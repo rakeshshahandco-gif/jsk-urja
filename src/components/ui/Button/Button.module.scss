@@ -1,0 +1,120 @@
+@import '@/styles/_variables';
+@import '@/styles/_mixins';
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    outline: none;
+    font-family: inherit;
+    gap: $spacing-sm;
+
+    // Disabled State
+    &:disabled,
+    &.disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    // Focus functionality
+    &:focus-visible {
+        box-shadow: 0 0 0 2px rgba($primary, 0.4);
+    }
+}
+
+// Variants
+.primary {
+    background-color: $primary;
+    color: #fff;
+
+    &:hover {
+        background-color: darken($primary, 5%);
+    }
+
+    &:active {
+        background-color: darken($primary, 10%);
+    }
+}
+
+.secondary {
+    background-color: $secondary;
+    color: #fff;
+
+    &:hover {
+        background-color: darken($secondary, 5%);
+    }
+}
+
+.outline {
+    background-color: transparent;
+    border-color: $primary;
+    color: $primary;
+
+    &:hover {
+        background-color: rgba($primary, 0.05);
+    }
+}
+
+.ghost {
+    background-color: transparent;
+    color: $text-color;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+}
+
+.danger {
+    background-color: #ef4444; // Example danger color
+    color: white;
+
+    &:hover {
+        background-color: darken(#ef4444, 5%);
+    }
+}
+
+// Sizes
+.sm {
+    padding: 8px 16px; // Increased from 4px 8px
+    font-size: 1rem; // Increased from 0.875rem
+    height: 42px;
+}
+
+.md {
+    padding: 12px 24px; // Increased from 8px 16px
+    font-size: 1.0625rem; // Increased from 1rem
+    height: 50px;
+}
+
+.lg {
+    padding: 16px 32px; // Increased from 12px 24px
+    font-size: 1.25rem; // Increased from 1.125rem
+    height: 60px;
+}
+
+// Full Width
+.fullWidth {
+    width: 100%;
+}
+
+// Loading Spinner (Simple CSS spinner)
+.spinner {
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

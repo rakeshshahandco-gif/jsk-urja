@@ -1,0 +1,321 @@
+@import '@/styles/_variables';
+
+.container {
+    min-height: 100vh;
+    background: #f8f9fa;
+    padding: 2rem;
+}
+
+.header {
+    max-width: 1600px;
+    margin: 0 auto 2rem;
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: $text-color;
+    margin: 0;
+}
+
+.mainForm {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+// Section Styles
+.section {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sectionTitle {
+    font-size: 1.375rem;
+    font-weight: 600;
+    color: $text-color;
+    margin: 0 0 1.5rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.sectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+
+    .sectionTitle {
+        margin: 0;
+        padding: 0;
+        border: none;
+    }
+}
+
+// Grid Layouts
+.grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+
+    @media (max-width: 1200px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+// Two Column Layout
+.twoColumnLayout {
+    display: grid;
+    grid-template-columns: 60% 40%;
+    gap: 2rem;
+
+    @media (max-width: 1200px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.conversationSection {
+    min-width: 0; // Prevent overflow
+}
+
+.followupSection {
+    min-width: 0;
+}
+
+// Sticky Panel
+.stickyPanel {
+    position: sticky;
+    top: 2rem;
+    align-self: flex-start;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+}
+
+// Table Styles
+.tableContainer {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1rem;
+
+    thead {
+        background: #f3f4f6;
+
+        th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+    }
+
+    tbody {
+        tr {
+            border-bottom: 1px solid #e5e7eb;
+            transition: background 0.2s ease;
+
+            &:hover {
+                background: #f9fafb;
+            }
+        }
+
+        td {
+            padding: 1rem;
+            color: #4b5563;
+        }
+    }
+}
+
+.modeBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background: #e0e7ff;
+    color: #3730a3;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.discussionCell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.outcomeCell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.actionButton {
+    padding: 0.5rem;
+    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+    }
+
+    &.delete {
+        color: #dc2626;
+
+        &:hover {
+            background: #fee2e2;
+            border-color: #dc2626;
+        }
+    }
+}
+
+.emptyState {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #9ca3af;
+    font-size: 1.0625rem;
+}
+
+// Modal Styles
+.modalForm {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.modalGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.textareaGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: $text-secondary;
+}
+
+.textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: $text-color;
+    resize: vertical;
+    transition: all 0.2s ease;
+
+    &:focus {
+        outline: none;
+        border-color: $primary;
+        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+    }
+
+    &::placeholder {
+        color: #9ca3af;
+    }
+}
+
+.error {
+    color: #dc2626;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.modalActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+// Reminder Panel Styles
+.reminderContent {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.reminderToggle {
+    padding: 1rem;
+    background: #f3f4f6;
+    border-radius: 8px;
+}
+
+.toggleLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.toggleText {
+    font-size: 1rem;
+    font-weight: 500;
+    color: $text-color;
+}
+
+.updateButton {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+// Footer
+.footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 2px solid #e5e7eb;
+}
+
+.addButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

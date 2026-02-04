@@ -1,0 +1,56 @@
+.whatsappButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: #25D366;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(37, 211, 102, 0.2);
+
+    &:hover {
+        background: #20BA5A;
+        box-shadow: 0 4px 8px rgba(37, 211, 102, 0.3);
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(37, 211, 102, 0.2);
+    }
+
+    &:disabled {
+        background: #cccccc;
+        cursor: not-allowed;
+        box-shadow: none;
+
+        &:hover {
+            background: #cccccc;
+            transform: none;
+        }
+    }
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+.buttonSm {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+}
+
+.buttonMd {
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+}
+
+.buttonLg {
+    padding: 1rem 1.5rem;
+    font-size: 1.0625rem;
+}

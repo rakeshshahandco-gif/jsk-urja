@@ -1,0 +1,72 @@
+import React, { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import styles from './Sidebar.module.scss';
+import clsx from 'clsx';
+
+// Placeholder icons - in real app would map to generic Icon component
+const IconPlaceholder = ({ name }) => <span>Build</span>; // Fallback
+
+export const SidebarItem = ({ item, collapsed }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const location = useLocation();
+
+    const toggleSubMenu = () => setIsOpen(!isOpen);
+
+    // Check if item has children
+    const hasChildren = item.children && item.children.length > 0;
+
+    // Check if current path matches item path
+    // For parent items, check if any child is active
+    const isChildActive = hasChildren && item.children.some(child => location.pathname.startsWith(child.path));
+
+    // Effect to auto-expand if child is active
+    React.useEffect(() => {
+        if (isChildActive) {
+            setIsOpen(true);
+        }
+    }, [isChildActive]);
+
+    if (hasChildren) {
+        return (
+            <li className={styles.menuItem}>
+                <div
+                    className={clsx(styles.link, { [styles.active]: isChildActive })}
+                    onClick={toggleSubMenu}
+                >
+                    <span className={styles.icon}>
+                        {/* Map icon string to component here */}
+                        📝
+                    </span>
+                    <span className={styles.label}>{item.title}</span>
+                    {!collapsed && (
+                        <span className={clsx(styles.arrow, { [styles.expanded]: isOpen })}>
+                            ▼
+                        </span>
+                    )}
+                </div>
+
+                {isOpen && !collapsed && (
+                    <ul className={styles.subMenu}>
+                        {item.children.map(child => (
+                            <SidebarItem key={child.id} item={child} collapsed={collapsed} />
+                        ))}
+                    </ul>
+                )}
+            </li>
+        );
+    }
+
+    return (
+        <li className={styles.menuItem}>
+            <NavLink
+                to={item.path}
+                className={({ isActive }) => clsx(styles.link, { [styles.active]: isActive })}
+            >
+                <span className={styles.icon}>
+                    📄
+                </span>
+                <span className={styles.label}>{item.title}</span>
+            </NavLink>
+        </li>
+    );
+};

@@ -1,0 +1,1 @@
+export { ContactPersonInput } from './ContactPersonInput';

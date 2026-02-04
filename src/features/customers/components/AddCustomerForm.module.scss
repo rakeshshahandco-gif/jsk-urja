@@ -1,0 +1,168 @@
+@import '@/styles/_variables';
+
+.toggleContainer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.toggleButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background: #f3f4f6;
+        border-color: #9ca3af;
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+
+    svg {
+        flex-shrink: 0;
+    }
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 2rem;
+    transition: all 0.3s ease;
+
+    @media (max-width: 1024px) {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    &.fullscreen {
+        max-width: 100%;
+        padding: 2rem 3rem;
+        grid-template-columns: 1fr 1fr;
+        gap: 2.5rem;
+
+        @media (max-width: 1024px) {
+            grid-template-columns: 1fr;
+        }
+    }
+}
+
+// When in browser fullscreen mode, adjust layout
+:fullscreen .formGrid,
+:-webkit-full-screen .formGrid,
+:-moz-full-screen .formGrid,
+:-ms-fullscreen .formGrid {
+    max-width: 100%;
+    padding: 1rem 2rem;
+    min-height: 100vh;
+    background: #f8f9fa;
+}
+
+.section {
+    background: #ffffff;
+    padding: 2rem;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+
+    // Some sections span full width
+    &.fullWidthSection {
+        grid-column: 1 / -1;
+    }
+}
+
+.sectionTitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-color;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+.row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.row3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fullWidth {
+    grid-column: 1 / -1;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $spacing-md;
+    padding-top: $spacing-md;
+    border-top: 1px solid $border-color;
+    margin-top: $spacing-xs;
+}
+
+/* Similar Companies Suggestion Box */
+.suggestionBox {
+    font-size: 0.85rem;
+    background-color: #fffbeb;
+    /* Amber-50 */
+    border: 1px solid #fcd34d;
+    /* Amber-300 */
+    border-radius: $radius-md;
+    padding: $spacing-sm;
+    margin-top: 4px;
+    /* Slightly closer to input */
+    color: #92400e;
+    /* Amber-800 */
+}
+
+.suggestionTitle {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.suggestionList {
+    margin: 0;
+    padding-left: 20px;
+
+    li {
+        margin-bottom: 2px;
+    }
+}

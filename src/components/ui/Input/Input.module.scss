@@ -1,0 +1,137 @@
+@import '@/styles/_variables';
+@import '@/styles/_mixins';
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+    width: 100%;
+}
+
+.label {
+    font-size: 1rem; // Increased from 0.875rem
+    font-weight: 600; // Increased from 500
+    color: $text-secondary;
+    margin-bottom: 4px; // Increased from 2px
+
+    &.required::after {
+        content: '*';
+        color: $danger;
+        margin-left: 2px;
+    }
+}
+
+.inputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    transition: all 0.2s ease;
+    border-radius: $radius-md;
+    background-color: $bg-color;
+    border: 1px solid $border-color;
+    box-shadow: $shadow-sm;
+
+    &:hover:not(.disabled) {
+        border-color: $primary-light;
+    }
+
+    &:focus-within:not(.disabled) {
+        border-color: $primary;
+        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+    }
+
+    &.error {
+        border-color: $danger;
+
+        &:focus-within {
+            box-shadow: 0 0 0 3px rgba($danger, 0.15);
+        }
+    }
+
+    &.disabled {
+        background-color: $bg-secondary;
+        cursor: not-allowed;
+        opacity: 0.7;
+
+        .input {
+            cursor: not-allowed;
+        }
+    }
+}
+
+.input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: $text-color;
+    font-family: inherit;
+    outline: none;
+
+    &::placeholder {
+        color: $text-tertiary;
+    }
+
+    // Sizes
+    &.sm {
+        padding: $spacing-sm $spacing-md; // Increased padding
+        font-size: 1rem; // Increased from 0.875rem
+        height: 42px; // Increased from 32px
+    }
+
+    &.md {
+        padding: $spacing-md $spacing-lg; // Increased padding
+        font-size: 1.0625rem; // Increased from 0.95rem
+        height: 50px; // Increased from 40px
+    }
+
+    &.lg {
+        padding: $spacing-lg 1.25rem; // Increased padding
+        font-size: 1.25rem; // Increased from 1.125rem
+        height: 60px; // Increased from 52px
+    }
+
+    // Icon Padding Adjustment
+    &.hasStartIcon {
+        padding-left: 0;
+    }
+
+    &.hasEndIcon {
+        padding-right: 0;
+    }
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-tertiary;
+    flex-shrink: 0;
+    pointer-events: none;
+
+    &.start {
+        padding-left: $spacing-sm;
+        padding-right: $spacing-xs;
+    }
+
+    &.end {
+        padding-left: $spacing-xs;
+        padding-right: $spacing-sm;
+    }
+}
+
+.helperText {
+    font-size: 0.75rem;
+    color: $text-tertiary;
+    margin-top: 2px;
+}
+
+.errorMessage {
+    font-size: 0.75rem;
+    color: $danger;
+    margin-top: 2px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}

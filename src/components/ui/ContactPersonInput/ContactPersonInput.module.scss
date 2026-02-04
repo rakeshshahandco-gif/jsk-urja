@@ -1,0 +1,175 @@
+.container {
+    width: 100%;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem; // Increased from 1rem
+}
+
+.title {
+    font-size: 1.125rem; // Increased from 1rem
+    font-weight: 600;
+    color: var(--text-primary, #1a1a1a);
+    margin: 0;
+}
+
+.addButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem; // Increased from 0.875rem
+    padding: 0.625rem 1.25rem; // Increased from 0.5rem 1rem
+    transition: all 0.2s ease;
+
+    &:hover {
+        transform: translateY(-1px);
+    }
+}
+
+.contactList {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; // Increased from 1rem
+}
+
+.contactCard {
+    background: var(--surface-secondary, #f8f9fa);
+    border: 2px solid var(--border-color, #e5e7eb);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: slideIn 0.3s ease-out;
+
+    &:hover {
+        border-color: var(--primary-color, #6366f1);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+    }
+
+    &.primary {
+        background: linear-gradient(135deg, #fef3c7 0%, #fef9e7 100%);
+        border-color: #f59e0b;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+
+        .starIcon {
+            fill: #f59e0b;
+            color: #f59e0b;
+        }
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.primaryToggle {
+    display: flex;
+    align-items: center;
+}
+
+.radioInput {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+
+    &:checked+.radioLabel {
+        color: #f59e0b;
+        font-weight: 600;
+
+        .starIcon {
+            fill: #f59e0b;
+            color: #f59e0b;
+            transform: scale(1.1);
+        }
+    }
+}
+
+.radioLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    user-select: none;
+
+    &:hover {
+        color: #f59e0b;
+
+        .starIcon {
+            transform: scale(1.05);
+        }
+    }
+}
+
+.starIcon {
+    transition: all 0.2s ease;
+    color: var(--text-tertiary, #9ca3af);
+}
+
+.removeButton {
+    background: transparent;
+    border: none;
+    color: var(--error-color, #ef4444);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background: rgba(239, 68, 68, 0.1);
+        transform: scale(1.1);
+    }
+
+    &:active {
+        transform: scale(0.95);
+    }
+}
+
+.cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; // Increased from 1rem
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem; // Increased from 1rem
+
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.error {
+    color: var(--error-color, #ef4444);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}

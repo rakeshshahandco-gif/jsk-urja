@@ -1,0 +1,418 @@
+@import '@/styles/_variables';
+
+.container {
+    min-height: 100vh;
+    background: #f8f9fa;
+    padding: 2rem 3rem;
+}
+
+.header {
+    max-width: 1400px;
+    margin: 0 auto 2rem;
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: $text-color;
+    margin: 0 0 0.5rem 0;
+}
+
+.subtitle {
+    font-size: 1rem;
+    color: $text-secondary;
+    margin: 0;
+}
+
+.content {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+// Search Section
+.searchSection {
+    background: #ffffff;
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.searchLabel {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: $text-color;
+    margin-bottom: 0.75rem;
+}
+
+.searchContainer {
+    position: relative;
+}
+
+.searchInput {
+    width: 100%;
+    height: 50px;
+    padding: 0 1rem;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 1.0625rem;
+    color: $text-color;
+    transition: all 0.2s ease;
+
+    &:focus {
+        outline: none;
+        border-color: $primary;
+        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+    }
+}
+
+.dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.dropdownItem {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.2s ease;
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    &:hover {
+        background: #f9fafb;
+    }
+}
+
+.dropdownCompany {
+    font-size: 1rem;
+    font-weight: 600;
+    color: $text-color;
+    margin-bottom: 0.25rem;
+}
+
+.dropdownDetails {
+    font-size: 0.875rem;
+    color: $text-secondary;
+}
+
+// Customer Info Display
+.customerInfo {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    border: 2px solid #d1d5db;
+}
+
+.infoGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+
+    @media (max-width: 1024px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.infoItem {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.infoLabel {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.infoValue {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: $text-color;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.875rem;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #ffffff;
+    width: fit-content;
+}
+
+// Two Column Layout
+.twoColumnLayout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+
+    @media (max-width: 1024px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+// Form Section
+.formSection {
+    background: #ffffff;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.formSectionTitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-color;
+    margin: 0;
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.textareaGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: $text-secondary;
+}
+
+.textarea {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: $text-color;
+    resize: vertical;
+    transition: all 0.2s ease;
+    line-height: 1.6;
+
+    &:focus {
+        outline: none;
+        border-color: $primary;
+        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+    }
+
+    &::placeholder {
+        color: #9ca3af;
+    }
+}
+
+.error {
+    color: #dc2626;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.reminderToggle {
+    padding: 1rem;
+    background: #f3f4f6;
+    border-radius: 8px;
+}
+
+.toggleLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.toggleText {
+    font-size: 1rem;
+    font-weight: 500;
+    color: $text-color;
+}
+
+.saveButton,
+.updateButton {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+// Conversation History
+.historySection {
+    background: #ffffff;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.historySectionTitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-color;
+    margin: 0;
+}
+
+.sectionIconHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.sectionIcon {
+    color: $primary;
+    flex-shrink: 0;
+}
+
+.sectionIconSecondary {
+    color: #f59e0b;
+    flex-shrink: 0;
+    margin-left: -0.25rem;
+}
+
+.iconGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.infoTitle {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $text-color;
+    margin: 0;
+}
+
+.historyList {
+    max-height: 500px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.historyItem {
+    padding: 1.25rem;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s ease;
+
+    &:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+}
+
+.historyHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.historyDate {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.historyMode {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: capitalize;
+    padding: 0.25rem 0.75rem;
+    background: #e0e7ff;
+    border-radius: 6px;
+}
+
+.historyDiscussion {
+    font-size: 1rem;
+    color: $text-color;
+    line-height: 1.6;
+    margin-bottom: 0.5rem;
+}
+
+.historyOutcome {
+    font-size: 0.9375rem;
+    color: #6b7280;
+    font-style: italic;
+}
+
+.emptyHistory {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #9ca3af;
+    font-size: 1.0625rem;
+}
+
+.emptyState {
+    background: #ffffff;
+    padding: 4rem 2rem;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+    p {
+        font-size: 1.125rem;
+        color: #6b7280;
+        margin: 0;
+    }
+}
+
+// WhatsApp Section
+.whatsappSection {
+    background: #ffffff;
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+
+    @media (max-width: 768px) {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.whatsappHint {
+    font-size: 0.9375rem;
+    color: #6b7280;
+    margin: 0;
+    font-style: italic;
+}

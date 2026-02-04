@@ -1,0 +1,81 @@
+@import '@/styles/_variables';
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    // Ensure it sits above everything
+    &.has-zindex {
+        // z-index is set via inline style but class acts as marker
+        position: fixed;
+    }
+}
+
+.container {
+    background-color: $bg-color;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-lg;
+    min-width: 400px;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+
+    // Add animation hook classes later
+}
+
+.header {
+    padding: $spacing-md $spacing-lg;
+    border-bottom: 1px solid $border-color;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-color;
+}
+
+.closeButton {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: $text-tertiary;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+        color: $danger;
+    }
+}
+
+.content {
+    padding: $spacing-lg;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.footer {
+    padding: $spacing-md $spacing-lg;
+    border-top: 1px solid $border-color;
+    display: flex;
+    justify-content: flex-end;
+    gap: $spacing-md;
+    background-color: $bg-secondary;
+}

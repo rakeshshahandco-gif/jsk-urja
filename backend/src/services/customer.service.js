@@ -1,0 +1,118 @@
+import Customer from '../models/customer.model.js';
+import { ApiError } from '../utils/ApiError.js';
+import logger from '../utils/logger.js';
+
+/**
+ * Create a customer
+ * @param {Object} body
+ * @returns {Promise<Customer>}
+ */
+const createCustomer = async (body) => {
+    logger.info('📝 Creating customer:', { customerName: body.customerName, company: body.company });
+    const customer = await Customer.create(body);
+    logger.info(`✅ Customer created successfully with ID: ${customer._id}`);
+    return customer;
+};
+
+/**
+ * Query for customers
+ * @param {Object} filter - Mongo filter
+ * @param {Object} options - Query options
+ * @param {string} [options.sortBy] - Sort option in the format: sortField:(desc|asc)
+ * @param {number} [options.limit] - Maximum number of results per page (default = 10)
+ * @param {number} [options.page] - Current page (default = 1)
+ * @returns {Promise<Object>}
+ */
+const queryCustomers = async (filter, options) => {
+    const finalFilter = { ...filter, isDeleted: false };
+
+    // Search logic
+    if (options.search) {
+        finalFilter.$text = { $search: options.search };
+    }
+
+    const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;
+    const limit = options.limit && parseInt(options.limit, 10) > 0 ? parseInt(options.limit, 10) : 10;
+    const skip = (page - 1) * limit;
+
+    // Sorting
+    let sort = '';
+    if (options.sortBy) {
+        const sortingCriteria = [];
+        options.sortBy.split(',').forEach((sortOption) => {
+            const [key, order] = sortOption.split(':');
+            sortingCriteria.push((order === 'desc' ? '-' : '') + key);
+        });
+        sort = sortingCriteria.join(' ');
+    } else {
+        sort = 'createdAt';
+    }
+
+    const customers = await Customer.find(finalFilter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit);
+
+    const totalResults = await Customer.countDocuments(finalFilter);
+    const totalPages = Math.ceil(totalResults / limit);
+
+    return {
+        results: customers,
+        page,
+        limit,
+        totalPages,
+        totalResults
+    };
+};
+
+/**
+ * Get customer by id
+ * @param {ObjectId} id
+ * @returns {Promise<Customer>}
+ */
+const getCustomerById = async (id) => {
+    return Customer.findOne({ _id: id, isDeleted: false });
+};
+
+/**
+ * Update customer by id
+ * @param {ObjectId} customerId
+ * @param {Object} updateBody
+ * @returns {Promise<Customer>}
+ */
+const updateCustomerById = async (customerId, updateBody) => {
+    const customer = await Customer.findByIdAndUpdate(
+        customerId,
+        updateBody,
+        { new: true, runValidators: true }
+    );
+
+    if (!customer) {
+        throw new ApiError(404, 'Customer not found');
+    }
+
+    return customer;
+};
+
+/**
+ * Delete customer by id
+ * @param {ObjectId} customerId
+ * @returns {Promise<Customer>}
+ */
+const deleteCustomerById = async (customerId) => {
+    const customer = await getCustomerById(customerId);
+    if (!customer) {
+        throw new ApiError(404, 'Customer not found');
+    }
+    customer.isDeleted = true;
+    await customer.save();
+    return customer;
+};
+
+export default {
+    createCustomer,
+    queryCustomers,
+    getCustomerById,
+    updateCustomerById,
+    deleteCustomerById,
+};
