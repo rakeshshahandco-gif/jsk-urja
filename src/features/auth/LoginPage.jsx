@@ -102,7 +102,7 @@ export const LoginPage = () => {
                     </Button>
                 </form>
 
-                <div className={styles.demoCredentials}>
+                {/* <div className={styles.demoCredentials}>
                     <p className={styles.demoTitle}>Demo Credentials:</p>
                     <div className={styles.demoList}>
                         <div><strong>Admin:</strong> admin / admin123</div>
@@ -110,7 +110,7 @@ export const LoginPage = () => {
                         <div><strong>Staff:</strong> staff / staff123</div>
                         <div><strong>Viewer:</strong> viewer / viewer123</div>
                     </div>
-                </div>
+                </div> */}
             </div>
         </div>
     );

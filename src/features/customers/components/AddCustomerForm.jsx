@@ -3,7 +3,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { Button, Input, Select, MultiSelect, ContactPersonInput } from '@/components/ui';
 import { INDIAN_STATES, STATE_GST_CODES, DEMAND_PRODUCTS, SALES_PERSONS } from '@/utils/constants';
 import { Maximize2, Minimize2 } from 'lucide-react';
-import styles from './AddCustomerForm.module.scss';
+import styles from './CustomerForm.module.scss';
 
 // Mock DB for Company Names (In real app, this comes from API)
 const MOCK_DB_COMPANIES = [
@@ -140,7 +140,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                 {/* Basic Information */}
                 <section className={styles.section}>
                     <h4 className={styles.sectionTitle}>Basic Information</h4>
-                    <div className={styles.row}>
+                    <div className={styles.grid3}>
                         <div>
                             <Input
                                 label="Company Name"
@@ -159,8 +159,6 @@ export const AddCustomerForm = ({ closeModal }) => {
                             )}
                         </div>
 
-                    </div>
-                    <div className={styles.row}>
                         <Input
                             label="Company Email"
                             type="email"
@@ -170,10 +168,18 @@ export const AddCustomerForm = ({ closeModal }) => {
                             })}
                             error={errors.companyEmail}
                         />
+
+                        {/* Mobile input would typically go here to complete the row, but it's not in the original Basic Info section? 
+                            Checking original: Mobile was not in Basic Info. Let's look for it.
+                            Wait, Mobile was in ContactPersonInput logic? 
+                            Ah, I don't see Mobile field in the Basic Info JSX of the original file provided in context. 
+                            Let's assume "Company Email" is the only other field in Basic Info provided in snippet. 
+                            We'll leave the 3rd slot empty or generic.
+                         */}
                     </div>
                 </section>
 
-                {/* Contact Persons */}
+                {/* Contact Persons - Keep as is, it has internal logic */}
                 <section className={styles.section}>
                     <ContactPersonInput
                         control={control}
@@ -185,17 +191,18 @@ export const AddCustomerForm = ({ closeModal }) => {
                 {/* Location */}
                 <section className={styles.section}>
                     <h4 className={styles.sectionTitle}>Location</h4>
-                    <div className={styles.row}>
-                        <Input
-                            label="Full Address"
-                            placeholder="123 Main St, Suite 100"
-                            {...register('address')}
-                            className={styles.fullWidth}
-                        />
-                    </div>
-                    <div className={styles.row3}>
+                    <div className={styles.grid3}>
+                        <div className={styles.colSpan3}>
+                            <Input
+                                label="Full Address"
+                                placeholder="123 Main St, Suite 100"
+                                {...register('address')}
+                            />
+                        </div>
+
                         <Input label="Area" {...register('area')} />
                         <Input label="City" {...register('city')} />
+
                         <div>
                             <Input
                                 label="State"
@@ -209,8 +216,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                                 ))}
                             </datalist>
                         </div>
-                    </div>
-                    <div className={styles.row}>
+
                         <Input label="PinCode" {...register('pincode')} />
                     </div>
                 </section>
@@ -218,7 +224,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                 {/* Business Details */}
                 <section className={styles.section}>
                     <h4 className={styles.sectionTitle}>Business Details</h4>
-                    <div className={styles.row}>
+                    <div className={styles.grid3}>
                         <Input
                             label="GST Number"
                             placeholder="27ABCDE1234F1Z5"
@@ -226,7 +232,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             {...register('gst', {
                                 pattern: { value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
                                 validate: (value) => {
-                                    if (!value) return true; // Optional
+                                    if (!value) return true;
                                     if (!stateValue) return true;
                                     const code = STATE_GST_CODES[stateValue];
                                     if (code && !value.startsWith(code)) {
@@ -235,16 +241,12 @@ export const AddCustomerForm = ({ closeModal }) => {
                                     return true;
                                 }
                             })}
-                            // We will add the real validator in a separate step or modify the whole file to include 'state' in watch.
-                            // For now, let's insert the field and then refine the watcher.
                             error={errors.gst}
-                            className={styles.fullWidth}
                             onChange={(e) => {
                                 e.target.value = e.target.value.toUpperCase();
                             }}
                         />
-                    </div>
-                    <div className={styles.row}>
+
                         <Select
                             label="Customer Type"
                             options={[
@@ -259,6 +261,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             ]}
                             {...register('customerType')}
                         />
+
                         <Select
                             label="Status"
                             options={[
@@ -269,23 +272,23 @@ export const AddCustomerForm = ({ closeModal }) => {
                             ]}
                             {...register('status')}
                         />
-                    </div>
-                    <div className={styles.row}>
-                        <MultiSelect
-                            label="Demand Product"
-                            placeholder="Select Products..."
-                            options={DEMAND_PRODUCTS}
-                            name="demandProduct"
-                            control={control}
-                            className={styles.fullWidth}
-                        />
+
+                        <div className={styles.colSpan3}>
+                            <MultiSelect
+                                label="Demand Product"
+                                placeholder="Select Products..."
+                                options={DEMAND_PRODUCTS}
+                                name="demandProduct"
+                                control={control}
+                            />
+                        </div>
                     </div>
                 </section>
 
                 {/* Follow-up Details */}
                 <section className={styles.section}>
                     <h4 className={styles.sectionTitle}>Follow-up Details</h4>
-                    <div className={styles.row}>
+                    <div className={styles.grid3}>
                         <Input
                             label="Date"
                             type="date"
@@ -296,14 +299,13 @@ export const AddCustomerForm = ({ closeModal }) => {
                             type="date"
                             {...register('nextActionDate')}
                         />
-                    </div>
-                    <div className={styles.row}>
-                        <Input
-                            label="Conversation"
-                            placeholder="Enter conversation details..."
-                            {...register('conversation')}
-                            className={styles.fullWidth}
-                        />
+                        <div className={styles.colSpan3}>
+                            <Input
+                                label="Conversation"
+                                placeholder="Enter conversation details..."
+                                {...register('conversation')}
+                            />
+                        </div>
                     </div>
                 </section>
 

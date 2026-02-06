@@ -26,6 +26,8 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
 import './styles/main.scss';
 
+import { Toaster } from 'react-hot-toast';
+
 // Component that uses the modal hook
 const DemoContent = () => {
     // ... reused from before if needed for dashboard
@@ -37,6 +39,7 @@ function App() {
         <BrowserRouter>
             <AuthProvider>
                 <ToastProvider>
+                    <Toaster position="top-right" />
                     <ModalProvider>
                         <Routes>
                             {/* Public routes - Login, Forgot Password, Reset Password */}

@@ -165,7 +165,7 @@ export const FollowUpForm = () => {
     if (loading) {
         return (
             <div className={styles.container}>
-                <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div className={styles.loadingContainer}>
                     <p>Loading customer data...</p>
                 </div>
             </div>
@@ -175,7 +175,7 @@ export const FollowUpForm = () => {
     if (!customer) {
         return (
             <div className={styles.container}>
-                <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div className={styles.errorContainer}>
                     <p>Customer not found</p>
                 </div>
             </div>
@@ -186,20 +186,18 @@ export const FollowUpForm = () => {
         <div className={styles.container}>
             {/* Header with customer info */}
             <div className={styles.header}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button
-                        onClick={() => navigate('/customers/list')}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}
-                    >
-                        <ArrowLeft size={24} />
-                    </button>
-                    <div>
-                        <h1 className={styles.title}>Follow-up & Conversation Tracker</h1>
-                        <p className={styles.subtitle}>
-                            Customer: <strong>{customer.customerName || customer.name || 'Not Provided'}</strong>
-                            {customer.company && ` - ${customer.company}`}
-                        </p>
-                    </div>
+                <button
+                    onClick={() => navigate('/customers/list')}
+                    aria-label="Back to customer list"
+                >
+                    <ArrowLeft size={24} />
+                </button>
+                <div>
+                    <h1 className={styles.title}>Follow-up & Conversation Tracker</h1>
+                    <p className={styles.subtitle}>
+                        Customer: <strong>{customer.customerName || customer.name || 'Not Provided'}</strong>
+                        {customer.company && ` - ${customer.company}`}
+                    </p>
                 </div>
             </div>
 
@@ -269,12 +267,12 @@ export const FollowUpForm = () => {
                     </div>
 
                     {/* Conversation History */}
-                    <div className={styles.formSection} style={{ marginTop: '24px' }}>
+                    <div className={styles.formSection} style={{ marginTop: '1.5rem' }}>
                         <h3 className={styles.formSectionTitle}>Conversation History ({conversations.length})</h3>
                         {conversations.length === 0 ? (
-                            <p style={{ color: '#6b7280', padding: '20px', textAlign: 'center' }}>
-                                No conversations yet. Add your first conversation above.
-                            </p>
+                            <div className={styles.emptyState}>
+                                <p>No conversations yet. Add your first conversation above.</p>
+                            </div>
                         ) : (
                             <div className={styles.conversationList}>
                                 {conversations.map((conv) => (
@@ -376,9 +374,8 @@ export const FollowUpForm = () => {
                                     <input
                                         type="checkbox"
                                         {...reminderForm.register('reminderEnabled')}
-                                        className={styles.checkbox}
                                     />
-                                    <Bell size={18} style={{ marginRight: '8px' }} />
+                                    <Bell size={18} />
                                     <span>Enable Reminder</span>
                                 </label>
                             </div>

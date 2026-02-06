@@ -20,18 +20,21 @@ export const menuConfig = [
                 title: 'Add Customer',
                 path: '/customers/add',
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'add_customer',
             },
             {
                 id: 'customer-list',
                 title: 'All Customers',
                 path: PATHS.CUSTOMERS.LIST,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
+                permission: 'view_customers',
             },
             {
                 id: 'reminder-tasks',
                 title: 'Reminder Tasks',
                 path: '/reminders',
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'view_reminders',
             },
             {
                 id: 'follow-up-tracker',

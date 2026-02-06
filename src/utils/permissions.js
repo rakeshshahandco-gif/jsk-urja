@@ -47,13 +47,25 @@ export const ROLE_PERMISSIONS = {
 };
 
 // Check if role has permission
-export const hasPermission = (userPermissions, requiredPermission) => {
-    if (!userPermissions) return false;
+export const hasPermission = (userPermissions, requiredPermission, userRole = null) => {
+    // 1. Check if userPermissions is explicitly set (even if empty)
+    // If it's an array (including empty []), respect it strictly - this is Granular Mode
+    if (Array.isArray(userPermissions)) {
+        // Admin has all permissions
+        if (userPermissions.includes('*')) return true;
+        // Strictly check the array - if permission not in array, deny
+        return userPermissions.includes(requiredPermission);
+    }
 
-    // Admin has all permissions
-    if (userPermissions.includes('*')) return true;
+    // 2. Fallback to Role Default Permissions (only if userPermissions is null/undefined)
+    // This handles legacy users who don't have the permissions field set
+    if (userRole && ROLE_PERMISSIONS[userRole]) {
+        const rolePerms = ROLE_PERMISSIONS[userRole];
+        if (rolePerms.includes('*')) return true;
+        if (rolePerms.includes(requiredPermission)) return true;
+    }
 
-    return userPermissions.includes(requiredPermission);
+    return false;
 };
 
 // Check if user has role

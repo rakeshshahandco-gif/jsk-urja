@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Plus, Trash2, Star } from 'lucide-react';
-import './CustomerForm.module.scss';
+import styles from './CustomerForm.module.scss';
 
 /**
  * CustomerForm component for creating and editing customers
@@ -147,24 +147,24 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     };
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="customer-form">
+        <form onSubmit={handleSubmit(onSubmit)} className={styles['customer-form']}>
             {/* Basic Information */}
-            <div className="form-section">
+            <div className={styles['form-section']}>
                 <h3>Basic Information</h3>
 
-                <div className="form-group">
-                    <label htmlFor="customerName">CUSTOMER NAME (OPTIONAL)</label>
-                    <Input
-                        id="customerName"
-                        {...register('customerName')}
-                        placeholder="Enter customer name (optional)"
-                        onChange={handleUppercaseChange('customerName')}
-                    />
-                    {errors.customerName && <span className="error">{errors.customerName.message}</span>}
-                </div>
+                <div className={styles.grid4}>
+                    <div className={styles['form-group']}>
+                        <label htmlFor="customerName">CUSTOMER NAME (OPTIONAL)</label>
+                        <Input
+                            id="customerName"
+                            {...register('customerName')}
+                            placeholder="Enter customer name (optional)"
+                            onChange={handleUppercaseChange('customerName')}
+                        />
+                        {errors.customerName && <span className={styles.error}>{errors.customerName.message}</span>}
+                    </div>
 
-                <div className="form-row">
-                    <div className="form-group">
+                    <div className={styles['form-group']}>
                         <label htmlFor="company">COMPANY</label>
                         <Input
                             id="company"
@@ -174,7 +174,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         />
                     </div>
 
-                    <div className="form-group">
+                    <div className={styles['form-group']}>
                         <label htmlFor="companyEmail">COMPANY EMAIL</label>
                         <Input
                             id="companyEmail"
@@ -184,20 +184,32 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             style={{ textTransform: 'uppercase' }}
                         />
                     </div>
-                </div>
 
-                <div className="form-group">
-                    <label htmlFor="companyBrand">COMPANY BRAND (OPTIONAL)</label>
-                    <Input
-                        id="companyBrand"
-                        {...register('companyBrand')}
-                        placeholder="Enter brand name (e.g. Philips, Havells)"
-                        onChange={handleUppercaseChange('companyBrand')}
+                    <div className={styles['form-group']}>
+                        <label htmlFor="companyBrand">COMPANY BRAND (OPTIONAL)</label>
+                        <Input
+                            id="companyBrand"
+                            {...register('companyBrand')}
+                            placeholder="Enter brand name"
+                            onChange={handleUppercaseChange('companyBrand')}
+                        />
+                    </div>
+                </div>
+                <div className={`${styles['form-group']} ${styles.colSpan3}`}>
+                    <label htmlFor="address">ADDRESS</label>
+                    <textarea
+                        id="address"
+                        {...register('address')}
+                        placeholder="Enter complete address..."
+                        rows={3}
+                        className={styles['form-textarea']}
+                        onChange={handleUppercaseChange('address')}
                     />
                 </div>
+                <div className={styles.grid4}>
 
-                <div className="form-row">
-                    <div className="form-group">
+
+                    <div className={styles['form-group']}>
                         <label htmlFor="area">AREA</label>
                         <Input
                             id="area"
@@ -207,8 +219,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         />
                     </div>
 
-
-                    <div className="form-group">
+                    <div className={styles['form-group']}>
                         <label htmlFor="pincode">PINCODE</label>
                         <Input
                             id="pincode"
@@ -217,85 +228,73 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             onChange={handleUppercaseChange('pincode')}
                         />
                     </div>
-                </div>
 
-                <div className="form-group">
-                    <label htmlFor="state">STATE</label>
-                    <select
-                        id="state"
-                        {...register('state')}
-                        className="form-select"
-                    >
-                        <option value="">Select State</option>
-                        <option value="Andhra Pradesh">Andhra Pradesh</option>
-                        <option value="Arunachal Pradesh">Arunachal Pradesh</option>
-                        <option value="Assam">Assam</option>
-                        <option value="Bihar">Bihar</option>
-                        <option value="Chhattisgarh">Chhattisgarh</option>
-                        <option value="Goa">Goa</option>
-                        <option value="Gujarat">Gujarat</option>
-                        <option value="Haryana">Haryana</option>
-                        <option value="Himachal Pradesh">Himachal Pradesh</option>
-                        <option value="Jharkhand">Jharkhand</option>
-                        <option value="Karnataka">Karnataka</option>
-                        <option value="Kerala">Kerala</option>
-                        <option value="Madhya Pradesh">Madhya Pradesh</option>
-                        <option value="Maharashtra">Maharashtra</option>
-                        <option value="Manipur">Manipur</option>
-                        <option value="Meghalaya">Meghalaya</option>
-                        <option value="Mizoram">Mizoram</option>
-                        <option value="Nagaland">Nagaland</option>
-                        <option value="Odisha">Odisha</option>
-                        <option value="Punjab">Punjab</option>
-                        <option value="Rajasthan">Rajasthan</option>
-                        <option value="Sikkim">Sikkim</option>
-                        <option value="Tamil Nadu">Tamil Nadu</option>
-                        <option value="Telangana">Telangana</option>
-                        <option value="Tripura">Tripura</option>
-                        <option value="Uttar Pradesh">Uttar Pradesh</option>
-                        <option value="Uttarakhand">Uttarakhand</option>
-                        <option value="West Bengal">West Bengal</option>
-                        <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
-                        <option value="Chandigarh">Chandigarh</option>
-                        <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
-                        <option value="Delhi">Delhi</option>
-                        <option value="Jammu and Kashmir">Jammu and Kashmir</option>
-                        <option value="Ladakh">Ladakh</option>
-                        <option value="Lakshadweep">Lakshadweep</option>
-                        <option value="Puducherry">Puducherry</option>
-                    </select>
-                </div>
+                    <div className={styles['form-group']}>
+                        <label htmlFor="state">STATE</label>
+                        <select
+                            id="state"
+                            {...register('state')}
+                            className={styles['form-select']}
+                        >
+                            <option value="">Select State</option>
+                            <option value="Andhra Pradesh">Andhra Pradesh</option>
+                            <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+                            <option value="Assam">Assam</option>
+                            <option value="Bihar">Bihar</option>
+                            <option value="Chhattisgarh">Chhattisgarh</option>
+                            <option value="Goa">Goa</option>
+                            <option value="Gujarat">Gujarat</option>
+                            <option value="Haryana">Haryana</option>
+                            <option value="Himachal Pradesh">Himachal Pradesh</option>
+                            <option value="Jharkhand">Jharkhand</option>
+                            <option value="Karnataka">Karnataka</option>
+                            <option value="Kerala">Kerala</option>
+                            <option value="Madhya Pradesh">Madhya Pradesh</option>
+                            <option value="Maharashtra">Maharashtra</option>
+                            <option value="Manipur">Manipur</option>
+                            <option value="Meghalaya">Meghalaya</option>
+                            <option value="Mizoram">Mizoram</option>
+                            <option value="Nagaland">Nagaland</option>
+                            <option value="Odisha">Odisha</option>
+                            <option value="Punjab">Punjab</option>
+                            <option value="Rajasthan">Rajasthan</option>
+                            <option value="Sikkim">Sikkim</option>
+                            <option value="Tamil Nadu">Tamil Nadu</option>
+                            <option value="Telangana">Telangana</option>
+                            <option value="Tripura">Tripura</option>
+                            <option value="Uttar Pradesh">Uttar Pradesh</option>
+                            <option value="Uttarakhand">Uttarakhand</option>
+                            <option value="West Bengal">West Bengal</option>
+                            <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+                            <option value="Chandigarh">Chandigarh</option>
+                            <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+                            <option value="Delhi">Delhi</option>
+                            <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+                            <option value="Ladakh">Ladakh</option>
+                            <option value="Lakshadweep">Lakshadweep</option>
+                            <option value="Puducherry">Puducherry</option>
+                        </select>
+                    </div>
 
-                <div className="form-group">
-                    <label htmlFor="address">ADDRESS</label>
-                    <textarea
-                        id="address"
-                        {...register('address')}
-                        placeholder="Enter complete address..."
-                        rows={3}
-                        className="form-textarea"
-                        onChange={handleUppercaseChange('address')}
-                    />
-                </div>
-
-                <div className="form-group">
-                    <label htmlFor="status">STATUS</label>
-                    <select
-                        id="status"
-                        {...register('status')}
-                        className="form-select"
-                    >
-                        <option value="lead">Lead</option>
-                        <option value="running_high">Running High</option>
-                        <option value="running_low">Running Low</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
+                    <div className={styles['form-group']}>
+                        <label htmlFor="status">STATUS</label>
+                        <select
+                            id="status"
+                            {...register('status')}
+                            className={styles['form-select']}
+                        >
+                            <option value="lead">Lead</option>
+                            <option value="running_high">Running High</option>
+                            <option value="running_low">Running Low</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
             {/* Contact Persons */}
-            <div className="form-section">
-                <div className="section-header">
+            <div className={styles['form-section']}>
+                <div className={styles['section-header']}>
                     <h3>Contact Persons</h3>
                     <Button type="button" onClick={handleAddContact} size="sm" variant="outline">
                         <Plus size={16} /> Add Contact
@@ -303,14 +302,14 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 </div>
 
                 {fields.map((field, index) => (
-                    <div key={field.id} className="contact-person-card">
-                        <div className="card-header">
-                            <span className="contact-number">Contact {index + 1}</span>
-                            <div className="card-actions">
+                    <div key={field.id} className={styles['contact-person-card']}>
+                        <div className={styles['card-header']}>
+                            <span className={styles['contact-number']}>Contact {index + 1}</span>
+                            <div className={styles['card-actions']}>
                                 <button
                                     type="button"
                                     onClick={() => handleSetPrimary(index)}
-                                    className={`primary - btn ${contactPersons[index]?.isPrimary ? 'active' : ''} `}
+                                    className={`${styles['primary-btn']} ${contactPersons[index]?.isPrimary ? styles.active : ''} `}
                                     title="Set as primary contact"
                                 >
                                     <Star size={16} fill={contactPersons[index]?.isPrimary ? 'currentColor' : 'none'} />
@@ -320,7 +319,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     <button
                                         type="button"
                                         onClick={() => handleRemoveContact(index)}
-                                        className="remove-btn"
+                                        className={styles['remove-btn']}
                                         title="Remove contact"
                                     >
                                         <Trash2 size={16} />
@@ -329,7 +328,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             </div>
                         </div>
 
-                        <div className="form-group">
+                        <div className={styles['form-group']}>
                             <label htmlFor={`contact-name-${index}`}>CONTACT NAME (OPTIONAL)</label>
                             <Input
                                 id={`contact-name-${index}`}
@@ -338,12 +337,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 onChange={handleUppercaseChange(`contactPersons.${index}.name`)}
                             />
                             {errors.contactPersons?.[index]?.name && (
-                                <span className="error">{errors.contactPersons[index].name.message}</span>
+                                <span className={styles.error}>{errors.contactPersons[index].name.message}</span>
                             )}
                         </div>
 
-                        <div className="form-row">
-                            <div className="form-group">
+                        <div className={styles['form-row']}>
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-mobile-${index}`}>MOBILE 1 (OPTIONAL)</label>
                                 <Input
                                     id={`contact-mobile-${index}`}
@@ -352,11 +351,11 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     style={{ textTransform: 'uppercase' }}
                                 />
                                 {errors.contactPersons?.[index]?.mobile && (
-                                    <span className="error">{errors.contactPersons[index].mobile.message}</span>
+                                    <span className={styles.error}>{errors.contactPersons[index].mobile.message}</span>
                                 )}
                             </div>
 
-                            <div className="form-group">
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-mobile2-${index}`}>MOBILE 2 (OPTIONAL)</label>
                                 <Input
                                     id={`contact-mobile2-${index}`}
@@ -365,13 +364,13 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     style={{ textTransform: 'uppercase' }}
                                 />
                                 {errors.contactPersons?.[index]?.mobile2 && (
-                                    <span className="error">{errors.contactPersons[index].mobile2.message}</span>
+                                    <span className={styles.error}>{errors.contactPersons[index].mobile2.message}</span>
                                 )}
                             </div>
                         </div>
 
-                        <div className="form-row">
-                            <div className="form-group">
+                        <div className={styles['form-row']}>
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-mobile3-${index}`}>MOBILE 3 (OPTIONAL)</label>
                                 <Input
                                     id={`contact-mobile3-${index}`}
@@ -381,7 +380,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 />
                             </div>
 
-                            <div className="form-group">
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-mobile4-${index}`}>MOBILE 4 (OPTIONAL)</label>
                                 <Input
                                     id={`contact-mobile4-${index}`}
@@ -392,8 +391,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             </div>
                         </div>
 
-                        <div className="form-row">
-                            <div className="form-group">
+                        <div className={styles['form-row']}>
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-mobile5-${index}`}>MOBILE 5 (OPTIONAL)</label>
                                 <Input
                                     id={`contact-mobile5-${index}`}
@@ -402,7 +401,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     style={{ textTransform: 'uppercase' }}
                                 />
                             </div>
-                            <div className="form-group">
+                            <div className={styles['form-group']}>
                                 <label htmlFor={`contact-email-${index}`}>EMAIL</label>
                                 <Input
                                     id={`contact-email-${index}`}
@@ -419,33 +418,32 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             </div>
 
             {/* Business Details */}
-            <div className="form-section">
+            <div className={styles['form-section']}>
                 <h3>Business Details</h3>
 
                 {/* Customer Type */}
-                <div className="form-group">
-                    <label htmlFor="customerType">TYPE</label>
-                    <select
-                        id="customerType"
-                        {...register('customerType')}
-                        className="form-select"
-                    >
-                        <option value="">Select Type</option>
-                        <option value="led_light_manufacturer">LED Light Manufacturer</option>
-                        <option value="led_light_showroom">LED Light Show Room</option>
-                        <option value="home_automation_provider">Home Automation Provider</option>
-                        <option value="interior_designer">Interior Designer</option>
-                        <option value="builders">Builders</option>
-                        <option value="dealer">Dealer</option>
-                        <option value="distributor">Distributor</option>
-                    </select>
-                </div>
+                <div className={styles.grid4}>
+                    {/* Customer Type */}
+                    <div className={styles['form-group']}>
+                        <label htmlFor="customerType">TYPE</label>
+                        <select
+                            id="customerType"
+                            {...register('customerType')}
+                            className={styles['form-select']}
+                        >
+                            <option value="">Select Type</option>
+                            <option value="led_light_manufacturer">LED Light Manufacturer</option>
+                            <option value="led_light_showroom">LED Light Show Room</option>
+                            <option value="home_automation_provider">Home Automation Provider</option>
+                            <option value="interior_designer">Interior Designer</option>
+                            <option value="builders">Builders</option>
+                            <option value="dealer">Dealer</option>
+                            <option value="distributor">Distributor</option>
+                        </select>
+                    </div>
 
-                {/* GST Details */}
-                <div className="subsection">
-                    <h4 style={{ fontSize: '1rem', marginBottom: '16px', color: '#374151' }}>GST Details</h4>
-
-                    <div className="form-group">
+                    {/* GST Details */}
+                    <div className={styles['form-group']}>
                         <label htmlFor="gstNumber">GST NUMBER</label>
                         <Input
                             id="gstNumber"
@@ -459,18 +457,16 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             maxLength={15}
                             style={{ textTransform: 'uppercase' }}
                         />
-                        {errors.gstNumber && <span className="error">{errors.gstNumber.message}</span>}
-                        <small className="help-text">15 characters GST number</small>
+                        {errors.gstNumber && <span className={styles.error}>{errors.gstNumber.message}</span>}
+                        <small className={styles['help-text']}>15 characters GST number</small>
                     </div>
-
-
                 </div>
 
                 {/* Product Interest */}
                 <div className="subsection" style={{ marginTop: '24px' }}>
                     <h4 style={{ fontSize: '1rem', marginBottom: '16px', color: '#374151' }}>Product Interest</h4>
 
-                    <div className="form-group">
+                    <div className={styles['form-group']}>
                         <label>INTERESTED IN PRODUCTS</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
                             {[
@@ -493,14 +489,14 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className={styles['form-group']}>
                         <label htmlFor="productNotes">PRODUCT REQUIREMENT NOTES</label>
                         <textarea
                             id="productNotes"
                             {...register('productNotes')}
                             placeholder="Enter specific product requirements or notes..."
                             rows={4}
-                            className="form-textarea"
+                            className={styles['form-textarea']}
                             onChange={handleUppercaseChange('productNotes')}
                         />
                     </div>
@@ -508,22 +504,22 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             </div>
 
             {/* Additional Information */}
-            <div className="form-section">
+            <div className={styles['form-section']}>
                 <h3>Additional Information</h3>
 
-                <div className="form-group">
+                <div className={styles['form-group']}>
                     <label htmlFor="notes">NOTES</label>
                     <textarea
                         id="notes"
                         {...register('notes')}
                         placeholder="Add any additional notes..."
                         rows={4}
-                        className="form-textarea"
+                        className={styles['form-textarea']}
                         onChange={handleUppercaseChange('notes')}
                     />
                 </div>
 
-                <div className="form-group">
+                <div className={styles['form-group']}>
                     <label htmlFor="tags">TAGS (COMMA SEPARATED)</label>
                     <Input
                         id="tags"
@@ -531,12 +527,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         placeholder="e.g. vip, premium, wholesale"
                         onChange={handleUppercaseChange('tags')}
                     />
-                    <small className="help-text">Separate tags with commas</small>
+                    <small className={styles['help-text']}>Separate tags with commas</small>
                 </div>
             </div>
 
             {/* Form Actions */}
-            <div className="form-actions">
+            <div className={styles['form-actions']}>
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
                     CANCEL
                 </Button>

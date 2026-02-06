@@ -7,24 +7,42 @@ import clsx from 'clsx';
 
 export const Sidebar = () => {
     const [collapsed, setCollapsed] = useState(false);
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
     const userRole = user?.role || ROLES.VIEWER;
 
-    // Filter items based on user role
-    const filterByRole = (items) => {
+    // console.log('Sidebar Debug:', { userRole, permissions: user?.permissions });
+    console.log('Sidebar Debug:', { userRole, permissions: user?.permissions });
+
+    // Filter items based on user role and permissions
+    const filterItems = (items) => {
         return items.filter(item => {
-            // If no roles defined, it's public (or authorized for all authenticated)
-            if (!item.roles) return true;
-            return item.roles.includes(userRole);
+            // Check Role
+            if (item.roles && !item.roles.includes(userRole)) {
+                return false;
+            }
+
+            // Check Permission
+            if (item.permission && !hasPermission(item.permission)) {
+                return false;
+            }
+
+            return true;
         }).map(item => {
             if (item.children) {
-                return { ...item, children: filterByRole(item.children) };
+                const filteredChildren = filterItems(item.children);
+                // If item has children but all are filtered out, should we hide the parent?
+                // For now, let's keep it if it has a title, unless we want to hide empty groups.
+                // A common pattern is to hide groups if they have no visible children.
+                if (filteredChildren.length === 0 && item.children.length > 0) {
+                    return null; // Hide parent if all children are hidden
+                }
+                return { ...item, children: filteredChildren };
             }
             return item;
-        });
+        }).filter(Boolean); // Filter out nulls from map (hidden parents)
     };
 
-    const visibleMenuItems = filterByRole(menuConfig);
+    const visibleMenuItems = filterItems(menuConfig);
 
     return (
         <aside className={clsx(styles.sidebar, { [styles.collapsed]: collapsed })}>

@@ -4,15 +4,15 @@
 .container {
     display: flex;
     flex-direction: column;
-    gap: $spacing-xs;
+    gap: 4px; // Fixed small gap
     width: 100%;
 }
 
 .label {
-    font-size: 1rem; // Increased from 0.875rem
-    font-weight: 600; // Increased from 500
+    font-size: 0.875rem; // Standard label size (14px)
+    font-weight: 500; // Medium weight
     color: $text-secondary;
-    margin-bottom: 4px; // Increased from 2px
+    margin-bottom: 2px;
 
     &.required::after {
         content: '*';
@@ -26,26 +26,26 @@
     display: flex;
     align-items: center;
     width: 100%;
-    transition: all 0.2s ease;
+    transition: all 0.2s ease-in-out;
     border-radius: $radius-md;
     background-color: $bg-color;
     border: 1px solid $border-color;
     box-shadow: $shadow-sm;
 
     &:hover:not(.disabled) {
-        border-color: $primary-light;
+        border-color: $text-tertiary; // Slightly darker border on hover
     }
 
     &:focus-within:not(.disabled) {
         border-color: $primary;
-        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+        box-shadow: 0 0 0 2px rgba($primary, 0.1); // Subtle focus ring
     }
 
     &.error {
         border-color: $danger;
 
         &:focus-within {
-            box-shadow: 0 0 0 3px rgba($danger, 0.15);
+            box-shadow: 0 0 0 2px rgba($danger, 0.1);
         }
     }
 
@@ -53,9 +53,11 @@
         background-color: $bg-secondary;
         cursor: not-allowed;
         opacity: 0.7;
+        border-color: $border-color;
 
         .input {
             cursor: not-allowed;
+            color: $text-secondary;
         }
     }
 }
@@ -67,28 +69,30 @@
     color: $text-color;
     font-family: inherit;
     outline: none;
+    line-height: 1.5;
 
     &::placeholder {
         color: $text-tertiary;
+        opacity: 0.8;
     }
 
     // Sizes
     &.sm {
-        padding: $spacing-sm $spacing-md; // Increased padding
-        font-size: 1rem; // Increased from 0.875rem
-        height: 42px; // Increased from 32px
+        padding: 4px 10px;
+        font-size: 0.8125rem; // 13px
+        height: 32px;
     }
 
     &.md {
-        padding: $spacing-md $spacing-lg; // Increased padding
-        font-size: 1.0625rem; // Increased from 0.95rem
-        height: 50px; // Increased from 40px
+        padding: 6px 10px;
+        font-size: 0.8125rem; // 13px
+        height: 34px; // High Density CRM
     }
 
     &.lg {
-        padding: $spacing-lg 1.25rem; // Increased padding
-        font-size: 1.25rem; // Increased from 1.125rem
-        height: 60px; // Increased from 52px
+        padding: 10px 16px;
+        font-size: 1rem; // 16px
+        height: 48px;
     }
 
     // Icon Padding Adjustment
@@ -110,13 +114,13 @@
     pointer-events: none;
 
     &.start {
-        padding-left: $spacing-sm;
-        padding-right: $spacing-xs;
+        padding-left: 10px;
+        padding-right: 6px;
     }
 
     &.end {
-        padding-left: $spacing-xs;
-        padding-right: $spacing-sm;
+        padding-left: 6px;
+        padding-right: 10px;
     }
 }
 

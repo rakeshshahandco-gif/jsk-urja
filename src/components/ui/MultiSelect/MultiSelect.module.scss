@@ -26,23 +26,23 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    min-height: 40px; // md variant
-    padding: 8px 12px;
-    font-size: 0.95rem;
+    min-height: 34px; // Matches Input md HP variant
+    padding: 6px 10px;
+    font-size: 0.8125rem; // 13px
     background-color: $bg-color;
     border: 1px solid $border-color;
     border-radius: $radius-md;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s ease-in-out;
     box-shadow: $shadow-sm;
 
     &:hover {
-        border-color: $primary-light;
+        border-color: $text-tertiary;
     }
 
     &.active {
         border-color: $primary;
-        box-shadow: 0 0 0 3px rgba($primary, 0.15);
+        box-shadow: 0 0 0 2px rgba($primary, 0.1);
     }
 
     &.error {

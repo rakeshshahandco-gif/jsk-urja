@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { mockLogin, mockLogout, saveAuthData, getAuthData, clearAuthData } from '@/utils/auth';
+import { saveAuthData, getAuthData, clearAuthData } from '@/utils/auth';
 import { hasPermission as checkPermission, hasRole as checkRole } from '@/utils/permissions';
+import { authService } from '@/services/auth.service';
 
 export const AuthContext = createContext(null);
 
@@ -11,56 +12,69 @@ export const AuthProvider = ({ children }) => {
 
     // Load user from localStorage on mount
     useEffect(() => {
-        const authData = getAuthData();
-        if (authData) {
-            // Fix for stale admin permissions
-            if (authData.user.role === 'admin' && !authData.user.permissions.includes('*')) {
-                console.log('🔄 Repairing stale admin permissions');
-                authData.user.permissions = ['*'];
-                // Update storage immediately
-                saveAuthData(authData.user, authData.token);
-            }
+        const initAuth = async () => {
+            const authData = getAuthData();
+            if (authData) {
+                // Determine if we need to validate token with backend?
+                // For now, trust hydration but maybe fetch fresh profile
+                setUser(authData.user);
+                setToken(authData.token);
 
-            console.log('👤 Loaded user:', authData.user.name, 'Role:', authData.user.role, 'Permissions:', authData.user.permissions);
-            setUser(authData.user);
-            setToken(authData.token);
-        }
-        setLoading(false);
+                try {
+                    // POC: Validate token validity by fetching profile
+                    const { data } = await authService.getMe();
+                    console.log('🔄 Fresh profile loaded:', data);
+                    setUser(data);
+                    // Update storage with fresh data
+                    saveAuthData(data, authData.token);
+                } catch (e) {
+                    console.error("Token invalid or expired", e);
+                    logout();
+                }
+            }
+            setLoading(false);
+        };
+        initAuth();
     }, []);
 
     // Login function
     const login = useCallback(async (username, password) => {
         try {
-            const response = await mockLogin(username, password);
-            const { token: newToken, ...userData } = response;
+            const response = await authService.login(username, password);
+            const { token: newToken, ...userData } = response.data;
 
             setUser(userData);
             setToken(newToken);
-            saveAuthData(userData, newToken);
+            // saveAuthData is handled in service or we do it here? 
+            // Service does it, but let's be safe. Service saveAuthData might be enough.
 
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.message };
+            console.error("Login error:", error);
+            const msg = error.response?.data?.message || error.message || 'Login failed';
+            return { success: false, error: msg };
         }
     }, []);
 
     // Logout function
     const logout = useCallback(async () => {
         try {
-            await mockLogout();
+            await authService.logout();
+            setUser(null);
+            setToken(null);
+            return { success: true };
+        } catch (error) {
+            // Force logout locally even if backend fails
             setUser(null);
             setToken(null);
             clearAuthData();
-            return { success: true };
-        } catch (error) {
             return { success: false, error: error.message };
         }
     }, []);
 
-    // Check if user has permission
     const hasPermission = useCallback((permission) => {
         if (!user) return false;
-        return checkPermission(user.permissions, permission);
+        return checkPermission(user.permissions || [], permission, user.role);
     }, [user]);
 
     // Check if user has role

@@ -37,7 +37,7 @@ export const CloseReminderModal = ({ reminder, onClose, onConfirm }) => {
                         {...register('notes')}
                         rows={3}
                         className={styles.formTextarea}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                        style={{ width: '100%', padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #d1d5db', fontFamily: 'inherit' }}
                         placeholder="E.g. Customer not interested, Deal closed, etc."
                     />
                 </div>

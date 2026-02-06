@@ -47,7 +47,7 @@ export const ChangeDateModal = ({ reminder, onClose, onSave, isSubmitting }) => 
                         className="w-full rounded-md border border-gray-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
                         rows={3}
                         placeholder="Why are you rescheduling?"
-                        style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '0.375rem' }}
+                        style={{ width: '100%', padding: '6px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontFamily: 'inherit' }}
                     />
                 </div>
 

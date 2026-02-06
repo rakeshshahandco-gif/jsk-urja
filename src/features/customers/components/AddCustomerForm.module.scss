@@ -37,90 +37,55 @@
 }
 
 .formGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 2rem;
     max-width: 1600px;
     margin: 0 auto;
     padding: 2rem;
     transition: all 0.3s ease;
 
-    @media (max-width: 1024px) {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-    }
-
     &.fullscreen {
         max-width: 100%;
         padding: 2rem 3rem;
-        grid-template-columns: 1fr 1fr;
-        gap: 2.5rem;
-
-        @media (max-width: 1024px) {
-            grid-template-columns: 1fr;
-        }
     }
 }
 
-// When in browser fullscreen mode, adjust layout
-:fullscreen .formGrid,
-:-webkit-full-screen .formGrid,
-:-moz-full-screen .formGrid,
-:-ms-fullscreen .formGrid {
-    max-width: 100%;
-    padding: 1rem 2rem;
-    min-height: 100vh;
-    background: #f8f9fa;
-}
-
-.section {
-    background: #ffffff;
-    padding: 2rem;
-    border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    display: flex;
-    flex-direction: column;
+.grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
 
-    // Some sections span full width
-    &.fullWidthSection {
-        grid-column: 1 / -1;
+    @media (max-width: 1200px) {
+        grid-template-columns: repeat(2, 1fr);
     }
-}
-
-.sectionTitle {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: $text-color;
-    margin: 0 0 1rem 0;
-    padding-bottom: 0.75rem;
-    border-bottom: 2px solid #e5e7eb;
-}
-
-.row {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-}
-
-.row2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
 
     @media (max-width: 768px) {
         grid-template-columns: 1fr;
     }
 }
 
-.row3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1.5rem;
+.colSpan2 {
+    grid-column: span 2;
+
+    @media (max-width: 1200px) {
+        grid-column: span 2;
+    }
 
     @media (max-width: 768px) {
-        grid-template-columns: 1fr;
+        grid-column: span 1;
+    }
+}
+
+.colSpan3 {
+    grid-column: span 3;
+
+    @media (max-width: 1200px) {
+        grid-column: span 2;
+    }
+
+    @media (max-width: 768px) {
+        grid-column: span 1;
     }
 }
 

@@ -1,9 +1,11 @@
 import express from 'express';
+import authRoute from './auth.routes.js';
+import userRoute from './user.routes.js';
 import customerRoute from './customer.routes.js';
-import followupRoute from './followup.routes.js';
+import followUpRoute from './followup.routes.js';
 import conversationRoute from './conversation.routes.js';
-import reportRoute from './report.routes.js';
 import reminderRoute from './reminder.routes.js';
+import reportRoute from './report.routes.js';
 
 const router = express.Router();
 
@@ -14,25 +16,33 @@ router.get('/health', (req, res) => {
 
 const defaultRoutes = [
     {
+        path: '/auth',
+        route: authRoute,
+    },
+    {
+        path: '/users',
+        route: userRoute,
+    },
+    {
         path: '/customers',
         route: customerRoute,
     },
     {
         path: '/followups',
-        route: followupRoute,
+        route: followUpRoute,
     },
     {
         path: '/conversations',
         route: conversationRoute,
     },
     {
+        path: '/reminders',
+        route: reminderRoute,
+    },
+    {
         path: '/reports',
         route: reportRoute,
     },
-    {
-        path: '/reminders',
-        route: reminderRoute,
-    }
 ];
 
 defaultRoutes.forEach((route) => {
