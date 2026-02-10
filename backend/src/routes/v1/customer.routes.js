@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { validate } from '../../middlewares/validate.middleware.js';
 import customerValidation from '../../validations/customer.validation.js';
 import customerController from '../../controllers/customer.controller.js';
@@ -6,10 +7,34 @@ import reminderController from '../../controllers/reminder.controller.js';
 
 const router = express.Router();
 
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedMimes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+            'application/vnd.ms-excel', // .xls
+        ];
+        if (allowedMimes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only Excel files (.xlsx, .xls) are allowed'));
+        }
+    },
+});
+
 router
     .route('/')
     .post(validate(customerValidation.createCustomer), customerController.createCustomer)
     .get(validate(customerValidation.getCustomers), customerController.getCustomers);
+
+// Import routes
+router.get('/template/download', customerController.downloadTemplate);
+router.post('/import', upload.single('file'), customerController.importCustomers);
 
 router
     .route('/:id')

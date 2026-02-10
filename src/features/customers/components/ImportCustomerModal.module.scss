@@ -85,6 +85,32 @@
 
     .browseButton {
         cursor: pointer;
+        display: inline-block;
+
+        .browseButtonText {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.625rem 1.25rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #ffffff;
+            color: $text-color;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+
+            &:hover {
+                background: #f9fafb;
+                border-color: $primary;
+                color: $primary;
+            }
+
+            &:active {
+                transform: scale(0.98);
+            }
+        }
     }
 
     .fileInput {

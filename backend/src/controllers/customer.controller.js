@@ -214,6 +214,338 @@ const deleteCustomer = catchAsync(async (req, res) => {
     res.status(200).send(new ApiResponse(200, null, 'Customer deleted successfully'));
 });
 
+// Download Excel Template
+const downloadTemplate = catchAsync(async (req, res) => {
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Customer Template');
+
+    // Define columns with headers
+    worksheet.columns = [
+        { header: 'Customer', key: 'customerName', width: 25 },
+        { header: 'Company', key: 'company', width: 25 },
+        { header: 'Primary Contact', key: 'contactName', width: 25 },
+        { header: 'Mobile', key: 'mobile', width: 15 },
+        { header: 'Mobile 2', key: 'mobile2', width: 15 },
+        { header: 'Mobile 3', key: 'mobile3', width: 15 },
+        { header: 'Mobile 4', key: 'mobile4', width: 15 },
+        { header: 'Mobile 5', key: 'mobile5', width: 15 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Address', key: 'address', width: 40 },
+        { header: 'Area', key: 'area', width: 20 },
+        { header: 'State', key: 'state', width: 20 },
+        { header: 'Pincode', key: 'pincode', width: 10 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Business Type', key: 'customerType', width: 30 },
+        { header: 'Interested Products', key: 'interestedProducts', width: 50 }
+    ];
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' }
+    };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Add example row
+    worksheet.addRow({
+        customerName: 'ABC Corporation',
+        company: 'ABC Corp',
+        contactName: 'John Doe',
+        mobile: '9876543210',
+        mobile2: '9876543211',
+        mobile3: '',
+        mobile4: '',
+        mobile5: '',
+        email: 'john@example.com',
+        address: '123 Main Street',
+        area: 'Andheri East',
+        state: 'Maharashtra',
+        pincode: '400001',
+        status: 'lead',
+        customerType: 'led_light_manufacturer',
+        interestedProducts: 'DALI DRIVER & DIMMER, SMART DRIVER – BLE'
+    });
+
+    // Add data validation for dropdowns
+    const customerTypes = [
+        'led_light_manufacturer',
+        'led_light_showroom',
+        'home_automation_provider',
+        'interior_designer',
+        'builders',
+        'dealer',
+        'distributor'
+    ];
+
+    const statuses = ['lead', 'running_high', 'running_low', 'inactive'];
+
+    // Apply data validation for 1000 rows
+    for (let i = 2; i <= 1001; i++) {
+        // Status validation (Column P - 16)
+        worksheet.getCell(`P${i}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: [`"${statuses.join(',')}"`]
+        };
+
+        // Business Type validation (Column Q - 17)
+        worksheet.getCell(`Q${i}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: [`"${customerTypes.join(',')}"`]
+        };
+    }
+
+    // Set response headers
+    res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+        'Content-Disposition',
+        'attachment; filename=Customer_Import_Template.xlsx'
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+});
+
+
+// Bulk Import Customers
+const importCustomers = catchAsync(async (req, res) => {
+    if (!req.file) {
+        throw new ApiError(400, 'No file uploaded');
+    }
+
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+
+    // Check file extension
+    const filename = req.file.originalname.toLowerCase();
+    if (filename.endsWith('.xls')) {
+        throw new ApiError(400, 'Legacy Excel files (.xls) are not supported. Please save your file as .xlsx (Excel Workbook) and try again.');
+    }
+
+    try {
+        await workbook.xlsx.load(req.file.buffer);
+    } catch (err) {
+        throw new ApiError(400, 'Failed to parse Excel file. Please ensure it is a valid .xlsx file.');
+    }
+
+    // Get first visible worksheet or any worksheet as fallback
+    let worksheet = workbook.worksheets.find(s => s.state === 'visible');
+    if (!worksheet) {
+        worksheet = workbook.worksheets[0] || workbook.getWorksheet(1);
+    }
+
+    if (!worksheet) {
+        throw new ApiError(400, `The Excel file "${req.file.originalname}" contains no readable worksheets. Please check if the file is empty or corrupted.`);
+    }
+    const results = {
+        success: 0,
+        failed: 0,
+        errors: [],
+        duplicates: 0
+    };
+
+    const customersToInsert = [];
+    const seenMobiles = new Set();
+    const seenEmails = new Set();
+
+    // Helper function to extract text from Excel cell
+    const getCellText = (cell) => {
+        const value = cell.value;
+
+        if (value === null || value === undefined) {
+            return '';
+        }
+
+        // Handle rich text
+        if (value.richText) {
+            return value.richText.map(part => part.text).join('').trim();
+        }
+
+        // Handle hyperlink
+        if (value.text !== undefined) {
+            return String(value.text).trim();
+        }
+
+        // Handle formula result
+        if (value.result !== undefined) {
+            return String(value.result).trim();
+        }
+
+        // Handle plain value
+        return String(value).trim();
+    };
+
+    // Skip header row, start from row 2
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header
+
+        try {
+            const customerName = getCellText(row.getCell(1)) || '';
+            const company = getCellText(row.getCell(2)) || '';
+            const contactName = getCellText(row.getCell(3)) || '';
+            const mobile = getCellText(row.getCell(4)) || '';
+            const mobile2 = getCellText(row.getCell(5)) || '';
+            const mobile3 = getCellText(row.getCell(6)) || '';
+            const mobile4 = getCellText(row.getCell(7)) || '';
+            const mobile5 = getCellText(row.getCell(8)) || '';
+            const email = getCellText(row.getCell(9)) || '';
+            const address = getCellText(row.getCell(10)) || '';
+            const area = getCellText(row.getCell(11)) || '';
+            const state = getCellText(row.getCell(12)) || '';
+            const pincode = getCellText(row.getCell(13)) || '';
+            const status = getCellText(row.getCell(14)) || 'lead';
+            const customerType = getCellText(row.getCell(15)) || '';
+            const interestedProductsStr = getCellText(row.getCell(16)) || '';
+
+            // Skip completely empty rows
+            if (!customerName && !company && !contactName && !mobile && !email && !address && !area) {
+                return;
+            }
+
+            // Validation
+            const errors = [];
+
+            if (mobile && !/^\d{10}$/.test(mobile)) {
+                errors.push('Mobile must be 10 digits');
+            }
+
+            // Check for duplicates within file
+            if (mobile && seenMobiles.has(mobile)) {
+                errors.push(`Duplicate mobile ${mobile} in file`);
+                results.duplicates++;
+            } else if (mobile) {
+                seenMobiles.add(mobile);
+            }
+
+            if (email && seenEmails.has(email)) {
+                errors.push(`Duplicate email ${email} in file`);
+                results.duplicates++;
+            } else if (email) {
+                seenEmails.add(email);
+            }
+
+            // Validate email format
+            if (email && !/^\S+@\S+\.\S+$/i.test(email)) {
+                errors.push('Invalid email format');
+            }
+
+
+            // Validate enums
+            const validCustomerTypes = [
+                'led_light_manufacturer',
+                'led_light_showroom',
+                'home_automation_provider',
+                'interior_designer',
+                'builders',
+                'dealer',
+                'distributor'
+            ];
+
+            if (customerType && !validCustomerTypes.includes(customerType)) {
+                errors.push(`Invalid customer type: ${customerType}`);
+            }
+
+            const validStatuses = ['lead', 'running_high', 'running_low', 'inactive'];
+            if (status && !validStatuses.includes(status)) {
+                errors.push(`Invalid status: ${status}`);
+            }
+
+            // Parse interested products
+            const interestedProducts = interestedProductsStr
+                ? interestedProductsStr.split(',').map(p => p.trim()).filter(p => p)
+                : [];
+
+            if (errors.length > 0) {
+                results.errors.push({
+                    row: rowNumber,
+                    mobile,
+                    contactName,
+                    errors
+                });
+                results.failed++;
+            } else {
+                // Build customer object
+                customersToInsert.push({
+                    customerName,
+                    contactPersons: [
+                        {
+                            name: contactName,
+                            mobile,
+                            mobile2,
+                            mobile3,
+                            mobile4,
+                            mobile5,
+                            email,
+                            isPrimary: true
+                        }
+                    ],
+                    company,
+                    customerType,
+                    area,
+                    state,
+                    address,
+                    pincode,
+                    status,
+                    interestedProducts
+                });
+            }
+        } catch (err) {
+            results.errors.push({
+                row: rowNumber,
+                errors: [`Unexpected error: ${err.message}`]
+            });
+            results.failed++;
+        }
+    });
+
+    // Check for existing customers by mobile
+    if (customersToInsert.length > 0) {
+        // Only check for mobiles that are provided
+        const mobiles = customersToInsert
+            .map(c => c.contactPersons[0].mobile)
+            .filter(m => m !== '');
+
+        let existingMobiles = new Set();
+        if (mobiles.length > 0) {
+            const existingCustomers = await customerService.findByMobiles(mobiles);
+            existingMobiles = new Set(
+                existingCustomers.flatMap(c => c.contactPersons.map(cp => cp.mobile))
+            );
+        }
+
+        const finalInserts = [];
+        customersToInsert.forEach(customer => {
+            const primaryMobile = customer.contactPersons[0].mobile;
+            if (primaryMobile && existingMobiles.has(primaryMobile)) {
+                results.errors.push({
+                    mobile: primaryMobile,
+                    contactName: customer.contactPersons[0].name,
+                    errors: ['Customer with this mobile already exists']
+                });
+                results.failed++;
+                results.duplicates++;
+            } else {
+                finalInserts.push(customer);
+            }
+        });
+
+        // Insert valid customers
+        if (finalInserts.length > 0) {
+            await customerService.bulkCreateCustomers(finalInserts);
+            results.success = finalInserts.length;
+        }
+    }
+
+    res.send(new ApiResponse(200, results, 'Import completed'));
+});
+
 export default {
     createCustomer,
     getCustomers,
@@ -222,4 +554,6 @@ export default {
     getConversationHistory,
     updateCustomer,
     deleteCustomer,
+    downloadTemplate,
+    importCustomers,
 };

@@ -109,10 +109,33 @@ const deleteCustomerById = async (customerId) => {
     return customer;
 };
 
+/**
+ * Find customers by mobile numbers
+ * @param {Array} mobiles - Array of mobile numbers
+ * @returns {Promise<Array>}
+ */
+const findByMobiles = async (mobiles) => {
+    return Customer.find({
+        'contactPersons.mobile': { $in: mobiles },
+        isDeleted: false
+    });
+};
+
+/**
+ * Bulk create customers
+ * @param {Array} customers - Array of customer objects
+ * @returns {Promise<Array>}
+ */
+const bulkCreateCustomers = async (customers) => {
+    return Customer.insertMany(customers, { ordered: false });
+};
+
 export default {
     createCustomer,
     queryCustomers,
     getCustomerById,
     updateCustomerById,
     deleteCustomerById,
+    findByMobiles,
+    bulkCreateCustomers,
 };

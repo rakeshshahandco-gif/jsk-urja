@@ -145,9 +145,9 @@ export const ImportCustomerModal = ({ isOpen, onClose, onSuccess }) => {
                             <h4>Drag & Drop Excel File</h4>
                             <p>or</p>
                             <label htmlFor="file-input" className={styles.browseButton}>
-                                <Button as="span" variant="outline">
+                                <span className={styles.browseButtonText}>
                                     Browse Files
-                                </Button>
+                                </span>
                             </label>
                             <input
                                 id="file-input"
