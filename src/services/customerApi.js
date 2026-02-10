@@ -108,6 +108,41 @@ export const getConversationHistory = async (customerId, params = {}) => {
     }
 };
 
+/**
+ * Download customer import template
+ * @returns {Promise<Blob>} - Excel file blob
+ */
+export const downloadCustomerTemplate = async () => {
+    try {
+        const response = await apiClient.get('/customers/template/download', {
+            responseType: 'blob',
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error downloading template:', error);
+        throw error;
+    }
+};
+
+/**
+ * Import customers from Excel file
+ * @param {FormData} formData - Form data containing the file
+ * @returns {Promise<Object>} - Import results
+ */
+export const importCustomers = async (formData) => {
+    try {
+        const response = await apiClient.post('/customers/import', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data.data;
+    } catch (error) {
+        console.error('Error importing customers:', error);
+        throw error;
+    }
+};
+
 export default {
     getCustomers,
     getCustomer,
@@ -116,4 +151,6 @@ export default {
     deleteCustomer,
     getCustomerConversations,
     getConversationHistory,
+    downloadCustomerTemplate,
+    importCustomers,
 };

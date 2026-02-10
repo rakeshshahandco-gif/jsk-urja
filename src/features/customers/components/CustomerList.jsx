@@ -4,8 +4,9 @@ import { Button, Input, useModal } from '@/components/ui';
 import { CustomerForm } from './CustomerForm';
 import { TalkWithCustomerForm } from '@/features/conversations/components/TalkWithCustomerForm';
 import { FollowUpForm } from '@/features/followup/components/FollowUpForm';
+import { ImportCustomerModal } from './ImportCustomerModal';
 import { getCustomers, getCustomer, deleteCustomer, updateCustomer } from '@/services/customerApi';
-import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 
 export const CustomerList = () => {
     const { openModal, closeModal } = useModal();
@@ -20,6 +21,7 @@ export const CustomerList = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalResults, setTotalResults] = useState(0);
+    const [showImportModal, setShowImportModal] = useState(false);
     const limit = 10;
 
     // Fetch customers from API
@@ -58,6 +60,14 @@ export const CustomerList = () => {
 
     const handleAddCustomer = () => {
         navigate('/customers/add');
+    };
+
+    const handleImportCustomers = () => {
+        setShowImportModal(true);
+    };
+
+    const handleImportSuccess = () => {
+        fetchCustomers(); // Refresh list after successful import
     };
 
     const handleEditCustomer = async (customer) => {
@@ -180,9 +190,14 @@ export const CustomerList = () => {
                         </span>
                     )}
                 </h1>
-                <Button onClick={handleAddCustomer}>
-                    <Plus size={20} /> Add Customer
-                </Button>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <Button variant="outline" onClick={handleImportCustomers}>
+                        <Upload size={20} /> Import
+                    </Button>
+                    <Button onClick={handleAddCustomer}>
+                        <Plus size={20} /> Add Customer
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -414,6 +429,14 @@ export const CustomerList = () => {
                     )}
                 </>
             )}
+
+            {/* Import Customer Modal */}
+            {showImportModal && (
+                <ImportCustomerModal
+                    isOpen={showImportModal}
+                    onClose={() => setShowImportModal(false)}
+                    onSuccess={handleImportSuccess}
+                />)}
         </div>
     );
 };
