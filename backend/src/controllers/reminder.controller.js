@@ -13,7 +13,7 @@ const createReminder = catchAsync(async (req, res) => {
 });
 
 const getReminders = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo', 'customerId', 'search']);
+    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo', 'customerId', 'search', 'isClosed']);
     const options = pick(req.query, ['sortBy', 'sortOrder', 'limit', 'page']);
     const result = await reminderService.queryReminders(filters, options);
     res.send(result);

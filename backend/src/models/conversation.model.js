@@ -24,6 +24,17 @@ const conversationSchema = mongoose.Schema(
         outcome: {
             type: String,
         },
+        interestedProducts: {
+            type: [String],
+            default: [],
+        },
+        productNotes: {
+            type: String,
+            trim: true,
+        },
+        callDuration: {
+            type: Number,
+        },
     },
     {
         timestamps: true,

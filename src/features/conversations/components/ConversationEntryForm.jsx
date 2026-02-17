@@ -59,6 +59,39 @@ export const ConversationEntryForm = ({ form, onSave }) => {
                 />
             </div>
 
+            <div className={styles.formSection} style={{ border: 'none', padding: 0, marginTop: '20px' }}>
+                <label className={styles.label} style={{ marginBottom: '10px', display: 'block', fontWeight: 600 }}>Interested Products</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                    {[
+                        'PHASE CUT DIMMABLE DRIVER AND DIMMER',
+                        'ANALOG DRIVER & DIMMER',
+                        'DALI DRIVER & DIMMER',
+                        'SMART DRIVER – BLE',
+                        'SMART DRIVER – ZIGBEE'
+                    ].map((product) => (
+                        <label key={product} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                value={product}
+                                {...register('interestedProducts')}
+                                style={{ width: '16px', height: '16px' }}
+                            />
+                            <span style={{ fontSize: '0.85rem' }}>{product}</span>
+                        </label>
+                    ))}
+                </div>
+
+                <div className={styles.textareaGroup}>
+                    <label className={styles.label}>Product Requirement Notes</label>
+                    <textarea
+                        className={styles.textarea}
+                        rows={3}
+                        placeholder="Specific product requirements..."
+                        {...register('productNotes')}
+                    />
+                </div>
+            </div>
+
             <Input
                 label="Call Duration (minutes)"
                 type="number"

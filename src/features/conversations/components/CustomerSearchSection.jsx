@@ -5,20 +5,28 @@ export const CustomerSearchSection = ({ customers, onSelect, selectedCustomer })
     const [searchTerm, setSearchTerm] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
 
-    const filteredCustomers = customers.filter(customer =>
-        (customer.customerName || customer.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.mobile || '').includes(searchTerm) ||
-        (customer.mobile2 || '').includes(searchTerm) ||
-        (customer.mobile3 || '').includes(searchTerm) ||
-        (customer.mobile4 || '').includes(searchTerm) ||
-        (customer.mobile5 || '').includes(searchTerm)
-    );
+    const filteredCustomers = customers.filter(customer => {
+        const searchVal = searchTerm.toLowerCase();
+        const nameMatch = (customer.customerName || '').toLowerCase().includes(searchVal);
+        const companyMatch = (customer.company || '').toLowerCase().includes(searchVal);
+        const brandMatch = (customer.companyBrand || '').toLowerCase().includes(searchVal);
+
+        const contactsMatch = (customer.contactPersons || []).some(contact =>
+            (contact.name || '').toLowerCase().includes(searchVal) ||
+            (contact.mobile || '').includes(searchVal) ||
+            (contact.mobile2 || '').includes(searchVal) ||
+            (contact.mobile3 || '').includes(searchVal) ||
+            (contact.mobile4 || '').includes(searchVal) ||
+            (contact.mobile5 || '').includes(searchVal) ||
+            (contact.email || '').toLowerCase().includes(searchVal)
+        );
+
+        return nameMatch || companyMatch || brandMatch || contactsMatch;
+    });
 
     const handleSelect = (customer) => {
         onSelect(customer);
-        setSearchTerm(customer.company);
+        setSearchTerm(customer.company || customer.customerName || '');
         setShowDropdown(false);
     };
 
@@ -29,7 +37,7 @@ export const CustomerSearchSection = ({ customers, onSelect, selectedCustomer })
                 <input
                     type="text"
                     className={styles.searchInput}
-                    placeholder="Type company name or contact person..."
+                    placeholder="Search by name, company, or mobile..."
                     value={searchTerm}
                     onChange={(e) => {
                         setSearchTerm(e.target.value);
@@ -40,18 +48,21 @@ export const CustomerSearchSection = ({ customers, onSelect, selectedCustomer })
 
                 {showDropdown && searchTerm && filteredCustomers.length > 0 && (
                     <div className={styles.dropdown}>
-                        {filteredCustomers.map((customer) => (
-                            <div
-                                key={customer.id}
-                                className={styles.dropdownItem}
-                                onClick={() => handleSelect(customer)}
-                            >
-                                <div className={styles.dropdownCompany}>{customer.customerName || customer.name || 'Not Provided'}</div>
-                                <div className={styles.dropdownDetails}>
-                                    {customer.company} • {customer.contactPerson || '-'} • {customer.mobile || '-'}
+                        {filteredCustomers.map((customer) => {
+                            const primaryContact = customer.contactPersons?.find(c => c.isPrimary) || (customer.contactPersons?.[0]);
+                            return (
+                                <div
+                                    key={customer._id}
+                                    className={styles.dropdownItem}
+                                    onClick={() => handleSelect(customer)}
+                                >
+                                    <div className={styles.dropdownCompany}>{customer.customerName || customer.name || 'Not Provided'}</div>
+                                    <div className={styles.dropdownDetails}>
+                                        {customer.company} • {primaryContact?.name || '-'} • {primaryContact?.mobile || '-'}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

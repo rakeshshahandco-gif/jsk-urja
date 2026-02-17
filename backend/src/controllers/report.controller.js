@@ -53,7 +53,8 @@ const exportPDFReport = catchAsync(async (req, res) => {
 });
 
 const getFollowUpReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'followUpType', 'status', 'priority', 'dateFrom', 'dateTo']);
+    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo']);
+    filters.search = req.query.search || req.query.q;
     const options = pick(req.query, ['sortBy', 'sortOrder', 'page', 'limit']);
     const result = await reportService.queryFollowUpReport(filters, options);
     res.send(result);
@@ -128,8 +129,8 @@ const exportReminderPDF = catchAsync(async (req, res) => {
 
 const getOpenRemindersReport = catchAsync(async (req, res) => {
     // 1. Basic Filters
-    const filters = pick(req.query, ['priority', 'followUpType', 'search']);
-    if (req.query.q) filters.search = req.query.q;
+    const filters = pick(req.query, ['priority', 'followUpType']);
+    filters.search = req.query.search || req.query.q;
 
     // 2. Tab Logic with Timezone (Asia/Kolkata)
     const tab = req.query.tab || 'TODAY';
@@ -213,7 +214,8 @@ const exportOpenRemindersPDF = catchAsync(async (req, res) => {
 });
 
 const getFollowupDashboardList = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'type', 'priority', 'due']);
+    const filters = pick(req.query, ['type', 'priority', 'due']);
+    filters.search = req.query.search || req.query.q;
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await reportService.queryFollowupDashboardList(filters, options);
     res.send(result);

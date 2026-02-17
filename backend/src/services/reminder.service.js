@@ -54,6 +54,11 @@ const queryReminders = async (filters, options) => {
         }
     }
 
+    // Direct isClosed filter (usually from direct frontend params)
+    if (filters.isClosed !== undefined) {
+        query.isClosed = filters.isClosed === 'true' || filters.isClosed === true;
+    }
+
     if (filters.dateFrom || filters.dateTo) {
         query.reminderDate = query.reminderDate || {};
         if (filters.dateFrom) query.reminderDate.$gte = new Date(filters.dateFrom);

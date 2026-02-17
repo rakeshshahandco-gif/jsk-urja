@@ -37,17 +37,13 @@ export const RemindersDashboard = () => {
             let params = {};
 
             if (activeTab === 'today') {
-                params = { dateFrom: todayStr, dateTo: todayStr, isClosed: false };
+                params = { status: 'Today' };
             } else if (activeTab === 'upcoming') {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                params = { dateFrom: tomorrow.toISOString().split('T')[0], isClosed: false };
+                params = { status: 'Upcoming' };
             } else if (activeTab === 'overdue') {
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                params = { dateTo: yesterday.toISOString().split('T')[0], isClosed: false };
+                params = { status: 'Overdue' };
             } else if (activeTab === 'closed') {
-                params = { isClosed: true };
+                params = { status: 'Closed' };
             }
 
             const data = await getReminders(params);

@@ -6,6 +6,9 @@ import followUpRoute from './followup.routes.js';
 import conversationRoute from './conversation.routes.js';
 import reminderRoute from './reminder.routes.js';
 import reportRoute from './report.routes.js';
+import taskRoute from './task.routes.js';
+import taskCategoryRoute from './taskCategory.routes.js';
+import groupRoute from './group.routes.js';
 
 const router = express.Router();
 
@@ -42,6 +45,18 @@ const defaultRoutes = [
     {
         path: '/reports',
         route: reportRoute,
+    },
+    {
+        path: '/tasks',
+        route: taskRoute,
+    },
+    {
+        path: '/task-categories',
+        route: taskCategoryRoute,
+    },
+    {
+        path: '/groups',
+        route: groupRoute,
     },
 ];
 

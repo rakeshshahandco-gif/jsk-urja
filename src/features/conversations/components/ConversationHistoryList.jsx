@@ -58,9 +58,14 @@ export const ConversationHistoryList = ({ conversations }) => {
                         <div className={styles.historyDiscussion}>
                             {conv.discussionDetails}
                         </div>
-                        {conv.outcome && (
-                            <div className={styles.historyOutcome}>
-                                <strong>Outcome:</strong> {conv.outcome}
+                        {conv.interestedProducts && conv.interestedProducts.length > 0 && (
+                            <div className={styles.historyProducts} style={{ marginTop: '8px', fontSize: '0.85rem' }}>
+                                <strong>Products:</strong> {conv.interestedProducts.join(', ')}
+                            </div>
+                        )}
+                        {conv.productNotes && (
+                            <div className={styles.historyProductNotes} style={{ marginTop: '4px', fontSize: '0.85rem', color: '#666' }}>
+                                <strong>Product Notes:</strong> {conv.productNotes}
                             </div>
                         )}
                     </div>

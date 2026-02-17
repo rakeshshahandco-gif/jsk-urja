@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
-import { Search, Filter, Phone, MessageSquare, Calendar, Download, AlertCircle, Loader2, User, Building } from 'lucide-react';
+import { Search, Filter, Phone, MessageSquare, Calendar, Download, AlertCircle, Loader2, User, Building, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiClient as api } from '@/lib/apiClient';
 import { getCustomers } from '@/services/customerApi';
+import { closeReminder } from '@/services/reminderApi';
 
 // Internal Service wrappers
 const getFollowupDashboardList = async (params) => {
@@ -125,6 +126,23 @@ const FollowupDashboardReport = () => {
         } catch (error) {
             console.error(error);
             addToast('Export failed', 'error');
+        }
+    };
+
+    const handleCloseTask = async (id) => {
+        if (!window.confirm('Are you sure you want to close this task?')) return;
+        try {
+            await closeReminder(id);
+            addToast('Task closed successfully', 'success');
+            // Refresh Both
+            fetchTasks();
+            if (selectedCustomerId) {
+                const data = await getFollowupDashboardDetail(selectedCustomerId);
+                setCustomerData(data);
+            }
+        } catch (error) {
+            console.error(error);
+            addToast('Failed to close task', 'error');
         }
     };
 
@@ -318,6 +336,7 @@ const FollowupDashboardReport = () => {
                                                 <th className="px-4 py-2 w-24 border-r">Type</th>
                                                 <th className="px-4 py-2 w-24 border-r">Priority</th>
                                                 <th className="px-4 py-2">What to Talk (Note)</th>
+                                                <th className="px-4 py-2 w-20">Action</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
@@ -339,6 +358,15 @@ const FollowupDashboardReport = () => {
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-2 text-gray-700">{task.taskNote}</td>
+                                                    <td className="px-4 py-2 text-center">
+                                                        <button
+                                                            onClick={() => handleCloseTask(task._id)}
+                                                            className="p-1.5 hover:bg-green-100 text-green-600 rounded-full transition-colors"
+                                                            title="Close Task"
+                                                        >
+                                                            <CheckCircle className="w-5 h-5" />
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -391,7 +419,7 @@ const FollowupDashboardReport = () => {
                                                 </tr>
                                             )) : (
                                                 <tr>
-                                                    <td colspan="3" className="px-4 py-8 text-center text-gray-500 italic">
+                                                    <td colSpan="3" className="px-4 py-8 text-center text-gray-500 italic">
                                                         No conversation history found.
                                                     </td>
                                                 </tr>

@@ -30,7 +30,9 @@ export const FollowUpForm = () => {
             conversationDate: new Date().toISOString().split('T')[0],
             mode: 'call',
             discussionDetails: '',
-            outcome: ''
+            outcome: '',
+            interestedProducts: [],
+            productNotes: ''
         }
     });
 
@@ -99,10 +101,15 @@ export const FollowUpForm = () => {
         try {
             const conversationData = {
                 customerId: customerId,
-                conversationDate: new Date(data.conversationDate),
+                conversationDate: data.conversationDate || new Date().toISOString().split('T')[0],
                 mode: data.mode,
                 discussionDetails: data.discussionDetails,
-                outcome: data.outcome || ''
+                outcome: data.outcome || '',
+                interestedProducts: Array.isArray(data.interestedProducts)
+                    ? data.interestedProducts.filter(p => p && p !== 'on')
+                    : (data.interestedProducts && data.interestedProducts !== 'on' ? [data.interestedProducts] : []),
+                productNotes: data.productNotes || '',
+                callDuration: data.callDuration ? Number(data.callDuration) : null,
             };
 
             const response = await createConversation(conversationData);
@@ -116,14 +123,18 @@ export const FollowUpForm = () => {
                 conversationDate: new Date().toISOString().split('T')[0],
                 mode: 'call',
                 discussionDetails: '',
-                outcome: ''
+                outcome: '',
+                interestedProducts: [],
+                productNotes: '',
+                callDuration: ''
             });
 
             addToast('Conversation saved successfully!', 'success');
 
         } catch (error) {
             console.error('Error saving conversation:', error);
-            addToast('Failed to save conversation', 'error');
+            const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+            addToast(`Failed to save conversation: ${errorMsg}`, 'error');
         }
     };
 
@@ -256,6 +267,39 @@ export const FollowUpForm = () => {
                                 />
                             </div>
 
+                            <div className={styles.formSection} style={{ border: 'none', padding: 0, marginTop: '1.5rem', background: 'none' }}>
+                                <label style={{ marginBottom: '12px', display: 'block', fontWeight: 600, color: '#374151' }}>Interested Products</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    {[
+                                        'PHASE CUT DIMMABLE DRIVER AND DIMMER',
+                                        'ANALOG DRIVER & DIMMER',
+                                        'DALI DRIVER & DIMMER',
+                                        'SMART DRIVER – BLE',
+                                        'SMART DRIVER – ZIGBEE'
+                                    ].map((product) => (
+                                        <label key={product} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                value={product}
+                                                {...conversationForm.register('interestedProducts')}
+                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                            />
+                                            <span style={{ fontSize: '0.875rem', color: '#1f2937' }}>{product}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className={styles.formGroup}>
+                                    <label>Product Requirement Notes</label>
+                                    <textarea
+                                        {...conversationForm.register('productNotes')}
+                                        rows={3}
+                                        placeholder="Specific product requirements..."
+                                        className={styles.formTextarea}
+                                    />
+                                </div>
+                            </div>
+
                             <Button
                                 type="submit"
                                 isLoading={conversationForm.formState.isSubmitting}
@@ -296,6 +340,16 @@ export const FollowUpForm = () => {
                                             <div className={styles.conversationOutcome}>
                                                 <strong>Outcome:</strong>
                                                 <p>{conv.outcome}</p>
+                                            </div>
+                                        )}
+                                        {conv.interestedProducts && conv.interestedProducts.length > 0 && (
+                                            <div className={styles.conversationProducts} style={{ marginTop: '8px', fontSize: '0.9rem' }}>
+                                                <strong>Products:</strong> {conv.interestedProducts.join(', ')}
+                                            </div>
+                                        )}
+                                        {conv.productNotes && (
+                                            <div className={styles.conversationNotes} style={{ marginTop: '4px', fontSize: '0.9rem', color: '#4b5563' }}>
+                                                <strong>Product Notes:</strong> {conv.productNotes}
                                             </div>
                                         )}
                                     </div>

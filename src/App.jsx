@@ -19,6 +19,8 @@ import ConversationHistoryReport from '@/features/reports/ConversationHistoryRep
 import FollowupDashboardReport from '@/features/reports/FollowupDashboardReport';
 import FollowupTaskReport from '@/features/reports/FollowupTaskReport';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
+import { TaskList } from '@/features/tasks/components/TaskList';
+import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -162,6 +164,9 @@ function App() {
                                                                 </ProtectedRoute>
                                                             }
                                                         />
+
+                                                        <Route path="/tasks/create" element={<TaskCreatePage />} />
+                                                        <Route path="/tasks/list" element={<TaskList />} />
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

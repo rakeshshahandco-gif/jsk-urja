@@ -50,7 +50,6 @@ export const ReportTable = ({ data, sortConfig, onSort }) => {
                             Status {getSortIcon('status')}
                         </th>
                         <th>Type</th>
-                        <th>Interested Products</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -75,9 +74,6 @@ export const ReportTable = ({ data, sortConfig, onSort }) => {
                                     </span>
                                 </td>
                                 <td>{customer.customerType || '-'}</td>
-                                <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {(customer.interestedProducts || []).join(', ') || '-'}
-                                </td>
                             </tr>
                         );
                     })}

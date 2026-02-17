@@ -350,7 +350,12 @@ const buildFollowUpQuery = (filters) => {
             query.reminderDate = { $lt: today };
         } else if (filters.status === 'Closed') {
             query.isClosed = true;
+        } else if (filters.status === 'All') {
+            // No status filter
         }
+    } else {
+        // Default to Open if no status specified
+        query.isClosed = { $ne: true };
     }
 
     if (filters.followUpType) query.followUpType = filters.followUpType;

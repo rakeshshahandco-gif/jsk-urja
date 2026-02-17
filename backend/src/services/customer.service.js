@@ -28,7 +28,18 @@ const queryCustomers = async (filter, options) => {
 
     // Search logic
     if (options.search) {
-        finalFilter.$text = { $search: options.search };
+        const searchRegex = { $regex: options.search, $options: 'i' };
+        finalFilter.$or = [
+            { customerName: searchRegex },
+            { company: searchRegex },
+            { companyBrand: searchRegex },
+            { 'contactPersons.name': searchRegex },
+            { 'contactPersons.mobile': searchRegex },
+            { 'contactPersons.mobile2': searchRegex },
+            { 'contactPersons.mobile3': searchRegex },
+            { 'contactPersons.mobile4': searchRegex },
+            { 'contactPersons.mobile5': searchRegex },
+        ];
     }
 
     const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;

@@ -103,23 +103,6 @@ const customerSchema = mongoose.Schema(
             uppercase: true,
             match: [/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid GST number format'],
         },
-        // Product Interest
-        interestedProducts: {
-            type: [String],
-            enum: [
-                'PHASE CUT DIMMABLE DRIVER AND DIMMER',
-                'ANALOG DRIVER & DIMMER',
-                'DALI DRIVER & DIMMER',
-                'SMART DRIVER – BLE',
-                'SMART DRIVER – ZIGBEE',
-                ''  // Allow empty strings for flexibility
-            ],
-            default: [],
-        },
-        productNotes: {
-            type: String,
-            trim: true,
-        },
         isDeleted: {
             type: Boolean,
             default: false,

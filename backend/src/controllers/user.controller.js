@@ -21,28 +21,42 @@ export const getUserById = asyncHandler(async (req, res) => {
 
 // Create new user (Admin only)
 export const createUser = asyncHandler(async (req, res) => {
-    const { name, username, email, password, role, permissions } = req.body;
+    try {
+        const { name, username, email, mobile, password, role, permissions } = req.body;
 
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
-    if (userExists) {
-        throw new ApiError(400, 'User already exists');
-    }
+        const query = { $or: [{ username }] };
+        if (email && email.trim() !== '') {
+            query.$or.push({ email });
+        }
 
-    const user = await User.create({
-        name,
-        username,
-        email,
-        password,
-        role: role || 'viewer',
-        permissions: permissions || []
-    });
+        const userExists = await User.findOne(query);
+        if (userExists) {
+            console.log('User creation failed: User already exists', { email, username });
+            throw new ApiError(400, 'User already exists');
+        }
 
-    if (user) {
-        // Exclude password from response
-        user.password = undefined;
-        res.status(201).json(new ApiResponse(201, user, 'User created successfully'));
-    } else {
-        throw new ApiError(400, 'Invalid user data');
+        const userData = {
+            name,
+            username,
+            email: email || undefined, // Use undefined for empty strings to satisfy sparse index and regex
+            mobile,
+            password,
+            role: role || 'viewer',
+            permissions: permissions || [],
+            isActive: req.body.isActive !== undefined ? req.body.isActive : true
+        };
+
+        const user = await User.create(userData);
+
+        if (user) {
+            user.password = undefined;
+            res.status(201).json(new ApiResponse(201, user, 'User created successfully'));
+        } else {
+            throw new ApiError(400, 'Invalid user data');
+        }
+    } catch (error) {
+        console.error('Error in createUser:', error);
+        throw error;
     }
 });
 
@@ -54,6 +68,7 @@ export const updateUser = asyncHandler(async (req, res) => {
         user.name = req.body.name || user.name;
         user.email = req.body.email || user.email;
         user.username = req.body.username || user.username;
+        user.mobile = req.body.mobile || user.mobile;
 
         // Only Admin can update roles
         if (req.body.role && req.user.role === 'admin') {

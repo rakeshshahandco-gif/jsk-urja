@@ -33,8 +33,6 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 notes: '',
                 tags: [],
                 gstNumber: '',
-                interestedProducts: [],
-                productNotes: '',
                 contactPersons: [
                     {
                         name: '',
@@ -64,8 +62,6 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             notes: customerData.notes || '',
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
-            interestedProducts: Array.isArray(customerData.interestedProducts) ? customerData.interestedProducts : [],
-            productNotes: customerData.productNotes || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
                     name: contact.name || '',
@@ -462,45 +458,6 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     </div>
                 </div>
 
-                {/* Product Interest */}
-                <div className="subsection" style={{ marginTop: '24px' }}>
-                    <h4 style={{ fontSize: '1rem', marginBottom: '16px', color: '#374151' }}>Product Interest</h4>
-
-                    <div className={styles['form-group']}>
-                        <label>INTERESTED IN PRODUCTS</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                            {[
-                                'PHASE CUT DIMMABLE DRIVER AND DIMMER',
-                                'ANALOG DRIVER & DIMMER',
-                                'DALI DRIVER & DIMMER',
-                                'SMART DRIVER – BLE',
-                                'SMART DRIVER – ZIGBEE'
-                            ].map((product) => (
-                                <label key={product} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        value={product}
-                                        {...register('interestedProducts')}
-                                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                    />
-                                    <span style={{ fontSize: '0.875rem', color: '#374151' }}>{product}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className={styles['form-group']}>
-                        <label htmlFor="productNotes">PRODUCT REQUIREMENT NOTES</label>
-                        <textarea
-                            id="productNotes"
-                            {...register('productNotes')}
-                            placeholder="Enter specific product requirements or notes..."
-                            rows={4}
-                            className={styles['form-textarea']}
-                            onChange={handleUppercaseChange('productNotes')}
-                        />
-                    </div>
-                </div>
             </div>
 
             {/* Additional Information */}
