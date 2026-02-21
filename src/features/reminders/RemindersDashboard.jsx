@@ -6,7 +6,7 @@ import {
     CalendarDays, TriangleAlert, CheckSquare, History
 } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { getReminders, closeReminder, extendReminder } from '@/services/reminderApi';
+import { getReminders, closeReminder, extendReminder, getReminderCounts } from '@/services/reminderApi';
 import styles from './RemindersDashboard.module.scss';
 import { useToast } from '@/components/ui/Toast';
 
@@ -26,16 +26,19 @@ export const RemindersDashboard = () => {
     const [extendData, setExtendData] = useState({ date: '', time: '' });
     const [actionLoading, setActionLoading] = useState(false);
 
+    const fetchCounts = useCallback(async () => {
+        try {
+            const countsData = await getReminderCounts();
+            setCounts(countsData || { today: 0, upcoming: 0, overdue: 0, closed: 0 });
+        } catch (error) {
+            console.error('Error fetching counts:', error);
+        }
+    }, []);
+
     const fetchReminders = useCallback(async () => {
         setLoading(true);
         try {
-            // We'll fetch all relevant reminders to calculate counts, 
-            // but in a real app, we might have a specific count endpoint.
-            // For now, let's fetch based on the active tab's criteria.
-
-            const todayStr = new Date().toISOString().split('T')[0];
             let params = {};
-
             if (activeTab === 'today') {
                 params = { status: 'Today' };
             } else if (activeTab === 'upcoming') {
@@ -47,12 +50,9 @@ export const RemindersDashboard = () => {
             }
 
             const data = await getReminders(params);
-            setReminders(data.results || []);
-
-            // Just a simple way to set counts for the UI labels
-            // In a larger app, fetch these separately or in one "summary" call
-            setCounts(prev => ({ ...prev, [activeTab]: data.totalResults || 0 }));
-
+            // Handle different data structures defensively
+            const results = data.results || data.data || (Array.isArray(data) ? data : []);
+            setReminders(results);
         } catch (error) {
             console.error('Error fetching reminders:', error);
             addToast('Failed to load tasks', 'error');
@@ -62,8 +62,9 @@ export const RemindersDashboard = () => {
     }, [activeTab, addToast]);
 
     useEffect(() => {
+        fetchCounts();
         fetchReminders();
-    }, [fetchReminders]);
+    }, [fetchCounts, fetchReminders]);
 
     const handleCloseTask = async (id) => {
         if (!window.confirm('Are you sure you want to close this task?')) return;
@@ -72,6 +73,7 @@ export const RemindersDashboard = () => {
         try {
             await closeReminder(id);
             addToast('Task closed successfully', 'success');
+            fetchCounts();
             fetchReminders();
         } catch (error) {
             console.error('Error closing task:', error);
@@ -104,6 +106,7 @@ export const RemindersDashboard = () => {
             });
             addToast('Task date extended', 'success');
             setIsExtendModalOpen(false);
+            fetchCounts();
             fetchReminders();
         } catch (error) {
             console.error('Error extending task:', error);
@@ -138,7 +141,7 @@ export const RemindersDashboard = () => {
                 >
                     <Calendar size={18} />
                     Today
-                    <span className={styles.count}>{counts.today}+</span>
+                    {counts.today > 0 && <span className={styles.count}>{counts.today}+</span>}
                 </button>
                 <button
                     className={`${styles.tab} ${activeTab === 'upcoming' ? styles.active : ''}`}
@@ -146,6 +149,7 @@ export const RemindersDashboard = () => {
                 >
                     <CalendarDays size={18} />
                     Upcoming
+                    {counts.upcoming > 0 && <span className={styles.count}>{counts.upcoming}+</span>}
                 </button>
                 <button
                     className={`${styles.tab} ${activeTab === 'overdue' ? styles.active : ''}`}
@@ -153,6 +157,7 @@ export const RemindersDashboard = () => {
                 >
                     <TriangleAlert size={18} />
                     Overdue
+                    {counts.overdue > 0 && <span className={styles.count}>{counts.overdue}+</span>}
                 </button>
                 <button
                     className={`${styles.tab} ${activeTab === 'closed' ? styles.active : ''}`}
@@ -184,6 +189,7 @@ export const RemindersDashboard = () => {
                                     <th>Type</th>
                                     <th>Priority</th>
                                     <th>Task Note</th>
+                                    <th>Created By</th>
                                     {!['closed'].includes(activeTab) && <th>Actions</th>}
                                 </tr>
                             </thead>
@@ -213,6 +219,9 @@ export const RemindersDashboard = () => {
                                         </td>
                                         <td>
                                             <p className={styles.note}>{r.taskNote || '-'}</p>
+                                        </td>
+                                        <td>
+                                            <span className={styles.creatorName}>{r.createdBy?.name || '-'}</span>
                                         </td>
                                         {!['closed'].includes(activeTab) && (
                                             <td>

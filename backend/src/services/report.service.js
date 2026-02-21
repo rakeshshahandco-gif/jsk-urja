@@ -49,6 +49,11 @@ const buildReportQuery = (filters) => {
         query.state = filters.state;
     }
 
+    // City filter
+    if (filters.city) {
+        query.city = filters.city;
+    }
+
     // Product Interest filter
     if (filters.interestedProduct) {
         query.interestedProducts = filters.interestedProduct;
@@ -98,9 +103,10 @@ const queryCustomerReport = async (filters, options) => {
  * @returns {Promise<Object>}
  */
 const getReportOptions = async () => {
-    const [statuses, states, products, types] = await Promise.all([
+    const [statuses, states, cities, products, types] = await Promise.all([
         Customer.distinct('status'),
         Customer.distinct('state'),
+        Customer.distinct('city'),
         Customer.distinct('interestedProducts'),
         Customer.distinct('customerType')
     ]);
@@ -108,6 +114,7 @@ const getReportOptions = async () => {
     return {
         statuses: statuses.filter(Boolean),
         states: states.filter(Boolean),
+        cities: cities.filter(Boolean),
         products: products.filter(Boolean),
         types: types.filter(Boolean)
     };
@@ -134,7 +141,7 @@ const exportReportToCSV = async (filters, options) => {
         'Mobile 1', 'Mobile 2', 'Mobile 3', 'Mobile 4', 'Mobile 5',
         'Email',
         'Address',
-        'Area',
+        'City',
         'State',
         'Pincode',
         'Status',
@@ -156,7 +163,7 @@ const exportReportToCSV = async (filters, options) => {
             primaryContact.mobile5 || '-',
             primaryContact.email || c.companyEmail || '-',
             (c.address || '').replace(/,/g, ' '),
-            c.area || '-',
+            c.city || '-',
             c.state || '-',
             c.pincode || '-',
             c.status || '-',
@@ -198,7 +205,7 @@ const generateExcelReport = async (filters, options) => {
         { header: 'Mobiles', key: 'mobiles', width: 30 },
         { header: 'Email', key: 'email', width: 25 },
         { header: 'Address', key: 'address', width: 40 },
-        { header: 'Area', key: 'area', width: 15 },
+        { header: 'City', key: 'city', width: 15 },
         { header: 'State', key: 'state', width: 15 },
         { header: 'Pincode', key: 'pincode', width: 10 },
         { header: 'Status', key: 'status', width: 15 },
@@ -232,7 +239,7 @@ const generateExcelReport = async (filters, options) => {
             mobiles: mobiles || '-',
             email: primaryContact.email || c.companyEmail || '-',
             address: c.address || '-',
-            area: c.area || '-',
+            city: c.city || '-',
             state: c.state || '-',
             pincode: c.pincode || '-',
             status: c.status || '-',
@@ -377,6 +384,8 @@ const queryFollowUpReport = async (filters, options) => {
         { $match: query },
         { $lookup: { from: 'customers', localField: 'customerId', foreignField: '_id', as: 'customer' } },
         { $unwind: '$customer' },
+        { $lookup: { from: 'users', localField: 'createdBy', foreignField: '_id', as: 'creator' } },
+        { $unwind: { path: '$creator', preserveNullAndEmptyArrays: true } },
         { $lookup: { from: 'conversations', localField: 'conversationId', foreignField: '_id', as: 'conversation' } },
         { $unwind: { path: '$conversation', preserveNullAndEmptyArrays: true } }
     ];
@@ -772,6 +781,8 @@ const queryFollowupDashboardList = async (filters, options) => {
         { $match: query },
         { $lookup: { from: 'customers', localField: 'customerId', foreignField: '_id', as: 'customer' } },
         { $unwind: '$customer' },
+        { $lookup: { from: 'users', localField: 'createdBy', foreignField: '_id', as: 'creator' } },
+        { $unwind: { path: '$creator', preserveNullAndEmptyArrays: true } },
         { $sort: { reminderDate: 1, reminderTime: 1 } } // Sort by due date asc
     ];
 
@@ -823,6 +834,7 @@ const queryCustomerTimeline = async (customerId) => {
 
     // 2. Fetch Open Followups
     const openFollowups = await Reminder.find({ customerId, isClosed: false })
+        .populate('createdBy', 'name email')
         .sort({ reminderDate: 1 }).lean();
 
     // 3. Fetch Full Conversation History

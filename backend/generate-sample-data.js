@@ -13,7 +13,7 @@ worksheet.columns = [
     { header: 'Company', key: 'company', width: 25 },
     { header: 'Company Brand', key: 'companyBrand', width: 20 },
     { header: 'Customer Type', key: 'customerType', width: 30 },
-    { header: 'Area/City', key: 'area', width: 20 },
+    { header: 'City', key: 'city', width: 20 },
     { header: 'State', key: 'state', width: 20 },
     { header: 'Address', key: 'address', width: 40 },
     { header: 'Pincode', key: 'pincode', width: 10 },

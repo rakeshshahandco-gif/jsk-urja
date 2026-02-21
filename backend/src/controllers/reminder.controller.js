@@ -8,7 +8,7 @@ const catchAsync = (fn) => (req, res, next) => {
 };
 
 const createReminder = catchAsync(async (req, res) => {
-    const reminder = await reminderService.createReminder(req.body);
+    const reminder = await reminderService.createReminder({ ...req.body, createdBy: req.user.id });
     res.status(httpStatus.CREATED).send(reminder);
 });
 
@@ -38,14 +38,13 @@ const extendReminder = catchAsync(async (req, res) => {
 });
 
 const upsertReminder = catchAsync(async (req, res) => {
-    const reminder = await reminderService.upsertReminderForCustomer(req.params.customerId, req.body);
+    const reminder = await reminderService.upsertReminderForCustomer(req.params.customerId, { ...req.body, createdBy: req.user.id });
     res.send({ reminder, message: reminder ? 'Reminder updated' : 'Reminder closed/disabled' });
 });
 
-const rescheduleReminder = catchAsync(async (req, res) => {
-    // Check if reason is provided, pass body
-    const reminder = await reminderService.extendReminder(req.params.id, req.body);
-    res.send(reminder);
+const getReminderCounts = catchAsync(async (req, res) => {
+    const counts = await reminderService.getReminderCounts();
+    res.send(counts);
 });
 
 export default {
@@ -55,5 +54,5 @@ export default {
     closeReminder,
     extendReminder,
     upsertReminder,
-    rescheduleReminder,
+    getReminderCounts,
 };

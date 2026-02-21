@@ -7,128 +7,98 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import pick from '../utils/pick.js';
 
-// Create a template with items
-const createTemplate = asyncHandler(async (req, res) => {
-    const { name, recurrence, recurrenceRule, assignToAll, assigneeIds, items } = req.body;
+// Create a generic group
+const createGroup = asyncHandler(async (req, res) => {
+    const { name, notes, visibility } = req.body;
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required for a template');
-    }
-
-    const groupData = {
+    const group = await TaskGroup.create({
         name,
-        kind: 'TEMPLATE',
-        recurrence: recurrence || 'NONE',
-        recurrenceRule: recurrenceRule || null,
-        assignToAll: !!assignToAll,
-        assigneeIds: assignToAll ? [] : (assigneeIds || []),
-        createdBy: req.user.id,
-    };
-
-    const group = await TaskGroup.create(groupData);
-
-    const groupItems = items.map((item, index) => ({
-        groupTemplateId: group._id,
-        title: item.title,
-        notes: item.notes || '',
-        amount: item.amount || 0,
-        dueOffsetDays: item.dueOffsetDays || 0,
-        sortOrder: item.sortOrder || index,
-    }));
-
-    const createdItems = await TaskGroupItem.insertMany(groupItems);
-
-    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, { group, items: createdItems }, 'Template created successfully'));
-});
-
-// Generate instance from template
-const generateInstance = asyncHandler(async (req, res) => {
-    const { templateId } = req.params;
-    const { period } = req.body; // YYYY-MM
-
-    const template = await TaskGroup.findById(templateId);
-    if (!template || template.kind !== 'TEMPLATE') {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Template not found');
-    }
-
-    const items = await TaskGroupItem.find({ groupTemplateId: templateId }).sort({ sortOrder: 1 });
-    if (items.length === 0) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Template has no items');
-    }
-
-    // Create Instance
-    const instance = await TaskGroup.create({
-        name: `${template.name} (${period})`,
-        kind: 'INSTANCE',
-        templateId: template._id,
-        period,
-        assignToAll: template.assignToAll,
-        assigneeIds: template.assigneeIds,
+        notes: notes || '',
+        visibility: visibility || 'COMPANY',
         createdBy: req.user.id,
     });
 
-    // Calculate base date from period
-    const [year, month] = period.split('-').map(Number);
-    const baseDate = new Date(year, month - 1, 1);
-
-    // Get day of month from recurrence rule if exists, default to 1
-    let dayOfMonth = 1;
-    if (template.recurrenceRule && template.recurrenceRule.dayOfMonth) {
-        dayOfMonth = template.recurrenceRule.dayOfMonth;
-    }
-
-    const createdTasks = [];
-    for (const item of items) {
-        const dueDate = new Date(year, month - 1, dayOfMonth + item.dueOffsetDays);
-
-        const taskData = {
-            title: item.title,
-            description: item.notes || '',
-            dueDate,
-            priority: 'MEDIUM',
-            status: 'OPEN',
-            groupId: instance._id,
-            groupItemId: item._id,
-            assignToAll: template.assignToAll,
-            assigneeIds: template.assigneeIds,
-            assignedTo: template.assignToAll ? null : template.assigneeIds[0],
-            createdBy: req.user.id,
-        };
-
-        const task = await Task.create(taskData);
-        createdTasks.push(task);
-    }
-
-    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, { instance, tasks: createdTasks }, 'Instance generated successfully'));
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, group, 'Group created successfully'));
 });
 
-// List Groups (Templates/Instances)
+// Delete a group
+const deleteGroup = asyncHandler(async (req, res) => {
+    const group = await TaskGroup.findById(req.params.groupId);
+    if (!group) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
+    }
+
+    // Check permissions (Admin or Creator)
+    if (req.user.role !== 'admin' && group.createdBy.toString() !== req.user.id) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'You do not have permission to delete this group');
+    }
+
+    await TaskGroup.deleteOne({ _id: group._id });
+    // Note: We might want to handle child tasks here, but user says "Closing a group does not automatically close all children"
+    // Usually deletion should probably un-link or delete children too, but I'll leave them as orphans for now or un-link.
+    await Task.updateMany({ groupId: group._id }, { $set: { groupId: null } });
+
+    res.send(new ApiResponse(httpStatus.OK, null, 'Group deleted successfully'));
+});
+
+// List Groups
 const getGroups = asyncHandler(async (req, res) => {
-    const filter = pick(req.query, ['kind', 'templateId']);
-    const result = await TaskGroup.find(filter).sort({ createdAt: -1 });
-    res.send(new ApiResponse(httpStatus.OK, result, 'Groups fetched successfully'));
+    const filter = pick(req.query, ['visibility']);
+
+    // RBAC Visibility Logic
+    if (req.user.role === 'admin') {
+        // Admin sees all
+    } else if (req.user.role === 'manager') {
+        // Manager sees COMPANY, TEAM groups and THEIR OWN private groups
+        filter.$or = [
+            { visibility: 'COMPANY' },
+            { visibility: 'TEAM' },
+            { createdBy: req.user.id }
+        ];
+    } else {
+        // Staff sees COMPANY and THEIR OWN groups
+        filter.$or = [
+            { visibility: 'COMPANY' },
+            { createdBy: req.user.id }
+        ];
+    }
+
+    let groups = await TaskGroup.find(filter).sort({ createdAt: -1 });
+
+    // Ensure "General" group exists for this user if they are listing groups
+    const hasGeneral = groups.some(g => g.name === 'General' && g.createdBy.toString() === req.user.id);
+    if (!hasGeneral) {
+        const generalGroup = await TaskGroup.create({
+            name: 'General',
+            notes: 'Default group for your tasks',
+            visibility: 'PRIVATE',
+            createdBy: req.user.id
+        });
+        groups.unshift(generalGroup);
+    }
+
+    res.send(new ApiResponse(httpStatus.OK, groups, 'Groups fetched successfully'));
 });
 
-// Get Single Group with Items/Tasks
+// Get Single Group with child tasks
 const getGroup = asyncHandler(async (req, res) => {
     const group = await TaskGroup.findById(req.params.groupId);
     if (!group) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
     }
 
-    const items = await TaskGroupItem.find({ groupTemplateId: group._id }).sort({ sortOrder: 1 });
+    const tasks = await Task.find({ groupId: group._id }).sort({ dueDate: 1 });
 
-    let tasks = [];
-    if (group.kind === 'INSTANCE') {
-        tasks = await Task.find({ groupId: group._id }).sort({ dueDate: 1 });
-    }
+    // Calculate progress
+    const total = tasks.length;
+    const closed = tasks.filter(t => t.status === 'COMPLETED').length;
 
-    res.send(new ApiResponse(httpStatus.OK, { group, items, tasks }, 'Group details fetched successfully'));
+    res.send(new ApiResponse(httpStatus.OK, { group, tasks, progress: { total, closed } }, 'Group details fetched successfully'));
 });
 
 export default {
-    createTemplate,
-    generateInstance,
+    createGroup,
     getGroups,
     getGroup,
+    deleteGroup,
 };

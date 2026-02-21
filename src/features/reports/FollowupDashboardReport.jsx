@@ -264,6 +264,11 @@ const FollowupDashboardReport = () => {
                                         </span>
                                     </div>
                                 </div>
+                                {(task.creator?.name || task.createdBy?.name) && (
+                                    <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-end gap-1 italic">
+                                        <span>By: {task.creator?.name || task.createdBy?.name}</span>
+                                    </div>
+                                )}
                             </div>
                         ))
                     )}
@@ -334,6 +339,7 @@ const FollowupDashboardReport = () => {
                                             <tr>
                                                 <th className="px-4 py-2 w-32 border-r">Due Date</th>
                                                 <th className="px-4 py-2 w-24 border-r">Type</th>
+                                                <th className="px-4 py-2 w-24 border-r">By</th>
                                                 <th className="px-4 py-2 w-24 border-r">Priority</th>
                                                 <th className="px-4 py-2">What to Talk (Note)</th>
                                                 <th className="px-4 py-2 w-20">Action</th>
@@ -350,6 +356,11 @@ const FollowupDashboardReport = () => {
                                                         <span className="inline-flex items-center gap-1">
                                                             {task.followUpType === 'WHATSAPP' ? <MessageSquare size={12} className="text-green-600" /> : <Phone size={12} className="text-blue-600" />}
                                                             {task.followUpType}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2 border-r">
+                                                        <span className="text-xs text-gray-600 whitespace-nowrap">
+                                                            {task.createdBy?.name || task.creator?.name || '-'}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-2 border-r">

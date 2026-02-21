@@ -35,6 +35,7 @@ export const ReminderTable = ({ reminders, onChangeDate, onCloseTask, loading })
                         <th>Type</th>
                         <th>Priority</th>
                         <th>Note</th>
+                        <th>Created By</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -92,6 +93,11 @@ export const ReminderTable = ({ reminders, onChangeDate, onCloseTask, loading })
                                 <td>
                                     <div className="max-w-xs truncate text-sm" title={reminder.taskNote}>
                                         {reminder.taskNote || '-'}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div className="text-sm">
+                                        {reminder.createdBy?.name || reminder.creator?.name || '-'}
                                     </div>
                                 </td>
                                 <td>

@@ -1,5 +1,6 @@
 import express from 'express';
-import { protect } from '../../middlewares/auth.middleware.js';
+import { validate } from '../../middlewares/validate.middleware.js';
+import taskGroupValidation from '../../validations/taskGroup.validation.js';
 import taskGroupController from '../../controllers/taskGroup.controller.js';
 
 const router = express.Router();
@@ -8,16 +9,16 @@ router.use(protect);
 
 router
     .route('/')
-    .post(taskGroupController.createTemplate)
-    .get(taskGroupController.getGroups);
+    .post(validate(taskGroupValidation.createGroup), taskGroupController.createTemplate)
+    .get(validate(taskGroupValidation.getGroups), taskGroupController.getGroups);
 
 router
     .route('/:groupId')
-    .get(taskGroupController.getGroup);
+    .get(validate(taskGroupValidation.getGroup), taskGroupController.getGroup);
 
 router
     .route('/templates')
-    .post(taskGroupController.createTemplate);
+    .post(validate(taskGroupValidation.createGroup), taskGroupController.createTemplate);
 
 router
     .route('/:templateId/generate')

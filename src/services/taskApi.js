@@ -38,3 +38,26 @@ export const closeTask = async (id) => {
 export const deleteTask = async (id) => {
   await api.delete(`/tasks/${id}`);
 };
+
+// ---------------------------
+// GROUPS
+// ---------------------------
+export const getTaskGroups = async (params = {}) => {
+  const response = await api.get("/task-groups", { params });
+  return response.data.data;
+};
+
+export const getTaskGroup = async (id) => {
+  const response = await api.get(`/task-groups/${id}`);
+  return response.data.data;
+};
+
+export const createTaskGroup = async (data) => {
+  const response = await api.post("/task-groups", data);
+  return response.data.data;
+};
+
+export const deleteTaskGroup = async (id) => {
+  const response = await api.delete(`/task-groups/${id}`);
+  return response.data.data;
+};

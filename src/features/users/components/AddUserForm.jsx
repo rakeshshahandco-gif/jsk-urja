@@ -61,7 +61,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         setValue(fieldName, upperValue);
     };
 
-    const onSubmit = (data) => {
+    const onSubmit = async (data) => {
         const { confirmPassword, ...userData } = data;
         userData.permissions = selectedPermissions;
 
@@ -71,8 +71,13 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
             return;
         }
 
-        onSave(userData);
-        closeModal();
+        try {
+            await onSave(userData);
+            closeModal();
+        } catch (error) {
+            // Error is handled by onSave toast in parent
+            console.error("Form submission error:", error);
+        }
     };
 
     return (
@@ -88,7 +93,10 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                             label="Full Name"
                             {...register('name', { required: 'Name is required' })}
                             error={errors.name}
-                            onChange={handleUppercaseChange('name')}
+                            onChange={(e) => {
+                                register('name').onChange(e);
+                                handleUppercaseChange('name')(e);
+                            }}
                             required
                         />
 
@@ -112,7 +120,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                         <Input
                             label="Mobile"
                             {...register('mobile')}
-                            icon Label="Optional"
+                            placeholder="Optional"
                         />
                     </div>
                 </section>
@@ -126,7 +134,10 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                             <Input
                                 label="Password"
                                 type="password"
-                                {...register('password', { required: 'Password is required' })}
+                                {...register('password', {
+                                    required: 'Password is required',
+                                    minLength: { value: 6, message: 'Password must be at least 6 characters' }
+                                })}
                                 error={errors.password}
                                 required
                             />

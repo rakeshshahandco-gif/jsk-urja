@@ -10,6 +10,10 @@ router
     .get(reminderController.getReminders);
 
 router
+    .route('/counts')
+    .get(reminderController.getReminderCounts);
+
+router
     .route('/:id')
     .get(reminderController.getReminder);
 
@@ -21,8 +25,8 @@ router
     .route('/:id/extend')
     .put(reminderController.extendReminder);
 
-router
-    .route('/:id/reschedule')
-    .put(reminderController.rescheduleReminder);
+// router
+//     .route('/:id/reschedule')
+//     .put(reminderController.rescheduleReminder);
 
 export default router;

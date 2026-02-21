@@ -1,9 +1,69 @@
 import React, { useState } from 'react';
-import { Calendar, User, Users, CheckCircle, Clock, MoreVertical, Repeat } from 'lucide-react';
-import { closeTask } from '@/services/taskApi';
-import { useModal } from '@/components/ui';
+import { Calendar, User, Users, CheckCircle, Clock, MoreVertical, Repeat, ListCheck } from 'lucide-react';
+import { closeTask, getTaskGroup } from '@/services/taskApi';
+import { Button, useModal } from '@/components/ui';
 import { TaskExtendModal } from './TaskExtendModal';
 import toast from 'react-hot-toast';
+
+const GroupDetailModal = ({ groupId, onRefresh, onClose }) => {
+    const [data, setData] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        getTaskGroup(groupId).then(res => {
+            setData(res);
+            setLoading(false);
+        }).catch(() => toast.error('Failed to load group'));
+    }, [groupId]);
+
+    if (loading) return <div className="p-10 text-center animate-pulse font-bold text-gray-400">Loading group details...</div>;
+
+    const { group, tasks, progress } = data;
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <h4 className="font-black text-blue-900 text-lg">{group.name}</h4>
+                {group.notes && <p className="text-sm text-blue-700 italic mt-1">{group.notes}</p>}
+                <div className="mt-4 flex items-center gap-4">
+                    <div className="flex-1 bg-blue-200 h-2 rounded-full overflow-hidden">
+                        <div
+                            className="bg-blue-600 h-full transition-all duration-500"
+                            style={{ width: `${(progress.closed / progress.total) * 100}%` }}
+                        ></div>
+                    </div>
+                    <span className="text-xs font-black text-blue-800">
+                        {progress.closed} / {progress.total} Tasks ({Math.round((progress.closed / progress.total) * 100)}%)
+                    </span>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <h5 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                    <ListCheck size={14} /> Child Tasks
+                </h5>
+                <div className="max-h-80 overflow-y-auto space-y-2 pr-2">
+                    {tasks.map(t => (
+                        <div key={t._id} className="p-3 border rounded-lg flex justify-between items-center bg-white shadow-sm">
+                            <div>
+                                <p className="text-sm font-bold text-gray-800">{t.title}</p>
+                                <p className="text-[10px] text-gray-400">{new Date(t.dueDate).toLocaleDateString()}</p>
+                            </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${t.status === 'COMPLETED' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-50 text-blue-600 border-blue-100'
+                                }`}>
+                                {t.status}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="flex justify-end pt-4">
+                <Button variant="outline" onClick={onClose} className="font-bold">Close</Button>
+            </div>
+        </div>
+    );
+};
 
 export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
     const { openModal, closeModal } = useModal();
@@ -57,6 +117,13 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
         });
     };
 
+    const handleViewGroup = () => {
+        openModal({
+            title: 'Group Progress',
+            content: <GroupDetailModal groupId={task.groupId?._id || task.groupId} onRefresh={onRefresh} onClose={closeModal} />
+        });
+    };
+
     return (
         <div className={`bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-all border-l-4 ${task.priority === 'CRITICAL' ? 'border-l-red-600' : 'border-l-transparent'}`}>
             <div className="flex flex-col gap-3">
@@ -76,6 +143,14 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
                             <span className="text-[10px] uppercase tracking-wider font-black text-gray-400">
                                 {task.taskCategoryId.name}
                             </span>
+                        )}
+                        {task.groupId?.name && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleViewGroup(); }}
+                                className="text-[10px] uppercase tracking-wider font-black text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded ml-2 hover:bg-blue-100 transition-colors"
+                            >
+                                G: {task.groupId.name}
+                            </button>
                         )}
                     </div>
                     <div className="flex flex-col items-end gap-2">

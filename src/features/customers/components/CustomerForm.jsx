@@ -25,7 +25,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 companyBrand: '',
                 companyEmail: '',
                 customerType: '',
-                area: '',
+                city: '',
                 state: '',
                 address: '',
                 pincode: '',
@@ -54,7 +54,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             companyBrand: customerData.companyBrand || '',
             companyEmail: customerData.companyEmail || '',
             customerType: customerData.customerType || '',
-            area: customerData.area || '',
+            city: customerData.city || '',
             state: customerData.state || '',
             address: customerData.address || '',
             pincode: customerData.pincode || '',
@@ -206,12 +206,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
 
                     <div className={styles['form-group']}>
-                        <label htmlFor="area">AREA</label>
+                        <label htmlFor="city">CITY</label>
                         <Input
-                            id="area"
-                            {...register('area')}
-                            placeholder="Enter area/locality"
-                            onChange={handleUppercaseChange('area')}
+                            id="city"
+                            {...register('city')}
+                            placeholder="Enter city"
+                            onChange={handleUppercaseChange('city')}
                         />
                     </div>
 

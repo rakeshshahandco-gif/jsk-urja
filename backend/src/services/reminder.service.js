@@ -35,19 +35,19 @@ const queryReminders = async (filters, options) => {
             query.isClosed = false;
             query.reminderDate = { $gte: today };
         } else if (filters.status === 'Overdue') {
-            query.isClosed = false;
+            query.isClosed = { $ne: true };
             query.reminderDate = { $lt: today };
         } else if (filters.status === 'Closed') {
             query.isClosed = true;
         } else if (filters.status === 'Today') {
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            query.isClosed = false;
+            query.isClosed = { $ne: true };
             query.reminderDate = { $gte: today, $lt: tomorrow };
         } else if (filters.status === 'Upcoming') {
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            query.isClosed = false;
+            query.isClosed = { $ne: true };
             query.reminderDate = { $gte: tomorrow };
         } else if (filters.status === 'Open') {
             query.isClosed = { $ne: true };
@@ -180,6 +180,7 @@ const queryReminders = async (filters, options) => {
     } else {
         let queryBuilder = Reminder.find(query)
             .populate('customerId', '_id customerName company companyBrand contactPersons mobile1 mobile2 mobile3 mobile4 mobile5')
+            .populate('createdBy', 'name email')
             .sort(sort);
 
         if (!isExport) {
@@ -315,6 +316,17 @@ const queryOpenRemindersWithDetails = async (filters, options) => {
         },
         { $unwind: { path: '$customerRaw', preserveNullAndEmptyArrays: true } },
 
+        // Lookup Creator
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'createdBy',
+                foreignField: '_id',
+                as: 'creatorRaw'
+            }
+        },
+        { $unwind: { path: '$creatorRaw', preserveNullAndEmptyArrays: true } },
+
         // Search Filter (applied after lookup if 'q' is present)
         ...(filters.search ? [{
             $match: {
@@ -359,6 +371,11 @@ const queryOpenRemindersWithDetails = async (filters, options) => {
                 priority: 1,
                 isClosed: 1,
                 taskNote: 1,
+                // Creator info
+                createdBy: {
+                    name: '$creatorRaw.name',
+                    email: '$creatorRaw.email'
+                },
                 // Mapped Alias
                 whatToTalkNext: '$taskNote',
                 lastConversation: { $arrayElemAt: ['$lastConversationRaw', 0] }
@@ -428,7 +445,8 @@ const upsertReminderForCustomer = async (customerId, reminderData) => {
                 followUpType: reminderData.followUpType,
                 taskNote: reminderData.note, // 'what to talk next'
                 priority: reminderData.priority,
-                isClosed: false
+                isClosed: false,
+                createdBy: reminderData.createdBy
             },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
@@ -442,6 +460,45 @@ const upsertReminderForCustomer = async (customerId, reminderData) => {
     }
 };
 
+/**
+ * Get counts for reminders by status (Today, Upcoming, Overdue)
+ * @returns {Promise<Object>}
+ */
+const getReminderCounts = async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const counts = await Reminder.aggregate([
+        {
+            $facet: {
+                today: [
+                    { $match: { isClosed: { $ne: true }, reminderDate: { $gte: today, $lt: tomorrow } } },
+                    { $count: 'count' }
+                ],
+                upcoming: [
+                    { $match: { isClosed: { $ne: true }, reminderDate: { $gte: tomorrow } } },
+                    { $count: 'count' }
+                ],
+                overdue: [
+                    { $match: { isClosed: { $ne: true }, reminderDate: { $lt: today } } },
+                    { $count: 'count' }
+                ]
+            }
+        },
+        {
+            $project: {
+                today: { $ifNull: [{ $arrayElemAt: ['$today.count', 0] }, 0] },
+                upcoming: { $ifNull: [{ $arrayElemAt: ['$upcoming.count', 0] }, 0] },
+                overdue: { $ifNull: [{ $arrayElemAt: ['$overdue.count', 0] }, 0] }
+            }
+        }
+    ]);
+
+    return counts[0] || { today: 0, upcoming: 0, overdue: 0 };
+};
+
 export default {
     createReminder,
     queryReminders,
@@ -450,4 +507,5 @@ export default {
     extendReminder,
     upsertReminderForCustomer,
     queryOpenRemindersWithDetails,
+    getReminderCounts,
 };

@@ -19,6 +19,6 @@ router
 
 router.patch('/:taskId/status', protect, validate(taskValidation.updateTaskStatus), taskController.updateTaskStatus);
 router.post('/:taskId/extend', protect, validate(taskValidation.extendTask), taskController.extendTask);
-router.post('/:taskId/close', protect, taskController.closeTask);
+router.post('/:taskId/close', protect, validate(taskValidation.updateTaskStatus), taskController.closeTask);
 
 export default router;

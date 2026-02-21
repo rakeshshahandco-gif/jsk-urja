@@ -14,7 +14,7 @@ const router = express.Router();
 
 // Route definitions will go here
 router.get('/health', (req, res) => {
-    res.send({ status: 'OK', uptime: process.uptime() });
+    res.send({ status: 'OK', version: '1.1.0-debug', uptime: process.uptime() });
 });
 
 const defaultRoutes = [

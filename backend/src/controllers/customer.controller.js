@@ -232,7 +232,7 @@ const downloadTemplate = catchAsync(async (req, res) => {
         { header: 'Mobile 5', key: 'mobile5', width: 15 },
         { header: 'Email', key: 'email', width: 30 },
         { header: 'Address', key: 'address', width: 40 },
-        { header: 'Area', key: 'area', width: 20 },
+        { header: 'City', key: 'city', width: 20 },
         { header: 'State', key: 'state', width: 20 },
         { header: 'Pincode', key: 'pincode', width: 10 },
         { header: 'Status', key: 'status', width: 15 },
@@ -261,7 +261,7 @@ const downloadTemplate = catchAsync(async (req, res) => {
         mobile5: '',
         email: 'john@example.com',
         address: '123 Main Street',
-        area: 'Andheri East',
+        city: 'Mumbai',
         state: 'Maharashtra',
         pincode: '400001',
         status: 'lead',
@@ -397,7 +397,7 @@ const importCustomers = catchAsync(async (req, res) => {
             const mobile5 = getCellText(row.getCell(8)) || '';
             const email = getCellText(row.getCell(9)) || '';
             const address = getCellText(row.getCell(10)) || '';
-            const area = getCellText(row.getCell(11)) || '';
+            const city = getCellText(row.getCell(11)) || '';
             const state = getCellText(row.getCell(12)) || '';
             const pincode = getCellText(row.getCell(13)) || '';
             const status = getCellText(row.getCell(14)) || 'lead';
@@ -405,7 +405,7 @@ const importCustomers = catchAsync(async (req, res) => {
             const interestedProductsStr = getCellText(row.getCell(16)) || '';
 
             // Skip completely empty rows
-            if (!customerName && !company && !contactName && !mobile && !email && !address && !area) {
+            if (!customerName && !company && !contactName && !mobile && !email && !address && !city) {
                 return;
             }
 
@@ -488,7 +488,7 @@ const importCustomers = catchAsync(async (req, res) => {
                     ],
                     company,
                     customerType,
-                    area,
+                    city,
                     state,
                     address,
                     pincode,

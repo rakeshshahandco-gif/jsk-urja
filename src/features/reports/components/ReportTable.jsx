@@ -42,7 +42,6 @@ export const ReportTable = ({ data, sortConfig, onSort }) => {
                         <th>Mobiles</th>
                         <th>Email</th>
                         <th>Address</th>
-                        <th>Area</th>
                         <th>City</th>
                         <th>State</th>
                         <th>Pincode</th>
@@ -64,7 +63,6 @@ export const ReportTable = ({ data, sortConfig, onSort }) => {
                                 <td className={styles.mobileCell}>{renderMobiles(customer)}</td>
                                 <td>{primaryContact.email || customer.companyEmail || '-'}</td>
                                 <td>{customer.address || '-'}</td>
-                                <td>{customer.area || '-'}</td>
                                 <td>{customer.city || '-'}</td>
                                 <td>{customer.state || '-'}</td>
                                 <td>{customer.pincode || '-'}</td>

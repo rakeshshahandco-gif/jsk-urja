@@ -29,8 +29,8 @@ export const CustomerInfoDisplay = ({ customer }) => {
                     <span className={styles.infoValue}>{customer.customerName || customer.name || 'Not Provided'}</span>
                 </div>
                 <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Area:</span>
-                    <span className={styles.infoValue}>{customer.area || '-'} {customer.pincode ? `(${customer.pincode})` : ''}</span>
+                    <span className={styles.infoLabel}>City:</span>
+                    <span className={styles.infoValue}>{customer.city || '-'} {customer.pincode ? `(${customer.pincode})` : ''}</span>
                 </div>
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Company:</span>

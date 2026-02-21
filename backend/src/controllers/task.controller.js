@@ -126,28 +126,48 @@ const getTasks = asyncHandler(async (req, res) => {
     });
   }
 
-  // Visibility logic
-  if (req.user.role !== 'admin') {
-    // Get groups user belongs to
+  const now = new Date();
+  const todayStart = new Date(now.setHours(0, 0, 0, 0));
+  const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+
+  // View specific filters (Today, Upcoming, Overdue, Closed)
+  if (view === 'today') {
+    andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gte: todayStart, $lte: todayEnd } });
+  } else if (view === 'upcoming') {
+    andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gt: todayEnd } });
+  } else if (view === 'overdue') {
+    andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $lt: todayStart } });
+  } else if (view === 'closed') {
+    andConditions.push({ status: 'COMPLETED' });
+  }
+
+  // Role-based visibility logic
+  if (req.user.role === 'admin') {
+    // Admin can see everything
+  } else if (req.user.role === 'manager') {
+    // Manager can see tasks created by them, assigned to them, or assigned to their team (if team exists)
+    // For now, team logic is simplified to createdBy/assigneeIds OR groupMembers
+    // (Assuming GroupMember model maps user to group)
     const userGroups = await GroupMember.find({ user: req.user.id }).select('group');
     const groupIds = userGroups.map((g) => g.group);
 
-    const visibilityOr = [
-      { createdBy: req.user.id },
-      { assigneeIds: req.user.id },
-      { assignToAll: true },
-      { assignedGroupId: { $in: groupIds } }
-    ];
-    andConditions.push({ $or: visibilityOr });
-  }
-
-  // View specific filters
-  if (view === 'assigned_to_me') {
     andConditions.push({
-      $or: [{ assignToAll: true }, { assigneeIds: req.user.id }]
+      $or: [
+        { createdBy: req.user.id },
+        { assigneeIds: req.user.id },
+        { assignToAll: true },
+        { assignedGroupId: { $in: groupIds } }
+      ]
     });
-  } else if (view === 'created_by_me') {
-    andConditions.push({ createdBy: req.user.id });
+  } else {
+    // Staff can see tasks assigned to them and tasks created by them
+    andConditions.push({
+      $or: [
+        { createdBy: req.user.id },
+        { assigneeIds: req.user.id },
+        { assignToAll: true }
+      ]
+    });
   }
 
   const filter = andConditions.length ? { $and: andConditions } : {};
@@ -158,6 +178,7 @@ const getTasks = asyncHandler(async (req, res) => {
       .populate('createdBy', 'name email username')
       .populate('taskCategoryId', 'name')
       .populate('assignedGroupId', 'name')
+      .populate('groupId', 'name')
       .sort(sort)
       .skip(skip)
       .limit(limit),
@@ -179,7 +200,8 @@ const getTask = asyncHandler(async (req, res) => {
     .populate('assigneeIds', 'name email username')
     .populate('createdBy', 'name email username')
     .populate('taskCategoryId', 'name')
-    .populate('assignedGroupId', 'name');
+    .populate('assignedGroupId', 'name')
+    .populate('groupId', 'name');
 
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
   res.send({ success: true, data: task });
@@ -198,6 +220,7 @@ const updateTask = asyncHandler(async (req, res) => {
   }
 
   Object.assign(task, up);
+  task.updatedBy = req.user.id;
   await task.save();
   res.send({ success: true, data: task });
 });
@@ -238,19 +261,12 @@ const closeTask = asyncHandler(async (req, res) => {
 
   task.status = 'COMPLETED';
   task.completedAt = new Date();
+  task.closedAt = new Date();
+  task.closedBy = req.user.id;
 
   // Handle Recurrence auto-create
   if (task.recurrence && task.recurrence.enabled && !task.nextGeneratedId) {
-    // Map current model to recycler utility expectations if needed
-    // Our utility expects { isRecurring: bool, recurrence: { type, interval, endDate }, dueDate: Date }
-    const nextDate = calculateNextDueDate({
-      isRecurring: task.recurrence.enabled,
-      recurrence: {
-        type: task.recurrence.frequency,
-        interval: task.recurrence.interval
-      },
-      dueDate: task.dueDate
-    });
+    const nextDate = calculateNextDueDate(task);
 
     if (nextDate) {
       const nextTaskData = {
@@ -261,15 +277,17 @@ const closeTask = asyncHandler(async (req, res) => {
         dueDate: nextDate,
         assignmentMode: task.assignmentMode,
         assignedGroupId: task.assignedGroupId,
+        groupId: task.groupId,
         taskCategoryId: task.taskCategoryId,
         assigneeIds: task.assigneeIds,
         assignToAll: task.assignToAll,
         createdBy: task.createdBy,
-        parentTaskId: task._id,
+        previousTaskId: task._id,
         recurrence: {
           ...task.recurrence.toObject(),
-          recurrenceId: task.recurrence.recurrenceId
-        }
+          occurrenceCount: (task.recurrence.occurrenceCount || 1) + 1
+        },
+        customerId: task.customerId
       };
 
       const nextTask = await Task.create(nextTaskData);

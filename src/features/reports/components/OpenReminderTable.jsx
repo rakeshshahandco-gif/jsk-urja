@@ -117,6 +117,14 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                                         >
                                             View Full History →
                                         </button>
+
+                                        {/* Creator Info */}
+                                        {(reminder.createdBy?.name || reminder.creator?.name) && (
+                                            <div className="pt-2 border-t border-gray-100 flex items-center gap-1 text-[10px] text-gray-400 italic">
+                                                <span>Created by:</span>
+                                                <span className="font-medium text-gray-500">{reminder.createdBy?.name || reminder.creator?.name}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </td>
 

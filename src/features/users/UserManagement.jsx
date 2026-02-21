@@ -66,8 +66,10 @@ export const UserManagement = () => {
                         fetchUsers();
                     }
                 } catch (error) {
+                    const message = error.response?.data?.message || error.message || "Failed to create user";
                     console.error("Create user failed", error);
-                    toast.error(error.message || "Failed to create user");
+                    toast.error(message);
+                    throw error;
                 }
             }
         });
@@ -93,8 +95,10 @@ export const UserManagement = () => {
                         }
                     }
                 } catch (error) {
+                    const message = error.response?.data?.message || error.message || "Failed to update user";
                     console.error("Update user failed", error);
-                    toast.error(error.message || "Failed to update user");
+                    toast.error(message);
+                    throw error;
                 }
             }
         });
