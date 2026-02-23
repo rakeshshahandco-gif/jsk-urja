@@ -2,8 +2,11 @@ import express from 'express';
 import { validate } from '../../middlewares/validate.middleware.js';
 import conversationValidation from '../../validations/conversation.validation.js';
 import conversationController from '../../controllers/conversation.controller.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 router
     .route('/')

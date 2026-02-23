@@ -8,12 +8,12 @@ const createTask = {
         priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL').default('MEDIUM'),
         status: Joi.string().valid('OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'OVERDUE').default('OPEN'),
         assignmentMode: Joi.string().valid('SELF', 'SINGLE', 'MULTI', 'ALL', 'GROUP').default('SELF'),
-        assignedGroupId: Joi.string().allow(null, '').optional(),
+        assignedGroupId: Joi.string().allow(null, '').custom(objectId).optional(),
         groupId: Joi.string().required().custom(objectId),
         taskCategoryId: Joi.string().allow(null, '').custom(objectId),
         group: Joi.string().allow(null, '').optional(),
         assignToAll: Joi.boolean().default(false),
-        assigneeIds: Joi.array().items(Joi.string()).optional(),
+        assigneeIds: Joi.array().items(Joi.string().custom(objectId)).optional(),
         dueDate: Joi.date().required(),
         recurrence: Joi.object().keys({
             enabled: Joi.boolean().default(false),
@@ -21,27 +21,29 @@ const createTask = {
             interval: Joi.number().integer().min(1).default(1),
             recurrenceSeriesId: Joi.string().allow(null, '').optional(),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT').default('NEVER'),
-            recurrenceEndDate: Joi.date().optional(),
-            recurrenceEndCount: Joi.number().integer().min(1).optional(),
+            recurrenceEndDate: Joi.date().allow(null).optional(),
+            recurrenceEndCount: Joi.number().integer().min(1).allow(null).optional(),
             occurrenceCount: Joi.number().integer().min(1).default(1),
         }).optional(),
-        previousTaskId: Joi.string().allow(null, '').optional(),
-        customerId: Joi.string().allow(null, '').optional(),
+        previousTaskId: Joi.string().allow(null, '').custom(objectId).optional(),
+        customerId: Joi.string().allow(null, '').custom(objectId).optional(),
     })
 };
 
 const getTasks = {
     query: Joi.object().keys({
-        group: Joi.string(),
-        taskCategoryId: Joi.string(),
+        groupId: Joi.string().custom(objectId),
+        group: Joi.string().allow(null, ''),
+        taskCategoryId: Joi.string().custom(objectId),
         status: Joi.string(),
         priority: Joi.string(),
-        view: Joi.string().valid('assigned_to_me', 'created_by_me', 'team', 'group_tasks', 'all'),
+        view: Joi.string().valid('assigned_to_me', 'created_by_me', 'team', 'group_tasks', 'all', 'today', 'upcoming', 'overdue', 'closed'),
+        assigneeType: Joi.string().valid('assigned_to_me', 'created_by_me', 'all'),
         sortBy: Joi.string(),
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
         search: Joi.string().allow('').optional(),
-        customerId: Joi.string().allow(null, '').optional(),
+        customerId: Joi.string().allow(null, '').custom(objectId).optional(),
     })
 };
 
@@ -73,8 +75,8 @@ const updateTask = {
             interval: Joi.number().integer().min(1),
             recurrenceSeriesId: Joi.string().allow(null, ''),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT'),
-            recurrenceEndDate: Joi.date(),
-            recurrenceEndCount: Joi.number().integer().min(1),
+            recurrenceEndDate: Joi.date().allow(null),
+            recurrenceEndCount: Joi.number().integer().min(1).allow(null),
             occurrenceCount: Joi.number().integer().min(1),
         }),
         previousTaskId: Joi.string().allow(null, ''),

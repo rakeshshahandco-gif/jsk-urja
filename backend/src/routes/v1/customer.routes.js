@@ -4,8 +4,11 @@ import { validate } from '../../middlewares/validate.middleware.js';
 import customerValidation from '../../validations/customer.validation.js';
 import customerController from '../../controllers/customer.controller.js';
 import reminderController from '../../controllers/reminder.controller.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();

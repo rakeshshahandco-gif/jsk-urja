@@ -100,6 +100,12 @@ export const menuConfig = [
                 path: '/reports/followup-task-report',
                 roles: [ROLES.ADMIN, ROLES.MANAGER],
             },
+            {
+                id: 'report-task-reminders',
+                title: 'Task Reminder Report',
+                path: '/reports/task-reminders',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
         ],
     },
     {

@@ -18,6 +18,8 @@ import OpenRemindersReport from '@/features/reports/OpenRemindersReport';
 import ConversationHistoryReport from '@/features/reports/ConversationHistoryReport';
 import FollowupDashboardReport from '@/features/reports/FollowupDashboardReport';
 import FollowupTaskReport from '@/features/reports/FollowupTaskReport';
+import TaskReminderReport from '@/features/reports/TaskReminderReport';
+import TaskChatDashboard from '@/features/taskChats/TaskChatDashboard';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
@@ -152,6 +154,32 @@ function App() {
                                                             element={
                                                                 <ProtectedRoute requireRole={['admin', 'manager']}>
                                                                     <FollowupTaskReport />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
+
+                                                        <Route
+                                                            path="/reports/task-reminders"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <TaskReminderReport />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
+
+                                                        <Route
+                                                            path="/task-chats"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <TaskChatDashboard />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="/task-chats/:taskId"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <TaskChatDashboard />
                                                                 </ProtectedRoute>
                                                             }
                                                         />

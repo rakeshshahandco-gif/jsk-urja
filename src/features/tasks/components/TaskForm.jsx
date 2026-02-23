@@ -3,9 +3,8 @@ import { useForm } from 'react-hook-form';
 import { Button, Input, Select, MultiSelect } from '@/components/ui';
 import { userService } from '@/services/user.service';
 import { getAssignableGroups } from '@/services/groupApi';
-import { createTask, updateTask } from '@/services/taskApi';
+import { createTask, updateTask, getTaskGroups } from '@/services/taskApi';
 import { getTaskCategories } from '@/services/taskCategoryApi';
-import api from '@/services/api';
 import toast from 'react-hot-toast';
 import { GroupForm } from './GroupForm';
 import { useModal } from '@/components/ui';
@@ -21,7 +20,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             taskCategoryId: task.taskCategoryId?._id || task.taskCategoryId || '',
             assigneeIds: task.assigneeIds ? task.assigneeIds.map(u => u._id || u.id || u) : [],
             dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : null,
-            customerId: task.customerId?._id || task.customerId || '',
             recurrence: {
                 enabled: task.recurrence?.enabled || false,
                 frequency: task.recurrence?.frequency || 'MONTHLY',
@@ -32,7 +30,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             status: 'OPEN',
             assignmentMode: 'SELF',
             assigneeIds: [],
-            customerId: task?.customerId || '',
             recurrence: {
                 enabled: false,
                 frequency: 'MONTHLY',
@@ -43,8 +40,8 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
 
     const [usersOptions, setUsersOptions] = useState([]);
     const [groupsOptions, setGroupsOptions] = useState([]);
+    const [teamsOptions, setTeamsOptions] = useState([]);
     const [categoriesOptions, setCategoriesOptions] = useState([]);
-    const [customerOptions, setCustomerOptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
@@ -56,21 +53,29 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [users, groups, categories, customers] = await Promise.all([
-                    userService.getAssignableUsers().catch(() => api.get('/users').then(r => r.data.data)),
-                    getAssignableGroups().catch(() => api.get('/groups').then(r => r.data.data)),
+                const [users, taskGroups, categories, teams] = await Promise.all([
+                    userService.getAssignableUsers().catch(() => []),
+                    getTaskGroups().catch(() => ({ data: [] })),
                     getTaskCategories().catch(() => ({ data: [] })),
-                    api.get('/customers').catch(() => ({ data: { results: [] } }))
+                    getAssignableGroups().catch(() => ({ data: [] }))
                 ]);
 
-                setUsersOptions(Array.isArray(users) ? users : []);
-                setGroupsOptions(Array.isArray(groups?.data) ? groups.data : (Array.isArray(groups) ? groups : []));
-                setCategoriesOptions(Array.isArray(categories.data) ? categories.data : []);
-                setCustomerOptions(customers.data?.results || customers.data?.data || []);
+                setUsersOptions(Array.isArray(users) ? users : (users?.data || []));
+
+                // For Task Folders (MANDATORY)
+                const tgData = taskGroups?.data || taskGroups || [];
+                setGroupsOptions(Array.isArray(tgData) ? tgData : []);
+
+                // For Assignment Groups (Teams)
+                const teamData = teams?.data || teams || [];
+                setTeamsOptions(Array.isArray(teamData) ? teamData : []);
+
+                // For Task Categories
+                setCategoriesOptions(Array.isArray(categories.data) ? categories.data : (Array.isArray(categories) ? categories : []));
 
                 // Auto-select "General" group if creating a new task and General group exists
-                if (!task && Array.isArray(groups)) {
-                    const general = groups.find(g => g.name === 'General');
+                if (!task && Array.isArray(tgData)) {
+                    const general = tgData.find(g => g.name === 'General');
                     if (general) {
                         setValue('groupId', general._id || general.id);
                     }
@@ -86,19 +91,18 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     }, []);
 
     const handleCreateNewGroup = () => {
-        openModal({
-            title: 'Create New Group',
-            content: (
-                <GroupForm
-                    onSuccess={(newGroup) => {
-                        setGroupsOptions(prev => [newGroup, ...prev]);
-                        setValue('groupId', newGroup._id || newGroup.id);
-                        closeModal();
-                    }}
-                    onCancel={closeModal}
-                />
-            )
-        });
+        const modalId = openModal(
+            GroupForm,
+            {
+                title: 'Create New Group',
+                onSuccess: (newGroup) => {
+                    setGroupsOptions(prev => [newGroup, ...prev]);
+                    setValue('groupId', newGroup._id || newGroup.id);
+                    closeModal(modalId);
+                },
+                onCancel: () => closeModal(modalId)
+            }
+        );
     };
 
     const onSubmit = async (data) => {
@@ -110,7 +114,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                 assignedGroupId: data.assignmentMode === 'GROUP' ? data.assignedGroupId : null,
                 groupId: data.groupId || null,
                 taskCategoryId: data.taskCategoryId || null,
-                customerId: data.customerId || null,
                 assigneeIds: (data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : [],
                 recurrence: data.recurrence.enabled ? {
                     ...data.recurrence,
@@ -214,16 +217,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                                 <option value="CRITICAL">Critical</option>
                             </select>
                         </div>
-
-                        <div className="col-span-2">
-                            <label className="block text-sm font-bold mb-1 text-gray-700">Link to Customer</label>
-                            <select className="w-full border rounded-lg p-2.5 bg-gray-50 text-sm font-medium focus:ring-2 focus:ring-primary outline-none" {...register('customerId')}>
-                                <option value="">No Customer</option>
-                                {customerOptions.map(c => (
-                                    <option key={c._id} value={c._id}>{c.firstName} {c.lastName} ({c.mobile})</option>
-                                ))}
-                            </select>
-                        </div>
                     </div>
                 </div>
 
@@ -264,7 +257,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                                 <label className="block text-sm font-bold mb-1 text-gray-700">Select Group *</label>
                                 <select className="w-full border rounded-lg p-2.5 bg-gray-50 text-sm font-medium focus:ring-2 focus:ring-primary outline-none" {...register('assignedGroupId')}>
                                     <option value="">Select Group</option>
-                                    {groupsOptions.map(g => (
+                                    {(teamsOptions.length > 0 ? teamsOptions : groupsOptions).map(g => (
                                         <option key={g._id || g.id} value={g._id || g.id}>{g.name}</option>
                                     ))}
                                 </select>
@@ -332,7 +325,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         {errors.dueDate && <span className="text-red-500 text-xs font-bold">{errors.dueDate.message}</span>}
                     </div>
                 </div>
-            </div>
+            </div >
 
             <div className="flex justify-end gap-3 pt-6 border-t mt-8">
                 <Button type="button" variant="outline" onClick={onCancel} className="font-bold px-6">Cancel</Button>
@@ -340,7 +333,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                     {submitting ? 'Saving...' : (task ? 'Update Task' : '🚀 Create Task')}
                 </Button>
             </div>
-        </form>
+        </form >
     );
 };
 

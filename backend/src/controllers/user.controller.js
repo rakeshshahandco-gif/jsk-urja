@@ -124,3 +124,9 @@ export const deleteUser = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'User not found');
     }
 });
+
+// Get users for assignment (available to all authenticated users)
+export const getAssignableUsers = asyncHandler(async (req, res) => {
+    const users = await User.find({ isActive: true }).select('name username fullName email');
+    res.status(200).json(new ApiResponse(200, users, 'Assignable users fetched successfully'));
+});

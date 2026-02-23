@@ -1,4 +1,5 @@
-const currentLocation = window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com/api/v1' : 'http://localhost:3000/api/v1'
+const currentLocation = window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com/api/v1' : 'http://localhost:5000/api/v1'
+import { getAuthData } from '../utils/auth';
 
 // API Configuration
 // const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
@@ -13,9 +14,14 @@ const API_BASE_URL = currentLocation;
 export const apiRequest = async (endpoint, options = {}) => {
     const url = `${API_BASE_URL}${endpoint}`;
 
+    const authData = getAuthData();
     const defaultHeaders = {
         'Content-Type': 'application/json',
     };
+
+    if (authData && authData.token) {
+        defaultHeaders['Authorization'] = `Bearer ${authData.token}`;
+    }
 
     const config = {
         ...options,

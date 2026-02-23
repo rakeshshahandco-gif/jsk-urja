@@ -31,14 +31,13 @@ export const GroupList = () => {
     };
 
     const handleCreateGroup = () => {
-        // Could open a modal here
-        // For now, simple implementation or redirect
-        // Let's implement a simple modal if possible, or just a form
-        // I'll assume we can use a modal
-        openModal({
-            title: 'Create Group',
-            content: <CreateGroupForm onSuccess={() => { closeModal(); fetchGroups(); }} />
-        });
+        const modalId = openModal(
+            CreateGroupForm,
+            {
+                title: 'Create Group',
+                onSuccess: () => { closeModal(modalId); fetchGroups(); }
+            }
+        );
     };
 
     const handleDelete = async (id) => {

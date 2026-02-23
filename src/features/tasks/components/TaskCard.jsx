@@ -111,17 +111,27 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
     };
 
     const handleExtend = () => {
-        openModal({
-            title: 'Extend Due Date',
-            content: <TaskExtendModal task={task} onSuccess={() => { closeModal(); onRefresh(); }} onCancel={closeModal} />
-        });
+        const modalId = openModal(
+            TaskExtendModal,
+            {
+                title: 'Extend Due Date',
+                task: task,
+                onSuccess: () => { closeModal(modalId); onRefresh(); },
+                onCancel: () => closeModal(modalId)
+            }
+        );
     };
 
     const handleViewGroup = () => {
-        openModal({
-            title: 'Group Progress',
-            content: <GroupDetailModal groupId={task.groupId?._id || task.groupId} onRefresh={onRefresh} onClose={closeModal} />
-        });
+        const modalId = openModal(
+            GroupDetailModal,
+            {
+                title: 'Group Progress',
+                groupId: task.groupId?._id || task.groupId,
+                onRefresh: onRefresh,
+                onClose: () => closeModal(modalId)
+            }
+        );
     };
 
     return (

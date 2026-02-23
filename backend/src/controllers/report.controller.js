@@ -309,6 +309,15 @@ const exportFollowupTaskReport = catchAsync(async (req, res) => {
     res.send(buffer);
 });
 
+const getTaskReminderReport = catchAsync(async (req, res) => {
+    const filters = pick(req.query, ['tab', 'priority', 'search']);
+    filters.user = req.user; // For role-based filtering
+    const options = pick(req.query, ['page', 'limit']);
+
+    const result = await reportService.queryTaskReminderReport(filters, options);
+    res.send(result);
+});
+
 export default {
     getCustomerReport,
     getReportOptions,
@@ -330,5 +339,6 @@ export default {
     exportFollowupDashboardDetail, // Ensure this was exported in previous steps
     getFollowupTaskReportAll,
     getFollowupTaskReportSingle,
-    exportFollowupTaskReport
+    exportFollowupTaskReport,
+    getTaskReminderReport
 };

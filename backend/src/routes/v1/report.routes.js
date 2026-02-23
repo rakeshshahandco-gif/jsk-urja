@@ -59,4 +59,7 @@ router
     .route('/followup-task-report/:customerId/export')
     .get(reportController.exportFollowupTaskReport); // For Single
 
+// Task Reminders Report
+router.get('/task-reminders', reportController.getTaskReminderReport);
+
 export default router;

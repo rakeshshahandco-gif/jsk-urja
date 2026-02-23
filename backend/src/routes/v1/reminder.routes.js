@@ -1,8 +1,10 @@
 import express from 'express';
-// import auth from '../../middlewares/auth.js'; // Assuming auth middleware exists if needed, but not specified in prompt
 import reminderController from '../../controllers/reminder.controller.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 router
     .route('/')

@@ -70,32 +70,40 @@ export const TaskList = () => {
     };
 
     const handleCreate = () => {
-        openModal({
-            title: 'Create Task',
-            content: <TaskForm onSuccess={() => { closeModal(); fetchTasks(); }} onCancel={closeModal} />
-        });
+        const modalId = openModal(
+            TaskForm,
+            {
+                title: 'Create Task',
+                onSuccess: () => { closeModal(modalId); fetchTasks(); },
+                onCancel: () => closeModal(modalId)
+            }
+        );
     };
 
     const handleCreateGroup = () => {
-        openModal({
-            title: 'Create New Group',
-            content: (
-                <GroupForm
-                    onSuccess={() => {
-                        closeModal();
-                        getTaskGroups().then(data => setGroups(data));
-                    }}
-                    onCancel={closeModal}
-                />
-            )
-        });
+        const modalId = openModal(
+            GroupForm,
+            {
+                title: 'Create New Group',
+                onSuccess: () => {
+                    closeModal(modalId);
+                    getTaskGroups().then(data => setGroups(data));
+                },
+                onCancel: () => closeModal(modalId)
+            }
+        );
     };
 
     const handleEdit = (task) => {
-        openModal({
-            title: 'Edit Task',
-            content: <TaskForm task={task} onSuccess={() => { closeModal(); fetchTasks(); }} onCancel={closeModal} />
-        });
+        const modalId = openModal(
+            TaskForm,
+            {
+                title: 'Edit Task',
+                task: task,
+                onSuccess: () => { closeModal(modalId); fetchTasks(); },
+                onCancel: () => closeModal(modalId)
+            }
+        );
     };
 
     const handleDelete = async (id) => {

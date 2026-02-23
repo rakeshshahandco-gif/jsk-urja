@@ -1,15 +1,34 @@
 import axios from 'axios';
-import { env } from '../config/env';
+import { getAuthData, clearAuthData } from '../utils/auth';
 
-const currentLocation = window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com/api/v1' : 'http://localhost:3000/api/v1'
+const currentLocation = window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com/api/v1' : 'http://localhost:5000/api/v1'
 
 export const apiClient = axios.create({
-    // baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1',
     baseURL: currentLocation,
-    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Interceptors can be added here
+// Request interceptor: Attach Auth Token
+apiClient.interceptors.request.use(
+    (config) => {
+        const authData = getAuthData();
+        if (authData && authData.token) {
+            config.headers.Authorization = `Bearer ${authData.token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// Response interceptor: Handle 401
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            clearAuthData();
+        }
+        return Promise.reject(error);
+    }
+);

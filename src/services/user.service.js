@@ -19,5 +19,10 @@ export const userService = {
     deleteUser: async (id) => {
         const { data } = await api.delete(`/users/${id}`);
         return data;
+    },
+
+    getAssignableUsers: async () => {
+        const { data } = await api.get('/users/assignable');
+        return data.data; // TaskForm expects Array [...users]
     }
 };

@@ -4,7 +4,8 @@ import {
     createUser,
     updateUser,
     deleteUser,
-    getUserById
+    getUserById,
+    getAssignableUsers
 } from '../../controllers/user.controller.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -14,6 +15,8 @@ const router = express.Router();
 
 // Protect all routes
 router.use(protect);
+
+router.get('/assignable', getAssignableUsers);
 
 // Only Admin can view all users and create new ones
 router.route('/')

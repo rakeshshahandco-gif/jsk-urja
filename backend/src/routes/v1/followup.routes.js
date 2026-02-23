@@ -2,8 +2,11 @@ import express from 'express';
 import { validate } from '../../middlewares/validate.middleware.js';
 import followupValidation from '../../validations/followup.validation.js';
 import followupController from '../../controllers/followup.controller.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
+
+router.use(protect);
 
 router
     .route('/')

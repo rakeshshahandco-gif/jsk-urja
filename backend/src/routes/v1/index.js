@@ -8,7 +8,9 @@ import reminderRoute from './reminder.routes.js';
 import reportRoute from './report.routes.js';
 import taskRoute from './task.routes.js';
 import taskCategoryRoute from './taskCategory.routes.js';
+import taskGroupRoute from './taskGroup.routes.js';
 import groupRoute from './group.routes.js';
+import taskChatRoute from './taskChat.routes.js';
 
 const router = express.Router();
 
@@ -55,8 +57,16 @@ const defaultRoutes = [
         route: taskCategoryRoute,
     },
     {
+        path: '/task-groups',
+        route: taskGroupRoute,
+    },
+    {
         path: '/groups',
         route: groupRoute,
+    },
+    {
+        path: '/task-chats',
+        route: taskChatRoute,
     },
 ];
 

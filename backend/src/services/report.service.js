@@ -1149,6 +1149,94 @@ const generateFollowupTaskReportExport = async (format, filters, customerId = nu
     return pdfBuffer;
 };
 
+
+/**
+ * Task Reminder Report (Internal Tasks)
+ */
+const queryTaskReminderReport = async (filters, options) => {
+    const { Task } = await import('../models/task.model.js');
+    const { GroupMember } = await import('../models/groupMember.model.js');
+
+    const tab = filters.tab || 'TODAY';
+    const andConditions = [];
+
+    // Current time logic for Asia/Kolkata (IST)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+
+    const startOfTodayIST = new Date(istTime);
+    startOfTodayIST.setUTCHours(0, 0, 0, 0);
+    const startOfTodayUTC = new Date(startOfTodayIST.getTime() - istOffset);
+
+    const endOfTodayIST = new Date(istTime);
+    endOfTodayIST.setUTCHours(23, 59, 59, 999);
+    const endOfTodayUTC = new Date(endOfTodayIST.getTime() - istOffset);
+
+    if (tab === 'TODAY') {
+        andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gte: startOfTodayUTC, $lte: endOfTodayUTC } });
+    } else if (tab === 'UPCOMING') {
+        andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gt: endOfTodayUTC } });
+    } else if (tab === 'OVERDUE') {
+        andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $lt: startOfTodayUTC } });
+    } else if (tab === 'COMPLETED') {
+        andConditions.push({ status: 'COMPLETED' });
+    }
+
+    if (filters.priority) andConditions.push({ priority: filters.priority });
+
+    if (filters.search) {
+        andConditions.push({
+            $or: [
+                { title: { $regex: filters.search, $options: 'i' } },
+                { description: { $regex: filters.search, $options: 'i' } }
+            ]
+        });
+    }
+
+    // Role-based filtering (similar to task.controller)
+    if (filters.user) {
+        if (filters.user.role === 'admin') {
+            // Admin sees all
+        } else {
+            const userGroups = await GroupMember.find({ user: filters.user.id }).select('group');
+            const groupIds = userGroups.map((g) => g.group);
+
+            andConditions.push({
+                $or: [
+                    { createdBy: filters.user.id },
+                    { assigneeIds: filters.user.id },
+                    { assignToAll: true },
+                    { assignedGroupId: { $in: groupIds } }
+                ]
+            });
+        }
+    }
+
+    const filter = andConditions.length ? { $and: andConditions } : {};
+    const limit = options.limit && parseInt(options.limit, 10) > 0 ? parseInt(options.limit, 10) : 50;
+    const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;
+    const skip = (page - 1) * limit;
+    const sort = { dueDate: 1, createdAt: -1 };
+
+    const [tasks, total] = await Promise.all([
+        Task.find(filter)
+            .populate('assigneeIds', 'name email username')
+            .populate('createdBy', 'name email username')
+            .populate('taskCategoryId', 'name')
+            .populate('groupId', 'name')
+            .sort(sort)
+            .skip(skip)
+            .limit(limit),
+        Task.countDocuments(filter)
+    ]);
+
+    return {
+        data: tasks,
+        meta: { total, page, limit, pages: Math.ceil(total / limit) }
+    };
+};
+
 export default {
     buildReportQuery,
     queryCustomerReport,
@@ -1171,5 +1259,7 @@ export default {
     // Task Report
     queryFollowupTaskReportAll,
     queryFollowupTaskReportSingle,
-    generateFollowupTaskReportExport
+    generateFollowupTaskReportExport,
+    // Task Reminder Report
+    queryTaskReminderReport
 };

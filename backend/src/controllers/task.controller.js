@@ -39,6 +39,7 @@ const createTask = asyncHandler(async (req, res) => {
     dueDate,
     assignmentMode,
     assignedGroupId,
+    groupId,
     taskCategoryId,
     assignToAll,
     assigneeIds,
@@ -58,6 +59,7 @@ const createTask = asyncHandler(async (req, res) => {
     dueDate: dueDate || null,
     assignmentMode: assignmentMode || 'SELF',
     assignedGroupId: toObjectId(assignedGroupId),
+    groupId: toObjectId(groupId),
     taskCategoryId: toObjectId(taskCategoryId),
     createdBy: req.user.id,
     customerId: toObjectId(customerId),
@@ -100,9 +102,9 @@ const createTask = asyncHandler(async (req, res) => {
 // GET TASKS (LIST)
 // ---------------------------
 const getTasks = asyncHandler(async (req, res) => {
-  const query = pick(req.query, ['status', 'priority', 'taskCategoryId', 'search', 'customerId']);
+  const query = pick(req.query, ['status', 'priority', 'taskCategoryId', 'search', 'customerId', 'groupId', 'assigneeType']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
-  const view = req.query.view || 'assigned_to_me';
+  const view = req.query.view || (query.assigneeType || 'assigned_to_me');
 
   const limit = Math.min(parseInt(options.limit || '50', 10), 200);
   const page = Math.max(parseInt(options.page || '1', 10), 1);
@@ -116,6 +118,7 @@ const getTasks = asyncHandler(async (req, res) => {
   if (query.priority) andConditions.push({ priority: query.priority });
   if (query.taskCategoryId) andConditions.push({ taskCategoryId: toObjectId(query.taskCategoryId) });
   if (query.customerId) andConditions.push({ customerId: toObjectId(query.customerId) });
+  if (query.groupId) andConditions.push({ groupId: toObjectId(query.groupId) });
 
   if (query.search) {
     andConditions.push({
@@ -126,9 +129,10 @@ const getTasks = asyncHandler(async (req, res) => {
     });
   }
 
-  const now = new Date();
-  const todayStart = new Date(now.setHours(0, 0, 0, 0));
-  const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
 
   // View specific filters (Today, Upcoming, Overdue, Closed)
   if (view === 'today') {
@@ -142,12 +146,25 @@ const getTasks = asyncHandler(async (req, res) => {
   }
 
   // Role-based visibility logic
-  if (req.user.role === 'admin') {
+  const assigneeType = query.assigneeType || (view === 'assigned_to_me' || view === 'today' || view === 'upcoming' || view === 'overdue' || view === 'closed' ? 'assigned_to_me' : 'all');
+
+  if (req.user.role === 'admin' && assigneeType === 'all') {
     // Admin can see everything
+  } else if (assigneeType === 'created_by_me') {
+    andConditions.push({ createdBy: req.user.id });
+  } else if (assigneeType === 'assigned_to_me') {
+    // Manager or Staff looking at their own tasks
+    const userGroups = await GroupMember.find({ user: req.user.id }).select('group');
+    const groupIds = userGroups.map((g) => g.group);
+
+    andConditions.push({
+      $or: [
+        { assigneeIds: req.user.id },
+        { assignToAll: true },
+        { assignedGroupId: { $in: groupIds } }
+      ]
+    });
   } else if (req.user.role === 'manager') {
-    // Manager can see tasks created by them, assigned to them, or assigned to their team (if team exists)
-    // For now, team logic is simplified to createdBy/assigneeIds OR groupMembers
-    // (Assuming GroupMember model maps user to group)
     const userGroups = await GroupMember.find({ user: req.user.id }).select('group');
     const groupIds = userGroups.map((g) => g.group);
 
@@ -160,7 +177,7 @@ const getTasks = asyncHandler(async (req, res) => {
       ]
     });
   } else {
-    // Staff can see tasks assigned to them and tasks created by them
+    // Staff generic view
     andConditions.push({
       $or: [
         { createdBy: req.user.id },
