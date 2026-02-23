@@ -27,3 +27,7 @@ export const upsertReminder = async (customerId, data) => {
 export const rescheduleReminder = async (id, data) => {
     return api.put(`/reminders/${id}/reschedule`, data);
 };
+
+export const getReminderCounts = async () => {
+    return api.get('/reminders/counts');
+};

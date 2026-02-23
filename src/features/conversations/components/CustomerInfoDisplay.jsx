@@ -14,7 +14,8 @@ const getStatusBadge = (status) => {
 };
 
 export const CustomerInfoDisplay = ({ customer }) => {
-    const badge = getStatusBadge(customer.customerStatus);
+    const primaryContact = customer.contactPersons?.find(c => c.isPrimary) || (customer.contactPersons?.[0]);
+    const badge = getStatusBadge(customer.customerStatus || customer.status);
 
     return (
         <div className={styles.customerInfo}>
@@ -41,18 +42,18 @@ export const CustomerInfoDisplay = ({ customer }) => {
                 </div>
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Contact Person:</span>
-                    <span className={styles.infoValue}>{customer.contactPerson || '-'}</span>
+                    <span className={styles.infoValue}>{primaryContact?.name || '-'}</span>
                 </div>
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Mobiles:</span>
                     <span className={styles.infoValue}>
                         {[
-                            customer.mobile,
-                            customer.mobile2,
-                            customer.mobile3,
-                            customer.mobile4,
-                            customer.mobile5
-                        ].filter(m => m).join(', ') || '-'}
+                            primaryContact?.mobile,
+                            primaryContact?.mobile2,
+                            primaryContact?.mobile3,
+                            primaryContact?.mobile4,
+                            primaryContact?.mobile5
+                        ].filter(m => m && m !== '').join(', ') || '-'}
                     </span>
                 </div>
                 <div className={styles.infoItem}>

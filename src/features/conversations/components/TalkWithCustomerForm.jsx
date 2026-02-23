@@ -121,10 +121,15 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
         try {
             const conversationData = {
                 customerId: selectedCustomer._id,
-                conversationDate: new Date(data.conversationDate),
+                conversationDate: data.conversationDate || new Date().toISOString().split('T')[0],
                 mode: data.mode,
                 discussionDetails: data.discussionDetails,
                 outcome: data.outcome || '',
+                interestedProducts: Array.isArray(data.interestedProducts)
+                    ? data.interestedProducts.filter(p => p && p !== 'on')
+                    : (data.interestedProducts && data.interestedProducts !== 'on' ? [data.interestedProducts] : []),
+                productNotes: data.productNotes || '',
+                callDuration: data.callDuration ? Number(data.callDuration) : null,
             };
 
             console.log('📤 Sending to API:', conversationData);
@@ -140,12 +145,16 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
                 mode: 'call',
                 discussionDetails: '',
                 outcome: '',
+                interestedProducts: [],
+                productNotes: '',
+                callDuration: '',
             });
 
             alert('Conversation saved successfully!');
         } catch (error) {
             console.error('❌ Error saving conversation:', error);
-            alert('Failed to save conversation: ' + error.message);
+            const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+            alert(`Failed to save conversation: ${errorMsg}`);
         }
     };
 
@@ -189,7 +198,8 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
             }
         } catch (error) {
             console.error('❌ Error updating follow-up:', error);
-            alert('Failed to update follow-up: ' + error.message);
+            const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+            alert(`Failed to update follow-up: ${errorMsg}`);
         }
     };
 

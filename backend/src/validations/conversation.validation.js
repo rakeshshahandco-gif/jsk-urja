@@ -14,6 +14,9 @@ const createConversation = {
             'string.min': 'Discussion details must be at least 5 characters'
         }),
         outcome: Joi.string().optional().allow(''),
+        interestedProducts: Joi.array().items(Joi.string()).optional(),
+        productNotes: Joi.string().optional().allow(''),
+        callDuration: Joi.number().optional().allow(null),
     }),
 };
 
@@ -61,6 +64,9 @@ const updateConversation = {
             mode: Joi.string().valid('call', 'whatsapp', 'visit', 'email'),
             discussionDetails: Joi.string().min(5),
             outcome: Joi.string().allow(''),
+            interestedProducts: Joi.array().items(Joi.string()),
+            productNotes: Joi.string().allow(''),
+            callDuration: Joi.number().allow(null),
         })
         .min(1),
 };

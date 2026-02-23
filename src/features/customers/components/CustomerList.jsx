@@ -93,10 +93,6 @@ export const CustomerList = () => {
                                 data.tags = data.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
                             }
 
-                            // Ensure arrays are properly formatted
-                            if (!Array.isArray(data.interestedProducts)) {
-                                data.interestedProducts = [];
-                            }
                             if (!Array.isArray(data.contactPersons)) {
                                 data.contactPersons = [];
                             }
@@ -194,6 +190,9 @@ export const CustomerList = () => {
                     <Button variant="outline" onClick={handleImportCustomers}>
                         <Upload size={20} /> Import
                     </Button>
+                    <Button variant="outline" onClick={() => navigate('/tasks/create')}>
+                        <Plus size={20} /> Create Task
+                    </Button>
                     <Button onClick={handleAddCustomer}>
                         <Plus size={20} /> Add Customer
                     </Button>
@@ -225,7 +224,7 @@ export const CustomerList = () => {
                         />
                         <Input
                             type="text"
-                            placeholder="Search customers..."
+                            placeholder="Search by name, company, or mobile..."
                             value={searchTerm}
                             onChange={handleSearch}
                             style={{ paddingLeft: '40px' }}
@@ -348,6 +347,14 @@ export const CustomerList = () => {
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
+                                                            onClick={() => navigate(`/tasks/create?customerId=${customer._id}`)}
+                                                            title="Create Task"
+                                                        >
+                                                            ➕
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
                                                             onClick={() => handleTalkWithCustomer(customer)}
                                                             title="Talk with customer"
                                                         >
@@ -440,4 +447,3 @@ export const CustomerList = () => {
         </div>
     );
 };
-

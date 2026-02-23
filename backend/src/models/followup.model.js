@@ -33,6 +33,10 @@ const followupSchema = mongoose.Schema(
             default: 'CALL',
             required: true,
         },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        },
     },
     {
         timestamps: true,

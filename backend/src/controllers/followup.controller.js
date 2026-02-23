@@ -8,7 +8,7 @@ const catchAsync = (fn) => (req, res, next) => {
 };
 
 const createFollowup = catchAsync(async (req, res) => {
-    const followup = await followupService.createFollowup(req.body);
+    const followup = await followupService.createFollowup({ ...req.body, createdBy: req.user.id });
     res.status(201).send(new ApiResponse(201, followup, 'Follow-up created successfully'));
 });
 
@@ -41,7 +41,7 @@ const getUpcomingFollowups = catchAsync(async (req, res) => {
 });
 
 const updateFollowup = catchAsync(async (req, res) => {
-    const followup = await followupService.updateFollowupById(req.params.followupId, req.body);
+    const followup = await followupService.updateFollowupById(req.params.followupId, { ...req.body, createdBy: req.user.id });
     res.send(new ApiResponse(200, followup, 'Follow-up updated successfully'));
 });
 

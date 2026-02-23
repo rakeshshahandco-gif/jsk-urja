@@ -52,6 +52,7 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                         <th>Priority</th>
                         <th>Summary / Next Action</th>
                         <th>Outcome</th>
+                        <th>Created By</th>
                         <th>Reminder Status</th>
                         <th>Created</th>
                     </tr>
@@ -91,6 +92,7 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                             <td style={{ maxWidth: '200px', whiteSpace: 'normal' }}>
                                 {r.conversation?.outcome || '-'}
                             </td>
+                            <td>{r.createdBy?.name || r.creator?.name || '-'}</td>
                             <td>{getStatusLabel(r)}</td>
                             <td className={styles.dateCell}>
                                 {new Date(r.createdAt).toLocaleDateString()}

@@ -21,28 +21,57 @@ export const getUserById = asyncHandler(async (req, res) => {
 
 // Create new user (Admin only)
 export const createUser = asyncHandler(async (req, res) => {
-    const { name, username, email, password, role, permissions } = req.body;
+    const logData = `[${new Date().toISOString()}] ATTEMPT: ${JSON.stringify(req.body)}\n`;
+    try {
+        const { name, username, email, mobile, password, role, permissions } = req.body;
 
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
-    if (userExists) {
-        throw new ApiError(400, 'User already exists');
-    }
+        // Ensure optional fields are handled correctly
+        const normalizedEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : undefined;
+        const normalizedMobile = (mobile && mobile.trim() !== '') ? mobile.trim() : undefined;
 
-    const user = await User.create({
-        name,
-        username,
-        email,
-        password,
-        role: role || 'viewer',
-        permissions: permissions || []
-    });
+        const query = { $or: [{ username: username.toLowerCase() }] };
+        if (normalizedEmail) {
+            query.$or.push({ email: normalizedEmail });
+        }
 
-    if (user) {
-        // Exclude password from response
-        user.password = undefined;
-        res.status(201).json(new ApiResponse(201, user, 'User created successfully'));
-    } else {
-        throw new ApiError(400, 'Invalid user data');
+        const userExists = await User.findOne(query);
+        if (userExists) {
+            const conflictField = userExists.username === username.toLowerCase() ? 'Username' : 'Email';
+            const logError = `[${new Date().toISOString()}] CONFLICT: ${conflictField} "${conflictField === 'Username' ? username : normalizedEmail}" taken by ${userExists.name} (${userExists._id})\n`;
+
+            throw new ApiError(400, `U_CTRL: ${conflictField} already exists (Used by ${userExists.name})`);
+        }
+
+        const userData = {
+            name,
+            username: username.toLowerCase(),
+            email: normalizedEmail,
+            mobile: normalizedMobile,
+            password,
+            role: role || 'viewer',
+            permissions: permissions || [],
+            isActive: req.body.isActive !== undefined ? req.body.isActive : true
+        };
+
+        const user = await User.create(userData);
+
+        if (user) {
+            user.password = undefined;
+            res.status(201).json(new ApiResponse(201, user, 'U_CTRL: User created successfully'));
+        } else {
+            throw new ApiError(400, 'U_CTRL: Invalid user data');
+        }
+    } catch (error) {
+        console.error('Error in createUser:', error);
+        if (error.name === 'ValidationError') {
+            const message = Object.values(error.errors).map(val => val.message).join(', ');
+            throw new ApiError(400, 'U_CTRL: ' + message);
+        }
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern)[0];
+            throw new ApiError(400, `U_CTRL: ${field.charAt(0).toUpperCase() + field.slice(1)} already exists`);
+        }
+        throw error;
     }
 });
 
@@ -54,6 +83,7 @@ export const updateUser = asyncHandler(async (req, res) => {
         user.name = req.body.name || user.name;
         user.email = req.body.email || user.email;
         user.username = req.body.username || user.username;
+        user.mobile = req.body.mobile || user.mobile;
 
         // Only Admin can update roles
         if (req.body.role && req.user.role === 'admin') {

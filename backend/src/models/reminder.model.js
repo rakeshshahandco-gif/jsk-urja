@@ -72,6 +72,10 @@ const reminderSchema = mongoose.Schema(
         rescheduledAt: {
             type: Date,
         },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        },
     },
     {
         timestamps: true,

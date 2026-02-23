@@ -26,7 +26,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 companyBrand: '',
                 companyEmail: '',
                 customerType: '',
-                area: '',
+                city: '',
                 state: '',
                 address: '',
                 pincode: '',
@@ -34,8 +34,6 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 notes: '',
                 tags: [],
                 gstNumber: '',
-                interestedProducts: [],
-                productNotes: '',
                 contactPersons: [
                     {
                         name: '',
@@ -57,18 +55,21 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             companyBrand: customerData.companyBrand || '',
             companyEmail: customerData.companyEmail || '',
             customerType: customerData.customerType || '',
-            area: customerData.area || '',
-            state: customerData.state ?
-                customerData.state.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') :
-                '',
+            city: customerData.area || customerData.city || '',
+            state: (() => {
+                if (!customerData.state) return '';
+                const stateStr = String(customerData.state).trim();
+                const matchedState = INDIAN_STATES.find(
+                    s => s.toLowerCase() === stateStr.toLowerCase()
+                );
+                return matchedState || stateStr;
+            })(),
             address: customerData.address || '',
             pincode: customerData.pincode || '',
             status: customerData.status || 'lead',
             notes: customerData.notes || '',
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
-            interestedProducts: Array.isArray(customerData.interestedProducts) ? customerData.interestedProducts : [],
-            productNotes: customerData.productNotes || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
                     name: contact.name || '',
@@ -216,9 +217,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         <label htmlFor="area">AREA</label>
                         <Input
                             id="area"
-                            {...register('area')}
-                            placeholder="Enter area/locality"
-                            onChange={handleUppercaseChange('area')}
+                            {...register('city')}
+                            placeholder="Enter area"
+                            onChange={handleUppercaseChange('city')}
                         />
                     </div>
 
@@ -432,45 +433,6 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     </div>
                 </div>
 
-                {/* Product Interest */}
-                <div className="subsection" style={{ marginTop: '24px' }}>
-                    <h4 style={{ fontSize: '1rem', marginBottom: '16px', color: '#374151' }}>Product Interest</h4>
-
-                    <div className={styles['form-group']}>
-                        <label>INTERESTED IN PRODUCTS</label>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                            {[
-                                'PHASE CUT DIMMABLE DRIVER AND DIMMER',
-                                'ANALOG DRIVER & DIMMER',
-                                'DALI DRIVER & DIMMER',
-                                'SMART DRIVER – BLE',
-                                'SMART DRIVER – ZIGBEE'
-                            ].map((product) => (
-                                <label key={product} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        value={product}
-                                        {...register('interestedProducts')}
-                                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                    />
-                                    <span style={{ fontSize: '0.875rem', color: '#374151' }}>{product}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className={styles['form-group']}>
-                        <label htmlFor="productNotes">PRODUCT REQUIREMENT NOTES</label>
-                        <textarea
-                            id="productNotes"
-                            {...register('productNotes')}
-                            placeholder="Enter specific product requirements or notes..."
-                            rows={4}
-                            className={styles['form-textarea']}
-                            onChange={handleUppercaseChange('productNotes')}
-                        />
-                    </div>
-                </div>
             </div>
 
             {/* Additional Information */}

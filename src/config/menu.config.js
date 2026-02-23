@@ -45,22 +45,31 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'tasks',
+        title: 'Task Management',
+        icon: 'AssignmentIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            {
+                id: 'task-create',
+                title: 'Create Task',
+                path: '/tasks/create',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'task-list',
+                title: 'Manage Tasks',
+                path: '/tasks/list',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+        ],
+    },
+    {
         id: 'reports',
         title: 'Reports',
         icon: 'BarChartIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         children: [
-            {
-                id: 'report-sales',
-                title: 'Sales Report',
-                path: PATHS.REPORTS.SALES,
-            },
-            {
-                id: 'report-performance',
-                title: 'Performance',
-                path: PATHS.REPORTS.PERFORMANCE,
-                roles: [ROLES.ADMIN], // Restricted to Admin
-            },
             {
                 id: 'report-customer-master',
                 title: 'Customer Master',

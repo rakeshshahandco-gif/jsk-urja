@@ -12,8 +12,6 @@ export const PATHS = {
     },
     REPORTS: {
         ROOT: '/reports',
-        SALES: '/reports/sales',
-        PERFORMANCE: '/reports/performance',
         CUSTOMER_MASTER: '/reports/customer-master',
     },
     AUTH: {

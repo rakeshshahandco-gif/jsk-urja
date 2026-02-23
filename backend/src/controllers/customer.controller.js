@@ -232,7 +232,7 @@ const downloadTemplate = catchAsync(async (req, res) => {
         { header: 'Mobile 5', key: 'mobile5', width: 15 },
         { header: 'Email', key: 'email', width: 30 },
         { header: 'Address', key: 'address', width: 40 },
-        { header: 'Area', key: 'area', width: 20 },
+        { header: 'Area', key: 'city', width: 20 },
         { header: 'State', key: 'state', width: 20 },
         { header: 'Pincode', key: 'pincode', width: 10 },
         { header: 'Status', key: 'status', width: 15 },
@@ -261,7 +261,7 @@ const downloadTemplate = catchAsync(async (req, res) => {
         mobile5: '',
         email: 'john@example.com',
         address: '123 Main Street',
-        area: 'Andheri East',
+        city: 'Mumbai',
         state: 'Maharashtra',
         pincode: '400001',
         status: 'lead',
@@ -284,15 +284,15 @@ const downloadTemplate = catchAsync(async (req, res) => {
 
     // Apply data validation for 1000 rows
     for (let i = 2; i <= 1001; i++) {
-        // Status validation (Column P - 16)
-        worksheet.getCell(`P${i}`).dataValidation = {
+        // Status validation (Column N - 14)
+        worksheet.getCell(`N${i}`).dataValidation = {
             type: 'list',
             allowBlank: true,
             formulae: [`"${statuses.join(',')}"`]
         };
 
-        // Business Type validation (Column Q - 17)
-        worksheet.getCell(`Q${i}`).dataValidation = {
+        // Business Type validation (Column O - 15)
+        worksheet.getCell(`O${i}`).dataValidation = {
             type: 'list',
             allowBlank: true,
             formulae: [`"${customerTypes.join(',')}"`]
@@ -397,7 +397,7 @@ const importCustomers = catchAsync(async (req, res) => {
             const mobile5 = getCellText(row.getCell(8)) || '';
             const email = getCellText(row.getCell(9)) || '';
             const address = getCellText(row.getCell(10)) || '';
-            const area = getCellText(row.getCell(11)) || '';
+            const city = getCellText(row.getCell(11)) || '';
             const state = getCellText(row.getCell(12)) || '';
             const pincode = getCellText(row.getCell(13)) || '';
             const status = getCellText(row.getCell(14)) || 'lead';
@@ -405,7 +405,7 @@ const importCustomers = catchAsync(async (req, res) => {
             const interestedProductsStr = getCellText(row.getCell(16)) || '';
 
             // Skip completely empty rows
-            if (!customerName && !company && !contactName && !mobile && !email && !address && !area) {
+            if (!customerName && !company && !contactName && !mobile && !email && !address && !city) {
                 return;
             }
 
@@ -488,7 +488,7 @@ const importCustomers = catchAsync(async (req, res) => {
                     ],
                     company,
                     customerType,
-                    area,
+                    city,
                     state,
                     address,
                     pincode,

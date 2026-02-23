@@ -200,8 +200,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             />
                         </div>
 
-                        <Input label="Area" {...register('area')} />
-                        <Input label="City" {...register('city')} />
+                        <Input label="Area" {...register('city')} />
 
                         <div>
                             <Input

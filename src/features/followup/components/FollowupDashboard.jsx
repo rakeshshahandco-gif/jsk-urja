@@ -12,10 +12,18 @@ export const FollowupDashboard = () => {
     const [followups, setFollowups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     useEffect(() => {
         fetchCustomersWithFollowups();
-    }, []);
+    }, [debouncedSearch]);
 
     const fetchCustomersWithFollowups = async () => {
         setLoading(true);
@@ -23,7 +31,7 @@ export const FollowupDashboard = () => {
         try {
             // Fetch all customers - we'll show those with and without follow-ups
             const [customersData, followupsData] = await Promise.all([
-                getCustomers({ limit: 100, sortBy: 'createdAt:desc' }),
+                getCustomers({ limit: 100, sortBy: 'createdAt:desc', search: debouncedSearch }),
                 getFollowups({ limit: 100 })
             ]);
             setCustomers(customersData.results || []);
@@ -56,15 +64,7 @@ export const FollowupDashboard = () => {
         return styles[status] || styles.inactive;
     };
 
-    const filteredCustomers = customers.filter(customer => {
-        if (!searchTerm) return true;
-        const search = searchTerm.toLowerCase();
-        return (
-            (customer.customerName || customer.name)?.toLowerCase().includes(search) ||
-            customer.company?.toLowerCase().includes(search) ||
-            getPrimaryContact(customer.contactPersons)?.mobile?.includes(search)
-        );
-    });
+    const filteredCustomers = customers; // Server already filtered
 
     return (
         <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>

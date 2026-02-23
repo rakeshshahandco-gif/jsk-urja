@@ -25,7 +25,8 @@ const syncReminder = async (followup, body = {}) => {
                 followUpType: followup.followUpType,
                 taskNote: followup.whatToTalkNext,
                 priority: followup.priority,
-                isClosed: false
+                isClosed: false,
+                createdBy: followup.createdBy
             },
             { upsert: true, new: true }
         );
@@ -92,6 +93,7 @@ const queryFollowups = async (filter, options) => {
 
     const followups = await Followup.find(filter)
         .populate('customerId', 'name company contactPersons')
+        .populate('createdBy', 'name email')
         .sort(sort)
         .skip(skip)
         .limit(limit);
@@ -114,7 +116,7 @@ const queryFollowups = async (filter, options) => {
  * @returns {Promise<Followup>}
  */
 const getFollowupById = async (id) => {
-    return Followup.findById(id).populate('customerId', 'name company contactPersons');
+    return Followup.findById(id).populate('customerId', 'name company contactPersons').populate('createdBy', 'name email');
 };
 
 /**
@@ -123,7 +125,7 @@ const getFollowupById = async (id) => {
  * @returns {Promise<Followup>}
  */
 const getFollowupsByCustomer = async (customerId) => {
-    return Followup.findOne({ customerId }).populate('customerId', 'name company contactPersons');
+    return Followup.findOne({ customerId }).populate('customerId', 'name company contactPersons').populate('createdBy', 'name email');
 };
 
 /**
@@ -177,6 +179,7 @@ const getUpcomingFollowups = async () => {
         }
     })
         .populate('customerId', 'name company contactPersons')
+        .populate('createdBy', 'name email')
         .sort('nextCallDate');
 };
 
