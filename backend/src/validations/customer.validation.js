@@ -38,6 +38,7 @@ const createCustomer = {
         gstNumber: Joi.string().optional().allow(''),
         notes: Joi.string().optional().allow(''),
         tags: Joi.array().items(Joi.string()).optional(),
+        interestedProducts: Joi.array().items(Joi.string()).optional(),
     }),
 };
 
@@ -86,6 +87,7 @@ const updateCustomer = {
             gstNumber: Joi.string().allow(''),
             notes: Joi.string().allow(''),
             tags: Joi.array().items(Joi.string()),
+            interestedProducts: Joi.array().items(Joi.string()).optional(),
             contactPersons: Joi.array().items(contactPersonSchema),
         })
         .min(1),

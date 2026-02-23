@@ -4,6 +4,8 @@ import { Button, Input, Select, MultiSelect, ContactPersonInput } from '@/compon
 import { INDIAN_STATES, STATE_GST_CODES, DEMAND_PRODUCTS, SALES_PERSONS } from '@/utils/constants';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import styles from './CustomerForm.module.scss';
+import { createCustomer } from '@/services/customerApi';
+import toast from 'react-hot-toast';
 
 // Mock DB for Company Names (In real app, this comes from API)
 const MOCK_DB_COMPANIES = [
@@ -98,23 +100,32 @@ export const AddCustomerForm = ({ closeModal }) => {
     }, [companyValue]);
 
     const onSubmit = async (data) => {
-        // Transform contactPersons to set isPrimary based on primaryContactIndex
-        const primaryIndex = parseInt(data.primaryContactIndex);
-        const transformedData = {
-            ...data,
-            contactPersons: data.contactPersons.map((contact, index) => ({
-                ...contact,
-                isPrimary: index === primaryIndex,
-            })),
-        };
+        try {
+            // Transform contactPersons to set isPrimary based on primaryContactIndex
+            const primaryIndex = parseInt(data.primaryContactIndex);
+            const transformedData = {
+                ...data,
+                contactPersons: data.contactPersons.map((contact, index) => ({
+                    ...contact,
+                    isPrimary: index === primaryIndex,
+                })),
+                // Map field names to match backend
+                gstNumber: data.gstNumber || '',
+                interestedProducts: data.demandProduct || [],
+            };
 
-        // Remove the primaryContactIndex field as it's not needed in the final data
-        delete transformedData.primaryContactIndex;
+            // Remove fields not needed by the backend
+            delete transformedData.primaryContactIndex;
+            delete transformedData.demandProduct;
 
-        // TODO: Connect to API
-        console.log('Submitted Data:', transformedData);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Mock API delay
-        closeModal();
+            await createCustomer(transformedData);
+            toast.success('Customer added successfully!');
+            closeModal();
+        } catch (error) {
+            const message = error?.response?.data?.message || 'Failed to add customer. Please try again.';
+            toast.error(message);
+            console.error('Create customer error:', error);
+        }
     };
 
     return (
@@ -228,7 +239,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             label="GST Number"
                             placeholder="27ABCDE1234F1Z5"
                             maxLength={15}
-                            {...register('gst', {
+                            {...register('gstNumber', {
                                 pattern: { value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
                                 validate: (value) => {
                                     if (!value) return true;
@@ -240,7 +251,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                                     return true;
                                 }
                             })}
-                            error={errors.gst}
+                            error={errors.gstNumber}
                             onChange={(e) => {
                                 e.target.value = e.target.value.toUpperCase();
                             }}
@@ -249,14 +260,14 @@ export const AddCustomerForm = ({ closeModal }) => {
                         <Select
                             label="Customer Type"
                             options={[
-                                { value: 'led_manufacturer', label: 'Led Manufacturer' },
-                                { value: 'home_automation', label: 'Home Automation' },
+                                { value: '', label: '-- Select Type --' },
+                                { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
+                                { value: 'led_light_showroom', label: 'LED Light Showroom' },
+                                { value: 'home_automation_provider', label: 'Home Automation' },
                                 { value: 'interior_designer', label: 'Interior Designer' },
-                                { value: 'distributor', label: 'Distributor' },
-                                { value: 'show_room', label: 'Show Room' },
                                 { value: 'builders', label: 'Builders' },
-                                { value: 'retail', label: 'Retail' },
-                                { value: 'wholesale', label: 'Wholesale' },
+                                { value: 'dealer', label: 'Dealer' },
+                                { value: 'distributor', label: 'Distributor' },
                             ]}
                             {...register('customerType')}
                         />
