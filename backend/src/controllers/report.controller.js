@@ -310,7 +310,7 @@ const exportFollowupTaskReport = catchAsync(async (req, res) => {
 });
 
 const getTaskReminderReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['tab', 'priority', 'search']);
+    const filters = pick(req.query, ['tab', 'priority', 'search', 'status', 'taskCategoryId', 'groupId', 'assigneeId', 'dateFrom', 'dateTo']);
     filters.user = req.user; // For role-based filtering
     const options = pick(req.query, ['page', 'limit']);
 

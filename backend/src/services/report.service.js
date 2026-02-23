@@ -103,12 +103,19 @@ const queryCustomerReport = async (filters, options) => {
  * @returns {Promise<Object>}
  */
 const getReportOptions = async () => {
-    const [statuses, states, cities, products, types] = await Promise.all([
+    const { TaskCategory } = await import('../models/taskCategory.model.js');
+    const { TaskGroup } = await import('../models/taskGroup.model.js');
+    const { User } = await import('../models/user.model.js');
+
+    const [statuses, states, cities, products, types, taskCategories, taskGroups, users] = await Promise.all([
         Customer.distinct('status'),
         Customer.distinct('state'),
         Customer.distinct('city'),
         Customer.distinct('interestedProducts'),
-        Customer.distinct('customerType')
+        Customer.distinct('customerType'),
+        TaskCategory.find({}).select('name').sort('name'),
+        TaskGroup.find({}).select('name').sort('name'),
+        User.find({ isActive: true }).select('name').sort('name')
     ]);
 
     return {
@@ -116,7 +123,10 @@ const getReportOptions = async () => {
         states: states.filter(Boolean),
         cities: cities.filter(Boolean),
         products: products.filter(Boolean),
-        types: types.filter(Boolean)
+        types: types.filter(Boolean),
+        taskCategories,
+        taskGroups,
+        users
     };
 };
 
@@ -1179,11 +1189,24 @@ const queryTaskReminderReport = async (filters, options) => {
         andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gt: endOfTodayUTC } });
     } else if (tab === 'OVERDUE') {
         andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $lt: startOfTodayUTC } });
-    } else if (tab === 'COMPLETED') {
+    } else if (tab === 'COMPLETED' || tab === 'CLOSED') {
         andConditions.push({ status: 'COMPLETED' });
+    } else if (tab === 'RECURRING') {
+        andConditions.push({ 'recurrence.enabled': true });
     }
 
     if (filters.priority) andConditions.push({ priority: filters.priority });
+    if (filters.status && filters.status !== 'ALL') andConditions.push({ status: filters.status });
+    if (filters.taskCategoryId) andConditions.push({ taskCategoryId: filters.taskCategoryId });
+    if (filters.groupId) andConditions.push({ groupId: filters.groupId });
+    if (filters.assigneeId) andConditions.push({ assigneeIds: filters.assigneeId });
+
+    if (filters.dateFrom || filters.dateTo) {
+        const dateFilter = {};
+        if (filters.dateFrom) dateFilter.$gte = new Date(filters.dateFrom);
+        if (filters.dateTo) dateFilter.$lte = new Date(filters.dateTo);
+        andConditions.push({ dueDate: dateFilter });
+    }
 
     if (filters.search) {
         andConditions.push({
