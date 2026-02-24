@@ -14,18 +14,18 @@ export const TaskCreatePage = () => {
     };
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
-            <div className="flex items-center gap-4 mb-6">
-                <Button variant="ghost" onClick={() => navigate(-1)} className="p-2">
-                    <ChevronLeft size={20} />
-                </Button>
+        <div className="p-4 max-w-5xl mx-auto">
+            <div className="flex items-center gap-3 mb-3">
+                <button onClick={() => navigate(-1)} style={{ height: 28, width: 28, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ChevronLeft size={16} />
+                </button>
                 <div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Create New Task</h1>
-                    <p className="text-sm text-gray-500">Assign and schedule a new task for your team.</p>
+                    <h1 className="text-base font-bold text-gray-900 leading-tight">Create New Task</h1>
+                    <p className="text-xs text-gray-400">Assign and schedule a task</p>
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border shadow-sm">
+            <div className="bg-white p-4 rounded-xl border shadow-sm">
                 <TaskForm
                     task={customerId ? { customerId } : null}
                     onSuccess={handleSuccess}

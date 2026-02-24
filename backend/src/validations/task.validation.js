@@ -102,6 +102,13 @@ const updateTaskStatus = {
     })
 };
 
+// No body required — just needs a valid taskId param
+const closeTask = {
+    params: Joi.object().keys({
+        taskId: Joi.string().required()
+    })
+};
+
 const extendTask = {
     params: Joi.object().keys({
         taskId: Joi.string().required()
@@ -134,6 +141,7 @@ export default {
     updateTask,
     deleteTask,
     updateTaskStatus,
+    closeTask,
     extendTask,
     createCategory,
     getCategories

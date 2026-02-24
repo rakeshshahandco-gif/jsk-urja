@@ -126,20 +126,12 @@ const TaskReminderReport = () => {
 
     return (
         <div className="p-6 bg-gray-50 min-h-screen">
-            {/* Header section */}
-            <div className="mb-6 flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-                    <div className="mt-1 flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900 uppercase">Rakesh Shah</span>
-                        <span className="px-2 py-0.5 bg-yellow-400 rounded-full text-[10px] font-bold text-black border border-yellow-500 ring-2 ring-yellow-400 ring-offset-1">MANAGER</span>
-                    </div>
-                </div>
-            </div>
 
-            {/* Tabs & Top Filters bar */}
-            <div className="flex flex-wrap items-center gap-4 mb-6">
-                <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+            {/* ── Line 1: Title + Tabs ─────────────────────────────── */}
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+                <h1 className="text-xl font-bold text-gray-900 mr-2">Tasks</h1>
+
+                <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
                     <button
                         onClick={() => setActiveTab('today')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'today' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
@@ -173,93 +165,69 @@ const TaskReminderReport = () => {
                 </div>
             </div>
 
-            {/* Advanced Filters Grid */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
-                    <div className="lg:col-span-1">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Task Type</label>
-                        <Select
-                            value={categoryFilter}
-                            onChange={(val) => setCategoryFilter(val)}
-                            className="h-9 text-sm"
-                            options={[
-                                { label: 'All Types', value: '' },
-                                ...(options?.taskCategories || []).map(c => ({ label: c.name, value: c._id }))
-                            ]}
-                        />
-                    </div>
 
-                    <div className="lg:col-span-1">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Group</label>
-                        <Select
-                            value={groupFilter}
-                            onChange={(val) => setGroupFilter(val)}
-                            className="h-9 text-sm"
-                            options={[
-                                { label: 'All Groups', value: '' },
-                                ...(options?.taskGroups || []).map(g => ({ label: g.name, value: g._id }))
-                            ]}
-                        />
-                    </div>
+            {/* ── Line 2: All filters in one compact row ────────────── */}
+            <div className="flex flex-wrap items-center gap-2 mb-3 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
+                <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                >
+                    <option value="">All Types</option>
+                    {(options?.taskCategories || []).map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                </select>
 
-                    <div className="lg:col-span-1">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Assigned To</label>
-                        <Select
-                            value={assigneeFilter}
-                            onChange={(val) => setAssigneeFilter(val)}
-                            className="h-9 text-sm"
-                            options={[
-                                { label: 'All Users', value: '' },
-                                ...(options?.users || []).map(u => ({ label: u.name, value: u._id }))
-                            ]}
-                        />
-                    </div>
+                <select
+                    value={groupFilter}
+                    onChange={(e) => setGroupFilter(e.target.value)}
+                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                >
+                    <option value="">All Groups</option>
+                    {(options?.taskGroups || []).map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
+                </select>
 
-                    <div className="lg:col-span-1">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Priority</label>
-                        <Select
-                            value={priorityFilter}
-                            onChange={(val) => setPriorityFilter(val)}
-                            className="h-9 text-sm"
-                            options={[
-                                { label: 'All Priority', value: '' },
-                                { label: 'Low', value: 'LOW' },
-                                { label: 'Medium', value: 'MEDIUM' },
-                                { label: 'High', value: 'HIGH' },
-                                { label: 'Urgent', value: 'URGENT' },
-                            ]}
-                        />
-                    </div>
+                <select
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                >
+                    <option value="">All Assignees</option>
+                    {(options?.users || []).map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                </select>
 
-                    <div className="lg:col-span-1">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Status</label>
-                        <Select
-                            value={statusFilter}
-                            onChange={(val) => setStatusFilter(val)}
-                            className="h-9 text-sm"
-                            options={[
-                                { label: 'All Status', value: '' },
-                                { label: 'Open', value: 'OPEN' },
-                                { label: 'In Progress', value: 'IN_PROGRESS' },
-                                { label: 'Completed', value: 'COMPLETED' },
-                                { label: 'Cancelled', value: 'CANCELLED' },
-                                { label: 'Overdue', value: 'OVERDUE' },
-                            ]}
-                        />
-                    </div>
+                <select
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value)}
+                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                >
+                    <option value="">All Priority</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                </select>
 
-                    <div className="lg:col-span-1 relative">
-                        <label className="text-xs font-bold text-gray-500 mb-1.5 block">Search</label>
-                        <div className="relative">
-                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <Input
-                                placeholder="Search..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-8 h-9 text-sm"
-                            />
-                        </div>
-                    </div>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                >
+                    <option value="">All Status</option>
+                    <option value="OPEN">Open</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                    <option value="OVERDUE">Overdue</option>
+                </select>
+
+                <div className="relative flex-1 min-w-[140px]">
+                    <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        placeholder="Search..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{ height: 28, fontSize: 12, paddingLeft: 24, paddingRight: 8, border: '1px solid #d1d5db', borderRadius: 6, width: '100%', outline: 'none' }}
+                    />
                 </div>
             </div>
 
@@ -279,6 +247,7 @@ const TaskReminderReport = () => {
                             setIsExtendModalOpen(true);
                         }}
                         onCloseTask={handleCloseTask}
+                        onRefresh={fetchTasks}
                     />
                 )}
             </div>

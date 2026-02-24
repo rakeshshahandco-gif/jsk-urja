@@ -133,8 +133,10 @@ export const FollowUpTrackerReport = () => {
     return (
         <div className={styles.container}>
             <header className={styles.header}>
-                <h1 className={styles.title}>Follow-up Tracker Report</h1>
-                <p className={styles.subtitle}>Track all pending, overdue and completed follow-up tasks</p>
+                <h1 className={styles.title}>
+                    Follow-up Tracker Report
+                    <span className={styles.subtitle}> — Track all pending, overdue and completed follow-up tasks</span>
+                </h1>
             </header>
 
             <FollowUpFilterPanel

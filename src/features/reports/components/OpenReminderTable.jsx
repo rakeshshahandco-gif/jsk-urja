@@ -1,9 +1,11 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Clock } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 export const OpenReminderTable = ({ reminders, onAction, loading }) => {
+    const navigate = useNavigate();
     if (loading) {
         return <div className="p-8 text-center text-gray-500">Loading open reminders...</div>;
     }
@@ -131,6 +133,15 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                                 {/* Column 4: Actions */}
                                 <td className="px-6 py-4 w-1/6 text-right">
                                     <div className="flex flex-col gap-2 items-end">
+                                        <button
+                                            onClick={() => {
+                                                const cId = customer._id || customer.id;
+                                                if (cId) navigate(`/followup/${cId}`);
+                                            }}
+                                            className="w-full text-xs font-semibold px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                        >
+                                            Open →
+                                        </button>
                                         {!reminder.isClosed ? (
                                             <>
                                                 <Button

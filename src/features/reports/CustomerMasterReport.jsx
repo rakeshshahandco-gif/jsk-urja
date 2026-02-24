@@ -162,8 +162,10 @@ export const CustomerMasterReport = () => {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <h1 className={styles.title}>Customer Master Report</h1>
-                <p className={styles.subtitle}>View and export comprehensive customer data with advanced filtering.</p>
+                <h1 className={styles.title}>
+                    Customer Master Report
+                    <span className={styles.subtitle}> — View and export comprehensive customer data with advanced filtering.</span>
+                </h1>
             </div>
 
             <FilterPanel

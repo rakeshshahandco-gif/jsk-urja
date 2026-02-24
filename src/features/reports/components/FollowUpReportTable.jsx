@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import styles from '../CustomerMasterReport.module.scss';
 
 export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }) => {
+    const navigate = useNavigate();
     if (loading) {
         return (
             <div className={styles.loaderContainer}>
@@ -58,47 +60,55 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                     </tr>
                 </thead>
                 <tbody>
-                    {data.map((r) => (
-                        <tr key={r._id}>
-                            <td className={styles.nameCell}>
-                                <div className={styles.customerColumn}>
-                                    <span className={styles.customerName}>{r.customer?.customerName || r.customer?.name || 'N/A'}</span>
-                                    <span className={styles.companyName}>{r.customer?.company || '-'}</span>
-                                </div>
-                            </td>
-                            <td>
-                                {r.customer?.contactPersons && r.customer.contactPersons.length > 0 ? (
-                                    <div className={styles.contactInfo}>
-                                        <div className={styles.primaryContact}>
-                                            {r.customer.contactPersons.find(c => c.isPrimary)?.name || r.customer.contactPersons[0].name}
-                                        </div>
-                                        <div className={styles.mobileNumber}>
-                                            {r.customer.contactPersons.find(c => c.isPrimary)?.mobile || r.customer.contactPersons[0].mobile}
-                                        </div>
+                    {data.map((r) => {
+                        const customerId = r.customer?._id || r.customer?.id || r.customerId;
+                        return (
+                            <tr
+                                key={r._id}
+                                onClick={() => customerId && navigate(`/followup/${customerId}`)}
+                                style={{ cursor: customerId ? 'pointer' : 'default' }}
+                                title={customerId ? 'Click to open customer details' : ''}
+                            >
+                                <td className={styles.nameCell}>
+                                    <div className={styles.customerColumn}>
+                                        <span className={styles.customerName}>{r.customer?.customerName || r.customer?.name || 'N/A'}</span>
+                                        <span className={styles.companyName}>{r.customer?.company || '-'}</span>
                                     </div>
-                                ) : 'N/A'}
-                            </td>
-                            <td>{new Date(r.reminderDate).toLocaleDateString()}</td>
-                            <td>{r.reminderTime || '-'}</td>
-                            <td>{r.followUpType === 'CALL' ? '📞 CALL' : '💬 WHATSAPP'}</td>
-                            <td>
-                                {r.priority === 'high' && '🔴 High'}
-                                {r.priority === 'medium' && '🟡 Medium'}
-                                {r.priority === 'low' && '🟢 Low'}
-                            </td>
-                            <td style={{ maxWidth: '300px', whiteSpace: 'normal' }}>
-                                {r.conversation?.discussionDetails || r.taskNote || '-'}
-                            </td>
-                            <td style={{ maxWidth: '200px', whiteSpace: 'normal' }}>
-                                {r.conversation?.outcome || '-'}
-                            </td>
-                            <td>{r.createdBy?.name || r.creator?.name || '-'}</td>
-                            <td>{getStatusLabel(r)}</td>
-                            <td className={styles.dateCell}>
-                                {new Date(r.createdAt).toLocaleDateString()}
-                            </td>
-                        </tr>
-                    ))}
+                                </td>
+                                <td>
+                                    {r.customer?.contactPersons && r.customer.contactPersons.length > 0 ? (
+                                        <div className={styles.contactInfo}>
+                                            <div className={styles.primaryContact}>
+                                                {r.customer.contactPersons.find(c => c.isPrimary)?.name || r.customer.contactPersons[0].name}
+                                            </div>
+                                            <div className={styles.mobileNumber}>
+                                                {r.customer.contactPersons.find(c => c.isPrimary)?.mobile || r.customer.contactPersons[0].mobile}
+                                            </div>
+                                        </div>
+                                    ) : 'N/A'}
+                                </td>
+                                <td>{new Date(r.reminderDate).toLocaleDateString()}</td>
+                                <td>{r.reminderTime || '-'}</td>
+                                <td>{r.followUpType === 'CALL' ? '📞 CALL' : '💬 WHATSAPP'}</td>
+                                <td>
+                                    {r.priority === 'high' && '🔴 High'}
+                                    {r.priority === 'medium' && '🟡 Medium'}
+                                    {r.priority === 'low' && '🟢 Low'}
+                                </td>
+                                <td style={{ maxWidth: '300px', whiteSpace: 'normal' }}>
+                                    {r.conversation?.discussionDetails || r.taskNote || '-'}
+                                </td>
+                                <td style={{ maxWidth: '200px', whiteSpace: 'normal' }}>
+                                    {r.conversation?.outcome || '-'}
+                                </td>
+                                <td>{r.createdBy?.name || r.creator?.name || '-'}</td>
+                                <td>{getStatusLabel(r)}</td>
+                                <td className={styles.dateCell}>
+                                    {new Date(r.createdAt).toLocaleDateString()}
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>

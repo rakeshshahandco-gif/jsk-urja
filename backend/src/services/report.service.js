@@ -15,14 +15,13 @@ import mongoose from 'mongoose';
 const buildReportQuery = (filters) => {
     const query = { isDeleted: false };
 
-    // Search filter (customerName, company, contactPersons, mobiles, email, state, brand)
+    // Search filter (customerName, company, contactPersons, mobiles, email, brand)
     if (filters.q) {
         const searchRegex = new RegExp(filters.q, 'i');
         query.$or = [
             { customerName: searchRegex },
             { company: searchRegex },
             { companyBrand: searchRegex },
-            { state: searchRegex },
             { 'contactPersons.name': searchRegex },
             { 'contactPersons.mobile': searchRegex },
             { 'contactPersons.mobile2': searchRegex },
@@ -44,14 +43,14 @@ const buildReportQuery = (filters) => {
     }
 
 
-    // State filter
+    // State filter — exact case-insensitive match
     if (filters.state) {
-        query.state = filters.state;
+        query.state = { $regex: `^${filters.state}$`, $options: 'i' };
     }
 
-    // City filter
+    // City filter — exact case-insensitive match
     if (filters.city) {
-        query.city = filters.city;
+        query.city = { $regex: `^${filters.city}$`, $options: 'i' };
     }
 
     // Product Interest filter
@@ -947,9 +946,27 @@ const queryFollowupTaskReportAll = async (filters) => {
                 customerName: '$customer.customerName',
                 conversationDate: 1,
                 discussionDetails: 1,
-                outcomeRemarks: '$outcome', // Normalize key
+                outcomeRemarks: '$outcome',
                 mode: 1,
                 createdAt: 1
+            }
+        },
+        // Deduplicate: group by customerId + date + discussionDetails, keep the richest outcome
+        {
+            $group: {
+                _id: {
+                    customerId: '$customerId',
+                    conversationDate: '$conversationDate',
+                    discussionDetails: '$discussionDetails'
+                },
+                customerId: { $first: '$customerId' },
+                companyName: { $first: '$companyName' },
+                customerName: { $first: '$customerName' },
+                conversationDate: { $first: '$conversationDate' },
+                discussionDetails: { $first: '$discussionDetails' },
+                outcomeRemarks: { $max: '$outcomeRemarks' }, // prefer non-null
+                mode: { $first: '$mode' },
+                createdAt: { $first: '$createdAt' }
             }
         },
         { $sort: { companyName: 1, conversationDate: -1 } }
@@ -976,9 +993,20 @@ const queryFollowupTaskReportSingle = async (customerId, filters = {}) => {
         .lean()
         .exec();
 
+    // Deduplicate: same date + same discussionDetails = same conversation
+    const seen = new Map();
+    const unique = [];
+    for (const c of conversations) {
+        const key = `${String(c.conversationDate).slice(0, 10)}_${c.discussionDetails?.trim()}`;
+        if (!seen.has(key)) {
+            seen.set(key, true);
+            unique.push(c);
+        }
+    }
+
     return {
         customer,
-        rows: conversations.map(c => ({
+        rows: unique.map(c => ({
             conversationDate: c.conversationDate,
             discussionDetails: c.discussionDetails,
             outcomeRemarks: c.outcome,
@@ -1161,6 +1189,102 @@ const generateFollowupTaskReportExport = async (format, filters, customerId = nu
 
 
 /**
+ * Manage Tasks Page — full task list with role-based access
+ * Reuses same logic as queryTaskReminderReport but adds createdById filter
+ */
+const queryManageTasks = async (filters, options) => {
+    const { Task } = await import('../models/task.model.js');
+    const { GroupMember } = await import('../models/groupMember.model.js');
+
+    const tab = filters.tab || 'ALL';
+    const andConditions = [];
+
+    // IST day boundaries
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+
+    const startOfTodayIST = new Date(istTime);
+    startOfTodayIST.setUTCHours(0, 0, 0, 0);
+    const startOfTodayUTC = new Date(startOfTodayIST.getTime() - istOffset);
+
+    const endOfTodayIST = new Date(istTime);
+    endOfTodayIST.setUTCHours(23, 59, 59, 999);
+    const endOfTodayUTC = new Date(endOfTodayIST.getTime() - istOffset);
+
+    if (tab === 'TODAY') {
+        andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gte: startOfTodayUTC, $lte: endOfTodayUTC } });
+    } else if (tab === 'UPCOMING') {
+        andConditions.push({ status: { $ne: 'COMPLETED' }, dueDate: { $gt: endOfTodayUTC } });
+    } else if (tab === 'OVERDUE') {
+        andConditions.push({ status: { $nin: ['COMPLETED', 'CANCELLED'] }, dueDate: { $lt: startOfTodayUTC } });
+    } else if (tab === 'CLOSED') {
+        andConditions.push({ status: { $in: ['COMPLETED', 'CANCELLED'] } });
+    }
+    // ALL: no date/status restriction
+
+    if (filters.priority) andConditions.push({ priority: filters.priority });
+    if (filters.status && filters.status !== 'ALL') andConditions.push({ status: filters.status });
+    if (filters.groupId) andConditions.push({ groupId: filters.groupId });
+    if (filters.assigneeId) andConditions.push({ assigneeIds: filters.assigneeId });
+    if (filters.createdById) andConditions.push({ createdBy: filters.createdById });
+
+    if (filters.dateFrom || filters.dateTo) {
+        const dateFilter = {};
+        if (filters.dateFrom) dateFilter.$gte = new Date(filters.dateFrom);
+        if (filters.dateTo) dateFilter.$lte = new Date(filters.dateTo);
+        andConditions.push({ dueDate: dateFilter });
+    }
+
+    if (filters.search) {
+        andConditions.push({
+            $or: [
+                { title: { $regex: filters.search, $options: 'i' } },
+                { description: { $regex: filters.search, $options: 'i' } }
+            ]
+        });
+    }
+
+    // Role-based access
+    if (filters.user) {
+        const role = filters.user.role;
+        if (role !== 'admin') {
+            const userGroups = await GroupMember.find({ user: filters.user.id }).select('group');
+            const groupIds = userGroups.map((g) => g.group);
+            andConditions.push({
+                $or: [
+                    { createdBy: filters.user.id },
+                    { assigneeIds: filters.user.id },
+                    { assignToAll: true },
+                    { assignedGroupId: { $in: groupIds } }
+                ]
+            });
+        }
+    }
+
+    const filter = andConditions.length ? { $and: andConditions } : {};
+    const limit = options.limit && parseInt(options.limit, 10) > 0 ? parseInt(options.limit, 10) : 50;
+    const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;
+    const skip = (page - 1) * limit;
+
+    const [tasks, total] = await Promise.all([
+        Task.find(filter)
+            .populate('assigneeIds', 'name email')
+            .populate('createdBy', 'name email')
+            .populate('groupId', 'name')
+            .sort({ dueDate: 1, createdAt: -1 })
+            .skip(skip)
+            .limit(limit),
+        Task.countDocuments(filter)
+    ]);
+
+    return {
+        data: tasks,
+        meta: { total, page, limit, pages: Math.ceil(total / limit) }
+    };
+};
+
+/**
  * Task Reminder Report (Internal Tasks)
  */
 const queryTaskReminderReport = async (filters, options) => {
@@ -1284,5 +1408,7 @@ export default {
     queryFollowupTaskReportSingle,
     generateFollowupTaskReportExport,
     // Task Reminder Report
-    queryTaskReminderReport
+    queryTaskReminderReport,
+    // Manage Tasks Page
+    queryManageTasks
 };

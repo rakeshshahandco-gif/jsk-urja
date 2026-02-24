@@ -8,7 +8,7 @@ const catchAsync = (fn) => (req, res, next) => {
 };
 
 const getCustomerReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'status', 'state', 'interestedProduct', 'customerType']);
+    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType']);
     const options = pick(req.query, ['sortBy', 'sortOrder', 'page', 'limit']);
 
     const result = await reportService.queryCustomerReport(filters, options);
@@ -21,7 +21,7 @@ const getReportOptions = catchAsync(async (req, res) => {
 });
 
 const exportCustomerReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'status', 'state', 'interestedProduct', 'customerType']);
+    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType']);
     const options = pick(req.query, ['sortBy', 'sortOrder']);
 
     const csvContent = await reportService.exportReportToCSV(filters, options);
@@ -32,7 +32,7 @@ const exportCustomerReport = catchAsync(async (req, res) => {
 });
 
 const exportExcelReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'status', 'state', 'interestedProduct', 'customerType']);
+    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType']);
     const options = pick(req.query, ['sortBy', 'sortOrder']);
 
     const excelBuffer = await reportService.generateExcelReport(filters, options);
@@ -43,7 +43,7 @@ const exportExcelReport = catchAsync(async (req, res) => {
 });
 
 const exportPDFReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'status', 'state', 'interestedProduct', 'customerType']);
+    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType']);
     const options = pick(req.query, ['sortBy', 'sortOrder']);
 
     const pdfBuffer = await reportService.generatePDFReport(filters, options);
@@ -309,6 +309,14 @@ const exportFollowupTaskReport = catchAsync(async (req, res) => {
     res.send(buffer);
 });
 
+const getManageTasks = catchAsync(async (req, res) => {
+    const filters = pick(req.query, ['tab', 'priority', 'search', 'status', 'groupId', 'assigneeId', 'createdById', 'dateFrom', 'dateTo']);
+    filters.user = req.user;
+    const options = pick(req.query, ['page', 'limit']);
+    const result = await reportService.queryManageTasks(filters, options);
+    res.send(result);
+});
+
 const getTaskReminderReport = catchAsync(async (req, res) => {
     const filters = pick(req.query, ['tab', 'priority', 'search', 'status', 'taskCategoryId', 'groupId', 'assigneeId', 'dateFrom', 'dateTo']);
     filters.user = req.user; // For role-based filtering
@@ -340,5 +348,6 @@ export default {
     getFollowupTaskReportAll,
     getFollowupTaskReportSingle,
     exportFollowupTaskReport,
-    getTaskReminderReport
+    getTaskReminderReport,
+    getManageTasks
 };

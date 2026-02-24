@@ -16,15 +16,8 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
         children: [
             {
-                id: 'add-customer',
-                title: 'Add Customer',
-                path: '/customers/add',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'add_customer',
-            },
-            {
                 id: 'customer-list',
-                title: 'All Customers',
+                title: 'Customer Master',
                 path: PATHS.CUSTOMERS.LIST,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
                 permission: 'view_customers',

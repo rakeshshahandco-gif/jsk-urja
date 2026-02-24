@@ -62,4 +62,7 @@ router
 // Task Reminders Report
 router.get('/task-reminders', reportController.getTaskReminderReport);
 
+// Manage Tasks Page
+router.get('/manage-tasks', reportController.getManageTasks);
+
 export default router;

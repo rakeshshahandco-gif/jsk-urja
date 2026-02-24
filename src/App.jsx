@@ -23,6 +23,7 @@ import TaskChatDashboard from '@/features/taskChats/TaskChatDashboard';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
+import ManageTasksPage from '@/features/tasks/components/ManageTasksPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -194,7 +195,7 @@ function App() {
                                                         />
 
                                                         <Route path="/tasks/create" element={<TaskCreatePage />} />
-                                                        <Route path="/tasks/list" element={<TaskList />} />
+                                                        <Route path="/tasks/list" element={<ManageTasksPage />} />
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

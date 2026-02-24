@@ -155,37 +155,36 @@ const FollowupDashboardReport = () => {
     return (
         <div className="h-[calc(100vh-100px)] flex gap-4 p-4">
             {/* LEFT PANEL: Filters & List */}
-            <div className="w-1/3 flex flex-col gap-4 bg-white rounded-lg shadow border p-4">
-                <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
-                    <Calendar className="w-5 h-5 text-blue-600" /> Follow-up Tasks
-                </h2>
-
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                    <Select
+            <div className="w-1/3 flex flex-col gap-2 bg-white rounded-lg shadow border p-3">
+                {/* Compact header + filters — all one row */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1 whitespace-nowrap">
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" /> Tasks
+                    </h2>
+                    <select
                         value={filters.due}
                         onChange={(e) => setFilters({ ...filters, due: e.target.value })}
-                        options={[
-                            { label: 'All Open', value: 'ALL' },
-                            { label: 'Today', value: 'TODAY' },
-                            { label: 'Overdue', value: 'OVERDUE' },
-                            { label: 'Upcoming', value: 'UPCOMING' }
-                        ]}
-                        className="w-full"
-                    />
-                    <Select
+                        style={{ height: 26, fontSize: 11, padding: '0 20px 0 5px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', flex: 1, minWidth: 80, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em' }}
+                    >
+                        <option value="ALL">All Open</option>
+                        <option value="TODAY">Today</option>
+                        <option value="OVERDUE">Overdue</option>
+                        <option value="UPCOMING">Upcoming</option>
+                    </select>
+                    <select
                         value={filters.priority}
                         onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-                        options={[
-                            { label: 'All Priorities', value: '' },
-                            { label: 'High', value: 'High' },
-                            { label: 'Medium', value: 'Medium' },
-                            { label: 'Low', value: 'Low' }
-                        ]}
-                        className="w-full"
-                    />
+                        style={{ height: 26, fontSize: 11, padding: '0 20px 0 5px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', flex: 1, minWidth: 80, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em' }}
+                    >
+                        <option value="">All Priority</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
                 </div>
-                <div className="relative mb-2">
-                    <form onSubmit={handleSearch} className="flex gap-2">
+
+                <div className="relative">
+                    <form onSubmit={handleSearch} className="flex gap-1.5">
                         <Input
                             placeholder="Search customer..."
                             value={filters.q}
@@ -204,13 +203,13 @@ const FollowupDashboardReport = () => {
                             }}
                             onFocus={() => { if (filters.q.length > 1) setShowSuggestions(true); }}
                             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                            className="flex-1"
+                            className="flex-1 h-7 text-xs"
                             autoComplete="off"
                         />
-                        <Button type="submit" variant="outline" size="icon"><Search className="w-4 h-4" /></Button>
+                        <Button type="submit" variant="outline" size="icon" className="h-7 w-7 p-0"><Search className="w-3 h-3" /></Button>
                     </form>
                     {showSuggestions && suggestions.length > 0 && (
-                        <div className="absolute top-full left-0 right-12 z-50 bg-white border rounded shadow-lg mt-1 max-h-60 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-10 z-50 bg-white border rounded shadow-lg mt-1 max-h-60 overflow-y-auto">
                             {suggestions.map(customer => (
                                 <div
                                     key={customer.id}
@@ -239,36 +238,54 @@ const FollowupDashboardReport = () => {
                         tasks.map(task => (
                             <div
                                 key={task._id}
-                                className={`p-3 cursor-pointer transition-all border rounded-lg shadow-sm mb-2 group ${selectedCustomerId === task.customerId ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 bg-white hover:border-blue-400'}`}
-                                onClick={() => setSelectedCustomerId(task.customerId)}
+                                className={`flex items-center gap-3 px-3 py-1.5 border rounded-md mb-1 text-xs ${selectedCustomerId === task.customerId ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                             >
-                                <div className="flex justify-between items-start mb-1">
-                                    <h3 className="font-bold text-gray-800 text-sm truncate pr-2" title={task.customerName}>{task.customerName}</h3>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${task.priority === 'High' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                        {task.priority || 'Normal'}
-                                    </span>
-                                </div>
-                                <div className="text-xs text-gray-600 mb-2 truncate flex items-center gap-1">
-                                    <Building size={10} className="text-gray-400" />
-                                    {task.companyName}
-                                </div>
-                                <div className="flex items-center gap-3 text-xs text-gray-500 border-t pt-2 mt-2">
-                                    <div className="flex items-center gap-1">
-                                        {task.followUpType === 'WHATSAPP' ? <MessageSquare size={12} className="text-green-600" /> : <Phone size={12} className="text-blue-600" />}
-                                        <span className="font-medium">{task.followUpType || 'Call'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 ml-auto">
-                                        <Calendar size={12} className={new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0) ? "text-red-500" : "text-gray-400"} />
-                                        <span className={new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0) ? "text-red-600 font-bold" : ""}>
-                                            {format(new Date(task.reminderDate), 'dd MMM yyyy')}
-                                        </span>
-                                    </div>
-                                </div>
-                                {(task.creator?.name || task.createdBy?.name) && (
-                                    <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-end gap-1 italic">
-                                        <span>By: {task.creator?.name || task.createdBy?.name}</span>
-                                    </div>
-                                )}
+                                {/* Priority */}
+                                <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${task.priority === 'High' ? 'bg-red-100 text-red-600' : task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {task.priority || 'Nrm'}
+                                </span>
+
+                                <span className="text-gray-400 shrink-0 select-none">|</span>
+
+                                {/* Company / Customer name */}
+                                <span className="font-semibold text-gray-800 truncate flex-1 min-w-0" title={`${task.companyName} | ${task.customerName}`}>
+                                    {task.companyName || task.customerName || '—'}
+                                    {task.customerName && task.companyName && task.customerName !== task.companyName && (
+                                        <span className="font-normal text-gray-400 ml-1">({task.customerName})</span>
+                                    )}
+                                </span>
+
+                                <span className="text-gray-400 shrink-0 select-none">|</span>
+
+                                {/* Type */}
+                                <span className="flex items-center gap-0.5 shrink-0 text-gray-600">
+                                    {task.followUpType === 'WHATSAPP'
+                                        ? <MessageSquare size={10} className="text-green-600" />
+                                        : <Phone size={10} className="text-blue-500" />}
+                                    <span>{task.followUpType || 'Call'}</span>
+                                </span>
+
+                                <span className="text-gray-400 shrink-0 select-none">|</span>
+
+                                {/* Date */}
+                                <span className={`shrink-0 whitespace-nowrap font-medium ${new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0) ? 'text-red-600' : 'text-gray-600'}`}>
+                                    {format(new Date(task.reminderDate), 'dd MMM yy')}
+                                </span>
+
+                                <span className="text-gray-400 shrink-0 select-none">|</span>
+
+                                {/* Assignee */}
+                                <span className="text-gray-500 shrink-0 whitespace-nowrap" title={task.creator?.name || task.createdBy?.name}>
+                                    {task.creator?.name || task.createdBy?.name || '—'}
+                                </span>
+
+                                {/* Chat button */}
+                                <button
+                                    onClick={() => setSelectedCustomerId(task.customerId)}
+                                    className="shrink-0 ml-1 px-2 py-0.5 text-[10px] font-semibold bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                >
+                                    Chat →
+                                </button>
                             </div>
                         ))
                     )}

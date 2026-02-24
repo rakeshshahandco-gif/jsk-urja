@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import styles from '../CustomerMasterReport.module.scss';
 
 export const ReportTable = ({ data, sortConfig, onSort }) => {
+    const navigate = useNavigate();
     const getSortIcon = (key) => {
         if (sortConfig.sortBy !== key) return <ArrowUpDown size={14} className={styles.sortIcon} />;
         return sortConfig.sortOrder === 'asc' ?
@@ -54,9 +56,15 @@ export const ReportTable = ({ data, sortConfig, onSort }) => {
                 <tbody>
                     {data.map((customer) => {
                         const primaryContact = customer.contactPersons?.find(cp => cp.isPrimary) || customer.contactPersons?.[0] || {};
+                        const customerId = customer._id || customer.id;
 
                         return (
-                            <tr key={customer._id}>
+                            <tr
+                                key={customer._id}
+                                onClick={() => navigate(`/followup/${customerId}`)}
+                                style={{ cursor: 'pointer' }}
+                                title="Click to open customer details"
+                            >
                                 <td className={styles.bold}>{customer.customerName || 'Unknown Customer'}</td>
                                 <td>{customer.company || '-'}</td>
                                 <td>{primaryContact.name || '-'}</td>

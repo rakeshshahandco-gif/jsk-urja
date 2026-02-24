@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { Search, Download, Calendar, ArrowRight, User } from 'lucide-react';
@@ -13,6 +14,7 @@ const tableCellClass = "px-4 py-3 border border-gray-200 text-sm align-top text-
 
 const FollowupTaskReport = () => {
     const { addToast } = useToast();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('ALL'); // ALL | SINGLE
 
     // ALL Filter State
@@ -119,49 +121,47 @@ const FollowupTaskReport = () => {
         }
     };
 
-    return (
-        <div className="p-6 h-[calc(100vh-64px)] flex flex-col bg-gray-50">
-            <h1 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Calendar className="w-6 h-6 text-blue-600" /> Follow-up Task Report
-            </h1>
+    const sel = { height: 28, fontSize: 12, padding: '0 22px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' };
+    const inp = { height: 28, fontSize: 12, padding: '0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff' };
+    const btn = (primary) => ({ height: 28, fontSize: 11, padding: '0 10px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', border: primary ? 'none' : '1px solid #d1d5db', background: primary ? '#2563eb' : '#fff', color: primary ? '#fff' : '#374151' });
 
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg px-2">
-                <button onClick={() => setActiveTab('ALL')} className={tabClass(activeTab === 'ALL')}>FOR ALL</button>
-                <button onClick={() => setActiveTab('SINGLE')} className={tabClass(activeTab === 'SINGLE')}>FOR SINGLE</button>
+    return (
+        <div className="p-3 h-[calc(100vh-64px)] flex flex-col bg-gray-50 gap-2">
+
+            {/* ── Line 1: Title + Tabs ── */}
+            <div className="flex items-center gap-3">
+                <h1 className="text-base font-bold text-gray-800 flex items-center gap-1.5 whitespace-nowrap">
+                    <Calendar className="w-4 h-4 text-blue-600" /> Follow-up Task Report
+                </h1>
+                <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
+                    <button
+                        onClick={() => setActiveTab('ALL')}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >For All</button>
+                    <button
+                        onClick={() => setActiveTab('SINGLE')}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'SINGLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                    >For Single</button>
+                </div>
             </div>
 
-            {/* TAB CONTENT: ALL */}
+            {/* ── TAB CONTENT: ALL ── */}
             {activeTab === 'ALL' && (
-                <div className="flex-1 flex flex-col bg-white rounded-b-lg shadow p-4 border overflow-hidden">
-                    {/* Filters */}
-                    <div className="flex flex-wrap gap-4 mb-4 items-end bg-gray-50 p-4 rounded border">
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">From Date</label>
-                            <Input type="date" value={filters.fromDate} onChange={e => setFilters({ ...filters, fromDate: e.target.value })} />
-                        </div>
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">To Date</label>
-                            <Input type="date" value={filters.toDate} onChange={e => setFilters({ ...filters, toDate: e.target.value })} />
-                        </div>
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Type</label>
-                            <Select
-                                value={filters.followUpType}
-                                onChange={e => setFilters({ ...filters, followUpType: e.target.value })}
-                                options={[
-                                    { label: 'All Types', value: 'ALL' },
-                                    { label: 'Call', value: 'CALL' },
-                                    { label: 'WhatsApp', value: 'WHATSAPP' }
-                                ]}
-                            />
-                        </div>
-                        <Button onClick={fetchAllData} className="mb-[2px]">Apply Filters</Button>
-
-                        <div className="ml-auto flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleExport('excel')}>Excel</Button>
-                            <Button variant="outline" size="sm" onClick={() => handleExport('pdf')}>PDF</Button>
-                            <Button variant="outline" size="sm" onClick={() => handleExport('docx')}>Word</Button>
+                <div className="flex-1 flex flex-col bg-white rounded-lg shadow border overflow-hidden">
+                    {/* Line 2: Filters + Export */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50 flex-wrap">
+                        <input type="date" value={filters.fromDate} onChange={e => setFilters({ ...filters, fromDate: e.target.value })} style={inp} placeholder="From" title="From Date" />
+                        <input type="date" value={filters.toDate} onChange={e => setFilters({ ...filters, toDate: e.target.value })} style={inp} placeholder="To" title="To Date" />
+                        <select value={filters.followUpType} onChange={e => setFilters({ ...filters, followUpType: e.target.value })} style={{ ...sel, minWidth: 100 }}>
+                            <option value="ALL">All Types</option>
+                            <option value="CALL">Call</option>
+                            <option value="WHATSAPP">WhatsApp</option>
+                        </select>
+                        <button onClick={fetchAllData} style={btn(true)}>Apply</button>
+                        <div className="ml-auto flex gap-1.5">
+                            <button onClick={() => handleExport('excel')} style={btn(false)}>Excel</button>
+                            <button onClick={() => handleExport('pdf')} style={btn(false)}>PDF</button>
+                            <button onClick={() => handleExport('docx')} style={btn(false)}>Word</button>
                         </div>
                     </div>
 
@@ -180,7 +180,12 @@ const FollowupTaskReport = () => {
                                 {loading && <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>}
                                 {!loading && data.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-500">No records found.</td></tr>}
                                 {data.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50">
+                                    <tr
+                                        key={idx}
+                                        className="hover:bg-blue-50 cursor-pointer"
+                                        onClick={() => row.customerId && navigate(`/followup/${row.customerId}`)}
+                                        title="Click to open customer details"
+                                    >
                                         <td className={tableCellClass + " font-medium"}>{row.companyName || row.customerName}</td>
                                         <td className={tableCellClass}>
                                             {format(new Date(row.conversationDate), 'dd-MM-yyyy')}
@@ -200,17 +205,17 @@ const FollowupTaskReport = () => {
                 </div>
             )}
 
-            {/* TAB CONTENT: SINGLE */}
+            {/* ── TAB CONTENT: SINGLE ── */}
             {activeTab === 'SINGLE' && (
-                <div className="flex-1 flex flex-col bg-white rounded-b-lg shadow p-4 border overflow-hidden">
-                    {/* Search Section */}
-                    <div className="flex gap-4 mb-6 items-end">
-                        <div className="relative w-96">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Search Customer (Company / Name)</label>
-                            <Input
+                <div className="flex-1 flex flex-col bg-white rounded-lg shadow border overflow-hidden">
+                    {/* Line 2: Search + buttons */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50">
+                        <div className="relative">
+                            <input
                                 value={customerSearch}
                                 onChange={e => onSearchChange(e.target.value)}
-                                placeholder="Type to search..."
+                                placeholder="Search customer (company / name)..."
+                                style={{ ...inp, width: 280 }}
                             />
                             {suggestions.length > 0 && (
                                 <div className="absolute top-full left-0 w-full bg-white border shadow-lg rounded mt-1 z-50 max-h-60 overflow-y-auto">
@@ -231,34 +236,27 @@ const FollowupTaskReport = () => {
                                 </div>
                             )}
                         </div>
-                        <Button
-                            onClick={fetchSingleData}
-                            disabled={!selectedCustomer}
-                            className="mb-[2px]"
-                        >
-                            View Report
-                        </Button>
-
+                        <button onClick={fetchSingleData} disabled={!selectedCustomer} style={{ ...btn(true), opacity: selectedCustomer ? 1 : 0.5 }}>View Report</button>
                         {singleData && (
-                            <div className="ml-auto flex gap-2">
-                                <Button variant="outline" size="sm" onClick={() => handleExport('excel')}>Excel</Button>
-                                <Button variant="outline" size="sm" onClick={() => handleExport('pdf')}>PDF</Button>
-                                <Button variant="outline" size="sm" onClick={() => handleExport('docx')}>Word</Button>
+                            <div className="ml-auto flex gap-1.5">
+                                <button onClick={() => handleExport('excel')} style={btn(false)}>Excel</button>
+                                <button onClick={() => handleExport('pdf')} style={btn(false)}>PDF</button>
+                                <button onClick={() => handleExport('docx')} style={btn(false)}>Word</button>
                             </div>
                         )}
                     </div>
 
                     {/* REPORT VIEW */}
                     {singleData ? (
-                        <div className="flex-1 overflow-auto border rounded p-4 bg-gray-50">
-                            <div className="bg-white border p-6 mb-4 shadow-sm">
-                                <h2 className="text-xl font-bold text-gray-800">Company NAME: <span className="text-blue-700">{singleData.customer.company || singleData.customer.customerName}</span></h2>
-                                <div className="text-sm text-gray-500 mt-2">
-                                    Contact: {singleData.customer.contactPersons?.[0]?.name} | {singleData.customer.contactPersons?.[0]?.mobile}
-                                </div>
+                        <div className="flex-1 overflow-auto border-t">
+                            {/* Compact customer info bar */}
+                            <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b text-sm">
+                                <span className="font-bold text-blue-800">{singleData.customer.company || singleData.customer.customerName}</span>
+                                {singleData.customer.contactPersons?.[0]?.name && (
+                                    <span className="text-gray-500 text-xs">Contact: {singleData.customer.contactPersons[0].name} | {singleData.customer.contactPersons[0].mobile}</span>
+                                )}
                             </div>
-
-                            <table className="w-full border-collapse bg-white shadow-sm">
+                            <table className="w-full border-collapse bg-white">
                                 <thead>
                                     <tr>
                                         <th className={tableHeaderClass}>Date of Conversation</th>
@@ -286,7 +284,7 @@ const FollowupTaskReport = () => {
                             </table>
                         </div>
                     ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 border rounded bg-gray-50/50">
+                        <div className="flex-1 flex items-center justify-center text-gray-400 border-t bg-gray-50/50">
                             {loading ? 'Loading report...' : 'Select a customer and click View Report'}
                         </div>
                     )}
