@@ -49,7 +49,8 @@ export const RemindersDashboard = () => {
                 params = { status: 'Closed' };
             }
 
-            const data = await getReminders(params);
+            // Pass a high limit so all records are returned (dashboard needs to show all tasks)
+            const data = await getReminders({ ...params, limit: 500, page: 1 });
             // Handle different data structures defensively
             const results = data.results || data.data || (Array.isArray(data) ? data : []);
             setReminders(results);

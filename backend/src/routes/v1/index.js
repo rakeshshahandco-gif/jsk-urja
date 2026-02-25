@@ -11,6 +11,10 @@ import taskCategoryRoute from './taskCategory.routes.js';
 import taskGroupRoute from './taskGroup.routes.js';
 import groupRoute from './group.routes.js';
 import taskChatRoute from './taskChat.routes.js';
+import itemRoute from './item.routes.js';
+import itemTypeRoute from './itemType.routes.js';
+import itemGroupRoute from './itemGroup.routes.js';
+import bomRoute from './bom.routes.js';
 
 const router = express.Router();
 
@@ -67,6 +71,22 @@ const defaultRoutes = [
     {
         path: '/task-chats',
         route: taskChatRoute,
+    },
+    {
+        path: '/items',
+        route: itemRoute,
+    },
+    {
+        path: '/item-types',
+        route: itemTypeRoute,
+    },
+    {
+        path: '/item-groups',
+        route: itemGroupRoute,
+    },
+    {
+        path: '/boms',
+        route: bomRoute,
     },
 ];
 

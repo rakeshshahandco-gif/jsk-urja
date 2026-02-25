@@ -24,8 +24,16 @@ import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
 import ManageTasksPage from '@/features/tasks/components/ManageTasksPage';
+import ItemListPage from '@/features/inventory/ItemListPage';
+import ItemFormPage from '@/features/inventory/ItemFormPage';
+import ItemTypePage from '@/features/inventory/ItemTypePage';
+import ItemGroupPage from '@/features/inventory/ItemGroupPage';
+import BOMPage from '@/features/inventory/BOMPage';
+import BOMFormPage from '@/features/inventory/BOMFormPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
+import { GroupList } from '@/features/groups/components/GroupList';
+import { GroupDetails } from '@/features/groups/components/GroupDetails';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -196,6 +204,35 @@ function App() {
 
                                                         <Route path="/tasks/create" element={<TaskCreatePage />} />
                                                         <Route path="/tasks/list" element={<ManageTasksPage />} />
+
+                                                        {/* Groups */}
+                                                        <Route
+                                                            path="/groups"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <GroupList />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
+                                                        <Route
+                                                            path="/groups/:id"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <GroupDetails />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
+
+                                                        {/* Inventory */}
+                                                        <Route path="/inventory/items" element={<ItemListPage />} />
+                                                        <Route path="/inventory/items/new" element={<ItemFormPage />} />
+                                                        <Route path="/inventory/items/:id" element={<ItemFormPage />} />
+                                                        <Route path="/inventory/item-types" element={<ItemTypePage />} />
+                                                        <Route path="/inventory/item-groups" element={<ItemGroupPage />} />
+
+                                                        <Route path="/inventory/bom" element={<BOMPage />} />
+                                                        <Route path="/inventory/bom/new" element={<BOMFormPage />} />
+                                                        <Route path="/inventory/bom/edit/:id" element={<BOMFormPage />} />
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

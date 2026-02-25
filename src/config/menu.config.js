@@ -38,6 +38,13 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'groups',
+        title: 'Groups & Projects',
+        icon: 'GroupWorkIcon',
+        path: PATHS.GROUPS.ROOT,
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+    },
+    {
         id: 'tasks',
         title: 'Task Management',
         icon: 'AssignmentIcon',
@@ -97,6 +104,38 @@ export const menuConfig = [
                 id: 'report-task-reminders',
                 title: 'Task Reminder Report',
                 path: '/reports/task-reminders',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+        ],
+    },
+    {
+        id: 'inventory',
+        title: 'Inventory',
+        icon: 'InventoryIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            {
+                id: 'item-master',
+                title: 'Item Master',
+                path: '/inventory/items',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'item-type-master',
+                title: 'Item Types',
+                path: '/inventory/item-types',
+                roles: [ROLES.ADMIN, ROLES.MANAGER],
+            },
+            {
+                id: 'item-group-master',
+                title: 'Item Groups',
+                path: '/inventory/item-groups',
+                roles: [ROLES.ADMIN, ROLES.MANAGER],
+            },
+            {
+                id: 'bom-master',
+                title: 'Bill of Materials (BOM)',
+                path: PATHS.INVENTORY.BOM.ROOT,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
             },
         ],

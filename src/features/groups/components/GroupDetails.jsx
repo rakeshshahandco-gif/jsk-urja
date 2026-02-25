@@ -6,6 +6,7 @@ import { Button, Input, Select } from '@/components/ui'; // Assuming Select exis
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { Trash2, UserPlus, ArrowLeft } from 'lucide-react';
+import { PATHS } from '@/routes/paths';
 
 export const GroupDetails = () => {
     const { id } = useParams(); // Group ID
@@ -85,7 +86,7 @@ export const GroupDetails = () => {
 
     return (
         <div className="p-6">
-            <Button variant="ghost" className="mb-4 pl-0" onClick={() => navigate('/groups')}>
+            <Button variant="ghost" className="mb-4 pl-0" onClick={() => navigate(PATHS.GROUPS.ROOT)}>
                 <ArrowLeft size={16} className="mr-2" /> Back to Groups
             </Button>
 

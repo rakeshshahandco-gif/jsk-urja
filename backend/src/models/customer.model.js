@@ -84,6 +84,19 @@ const customerSchema = mongoose.Schema(
             type: String,
             trim: true,
         },
+        district: {
+            type: String,
+            trim: true,
+        },
+        taluka: {
+            type: String,
+            trim: true,
+        },
+        country: {
+            type: String,
+            trim: true,
+            default: 'India',
+        },
         status: {
             type: String,
             enum: ['running_high', 'running_low', 'inactive', 'lead'],
@@ -102,6 +115,11 @@ const customerSchema = mongoose.Schema(
             trim: true,
             uppercase: true,
             match: [/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid GST number format'],
+        },
+        gstType: {
+            type: String,
+            enum: ['CGST / SGST', 'IGST', ''],
+            default: '',
         },
         isDeleted: {
             type: Boolean,

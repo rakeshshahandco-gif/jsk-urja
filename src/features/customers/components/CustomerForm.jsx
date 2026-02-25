@@ -27,13 +27,17 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 companyEmail: '',
                 customerType: '',
                 city: '',
+                district: '',
+                taluka: '',
                 state: '',
+                country: 'India',
                 address: '',
                 pincode: '',
                 status: 'lead',
                 notes: '',
                 tags: [],
                 gstNumber: '',
+                gstType: '',
                 contactPersons: [
                     {
                         name: '',
@@ -56,6 +60,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             companyEmail: customerData.companyEmail || '',
             customerType: customerData.customerType || '',
             city: customerData.area || customerData.city || '',
+            district: customerData.district || '',
+            taluka: customerData.taluka || '',
             state: (() => {
                 if (!customerData.state) return '';
                 const stateStr = String(customerData.state).trim();
@@ -66,10 +72,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             })(),
             address: customerData.address || '',
             pincode: customerData.pincode || '',
+            country: customerData.country || 'India',
             status: customerData.status || 'lead',
             notes: customerData.notes || '',
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
+            gstType: customerData.gstType || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
                     name: contact.name || '',
@@ -110,6 +118,21 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     useEffect(() => {
         reset(normalizeCustomerData(customer));
     }, [customer, reset]);
+
+    const stateValue = watch('state');
+
+    // Automate GST Type based on state
+    useEffect(() => {
+        if (!stateValue) {
+            setValue('gstType', '');
+            return;
+        }
+        if (stateValue.toLowerCase() === 'maharashtra') {
+            setValue('gstType', 'CGST / SGST');
+        } else {
+            setValue('gstType', 'IGST');
+        }
+    }, [stateValue, setValue]);
 
     // Helper function to convert input to uppercase
     const handleUppercaseChange = (fieldName) => (e) => {
@@ -214,12 +237,32 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
 
                     <div className={styles['form-group']}>
-                        <label htmlFor="area">AREA</label>
+                        <label htmlFor="city">CITY</label>
                         <Input
-                            id="area"
+                            id="city"
                             {...register('city')}
-                            placeholder="Enter area"
+                            placeholder="Enter city"
                             onChange={handleUppercaseChange('city')}
+                        />
+                    </div>
+
+                    <div className={styles['form-group']}>
+                        <label htmlFor="district">DISTRICT</label>
+                        <Input
+                            id="district"
+                            {...register('district')}
+                            placeholder="Enter district"
+                            onChange={handleUppercaseChange('district')}
+                        />
+                    </div>
+
+                    <div className={styles['form-group']}>
+                        <label htmlFor="taluka">TALUKA / TEHSIL</label>
+                        <Input
+                            id="taluka"
+                            {...register('taluka')}
+                            placeholder="Enter taluka or tehsil"
+                            onChange={handleUppercaseChange('taluka')}
                         />
                     </div>
 
@@ -245,6 +288,16 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option key={state} value={state}>{state}</option>
                             ))}
                         </select>
+                    </div>
+
+                    <div className={styles['form-group']}>
+                        <label htmlFor="country">COUNTRY</label>
+                        <Input
+                            id="country"
+                            {...register('country')}
+                            placeholder="India"
+                            onChange={handleUppercaseChange('country')}
+                        />
                     </div>
 
                     <div className={styles['form-group']}>
@@ -430,6 +483,21 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         />
                         {errors.gstNumber && <span className={styles.error}>{errors.gstNumber.message}</span>}
                         <small className={styles['help-text']}>15 characters GST number</small>
+                    </div>
+
+                    {/* GST Type */}
+                    <div className={styles['form-group']}>
+                        <label htmlFor="gstType">GST TYPE</label>
+                        <select
+                            id="gstType"
+                            {...register('gstType')}
+                            className={styles['form-select']}
+                            disabled // Automatically selected
+                        >
+                            <option value="">Select Type</option>
+                            <option value="CGST / SGST">CGST / SGST</option>
+                            <option value="IGST">IGST</option>
+                        </select>
                     </div>
                 </div>
 

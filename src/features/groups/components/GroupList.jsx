@@ -4,6 +4,7 @@ import { Button, Input, useModal } from '@/components/ui'; // Assuming these exi
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 
 export const GroupList = () => {
     const [groups, setGroups] = useState([]);
@@ -64,7 +65,7 @@ export const GroupList = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {groups.map((group) => (
-                    <div key={group._id} className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/groups/${group._id}`)}>
+                    <div key={group._id} className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(PATHS.GROUPS.DETAILS(group._id))}>
                         <h3 className="text-lg font-semibold">{group.name}</h3>
                         {group.code && <span className="text-sm bg-gray-100 px-2 py-1 rounded text-gray-600">{group.code}</span>}
                         <p className="text-gray-500 mt-2 truncate">{group.description || 'No description'}</p>

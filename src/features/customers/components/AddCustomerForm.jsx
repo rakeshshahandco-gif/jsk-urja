@@ -18,7 +18,7 @@ const MOCK_DB_COMPANIES = [
 ];
 
 export const AddCustomerForm = ({ closeModal }) => {
-    const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
+    const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     // Watch company and state field values
@@ -98,6 +98,19 @@ export const AddCustomerForm = ({ closeModal }) => {
             setSimilarCompanies([]);
         }
     }, [companyValue]);
+
+    // Automate GST Type based on state
+    useEffect(() => {
+        if (!stateValue) {
+            setValue('gstType', '');
+            return;
+        }
+        if (stateValue.toLowerCase() === 'maharashtra') {
+            setValue('gstType', 'CGST / SGST');
+        } else {
+            setValue('gstType', 'IGST');
+        }
+    }, [stateValue, setValue]);
 
     const onSubmit = async (data) => {
         try {
@@ -255,6 +268,17 @@ export const AddCustomerForm = ({ closeModal }) => {
                             onChange={(e) => {
                                 e.target.value = e.target.value.toUpperCase();
                             }}
+                        />
+
+                        <Select
+                            label="GST Type"
+                            options={[
+                                { value: '', label: '-- Select Type --' },
+                                { value: 'CGST / SGST', label: 'CGST / SGST' },
+                                { value: 'IGST', label: 'IGST' },
+                            ]}
+                            {...register('gstType')}
+                            disabled // Automatically selected
                         />
 
                         <Select

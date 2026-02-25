@@ -18,4 +18,20 @@ export const PATHS = {
         LOGIN: '/auth/login',
         REGISTER: '/auth/register',
     },
+    GROUPS: {
+        ROOT: '/groups',
+        DETAILS: (id) => `/groups/${id}`,
+    },
+    INVENTORY: {
+        ITEMS: '/inventory/items',
+        NEW_ITEM: '/inventory/items/new',
+        EDIT_ITEM: (id) => `/inventory/items/${id}`,
+        ITEM_TYPES: '/inventory/item-types',
+        ITEM_GROUPS: '/inventory/item-groups',
+        BOM: {
+            ROOT: '/inventory/bom',
+            NEW: '/inventory/bom/new',
+            EDIT: (id) => `/inventory/bom/edit/${id}`,
+        },
+    },
 };
