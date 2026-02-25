@@ -8,17 +8,19 @@ const objectId = (value, helpers) => {
 };
 
 const bomComponent = Joi.object().keys({
+    _id: Joi.any().optional(),
     itemId: Joi.string().custom(objectId).required(),
     itemCode: Joi.string().allow('').optional(),
     itemName: Joi.string().allow('').optional(),
     category: Joi.string().allow('').optional(),
     uom: Joi.string().allow('').optional(),
     quantity: Joi.number().required().min(0),
-    wastagePercentage: Joi.number().min(0).default(0),
-    finalQuantity: Joi.number().min(0).default(0),
     rate: Joi.number().min(0).default(0),
-    totalCost: Joi.number().min(0).default(0)
-});
+    totalCost: Joi.number().min(0).default(0),
+    points: Joi.number().min(0).default(0),
+    pointsLabourCost: Joi.number().min(0).default(0),
+    remarks: Joi.string().allow('').optional()
+}).unknown(true);
 
 const createBOM = {
     body: Joi.object().keys({
@@ -34,6 +36,8 @@ const createBOM = {
         totalProcessCost: Joi.number().default(0),
         overheadCost: Joi.number().default(0),
         labourCost: Joi.number().default(0),
+        labourCostPerPoint: Joi.number().min(0).default(0.25),
+        totalPointsLabourCost: Joi.number().default(0),
         finalProductionCostPerUnit: Joi.number().default(0),
         processes: Joi.object().keys({
             smtAssembly: Joi.boolean().default(false),
@@ -43,7 +47,7 @@ const createBOM = {
             packingRequired: Joi.boolean().default(false),
         }).optional(),
         isDefault: Joi.boolean().default(false),
-        allowAlternateItems: Joi.boolean().default(false),
+
         scrapAccount: Joi.string().allow('').optional(),
         remarks: Joi.string().allow('').optional()
     })
@@ -74,6 +78,7 @@ const updateBOM = {
     }),
     body: Joi.object().keys({
         bomNumber: Joi.string().uppercase(),
+        finishedProductId: Joi.string().custom(objectId).optional(),
         version: Joi.string(),
         revisionDate: Joi.date(),
         status: Joi.string().valid('Draft', 'Approved', 'Inactive'),
@@ -84,6 +89,8 @@ const updateBOM = {
         totalProcessCost: Joi.number(),
         overheadCost: Joi.number(),
         labourCost: Joi.number(),
+        labourCostPerPoint: Joi.number().min(0),
+        totalPointsLabourCost: Joi.number(),
         finalProductionCostPerUnit: Joi.number(),
         processes: Joi.object().keys({
             smtAssembly: Joi.boolean(),
@@ -93,10 +100,9 @@ const updateBOM = {
             packingRequired: Joi.boolean(),
         }),
         isDefault: Joi.boolean(),
-        allowAlternateItems: Joi.boolean(),
         scrapAccount: Joi.string().allow(''),
         remarks: Joi.string().allow('')
-    }).min(1)
+    }).min(1).unknown(true)
 };
 
 const deleteBOM = {

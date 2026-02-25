@@ -62,6 +62,7 @@ const bodySchema = Joi.object({
     isActive: Joi.boolean().optional(),
     isServiceItem: Joi.boolean().optional(),
     allowNegativeStock: Joi.boolean().optional(),
+    remarks: Joi.string().allow('').optional(),
 }).unknown(true);
 
 const createItem = { body: bodySchema };

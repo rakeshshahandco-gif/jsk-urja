@@ -98,6 +98,7 @@ const itemSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true },
     isServiceItem: { type: Boolean, default: false },
     allowNegativeStock: { type: Boolean, default: false },
+    remarks: { type: String, trim: true, default: '' },
 
     // Meta
     createdBy: {

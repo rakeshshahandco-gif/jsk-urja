@@ -51,6 +51,7 @@ const DEFAULT = {
     technical: { wattage: '', inputVoltage: '', outputVoltage: '', outputCurrent: '', dimmingType: '', ipRating: '', surgeProtection: '', efficiency: '' },
     purchaseAccount: '', salesAccount: '', inventoryAccount: '', cogsAccount: '',
     isActive: true, isServiceItem: false, allowNegativeStock: false,
+    remarks: '',
 };
 
 // ── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -253,6 +254,7 @@ const ItemFormPage = () => {
                                 <Toggle value={form.allowNegativeStock} onChange={v => set('allowNegativeStock', v)} />
                             </div>
                         </div>
+
                     </div>
                 )}
 

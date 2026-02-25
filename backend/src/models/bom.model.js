@@ -15,14 +15,6 @@ const bomComponentSchema = new mongoose.Schema({
         required: true,
         default: 0
     },
-    wastagePercentage: {
-        type: Number,
-        default: 0
-    },
-    finalQuantity: {
-        type: Number,
-        default: 0
-    },
     rate: {
         type: Number,
         default: 0
@@ -30,6 +22,19 @@ const bomComponentSchema = new mongoose.Schema({
     totalCost: {
         type: Number,
         default: 0
+    },
+    points: {
+        type: Number,
+        default: 0
+    },
+    pointsLabourCost: {
+        type: Number,
+        default: 0
+    },
+    remarks: {
+        type: String,
+        trim: true,
+        default: ''
     }
 });
 
@@ -77,6 +82,8 @@ const bomSchema = new mongoose.Schema({
     totalProcessCost: { type: Number, default: 0 },
     overheadCost: { type: Number, default: 0 },
     labourCost: { type: Number, default: 0 },
+    labourCostPerPoint: { type: Number, default: 0.25 },
+    totalPointsLabourCost: { type: Number, default: 0 },
     finalProductionCostPerUnit: { type: Number, default: 0 },
 
     // Process Details
@@ -90,7 +97,7 @@ const bomSchema = new mongoose.Schema({
 
     // Controls
     isDefault: { type: Boolean, default: false },
-    allowAlternateItems: { type: Boolean, default: false },
+
     scrapAccount: { type: String, trim: true },
     remarks: { type: String, trim: true },
 
