@@ -5,6 +5,7 @@ import { getBOM, createBOM, updateBOM } from '@/services/bomApi';
 import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 // ── STYLES ────────────────────────────────────────────────────────────────────
 const s = {
@@ -85,13 +86,21 @@ const BOMFormPage = () => {
         isDefault: false, scrapAccount: '', remarks: ''
     });
 
-    // ── FETCH DATA ────────────────────────────────────────────────────────────
-    useEffect(() => {
+    // ── FETCH DATA & AUTO REFRESH ─────────────────────────────────────────────
+    const fetchItems = () => {
         getItems({ limit: 1000 }).then(res => {
             setItems(res.data);
             setFinishedProducts(res.data.filter(i => i.itemCategory === 'FINISHED_GOOD'));
-        }).catch(() => addToast('Failed to load items', 'error'));
+        }).catch(() => console.error('Silent fail on refresh items'));
+    };
 
+    useEffect(() => {
+        fetchItems();
+        window.addEventListener('focus', fetchItems);
+        return () => window.removeEventListener('focus', fetchItems);
+    }, []);
+
+    useEffect(() => {
         if (!isEdit) return;
         getBOM(id).then(data => {
             setForm({
@@ -111,7 +120,11 @@ const BOMFormPage = () => {
         }).finally(() => setLoading(false));
     }, [id, isEdit]);
 
-    // ── AUTO-FILL POINTS FROM ITEM MASTER WHEN ITEMS LOAD ─────────────────────
+    const handleCreateNewItem = () => {
+        window.open(PATHS.INVENTORY.ITEMS.NEW, '_blank');
+    };
+
+    // ── AUTO-FILL POINTS & RATES FROM ITEM MASTER WHEN ITEMS LOAD ──────────────
     useEffect(() => {
         if (!isEdit || items.length === 0) return;
         setForm(prev => {
@@ -120,12 +133,22 @@ const BOMFormPage = () => {
                 if (!comp.itemId) return comp;
                 const masterItem = items.find(i => i._id === comp.itemId);
                 if (!masterItem) return comp;
-                const pts = parseInt(masterItem.points) || 0;
-                if (pts === 0) return comp; // no points defined in master, leave as-is
+
+                const pts = parseInt(masterItem.points) || comp.points || 0;
+
+                // If rate in BOM is currently 0 or missing, try to auto-fetch the actual rate from item master
+                let rate = parseFloat(comp.rate) || 0;
+                if (rate === 0) {
+                    rate = masterItem.purchaseRate || masterItem.valuationRate || 0;
+                }
+
                 const qty = parseFloat(comp.quantity) || 0;
+
                 return {
                     ...comp,
                     points: pts,
+                    rate: rate,
+                    totalCost: qty * rate,
                     pointsLabourCost: qty * pts * labourRate
                 };
             });
@@ -144,7 +167,8 @@ const BOMFormPage = () => {
             if (item) {
                 comp.itemId = value; comp.itemCode = item.itemCode;
                 comp.itemName = item.itemName; comp.category = item.itemCategory;
-                comp.uom = item.uom; comp.rate = item.purchaseRate || 0;
+                comp.uom = item.uom;
+                comp.rate = item.purchaseRate || item.valuationRate || 0;
                 comp.points = parseInt(item.points) || 0;
                 comp.remarks = item.remarks || '';
             }
@@ -218,6 +242,16 @@ const BOMFormPage = () => {
 
     return (
         <div style={s.page}>
+            <style>{`
+                input[type=number]::-webkit-inner-spin-button, 
+                input[type=number]::-webkit-outer-spin-button { 
+                    -webkit-appearance: none; 
+                    margin: 0; 
+                }
+                input[type=number] {
+                    -moz-appearance: textfield;
+                }
+            `}</style>
             {/* ── STICKY HEADER ── */}
             <div style={s.header}>
                 <div style={s.headerLeft}>
@@ -251,11 +285,13 @@ const BOMFormPage = () => {
                             </Field>
                             <div style={{ gridColumn: 'span 2' }}>
                                 <Field label="Finished Product *">
-                                    <select style={s.select} value={form.finishedProductId}
-                                        onChange={e => setForm({ ...form, finishedProductId: e.target.value })} required>
-                                        <option value="">— Select Product from Item Master —</option>
-                                        {finishedProducts.map(p => <option key={p._id} value={p._id}>{p.itemCode} — {p.itemName}</option>)}
-                                    </select>
+                                    <SearchableSelect
+                                        options={finishedProducts.map(p => ({ value: p._id, label: `${p.itemCode} — ${p.itemName}` }))}
+                                        value={form.finishedProductId}
+                                        onChange={val => setForm({ ...form, finishedProductId: val })}
+                                        placeholder="— Search Product from Item Master —"
+                                        onCreateNew={handleCreateNewItem}
+                                    />
                                 </Field>
                             </div>
                             <Field label="Version">
@@ -313,12 +349,15 @@ const BOMFormPage = () => {
                                         <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={{ ...s.td, textAlign: 'center', color: '#94a3b8', fontWeight: 700, fontSize: 11 }}>{idx + 1}</td>
                                             <td style={{ ...s.td, minWidth: 200 }}>
-                                                <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', borderRadius: 6 }}
-                                                    value={comp.itemId} onChange={e => handleComponentChange(idx, 'itemId', e.target.value)}>
-                                                    <option value="">Select Item...</option>
-                                                    {items.map(i => <option key={i._id} value={i._id}>{i.itemCode} — {i.itemName}</option>)}
-                                                </select>
-                                                {comp.itemName && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, paddingLeft: 2 }}>{comp.itemName}</div>}
+                                                <SearchableSelect
+                                                    options={items.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                                                    value={comp.itemId}
+                                                    onChange={val => handleComponentChange(idx, 'itemId', val)}
+                                                    placeholder="Search and Select Item..."
+                                                    style={{ width: '100%', minWidth: 200 }}
+                                                    onCreateNew={handleCreateNewItem}
+                                                />
+                                                {comp.itemName && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, paddingLeft: 2 }}>{comp.itemName}</div>}
                                             </td>
                                             <td style={s.td}>
                                                 <span style={{ fontSize: 10, background: '#f1f5f9', padding: '3px 8px', borderRadius: 20, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{comp.category || '—'}</span>

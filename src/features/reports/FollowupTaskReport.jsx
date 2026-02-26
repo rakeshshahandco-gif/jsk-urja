@@ -121,82 +121,112 @@ const FollowupTaskReport = () => {
         }
     };
 
-    const sel = { height: 28, fontSize: 12, padding: '0 22px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' };
-    const inp = { height: 28, fontSize: 12, padding: '0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff' };
-    const btn = (primary) => ({ height: 28, fontSize: 11, padding: '0 10px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', border: primary ? 'none' : '1px solid #d1d5db', background: primary ? '#2563eb' : '#fff', color: primary ? '#fff' : '#374151' });
+    // ── STYLES ───────────────────────────────────────────────────────────────────
+    const s = {
+        container: { display: 'flex', flexDirection: 'column', gap: 20, padding: 20, height: 'calc(100vh - 90px)', background: '#f8fafc', fontFamily: "'Inter', sans-serif" },
+        headerRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+        headerTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 },
+        tabs: { display: 'flex', background: '#e2e8f0', borderRadius: 8, padding: 4, gap: 4 },
+        tab: (active) => ({ padding: '6px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s', background: active ? '#fff' : 'transparent', color: active ? '#2563eb' : '#64748b', boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', border: 'none' }),
+
+        card: { flex: 1, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        filterBar: { padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+
+        inputGroup: { display: 'flex', alignItems: 'center', gap: 8 },
+        label: { fontSize: 12, fontWeight: 600, color: '#64748b' },
+        input: { height: 34, fontSize: 13, padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: 6, outline: 'none', color: '#1e293b', minWidth: 140 },
+        select: { height: 34, fontSize: 13, padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: 6, outline: 'none', color: '#1e293b', backgroundColor: '#fff', minWidth: 120, cursor: 'pointer' },
+
+        btnPrimary: { height: 34, padding: '0 16px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#3b82f6', border: 'none', borderRadius: 6, cursor: 'pointer', transition: 'background 0.2s' },
+        btnOutlined: { height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, color: '#475569', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.2s' },
+
+        tableContainer: { flex: 1, overflowY: 'auto' },
+        table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+        th: { padding: '12px 20px', background: '#f1f5f9', color: '#475569', fontWeight: 600, textAlign: 'left', borderBottom: '1px solid #e2e8f0', fontSize: 12, position: 'sticky', top: 0, zIndex: 10 },
+        td: { padding: '16px 20px', borderBottom: '1px solid #f1f5f9', color: '#1e293b', verticalAlign: 'top', lineHeight: 1.5 },
+
+        pill: (type) => ({
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', display: 'inline-block', marginTop: 6,
+            background: type === 'whatsapp' ? '#dcfce7' : '#e0e7ff',
+            color: type === 'whatsapp' ? '#15803d' : '#4338ca',
+            border: type === 'whatsapp' ? '1px solid #bbf7d0' : '1px solid #c7d2fe'
+        }),
+
+        customerHeader: { padding: '12px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: 12 },
+        customerTitle: { margin: 0, fontSize: 15, fontWeight: 700, color: '#1e3a8a' },
+        customerMeta: { fontSize: 12, color: '#3b82f6', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }
+    };
 
     return (
-        <div className="p-3 h-[calc(100vh-64px)] flex flex-col bg-gray-50 gap-2">
-
+        <div style={s.container}>
             {/* ── Line 1: Title + Tabs ── */}
-            <div className="flex items-center gap-3">
-                <h1 className="text-base font-bold text-gray-800 flex items-center gap-1.5 whitespace-nowrap">
-                    <Calendar className="w-4 h-4 text-blue-600" /> Follow-up Task Report
+            <div style={s.headerRow}>
+                <h1 style={s.headerTitle}>
+                    <Calendar size={20} color="#3b82f6" /> Follow-up Task Report
                 </h1>
-                <div className="flex bg-white border border-gray-200 rounded-lg p-0.5 gap-0.5">
-                    <button
-                        onClick={() => setActiveTab('ALL')}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'ALL' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
-                    >For All</button>
-                    <button
-                        onClick={() => setActiveTab('SINGLE')}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'SINGLE' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
-                    >For Single</button>
+                <div style={s.tabs}>
+                    <button style={s.tab(activeTab === 'ALL')} onClick={() => setActiveTab('ALL')}>For All Customers</button>
+                    <button style={s.tab(activeTab === 'SINGLE')} onClick={() => setActiveTab('SINGLE')}>For Single Customer</button>
                 </div>
             </div>
 
             {/* ── TAB CONTENT: ALL ── */}
             {activeTab === 'ALL' && (
-                <div className="flex-1 flex flex-col bg-white rounded-lg shadow border overflow-hidden">
+                <div style={s.card}>
                     {/* Line 2: Filters + Export */}
-                    <div className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50 flex-wrap">
-                        <input type="date" value={filters.fromDate} onChange={e => setFilters({ ...filters, fromDate: e.target.value })} style={inp} placeholder="From" title="From Date" />
-                        <input type="date" value={filters.toDate} onChange={e => setFilters({ ...filters, toDate: e.target.value })} style={inp} placeholder="To" title="To Date" />
-                        <select value={filters.followUpType} onChange={e => setFilters({ ...filters, followUpType: e.target.value })} style={{ ...sel, minWidth: 100 }}>
-                            <option value="ALL">All Types</option>
+                    <div style={s.filterBar}>
+                        <div style={s.inputGroup}>
+                            <span style={s.label}>From:</span>
+                            <input type="date" value={filters.fromDate} onChange={e => setFilters({ ...filters, fromDate: e.target.value })} style={s.input} />
+                        </div>
+                        <div style={s.inputGroup}>
+                            <span style={s.label}>To:</span>
+                            <input type="date" value={filters.toDate} onChange={e => setFilters({ ...filters, toDate: e.target.value })} style={s.input} />
+                        </div>
+                        <select value={filters.followUpType} onChange={e => setFilters({ ...filters, followUpType: e.target.value })} style={s.select}>
+                            <option value="ALL">All Interaction Types</option>
                             <option value="CALL">Call</option>
                             <option value="WHATSAPP">WhatsApp</option>
                         </select>
-                        <button onClick={fetchAllData} style={btn(true)}>Apply</button>
-                        <div className="ml-auto flex gap-1.5">
-                            <button onClick={() => handleExport('excel')} style={btn(false)}>Excel</button>
-                            <button onClick={() => handleExport('pdf')} style={btn(false)}>PDF</button>
-                            <button onClick={() => handleExport('docx')} style={btn(false)}>Word</button>
+                        <button onClick={fetchAllData} style={s.btnPrimary}>Apply Filters</button>
+
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                            <button onClick={() => handleExport('excel')} style={s.btnOutlined} title="Export Excel"><Download size={14} /> XL</button>
+                            <button onClick={() => handleExport('pdf')} style={s.btnOutlined} title="Export PDF"><Download size={14} /> PDF</button>
+                            <button onClick={() => handleExport('docx')} style={s.btnOutlined} title="Export Word"><Download size={14} /> Word</button>
                         </div>
                     </div>
 
                     {/* DATA TABLE */}
-                    <div className="flex-1 overflow-auto border rounded">
-                        <table className="w-full border-collapse">
-                            <thead className="sticky top-0 z-10">
+                    <div style={s.tableContainer}>
+                        <table style={s.table}>
+                            <thead>
                                 <tr>
-                                    <th className={tableHeaderClass}>Company</th>
-                                    <th className={tableHeaderClass}>Date of Conversation</th>
-                                    <th className={tableHeaderClass}>Discussion Details</th>
-                                    <th className={tableHeaderClass}>Outcome</th>
+                                    <th style={s.th}>Company</th>
+                                    <th style={{ ...s.th, width: 140 }}>Date</th>
+                                    <th style={s.th}>Discussion Details</th>
+                                    <th style={{ ...s.th, width: '30%' }}>Outcome</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading && <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>}
-                                {!loading && data.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-gray-500">No records found.</td></tr>}
+                                {loading && <tr><td colSpan="4" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading data...</td></tr>}
+                                {!loading && data.length === 0 && <tr><td colSpan="4" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>No records found for the selected filters.</td></tr>}
                                 {data.map((row, idx) => (
                                     <tr
                                         key={idx}
-                                        className="hover:bg-blue-50 cursor-pointer"
+                                        style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                                        onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
+                                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                                         onClick={() => row.customerId && navigate(`/followup/${row.customerId}`)}
                                         title="Click to open customer details"
                                     >
-                                        <td className={tableCellClass + " font-medium"}>{row.companyName || row.customerName}</td>
-                                        <td className={tableCellClass}>
-                                            {format(new Date(row.conversationDate), 'dd-MM-yyyy')}
-                                            {row.mode && (
-                                                <div className={`mt-1 text-xs inline-block px-1.5 py-0.5 rounded border ${row.mode === 'whatsapp' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
-                                                    {row.mode}
-                                                </div>
-                                            )}
+                                        <td style={{ ...s.td, fontWeight: 600, color: '#0f172a' }}>{row.companyName || row.customerName}</td>
+                                        <td style={s.td}>
+                                            <div style={{ fontWeight: 600 }}>{format(new Date(row.conversationDate), 'dd-MM-yyyy')}</div>
+                                            {row.mode && <div style={s.pill(row.mode)}>{row.mode}</div>}
                                         </td>
-                                        <td className={tableCellClass}>{row.discussionDetails}</td>
-                                        <td className={tableCellClass}>{row.outcomeRemarks || '-'}</td>
+                                        <td style={{ ...s.td, whiteSpace: 'pre-wrap' }}>{row.discussionDetails}</td>
+                                        <td style={{ ...s.td, color: '#475569', whiteSpace: 'pre-wrap' }}>{row.outcomeRemarks || '—'}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -207,85 +237,98 @@ const FollowupTaskReport = () => {
 
             {/* ── TAB CONTENT: SINGLE ── */}
             {activeTab === 'SINGLE' && (
-                <div className="flex-1 flex flex-col bg-white rounded-lg shadow border overflow-hidden">
+                <div style={s.card}>
                     {/* Line 2: Search + buttons */}
-                    <div className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50">
-                        <div className="relative">
-                            <input
-                                value={customerSearch}
-                                onChange={e => onSearchChange(e.target.value)}
-                                placeholder="Search customer (company / name)..."
-                                style={{ ...inp, width: 280 }}
-                            />
+                    <div style={s.filterBar}>
+                        <div style={{ position: 'relative' }}>
+                            <div style={{ ...s.inputGroup, position: 'relative' }}>
+                                <Search size={16} color="#64748b" style={{ position: 'absolute', left: 10 }} />
+                                <input
+                                    value={customerSearch}
+                                    onChange={e => onSearchChange(e.target.value)}
+                                    placeholder="Search customer by name or company..."
+                                    style={{ ...s.input, width: 320, paddingLeft: 34 }}
+                                />
+                            </div>
+
+                            {/* Auto-suggest dropdown */}
                             {suggestions.length > 0 && (
-                                <div className="absolute top-full left-0 w-full bg-white border shadow-lg rounded mt-1 z-50 max-h-60 overflow-y-auto">
+                                <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4, zIndex: 50, maxHeight: 250, overflowY: 'auto' }}>
                                     {suggestions.map(c => (
                                         <div
                                             key={c._id || c.id}
-                                            className="p-2 hover:bg-gray-100 cursor-pointer border-b"
+                                            style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
                                             onClick={() => {
                                                 setSelectedCustomer(c);
                                                 setCustomerSearch(c.company || c.customerName);
                                                 setSuggestions([]);
                                             }}
+                                            onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                                         >
-                                            <div className="font-bold text-sm">{c.company}</div>
-                                            <div className="text-xs text-gray-500">{c.customerName} - {c.mobile}</div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{c.company || c.customerName}</div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                                                {c.customerName && c.company && c.customerName !== c.company ? c.customerName + ' • ' : ''}
+                                                {c.mobile || ''}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </div>
-                        <button onClick={fetchSingleData} disabled={!selectedCustomer} style={{ ...btn(true), opacity: selectedCustomer ? 1 : 0.5 }}>View Report</button>
+
+                        <button onClick={fetchSingleData} disabled={!selectedCustomer} style={{ ...s.btnPrimary, opacity: selectedCustomer ? 1 : 0.5, cursor: selectedCustomer ? 'pointer' : 'not-allowed' }}>
+                            View Report
+                        </button>
+
                         {singleData && (
-                            <div className="ml-auto flex gap-1.5">
-                                <button onClick={() => handleExport('excel')} style={btn(false)}>Excel</button>
-                                <button onClick={() => handleExport('pdf')} style={btn(false)}>PDF</button>
-                                <button onClick={() => handleExport('docx')} style={btn(false)}>Word</button>
+                            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                                <button onClick={() => handleExport('excel')} style={s.btnOutlined} title="Export Excel"><Download size={14} /> XL</button>
+                                <button onClick={() => handleExport('pdf')} style={s.btnOutlined} title="Export PDF"><Download size={14} /> PDF</button>
+                                <button onClick={() => handleExport('docx')} style={s.btnOutlined} title="Export Word"><Download size={14} /> Word</button>
                             </div>
                         )}
                     </div>
 
                     {/* REPORT VIEW */}
                     {singleData ? (
-                        <div className="flex-1 overflow-auto border-t">
-                            {/* Compact customer info bar */}
-                            <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b text-sm">
-                                <span className="font-bold text-blue-800">{singleData.customer.company || singleData.customer.customerName}</span>
+                        <div style={s.tableContainer}>
+                            <div style={s.customerHeader}>
+                                <h3 style={s.customerTitle}>{singleData.customer.company || singleData.customer.customerName}</h3>
                                 {singleData.customer.contactPersons?.[0]?.name && (
-                                    <span className="text-gray-500 text-xs">Contact: {singleData.customer.contactPersons[0].name} | {singleData.customer.contactPersons[0].mobile}</span>
+                                    <div style={s.customerMeta}>
+                                        <User size={14} />
+                                        {singleData.customer.contactPersons[0].name}
+                                        {singleData.customer.contactPersons[0].mobile && ` • ${singleData.customer.contactPersons[0].mobile}`}
+                                    </div>
                                 )}
                             </div>
-                            <table className="w-full border-collapse bg-white">
+                            <table style={s.table}>
                                 <thead>
                                     <tr>
-                                        <th className={tableHeaderClass}>Date of Conversation</th>
-                                        <th className={tableHeaderClass}>Discussion Details</th>
-                                        <th className={tableHeaderClass}>Outcome</th>
+                                        <th style={{ ...s.th, width: 140 }}>Date</th>
+                                        <th style={s.th}>Discussion Details</th>
+                                        <th style={{ ...s.th, width: '30%' }}>Outcome</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {singleData.rows.length === 0 && <tr><td colSpan="3" className="p-8 text-center text-gray-500">No conversation history found.</td></tr>}
+                                    {singleData.rows.length === 0 && <tr><td colSpan="3" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>No conversation history found.</td></tr>}
                                     {singleData.rows.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-50">
-                                            <td className={tableCellClass}>
-                                                {format(new Date(row.conversationDate), 'dd-MM-yyyy')}
-                                                {row.mode && (
-                                                    <div className={`mt-1 text-xs px-1 py-0.5 rounded border inline-block ml-2 ${row.mode === 'whatsapp' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
-                                                        {row.mode}
-                                                    </div>
-                                                )}
+                                        <tr key={idx} style={{ transition: 'background 0.15s' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                                            <td style={s.td}>
+                                                <div style={{ fontWeight: 600 }}>{format(new Date(row.conversationDate), 'dd-MM-yyyy')}</div>
+                                                {row.mode && <div style={s.pill(row.mode)}>{row.mode}</div>}
                                             </td>
-                                            <td className={tableCellClass}>{row.discussionDetails}</td>
-                                            <td className={tableCellClass}>{row.outcomeRemarks || '-'}</td>
+                                            <td style={{ ...s.td, whiteSpace: 'pre-wrap' }}>{row.discussionDetails}</td>
+                                            <td style={{ ...s.td, color: '#475569', whiteSpace: 'pre-wrap' }}>{row.outcomeRemarks || '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 border-t bg-gray-50/50">
-                            {loading ? 'Loading report...' : 'Select a customer and click View Report'}
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#f8fafc', fontSize: 13 }}>
+                            {loading ? 'Loading report details...' : 'Select a customer and click "View Report"'}
                         </div>
                     )}
                 </div>

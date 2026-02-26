@@ -34,4 +34,10 @@ export const PATHS = {
             EDIT: (id) => `/inventory/bom/edit/${id}`,
         },
     },
+    PRODUCTION: {
+        DASHBOARD: '/production',
+        WORK_ORDERS: '/production/work-orders',
+        NEW_WO: '/production/work-orders/new',
+        WO_DETAIL: (id) => `/production/work-orders/${id}`,
+    },
 };

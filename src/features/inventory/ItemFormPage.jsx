@@ -44,7 +44,7 @@ const TABS = [
 // ── DEFAULT FORM STATE ───────────────────────────────────────────────────────
 const DEFAULT = {
     itemCode: '', itemName: '', itemGroupName: '', itemCategory: 'RAW_MATERIAL', itemType: 'OTHER', uom: 'NOS', points: '',
-    openingStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
+    openingStock: 0, currentStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
     defaultSupplier: '', purchaseRate: 0, purchaseGst: 18, hsnCode: '', leadTimeDays: 0,
     sellingPrice: 0, mrp: 0, warrantyMonths: 0, salesGst: 18, productDescription: '',
     isManufacturable: false, bomLink: '', productionTimeHours: 0, machineRequired: '', qcRequired: false, stdProductionCost: 0,
@@ -264,11 +264,12 @@ const ItemFormPage = () => {
                         <div style={f.sectionTitle}>Stock Information</div>
                         <div style={f.row(4)}>
                             <Field label="Opening Stock"><input style={f.input} type="number" min="0" value={form.openingStock} onChange={e => num('openingStock', e.target.value)} /></Field>
+                            <Field label="Current Stock"><input style={f.input} type="number" min="0" value={form.currentStock} onChange={e => num('currentStock', e.target.value)} title="Manually adjust to simulate stock purchase/movement" /></Field>
                             <Field label="Min Stock (Reorder)"><input style={f.input} type="number" min="0" value={form.minStockLevel} onChange={e => num('minStockLevel', e.target.value)} /></Field>
                             <Field label="Max Stock"><input style={f.input} type="number" min="0" value={form.maxStockLevel} onChange={e => num('maxStockLevel', e.target.value)} /></Field>
-                            <Field label="Warehouse Location"><input style={f.input} value={form.warehouseLocation} onChange={e => set('warehouseLocation', e.target.value)} placeholder="Shelf A-3" /></Field>
                         </div>
                         <div style={f.row(4)}>
+                            <Field label="Warehouse Location"><input style={f.input} value={form.warehouseLocation} onChange={e => set('warehouseLocation', e.target.value)} placeholder="Shelf A-3" /></Field>
                             <Field label="Valuation Rate (₹)">
                                 <input style={f.input} type="number" min="0" step="0.01" value={form.valuationRate} onChange={e => num('valuationRate', e.target.value)} placeholder="0.00" />
                             </Field>

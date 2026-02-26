@@ -15,6 +15,7 @@ import itemRoute from './item.routes.js';
 import itemTypeRoute from './itemType.routes.js';
 import itemGroupRoute from './itemGroup.routes.js';
 import bomRoute from './bom.routes.js';
+import workOrderRoute from './workOrder.routes.js';
 
 const router = express.Router();
 
@@ -87,6 +88,10 @@ const defaultRoutes = [
     {
         path: '/boms',
         route: bomRoute,
+    },
+    {
+        path: '/work-orders',
+        route: workOrderRoute,
     },
 ];
 

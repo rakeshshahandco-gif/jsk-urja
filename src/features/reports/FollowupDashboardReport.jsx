@@ -152,40 +152,72 @@ const FollowupDashboardReport = () => {
         (c.outcome || '').toLowerCase().includes(historySearch.toLowerCase())
     ) || [];
 
-    return (
-        <div className="h-[calc(100vh-100px)] flex gap-4 p-4">
-            {/* LEFT PANEL: Filters & List */}
-            <div className="w-1/3 flex flex-col gap-2 bg-white rounded-lg shadow border p-3">
-                {/* Compact header + filters — all one row */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <h2 className="text-sm font-bold text-gray-800 flex items-center gap-1 whitespace-nowrap">
-                        <Calendar className="w-3.5 h-3.5 text-blue-600" /> Tasks
-                    </h2>
-                    <select
-                        value={filters.due}
-                        onChange={(e) => setFilters({ ...filters, due: e.target.value })}
-                        style={{ height: 26, fontSize: 11, padding: '0 20px 0 5px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', flex: 1, minWidth: 80, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em' }}
-                    >
-                        <option value="ALL">All Open</option>
-                        <option value="TODAY">Today</option>
-                        <option value="OVERDUE">Overdue</option>
-                        <option value="UPCOMING">Upcoming</option>
-                    </select>
-                    <select
-                        value={filters.priority}
-                        onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-                        style={{ height: 26, fontSize: 11, padding: '0 20px 0 5px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', flex: 1, minWidth: 80, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em' }}
-                    >
-                        <option value="">All Priority</option>
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                    </select>
-                </div>
+    // ── STYLES ───────────────────────────────────────────────────────────────────
+    const s = {
+        container: { display: 'flex', gap: 20, padding: 20, height: 'calc(100vh - 90px)', background: '#f8fafc', fontFamily: "'Inter', sans-serif" },
+        leftPanel: { width: '35%', minWidth: 350, maxWidth: 450, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        rightPanel: { flex: 1, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
 
-                <div className="relative">
-                    <form onSubmit={handleSearch} className="flex gap-1.5">
-                        <Input
+        header: { padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 },
+        headerTitle: { margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 },
+
+        controlsRow: { display: 'flex', gap: 8, marginTop: 12 },
+        select: { flex: 1, height: 32, fontSize: 12, padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', outline: 'none', cursor: 'pointer', color: '#334155' },
+        searchRow: { display: 'flex', gap: 8, marginTop: 10, position: 'relative' },
+        input: { flex: 1, height: 34, fontSize: 12, padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: 6, outline: 'none', color: '#1e293b' },
+        iconBtn: { height: 34, width: 34, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', color: '#475569' },
+
+        listWrap: { flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 },
+        taskCard: (active) => ({ padding: 12, borderRadius: 8, border: active ? '1.5px solid #3b82f6' : '1px solid #e2e8f0', background: active ? '#eff6ff' : '#fff', cursor: 'pointer', transition: 'all 0.15s', boxShadow: active ? '0 2px 4px rgba(59,130,246,0.1)' : 'none' }),
+        taskHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
+        taskPill: (priority) => ({ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, textTransform: 'uppercase', background: priority === 'High' ? '#fee2e2' : priority === 'Medium' ? '#fef3c7' : '#f1f5f9', color: priority === 'High' ? '#ef4444' : priority === 'Medium' ? '#d97706' : '#64748b' }),
+        taskDate: (isOverdue) => ({ fontSize: 11, fontWeight: 600, color: isOverdue ? '#ef4444' : '#64748b' }),
+        taskTitle: { margin: '0 0 6px 0', fontSize: 13, fontWeight: 700, color: '#1e293b', wordBreak: 'break-word' },
+        taskMetaRow: { display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: '#64748b', marginTop: 8 },
+        taskMetaItem: { display: 'flex', alignItems: 'center', gap: 4 },
+
+        emptyState: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', textAlign: 'center', padding: 40 },
+
+        detailHeader: { padding: '24px 30px', borderBottom: '1px solid #e2e8f0', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+        detailTitle: { margin: '0 0 12px 0', fontSize: 22, fontWeight: 800, color: '#0f172a' },
+        contactTags: { display: 'flex', flexWrap: 'wrap', gap: 8 },
+        contactTag: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f1f5f9', borderRadius: 6, fontSize: 12, color: '#475569', fontWeight: 500 },
+        actionBtns: { display: 'flex', gap: 8 },
+        btnOutlined: { padding: '6px 12px', fontSize: 12, fontWeight: 600, color: '#3b82f6', background: '#fff', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' },
+
+        contentScroll: { flex: 1, overflowY: 'auto', padding: '24px 30px', background: '#f8fafc' },
+        sectionCard: { background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', marginBottom: 24, overflow: 'hidden' },
+        sectionTitleRow: { padding: '14px 20px', borderBottom: '1px solid #e2e8f0', background: '#fdf8f6', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 14, fontWeight: 700, color: '#9a3412' },
+
+        table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+        th: { padding: '12px 16px', background: '#f1f5f9', color: '#475569', fontWeight: 600, textAlign: 'left', borderBottom: '1px solid #e2e8f0', fontSize: 12 },
+        td: { padding: '14px 16px', borderBottom: '1px solid #f1f5f9', color: '#1e293b', verticalAlign: 'top' },
+        iconBtnGreen: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', background: '#dcfce7', color: '#16a34a', border: 'none', cursor: 'pointer', transition: 'background 0.2s' },
+    };
+
+    return (
+        <div style={s.container}>
+            {/* LEFT PANEL: Filters & List */}
+            <div style={s.leftPanel}>
+                <div style={s.header}>
+                    <h2 style={s.headerTitle}><Calendar size={18} color="#3b82f6" /> Follow-up Tasks</h2>
+                    <div style={s.controlsRow}>
+                        <select style={s.select} value={filters.due} onChange={(e) => setFilters({ ...filters, due: e.target.value })}>
+                            <option value="ALL">All Open</option>
+                            <option value="TODAY">Today</option>
+                            <option value="OVERDUE">Overdue</option>
+                            <option value="UPCOMING">Upcoming</option>
+                        </select>
+                        <select style={s.select} value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}>
+                            <option value="">All Priority</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                    <form onSubmit={handleSearch} style={s.searchRow}>
+                        <input
+                            style={s.input}
                             placeholder="Search customer..."
                             value={filters.q}
                             onChange={(e) => {
@@ -203,251 +235,199 @@ const FollowupDashboardReport = () => {
                             }}
                             onFocus={() => { if (filters.q.length > 1) setShowSuggestions(true); }}
                             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                            className="flex-1 h-7 text-xs"
-                            autoComplete="off"
                         />
-                        <Button type="submit" variant="outline" size="icon" className="h-7 w-7 p-0"><Search className="w-3 h-3" /></Button>
+                        <button type="submit" style={s.iconBtn}><Search size={14} /></button>
+
+                        {/* Auto-suggest dropdown */}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 42, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 250, overflowY: 'auto' }}>
+                                {suggestions.map(customer => (
+                                    <div
+                                        key={customer.id}
+                                        style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                                        onClick={() => {
+                                            setFilters({ ...filters, q: customer.customerName || customer.company });
+                                            setSelectedCustomerId(customer.id);
+                                            setSuggestions([]);
+                                            setShowSuggestions(false);
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
+                                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{customer.customerName}</div>
+                                        <div style={{ fontSize: 11, color: '#64748b' }}>{customer.company}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </form>
-                    {showSuggestions && suggestions.length > 0 && (
-                        <div className="absolute top-full left-0 right-10 z-50 bg-white border rounded shadow-lg mt-1 max-h-60 overflow-y-auto">
-                            {suggestions.map(customer => (
-                                <div
-                                    key={customer.id}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-0"
-                                    onClick={() => {
-                                        setFilters({ ...filters, q: customer.customerName || customer.company });
-                                        setSelectedCustomerId(customer.id);
-                                        setSuggestions([]);
-                                        setShowSuggestions(false);
-                                    }}
-                                >
-                                    <div className="font-semibold">{customer.customerName}</div>
-                                    <div className="text-xs text-gray-500">{customer.company}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                <div style={s.listWrap}>
                     {loadingTasks ? (
-                        <div className="flex justify-center p-8"><Loader2 className="animate-spin text-gray-400" /></div>
+                        <div style={s.emptyState}><Loader2 className="animate-spin" size={24} /></div>
                     ) : tasks.length === 0 ? (
-                        <div className="text-center text-gray-500 py-8">No open tasks found.</div>
+                        <div style={s.emptyState}>No open tasks found.</div>
                     ) : (
-                        tasks.map(task => (
-                            <div
-                                key={task._id}
-                                className={`flex items-center gap-3 px-3 py-1.5 border rounded-md mb-1 text-xs ${selectedCustomerId === task.customerId ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                            >
-                                {/* Priority */}
-                                <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${task.priority === 'High' ? 'bg-red-100 text-red-600' : task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
-                                    {task.priority || 'Nrm'}
-                                </span>
-
-                                <span className="text-gray-400 shrink-0 select-none">|</span>
-
-                                {/* Company / Customer name */}
-                                <span className="font-semibold text-gray-800 truncate flex-1 min-w-0" title={`${task.companyName} | ${task.customerName}`}>
-                                    {task.companyName || task.customerName || '—'}
+                        tasks.map(task => {
+                            const isSelected = selectedCustomerId === task.customerId;
+                            const isOverdue = new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0);
+                            return (
+                                <div key={task._id} style={s.taskCard(isSelected)} onClick={() => setSelectedCustomerId(task.customerId)}>
+                                    <div style={s.taskHeader}>
+                                        <span style={s.taskPill(task.priority)}>{task.priority || 'Normal'}</span>
+                                        <span style={s.taskDate(isOverdue)}>{format(new Date(task.reminderDate), 'dd MMM yy')}</span>
+                                    </div>
+                                    <h4 style={s.taskTitle}>{task.companyName || task.customerName || '—'}</h4>
                                     {task.customerName && task.companyName && task.customerName !== task.companyName && (
-                                        <span className="font-normal text-gray-400 ml-1">({task.customerName})</span>
+                                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{task.customerName}</div>
                                     )}
-                                </span>
-
-                                <span className="text-gray-400 shrink-0 select-none">|</span>
-
-                                {/* Type */}
-                                <span className="flex items-center gap-0.5 shrink-0 text-gray-600">
-                                    {task.followUpType === 'WHATSAPP'
-                                        ? <MessageSquare size={10} className="text-green-600" />
-                                        : <Phone size={10} className="text-blue-500" />}
-                                    <span>{task.followUpType || 'Call'}</span>
-                                </span>
-
-                                <span className="text-gray-400 shrink-0 select-none">|</span>
-
-                                {/* Date */}
-                                <span className={`shrink-0 whitespace-nowrap font-medium ${new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0) ? 'text-red-600' : 'text-gray-600'}`}>
-                                    {format(new Date(task.reminderDate), 'dd MMM yy')}
-                                </span>
-
-                                <span className="text-gray-400 shrink-0 select-none">|</span>
-
-                                {/* Assignee */}
-                                <span className="text-gray-500 shrink-0 whitespace-nowrap" title={task.creator?.name || task.createdBy?.name}>
-                                    {task.creator?.name || task.createdBy?.name || '—'}
-                                </span>
-
-                                {/* Chat button */}
-                                <button
-                                    onClick={() => setSelectedCustomerId(task.customerId)}
-                                    className="shrink-0 ml-1 px-2 py-0.5 text-[10px] font-semibold bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                >
-                                    Chat →
-                                </button>
-                            </div>
-                        ))
+                                    <div style={s.taskMetaRow}>
+                                        <div style={s.taskMetaItem}>
+                                            {task.followUpType === 'WHATSAPP' ? <MessageSquare size={12} color="#16a34a" /> : <Phone size={12} color="#3b82f6" />}
+                                            <span style={{ fontWeight: 600, color: '#475569' }}>{task.followUpType || 'CALL'}</span>
+                                        </div>
+                                        <div style={s.taskMetaItem} title={`Assigned to: ${task.creator?.name || task.createdBy?.name}`}>
+                                            <User size={12} />
+                                            <span>{task.creator?.name || task.createdBy?.name || '—'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
                 </div>
             </div>
 
             {/* RIGHT PANEL: Details & History */}
-            <div className="w-2/3 flex flex-col bg-gray-50 rounded-lg shadow border overflow-hidden">
+            <div style={s.rightPanel}>
                 {!selectedCustomerId ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8">
-                        <Building className="w-16 h-16 mb-4 opacity-20" />
-                        <p className="text-lg font-medium text-gray-500">Select a customer to view dashboard</p>
-                        <p className="text-sm text-gray-400 mb-6">View open tasks and complete conversation history</p>
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={() => handleExport('excel')}><Download className="w-4 h-4 mr-2" /> Export List (Excel)</Button>
-                            <Button variant="outline" onClick={() => handleExport('pdf')}><Download className="w-4 h-4 mr-2" /> PDF</Button>
+                    <div style={s.emptyState}>
+                        <Building size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+                        <p style={{ fontSize: 18, fontWeight: 600, color: '#64748b', margin: '0 0 8px 0' }}>Select a customer</p>
+                        <p style={{ fontSize: 13, margin: '0 0 24px 0' }}>View open tasks and complete conversation history</p>
+                        <div style={s.actionBtns}>
+                            <button style={s.btnOutlined} onClick={() => handleExport('excel')}><Download size={14} /> Global Export (Excel)</button>
+                            <button style={s.btnOutlined} onClick={() => handleExport('pdf')}><Download size={14} /> PDF</button>
                         </div>
                     </div>
                 ) : loadingDetail ? (
-                    <div className="flex-1 flex justify-center items-center"><Loader2 className="animate-spin w-8 h-8 text-blue-500" /></div>
+                    <div style={s.emptyState}><Loader2 className="animate-spin text-blue-500" size={32} /></div>
                 ) : !customerData ? (
-                    <div className="flex-1 flex justify-center items-center">Failed to load data</div>
+                    <div style={s.emptyState}>Failed to load data</div>
                 ) : (
-                    <div className="flex flex-col h-full">
-                        {/* 1. Header Card */}
-                        <div className="bg-white p-5 border-b shadow-sm flex justify-between items-start">
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+                        {/* 1. Detail Header */}
+                        <div style={s.detailHeader}>
                             <div>
-                                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                                    {customerData.customer.company || customerData.customer.customerName}
-                                </h1>
-                                <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
-                                    <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                                        <User size={14} className="text-gray-500" />
-                                        <span className="font-semibold">{customerData.customer.customerName}</span>
-                                    </div>
-                                    {(customerData.customer.contactPersons?.[0]?.mobile) && (
-                                        <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                                            <Phone size={14} className="text-gray-500" />
-                                            <span>{customerData.customer.contactPersons[0].mobile}</span>
-                                        </div>
+                                <h1 style={s.detailTitle}>{customerData.customer.company || customerData.customer.customerName}</h1>
+                                <div style={s.contactTags}>
+                                    <div style={s.contactTag}><User size={14} /> {customerData.customer.customerName}</div>
+                                    {customerData.customer.contactPersons?.[0]?.mobile && (
+                                        <div style={s.contactTag}><Phone size={14} /> {customerData.customer.contactPersons[0].mobile}</div>
                                     )}
-                                    {(customerData.customer.email) && (
-                                        <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                                            <span className="text-gray-500">@</span>
-                                            <span>{customerData.customer.email}</span>
-                                        </div>
+                                    {customerData.customer.email && (
+                                        <div style={s.contactTag}><span style={{ color: '#94a3b8', fontWeight: 700 }}>@</span> {customerData.customer.email}</div>
                                     )}
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" onClick={() => handleExport('excel')} title="Export Excel"><Download className="w-4 h-4" /> XL</Button>
-                                <Button size="sm" variant="outline" onClick={() => handleExport('pdf')} title="Export PDF"><Download className="w-4 h-4" /> PDF</Button>
-                                <Button size="sm" variant="outline" onClick={() => handleExport('docx')} title="Export Word"><Download className="w-4 h-4" /> Word</Button>
+                            <div style={s.actionBtns}>
+                                <button style={s.btnOutlined} onClick={() => handleExport('excel')} title="Export Excel"><Download size={14} /> XL</button>
+                                <button style={s.btnOutlined} onClick={() => handleExport('pdf')} title="Export PDF"><Download size={14} /> PDF</button>
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">
+                        {/* 2. Scrollable Content */}
+                        <div style={s.contentScroll}>
 
-                            {/* 2. Open Tasks Table */}
+                            {/* Open Tasks Section */}
                             {customerData.openFollowups?.length > 0 && (
-                                <div className="mb-6 bg-white rounded-lg border shadow-sm overflow-hidden">
-                                    <div className="bg-yellow-50 px-4 py-2 border-b border-yellow-100 flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-yellow-600" />
-                                        <h3 className="font-bold text-yellow-800 text-sm">Open Follow-up Tasks</h3>
-                                    </div>
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 text-gray-600 font-medium border-b">
-                                            <tr>
-                                                <th className="px-4 py-2 w-32 border-r">Due Date</th>
-                                                <th className="px-4 py-2 w-24 border-r">Type</th>
-                                                <th className="px-4 py-2 w-24 border-r">By</th>
-                                                <th className="px-4 py-2 w-24 border-r">Priority</th>
-                                                <th className="px-4 py-2">What to Talk (Note)</th>
-                                                <th className="px-4 py-2 w-20">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {customerData.openFollowups.map(task => (
-                                                <tr key={task._id} className="hover:bg-gray-50">
-                                                    <td className="px-4 py-2 border-r whitespace-nowrap font-medium text-gray-700">
-                                                        {format(new Date(task.reminderDate), 'dd MMM yyyy')}
-                                                        {task.reminderTime && <div className="text-xs text-gray-500 font-normal">{task.reminderTime}</div>}
-                                                    </td>
-                                                    <td className="px-4 py-2 border-r">
-                                                        <span className="inline-flex items-center gap-1">
-                                                            {task.followUpType === 'WHATSAPP' ? <MessageSquare size={12} className="text-green-600" /> : <Phone size={12} className="text-blue-600" />}
-                                                            {task.followUpType}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-2 border-r">
-                                                        <span className="text-xs text-gray-600 whitespace-nowrap">
-                                                            {task.createdBy?.name || task.creator?.name || '-'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-2 border-r">
-                                                        <span className={`px-2 py-0.5 rounded text-xs ${task.priority === 'High' ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
-                                                            {task.priority}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-2 text-gray-700">{task.taskNote}</td>
-                                                    <td className="px-4 py-2 text-center">
-                                                        <button
-                                                            onClick={() => handleCloseTask(task._id)}
-                                                            className="p-1.5 hover:bg-green-100 text-green-600 rounded-full transition-colors"
-                                                            title="Close Task"
-                                                        >
-                                                            <CheckCircle className="w-5 h-5" />
-                                                        </button>
-                                                    </td>
+                                <div style={s.sectionCard}>
+                                    <h3 style={s.sectionTitleRow}><AlertCircle size={16} /> Open Follow-up Tasks</h3>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table style={s.table}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={s.th}>Due Date</th>
+                                                    <th style={s.th}>Type</th>
+                                                    <th style={s.th}>Priority</th>
+                                                    <th style={s.th}>What to Talk (Note)</th>
+                                                    <th style={{ ...s.th, width: 60, textAlign: 'center' }}>Action</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {customerData.openFollowups.map(task => (
+                                                    <tr key={task._id} style={{ transition: 'background 0.15s' }}>
+                                                        <td style={s.td}>
+                                                            <div style={{ fontWeight: 600 }}>{format(new Date(task.reminderDate), 'dd MMM yyyy')}</div>
+                                                            {task.reminderTime && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{task.reminderTime}</div>}
+                                                        </td>
+                                                        <td style={s.td}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, fontSize: 12 }}>
+                                                                {task.followUpType === 'WHATSAPP' ? <MessageSquare size={14} color="#16a34a" /> : <Phone size={14} color="#3b82f6" />}
+                                                                {task.followUpType}
+                                                            </div>
+                                                        </td>
+                                                        <td style={s.td}>
+                                                            <span style={s.taskPill(task.priority)}>{task.priority}</span>
+                                                        </td>
+                                                        <td style={s.td}>{task.taskNote || '—'}</td>
+                                                        <td style={{ ...s.td, textAlign: 'center', verticalAlign: 'middle' }}>
+                                                            <button onClick={() => handleCloseTask(task._id)} style={s.iconBtnGreen} title="Mark as Done">
+                                                                <CheckCircle size={14} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* 3. History Table */}
-                            <div className="bg-white rounded-lg border shadow-sm overflow-hidden flex flex-col">
-                                <div className="px-4 py-3 border-b flex justify-between items-center bg-gray-50">
-                                    <h3 className="font-bold text-gray-700">Conversation History</h3>
-                                    <div className="relative w-64">
-                                        <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" />
+                            {/* Conversation History Section */}
+                            <div style={s.sectionCard}>
+                                <div style={{ ...s.sectionTitleRow, background: '#f8fafc', color: '#334155', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MessageSquare size={16} /> Conversation History</div>
+                                    <div style={{ position: 'relative', width: 250, display: 'flex', alignItems: 'center' }}>
+                                        <Search size={14} style={{ position: 'absolute', left: 10, color: '#94a3b8' }} />
                                         <input
                                             type="text"
                                             placeholder="Search history..."
-                                            className="w-full pl-9 pr-3 py-1.5 text-sm border rounded hover:border-blue-400 focus:outline-none focus:border-blue-500 transition-colors"
+                                            style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: 12, border: '1px solid #cbd5e1', borderRadius: 6, outline: 'none' }}
                                             value={historySearch}
                                             onChange={(e) => setHistorySearch(e.target.value)}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead className="bg-gray-100 text-gray-700 font-semibold border-b">
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={s.table}>
+                                        <thead>
                                             <tr>
-                                                <th className="px-4 py-3 border-r w-40">Date</th>
-                                                <th className="px-4 py-3 border-r">Discussion Details</th>
-                                                <th className="px-4 py-3 w-1/4">Outcome / Remarks</th>
+                                                <th style={{ ...s.th, width: 120 }}>Date</th>
+                                                <th style={s.th}>Discussion Details</th>
+                                                <th style={{ ...s.th, width: '30%' }}>Outcome / Remarks</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-200">
+                                        <tbody>
                                             {filteredHistory.length > 0 ? filteredHistory.map(c => (
-                                                <tr key={c._id} className="hover:bg-blue-50/30 transition-colors group">
-                                                    <td className="px-4 py-3 border-r align-top bg-gray-50/50">
-                                                        <div className="font-bold text-gray-800">{format(new Date(c.conversationDate), 'dd-MM-yyyy')}</div>
-                                                        <div className="flex items-center gap-1 mt-1">
-                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide font-medium ${c.mode === 'whatsapp' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                <tr key={c._id}>
+                                                    <td style={{ ...s.td, background: '#f8fafc' }}>
+                                                        <div style={{ fontWeight: 700 }}>{format(new Date(c.conversationDate), 'dd-MM-yyyy')}</div>
+                                                        <div style={{ marginTop: 6 }}>
+                                                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', background: c.mode === 'whatsapp' ? '#dcfce7' : '#e0e7ff', color: c.mode === 'whatsapp' ? '#15803d' : '#4338ca', border: c.mode === 'whatsapp' ? '1px solid #bbf7d0' : '1px solid #c7d2fe' }}>
                                                                 {c.mode}
                                                             </span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-4 py-3 border-r align-top text-gray-800 whitespace-pre-wrap leading-relaxed">
-                                                        {c.discussionDetails}
-                                                    </td>
-                                                    <td className="px-4 py-3 align-top text-gray-600 whitespace-pre-wrap">
-                                                        {c.outcome || '-'}
-                                                    </td>
+                                                    <td style={{ ...s.td, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.discussionDetails}</td>
+                                                    <td style={{ ...s.td, color: '#64748b', whiteSpace: 'pre-wrap', fontSize: 12 }}>{c.outcome || '—'}</td>
                                                 </tr>
                                             )) : (
                                                 <tr>
-                                                    <td colSpan="3" className="px-4 py-8 text-center text-gray-500 italic">
+                                                    <td colSpan="3" style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
                                                         No conversation history found.
                                                     </td>
                                                 </tr>
@@ -455,12 +435,10 @@ const FollowupDashboardReport = () => {
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="bg-gray-50 border-t px-4 py-2 text-xs text-gray-500 flex justify-between">
-                                    <span>Showing {filteredHistory.length} records</span>
-                                    <span>Total: {customerData.conversations?.length || 0}</span>
+                                <div style={{ padding: '8px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: 11, color: '#64748b', textAlign: 'right' }}>
+                                    Showing {filteredHistory.length} of {customerData.conversations?.length || 0} records
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 )}

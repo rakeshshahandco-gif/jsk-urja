@@ -34,6 +34,10 @@ import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { GroupList } from '@/features/groups/components/GroupList';
 import { GroupDetails } from '@/features/groups/components/GroupDetails';
+import ProductionDashboard from '@/features/production/ProductionDashboard';
+import WorkOrderListPage from '@/features/production/WorkOrderListPage';
+import WorkOrderFormPage from '@/features/production/WorkOrderFormPage';
+import WorkOrderDetailPage from '@/features/production/WorkOrderDetailPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -233,6 +237,12 @@ function App() {
                                                         <Route path="/inventory/bom" element={<BOMPage />} />
                                                         <Route path="/inventory/bom/new" element={<BOMFormPage />} />
                                                         <Route path="/inventory/bom/edit/:id" element={<BOMFormPage />} />
+
+                                                        {/* Production */}
+                                                        <Route path="/production" element={<ProductionDashboard />} />
+                                                        <Route path="/production/work-orders" element={<WorkOrderListPage />} />
+                                                        <Route path="/production/work-orders/new" element={<WorkOrderFormPage />} />
+                                                        <Route path="/production/work-orders/:id" element={<WorkOrderDetailPage />} />
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

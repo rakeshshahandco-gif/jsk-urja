@@ -58,11 +58,22 @@ export const getItems = asyncHandler(async (req, res) => {
     if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     if (search) {
-        filter.$or = [
-            { itemName: { $regex: search, $options: 'i' } },
-            { itemCode: { $regex: search, $options: 'i' } },
-            { hsnCode: { $regex: search, $options: 'i' } },
-        ];
+        // Handle concatenated string formats like "Code — Name" or "Code - Name"
+        const searchParts = search.split(/\s+[—\-]\s+/).map(s => s.trim()).filter(Boolean);
+
+        if (searchParts.length > 1) {
+            filter.$or = [
+                { itemCode: { $regex: searchParts[0], $options: 'i' } },
+                { itemName: { $regex: searchParts[1], $options: 'i' } }
+            ];
+        } else {
+            const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.$or = [
+                { itemName: { $regex: safeSearch, $options: 'i' } },
+                { itemCode: { $regex: safeSearch, $options: 'i' } },
+                { hsnCode: { $regex: safeSearch, $options: 'i' } },
+            ];
+        }
     }
 
     const pageNum = Math.max(parseInt(page, 10), 1);
@@ -100,6 +111,14 @@ export const updateItem = asyncHandler(async (req, res) => {
     if (req.body.itemCode && req.body.itemCode !== item.itemCode) {
         const clash = await Item.findOne({ itemCode: req.body.itemCode.toUpperCase() });
         if (clash) throw new ApiError(httpStatus.CONFLICT, `Item code "${req.body.itemCode}" already in use`);
+    }
+
+    if (req.body.openingStock !== undefined) {
+        const newOpeningStock = Number(req.body.openingStock);
+        if (newOpeningStock !== item.openingStock) {
+            const diff = newOpeningStock - (item.openingStock || 0);
+            item.currentStock = (item.currentStock || 0) + diff;
+        }
     }
 
     Object.assign(item, req.body);

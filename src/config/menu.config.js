@@ -141,6 +141,26 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'production',
+        title: 'Production',
+        icon: 'FactoryIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            {
+                id: 'prod-dashboard',
+                title: 'Dashboard',
+                path: PATHS.PRODUCTION.DASHBOARD,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'work-orders',
+                title: 'Work Orders',
+                path: PATHS.PRODUCTION.WORK_ORDERS,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+        ],
+    },
+    {
         id: 'admin',
         title: 'Admin',
         icon: 'SettingsIcon',
