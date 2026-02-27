@@ -210,6 +210,14 @@ export const updateStage = asyncHandler(async (req, res) => {
     if (value.status === 'Running' && !stage.startTime) stage.startTime = new Date();
     if (value.status === 'Completed') stage.endTime = new Date();
 
+    // Auto-calculate aggregated quantities from productionLogs if provided
+    if (value.productionLogs !== undefined) {
+        stage.inputQty = value.productionLogs.reduce((sum, log) => sum + (log.inputQty || 0), 0);
+        stage.outputQty = value.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
+        stage.reworkQty = value.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
+        stage.rejectionQty = value.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
+    }
+
     // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
     if (seq === 9 && value.status === 'Completed') {
         const mandatoryShortages = wo.materialStatus.filter(

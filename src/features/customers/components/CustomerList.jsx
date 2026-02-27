@@ -155,17 +155,17 @@ export const CustomerList = () => {
 
     const getStatusBadgeStyle = (status) => {
         const styles = {
-            hot: { bg: '#fee2e2', color: '#dc2626' },
-            warm: { bg: '#fef3c7', color: '#d97706' },
-            cold: { bg: '#dbeafe', color: '#2563eb' },
-            active: { bg: '#d1fae5', color: '#10b981' },
-            inactive: { bg: '#f3f4f6', color: '#6b7280' },
+            hot: { bg: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
+            warm: { bg: '#422006', color: '#fcd34d', border: '1px solid #d97706' },
+            cold: { bg: '#1e3a5f', color: '#bfdbfe', border: '1px solid #3b82f6' },
+            active: { bg: '#052e16', color: '#6ee7b7', border: '1px solid #10b981' },
+            inactive: { bg: '#1e293b', color: '#94a3b8', border: '1px solid #334155' },
         };
         return styles[status] || styles.inactive;
     };
 
     return (
-        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto' }}>
+        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto', background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
             {/* Page Header */}
             <div style={{
                 display: 'flex',
@@ -176,7 +176,7 @@ export const CustomerList = () => {
                 <h1 style={{
                     fontSize: '2rem',
                     fontWeight: '700',
-                    color: '#1f2937',
+                    color: '#f1f5f9',
                     margin: 0
                 }}>
                     Customers
@@ -201,7 +201,8 @@ export const CustomerList = () => {
 
             {/* Filters */}
             <div style={{
-                background: '#fff',
+                background: '#1e293b',
+                border: '1px solid #334155',
                 padding: '16px',
                 borderRadius: '8px',
                 marginBottom: '24px',
@@ -227,7 +228,7 @@ export const CustomerList = () => {
                             placeholder="Search by name, company, or mobile..."
                             value={searchTerm}
                             onChange={handleSearch}
-                            style={{ paddingLeft: '40px' }}
+                            style={{ paddingLeft: '40px', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9' }}
                         />
                     </div>
                 </div>
@@ -238,10 +239,11 @@ export const CustomerList = () => {
                         style={{
                             width: '100%',
                             padding: '10px 12px',
-                            border: '1px solid #d1d5db',
+                            border: '1px solid #334155',
                             borderRadius: '6px',
                             fontSize: '0.875rem',
-                            backgroundColor: '#fff',
+                            backgroundColor: '#0f172a',
+                            color: '#f1f5f9',
                             cursor: 'pointer'
                         }}
                     >
@@ -257,11 +259,12 @@ export const CustomerList = () => {
             {/* Loading State */}
             {loading && (
                 <div style={{
-                    background: '#fff',
+                    background: '#1e293b',
+                    border: '1px solid #334155',
                     padding: '40px',
                     borderRadius: '8px',
                     textAlign: 'center',
-                    color: '#6b7280'
+                    color: '#94a3b8'
                 }}>
                     Loading customers...
                 </div>
@@ -270,13 +273,13 @@ export const CustomerList = () => {
             {/* Error State */}
             {error && (
                 <div style={{
-                    background: '#fef2f2',
+                    background: '#450a0a',
                     padding: '24px',
                     borderRadius: '8px',
                     marginBottom: '24px',
-                    border: '1px solid #f87171',
+                    border: '1px solid #dc2626',
                     textAlign: 'center',
-                    color: '#b91c1c'
+                    color: '#fca5a5'
                 }}>
                     <p style={{ fontWeight: 600, marginBottom: '12px' }}>{error}</p>
                     <div style={{ fontSize: '0.875rem', marginBottom: '16px', color: '#7f1d1d' }}>
@@ -292,23 +295,23 @@ export const CustomerList = () => {
             {!loading && !error && (
                 <>
                     {customers.length === 0 ? (
-                        <div style={{ background: '#fff', padding: '40px', borderRadius: '8px', textAlign: 'center', color: '#666' }}>
+                        <div style={{ background: '#1e293b', border: '1px solid #334155', padding: '40px', borderRadius: '8px', textAlign: 'center', color: '#94a3b8' }}>
                             <p style={{ margin: 0, fontSize: '1.125rem' }}>No customers found</p>
-                            <p style={{ margin: '8px 0 0 0', color: '#9ca3af' }}>
+                            <p style={{ margin: '8px 0 0 0', color: '#64748b' }}>
                                 {searchTerm || statusFilter ? 'Try adjusting your filters' : 'Click "Add Customer" to get started'}
                             </p>
                         </div>
                     ) : (
-                        <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                                 <thead>
-                                    <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Name</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Company</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Primary Contact</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Mobile</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Customer Status</th>
-                                        <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Actions</th>
+                                    <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155' }}>
+                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Name</th>
+                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Company</th>
+                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Primary Contact</th>
+                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Mobile</th>
+                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Customer Status</th>
+                                        <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, color: '#94a3b8' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -317,26 +320,27 @@ export const CustomerList = () => {
                                         const statusStyle = getStatusBadgeStyle(customer.customerStatus);
 
                                         return (
-                                            <tr key={customer._id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                <td style={{ padding: '16px', fontWeight: 500, color: '#1f2937' }}>{customer.customerName || customer.name || 'Not Provided'}</td>
-                                                <td style={{ padding: '16px', color: '#6b7280' }}>
+                                            <tr key={customer._id} style={{ borderBottom: '1px solid #334155', backgroundColor: '#1e293b', transition: 'background-color 0.2s' }} onMouseOver={e => e.currentTarget.style.backgroundColor = '#0f172a'} onMouseOut={e => e.currentTarget.style.backgroundColor = '#1e293b'}>
+                                                <td style={{ padding: '16px', fontWeight: 600, color: '#f1f5f9' }}>{customer.customerName || customer.name || 'Not Provided'}</td>
+                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
                                                     {customer.company || '-'}
                                                     {customer.companyBrand ? ` (${customer.companyBrand})` : ''}
                                                 </td>
-                                                <td style={{ padding: '16px', color: '#6b7280' }}>
+                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
                                                     {primaryContact ? (primaryContact.name || '-') : '-'}
                                                 </td>
-                                                <td style={{ padding: '16px', color: '#6b7280' }}>
+                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
                                                     {primaryContact ? (primaryContact.mobile || '-') : '-'}
                                                 </td>
                                                 <td style={{ padding: '16px' }}>
                                                     <span style={{
                                                         padding: '4px 12px',
                                                         borderRadius: '12px',
-                                                        fontSize: '0.875rem',
-                                                        fontWeight: 500,
+                                                        fontSize: '0.8125rem',
+                                                        fontWeight: 600,
                                                         backgroundColor: statusStyle.bg,
                                                         color: statusStyle.color,
+                                                        border: statusStyle.border,
                                                         textTransform: 'capitalize'
                                                     }}>
                                                         {customer.customerStatus}
@@ -408,10 +412,11 @@ export const CustomerList = () => {
                             alignItems: 'center',
                             marginTop: '24px',
                             padding: '16px',
-                            background: '#fff',
+                            background: '#1e293b',
+                            border: '1px solid #334155',
                             borderRadius: '8px'
                         }}>
-                            <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                            <div style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 500 }}>
                                 Page {currentPage} of {totalPages}
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>

@@ -42,6 +42,20 @@ const testDataSchema = new mongoose.Schema({
 }, { _id: false });
 
 // ─────────────────────────────────────────────
+// Production Log sub-document (for tracking multiple runs)
+// ─────────────────────────────────────────────
+const productionLogSchema = new mongoose.Schema({
+    startTime: { type: Date },
+    endTime: { type: Date },
+    operator: { type: String, default: '' },
+    inputQty: { type: Number, default: 0 },
+    outputQty: { type: Number, default: 0 },
+    reworkQty: { type: Number, default: 0 },
+    rejectionQty: { type: Number, default: 0 },
+    rejectionReason: { type: String, default: '' },
+}, { _id: true });
+
+// ─────────────────────────────────────────────
 // Stage sub-document
 // ─────────────────────────────────────────────
 const stageSchema = new mongoose.Schema({
@@ -63,6 +77,7 @@ const stageSchema = new mongoose.Schema({
     reworkQty: { type: Number, default: 0 },
     rejectionQty: { type: Number, default: 0 },
     rejectionReason: { type: String, default: '' },
+    productionLogs: [productionLogSchema],
     checklist: [checklistItemSchema],
     testData: testDataSchema,
     remarks: { type: String, default: '' },

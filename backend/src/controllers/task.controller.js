@@ -4,6 +4,7 @@ import pick from '../utils/pick.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { Task } from '../models/task.model.js';
+import { TaskGroup } from '../models/taskGroup.model.js';
 import { GroupMember } from '../models/groupMember.model.js';
 import { calculateNextDueDate } from '../utils/recurrence.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -65,8 +66,21 @@ const createTask = asyncHandler(async (req, res) => {
     customerId: toObjectId(customerId),
   };
 
+  // Check if group has fixed users
+  let groupFixedUsers = [];
+  if (taskData.groupId) {
+    const group = await TaskGroup.findById(taskData.groupId);
+    if (group && group.userIds && group.userIds.length > 0) {
+      groupFixedUsers = group.userIds;
+    }
+  }
+
   // Handle assignment logic
-  if (taskData.assignmentMode === 'SELF') {
+  if (groupFixedUsers.length > 0) {
+    taskData.assigneeIds = groupFixedUsers;
+    taskData.assignmentMode = groupFixedUsers.length === 1 ? 'SINGLE' : 'MULTI';
+    taskData.assignToAll = false;
+  } else if (taskData.assignmentMode === 'SELF') {
     taskData.assigneeIds = [req.user.id];
     taskData.assignToAll = false;
   } else if (taskData.assignmentMode === 'ALL') {
@@ -75,6 +89,7 @@ const createTask = asyncHandler(async (req, res) => {
   } else if (taskData.assignmentMode === 'SINGLE' || taskData.assignmentMode === 'MULTI') {
     taskData.assigneeIds = Array.isArray(assigneeIds) ? assigneeIds : [];
     taskData.assignToAll = false;
+    // Strict Option 2: Must have at least one assignee if USERS/MULTI mode
     if (taskData.assigneeIds.length === 0) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'At least one assignee is required for this mode');
     }
@@ -83,7 +98,11 @@ const createTask = asyncHandler(async (req, res) => {
     if (!taskData.assignedGroupId) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Group is required for Group assignment mode');
     }
-    // We don't necessarily need to populate assigneeIds here, usually visibility is handled by assignedGroupId
+  }
+
+  // Backup safeguard
+  if (!taskData.assignToAll && !taskData.assignedGroupId && (!taskData.assigneeIds || taskData.assigneeIds.length === 0)) {
+    taskData.assignToAll = true; // Safe fallback so task doesn't become orphaned, though validations above should catch it
   }
 
   // Handle recurrence initialization
@@ -145,44 +164,27 @@ const getTasks = asyncHandler(async (req, res) => {
     andConditions.push({ status: 'COMPLETED' });
   }
 
-  // Role-based visibility logic
-  const assigneeType = query.assigneeType || (view === 'assigned_to_me' || view === 'today' || view === 'upcoming' || view === 'overdue' || view === 'closed' ? 'assigned_to_me' : 'all');
-
-  if (req.user.role === 'admin' && assigneeType === 'all') {
-    // Admin can see everything
-  } else if (assigneeType === 'created_by_me') {
-    andConditions.push({ createdBy: req.user.id });
-  } else if (assigneeType === 'assigned_to_me') {
-    // Manager or Staff looking at their own tasks
-    const userGroups = await GroupMember.find({ user: req.user.id }).select('group');
-    const groupIds = userGroups.map((g) => g.group);
-
-    andConditions.push({
-      $or: [
-        { assigneeIds: req.user.id },
-        { assignToAll: true },
-        { assignedGroupId: { $in: groupIds } }
-      ]
-    });
-  } else if (req.user.role === 'manager') {
-    const userGroups = await GroupMember.find({ user: req.user.id }).select('group');
-    const groupIds = userGroups.map((g) => g.group);
-
-    andConditions.push({
-      $or: [
-        { createdBy: req.user.id },
-        { assigneeIds: req.user.id },
-        { assignToAll: true },
-        { assignedGroupId: { $in: groupIds } }
-      ]
-    });
+  // Strict User-wise Visibility Rule (Option 2)
+  // A task must be visible ONLY to: Assigned users, Groups user belongs to, All Users, or Admin
+  if (req.user.role === 'admin') {
+    // Admin sees everything if they select 'all', or specifically filters
+    if (query.assigneeType === 'created_by_me') {
+      andConditions.push({ createdBy: req.user.id });
+    } else if (query.assigneeType === 'assigned_to_me') {
+      andConditions.push({
+        $or: [
+          { assigneeIds: req.user.id },
+          { assignToAll: true }
+        ]
+      });
+    }
   } else {
-    // Staff generic view
+    // strict Option 2 rule for non-admin (Creator has NO special visibility, NO group bypass)
+    // ROOT Filter Layer - cannot be bypassed
     andConditions.push({
       $or: [
-        { createdBy: req.user.id },
-        { assigneeIds: req.user.id },
-        { assignToAll: true }
+        { assigneeIds: req.user.id }, // Assigned to me
+        { assignToAll: true }         // Assigned to everyone
       ]
     });
   }
@@ -236,7 +238,48 @@ const updateTask = asyncHandler(async (req, res) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Title cannot be empty');
   }
 
+  let targetGroupId = up.groupId || task.groupId;
+  let groupFixedUsers = [];
+  if (targetGroupId) {
+    const group = await TaskGroup.findById(targetGroupId);
+    if (group && group.userIds && group.userIds.length > 0) {
+      groupFixedUsers = group.userIds;
+    }
+  }
+
+  // Handle assignment logic updates safely
+  if (groupFixedUsers.length > 0) {
+    up.assigneeIds = groupFixedUsers;
+    up.assignmentMode = groupFixedUsers.length === 1 ? 'SINGLE' : 'MULTI';
+    up.assignToAll = false;
+  } else if (up.assignmentMode) {
+    if (up.assignmentMode === 'SELF') {
+      up.assigneeIds = [req.user.id];
+      up.assignToAll = false;
+    } else if (up.assignmentMode === 'ALL') {
+      up.assignToAll = true;
+      up.assigneeIds = [];
+    } else if (up.assignmentMode === 'SINGLE' || up.assignmentMode === 'MULTI') {
+      up.assigneeIds = Array.isArray(up.assigneeIds) ? up.assigneeIds : [];
+      up.assignToAll = false;
+      if (up.assigneeIds.length === 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'At least one assignee is required for this mode');
+      }
+    } else if (up.assignmentMode === 'GROUP') {
+      up.assignToAll = false;
+      if (!up.assignedGroupId) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Group is required for Group assignment mode');
+      }
+    }
+  }
+
   Object.assign(task, up);
+
+  // Backup safeguard after applying updates
+  if (!task.assignToAll && !task.assignedGroupId && (!task.assigneeIds || task.assigneeIds.length === 0)) {
+    task.assignToAll = true;
+  }
+
   task.updatedBy = req.user.id;
   await task.save();
   res.send({ success: true, data: task });

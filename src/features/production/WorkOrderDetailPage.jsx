@@ -390,30 +390,79 @@ function ProcessExecutionTab({ wo, load }) {
 function StageCard({ stage, woId, canEdit, load }) {
     const sc = STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const [open, setOpen] = useState(false);
+
+    // Stage-level fields
     const [form, setForm] = useState({
         status: stage.status,
         operator: stage.operator || '',
         line: stage.line || '',
-        inputQty: stage.inputQty || 0,
-        outputQty: stage.outputQty || 0,
-        reworkQty: stage.reworkQty || 0,
-        rejectionQty: stage.rejectionQty || 0,
-        rejectionReason: stage.rejectionReason || '',
         remarks: stage.remarks || '',
     });
+
+    // Backward compatibility & Logs init
+    const [productionLogs, setProductionLogs] = useState(() => {
+        if (stage.productionLogs && stage.productionLogs.length > 0) return stage.productionLogs;
+        if (stage.inputQty || stage.outputQty || stage.reworkQty || stage.rejectionQty) {
+            return [{
+                startTime: stage.startTime || '',
+                endTime: stage.endTime || '',
+                operator: stage.operator || '',
+                inputQty: stage.inputQty || 0,
+                outputQty: stage.outputQty || 0,
+                reworkQty: stage.reworkQty || 0,
+                rejectionQty: stage.rejectionQty || 0,
+                rejectionReason: stage.rejectionReason || ''
+            }];
+        }
+        return [];
+    });
+
+    // New run log state
+    const [newLog, setNewLog] = useState({
+        startTime: '',
+        endTime: '',
+        operator: '',
+        inputQty: 0,
+        outputQty: 0,
+        reworkQty: 0,
+        rejectionQty: 0,
+        rejectionReason: '',
+    });
+    const [showNewLog, setShowNewLog] = useState(false);
+
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const setLog = (k, v) => setNewLog(l => ({ ...l, [k]: v }));
+
+    // Derived totals
+    const totalInput = productionLogs.reduce((acc, l) => acc + (Number(l.inputQty) || 0), 0);
+    const totalOutput = productionLogs.reduce((acc, l) => acc + (Number(l.outputQty) || 0), 0);
+    const totalRework = productionLogs.reduce((acc, l) => acc + (Number(l.reworkQty) || 0), 0);
+    const totalRejection = productionLogs.reduce((acc, l) => acc + (Number(l.rejectionQty) || 0), 0);
 
     const save = async () => {
         if (!canEdit) return;
         setSaving(true);
         try {
-            await updateStage(woId, stage.seq, form);
+            await updateStage(woId, stage.seq, { ...form, productionLogs });
             toast.success(`${stage.stageName} updated`);
             setOpen(false);
             load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setSaving(false); }
+    };
+
+    const handleAddLog = () => {
+        setProductionLogs([...productionLogs, {
+            ...newLog,
+            startTime: newLog.startTime || null,
+            endTime: newLog.endTime || null,
+        }]);
+        setShowNewLog(false);
+        setNewLog({
+            startTime: '', endTime: '', operator: '',
+            inputQty: 0, outputQty: 0, reworkQty: 0, rejectionQty: 0, rejectionReason: ''
+        });
     };
 
     return (
@@ -438,8 +487,7 @@ function StageCard({ stage, woId, canEdit, load }) {
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
                         {stage.operator ? `Operator: ${stage.operator}` : ''}
-                        {stage.startTime ? ` · Started: ${new Date(stage.startTime).toLocaleString()}` : ''}
-                        {stage.endTime ? ` · Done: ${new Date(stage.endTime).toLocaleString()}` : ''}
+                        {productionLogs.length > 0 ? ` · Total Output: ${totalOutput}` : ''}
                     </div>
                 </div>
                 <span style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: sc.bg, color: sc.color }}>{stage.status}</span>
@@ -449,51 +497,114 @@ function StageCard({ stage, woId, canEdit, load }) {
             {/* Expanded edit form */}
             {open && (
                 <div style={{ borderTop: '1px solid #334155', padding: '20px', background: '#0f172a' }}>
+
+                    {/* Stage Level Info */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
                         <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Status</label>
-                            <select value={form.status} onChange={e => set('status', e.target.value)}
-                                disabled={!canEdit}
-                                style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
+                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Overall Status</label>
+                            <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
                                 {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Operator</label>
+                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Current Operator</label>
                             <input value={form.operator} onChange={e => set('operator', e.target.value)} style={inp} disabled={!canEdit} />
                         </div>
                         <div>
                             <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Line</label>
                             <input value={form.line} onChange={e => set('line', e.target.value)} style={inp} disabled={!canEdit} />
                         </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Input Qty</label>
-                            <input type="number" value={form.inputQty} onChange={e => set('inputQty', Number(e.target.value))} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Output Qty</label>
-                            <input type="number" value={form.outputQty} onChange={e => set('outputQty', Number(e.target.value))} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Rework Qty</label>
-                            <input type="number" value={form.reworkQty} onChange={e => set('reworkQty', Number(e.target.value))} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Rejection Qty</label>
-                            <input type="number" value={form.rejectionQty} onChange={e => set('rejectionQty', Number(e.target.value))} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div style={{ gridColumn: 'span 2' }}>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Rejection Reason</label>
-                            <input value={form.rejectionReason} onChange={e => set('rejectionReason', e.target.value)} style={inp} disabled={!canEdit} />
-                        </div>
                     </div>
-                    <div style={{ marginBottom: '14px' }}>
+
+                    <div style={{ marginBottom: '16px' }}>
                         <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Remarks</label>
-                        <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)}
-                            style={{ ...inp, resize: 'vertical' }} disabled={!canEdit} />
+                        <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} disabled={!canEdit} />
                     </div>
+
+                    {/* Aggregate Totals (Read Only) */}
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalInput}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#10b981' }}>{totalOutput}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rework</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#a78bfa' }}>{totalRework}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rejection</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>{totalRejection}</div></div>
+                    </div>
+
+                    {/* Execution Logs Table */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>Execution Runs ({productionLogs.length})</div>
+                            {canEdit && !showNewLog && (
+                                <button onClick={() => setShowNewLog(true)} style={{ padding: '4px 10px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>+ Add Run Log</button>
+                            )}
+                        </div>
+
+                        {productionLogs.length > 0 && (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '12px' }}>
+                                <thead>
+                                    <tr style={{ background: '#1e293b', color: '#94a3b8', textAlign: 'left' }}>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Start</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>End</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Operator</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>In</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Out</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rw</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rej</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {productionLogs.map((l, i) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
+                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.startTime ? new Date(l.startTime).toLocaleString() : '—'}</td>
+                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.endTime ? new Date(l.endTime).toLocaleString() : '—'}</td>
+                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.operator || '—'}</td>
+                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.inputQty}</td>
+                                            <td style={{ padding: '8px', color: '#10b981' }}>{l.outputQty}</td>
+                                            <td style={{ padding: '8px', color: '#a78bfa' }}>{l.reworkQty}</td>
+                                            <td style={{ padding: '8px', color: '#ef4444' }}>{l.rejectionQty}</td>
+                                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                                                {canEdit && (
+                                                    <button onClick={() => setProductionLogs(logs => logs.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+
+                        {/* Add Run Log Form */}
+                        {showNewLog && (
+                            <div style={{ background: '#1e293b', border: '1px solid #3b82f6', borderRadius: '8px', padding: '16px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#60a5fa', marginBottom: '12px' }}>New Run Details</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Start Time</label><input type="datetime-local" value={newLog.startTime} onChange={e => setLog('startTime', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>End Time</label><input type="datetime-local" value={newLog.endTime} onChange={e => setLog('endTime', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div style={{ gridColumn: 'span 2' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
+
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Input Qty</label><input type="number" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Output Qty</label><input type="number" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rework Qty</label><input type="number" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Qty</label><input type="number" value={newLog.rejectionQty} onChange={e => setLog('rejectionQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Reason (if any)</label>
+                                    <input value={newLog.rejectionReason} onChange={e => setLog('rejectionReason', e.target.value)} style={{ ...inp, padding: '6px' }} />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                    <button onClick={() => setShowNewLog(false)} style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
+                                    <button onClick={handleAddLog} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>Save Log temporarily</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {canEdit && (
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #334155', paddingTop: '16px' }}>
                             <button onClick={() => setOpen(false)}
                                 style={{ padding: '8px 16px', borderRadius: '7px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                                 Cancel

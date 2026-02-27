@@ -7,29 +7,30 @@ import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
 import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 // Shared compact styles
 const s = {
     sel: {
-        height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #d1d5db',
-        borderRadius: 5, background: '#fff', outline: 'none', cursor: 'pointer',
+        height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #334155',
+        borderRadius: 5, background: '#0f172a', color: '#f1f5f9', outline: 'none', cursor: 'pointer',
         appearance: 'none', minWidth: 90,
-        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
+        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
         backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em'
     },
     inp: {
-        height: 28, fontSize: 11, padding: '0 6px', border: '1px solid #d1d5db',
-        borderRadius: 5, background: '#fff', outline: 'none', width: 88
+        height: 28, fontSize: 11, padding: '0 6px', border: '1px solid #334155', color: '#f1f5f9',
+        borderRadius: 5, background: '#0f172a', outline: 'none', width: 88, colorScheme: 'dark'
     },
     tab: (active) => ({
         padding: '3px 10px', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none',
         cursor: 'pointer', background: active ? '#2563eb' : 'transparent',
-        color: active ? '#fff' : '#6b7280', transition: 'all 0.15s'
+        color: active ? '#fff' : '#94a3b8', transition: 'all 0.15s'
     }),
     resetBtn: {
         height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600,
-        border: '1px solid #d1d5db', borderRadius: 5, background: '#fff',
-        color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+        border: '1px solid #334155', borderRadius: 5, background: '#0f172a',
+        color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
     }
 };
 
@@ -44,6 +45,7 @@ const TABS = [
 const ManageTasksPage = () => {
     const { addToast } = useToast();
     const navigate = useNavigate();
+    const { user } = useAuth();
 
     const [activeTab, setActiveTab] = useState('today');
     const [loading, setLoading] = useState(true);
@@ -122,40 +124,44 @@ const ManageTasksPage = () => {
     const totalPages = Math.ceil(pagination.total / pagination.limit) || 1;
 
     return (
-        <div style={{ padding: '10px 16px', background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '10px 16px', background: '#0f172a', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 8, color: '#f1f5f9' }}>
 
             {/* ── LINE 1: Title + Tabs + Total badge ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#111827', whiteSpace: 'nowrap' }}>Manage Tasks</span>
-                <div style={{ display: 'flex', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: 3, gap: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', whiteSpace: 'nowrap' }}>Manage Tasks</span>
+                <div style={{ display: 'flex', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: 3, gap: 2 }}>
                     {TABS.map(t => (
                         <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
                             {t.label}
-                            {t.id === 'all' && <span style={{ marginLeft: 4, background: activeTab === 'all' ? 'rgba(255,255,255,0.25)' : '#f3f4f6', borderRadius: 8, padding: '0 5px', fontSize: 10 }}>{pagination.total}</span>}
+                            {t.id === 'all' && <span style={{ marginLeft: 4, background: activeTab === 'all' ? 'rgba(255,255,255,0.25)' : '#334155', borderRadius: 8, padding: '0 5px', fontSize: 10 }}>{pagination.total}</span>}
                         </button>
                     ))}
                 </div>
             </div>
 
             {/* ── LINE 2: All Filters in one row ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#1e293b', border: '1px solid #334155', borderRadius: 7, padding: '6px 10px' }}>
                 {/* Group */}
                 <select style={s.sel} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
                     <option value="">All Groups</option>
                     {options.taskGroups.map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
                 </select>
 
-                {/* Assigned To */}
-                <select style={s.sel} value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}>
-                    <option value="">All Assignees</option>
-                    {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-                </select>
+                {/* Assigned To - Admin Only */}
+                {user?.role === 'admin' && (
+                    <select style={s.sel} value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}>
+                        <option value="">All Assignees</option>
+                        {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                    </select>
+                )}
 
-                {/* Created By */}
-                <select style={s.sel} value={createdByFilter} onChange={e => setCreatedByFilter(e.target.value)}>
-                    <option value="">All Creators</option>
-                    {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-                </select>
+                {/* Created By - Admin Only */}
+                {user?.role === 'admin' && (
+                    <select style={s.sel} value={createdByFilter} onChange={e => setCreatedByFilter(e.target.value)}>
+                        <option value="">All Creators</option>
+                        {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                    </select>
+                )}
 
                 {/* Priority */}
                 <select style={s.sel} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
@@ -197,7 +203,7 @@ const ManageTasksPage = () => {
             </div>
 
             {/* ── TABLE ── */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
                 <ManageTasksTable
                     tasks={tasks}
                     loading={loading}
@@ -212,13 +218,13 @@ const ManageTasksPage = () => {
             {/* ── PAGINATION ── */}
             {!loading && pagination.total > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#6b7280' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
                         {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
                     </span>
                     <button
                         disabled={pagination.page <= 1}
                         onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #e5e7eb', borderRadius: 5, background: '#fff', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
+                        style={{ height: 26, width: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e293b', color: '#f1f5f9', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
                     >
                         <ChevronLeft size={13} />
                     </button>
@@ -228,7 +234,7 @@ const ManageTasksPage = () => {
                             <button
                                 key={pg}
                                 onClick={() => setPagination(p => ({ ...p, page: pg }))}
-                                style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #e5e7eb', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#2563eb' : '#fff', color: pagination.page === pg ? '#fff' : '#374151' }}
+                                style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #334155', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#2563eb' : '#1e293b', color: pagination.page === pg ? '#fff' : '#f1f5f9' }}
                             >
                                 {pg}
                             </button>
@@ -237,7 +243,7 @@ const ManageTasksPage = () => {
                     <button
                         disabled={pagination.page >= totalPages}
                         onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #e5e7eb', borderRadius: 5, background: '#fff', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
+                        style={{ height: 26, width: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e293b', color: '#f1f5f9', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
                     >
                         <ChevronRight size={13} />
                     </button>

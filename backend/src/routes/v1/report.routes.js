@@ -1,7 +1,11 @@
 import express from 'express';
 import reportController from '../../controllers/report.controller.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
+
+// Apply protect to ALL report routes by default, as they all expose private data
+router.use(protect);
 
 router.get('/customers', reportController.getCustomerReport);
 router.get('/options', reportController.getReportOptions);

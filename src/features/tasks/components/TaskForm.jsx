@@ -72,6 +72,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const assignmentMode = watch('assignmentMode');
     const recurrenceEnabled = watch('recurrence.enabled');
     const recurrenceEndType = watch('recurrence.recurrenceEndType');
+    const selectedGroupId = watch('groupId');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -115,6 +116,15 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     };
 
     const onSubmit = async (data) => {
+        const selectedGroup = groupsOptions.find(g => (g._id || g.id) === data.groupId);
+        const hasFixedUsers = selectedGroup && selectedGroup.userIds && selectedGroup.userIds.length > 0;
+
+        // Strict Option 2 frontend validation
+        if (!hasFixedUsers && (data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') && (!data.assigneeIds || data.assigneeIds.length === 0)) {
+            toast.error('Please select at least one assignee.');
+            return;
+        }
+
         try {
             setSubmitting(true);
             const payload = {
@@ -150,8 +160,11 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
         return <div style={{ padding: 24, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>Loading form options...</div>;
     }
 
-    const needsAssignee = assignmentMode === 'SINGLE' || assignmentMode === 'MULTI';
-    const needsGroup = assignmentMode === 'GROUP';
+    const selectedGroupDef = groupsOptions.find(g => (g._id || g.id) === selectedGroupId);
+    const hasFixedUsers = selectedGroupDef && selectedGroupDef.userIds && selectedGroupDef.userIds.length > 0;
+
+    const needsAssignee = !hasFixedUsers && (assignmentMode === 'SINGLE' || assignmentMode === 'MULTI');
+    const needsGroup = !hasFixedUsers && (assignmentMode === 'GROUP');
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -202,16 +215,26 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         <option value="CRITICAL">Critical</option>
                     </select>
                 </div>
-                <div>
-                    <label style={f.label}>Assign To</label>
-                    <select style={f.sel} {...register('assignmentMode')}>
-                        <option value="SELF">Self (Me)</option>
-                        <option value="SINGLE">Single User</option>
-                        <option value="MULTI">Multiple Users</option>
-                        <option value="ALL">All Users</option>
-                        <option value="GROUP">Specific Group</option>
-                    </select>
-                </div>
+                {!hasFixedUsers && (
+                    <div>
+                        <label style={f.label}>Assign To</label>
+                        <select style={f.sel} {...register('assignmentMode')}>
+                            <option value="SELF">Self (Me)</option>
+                            <option value="SINGLE">Single User</option>
+                            <option value="MULTI">Multiple Users</option>
+                            <option value="ALL">All Users</option>
+                            <option value="GROUP">Specific Group</option>
+                        </select>
+                    </div>
+                )}
+                {hasFixedUsers && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                        <label style={f.label}>Assignment</label>
+                        <div style={{ ...f.base, background: '#f3f4f6', color: '#6b7280', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+                            Fixed to Group Users ({selectedGroupDef.userIds.length})
+                        </div>
+                    </div>
+                )}
                 {needsAssignee && (
                     <div>
                         <label style={f.label}>Assignee(s) *</label>
@@ -236,7 +259,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         </select>
                     </div>
                 )}
-                {!needsAssignee && !needsGroup && <div />}
+                {!needsAssignee && !needsGroup && !hasFixedUsers && <div />}
             </div>
 
             {/* ── ROW 3: Due Date | Recurring toggle | Frequency | Interval ── */}

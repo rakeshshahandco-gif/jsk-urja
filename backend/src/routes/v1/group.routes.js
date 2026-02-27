@@ -9,7 +9,7 @@ const router = express.Router();
 // Publicly available group endpoints (protected)
 router
     .route('/')
-    .post(protect, authorize('admin'), validate(groupValidation.createGroup), groupController.createGroup)
+    .post(protect, validate(groupValidation.createGroup), groupController.createGroup)
     .get(protect, validate(groupValidation.getGroups), groupController.getGroups);
 
 router.get('/assignable', protect, groupController.getAssignableGroups);
@@ -17,15 +17,15 @@ router.get('/assignable', protect, groupController.getAssignableGroups);
 router
     .route('/:groupId')
     .get(protect, validate(groupValidation.getGroup), groupController.getGroup)
-    .patch(protect, authorize('admin'), validate(groupValidation.updateGroup), groupController.updateGroup)
-    .delete(protect, authorize('admin'), validate(groupValidation.deleteGroup), groupController.deleteGroup);
+    .patch(protect, validate(groupValidation.updateGroup), groupController.updateGroup)
+    .delete(protect, validate(groupValidation.deleteGroup), groupController.deleteGroup);
 
 router
     .route('/:groupId/members')
-    .post(protect, authorize('admin'), validate(groupValidation.addMember), groupController.addMember);
+    .post(protect, validate(groupValidation.addMember), groupController.addMember);
 
 router
     .route('/:groupId/members/:userId')
-    .delete(protect, authorize('admin'), validate(groupValidation.removeMember), groupController.removeMember);
+    .delete(protect, validate(groupValidation.removeMember), groupController.removeMember);
 
 export default router;

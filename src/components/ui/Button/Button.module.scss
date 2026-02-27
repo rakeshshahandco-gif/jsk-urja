@@ -1,3 +1,4 @@
+@use "sass:color";
 @import '@/styles/_variables';
 @import '@/styles/_mixins';
 
@@ -34,11 +35,11 @@
     color: #fff;
 
     &:hover {
-        background-color: darken($primary, 5%);
+        background-color: color.adjust($primary, $lightness: -5%);
     }
 
     &:active {
-        background-color: darken($primary, 10%);
+        background-color: color.adjust($primary, $lightness: -10%);
     }
 }
 
@@ -47,7 +48,7 @@
     color: #fff;
 
     &:hover {
-        background-color: darken($secondary, 5%);
+        background-color: color.adjust($secondary, $lightness: -5%);
     }
 }
 
@@ -75,7 +76,7 @@
     color: white;
 
     &:hover {
-        background-color: darken(#ef4444, 5%);
+        background-color: color.adjust(#ef4444, $lightness: -5%);
     }
 }
 

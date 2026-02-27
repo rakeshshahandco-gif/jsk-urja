@@ -11,6 +11,10 @@ const taskGroupSchema = new mongoose.Schema(
             type: String,
             trim: true
         },
+        userIds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        }],
         visibility: {
             type: String,
             enum: ['PRIVATE', 'TEAM', 'COMPANY'],

@@ -1,17 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input, Select, MultiSelect } from '@/components/ui';
 import { createTaskGroup } from '@/services/taskApi';
+import { userService } from '@/services/user.service';
 import toast from 'react-hot-toast';
 
 export const GroupForm = ({ onSuccess, onCancel }) => {
-    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+    const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             name: '',
             notes: '',
-            visibility: 'COMPANY'
+            visibility: 'COMPANY',
+            userIds: []
         }
     });
+
+    const [usersOptions, setUsersOptions] = useState([]);
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const users = await userService.getAssignableUsers();
+                setUsersOptions(Array.isArray(users) ? users : (users?.data || []));
+            } catch (err) {
+                toast.error('Failed to load users');
+            }
+        };
+        fetchUsers();
+    }, []);
 
     const onSubmit = async (data) => {
         try {
@@ -57,6 +73,21 @@ export const GroupForm = ({ onSuccess, onCancel }) => {
                 </select>
                 <p className="text-[10px] text-gray-400 mt-1 italic">
                     Controls who can see tasks within this group.
+                </p>
+            </div>
+
+            <div>
+                <label className="block text-sm font-bold mb-1 text-gray-700">Assign Users (Optional)</label>
+                <div className="text-sm">
+                    <MultiSelect
+                        name="userIds"
+                        control={control}
+                        options={usersOptions.map(u => ({ value: u.id || u._id, label: u.fullName || u.name }))}
+                        placeholder="Select users to fix to this group..."
+                    />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1 italic">
+                    Tasks created in this group will be automatically assigned to these users.
                 </p>
             </div>
 

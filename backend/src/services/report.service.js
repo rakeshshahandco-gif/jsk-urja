@@ -1249,20 +1249,18 @@ const queryManageTasks = async (filters, options) => {
     if (filters.user) {
         const role = filters.user.role;
         if (role !== 'admin') {
-            const userGroups = await GroupMember.find({ user: filters.user.id }).select('group');
-            const groupIds = userGroups.map((g) => g.group);
+            // STRICT Root Filter Layer: Users can ONLY see tasks they are directly assigned to or assigned to ALL
             andConditions.push({
                 $or: [
-                    { createdBy: filters.user.id },
                     { assigneeIds: filters.user.id },
-                    { assignToAll: true },
-                    { assignedGroupId: { $in: groupIds } }
+                    { assignToAll: true }
                 ]
             });
         }
     }
 
     const filter = andConditions.length ? { $and: andConditions } : {};
+    console.log('DEBUG ManageTasks Filter:', JSON.stringify(filter, null, 2), 'USER ROLE:', filters.user?.role, 'USER ID:', filters.user?.id);
     const limit = options.limit && parseInt(options.limit, 10) > 0 ? parseInt(options.limit, 10) : 50;
     const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;
     const skip = (page - 1) * limit;
@@ -1346,15 +1344,10 @@ const queryTaskReminderReport = async (filters, options) => {
         if (filters.user.role === 'admin') {
             // Admin sees all
         } else {
-            const userGroups = await GroupMember.find({ user: filters.user.id }).select('group');
-            const groupIds = userGroups.map((g) => g.group);
-
             andConditions.push({
                 $or: [
-                    { createdBy: filters.user.id },
                     { assigneeIds: filters.user.id },
-                    { assignToAll: true },
-                    { assignedGroupId: { $in: groupIds } }
+                    { assignToAll: true }
                 ]
             });
         }

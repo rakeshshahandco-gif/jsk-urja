@@ -30,6 +30,19 @@ const updateStageSchema = Joi.object({
     rejectionQty: Joi.number().min(0).optional(),
     rejectionReason: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
+    productionLogs: Joi.array().items(
+        Joi.object({
+            _id: Joi.string().optional().allow(''),
+            startTime: Joi.date().optional().allow(null, ''),
+            endTime: Joi.date().optional().allow(null, ''),
+            operator: Joi.string().optional().allow(''),
+            inputQty: Joi.number().min(0).optional(),
+            outputQty: Joi.number().min(0).optional(),
+            reworkQty: Joi.number().min(0).optional(),
+            rejectionQty: Joi.number().min(0).optional(),
+            rejectionReason: Joi.string().optional().allow(''),
+        })
+    ).optional(),
     checklist: Joi.array().items(
         Joi.object({
             item: Joi.string().required(),

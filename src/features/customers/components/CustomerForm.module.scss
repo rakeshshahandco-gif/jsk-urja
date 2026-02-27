@@ -3,16 +3,16 @@
 .customer-form {
 
     .form-section {
-        background: $bg-color;
+        background: #1e293b;
         border-radius: $radius-lg;
         padding: 24px;
         margin-bottom: 24px;
-        border: 1px solid $border-color;
+        border: 1px solid #334155;
 
         h3 {
             font-size: 1.25rem;
             font-weight: 600;
-            color: $text-color;
+            color: #f1f5f9;
             margin: 0 0 20px 0;
         }
 
@@ -33,8 +33,8 @@
 
         label {
             display: block;
-            font-weight: 500;
-            color: $text-secondary;
+            font-weight: 600;
+            color: #94a3b8;
             margin-bottom: 4px; // Reduced from 8px
             font-size: 0.875rem;
         }
@@ -48,7 +48,7 @@
 
         .help-text {
             display: block;
-            color: $text-tertiary;
+            color: #64748b;
             font-size: 0.75rem;
             margin-top: 4px;
         }
@@ -107,22 +107,23 @@
     .form-textarea {
         width: 100%;
         padding: 6px 10px; // Updated padding to match Input
-        border: 1px solid $border-color;
+        border: 1px solid #334155;
         border-radius: $radius-md;
         font-size: 0.8125rem; // 13px
         font-family: inherit;
         resize: vertical;
         transition: border-color 0.2s;
-        color: $text-color;
+        color: #f1f5f9;
+        background-color: #0f172a;
 
         &:focus {
             outline: none;
-            border-color: $primary;
-            box-shadow: 0 0 0 2px rgba($primary, 0.1);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
 
         &:hover {
-            border-color: $text-tertiary;
+            border-color: #475569;
         }
     }
 
@@ -130,35 +131,36 @@
         width: 100%;
         padding: 6px 10px; // Updated padding to match Input
         height: 34px; // Fixed height to match Input
-        border: 1px solid $border-color;
+        border: 1px solid #334155;
         border-radius: $radius-md;
         font-size: 0.8125rem; // 13px
         font-family: inherit;
-        background-color: $bg-color;
+        background-color: #0f172a;
         cursor: pointer;
         transition: border-color 0.2s;
-        color: $text-color;
+        color: #f1f5f9;
 
         &:focus {
             outline: none;
-            border-color: $primary;
-            box-shadow: 0 0 0 2px rgba($primary, 0.1);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
         }
 
         &:hover {
-            border-color: $text-tertiary;
+            border-color: #475569;
         }
 
         &:disabled {
-            background-color: $bg-secondary;
+            background-color: #1e293b;
+            color: #64748b;
             cursor: not-allowed;
             opacity: 0.6;
         }
     }
 
     .contact-person-card {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
+        background: #0f172a;
+        border: 1px solid #334155;
         border-radius: 8px;
         padding: 20px;
         margin-bottom: 16px;
@@ -169,11 +171,11 @@
             align-items: center;
             margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #334155;
 
             .contact-number {
                 font-weight: 600;
-                color: #1f2937;
+                color: #f1f5f9;
             }
 
             .card-actions {
@@ -187,23 +189,23 @@
                 gap: 4px;
                 padding: 6px 12px;
                 background: transparent;
-                border: 1px solid #d1d5db;
+                border: 1px solid #475569;
                 border-radius: 6px;
                 font-size: 0.875rem;
-                color: #6b7280;
+                color: #94a3b8;
                 cursor: pointer;
                 transition: all 0.2s;
 
                 &:hover {
-                    background: #fef3c7;
-                    border-color: #fbbf24;
-                    color: #d97706;
+                    background: #422006;
+                    border-color: #f59e0b;
+                    color: #fbbf24;
                 }
 
                 &.active {
-                    background: #fef3c7;
-                    border-color: #fbbf24;
-                    color: #d97706;
+                    background: #422006;
+                    border-color: #f59e0b;
+                    color: #fbbf24;
                 }
             }
 
@@ -212,16 +214,16 @@
                 align-items: center;
                 padding: 6px 12px;
                 background: transparent;
-                border: 1px solid #d1d5db;
+                border: 1px solid #475569;
                 border-radius: 6px;
-                color: #6b7280;
+                color: #94a3b8;
                 cursor: pointer;
                 transition: all 0.2s;
 
                 &:hover {
-                    background: #fee2e2;
-                    border-color: #f87171;
-                    color: #dc2626;
+                    background: #450a0a;
+                    border-color: #ef4444;
+                    color: #f87171;
                 }
             }
         }

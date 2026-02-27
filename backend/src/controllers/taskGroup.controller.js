@@ -9,11 +9,12 @@ import pick from '../utils/pick.js';
 
 // Create a generic group
 const createGroup = asyncHandler(async (req, res) => {
-    const { name, notes, visibility } = req.body;
+    const { name, notes, visibility, userIds } = req.body;
 
     const group = await TaskGroup.create({
         name,
         notes: notes || '',
+        userIds: Array.isArray(userIds) ? userIds : [],
         visibility: visibility || 'COMPANY',
         createdBy: req.user.id,
     });
@@ -28,10 +29,7 @@ const deleteGroup = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
     }
 
-    // Check permissions (Admin or Creator)
-    if (req.user.role !== 'admin' && group.createdBy.toString() !== req.user.id) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'You do not have permission to delete this group');
-    }
+    // Check permissions removed - all users can delete groups
 
     await TaskGroup.deleteOne({ _id: group._id });
     // Note: We might want to handle child tasks here, but user says "Closing a group does not automatically close all children"
@@ -45,25 +43,9 @@ const deleteGroup = asyncHandler(async (req, res) => {
 const getGroups = asyncHandler(async (req, res) => {
     const filter = pick(req.query, ['visibility']);
 
-    // RBAC Visibility Logic
-    if (req.user.role === 'admin') {
-        // Admin sees all
-    } else if (req.user.role === 'manager') {
-        // Manager sees COMPANY, TEAM groups and THEIR OWN private groups
-        filter.$or = [
-            { visibility: 'COMPANY' },
-            { visibility: 'TEAM' },
-            { createdBy: req.user.id }
-        ];
-    } else {
-        // Staff sees COMPANY and THEIR OWN groups
-        filter.$or = [
-            { visibility: 'COMPANY' },
-            { createdBy: req.user.id }
-        ];
-    }
+    // No RBAC visibility logic - all users see all task groups
 
-    let groups = await TaskGroup.find(filter).sort({ createdAt: -1 });
+    let groups = await TaskGroup.find(filter).populate('userIds', 'name email').sort({ createdAt: -1 });
 
     // Ensure "General" group exists for this user if they are listing groups
     const hasGeneral = groups.some(g => g.name === 'General' && g.createdBy.toString() === req.user.id);
@@ -82,7 +64,7 @@ const getGroups = asyncHandler(async (req, res) => {
 
 // Get Single Group with child tasks
 const getGroup = asyncHandler(async (req, res) => {
-    const group = await TaskGroup.findById(req.params.groupId);
+    const group = await TaskGroup.findById(req.params.groupId).populate('userIds', 'name email');
     if (!group) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
     }

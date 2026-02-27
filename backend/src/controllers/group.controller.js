@@ -45,25 +45,13 @@ const createGroup = asyncHandler(async (req, res) => {
 });
 
 const getGroups = asyncHandler(async (req, res) => {
-    // Admin sees all, User sees belonging
+    // Admin sees all, User sees belonging (Changed to all users see all)
     const filter = pick(req.query, ['name', 'role']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
 
-    let result;
-
-    if (req.user.role === 'admin') {
-        // Admin: fetch all groups matching filter
-        // Simple pagination assuming internal helper or mongoose-paginate 
-        // If no pagination plugin, I'll do basic find
-        const groups = await Group.find(filter); // Todo: add pagination if needed
-        res.send(groups);
-    } else {
-        // Normal user: fetch groups where they are a member
-        const memberships = await GroupMember.find({ user: req.user.id }).select('group');
-        const groupIds = memberships.map(m => m.group);
-        const groups = await Group.find({ _id: { $in: groupIds }, ...filter });
-        res.send(groups);
-    }
+    // Fetch all groups matching filter for everyone
+    const groups = await Group.find(filter); // Todo: add pagination if needed
+    res.send(groups);
 });
 
 const getGroup = asyncHandler(async (req, res) => {
@@ -72,13 +60,7 @@ const getGroup = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
     }
 
-    // Check access
-    if (req.user.role !== 'admin') {
-        const isMember = await GroupMember.findOne({ group: group._id, user: req.user.id });
-        if (!isMember) {
-            throw new ApiError(httpStatus.FORBIDDEN, 'Forbidden');
-        }
-    }
+    // Access check removed - all users can view group details
 
     // Get members
     const members = await GroupMember.find({ group: group._id }).populate('user', 'name email role');
@@ -146,15 +128,9 @@ const removeMember = asyncHandler(async (req, res) => {
 
 const getAssignableGroups = asyncHandler(async (req, res) => {
     const query = { isActive: true };
-    let groups = [];
 
-    if (req.user.role === 'admin') {
-        groups = await Group.find(query).select('name isActive').sort({ name: 1 });
-    } else {
-        const memberships = await GroupMember.find({ user: req.user.id }).select('group');
-        const groupIds = memberships.map(m => m.group);
-        groups = await Group.find({ _id: { $in: groupIds }, ...query }).select('name isActive').sort({ name: 1 });
-    }
+    // Return all active groups for all users
+    const groups = await Group.find(query).select('name isActive').sort({ name: 1 });
 
     if (process.env.NODE_ENV === 'development') {
         console.log(`[getAssignableGroups] User ${req.user.id} fetched ${groups.length} active groups.`);

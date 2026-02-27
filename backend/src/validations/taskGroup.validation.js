@@ -5,6 +5,7 @@ const createGroup = {
         name: Joi.string().required().trim(),
         notes: Joi.string().allow('').trim(),
         visibility: Joi.string().valid('PRIVATE', 'TEAM', 'COMPANY').default('COMPANY'),
+        userIds: Joi.array().items(Joi.string()).optional(),
     })
 };
 
@@ -32,6 +33,7 @@ const updateGroup = {
         name: Joi.string().trim(),
         notes: Joi.string().allow('').trim(),
         visibility: Joi.string().valid('PRIVATE', 'TEAM', 'COMPANY'),
+        userIds: Joi.array().items(Joi.string()).optional(),
     }).min(1)
 };
 
