@@ -54,10 +54,15 @@ export const getTaskGroup = async (id) => {
 
 export const createTaskGroup = async (data) => {
   const response = await api.post("/task-groups", data);
-  return response.data.data;
+  return response.data;
+};
+
+export const updateTaskGroup = async (id, data) => {
+  const response = await api.patch(`/task-groups/${id}`, data);
+  return response.data;
 };
 
 export const deleteTaskGroup = async (id) => {
   const response = await api.delete(`/task-groups/${id}`);
-  return response.data.data;
+  return response.data;
 };

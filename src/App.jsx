@@ -24,6 +24,7 @@ import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
 import ManageTasksPage from '@/features/tasks/components/ManageTasksPage';
+import { TaskGroupList } from '@/features/tasks/components/TaskGroupList';
 import ItemListPage from '@/features/inventory/ItemListPage';
 import ItemFormPage from '@/features/inventory/ItemFormPage';
 import ItemTypePage from '@/features/inventory/ItemTypePage';
@@ -208,6 +209,14 @@ function App() {
 
                                                         <Route path="/tasks/create" element={<TaskCreatePage />} />
                                                         <Route path="/tasks/list" element={<ManageTasksPage />} />
+                                                        <Route
+                                                            path="/tasks/groups"
+                                                            element={
+                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <TaskGroupList />
+                                                                </ProtectedRoute>
+                                                            }
+                                                        />
 
                                                         {/* Groups */}
                                                         <Route

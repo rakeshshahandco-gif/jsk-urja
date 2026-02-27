@@ -203,7 +203,7 @@ const ManageTasksPage = () => {
             </div>
 
             {/* ── TABLE ── */}
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, flex: 1 }}>
                 <ManageTasksTable
                     tasks={tasks}
                     loading={loading}

@@ -11,10 +11,17 @@ import pick from '../utils/pick.js';
 const createGroup = asyncHandler(async (req, res) => {
     const { name, notes, visibility, userIds } = req.body;
 
+    let finalUserIds = Array.isArray(userIds) ? [...userIds] : [];
+
+    // Automatically add the creator to the group members so they can see tasks assigned to it
+    if (!finalUserIds.includes(req.user.id)) {
+        finalUserIds.push(req.user.id);
+    }
+
     const group = await TaskGroup.create({
         name,
         notes: notes || '',
-        userIds: Array.isArray(userIds) ? userIds : [],
+        userIds: finalUserIds,
         visibility: visibility || 'COMPANY',
         createdBy: req.user.id,
     });
@@ -78,9 +85,33 @@ const getGroup = asyncHandler(async (req, res) => {
     res.send(new ApiResponse(httpStatus.OK, { group, tasks, progress: { total, closed } }, 'Group details fetched successfully'));
 });
 
+// Update a group
+const updateGroup = asyncHandler(async (req, res) => {
+    const group = await TaskGroup.findById(req.params.groupId);
+    if (!group) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
+    }
+
+    if (req.body.userIds) {
+        let finalUserIds = Array.isArray(req.body.userIds) ? [...req.body.userIds] : [];
+        // Make sure creator is not explicitly removed if we still want them to be a part of it, or allow them to remove themselves?
+        // Usually better to keep the creator in the group.
+        if (group.createdBy && !finalUserIds.includes(group.createdBy.toString())) {
+            finalUserIds.push(group.createdBy.toString());
+        }
+        req.body.userIds = finalUserIds;
+    }
+
+    Object.assign(group, req.body);
+    await group.save();
+
+    res.send(new ApiResponse(httpStatus.OK, group, 'Group updated successfully'));
+});
+
 export default {
     createGroup,
     getGroups,
     getGroup,
+    updateGroup,
     deleteGroup,
 };

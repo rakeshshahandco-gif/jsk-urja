@@ -37,13 +37,7 @@ export const menuConfig = [
             },
         ],
     },
-    {
-        id: 'groups',
-        title: 'Groups & Projects',
-        icon: 'GroupWorkIcon',
-        path: PATHS.GROUPS.ROOT,
-        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-    },
+
     {
         id: 'tasks',
         title: 'Task Management',
@@ -60,6 +54,12 @@ export const menuConfig = [
                 id: 'task-list',
                 title: 'Manage Tasks',
                 path: '/tasks/list',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'task-groups',
+                title: 'Task Groups',
+                path: PATHS.TASKS.GROUPS,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
             },
         ],

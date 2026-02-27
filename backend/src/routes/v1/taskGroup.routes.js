@@ -16,6 +16,7 @@ router
 router
     .route('/:groupId')
     .get(validate(taskGroupValidation.getGroup), taskGroupController.getGroup)
+    .patch(validate(taskGroupValidation.updateGroup), taskGroupController.updateGroup)
     .delete(taskGroupController.deleteGroup);
 
 export default router;

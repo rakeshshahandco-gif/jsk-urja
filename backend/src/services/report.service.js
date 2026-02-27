@@ -1249,10 +1249,11 @@ const queryManageTasks = async (filters, options) => {
     if (filters.user) {
         const role = filters.user.role;
         if (role !== 'admin') {
-            // STRICT Root Filter Layer: Users can ONLY see tasks they are directly assigned to or assigned to ALL
+            // STRICT Root Filter Layer: Users can ONLY see tasks they are directly assigned to, have created, or assigned to ALL
             andConditions.push({
                 $or: [
                     { assigneeIds: filters.user.id },
+                    { createdBy: filters.user.id },
                     { assignToAll: true }
                 ]
             });
@@ -1347,6 +1348,7 @@ const queryTaskReminderReport = async (filters, options) => {
             andConditions.push({
                 $or: [
                     { assigneeIds: filters.user.id },
+                    { createdBy: filters.user.id },
                     { assignToAll: true }
                 ]
             });

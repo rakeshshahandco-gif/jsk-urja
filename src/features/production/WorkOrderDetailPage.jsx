@@ -380,14 +380,14 @@ function ProcessExecutionTab({ wo, load }) {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(wo.stages || []).map(stage => (
-                    <StageCard key={stage.seq} stage={stage} woId={wo._id} canEdit={canEdit} load={load} />
+                    <StageCard key={stage.seq} stage={stage} woId={wo._id} targetQty={wo.targetQty} canEdit={canEdit} load={load} />
                 ))}
             </div>
         </div>
     );
 }
 
-function StageCard({ stage, woId, canEdit, load }) {
+function StageCard({ stage, woId, targetQty, canEdit, load }) {
     const sc = STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const [open, setOpen] = useState(false);
 
@@ -397,6 +397,8 @@ function StageCard({ stage, woId, canEdit, load }) {
         operator: stage.operator || '',
         line: stage.line || '',
         remarks: stage.remarks || '',
+        startTime: stage.startTime ? new Date(stage.startTime).toISOString().slice(0, 16) : '',
+        endTime: stage.endTime ? new Date(stage.endTime).toISOString().slice(0, 16) : '',
     });
 
     // Backward compatibility & Logs init
@@ -440,6 +442,10 @@ function StageCard({ stage, woId, canEdit, load }) {
     const totalRework = productionLogs.reduce((acc, l) => acc + (Number(l.reworkQty) || 0), 0);
     const totalRejection = productionLogs.reduce((acc, l) => acc + (Number(l.rejectionQty) || 0), 0);
 
+    // New Production Math
+    const pendingToStart = Math.max(0, targetQty - totalInput);
+    const balanceInProcess = Math.max(0, totalInput - totalOutput - totalRework - totalRejection);
+
     const save = async () => {
         if (!canEdit) return;
         setSaving(true);
@@ -455,8 +461,8 @@ function StageCard({ stage, woId, canEdit, load }) {
     const handleAddLog = () => {
         setProductionLogs([...productionLogs, {
             ...newLog,
-            startTime: newLog.startTime || null,
-            endTime: newLog.endTime || null,
+            startTime: newLog.startTime || new Date().toISOString(),
+            endTime: newLog.endTime || new Date().toISOString(),
         }]);
         setShowNewLog(false);
         setNewLog({
@@ -499,12 +505,20 @@ function StageCard({ stage, woId, canEdit, load }) {
                 <div style={{ borderTop: '1px solid #334155', padding: '20px', background: '#0f172a' }}>
 
                     {/* Stage Level Info */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
                         <div>
                             <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Overall Status</label>
                             <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
                                 {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
                             </select>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Start Date/Time</label>
+                            <input type="datetime-local" value={form.startTime} onChange={e => set('startTime', e.target.value)} style={inp} disabled={!canEdit} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>End Date/Time</label>
+                            <input type="datetime-local" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inp} disabled={!canEdit} />
                         </div>
                         <div>
                             <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Current Operator</label>
@@ -523,9 +537,15 @@ function StageCard({ stage, woId, canEdit, load }) {
 
                     {/* Aggregate Totals (Read Only) */}
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalInput}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Target Qty</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{targetQty}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#10b981' }}>{totalOutput}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Pending to Start</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fcd34d' }}>{pendingToStart}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Balance in Process</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{balanceInProcess}</div></div>
+                        <div style={{ width: '1px', background: '#334155' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalOutput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rework</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#a78bfa' }}>{totalRework}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>

@@ -22,6 +22,9 @@ export const PATHS = {
         ROOT: '/groups',
         DETAILS: (id) => `/groups/${id}`,
     },
+    TASKS: {
+        GROUPS: '/tasks/groups',
+    },
     INVENTORY: {
         ITEMS: '/inventory/items',
         NEW_ITEM: '/inventory/items/new',

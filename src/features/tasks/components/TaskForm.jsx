@@ -130,10 +130,12 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             const payload = {
                 ...data,
                 dueDate: new Date(data.dueDate).toISOString(),
-                assignedGroupId: data.assignmentMode === 'GROUP' ? data.assignedGroupId : null,
+                assignmentMode: hasFixedUsers ? 'GROUP' : data.assignmentMode,
+                assignedGroupId: hasFixedUsers ? data.groupId : (data.assignmentMode === 'GROUP' ? data.assignedGroupId : null),
                 groupId: data.groupId || null,
                 taskCategoryId: data.taskCategoryId || null,
-                assigneeIds: (data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : [],
+                // If the group has fixed users, explicitly send those user IDs to the backend to guarantee assignment
+                assigneeIds: hasFixedUsers ? selectedGroup.userIds.map(u => u._id || u.id || u) : ((data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : []),
                 recurrence: data.recurrence.enabled ? {
                     ...data.recurrence,
                     recurrenceEndDate: data.recurrence.recurrenceEndType === 'DATE' ? new Date(data.recurrence.recurrenceEndDate).toISOString() : null,

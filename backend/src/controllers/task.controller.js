@@ -68,8 +68,12 @@ const createTask = asyncHandler(async (req, res) => {
 
   // Check if group has fixed users
   let groupFixedUsers = [];
-  if (taskData.groupId) {
-    const group = await TaskGroup.findById(taskData.groupId);
+
+  // Check main groupId AND assignedGroupId for users
+  const targetGroupIdStr = assignedGroupId || groupId;
+
+  if (targetGroupIdStr) {
+    const group = await TaskGroup.findById(targetGroupIdStr);
     if (group && group.userIds && group.userIds.length > 0) {
       groupFixedUsers = group.userIds;
     }
@@ -165,7 +169,7 @@ const getTasks = asyncHandler(async (req, res) => {
   }
 
   // Strict User-wise Visibility Rule (Option 2)
-  // A task must be visible ONLY to: Assigned users, Groups user belongs to, All Users, or Admin
+  // A task must be visible ONLY to: Assigned users, All Users, Creators, or Admin
   if (req.user.role === 'admin') {
     // Admin sees everything if they select 'all', or specifically filters
     if (query.assigneeType === 'created_by_me') {
@@ -179,11 +183,12 @@ const getTasks = asyncHandler(async (req, res) => {
       });
     }
   } else {
-    // strict Option 2 rule for non-admin (Creator has NO special visibility, NO group bypass)
-    // ROOT Filter Layer - cannot be bypassed
+    // strict Option 2 rule for non-admin
+    // Users can see tasks assigned to them, created by them, or assigned to everyone.
     andConditions.push({
       $or: [
         { assigneeIds: req.user.id }, // Assigned to me
+        { createdBy: req.user.id },   // Created by me
         { assignToAll: true }         // Assigned to everyone
       ]
     });
@@ -239,9 +244,13 @@ const updateTask = asyncHandler(async (req, res) => {
   }
 
   let targetGroupId = up.groupId || task.groupId;
+  let targetAssignedGroupId = up.assignedGroupId || task.assignedGroupId;
+
+  const targetGroupIdStr = targetAssignedGroupId || targetGroupId;
+
   let groupFixedUsers = [];
-  if (targetGroupId) {
-    const group = await TaskGroup.findById(targetGroupId);
+  if (targetGroupIdStr) {
+    const group = await TaskGroup.findById(targetGroupIdStr);
     if (group && group.userIds && group.userIds.length > 0) {
       groupFixedUsers = group.userIds;
     }
@@ -267,7 +276,7 @@ const updateTask = asyncHandler(async (req, res) => {
       }
     } else if (up.assignmentMode === 'GROUP') {
       up.assignToAll = false;
-      if (!up.assignedGroupId) {
+      if (!up.assignedGroupId && !task.assignedGroupId) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Group is required for Group assignment mode');
       }
     }

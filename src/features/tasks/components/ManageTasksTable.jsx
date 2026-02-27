@@ -66,7 +66,7 @@ const Menu = ({ task, onEdit, onDelete, onViewDetails }) => {
                 <MoreHorizontal size={13} />
             </button>
             {open && (
-                <div style={{ position: 'absolute', right: 0, top: 28, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 60, minWidth: 130, overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', right: 0, top: 28, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 9999, minWidth: 130 }}>
                     {btn(() => onViewDetails(task), <Eye size={12} />, 'View')}
                     {btn(() => onEdit(task), <Pencil size={12} />, 'Edit')}
                     <div style={{ borderTop: '1px solid #334155', margin: '2px 0' }} />
@@ -109,7 +109,7 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
     const td = { padding: '4px 10px', fontSize: 11, color: '#f1f5f9', verticalAlign: 'middle', borderBottom: '1px solid #334155' };
 
     return (
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ paddingBottom: '80px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
                     <col style={{ width: 30 }} />     {/* # */}
@@ -119,7 +119,7 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
                     <col style={{ width: '10%' }} />  {/* Assignee */}
                     <col style={{ width: '8%' }} />   {/* Priority */}
                     <col style={{ width: '9%' }} />   {/* Status */}
-                    <col style={{ width: 84 }} />     {/* Actions */}
+                    <col style={{ width: 100 }} />     {/* Actions */}
                 </colgroup>
                 <thead>
                     <tr>
