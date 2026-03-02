@@ -62,7 +62,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     };
 
     const onSubmit = async (data) => {
-        const { confirmPassword, _id, createdAt, updatedAt, __v, lastLogin, ...userData } = data;
+        const { confirmPassword, _id, createdAt, updatedAt, __v, lastLogin, preferences, ...userData } = data;
         userData.permissions = selectedPermissions;
 
         // Validation

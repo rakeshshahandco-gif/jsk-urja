@@ -10,6 +10,7 @@ const createUser = {
         role: Joi.string().valid('admin', 'manager', 'staff', 'viewer').default('viewer'),
         permissions: Joi.array().items(Joi.string()).optional(),
         isActive: Joi.boolean().optional().default(true),
+        preferences: Joi.any(),
     }),
 };
 
@@ -43,6 +44,7 @@ const updateUser = {
             role: Joi.string().valid('admin', 'manager', 'staff', 'viewer'),
             permissions: Joi.array().items(Joi.string()),
             isActive: Joi.boolean(),
+            preferences: Joi.any(),
         })
         .min(1),
 };

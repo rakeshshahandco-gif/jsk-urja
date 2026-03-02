@@ -568,8 +568,8 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Start</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>End</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Operator</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>In</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Out</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Started</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Completed</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rw</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rej</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}></th>
@@ -605,8 +605,8 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>End Time</label><input type="datetime-local" value={newLog.endTime} onChange={e => setLog('endTime', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
                                     <div style={{ gridColumn: 'span 2' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
 
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Input Qty</label><input type="number" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Output Qty</label><input type="number" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Qty Started</label><input type="number" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Qty Completed</label><input type="number" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rework Qty</label><input type="number" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Qty</label><input type="number" value={newLog.rejectionQty} onChange={e => setLog('rejectionQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
                                 </div>
