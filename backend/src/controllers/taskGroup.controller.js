@@ -55,16 +55,8 @@ const getGroups = asyncHandler(async (req, res) => {
     let groups = await TaskGroup.find(filter).populate('userIds', 'name email').sort({ createdAt: -1 });
 
     // Ensure "General" group exists for this user if they are listing groups
-    const hasGeneral = groups.some(g => g.name === 'General' && g.createdBy.toString() === req.user.id);
-    if (!hasGeneral) {
-        const generalGroup = await TaskGroup.create({
-            name: 'General',
-            notes: 'Default group for your tasks',
-            visibility: 'PRIVATE',
-            createdBy: req.user.id
-        });
-        groups.unshift(generalGroup);
-    }
+    // Removed per user request
+
 
     res.send(new ApiResponse(httpStatus.OK, groups, 'Groups fetched successfully'));
 });
