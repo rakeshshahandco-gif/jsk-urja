@@ -25,4 +25,8 @@ router.patch('/:id/refresh-stock', woController.refreshMaterialStock);
 router.patch('/:id/stages/:seq', woController.updateStage);
 router.patch('/:id/material-status', woController.updateMaterialStatus);
 
+// Production Logs
+router.post('/:id/stages/:seq/production-logs', woController.addProductionLog);
+router.delete('/:id/stages/:seq/production-logs/:logId', woController.deleteProductionLog);
+
 export default router;

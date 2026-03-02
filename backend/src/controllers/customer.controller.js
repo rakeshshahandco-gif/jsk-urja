@@ -33,6 +33,11 @@ const getCustomer = catchAsync(async (req, res) => {
     res.send(new ApiResponse(200, customer));
 });
 
+const getCustomerTypes = catchAsync(async (req, res) => {
+    const types = await customerService.getCustomerTypes();
+    res.send(new ApiResponse(200, types, 'Customer types fetched successfully'));
+});
+
 const getCustomerConversations = catchAsync(async (req, res) => {
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     const result = await conversationService.getConversationsByCustomer(req.params.id, options);
@@ -556,4 +561,5 @@ export default {
     deleteCustomer,
     downloadTemplate,
     importCustomers,
+    getCustomerTypes,
 };

@@ -45,14 +45,16 @@ const testDataSchema = new mongoose.Schema({
 // Production Log sub-document (for tracking multiple runs)
 // ─────────────────────────────────────────────
 const productionLogSchema = new mongoose.Schema({
-    startTime: { type: Date },
-    endTime: { type: Date },
+    date: { type: Date, required: true },
+    shift: { type: String, default: '' },
     operator: { type: String, default: '' },
     inputQty: { type: Number, default: 0 },
-    outputQty: { type: Number, default: 0 },
+    outputQty: { type: Number, default: 0 }, // Good Output
     reworkQty: { type: Number, default: 0 },
     rejectionQty: { type: Number, default: 0 },
     rejectionReason: { type: String, default: '' },
+    remarks: { type: String, default: '' },
+    recordedAt: { type: Date, default: Date.now }
 }, { _id: true });
 
 // ─────────────────────────────────────────────
@@ -173,7 +175,6 @@ const workOrderSchema = new mongoose.Schema({
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
-workOrderSchema.index({ woNumber: 1 });
 workOrderSchema.index({ status: 1 });
 workOrderSchema.index({ bomId: 1 });
 workOrderSchema.index({ createdAt: -1 });

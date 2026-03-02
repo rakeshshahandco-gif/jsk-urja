@@ -44,7 +44,7 @@ export const getCustomers = async (params = {}) => {
         // So return response.data.data.
     } catch (error) {
         console.error('Error fetching customers:', error);
-        throw error;
+        throw new Error(error.response?.data?.message || error.message);
     }
 };
 
@@ -55,6 +55,16 @@ export const getCustomer = async (id) => {
     } catch (error) {
         console.error('Error fetching customer:', error);
         throw error;
+    }
+};
+
+export const getCustomerTypes = async () => {
+    try {
+        const response = await apiClient.get('/customers/types');
+        return response.data.data;
+    } catch (error) {
+        console.error('Error fetching customer types:', error);
+        throw new Error(error.response?.data?.message || error.message);
     }
 };
 
@@ -74,7 +84,7 @@ export const updateCustomer = async (id, customerData) => {
         return response.data.data;
     } catch (error) {
         console.error('Error updating customer:', error);
-        throw error;
+        throw new Error(error.response?.data?.message || error.message);
     }
 };
 
@@ -149,6 +159,7 @@ export default {
     createCustomer,
     updateCustomer,
     deleteCustomer,
+    getCustomerTypes,
     getCustomerConversations,
     getConversationHistory,
     downloadCustomerTemplate,

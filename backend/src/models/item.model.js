@@ -113,7 +113,6 @@ const itemSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Index for fast lookups
-itemSchema.index({ itemCode: 1 });
 itemSchema.index({ itemCategory: 1, isActive: 1 });
 itemSchema.index({ itemName: 'text', itemCode: 'text' });
 

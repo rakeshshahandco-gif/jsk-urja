@@ -8,6 +8,7 @@ import { FollowUpForm } from '@/features/followup/components/FollowUpForm';
 import { ImportCustomerModal } from './ImportCustomerModal';
 import { getCustomers, getCustomer, deleteCustomer, updateCustomer } from '@/services/customerApi';
 import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export const CustomerList = () => {
     const { openModal, closeModal } = useModal();
@@ -91,7 +92,7 @@ export const CustomerList = () => {
             const freshCustomerData = await getCustomer(customer._id);
             console.log('✅ Fetched customer data:', freshCustomerData);
 
-            openModal(
+            const modalId = openModal(
                 CustomerForm,
                 {
                     title: 'Edit Customer',
@@ -113,20 +114,20 @@ export const CustomerList = () => {
                             const updatedCustomer = await updateCustomer(customer._id, data);
                             console.log('✅ Customer updated successfully:', updatedCustomer);
 
-                            closeModal();
+                            closeModal(modalId);
                             fetchCustomers(); // Refresh list
-                            alert('Customer updated successfully!');
+                            toast.success('Customer updated successfully!');
                         } catch (error) {
                             console.error('❌ Failed to update customer:', error);
-                            alert('Failed to update customer: ' + error.message);
+                            toast.error('Failed to update customer: ' + error.message);
                         }
                     },
-                    onCancel: closeModal,
+                    onCancel: () => closeModal(modalId),
                 }
             );
         } catch (error) {
             console.error('❌ Error loading customer for edit:', error);
-            alert('Failed to load customer details: ' + error.message);
+            toast.error('Failed to load customer details: ' + error.message);
         }
     };
 
@@ -135,10 +136,10 @@ export const CustomerList = () => {
             deleteCustomer(customer._id)
                 .then(() => {
                     fetchCustomers(); // Refresh list
-                    alert('Customer deleted successfully!');
+                    toast.success('Customer deleted successfully!');
                 })
                 .catch((error) => {
-                    alert('Failed to delete customer: ' + error.message);
+                    toast.error('Failed to delete customer: ' + error.message);
                 });
         }
     };

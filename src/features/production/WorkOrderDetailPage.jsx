@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    getWorkOrderById, releaseWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock
+    getWorkOrderById, releaseWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
+    addProductionLog, deleteProductionLog
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -402,33 +403,19 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
     });
 
     // Backward compatibility & Logs init
-    const [productionLogs, setProductionLogs] = useState(() => {
-        if (stage.productionLogs && stage.productionLogs.length > 0) return stage.productionLogs;
-        if (stage.inputQty || stage.outputQty || stage.reworkQty || stage.rejectionQty) {
-            return [{
-                startTime: stage.startTime || '',
-                endTime: stage.endTime || '',
-                operator: stage.operator || '',
-                inputQty: stage.inputQty || 0,
-                outputQty: stage.outputQty || 0,
-                reworkQty: stage.reworkQty || 0,
-                rejectionQty: stage.rejectionQty || 0,
-                rejectionReason: stage.rejectionReason || ''
-            }];
-        }
-        return [];
-    });
+    const productionLogs = stage.productionLogs || [];
 
     // New run log state
     const [newLog, setNewLog] = useState({
-        startTime: '',
-        endTime: '',
+        date: new Date().toISOString().split('T')[0],
+        shift: '',
         operator: '',
         inputQty: 0,
         outputQty: 0,
         reworkQty: 0,
         rejectionQty: 0,
         rejectionReason: '',
+        remarks: ''
     });
     const [showNewLog, setShowNewLog] = useState(false);
 
@@ -436,11 +423,11 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
     const setLog = (k, v) => setNewLog(l => ({ ...l, [k]: v }));
 
-    // Derived totals
-    const totalInput = productionLogs.reduce((acc, l) => acc + (Number(l.inputQty) || 0), 0);
-    const totalOutput = productionLogs.reduce((acc, l) => acc + (Number(l.outputQty) || 0), 0);
-    const totalRework = productionLogs.reduce((acc, l) => acc + (Number(l.reworkQty) || 0), 0);
-    const totalRejection = productionLogs.reduce((acc, l) => acc + (Number(l.rejectionQty) || 0), 0);
+    // Derived totals using stage fields which are auto-calculated by backend anyway, but we show what is there
+    const totalInput = stage.inputQty || 0;
+    const totalOutput = stage.outputQty || 0;
+    const totalRework = stage.reworkQty || 0;
+    const totalRejection = stage.rejectionQty || 0;
 
     // New Production Math
     const pendingToStart = Math.max(0, targetQty - totalInput);
@@ -450,7 +437,7 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
         if (!canEdit) return;
         setSaving(true);
         try {
-            await updateStage(woId, stage.seq, { ...form, productionLogs });
+            await updateStage(woId, stage.seq, form);
             toast.success(`${stage.stageName} updated`);
             setOpen(false);
             load();
@@ -458,17 +445,28 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
         finally { setSaving(false); }
     };
 
-    const handleAddLog = () => {
-        setProductionLogs([...productionLogs, {
-            ...newLog,
-            startTime: newLog.startTime || new Date().toISOString(),
-            endTime: newLog.endTime || new Date().toISOString(),
-        }]);
-        setShowNewLog(false);
-        setNewLog({
-            startTime: '', endTime: '', operator: '',
-            inputQty: 0, outputQty: 0, reworkQty: 0, rejectionQty: 0, rejectionReason: ''
-        });
+    const handleAddLog = async () => {
+        setSaving(true);
+        try {
+            const res = await addProductionLog(woId, stage.seq, newLog);
+            toast.success(res.message || 'Production logged!');
+            setShowNewLog(false);
+            setNewLog({
+                date: new Date().toISOString().split('T')[0], shift: '', operator: '',
+                inputQty: 0, outputQty: 0, reworkQty: 0, rejectionQty: 0, rejectionReason: '', remarks: ''
+            });
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleDeleteLog = async (logId) => {
+        if (!window.confirm('Delete this production log?')) return;
+        try {
+            await deleteProductionLog(woId, stage.seq, logId);
+            toast.success('Log deleted');
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
     };
 
     return (
@@ -539,13 +537,13 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Target Qty</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{targetQty}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Pending to Start</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fcd34d' }}>{pendingToStart}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Pending Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fca5a5' }}>{Math.max(0, targetQty - totalOutput)}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Balance in Process</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{balanceInProcess}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalOutput}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Good Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalOutput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rework</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#a78bfa' }}>{totalRework}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
@@ -565,29 +563,31 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '12px' }}>
                                 <thead>
                                     <tr style={{ background: '#1e293b', color: '#94a3b8', textAlign: 'left' }}>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Start</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>End</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Date</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Shift</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Operator</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Started</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Completed</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>In</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Out</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rw</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rej</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Remarks</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {productionLogs.map((l, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
-                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.startTime ? new Date(l.startTime).toLocaleString() : '—'}</td>
-                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.endTime ? new Date(l.endTime).toLocaleString() : '—'}</td>
+                                        <tr key={l._id || i} style={{ borderBottom: '1px solid #1e293b' }}>
+                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.date ? new Date(l.date).toLocaleDateString() : '—'}</td>
+                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.shift || '—'}</td>
                                             <td style={{ padding: '8px', color: '#94a3b8' }}>{l.operator || '—'}</td>
-                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.inputQty}</td>
-                                            <td style={{ padding: '8px', color: '#10b981' }}>{l.outputQty}</td>
+                                            <td style={{ padding: '8px', color: '#3b82f6', fontWeight: 600 }}>{l.inputQty}</td>
+                                            <td style={{ padding: '8px', color: '#10b981', fontWeight: 600 }}>{l.outputQty}</td>
                                             <td style={{ padding: '8px', color: '#a78bfa' }}>{l.reworkQty}</td>
                                             <td style={{ padding: '8px', color: '#ef4444' }}>{l.rejectionQty}</td>
+                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.remarks || l.rejectionReason}</td>
                                             <td style={{ padding: '8px', textAlign: 'right' }}>
-                                                {canEdit && (
-                                                    <button onClick={() => setProductionLogs(logs => logs.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                                                {canEdit && l._id && (
+                                                    <button onClick={() => handleDeleteLog(l._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                                                 )}
                                             </td>
                                         </tr>
@@ -600,24 +600,31 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                         {showNewLog && (
                             <div style={{ background: '#1e293b', border: '1px solid #3b82f6', borderRadius: '8px', padding: '16px' }}>
                                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#60a5fa', marginBottom: '12px' }}>New Run Details</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' }}>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Start Time</label><input type="datetime-local" value={newLog.startTime} onChange={e => setLog('startTime', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>End Time</label><input type="datetime-local" value={newLog.endTime} onChange={e => setLog('endTime', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div style={{ gridColumn: 'span 2' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
-
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Qty Started</label><input type="number" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Qty Completed</label><input type="number" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rework Qty</label><input type="number" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Qty</label><input type="number" value={newLog.rejectionQty} onChange={e => setLog('rejectionQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Date</label><input type="date" value={newLog.date} onChange={e => setLog('date', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Shift</label><input value={newLog.shift} onChange={e => setLog('shift', e.target.value)} placeholder="e.g. Morning" style={{ ...inp, padding: '6px' }} /></div>
+                                    <div style={{ gridColumn: 'span 3' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
                                 </div>
-                                <div style={{ marginBottom: '12px' }}>
-                                    <label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Reason (if any)</label>
-                                    <input value={newLog.rejectionReason} onChange={e => setLog('rejectionReason', e.target.value)} style={{ ...inp, padding: '6px' }} />
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px', background: '#0f172a', padding: '10px', borderRadius: '6px' }}>
+                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Input Qty</label><input type="number" min="0" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#10b981', fontWeight: 700 }}>Good Output Qty</label><input type="number" min="0" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px', border: '1px solid #10b981' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#a78bfa' }}>Rework Qty</label><input type="number" min="0" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                    <div><label style={{ fontSize: '10px', color: '#ef4444' }}>Rejection Qty</label><input type="number" min="0" value={newLog.rejectionQty} onChange={e => setLog('rejectionQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '10px', color: '#94a3b8' }}>Remarks</label>
+                                        <input value={newLog.remarks} onChange={e => setLog('remarks', e.target.value)} placeholder="General remarks..." style={{ ...inp, padding: '6px' }} />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Reason (if any)</label>
+                                        <input value={newLog.rejectionReason} onChange={e => setLog('rejectionReason', e.target.value)} style={{ ...inp, padding: '6px' }} />
+                                    </div>
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                    <button onClick={() => setShowNewLog(false)} style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
-                                    <button onClick={handleAddLog} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>Save Log temporarily</button>
+                                    <button onClick={() => setShowNewLog(false)} disabled={saving} style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
+                                    <button onClick={handleAddLog} disabled={saving} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Run Log'}</button>
                                 </div>
                             </div>
                         )}

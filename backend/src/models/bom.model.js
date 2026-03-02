@@ -112,7 +112,6 @@ const bomSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Pre-save hook to calculate costs (optional, or handle in controller/frontend)
-bomSchema.index({ bomNumber: 1 });
 bomSchema.index({ finishedProductId: 1 });
 
 const BOM = mongoose.model('BOM', bomSchema);

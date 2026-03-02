@@ -9,6 +9,7 @@ import {
     updateWorkOrderSchema,
     updateStageSchema,
     updateMaterialStatusSchema,
+    addProductionLogSchema,
 } from '../validations/workOrder.validation.js';
 
 // ── Auto-generate WO Number ──────────────────────────────────────────────────
@@ -245,6 +246,120 @@ export const updateStage = asyncHandler(async (req, res) => {
     wo.updatedBy = req.user._id;
     await wo.save();
     res.json(new ApiResponse(200, wo, `Stage "${stage.stageName}" updated`));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helper: Recalculate Stage Quantities and Status
+// ────────────────────────────────────────────────────────────────────────────
+const recalculateStageAndWo = (wo, stage) => {
+    // Recalculate Totals
+    stage.inputQty = stage.productionLogs.reduce((sum, log) => sum + (log.inputQty || 0), 0);
+    stage.outputQty = stage.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
+    stage.reworkQty = stage.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
+    stage.rejectionQty = stage.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
+
+    // Auto Status Logic based on Rules
+    if (stage.outputQty === 0) {
+        stage.status = 'Not Started';
+    } else if (stage.outputQty > 0 && stage.outputQty < wo.targetQty) {
+        stage.status = 'Running';
+    } else if (stage.outputQty >= wo.targetQty) {
+        stage.status = 'Completed';
+    }
+
+    // Assign Times
+    if (stage.status === 'Running' && !stage.startTime) stage.startTime = new Date();
+    if (stage.status === 'Completed') stage.endTime = new Date();
+
+    // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
+    if (stage.seq === 9 && stage.status === 'Completed') {
+        const mandatoryShortages = wo.materialStatus.filter(
+            m => m.isMandatory && m.shortQty > 0
+        );
+        if (mandatoryShortages.length > 0) {
+            stage.status = 'QC Hold';
+            wo.status = 'WIP – Waiting Material';
+            wo.wip.isOnHold = true;
+            wo.wip.holdReason = 'Mandatory material shortage – cannot complete FG';
+            wo.wip.missingMandatoryItems = mandatoryShortages.map(m => m.itemName);
+            return { blocked: true };
+        }
+    }
+
+    // Derive overall WO status
+    if (wo.status !== 'On Hold') {
+        wo.status = deriveWoStatus(wo.stages, wo.status);
+        if (wo.status === 'In Process' && !wo.actualStart) wo.actualStart = new Date();
+        if (wo.status === 'Completed') wo.actualEnd = new Date();
+    }
+    return { blocked: false };
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /work-orders/:id/stages/:seq/production-logs – Add Production Log
+// ────────────────────────────────────────────────────────────────────────────
+export const addProductionLog = asyncHandler(async (req, res) => {
+    const { error, value } = addProductionLogSchema.validate(req.body);
+    if (error) throw new ApiError(400, error.details[0].message);
+
+    const wo = await WorkOrder.findById(req.params.id);
+    if (!wo) throw new ApiError(404, 'Work Order not found');
+    if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
+        throw new ApiError(400, `WO in status "${wo.status}" cannot have production logged`);
+    }
+
+    const seq = Number(req.params.seq);
+    const stage = wo.stages.find(s => s.seq === seq);
+    if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+
+    // Validation: Total Good Output cannot exceed Target Qty
+    const expectedTotalOutput = stage.outputQty + value.outputQty;
+    if (expectedTotalOutput > wo.targetQty) {
+        throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending is ${wo.targetQty - stage.outputQty}.`);
+    }
+
+    // Add Log
+    stage.productionLogs.push(value);
+
+    // Recalculate
+    const { blocked } = recalculateStageAndWo(wo, stage);
+
+    wo.updatedBy = req.user._id;
+    await wo.save();
+
+    const responseMsg = blocked
+        ? 'Production logged, but Final QC blocked due to material shortage'
+        : `Production logged successfully for Stage "${stage.stageName}"`;
+
+    res.status(201).json(new ApiResponse(201, wo, responseMsg));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// DELETE /work-orders/:id/stages/:seq/production-logs/:logId – Delete Prod Log
+// ────────────────────────────────────────────────────────────────────────────
+export const deleteProductionLog = asyncHandler(async (req, res) => {
+    const wo = await WorkOrder.findById(req.params.id);
+    if (!wo) throw new ApiError(404, 'Work Order not found');
+    if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
+        throw new ApiError(400, `WO in status "${wo.status}" cannot be modified`);
+    }
+
+    const seq = Number(req.params.seq);
+    const stage = wo.stages.find(s => s.seq === seq);
+    if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+
+    const logIndex = stage.productionLogs.findIndex(l => l._id.toString() === req.params.logId);
+    if (logIndex === -1) throw new ApiError(404, 'Production Log not found');
+
+    stage.productionLogs.splice(logIndex, 1);
+
+    // Recalculate
+    recalculateStageAndWo(wo, stage);
+
+    wo.updatedBy = req.user._id;
+    await wo.save();
+
+    res.json(new ApiResponse(200, wo, 'Production Log deleted and quantities recalculated'));
 });
 
 // ────────────────────────────────────────────────────────────────────────────

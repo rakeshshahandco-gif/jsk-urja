@@ -39,6 +39,8 @@ router
 router.get('/template/download', customerController.downloadTemplate);
 router.post('/import', upload.single('file'), customerController.importCustomers);
 
+router.get('/types', customerController.getCustomerTypes);
+
 router
     .route('/:id')
     .get(validate(customerValidation.getCustomer), customerController.getCustomer)

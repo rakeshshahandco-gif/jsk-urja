@@ -18,7 +18,7 @@ export const errorHandler = (err, req, res, next) => {
 
     const response = {
         code: statusCode,
-        message,
+        message: err.message || message, // Forcing error message to frontend for debugging
         ...(config.env === 'development' && { stack: err.stack }),
     };
 

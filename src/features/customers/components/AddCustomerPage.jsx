@@ -4,13 +4,14 @@ import { CustomerForm } from './CustomerForm';
 import { Button } from '@/components/ui';
 import { createCustomer } from '@/services/customerApi';
 import styles from './AddCustomerPage.module.scss';
+import toast from 'react-hot-toast';
 
 export const AddCustomerPage = () => {
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleClose = () => {
-        navigate('/customers/list');
+        navigate(-1); // Go back to previous page
     };
 
     const handleSubmit = async (data) => {
@@ -23,10 +24,10 @@ export const AddCustomerPage = () => {
             }
 
             await createCustomer(data);
-            alert('Customer created successfully!');
-            navigate('/customers/list');
+            toast.success('Customer created successfully!');
+            navigate(-1); // Go back to keep user flow
         } catch (error) {
-            alert('Failed to create customer: ' + error.message);
+            toast.error('Failed to create customer: ' + error.message);
             console.error('Error creating customer:', error);
         } finally {
             setIsSubmitting(false);

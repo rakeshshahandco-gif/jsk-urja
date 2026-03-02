@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Plus, Trash2, Star } from 'lucide-react';
 import { INDIAN_STATES } from '@/utils/constants';
+import { getCustomerTypes } from '@/services/customerApi';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -15,6 +16,16 @@ import styles from './CustomerForm.module.scss';
  */
 export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = false }) => {
     const [isCustomType, setIsCustomType] = useState(false);
+    const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
+        { value: '', label: '-- Select Type --' },
+        { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
+        { value: 'led_light_showroom', label: 'LED Light Showroom' },
+        { value: 'home_automation_provider', label: 'Home Automation' },
+        { value: 'interior_designer', label: 'Interior Designer' },
+        { value: 'builders', label: 'Builders' },
+        { value: 'dealer', label: 'Dealer' },
+        { value: 'distributor', label: 'Distributor' }
+    ]);
     // Normalize customer data for form display
     const normalizeCustomerData = (customerData) => {
         console.log('🔄 Normalizing customer data:', customerData);
@@ -141,6 +152,33 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             setValue('gstType', 'IGST');
         }
     }, [stateValue, setValue]);
+
+    // Fetch dynamic customer types
+    useEffect(() => {
+        const fetchTypes = async () => {
+            try {
+                const types = await getCustomerTypes();
+                if (types && types.length > 0) {
+                    const defaultValues = ['led_light_manufacturer', 'led_light_showroom', 'home_automation_provider', 'interior_designer', 'builders', 'dealer', 'distributor'];
+                    const newTypes = types
+                        .filter(t => t && !defaultValues.includes(t)) // filter out empty and defaults
+                        .map(t => ({ value: t, label: t }));
+
+                    if (newTypes.length > 0) {
+                        setDynamicCustomerTypes(prev => {
+                            // avoid duplicates on hot reload or multiple renders
+                            const existingValues = new Set(prev.map(p => p.value));
+                            const uniqueNewTypes = newTypes.filter(nt => !existingValues.has(nt.value));
+                            return [...prev, ...uniqueNewTypes];
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load dynamic customer types:', error);
+            }
+        };
+        fetchTypes();
+    }, []);
 
     // Helper function to convert input to uppercase
     const handleUppercaseChange = (fieldName) => (e) => {
@@ -466,14 +504,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     className={styles['form-select']}
                                     style={{ flex: 1 }}
                                 >
-                                    <option value="">Select Type</option>
-                                    <option value="led_light_manufacturer">LED Light Manufacturer</option>
-                                    <option value="led_light_showroom">LED Light Show Room</option>
-                                    <option value="home_automation_provider">Home Automation Provider</option>
-                                    <option value="interior_designer">Interior Designer</option>
-                                    <option value="builders">Builders</option>
-                                    <option value="dealer">Dealer</option>
-                                    <option value="distributor">Distributor</option>
+                                    {dynamicCustomerTypes.map((type, index) => (
+                                        <option key={`${type.value}-${index}`} value={type.value}>{type.label}</option>
+                                    ))}
                                 </select>
                                 <Button type="button" variant="outline" onClick={() => { setIsCustomType(true); setValue('customerType', ''); }} title="Add Custom Type" style={{ padding: '0 12px' }}>
                                     <Plus size={18} />

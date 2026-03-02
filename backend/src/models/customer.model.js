@@ -65,7 +65,6 @@ const customerSchema = mongoose.Schema(
         },
         customerType: {
             type: String,
-            enum: ['led_light_manufacturer', 'led_light_showroom', 'home_automation_provider', 'interior_designer', 'builders', 'dealer', 'distributor', ''],
             default: '',
         },
         city: {

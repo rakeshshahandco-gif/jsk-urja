@@ -141,6 +141,14 @@ const bulkCreateCustomers = async (customers) => {
     return Customer.insertMany(customers, { ordered: false });
 };
 
+/**
+ * Get all unique customer types
+ * @returns {Promise<Array<string>>}
+ */
+const getCustomerTypes = async () => {
+    return Customer.distinct('customerType', { isDeleted: false, customerType: { $ne: '' } });
+};
+
 export default {
     createCustomer,
     queryCustomers,
@@ -149,4 +157,5 @@ export default {
     deleteCustomerById,
     findByMobiles,
     bulkCreateCustomers,
+    getCustomerTypes,
 };

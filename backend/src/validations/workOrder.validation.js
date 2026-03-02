@@ -79,9 +79,22 @@ const updateMaterialStatusSchema = Joi.object({
     eta: Joi.date().optional().allow(null, ''),
 });
 
+const addProductionLogSchema = Joi.object({
+    date: Joi.date().required(),
+    shift: Joi.string().optional().allow(''),
+    operator: Joi.string().optional().allow(''),
+    inputQty: Joi.number().min(0).required(),
+    outputQty: Joi.number().min(0).required(),
+    reworkQty: Joi.number().min(0).default(0),
+    rejectionQty: Joi.number().min(0).default(0),
+    rejectionReason: Joi.string().optional().allow(''),
+    remarks: Joi.string().optional().allow(''),
+});
+
 export {
     createWorkOrderSchema,
     updateWorkOrderSchema,
     updateStageSchema,
     updateMaterialStatusSchema,
+    addProductionLogSchema,
 };

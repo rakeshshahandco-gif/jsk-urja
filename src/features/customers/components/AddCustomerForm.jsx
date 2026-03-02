@@ -4,7 +4,7 @@ import { Button, Input, Select, MultiSelect, ContactPersonInput } from '@/compon
 import { INDIAN_STATES, STATE_GST_CODES, DEMAND_PRODUCTS, SALES_PERSONS } from '@/utils/constants';
 import { Maximize2, Minimize2, Plus } from 'lucide-react';
 import styles from './CustomerForm.module.scss';
-import { createCustomer } from '@/services/customerApi';
+import { createCustomer, getCustomerTypes } from '@/services/customerApi';
 import toast from 'react-hot-toast';
 
 // Mock DB for Company Names (In real app, this comes from API)
@@ -21,6 +21,16 @@ export const AddCustomerForm = ({ closeModal }) => {
     const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
+    const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
+        { value: '', label: '-- Select Type --' },
+        { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
+        { value: 'led_light_showroom', label: 'LED Light Showroom' },
+        { value: 'home_automation_provider', label: 'Home Automation' },
+        { value: 'interior_designer', label: 'Interior Designer' },
+        { value: 'builders', label: 'Builders' },
+        { value: 'dealer', label: 'Dealer' },
+        { value: 'distributor', label: 'Distributor' }
+    ]);
 
     // Watch company and state field values
     const [companyValue, stateValue] = useWatch({
@@ -85,6 +95,28 @@ export const AddCustomerForm = ({ closeModal }) => {
             document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
             document.removeEventListener('msfullscreenchange', handleFullscreenChange);
         };
+    }, []);
+
+    // Fetch dynamic customer types
+    useEffect(() => {
+        const fetchTypes = async () => {
+            try {
+                const types = await getCustomerTypes();
+                if (types && types.length > 0) {
+                    const defaultValues = ['led_light_manufacturer', 'led_light_showroom', 'home_automation_provider', 'interior_designer', 'builders', 'dealer', 'distributor'];
+                    const newTypes = types
+                        .filter(t => t && !defaultValues.includes(t)) // filter out empty and defaults
+                        .map(t => ({ value: t, label: t }));
+
+                    if (newTypes.length > 0) {
+                        setDynamicCustomerTypes(prev => [...prev, ...newTypes]);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load dynamic customer types:', error);
+            }
+        };
+        fetchTypes();
     }, []);
 
     // Check for similar companies when input changes
@@ -287,16 +319,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                                 <div style={{ flex: 1 }}>
                                     <Select
                                         label="Customer Type"
-                                        options={[
-                                            { value: '', label: '-- Select Type --' },
-                                            { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
-                                            { value: 'led_light_showroom', label: 'LED Light Showroom' },
-                                            { value: 'home_automation_provider', label: 'Home Automation' },
-                                            { value: 'interior_designer', label: 'Interior Designer' },
-                                            { value: 'builders', label: 'Builders' },
-                                            { value: 'dealer', label: 'Dealer' },
-                                            { value: 'distributor', label: 'Distributor' },
-                                        ]}
+                                        options={dynamicCustomerTypes}
                                         {...register('customerType')}
                                     />
                                 </div>

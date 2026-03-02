@@ -51,3 +51,14 @@ export const deleteWorkOrder = async (id) => {
     const response = await api.delete(`${BASE}/${id}`);
     return response.data;
 };
+
+// Production Logs API
+export const addProductionLog = async (id, seq, data) => {
+    const response = await api.post(`${BASE}/${id}/stages/${seq}/production-logs`, data);
+    return response.data; // Note returning full response.data to get the message
+};
+
+export const deleteProductionLog = async (id, seq, logId) => {
+    const response = await api.delete(`${BASE}/${id}/stages/${seq}/production-logs/${logId}`);
+    return response.data;
+};
