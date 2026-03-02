@@ -43,6 +43,13 @@ export const FollowupDashboard = () => {
         }
     }, [debouncedSearch]);
 
+    useEffect(() => {
+        fetchDashboardData();
+    }, [fetchDashboardData]);
+
+    useGlobalSync('customer', () => fetchDashboardData());
+    useGlobalSync('followup', () => fetchDashboardData());
+
     const handleOpenFollowup = (customerId) => {
         navigate(`/followup/${customerId}`);
     };

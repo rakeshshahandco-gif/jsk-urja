@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Button, Input, Select, MultiSelect, ContactPersonInput } from '@/components/ui';
 import { INDIAN_STATES, STATE_GST_CODES, DEMAND_PRODUCTS, SALES_PERSONS } from '@/utils/constants';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Plus } from 'lucide-react';
 import styles from './CustomerForm.module.scss';
 import { createCustomer } from '@/services/customerApi';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ const MOCK_DB_COMPANIES = [
 export const AddCustomerForm = ({ closeModal }) => {
     const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isCustomType, setIsCustomType] = useState(false);
 
     // Watch company and state field values
     const [companyValue, stateValue] = useWatch({
@@ -281,20 +282,45 @@ export const AddCustomerForm = ({ closeModal }) => {
                             disabled // Automatically selected
                         />
 
-                        <Select
-                            label="Customer Type"
-                            options={[
-                                { value: '', label: '-- Select Type --' },
-                                { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
-                                { value: 'led_light_showroom', label: 'LED Light Showroom' },
-                                { value: 'home_automation_provider', label: 'Home Automation' },
-                                { value: 'interior_designer', label: 'Interior Designer' },
-                                { value: 'builders', label: 'Builders' },
-                                { value: 'dealer', label: 'Dealer' },
-                                { value: 'distributor', label: 'Distributor' },
-                            ]}
-                            {...register('customerType')}
-                        />
+                        {!isCustomType ? (
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <Select
+                                        label="Customer Type"
+                                        options={[
+                                            { value: '', label: '-- Select Type --' },
+                                            { value: 'led_light_manufacturer', label: 'LED Light Manufacturer' },
+                                            { value: 'led_light_showroom', label: 'LED Light Showroom' },
+                                            { value: 'home_automation_provider', label: 'Home Automation' },
+                                            { value: 'interior_designer', label: 'Interior Designer' },
+                                            { value: 'builders', label: 'Builders' },
+                                            { value: 'dealer', label: 'Dealer' },
+                                            { value: 'distributor', label: 'Distributor' },
+                                        ]}
+                                        {...register('customerType')}
+                                    />
+                                </div>
+                                <Button type="button" variant="outline" onClick={() => { setIsCustomType(true); setValue('customerType', ''); }} title="Add Custom Type" style={{ height: '42px', padding: '0 12px' }}>
+                                    <Plus size={18} />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <Input
+                                        label="Customer Type (Custom)"
+                                        placeholder="Enter custom type"
+                                        {...register('customerType')}
+                                        onChange={(e) => {
+                                            e.target.value = e.target.value.toUpperCase();
+                                        }}
+                                    />
+                                </div>
+                                <Button type="button" variant="outline" onClick={() => { setIsCustomType(false); setValue('customerType', ''); }} title="Select from list" style={{ height: '42px', padding: '0 12px' }}>
+                                    List
+                                </Button>
+                            </div>
+                        )}
 
                         <Select
                             label="Status"

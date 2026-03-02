@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Plus, Trash2, Star } from 'lucide-react';
@@ -14,6 +14,7 @@ import styles from './CustomerForm.module.scss';
  * @param {boolean} props.isSubmitting - Loading state
  */
 export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = false }) => {
+    const [isCustomType, setIsCustomType] = useState(false);
     // Normalize customer data for form display
     const normalizeCustomerData = (customerData) => {
         console.log('🔄 Normalizing customer data:', customerData);
@@ -116,7 +117,14 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
     // Reset form when customer prop changes (to prevent cache)
     useEffect(() => {
-        reset(normalizeCustomerData(customer));
+        const normalized = normalizeCustomerData(customer);
+        reset(normalized);
+        const defaultTypes = ['', 'led_light_manufacturer', 'led_light_showroom', 'home_automation_provider', 'interior_designer', 'builders', 'dealer', 'distributor'];
+        if (normalized.customerType && !defaultTypes.includes(normalized.customerType)) {
+            setIsCustomType(true);
+        } else {
+            setIsCustomType(false);
+        }
     }, [customer, reset]);
 
     const stateValue = watch('state');
@@ -450,20 +458,41 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     {/* Customer Type */}
                     <div className={styles['form-group']}>
                         <label htmlFor="customerType">TYPE</label>
-                        <select
-                            id="customerType"
-                            {...register('customerType')}
-                            className={styles['form-select']}
-                        >
-                            <option value="">Select Type</option>
-                            <option value="led_light_manufacturer">LED Light Manufacturer</option>
-                            <option value="led_light_showroom">LED Light Show Room</option>
-                            <option value="home_automation_provider">Home Automation Provider</option>
-                            <option value="interior_designer">Interior Designer</option>
-                            <option value="builders">Builders</option>
-                            <option value="dealer">Dealer</option>
-                            <option value="distributor">Distributor</option>
-                        </select>
+                        {!isCustomType ? (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <select
+                                    id="customerType"
+                                    {...register('customerType')}
+                                    className={styles['form-select']}
+                                    style={{ flex: 1 }}
+                                >
+                                    <option value="">Select Type</option>
+                                    <option value="led_light_manufacturer">LED Light Manufacturer</option>
+                                    <option value="led_light_showroom">LED Light Show Room</option>
+                                    <option value="home_automation_provider">Home Automation Provider</option>
+                                    <option value="interior_designer">Interior Designer</option>
+                                    <option value="builders">Builders</option>
+                                    <option value="dealer">Dealer</option>
+                                    <option value="distributor">Distributor</option>
+                                </select>
+                                <Button type="button" variant="outline" onClick={() => { setIsCustomType(true); setValue('customerType', ''); }} title="Add Custom Type" style={{ padding: '0 12px' }}>
+                                    <Plus size={18} />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <Input
+                                    id="customerType"
+                                    {...register('customerType')}
+                                    placeholder="Enter custom type"
+                                    style={{ flex: 1 }}
+                                    onChange={handleUppercaseChange('customerType')}
+                                />
+                                <Button type="button" variant="outline" onClick={() => { setIsCustomType(false); setValue('customerType', ''); }} title="Select from list" style={{ padding: '0 12px' }}>
+                                    List
+                                </Button>
+                            </div>
+                        )}
                     </div>
 
                     {/* GST Details */}
