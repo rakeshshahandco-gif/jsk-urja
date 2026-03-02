@@ -9,6 +9,7 @@ import { Button } from '@/components/ui';
 import { getReminders, closeReminder, extendReminder, getReminderCounts } from '@/services/reminderApi';
 import styles from './RemindersDashboard.module.scss';
 import { useToast } from '@/components/ui/Toast';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 
 export const RemindersDashboard = () => {
     const navigate = useNavigate();
@@ -66,6 +67,18 @@ export const RemindersDashboard = () => {
         fetchCounts();
         fetchReminders();
     }, [fetchCounts, fetchReminders]);
+
+    useGlobalSync('followup', (payload) => {
+        if (payload.action === 'create') {
+            setReminders(prev => [payload.data, ...prev]);
+            fetchCounts();
+        } else if (payload.action === 'update') {
+            setReminders(prev => prev.map(r => r._id === payload.recordId ? { ...r, ...payload.data } : r));
+        } else if (payload.action === 'delete') {
+            setReminders(prev => prev.filter(r => r._id !== payload.recordId));
+            fetchCounts();
+        }
+    });
 
     const handleCloseTask = async (id) => {
         if (!window.confirm('Are you sure you want to close this task?')) return;

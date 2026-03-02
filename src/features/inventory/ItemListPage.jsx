@@ -4,6 +4,7 @@ import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Pac
 import { getItems, deleteItem } from '@/services/itemApi';
 import { getItemTypes } from '@/services/itemTypeApi';
 import { useToast } from '@/components/ui/Toast';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 
 const CATEGORIES = [
     { value: '', label: 'All Categories' },
@@ -78,6 +79,12 @@ const ItemListPage = () => {
     }, [page, search, catFilter, typeFilter, activeFilter]);
 
     useEffect(() => { load(); }, [load]);
+
+    useGlobalSync('item', (payload) => {
+        if (payload.action === 'create') setItems(prev => [payload.data, ...prev].slice(0, limit));
+        else if (payload.action === 'update') setItems(prev => prev.map(i => i._id === payload.recordId ? { ...i, ...payload.data } : i));
+        else if (payload.action === 'delete') setItems(prev => prev.filter(i => i._id !== payload.recordId));
+    });
 
     useEffect(() => {
         getItemTypes().then(data => {

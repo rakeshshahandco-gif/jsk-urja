@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui';
 import { getCustomers } from '@/services/customerApi';
@@ -134,7 +134,7 @@ export const FollowupDashboard = () => {
             )}
 
             {/* Loading */}
-            {loading && !error && (
+            {loading && !error && customers.length === 0 && (
                 <div style={{
                     background: '#fff',
                     padding: '40px',
@@ -147,7 +147,7 @@ export const FollowupDashboard = () => {
             )}
 
             {/* Customer Table */}
-            {!loading && !error && (
+            {!error && (
                 <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                     {filteredCustomers.length === 0 ? (
                         <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
@@ -235,7 +235,7 @@ export const FollowupDashboard = () => {
                     )}
 
                     {/* Results count */}
-                    {!loading && filteredCustomers.length > 0 && (
+                    {filteredCustomers.length > 0 && (
                         <div style={{
                             padding: '16px',
                             background: '#f9fafb',

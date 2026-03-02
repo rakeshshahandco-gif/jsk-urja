@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, useModal } from '@/components/ui';
 import { CustomerForm } from './CustomerForm';
@@ -59,7 +59,17 @@ export const CustomerList = () => {
         fetchCustomers();
     }, [currentPage, searchTerm, statusFilter]);
 
-    useAutoRefresh(fetchCustomers);
+    useGlobalSync('customer', (payload) => {
+        if (payload.action === 'create') {
+            setCustomers(prev => [payload.data, ...prev].slice(0, limit));
+            setTotalResults(prev => prev + 1);
+        } else if (payload.action === 'update') {
+            setCustomers(prev => prev.map(c => c._id === payload.recordId ? { ...c, ...payload.data } : c));
+        } else if (payload.action === 'delete') {
+            setCustomers(prev => prev.filter(c => c._id !== payload.recordId));
+            setTotalResults(prev => Math.max(0, prev - 1));
+        }
+    });
 
     const handleAddCustomer = () => {
         navigate('/customers/add');

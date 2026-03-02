@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { getGroups, createGroup, deleteGroup } from '@/services/groupApi'; // Absolute import
 import { Button, Input, useModal } from '@/components/ui'; // Assuming these exist
 import { useAuth } from '@/hooks/useAuth';
@@ -17,7 +17,12 @@ export const GroupList = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
-    useAutoRefresh(fetchGroups);
+
+    useGlobalSync('group', (payload) => {
+        if (payload.action === 'create') setGroups(prev => [...prev, payload.data]);
+        else if (payload.action === 'update') setGroups(prev => prev.map(g => g._id === payload.recordId ? { ...g, ...payload.data } : g));
+        else if (payload.action === 'delete') setGroups(prev => prev.filter(g => g._id !== payload.recordId));
+    });
 
     const fetchGroups = async () => {
         try {

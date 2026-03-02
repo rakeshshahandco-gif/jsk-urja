@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getWorkOrders, deleteWorkOrder, releaseWorkOrder } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
@@ -42,7 +42,12 @@ export default function WorkOrderListPage() {
     useEffect(() => {
         fetchWorkOrders();
     }, [search, statusFilter]);
-    useAutoRefresh(fetchWorkOrders);
+
+    useGlobalSync('workorder', (payload) => {
+        if (payload.action === 'create') setWos(prev => [payload.data, ...prev]);
+        else if (payload.action === 'update') setWos(prev => prev.map(w => w._id === payload.recordId ? { ...w, ...payload.data } : w));
+        else if (payload.action === 'delete') setWos(prev => prev.filter(w => w._id !== payload.recordId));
+    });
 
     const handleRelease = async (id) => {
         try {

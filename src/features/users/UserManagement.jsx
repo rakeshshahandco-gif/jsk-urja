@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { Button, useModal } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { AddUserForm } from './components/AddUserForm';
@@ -34,7 +34,12 @@ export const UserManagement = () => {
     useEffect(() => {
         fetchUsers();
     }, []);
-    useAutoRefresh(fetchUsers);
+
+    useGlobalSync('user', (payload) => {
+        if (payload.action === 'create') setUsers(prev => [...prev, payload.data]);
+        else if (payload.action === 'update') setUsers(prev => prev.map(u => u._id === payload.recordId ? { ...u, ...payload.data } : u));
+        else if (payload.action === 'delete') setUsers(prev => prev.filter(u => u._id !== payload.recordId));
+    });
 
     // Role hierarchy for sorting (lower number = higher priority)
     const roleOrder = {

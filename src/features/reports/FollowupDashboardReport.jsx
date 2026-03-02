@@ -3,6 +3,7 @@ import { Button, Input, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { Search, Filter, Phone, MessageSquare, Calendar, Download, AlertCircle, Loader2, User, Building, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { apiClient as api } from '@/lib/apiClient';
 import { getCustomers } from '@/services/customerApi';
 import { closeReminder } from '@/services/reminderApi';
@@ -58,8 +59,8 @@ const FollowupDashboardReport = () => {
     const [historySearch, setHistorySearch] = useState('');
 
     // Fetch List
-    const fetchTasks = async () => {
-        setLoadingTasks(true);
+    const fetchTasks = async (silent = false) => {
+        if (!silent) setLoadingTasks(true);
         try {
             const result = await getFollowupDashboardList(filters);
             setTasks(result.data || []);
@@ -102,6 +103,14 @@ const FollowupDashboardReport = () => {
         fetchDetail();
     }, [selectedCustomerId]);
 
+    useGlobalSync('followup', () => {
+        fetchTasks(true);
+        if (selectedCustomerId) {
+            getFollowupDashboardDetail(selectedCustomerId)
+                .then(setCustomerData)
+                .catch(err => console.error('Silent refresh failed', err));
+        }
+    });
 
     // Exports
     const handleExport = async (format) => {

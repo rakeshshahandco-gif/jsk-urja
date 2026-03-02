@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
@@ -96,7 +96,21 @@ const ManageTasksPage = () => {
     }, [activeTab, pagination.page, pagination.limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
-    useAutoRefresh(fetchTasks);
+
+    useGlobalSync('task', (payload) => {
+        if (payload.action === 'create') {
+            setTasks(prev => {
+                if (prev.find(t => t._id === payload.recordId)) return prev;
+                return [payload.data, ...prev].slice(0, pagination.limit);
+            });
+            setPagination(p => ({ ...p, total: p.total + 1 }));
+        } else if (payload.action === 'update') {
+            setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
+        } else if (payload.action === 'delete') {
+            setTasks(prev => prev.filter(t => t._id !== payload.recordId));
+            setPagination(p => ({ ...p, total: Math.max(0, p.total - 1) }));
+        }
+    });
 
     const resetFilters = () => {
         setSearchTerm(''); setPriorityFilter(''); setGroupFilter('');

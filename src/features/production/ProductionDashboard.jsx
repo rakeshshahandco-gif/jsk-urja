@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardStats } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
@@ -25,8 +25,8 @@ export default function ProductionDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const fetchDashboardData = () => {
-        setLoading(true);
+    const fetchDashboardData = (silent = false) => {
+        if (!silent) setLoading(true);
         getDashboardStats()
             .then(setStats)
             .catch(e => setError(e.message || 'Failed to load stats'))
@@ -37,8 +37,7 @@ export default function ProductionDashboard() {
         fetchDashboardData();
     }, []);
 
-    // Auto refresh the dashboard data every 5 seconds
-    useAutoRefresh(fetchDashboardData);
+    useGlobalSync('workorder', () => { fetchDashboardData(true); });
 
     const s = (key) => loading ? '...' : (stats[key] ?? '0');
 

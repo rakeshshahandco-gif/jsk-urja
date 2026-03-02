@@ -8,6 +8,7 @@ import { Button, useModal } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { Plus, Search, Filter } from 'lucide-react';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 
 export const TaskList = () => {
     const [tasks, setTasks] = useState([]);
@@ -45,6 +46,12 @@ export const TaskList = () => {
     useEffect(() => {
         fetchTasks();
     }, [view, filter.status, filter.priority, filter.taskCategoryId, filter.group, filter.assigneeType]);
+
+    useGlobalSync('task', (payload) => {
+        if (payload.action === 'create') setTasks(prev => [payload.data, ...prev]);
+        else if (payload.action === 'update') setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
+        else if (payload.action === 'delete') setTasks(prev => prev.filter(t => t._id !== payload.recordId));
+    });
 
     const fetchTasks = async () => {
         try {

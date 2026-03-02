@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { getTaskGroups, createTaskGroup, deleteTaskGroup, updateTaskGroup } from '@/services/taskApi';
 import { Button, Input, useModal, Select, MultiSelect } from '@/components/ui';
 import { userService } from '@/services/user.service';
@@ -58,7 +58,12 @@ export const TaskGroupList = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
-    useAutoRefresh(fetchGroups);
+
+    useGlobalSync('taskgroup', (payload) => {
+        if (payload.action === 'create') setGroups(prev => [...prev, payload.data]);
+        else if (payload.action === 'update') setGroups(prev => prev.map(g => g._id === payload.recordId ? { ...g, ...payload.data } : g));
+        else if (payload.action === 'delete') setGroups(prev => prev.filter(g => g._id !== payload.recordId));
+    });
 
     const handleCreate = () => {
         const modalId = openModal(

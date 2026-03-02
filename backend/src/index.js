@@ -2,6 +2,8 @@ import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';
 import logger from './utils/logger.js';
+import http from 'http';
+import { initSocket } from './config/socket.js';
 
 // Connect to Database
 let server;
@@ -9,7 +11,14 @@ connectDB().then((connected) => {
     if (!connected) {
         logger.warn('⚠️  Starting server without database connection');
     }
-    server = app.listen(config.port, () => {
+
+    // Create HTTP server wrapping Express app
+    const httpServer = http.createServer(app);
+
+    // Initialize Socket.io
+    initSocket(httpServer);
+
+    server = httpServer.listen(config.port, () => {
         logger.info(`Server running on port ${config.port}`);
         logger.info(`🌐 API available at: http://localhost:${config.port}/api/v1`);
     });
