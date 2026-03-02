@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardStats } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
@@ -24,12 +25,20 @@ export default function ProductionDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    useEffect(() => {
+    const fetchDashboardData = () => {
+        setLoading(true);
         getDashboardStats()
             .then(setStats)
             .catch(e => setError(e.message || 'Failed to load stats'))
             .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchDashboardData();
     }, []);
+
+    // Auto refresh the dashboard data every 5 seconds
+    useAutoRefresh(fetchDashboardData);
 
     const s = (key) => loading ? '...' : (stats[key] ?? '0');
 

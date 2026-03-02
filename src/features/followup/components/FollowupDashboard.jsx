@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui';
 import { getCustomers } from '@/services/customerApi';
@@ -13,6 +14,8 @@ export const FollowupDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [dateRange, setDateRange] = useState('today'); // Added state
+    const [assignedToMe, setAssignedToMe] = useState(false); // Added state
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -21,11 +24,7 @@ export const FollowupDashboard = () => {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    useEffect(() => {
-        fetchCustomersWithFollowups();
-    }, [debouncedSearch]);
-
-    const fetchCustomersWithFollowups = async () => {
+    const fetchDashboardData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -42,7 +41,7 @@ export const FollowupDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [debouncedSearch]);
 
     const handleOpenFollowup = (customerId) => {
         navigate(`/followup/${customerId}`);

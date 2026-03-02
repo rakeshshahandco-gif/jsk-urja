@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, useModal } from '@/components/ui';
 import { CustomerForm } from './CustomerForm';
@@ -57,6 +58,8 @@ export const CustomerList = () => {
     useEffect(() => {
         fetchCustomers();
     }, [currentPage, searchTerm, statusFilter]);
+
+    useAutoRefresh(fetchCustomers);
 
     const handleAddCustomer = () => {
         navigate('/customers/add');

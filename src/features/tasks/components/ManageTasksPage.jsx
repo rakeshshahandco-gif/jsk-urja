@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
@@ -95,6 +96,7 @@ const ManageTasksPage = () => {
     }, [activeTab, pagination.page, pagination.limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo]);
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
+    useAutoRefresh(fetchTasks);
 
     const resetFilters = () => {
         setSearchTerm(''); setPriorityFilter(''); setGroupFilter('');

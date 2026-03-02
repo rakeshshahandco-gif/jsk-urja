@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { getTaskGroups, createTaskGroup, deleteTaskGroup, updateTaskGroup } from '@/services/taskApi';
 import { Button, Input, useModal, Select, MultiSelect } from '@/components/ui';
 import { userService } from '@/services/user.service';
@@ -57,6 +58,7 @@ export const TaskGroupList = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
+    useAutoRefresh(fetchGroups);
 
     const handleCreate = () => {
         const modalId = openModal(

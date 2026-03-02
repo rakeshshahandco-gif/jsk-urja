@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { getGroups, createGroup, deleteGroup } from '@/services/groupApi'; // Absolute import
 import { Button, Input, useModal } from '@/components/ui'; // Assuming these exist
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +17,7 @@ export const GroupList = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
+    useAutoRefresh(fetchGroups);
 
     const fetchGroups = async () => {
         try {

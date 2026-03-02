@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { Button, useModal } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { AddUserForm } from './components/AddUserForm';
@@ -33,6 +34,7 @@ export const UserManagement = () => {
     useEffect(() => {
         fetchUsers();
     }, []);
+    useAutoRefresh(fetchUsers);
 
     // Role hierarchy for sorting (lower number = higher priority)
     const roleOrder = {

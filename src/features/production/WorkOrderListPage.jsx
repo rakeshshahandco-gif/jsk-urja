@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getWorkOrders, deleteWorkOrder, releaseWorkOrder } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
@@ -30,7 +31,7 @@ export default function WorkOrderListPage() {
     const [statusFilter, setStatus] = useState(sp.get('status') || '');
     const [deleting, setDeleting] = useState(null);
 
-    const load = () => {
+    const fetchWorkOrders = () => {
         setLoading(true);
         getWorkOrders({ search, status: statusFilter || undefined })
             .then(d => setWos(d.workOrders || []))
@@ -38,13 +39,16 @@ export default function WorkOrderListPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { load(); }, [search, statusFilter]);   // eslint-disable-line
+    useEffect(() => {
+        fetchWorkOrders();
+    }, [search, statusFilter]);
+    useAutoRefresh(fetchWorkOrders);
 
     const handleRelease = async (id) => {
         try {
             await releaseWorkOrder(id);
             toast.success('Work Order released!');
-            load();
+            fetchWorkOrders();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
     };
 
