@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button, Input, Select } from '@/components/ui';
-import { ROLES, PERMISSIONS, PERMISSION_LABELS, getPermissionsForRole } from '@/utils/permissions';
+import { ROLES, PERMISSIONS, APP_MODULES, getPermissionsForRole } from '@/utils/permissions';
 import styles from './AddUserForm.module.scss';
 
 export const AddUserForm = ({ user = null, onSave, closeModal }) => {
@@ -62,7 +62,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     };
 
     const onSubmit = async (data) => {
-        const { confirmPassword, ...userData } = data;
+        const { confirmPassword, _id, createdAt, updatedAt, __v, lastLogin, ...userData } = data;
         userData.permissions = selectedPermissions;
 
         // Validation
@@ -197,17 +197,24 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                         </div>
                     </div>
 
-                    <div className={styles.permissionGrid}>
-                        {Object.entries(PERMISSIONS).map(([key, permission]) => (
-                            <label key={permission} className={styles.permissionItem}>
-                                <input
-                                    type="checkbox"
-                                    checked={selectedPermissions.includes(permission)}
-                                    onChange={() => handlePermissionToggle(permission)}
-                                    className={styles.checkbox}
-                                />
-                                <span>{PERMISSION_LABELS[permission]}</span>
-                            </label>
+                    <div className={styles.modulesContainer}>
+                        {APP_MODULES.map((module) => (
+                            <div key={module.name} className={styles.moduleGroup}>
+                                <h4 className={styles.moduleTitle}>{module.name}</h4>
+                                <div className={styles.permissionGrid}>
+                                    {module.permissions.map((perm) => (
+                                        <label key={perm.value} className={styles.permissionItem}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPermissions.includes(perm.value)}
+                                                onChange={() => handlePermissionToggle(perm.value)}
+                                                className={styles.checkbox}
+                                            />
+                                            <span>{perm.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
 
