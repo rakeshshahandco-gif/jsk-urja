@@ -109,7 +109,11 @@ export const AddCustomerForm = ({ closeModal }) => {
                         .map(t => ({ value: t, label: t }));
 
                     if (newTypes.length > 0) {
-                        setDynamicCustomerTypes(prev => [...prev, ...newTypes]);
+                        setDynamicCustomerTypes(prev => {
+                            const existingValues = new Set(prev.map(p => p.value));
+                            const uniqueNewTypes = newTypes.filter(nt => !existingValues.has(nt.value));
+                            return [...prev, ...uniqueNewTypes];
+                        });
                     }
                 }
             } catch (error) {
@@ -300,6 +304,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             error={errors.gstNumber}
                             onChange={(e) => {
                                 e.target.value = e.target.value.toUpperCase();
+                                setValue('gstNumber', e.target.value, { shouldValidate: true, shouldDirty: true });
                             }}
                         />
 
@@ -336,6 +341,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                                         {...register('customerType')}
                                         onChange={(e) => {
                                             e.target.value = e.target.value.toUpperCase();
+                                            setValue('customerType', e.target.value, { shouldValidate: true, shouldDirty: true });
                                         }}
                                     />
                                 </div>
