@@ -226,11 +226,11 @@
         z-index: 10;
 
         th {
-            padding: 1rem 1.5rem;
+            padding: 8px 12px;
             background: #f9fafb;
             font-weight: 600;
             color: $text-color;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             border-bottom: 2px solid #e5e7eb;
             white-space: nowrap;
             text-transform: uppercase;
@@ -278,9 +278,9 @@
         }
 
         td {
-            padding: 1rem 1.5rem;
+            padding: 8px 12px;
             color: $text-secondary;
-            font-size: 0.9375rem;
+            font-size: 0.8125rem;
             vertical-align: middle;
 
             &.bold {

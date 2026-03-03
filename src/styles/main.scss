@@ -2,9 +2,21 @@
 @import 'mixins';
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Outfit', Inter, system-ui, sans-serif;
+  font-size: 14px;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: 500;
+  color: #1a202c;
+}
+
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  
+  th, td {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+  }
 }
 
 body {

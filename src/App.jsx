@@ -79,10 +79,10 @@ function App() {
                             <Route path="*" element={
                                 <ProtectedRoute>
                                     <ErrorBoundary>
-                                        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-                                            <Header />
-                                            <div style={{ display: 'flex', flex: 1 }}>
-                                                <Sidebar />
+                                        <div style={{ display: 'flex', minHeight: '100vh' }}>
+                                            <Sidebar />
+                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                                <Header />
                                                 <main style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
                                                     <Routes>
                                                         <Route path="/" element={<Navigate to="/customers/list" replace />} />

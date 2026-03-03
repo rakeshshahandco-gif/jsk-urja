@@ -28,13 +28,15 @@ export const SidebarItem = ({ item, collapsed }) => {
 
     if (hasChildren) {
         return (
-            <li className={styles.menuItem}>
+            <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })}>
                 <div
-                    className={clsx(styles.link, { [styles.active]: isChildActive })}
+                    className={clsx(styles.link, { 
+                        [styles.active]: isChildActive && !isOpen,
+                        [styles.subMenuHeader]: isOpen && !collapsed
+                    })}
                     onClick={toggleSubMenu}
                 >
                     <span className={styles.icon}>
-                        {/* Map icon string to component here */}
                         📝
                     </span>
                     <span className={styles.label}>{item.title}</span>

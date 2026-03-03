@@ -63,7 +63,8 @@
 }
 
 .input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     border: none;
     background: transparent;
     color: $text-color;
@@ -111,7 +112,6 @@
     justify-content: center;
     color: $text-tertiary;
     flex-shrink: 0;
-    pointer-events: none;
 
     &.start {
         padding-left: 10px;
