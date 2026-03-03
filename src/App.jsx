@@ -39,6 +39,16 @@ import ProductionDashboard from '@/features/production/ProductionDashboard';
 import WorkOrderListPage from '@/features/production/WorkOrderListPage';
 import WorkOrderFormPage from '@/features/production/WorkOrderFormPage';
 import WorkOrderDetailPage from '@/features/production/WorkOrderDetailPage';
+import SupplierListPage from '@/features/purchase/SupplierListPage';
+import PurchaseOrderListPage from '@/features/purchase/PurchaseOrderListPage';
+import PurchaseOrderFormPage from '@/features/purchase/PurchaseOrderFormPage';
+import PurchaseOrderDetailPage from '@/features/purchase/PurchaseOrderDetailPage';
+import PurchaseInvoiceListPage from '@/features/purchase/PurchaseInvoiceListPage';
+import PurchaseInvoiceFormPage from '@/features/purchase/PurchaseInvoiceFormPage';
+import PurchaseInvoiceDetailPage from '@/features/purchase/PurchaseInvoiceDetailPage';
+import GRNListPage from '@/features/purchase/GRNListPage';
+import CashBookPage from '@/features/purchase/CashBookPage';
+import BankBookPage from '@/features/purchase/BankBookPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -301,6 +311,19 @@ function App() {
                                                         <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="view_production"><WorkOrderListPage /></ProtectedRoute>} />
                                                         <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderFormPage /></ProtectedRoute>} />
                                                         <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderDetailPage /></ProtectedRoute>} />
+
+                                                        {/* Purchase Module */}
+                                                        <Route path="/purchase/suppliers" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SupplierListPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderListPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderFormPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderDetailPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/grn" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><GRNListPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceListPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceFormPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/cash-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><CashBookPage /></ProtectedRoute>} />
+                                                        <Route path="/purchase/bank-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><BankBookPage /></ProtectedRoute>} />
+
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

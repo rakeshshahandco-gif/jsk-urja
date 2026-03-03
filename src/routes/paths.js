@@ -43,4 +43,14 @@ export const PATHS = {
         NEW_WO: '/production/work-orders/new',
         WO_DETAIL: (id) => `/production/work-orders/${id}`,
     },
+    PURCHASE: {
+        SUPPLIERS: '/purchase/suppliers',
+        ORDERS: '/purchase/orders',
+        NEW_ORDER: '/purchase/orders/new',
+        ORDER_DETAIL: (id) => `/purchase/orders/${id}`,
+        GRN: '/purchase/grn',
+        INVOICES: '/purchase/invoices',
+        NEW_INVOICE: '/purchase/invoices/new',
+        INVOICE_DETAIL: (id) => `/purchase/invoices/${id}`,
+    },
 };

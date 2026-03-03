@@ -75,6 +75,13 @@ export const APP_MODULES = [
             { key: 'VIEW_PRODUCTION', value: 'view_production', label: 'View Production' },
             { key: 'MANAGE_PRODUCTION', value: 'manage_production', label: 'Manage Production' }
         ]
+    },
+    {
+        name: 'Purchase',
+        permissions: [
+            { key: 'VIEW_PURCHASE', value: 'view_purchase', label: 'View Purchase' },
+            { key: 'MANAGE_PURCHASE', value: 'manage_purchase', label: 'Manage Purchase' }
+        ]
     }
 ];
 
@@ -110,7 +117,9 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_INVENTORY,
         PERMISSIONS.MANAGE_INVENTORY,
         PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.MANAGE_PRODUCTION
+        PERMISSIONS.MANAGE_PRODUCTION,
+        PERMISSIONS.VIEW_PURCHASE,
+        PERMISSIONS.MANAGE_PURCHASE
     ],
     [ROLES.STAFF]: [
         PERMISSIONS.VIEW_CUSTOMERS,
@@ -121,7 +130,8 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.ADD_TASK,
         PERMISSIONS.VIEW_GROUPS,
         PERMISSIONS.VIEW_INVENTORY,
-        PERMISSIONS.VIEW_PRODUCTION
+        PERMISSIONS.VIEW_PRODUCTION,
+        PERMISSIONS.VIEW_PURCHASE
     ],
     [ROLES.VIEWER]: [
         PERMISSIONS.VIEW_CUSTOMERS,
@@ -129,7 +139,8 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_TASKS,
         PERMISSIONS.VIEW_GROUPS,
         PERMISSIONS.VIEW_INVENTORY,
-        PERMISSIONS.VIEW_PRODUCTION
+        PERMISSIONS.VIEW_PRODUCTION,
+        PERMISSIONS.VIEW_PURCHASE
     ]
 };
 

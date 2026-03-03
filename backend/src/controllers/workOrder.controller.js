@@ -167,6 +167,12 @@ export const updateWorkOrder = asyncHandler(async (req, res) => {
     if (!wo) throw new ApiError(404, 'Work Order not found');
     if (wo.status === 'Closed') throw new ApiError(400, 'Closed WO cannot be edited');
 
+    // Prevent modifying targetQty if production has already started
+    if (value.targetQty && value.targetQty !== wo.targetQty) {
+        const hasStarted = wo.stages.some(s => s.productionLogs && s.productionLogs.length > 0);
+        if (hasStarted) throw new ApiError(400, 'Cannot modify Target Qty. Production has already started.');
+    }
+
     Object.assign(wo, value);
     wo.updatedBy = req.user._id;
     await wo.save();
@@ -208,8 +214,6 @@ export const updateStage = asyncHandler(async (req, res) => {
 
     // Assign values
     Object.assign(stage, value);
-    if (value.status === 'Running' && !stage.startTime) stage.startTime = new Date();
-    if (value.status === 'Completed') stage.endTime = new Date();
 
     // Auto-calculate aggregated quantities from productionLogs if provided
     if (value.productionLogs !== undefined) {
@@ -217,6 +221,16 @@ export const updateStage = asyncHandler(async (req, res) => {
         stage.outputQty = value.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
         stage.reworkQty = value.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
         stage.rejectionQty = value.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
+
+        // Stage Dependency Math:
+        const maxAllowed = getMaxAllowedOutput(wo, stage);
+        if (stage.outputQty > maxAllowed) {
+            if (stage.seq === 1) {
+                throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Total is ${stage.outputQty}.`);
+            } else {
+                throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Total is ${stage.outputQty}.`);
+            }
+        }
     }
 
     // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
@@ -249,6 +263,23 @@ export const updateStage = asyncHandler(async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// Helper: Get Max Allowed Output for a Stage (Dependency logic)
+// ────────────────────────────────────────────────────────────────────────────
+const getMaxAllowedOutput = (wo, currentStage) => {
+    if (currentStage.seq === 1) return wo.targetQty;
+    const prevStage = wo.stages.find(s => s.seq === currentStage.seq - 1);
+    return prevStage ? prevStage.outputQty : wo.targetQty;
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helper: Get Pending Qty for a Stage
+// ────────────────────────────────────────────────────────────────────────────
+const getPendingQty = (wo, currentStage) => {
+    const maxAllowed = getMaxAllowedOutput(wo, currentStage);
+    return Math.max(0, maxAllowed - currentStage.outputQty);
+};
+
+// ────────────────────────────────────────────────────────────────────────────
 // Helper: Recalculate Stage Quantities and Status
 // ────────────────────────────────────────────────────────────────────────────
 const recalculateStageAndWo = (wo, stage) => {
@@ -261,15 +292,14 @@ const recalculateStageAndWo = (wo, stage) => {
     // Auto Status Logic based on Rules
     if (stage.outputQty === 0) {
         stage.status = 'Not Started';
-    } else if (stage.outputQty > 0 && stage.outputQty < wo.targetQty) {
-        stage.status = 'Running';
-    } else if (stage.outputQty >= wo.targetQty) {
-        stage.status = 'Completed';
+    } else {
+        const pendingQty = getPendingQty(wo, stage);
+        if (pendingQty === 0) {
+            stage.status = 'Completed';
+        } else {
+            stage.status = 'Running';
+        }
     }
-
-    // Assign Times
-    if (stage.status === 'Running' && !stage.startTime) stage.startTime = new Date();
-    if (stage.status === 'Completed') stage.endTime = new Date();
 
     // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
     if (stage.seq === 9 && stage.status === 'Completed') {
@@ -312,10 +342,15 @@ export const addProductionLog = asyncHandler(async (req, res) => {
     const stage = wo.stages.find(s => s.seq === seq);
     if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
 
-    // Validation: Total Good Output cannot exceed Target Qty
-    const expectedTotalOutput = stage.outputQty + value.outputQty;
-    if (expectedTotalOutput > wo.targetQty) {
-        throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending is ${wo.targetQty - stage.outputQty}.`);
+    // Stage Dependency Math:
+    const expectedOutput = stage.outputQty + value.outputQty;
+    const maxAllowed = getMaxAllowedOutput(wo, stage);
+    if (expectedOutput > maxAllowed) {
+        if (stage.seq === 1) {
+            throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending is ${wo.targetQty - stage.outputQty}.`);
+        } else {
+            throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Pending is ${maxAllowed - stage.outputQty}.`);
+        }
     }
 
     // Add Log

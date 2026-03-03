@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    getWorkOrderById, releaseWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
+    getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
     addProductionLog, deleteProductionLog
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
@@ -139,7 +139,7 @@ export default function WorkOrderDetailPage() {
 
             {/* Tab Content */}
             <div style={{ padding: '28px' }}>
-                {tab === 0 && <OverviewTab wo={wo} />}
+                {tab === 0 && <OverviewTab wo={wo} load={load} />}
                 {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
                 {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
@@ -150,31 +150,98 @@ export default function WorkOrderDetailPage() {
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ wo }) {
+function OverviewTab({ wo, load }) {
     const fmt = (d) => d ? new Date(d).toLocaleDateString() : '—';
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Check if production has started (if any stage has prod logs)
+    const hasStarted = wo.stages && wo.stages.some(s => s.productionLogs && s.productionLogs.length > 0);
+
+    const [form, setForm] = useState({
+        targetQty: wo.targetQty,
+        priority: wo.priority,
+        plannedStart: wo.plannedStart ? wo.plannedStart.split('T')[0] : '',
+        plannedEnd: wo.plannedEnd ? wo.plannedEnd.split('T')[0] : '',
+        supervisor: wo.supervisor || '',
+        remarks: wo.remarks || '',
+    });
+
+    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            // we use the same updateMaterialStatus or create a new api method? 
+            // Wait, there's no updateWorkOrder api method imported yet? Let's check imports.
+            // I'll need to import updateWorkOrder from services/workOrderApi
+            // Let's assume it's imported or I will add it to the imports.
+            // Oh, I can just use a generic fetch or we need to add the import. I will add the import at the top.
+            const { updateWorkOrder } = await import('@/services/workOrderApi');
+            await updateWorkOrder(wo._id, form);
+            toast.success('Work Order updated');
+            setEditing(false);
+            load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const inputStyle = {
+        width: '100%', padding: '6px 10px', background: '#0f172a', border: '1px solid #334155',
+        borderRadius: '6px', color: '#f1f5f9', fontSize: '13px', outline: 'none'
+    };
+
     const rows = [
         ['WO Number', wo.woNumber],
         ['Status', wo.status],
         ['BOM Version', wo.bomVersion || '—'],
         ['Finished Product', wo.finishedProductName || '—'],
-        ['Target Qty', wo.targetQty],
-        ['Priority', wo.priority],
-        ['Planned Start', fmt(wo.plannedStart)],
-        ['Planned End', fmt(wo.plannedEnd)],
+        ['Target Qty', editing ? (
+            <div>
+                <input type="number" min="1" value={form.targetQty} onChange={e => set('targetQty', Number(e.target.value))} style={{ ...inputStyle, borderColor: hasStarted ? '#ef4444' : '#3b82f6' }} disabled={hasStarted} />
+                {hasStarted && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>Cannot edit: Production started</div>}
+            </div>
+        ) : wo.targetQty],
+        ['Priority', editing ? (
+            <select value={form.priority} onChange={e => set('priority', e.target.value)} style={inputStyle}>
+                {['Low', 'Medium', 'High', 'Urgent'].map(p => <option key={p}>{p}</option>)}
+            </select>
+        ) : wo.priority],
+        ['Planned Start', editing ? <input type="date" value={form.plannedStart} onChange={e => set('plannedStart', e.target.value)} style={inputStyle} /> : fmt(wo.plannedStart)],
+        ['Planned End', editing ? <input type="date" value={form.plannedEnd} onChange={e => set('plannedEnd', e.target.value)} style={inputStyle} /> : fmt(wo.plannedEnd)],
         ['Actual Start', fmt(wo.actualStart)],
         ['Actual End', fmt(wo.actualEnd)],
-        ['Supervisor', wo.supervisor || '—'],
-        ['Remarks', wo.remarks || '—'],
+        ['Supervisor', editing ? <input type="text" value={form.supervisor} onChange={e => set('supervisor', e.target.value)} style={inputStyle} /> : (wo.supervisor || '—')],
+        ['Remarks', editing ? <textarea value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} /> : (wo.remarks || '—')],
         ['Created', fmt(wo.createdAt)],
     ];
+
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', maxWidth: '800px' }}>
-            {rows.map(([k, v]) => (
-                <div key={k} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '14px 18px' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{k}</div>
-                    <div style={{ fontSize: '14px', color: '#f1f5f9', marginTop: '4px', fontWeight: 500 }}>{String(v)}</div>
-                </div>
-            ))}
+        <div style={{ maxWidth: '800px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>Work Order Details</h2>
+                {wo.status !== 'Closed' && (
+                    editing ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => setEditing(false)} disabled={saving} style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Cancel</button>
+                            <button onClick={handleSave} disabled={saving} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Changes'}</button>
+                        </div>
+                    ) : (
+                        <button onClick={() => setEditing(true)} style={{ padding: '6px 12px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}>Edit Details</button>
+                    )
+                )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {rows.map(([k, v]) => (
+                    <div key={k} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '14px 18px' }}>
+                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>{k}</div>
+                        <div style={{ fontSize: '14px', color: '#f1f5f9', fontWeight: 500 }}>{v}</div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
@@ -381,25 +448,21 @@ function ProcessExecutionTab({ wo, load }) {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {(wo.stages || []).map(stage => (
-                    <StageCard key={stage.seq} stage={stage} woId={wo._id} targetQty={wo.targetQty} canEdit={canEdit} load={load} />
+                    <StageCard key={stage.seq} stage={stage} wo={wo} woId={wo._id} targetQty={wo.targetQty} canEdit={canEdit} load={load} />
                 ))}
             </div>
         </div>
     );
 }
 
-function StageCard({ stage, woId, targetQty, canEdit, load }) {
+function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
     const sc = STAGE_STATUS_COLORS[stage.status] || STAGE_STATUS_COLORS['Not Started'];
     const [open, setOpen] = useState(false);
 
     // Stage-level fields
     const [form, setForm] = useState({
         status: stage.status,
-        operator: stage.operator || '',
-        line: stage.line || '',
         remarks: stage.remarks || '',
-        startTime: stage.startTime ? new Date(stage.startTime).toISOString().slice(0, 16) : '',
-        endTime: stage.endTime ? new Date(stage.endTime).toISOString().slice(0, 16) : '',
     });
 
     // Backward compatibility & Logs init
@@ -431,6 +494,12 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
 
     // New Production Math
     const pendingToStart = Math.max(0, targetQty - totalInput);
+
+    // Calculate max allowed output depending on the stage
+    const prevStage = wo.stages.find(s => s.seq === stage.seq - 1);
+    const maxAllowedOutput = stage.seq === 1 ? targetQty : (prevStage ? prevStage.outputQty : targetQty);
+    const pendingOutput = Math.max(0, maxAllowedOutput - totalOutput);
+
     const balanceInProcess = Math.max(0, totalInput - totalOutput - totalRework - totalRejection);
 
     const save = async () => {
@@ -446,6 +515,11 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
     };
 
     const handleAddLog = async () => {
+        if (newLog.outputQty > pendingOutput) {
+            toast.error(`Output Qty cannot exceed Pending Output (${pendingOutput})`);
+            return;
+        }
+
         setSaving(true);
         try {
             const res = await addProductionLog(woId, stage.seq, newLog);
@@ -490,8 +564,7 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                         )}
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                        {stage.operator ? `Operator: ${stage.operator}` : ''}
-                        {productionLogs.length > 0 ? ` · Total Output: ${totalOutput}` : ''}
+                        {productionLogs.length > 0 ? `Total Output: ${totalOutput}` : ''}
                     </div>
                 </div>
                 <span style={{ padding: '5px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: sc.bg, color: sc.color }}>{stage.status}</span>
@@ -503,29 +576,11 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
                 <div style={{ borderTop: '1px solid #334155', padding: '20px', background: '#0f172a' }}>
 
                     {/* Stage Level Info */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Overall Status</label>
-                            <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
-                                {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Start Date/Time</label>
-                            <input type="datetime-local" value={form.startTime} onChange={e => set('startTime', e.target.value)} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>End Date/Time</label>
-                            <input type="datetime-local" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Current Operator</label>
-                            <input value={form.operator} onChange={e => set('operator', e.target.value)} style={inp} disabled={!canEdit} />
-                        </div>
-                        <div>
-                            <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Line</label>
-                            <input value={form.line} onChange={e => set('line', e.target.value)} style={inp} disabled={!canEdit} />
-                        </div>
+                    <div>
+                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Overall Status</label>
+                        <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
+                            {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
+                        </select>
                     </div>
 
                     <div style={{ marginBottom: '16px' }}>
@@ -535,9 +590,9 @@ function StageCard({ stage, woId, targetQty, canEdit, load }) {
 
                     {/* Aggregate Totals (Read Only) */}
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Target Qty</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{targetQty}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Max Allowed</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{maxAllowedOutput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Pending Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fca5a5' }}>{Math.max(0, targetQty - totalOutput)}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Pending Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fca5a5' }}>{pendingOutput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>

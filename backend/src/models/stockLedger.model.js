@@ -1,0 +1,29 @@
+import mongoose from 'mongoose';
+
+const stockLedgerSchema = new mongoose.Schema({
+    date: { type: Date, required: true, default: Date.now },
+    itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true },
+    itemCode: { type: String, default: '' },
+    itemName: { type: String, default: '' },
+    transactionType: {
+        type: String,
+        enum: ['GRN', 'WO_CONSUMPTION', 'OPENING', 'ADJUSTMENT', 'RETURN'],
+        required: true,
+    },
+    referenceNo: { type: String, default: '' }, // GRN No, PO No, etc.
+    referenceId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    inQty: { type: Number, default: 0 },
+    outQty: { type: Number, default: 0 },
+    rate: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+    runningStock: { type: Number, default: 0 }, // stock after this entry
+    warehouse: { type: String, default: '' },
+    remarks: { type: String, default: '' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+}, { timestamps: true });
+
+stockLedgerSchema.index({ itemId: 1, date: -1 });
+stockLedgerSchema.index({ transactionType: 1 });
+
+const StockLedger = mongoose.model('StockLedger', stockLedgerSchema);
+export { StockLedger };
