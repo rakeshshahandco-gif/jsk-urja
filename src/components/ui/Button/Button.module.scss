@@ -13,7 +13,8 @@
     border: 1px solid transparent;
     outline: none;
     font-family: inherit;
-    gap: $spacing-sm;
+    gap: 6px;
+    line-height: 1;
 
     // Disabled State
     &:disabled,
@@ -82,21 +83,22 @@
 
 // Sizes
 .sm {
-    padding: 8px 16px; // Increased from 4px 8px
-    font-size: 1rem; // Increased from 0.875rem
-    height: 42px;
+    padding: 2px 10px;
+    font-size: 0.8125rem; // 13px
+    height: 28px;
+    gap: 4px;
 }
 
 .md {
-    padding: 12px 24px; // Increased from 8px 16px
-    font-size: 1.0625rem; // Increased from 1rem
-    height: 50px;
+    padding: 6px 14px;
+    font-size: 0.875rem; // 14px
+    height: 36px;
 }
 
 .lg {
-    padding: 16px 32px; // Increased from 12px 24px
-    font-size: 1.25rem; // Increased from 1.125rem
-    height: 60px;
+    padding: 10px 20px;
+    font-size: 1rem; // 16px
+    height: 44px;
 }
 
 // Full Width

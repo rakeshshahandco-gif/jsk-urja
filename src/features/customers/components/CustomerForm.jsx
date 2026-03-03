@@ -85,7 +85,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             address: customerData.address || '',
             pincode: customerData.pincode || '',
             country: customerData.country || 'India',
-            status: customerData.status || 'lead',
+            status: customerData.status || customerData.customerStatus || 'lead',
             notes: customerData.notes || '',
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',

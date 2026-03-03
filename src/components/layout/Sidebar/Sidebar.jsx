@@ -47,7 +47,21 @@ export const Sidebar = () => {
     return (
         <aside className={clsx(styles.sidebar, { [styles.collapsed]: collapsed })}>
             <div className={styles.header}>
-                <span className={styles.logo}>{!collapsed ? 'CRM App' : 'C'}</span>
+                {!collapsed && (
+                    <div className={styles.brand}>
+                        <div className={styles.logoWrapper}>
+                            <div className={styles.brandText}>
+                                <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
+                                <span className={styles.tagline}>CRM Application</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {collapsed && (
+                    <div className={styles.collapsedLogo}>
+                         <span className={styles.one}>J</span>U
+                    </div>
+                )}
                 <button
                     className={styles.toggleBtn}
                     onClick={() => setCollapsed(!collapsed)}

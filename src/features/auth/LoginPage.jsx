@@ -43,74 +43,88 @@ export const LoginPage = () => {
 
     return (
         <div className={styles.loginContainer}>
-            <div className={styles.loginCard}>
-                <div className={styles.loginHeader}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
-                    <h2 className={styles.title}>CRM Application</h2>
-                    <p className={styles.subtitle}>Sign in to your account</p>
+            {/* Abstract background shapes */}
+            <div className={`${styles.bgShape} ${styles.bgShape1}`}></div>
+            <div className={`${styles.bgShape} ${styles.bgShape2}`}></div>
+            <div className={`${styles.bgShape} ${styles.bgShape3}`}></div>
+
+            <div className={styles.loginContent}>
+                {/* Left side content */}
+                <div className={styles.brandingSection}>
+                    <div className={styles.logoWrapper}>
+                        <div className={styles.brandText}>
+                            <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
+                            <span className={styles.tagline}>CRM Application</span>
+                        </div>
+                    </div>
+
+                    <div className={styles.heroText}>
+                        <h1 className={styles.mainHeading}>Login into <br /> your account</h1>
+                        <p className={styles.subHeading}>Elevating your business efficiency with modern CRM solutions.</p>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className={styles.loginForm}>
-                    {error && (
-                        <div className={styles.errorBanner}>
-                            {error}
+                {/* Right side login form */}
+                <div className={styles.cardSection}>
+                    <div className={styles.loginCard}>
+                        <div className={styles.loginHeader}>
+                            <h2>Login</h2>
+                            <p>Enter your credentials to access your account</p>
                         </div>
-                    )}
 
-                    <div className={styles.inputGroup}>
-                        <Input
-                            label="Username or Email"
-                            name="username"
-                            value={formData.username}
-                            onChange={handleChange}
-                            placeholder="Enter your username"
-                            startIcon={<User size={18} />}
-                            required
-                            autoFocus
-                        />
-                    </div>
+                        <form onSubmit={handleSubmit} className={styles.loginForm}>
+                            {error && (
+                                <div className={styles.errorBanner}>
+                                    {error}
+                                </div>
+                            )}
 
-                    <div className={styles.inputGroup}>
-                        <Input
-                            label="Password"
-                            name="password"
-                            type={showPassword ? 'text' : 'password'}
-                            value={formData.password}
-                            onChange={handleChange}
-                            placeholder="Enter your password"
-                            startIcon={<Lock size={18} />}
-                            endIcon={
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className={styles.passwordToggle}
+                            <div className={styles.inputGroup}>
+                                <Input
+                                    label="Email"
+                                    name="username"
+                                    value={formData.username}
+                                    onChange={handleChange}
+                                    placeholder="name@example.com"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className={styles.inputGroup}>
+                                <Input
+                                    label="Password"
+                                    name="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    placeholder="Your password"
+                                    endIcon={
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className={styles.passwordToggle}
+                                        >
+                                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                        </button>
+                                    }
+                                    required
+                                />
+                            </div>
+
+                            <div className={styles.formFooter}>
+                                <Button
+                                    type="submit"
+                                    className={styles.loginButton}
+                                    isLoading={loading}
+                                    disabled={loading}
                                 >
-                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-                            }
-                            required
-                        />
+                                    {loading ? 'Logging in...' : 'Login'}
+                                </Button>
+                            </div>
+                        </form>
                     </div>
-
-                    <Button
-                        type="submit"
-                        className={styles.loginButton}
-                        isLoading={loading}
-                        disabled={loading}
-                    >
-                        {loading ? 'Signing In...' : 'Sign In'}
-                    </Button>
-                </form>
-
-                {/* <div className={styles.demoCredentials}>
-                    <p className={styles.demoTitle}>Demo Credentials:</p>
-                    <div className={styles.demoList}>
-                        <div><strong>Admin:</strong> admin / admin123</div>
-                        <div><strong>Manager:</strong> manager / manager123</div>
-                        <div><strong>Staff:</strong> staff / staff123</div>
-                        <div><strong>Viewer:</strong> viewer / viewer123</div>
-                    </div>
-                </div> */}
+                </div>
             </div>
         </div>
     );

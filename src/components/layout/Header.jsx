@@ -1,18 +1,45 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
 import { LogOut, KeyRound, ChevronDown } from 'lucide-react';
 import { ROLE_CONFIG } from '@/utils/permissions';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
+import { menuConfig } from '@/config/menu.config';
 import styles from './Header.module.scss';
 
 export const Header = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user, logout } = useAuth();
     const { openModal } = useModal();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const menuRef = useRef(null);
+
+    // Dynamic page title logic
+    const pageTitle = useMemo(() => {
+        const path = location.pathname;
+        let title = '';
+        
+        const findTitle = (items) => {
+            for (const item of items) {
+                if (item.path === path) return item.title;
+                if (item.children) {
+                    const childTitle = findTitle(item.children);
+                    if (childTitle) return childTitle;
+                }
+            }
+            return null;
+        };
+
+        title = findTitle(menuConfig);
+        return title || 'Dashboard';
+    }, [location.pathname]);
+
+    // User initials for avatar
+    const initials = user?.name
+        ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
+        : '??';
 
     const handleLogout = async () => {
         const result = await logout();
@@ -48,9 +75,8 @@ export const Header = () => {
     return (
         <header className={styles.header}>
             <div className={styles.content}>
-                <div className={styles.branding}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
-                    <span className={styles.appSubtitle}>CRM Application</span>
+                <div className={styles.pageHeader}>
+                    <h2 className={styles.pageTitle}>{pageTitle}</h2>
                 </div>
 
                 <div className={styles.userSection}>
@@ -59,16 +85,19 @@ export const Header = () => {
                             className={styles.userMenuButton}
                             onClick={() => setShowUserMenu(!showUserMenu)}
                         >
+                            <div className={styles.avatar}>
+                                {initials}
+                            </div>
                             <div className={styles.userInfo}>
                                 <span className={styles.userName}>{user.name}</span>
                                 <span
                                     className={styles.roleBadge}
-                                    style={{ backgroundColor: roleConfig.color }}
+                                    style={{ color: roleConfig.color }}
                                 >
-                                    {roleConfig.badge} {roleConfig.label}
+                                    {roleConfig.label}
                                 </span>
                             </div>
-                            <ChevronDown size={16} className={styles.chevron} />
+                            <ChevronDown size={14} className={styles.chevron} />
                         </button>
 
                         {showUserMenu && (

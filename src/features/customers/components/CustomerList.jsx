@@ -8,6 +8,8 @@ import { FollowUpForm } from '@/features/followup/components/FollowUpForm';
 import { ImportCustomerModal } from './ImportCustomerModal';
 import { getCustomers, getCustomer, deleteCustomer, updateCustomer } from '@/services/customerApi';
 import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import styles from './CustomerList.module.scss';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
 
 export const CustomerList = () => {
@@ -167,293 +169,203 @@ export const CustomerList = () => {
         return contactPersons.find(c => c.isPrimary) || contactPersons[0];
     };
 
-    const getStatusBadgeStyle = (status) => {
-        const styles = {
-            hot: { bg: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626' },
-            warm: { bg: '#422006', color: '#fcd34d', border: '1px solid #d97706' },
-            cold: { bg: '#1e3a5f', color: '#bfdbfe', border: '1px solid #3b82f6' },
-            active: { bg: '#052e16', color: '#6ee7b7', border: '1px solid #10b981' },
-            inactive: { bg: '#1e293b', color: '#94a3b8', border: '1px solid #334155' },
+    const getStatusClass = (status) => {
+        const statusMap = {
+            hot: styles.status_hot,
+            warm: styles.status_warm,
+            cold: styles.status_cold,
+            active: styles.status_active,
+            inactive: styles.status_inactive,
+            lead: styles.status_lead,
+            running_high: styles.status_running_high,
+            running_low: styles.status_running_low,
         };
-        return styles[status] || styles.inactive;
+        return statusMap[status] || styles.status_inactive;
     };
 
     return (
-        <div style={{ padding: '24px', maxWidth: '1600px', margin: '0 auto', background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div className={styles.container}>
             {/* Page Header */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '24px'
-            }}>
-                <h1 style={{
-                    fontSize: '2rem',
-                    fontWeight: '700',
-                    color: '#f1f5f9',
-                    margin: 0
-                }}>
-                    Customers
+            <div className={styles.headerContainer}>
+                <div className={styles.titleWrapper}>
+                    <h1 className={styles.title}>Customers</h1>
                     {totalResults > 0 && (
-                        <span style={{ fontSize: '1rem', fontWeight: 400, color: '#6b7280', marginLeft: '12px' }}>
-                            ({totalResults} total)
-                        </span>
+                        <span className={styles.count}>({totalResults} total)</span>
                     )}
-                </h1>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <Button variant="outline" onClick={handleImportCustomers}>
-                        <Upload size={20} /> Import
+                </div>
+                <div className={styles.actions}>
+                    <Button variant="outline" size="sm" onClick={handleImportCustomers}>
+                        <Upload size={16} /> Import
                     </Button>
-                    <Button variant="outline" onClick={() => navigate('/tasks/create')}>
-                        <Plus size={20} /> Create Task
+                    <Button variant="outline" size="sm" onClick={() => navigate('/tasks/create')}>
+                        <Plus size={16} /> Create Task
                     </Button>
-                    <Button onClick={handleAddCustomer}>
-                        <Plus size={20} /> Add Customer
+                    <Button size="sm" onClick={handleAddCustomer}>
+                        <Plus size={16} /> Add Customer
                     </Button>
                 </div>
             </div>
 
             {/* Filters */}
-            <div style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                padding: '16px',
-                borderRadius: '8px',
-                marginBottom: '24px',
-                display: 'flex',
-                gap: '16px',
-                alignItems: 'center',
-                flexWrap: 'wrap'
-            }}>
-                <div style={{ flex: '1', minWidth: '250px' }}>
-                    <div style={{ position: 'relative' }}>
-                        <Search
-                            size={18}
-                            style={{
-                                position: 'absolute',
-                                left: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: '#9ca3af'
-                            }}
-                        />
-                        <Input
-                            type="text"
-                            placeholder="Search by name, company, or mobile..."
-                            value={searchTerm}
-                            onChange={handleSearch}
-                            style={{ paddingLeft: '40px', background: '#0f172a', border: '1px solid #334155', color: '#f1f5f9' }}
-                        />
-                    </div>
+            <div className={styles.filtersCard}>
+                <div className={styles.searchWrapper}>
+                    <Input
+                        type="text"
+                        placeholder="Search by name, company, or mobile..."
+                        value={searchTerm}
+                        onChange={handleSearch}
+                        startIcon={<Search size={14} />}
+                        variant="md"
+                    />
                 </div>
-                <div style={{ minWidth: '180px' }}>
-                    <select
-                        value={statusFilter}
-                        onChange={handleStatusFilter}
-                        style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            border: '1px solid #334155',
-                            borderRadius: '6px',
-                            fontSize: '0.875rem',
-                            backgroundColor: '#0f172a',
-                            color: '#f1f5f9',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <option value="">All Statuses</option>
-                        <option value="lead">Lead</option>
-                        <option value="running_high">Running High</option>
-                        <option value="running_low">Running Low</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                </div>
+                <select
+                    className={styles.statusSelect}
+                    value={statusFilter}
+                    onChange={handleStatusFilter}
+                >
+                    <option value="">All Statuses</option>
+                    <option value="lead">Lead</option>
+                    <option value="running_high">Running High</option>
+                    <option value="running_low">Running Low</option>
+                    <option value="inactive">Inactive</option>
+                </select>
             </div>
 
-            {/* Loading State */}
-            {loading && (
-                <div style={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    padding: '40px',
-                    borderRadius: '8px',
-                    textAlign: 'center',
-                    color: '#94a3b8'
-                }}>
-                    Loading customers...
-                </div>
-            )}
-
-            {/* Error State */}
-            {error && (
-                <div style={{
-                    background: '#450a0a',
-                    padding: '24px',
-                    borderRadius: '8px',
-                    marginBottom: '24px',
-                    border: '1px solid #dc2626',
-                    textAlign: 'center',
-                    color: '#fca5a5'
-                }}>
-                    <p style={{ fontWeight: 600, marginBottom: '12px' }}>{error}</p>
-                    <div style={{ fontSize: '0.875rem', marginBottom: '16px', color: '#7f1d1d' }}>
-                        Please check if the backend server is running and accessible.
+            {/* Content Section */}
+            <div className={styles.tableSection}>
+                {loading && (
+                    <div className={styles.loadingState}>
+                        <p className={styles.mainText}>Loading customers...</p>
                     </div>
-                    <Button onClick={fetchCustomers} variant="outline" style={{ borderColor: '#b91c1c', color: '#b91c1c' }}>
-                        Retry Loading
-                    </Button>
+                )}
+
+                {error && (
+                    <div className={styles.errorState}>
+                        <p className={styles.title}>{error}</p>
+                        <p className={styles.message}>Please check if the backend server is running and accessible.</p>
+                        <Button onClick={fetchCustomers} variant="outline" size="sm">
+                            Retry Loading
+                        </Button>
+                    </div>
+                )}
+
+                {!loading && !error && (
+                    <>
+                        {customers.length === 0 ? (
+                            <div className={styles.emptyState}>
+                                <p className={styles.mainText}>No customers found</p>
+                                <p className={styles.subText}>
+                                    {searchTerm || statusFilter ? 'Try adjusting your filters' : 'Click "Add Customer" to get started'}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className={styles.tableWrapper}>
+                                <table className={styles.table}>
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Company</th>
+                                            <th>Primary Contact</th>
+                                            <th>Mobile</th>
+                                            <th>Status</th>
+                                            <th style={{ textAlign: 'center' }}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {customers.map((customer) => {
+                                            const primaryContact = getPrimaryContact(customer.contactPersons);
+                                            const currentStatus = customer.status || customer.customerStatus;
+                                            const statusClass = getStatusClass(currentStatus);
+
+                                            return (
+                                                <tr key={customer._id}>
+                                                    <td className={styles.nameCell}>{customer.customerName || customer.name || 'Not Provided'}</td>
+                                                    <td className={styles.companyCell}>
+                                                        {customer.company || '-'}
+                                                        {customer.companyBrand ? ` (${customer.companyBrand})` : ''}
+                                                    </td>
+                                                    <td>{primaryContact ? (primaryContact.name || '-') : '-'}</td>
+                                                    <td>{primaryContact ? (primaryContact.mobile || '-') : '-'}</td>
+                                                    <td>
+                                                        <span className={clsx(styles.badge, statusClass)}>
+                                                            {currentStatus}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div className={styles.actionButtons}>
+                                                            <button
+                                                                className={styles.btnIcon}
+                                                                onClick={() => navigate(`/tasks/create?customerId=${customer._id}`)}
+                                                                title="Create Task"
+                                                            >
+                                                                <Plus size={16} />
+                                                            </button>
+                                                            <button
+                                                                className={styles.btnIcon}
+                                                                onClick={() => handleTalkWithCustomer(customer)}
+                                                                title="Talk with customer"
+                                                            >
+                                                                💬
+                                                            </button>
+                                                            <button
+                                                                className={styles.btnIcon}
+                                                                onClick={() => handleFollowUp(customer)}
+                                                                title="Follow-up tracker"
+                                                            >
+                                                                📅
+                                                            </button>
+                                                            <button
+                                                                className={styles.btnEdit}
+                                                                onClick={() => handleEditCustomer(customer)}
+                                                                title="Edit customer"
+                                                            >
+                                                                EDIT
+                                                            </button>
+                                                            <button
+                                                                className={styles.btnDelete}
+                                                                onClick={() => handleDeleteCustomer(customer)}
+                                                                title="Delete customer"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Pagination */}
+            {!loading && !error && totalPages > 1 && (
+                <div className={styles.pagination}>
+                    <div className={styles.info}>
+                        Page {currentPage} of {totalPages}
+                    </div>
+                    <div className={styles.controls}>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft size={16} /> Previous
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next <ChevronRight size={16} />
+                        </Button>
+                    </div>
                 </div>
-            )}
-
-            {/* Customer Table */}
-            {!loading && !error && (
-                <>
-                    {customers.length === 0 ? (
-                        <div style={{ background: '#1e293b', border: '1px solid #334155', padding: '40px', borderRadius: '8px', textAlign: 'center', color: '#94a3b8' }}>
-                            <p style={{ margin: 0, fontSize: '1.125rem' }}>No customers found</p>
-                            <p style={{ margin: '8px 0 0 0', color: '#64748b' }}>
-                                {searchTerm || statusFilter ? 'Try adjusting your filters' : 'Click "Add Customer" to get started'}
-                            </p>
-                        </div>
-                    ) : (
-                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', overflow: 'hidden' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                <thead>
-                                    <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155' }}>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Name</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Company</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Primary Contact</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Mobile</th>
-                                        <th style={{ padding: '16px', textAlign: 'left', fontWeight: 600, color: '#94a3b8' }}>Customer Status</th>
-                                        <th style={{ padding: '16px', textAlign: 'center', fontWeight: 600, color: '#94a3b8' }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {customers.map((customer) => {
-                                        const primaryContact = getPrimaryContact(customer.contactPersons);
-                                        const statusStyle = getStatusBadgeStyle(customer.customerStatus);
-
-                                        return (
-                                            <tr key={customer._id} style={{ borderBottom: '1px solid #334155', backgroundColor: '#1e293b', transition: 'background-color 0.2s' }} onMouseOver={e => e.currentTarget.style.backgroundColor = '#0f172a'} onMouseOut={e => e.currentTarget.style.backgroundColor = '#1e293b'}>
-                                                <td style={{ padding: '16px', fontWeight: 600, color: '#f1f5f9' }}>{customer.customerName || customer.name || 'Not Provided'}</td>
-                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
-                                                    {customer.company || '-'}
-                                                    {customer.companyBrand ? ` (${customer.companyBrand})` : ''}
-                                                </td>
-                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
-                                                    {primaryContact ? (primaryContact.name || '-') : '-'}
-                                                </td>
-                                                <td style={{ padding: '16px', color: '#94a3b8' }}>
-                                                    {primaryContact ? (primaryContact.mobile || '-') : '-'}
-                                                </td>
-                                                <td style={{ padding: '16px' }}>
-                                                    <span style={{
-                                                        padding: '4px 12px',
-                                                        borderRadius: '12px',
-                                                        fontSize: '0.8125rem',
-                                                        fontWeight: 600,
-                                                        backgroundColor: statusStyle.bg,
-                                                        color: statusStyle.color,
-                                                        border: statusStyle.border,
-                                                        textTransform: 'capitalize'
-                                                    }}>
-                                                        {customer.customerStatus}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '16px' }}>
-                                                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => navigate(`/tasks/create?customerId=${customer._id}`)}
-                                                            title="Create Task"
-                                                        >
-                                                            ➕
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleTalkWithCustomer(customer)}
-                                                            title="Talk with customer"
-                                                        >
-                                                            💬
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleFollowUp(customer)}
-                                                            title="Follow-up tracker"
-                                                        >
-                                                            📅
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleEditCustomer(customer)}
-                                                            style={{
-                                                                backgroundColor: '#3b82f6',
-                                                                color: 'white',
-                                                                border: 'none',
-                                                                fontWeight: '600'
-                                                            }}
-                                                            title="Edit customer"
-                                                        >
-                                                            EDIT
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            style={{ color: '#dc2626' }}
-                                                            onClick={() => handleDeleteCustomer(customer)}
-                                                            title="Delete customer"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginTop: '24px',
-                            padding: '16px',
-                            background: '#1e293b',
-                            border: '1px solid #334155',
-                            borderRadius: '8px'
-                        }}>
-                            <div style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 500 }}>
-                                Page {currentPage} of {totalPages}
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                >
-                                    <ChevronLeft size={16} /> Previous
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                >
-                                    Next <ChevronRight size={16} />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </>
             )}
 
             {/* Import Customer Modal */}
@@ -462,7 +374,8 @@ export const CustomerList = () => {
                     isOpen={showImportModal}
                     onClose={() => setShowImportModal(false)}
                     onSuccess={handleImportSuccess}
-                />)}
+                />
+            )}
         </div>
     );
 };

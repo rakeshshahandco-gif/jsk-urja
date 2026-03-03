@@ -10,32 +10,8 @@ import { GroupForm } from './GroupForm';
 import { useModal } from '@/components/ui';
 import { Plus, RefreshCw } from 'lucide-react';
 
-// Shared native input style — 32px height, compact
-const f = {
-    base: {
-        height: 32, fontSize: 12, padding: '0 8px',
-        border: '1px solid #d1d5db', borderRadius: 6,
-        background: '#fff', outline: 'none', width: '100%', boxSizing: 'border-box'
-    },
-    sel: {
-        height: 32, fontSize: 12, padding: '0 24px 0 8px',
-        border: '1px solid #d1d5db', borderRadius: 6,
-        background: '#fff', outline: 'none', width: '100%', boxSizing: 'border-box',
-        appearance: 'none',
-        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
-        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em'
-    },
-    label: { display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3, letterSpacing: '0.04em' },
-    btn: (primary) => ({
-        height: 32, fontSize: 12, padding: '0 14px', borderRadius: 6, fontWeight: 600,
-        cursor: 'pointer', border: primary ? 'none' : '1px solid #d1d5db',
-        background: primary ? '#2563eb' : '#fff', color: primary ? '#fff' : '#374151',
-        display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap'
-    }),
-    err: { color: '#ef4444', fontSize: 10, marginTop: 2 }
-};
-
-const col = (n) => ({ display: 'grid', gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))`, gap: 10, alignItems: 'end' });
+import styles from './TaskForm.module.scss';
+import clsx from 'clsx';
 
 export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const { openModal, closeModal } = useModal();
@@ -119,7 +95,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
         const selectedGroup = groupsOptions.find(g => (g._id || g.id) === data.groupId);
         const hasFixedUsers = selectedGroup && selectedGroup.userIds && selectedGroup.userIds.length > 0;
 
-        // Strict Option 2 frontend validation
         if (!hasFixedUsers && (data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') && (!data.assigneeIds || data.assigneeIds.length === 0)) {
             toast.error('Please select at least one assignee.');
             return;
@@ -134,7 +109,6 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                 assignedGroupId: hasFixedUsers ? data.groupId : (data.assignmentMode === 'GROUP' ? data.assignedGroupId : null),
                 groupId: data.groupId || null,
                 taskCategoryId: data.taskCategoryId || null,
-                // If the group has fixed users, explicitly send those user IDs to the backend to guarantee assignment
                 assigneeIds: hasFixedUsers ? selectedGroup.userIds.map(u => u._id || u.id || u) : ((data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : []),
                 recurrence: data.recurrence.enabled ? {
                     ...data.recurrence,
@@ -159,7 +133,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     };
 
     if (loading) {
-        return <div style={{ padding: 24, textAlign: 'center', color: '#6b7280', fontSize: 13 }}>Loading form options...</div>;
+        return <div className={styles.loading}>Loading form options...</div>;
     }
 
     const selectedGroupDef = groupsOptions.find(g => (g._id || g.id) === selectedGroupId);
@@ -169,47 +143,46 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const needsGroup = !hasFixedUsers && (assignmentMode === 'GROUP');
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-
+        <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
             {/* ── ROW 1: Group | +New | Title ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '160px 80px 1fr', gap: 10, alignItems: 'end' }}>
-                <div>
-                    <label style={f.label}>Group *</label>
-                    <select style={f.sel} {...register('groupId', { required: 'Group required' })}>
+            <div className={clsx(styles.row, styles.mixedCols)}>
+                <div className={styles.field}>
+                    <label className={styles.label}>Group *</label>
+                    <select className={styles.select} {...register('groupId', { required: 'Group required' })}>
                         <option value="">— Select Group —</option>
                         {groupsOptions.map(g => <option key={g._id || g.id} value={g._id || g.id}>{g.name}</option>)}
                     </select>
-                    {errors.groupId && <div style={f.err}>{errors.groupId.message}</div>}
+                    {errors.groupId && <div className={styles.error}>{errors.groupId.message}</div>}
                 </div>
-                <div>
-                    <label style={f.label}>&nbsp;</label>
-                    <button type="button" onClick={handleCreateNewGroup} style={f.btn(false)}>
+                <div className={styles.field}>
+                    <label className={styles.label}>&nbsp;</label>
+                    <button type="button" onClick={handleCreateNewGroup} className={clsx(styles.btn, styles.secondary)}>
                         <Plus size={12} /> New
                     </button>
                 </div>
-                <div>
-                    <label style={f.label}>Task Title *</label>
+                <div className={styles.field}>
+                    <label className={styles.label}>Task Title *</label>
                     <input
-                        style={{ ...f.base, fontWeight: 600 }}
+                        className={clsx(styles.input, styles.bold)}
                         {...register('title', { required: 'Title is required' })}
                         placeholder="What needs to be done?"
                     />
-                    {errors.title && <div style={f.err}>{errors.title.message}</div>}
+                    {errors.title && <div className={styles.error}>{errors.title.message}</div>}
                 </div>
             </div>
 
             {/* ── ROW 2: Category | Priority | Assignment Mode | Assignee ── */}
-            <div style={col(4)}>
-                <div>
-                    <label style={f.label}>Category</label>
-                    <select style={f.sel} {...register('taskCategoryId')}>
+            <div className={clsx(styles.row, styles.fourCols)}>
+                <div className={styles.field}>
+                    <label className={styles.label}>Category</label>
+                    <select className={styles.select} {...register('taskCategoryId')}>
                         <option value="">No Category</option>
                         {categoriesOptions.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
                     </select>
                 </div>
-                <div>
-                    <label style={f.label}>Priority</label>
-                    <select style={f.sel} {...register('priority')}>
+                <div className={styles.field}>
+                    <label className={styles.label}>Priority</label>
+                    <select className={styles.select} {...register('priority')}>
                         <option value="LOW">Low</option>
                         <option value="MEDIUM">Medium</option>
                         <option value="HIGH">High</option>
@@ -217,10 +190,10 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         <option value="CRITICAL">Critical</option>
                     </select>
                 </div>
-                {!hasFixedUsers && (
-                    <div>
-                        <label style={f.label}>Assign To</label>
-                        <select style={f.sel} {...register('assignmentMode')}>
+                {!hasFixedUsers ? (
+                    <div className={styles.field}>
+                        <label className={styles.label}>Assign To</label>
+                        <select className={styles.select} {...register('assignmentMode')}>
                             <option value="SELF">Self (Me)</option>
                             <option value="SINGLE">Single User</option>
                             <option value="MULTI">Multiple Users</option>
@@ -228,32 +201,29 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                             <option value="GROUP">Specific Group</option>
                         </select>
                     </div>
-                )}
-                {hasFixedUsers && (
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label style={f.label}>Assignment</label>
-                        <div style={{ ...f.base, background: '#f3f4f6', color: '#6b7280', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+                ) : (
+                    <div className={styles.field}>
+                        <label className={styles.label}>Assignment</label>
+                        <div className={styles.fixedUsersBadge}>
                             Fixed to Group Users ({selectedGroupDef.userIds.length})
                         </div>
                     </div>
                 )}
                 {needsAssignee && (
-                    <div>
-                        <label style={f.label}>Assignee(s) *</label>
-                        <div style={{ fontSize: 12 }}>
-                            <MultiSelect
-                                name="assigneeIds"
-                                control={control}
-                                options={usersOptions.map(u => ({ value: u.id || u._id, label: u.fullName || u.name }))}
-                                placeholder="Select..."
-                            />
-                        </div>
+                    <div className={styles.field}>
+                        <label className={styles.label}>Assignee(s) *</label>
+                        <MultiSelect
+                            name="assigneeIds"
+                            control={control}
+                            options={usersOptions.map(u => ({ value: u.id || u._id, label: u.fullName || u.name }))}
+                            placeholder="Select..."
+                        />
                     </div>
                 )}
                 {needsGroup && (
-                    <div>
-                        <label style={f.label}>Select Group *</label>
-                        <select style={f.sel} {...register('assignedGroupId')}>
+                    <div className={styles.field}>
+                        <label className={styles.label}>Select Group *</label>
+                        <select className={styles.select} {...register('assignedGroupId')}>
                             <option value="">— Select —</option>
                             {(teamsOptions.length > 0 ? teamsOptions : groupsOptions).map(g => (
                                 <option key={g._id || g.id} value={g._id || g.id}>{g.name}</option>
@@ -261,32 +231,34 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         </select>
                     </div>
                 )}
-                {!needsAssignee && !needsGroup && !hasFixedUsers && <div />}
             </div>
 
             {/* ── ROW 3: Due Date | Recurring toggle | Frequency | Interval ── */}
-            <div style={col(4)}>
-                <div>
-                    <label style={f.label}>Due Date & Time *</label>
+            <div className={clsx(styles.row, styles.fourCols)}>
+                <div className={styles.field}>
+                    <label className={styles.label}>Due Date & Time *</label>
                     <input
                         type="datetime-local"
-                        style={f.base}
+                        className={styles.input}
                         {...register('dueDate', { required: 'Due date required' })}
                     />
-                    {errors.dueDate && <div style={f.err}>{errors.dueDate.message}</div>}
+                    {errors.dueDate && <div className={styles.error}>{errors.dueDate.message}</div>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 2 }}>
-                    <label style={{ ...f.label, margin: 0 }}>&nbsp;</label>
-                    <input type="checkbox" id="recurrenceEnabled" {...register('recurrence.enabled')} style={{ width: 14, height: 14 }} />
-                    <label htmlFor="recurrenceEnabled" style={{ fontSize: 12, fontWeight: 600, color: recurrenceEnabled ? '#7c3aed' : '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div className={styles.recurrenceBox}>
+                    <input type="checkbox" id="recurrenceEnabled" {...register('recurrence.enabled')} />
+                    <label 
+                        htmlFor="recurrenceEnabled" 
+                        className={clsx({ [styles.active]: recurrenceEnabled })}
+                    >
                         <RefreshCw size={12} /> Recurring
                     </label>
                 </div>
-                {recurrenceEnabled ? (
+
+                {recurrenceEnabled && (
                     <>
-                        <div>
-                            <label style={f.label}>Frequency</label>
-                            <select style={{ ...f.sel, borderColor: '#c4b5fd' }} {...register('recurrence.frequency')}>
+                        <div className={styles.field}>
+                            <label className={styles.label}>Frequency</label>
+                            <select className={styles.select} {...register('recurrence.frequency')}>
                                 <option value="DAILY">Daily</option>
                                 <option value="WEEKLY">Weekly</option>
                                 <option value="MONTHLY">Monthly</option>
@@ -294,56 +266,54 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                                 <option value="YEARLY">Yearly</option>
                             </select>
                         </div>
-                        <div>
-                            <label style={f.label}>Every X</label>
-                            <input type="number" style={{ ...f.base, borderColor: '#c4b5fd' }} {...register('recurrence.interval')} min="1" />
+                        <div className={styles.field}>
+                            <label className={styles.label}>Every X</label>
+                            <input type="number" className={styles.input} {...register('recurrence.interval')} min="1" />
                         </div>
                     </>
-                ) : (
-                    <><div /><div /></>
                 )}
             </div>
 
             {/* ── Recurrence End Rule (only if recurring) ── */}
             {recurrenceEnabled && (
-                <div style={col(recurrenceEndType === 'DATE' || recurrenceEndType === 'ON_COUNT' ? 3 : 2)}>
-                    <div>
-                        <label style={f.label}>End Rule</label>
-                        <select style={{ ...f.sel, borderColor: '#c4b5fd' }} {...register('recurrence.recurrenceEndType')}>
+                <div className={clsx(styles.row, { [styles.threeCols]: (recurrenceEndType === 'DATE' || recurrenceEndType === 'ON_COUNT'), [styles.twoCols]: !(recurrenceEndType === 'DATE' || recurrenceEndType === 'ON_COUNT') })}>
+                    <div className={styles.field}>
+                        <label className={styles.label}>End Rule</label>
+                        <select className={styles.select} {...register('recurrence.recurrenceEndType')}>
                             <option value="NEVER">Never ends</option>
                             <option value="DATE">Ends on date</option>
                             <option value="ON_COUNT">After N occurrences</option>
                         </select>
                     </div>
                     {recurrenceEndType === 'DATE' && (
-                        <div>
-                            <label style={f.label}>End Date</label>
-                            <input type="date" style={{ ...f.base, borderColor: '#c4b5fd' }} {...register('recurrence.recurrenceEndDate')} />
+                        <div className={styles.field}>
+                            <label className={styles.label}>End Date</label>
+                            <input type="date" className={styles.input} {...register('recurrence.recurrenceEndDate')} />
                         </div>
                     )}
                     {recurrenceEndType === 'ON_COUNT' && (
-                        <div>
-                            <label style={f.label}>Occurrences</label>
-                            <input type="number" style={{ ...f.base, borderColor: '#c4b5fd' }} {...register('recurrence.recurrenceEndCount')} min="1" />
+                        <div className={styles.field}>
+                            <label className={styles.label}>Occurrences</label>
+                            <input type="number" className={styles.input} {...register('recurrence.recurrenceEndCount')} min="1" />
                         </div>
                     )}
                 </div>
             )}
 
             {/* ── ROW 4: Description ── */}
-            <div>
-                <label style={f.label}>Description</label>
+            <div className={styles.field}>
+                <label className={styles.label}>Description</label>
                 <textarea
-                    style={{ ...f.base, height: 52, padding: '6px 8px', resize: 'vertical', fontFamily: 'inherit' }}
+                    className={styles.textarea}
                     {...register('description')}
                     placeholder="Add any specific details or instructions..."
                 />
             </div>
 
             {/* ── Buttons ── */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #e5e7eb', paddingTop: 10, marginTop: 2 }}>
-                <button type="button" onClick={onCancel} style={f.btn(false)}>Cancel</button>
-                <button type="submit" disabled={submitting} style={{ ...f.btn(true), opacity: submitting ? 0.7 : 1 }}>
+            <div className={styles.footer}>
+                <button type="button" onClick={onCancel} className={clsx(styles.btn, styles.secondary)}>Cancel</button>
+                <button type="submit" disabled={submitting} className={clsx(styles.btn, styles.primary)}>
                     {submitting ? 'Saving...' : (task ? '✓ Update Task' : '🚀 Create Task')}
                 </button>
             </div>
