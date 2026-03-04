@@ -1,11 +1,11 @@
 services:
-  # Static Site configuration for the frontend
-  - type: static
-    name: jsk-urja-frontend
-    env: static
-    buildCommand: npm run build
-    staticPublishPath: ./dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+  # Backend Web Service (serves both API and React frontend)
+  - type: web
+    name: jsk-urja-backend
+    env: node
+    rootDir: .
+    buildCommand: npm install && npm run build && cd backend && npm install
+    startCommand: node backend/src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
