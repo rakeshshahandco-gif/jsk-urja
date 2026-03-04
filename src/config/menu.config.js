@@ -213,6 +213,32 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'sales',
+        title: 'Sales',
+        icon: 'ShoppingBagIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            {
+                id: 'sales-orders',
+                title: 'Sales Orders',
+                path: PATHS.SALES.ORDERS,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'sales-invoices',
+                title: 'Tax Invoices (GST)',
+                path: PATHS.SALES.INVOICES,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'invoice-series',
+                title: 'Invoice Series',
+                path: PATHS.SALES.INVOICE_SERIES,
+                roles: [ROLES.ADMIN],
+            },
+        ],
+    },
+    {
         id: 'admin',
         title: 'Admin',
         icon: 'SettingsIcon',
@@ -227,3 +253,4 @@ export const menuConfig = [
         ],
     },
 ];
+

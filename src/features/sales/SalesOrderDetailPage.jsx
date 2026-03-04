@@ -1,0 +1,177 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getSalesOrderById, cancelSalesOrder, generateProductionSheet } from '@/services/salesApi';
+import { PATHS } from '@/routes/paths';
+import toast from 'react-hot-toast';
+
+const STATUS_COLORS = {
+    Draft: { color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
+    Confirmed: { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
+    Dispatched: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+    Invoiced: { color: '#059669', bg: '#f0fdf4', border: '#6ee7b7' },
+    Closed: { color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+    Cancelled: { color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+};
+const th = { padding: '9px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 12, textTransform: 'uppercase', background: '#f9fafb' };
+const td = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
+
+export default function SalesOrderDetailPage() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [so, setSO] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [generating, setGenerating] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        getSalesOrderById(id).then(setSO).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
+    }, [id]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
+    const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
+
+    const handleGeneratePS = async () => {
+        setGenerating(true);
+        try {
+            const res = await generateProductionSheet(id);
+            toast.success(res.message || 'Production sheet generated!');
+            navigate(PATHS.SALES.PRODUCTION_SHEET(res.data._id));
+        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        finally { setGenerating(false); }
+    };
+
+    const handleCancel = async () => {
+        if (!window.confirm('Cancel this Sales Order?')) return;
+        setCancelling(true);
+        try { await cancelSalesOrder(id); toast.success('Cancelled'); load(); }
+        catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        finally { setCancelling(false); }
+    };
+
+    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
+    if (!so) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Sales Order not found.</div>;
+
+    const sc = STATUS_COLORS[so.status] || STATUS_COLORS.Draft;
+    const notCancelled = so.status !== 'Cancelled';
+
+    return (
+        <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+            {/* Header */}
+            <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{so.soNumber}</h1>
+                            <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{so.status}</span>
+                            <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: so.paymentType === 'Cash' ? '#f0fdf4' : '#fffbeb', color: so.paymentType === 'Cash' ? '#16a34a' : '#d97706', border: `1px solid ${so.paymentType === 'Cash' ? '#86efac' : '#fcd34d'}` }}>{so.paymentType}</span>
+                        </div>
+                        <div style={{ color: '#9ca3af', fontSize: 13, marginTop: 4 }}>{so.customerName} · {so.orderCategory} · Date: {fmt(so.soDate)} · Delivery: {fmt(so.deliveryDate)}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {notCancelled && !so.productionSheetId && (
+                            <button onClick={handleGeneratePS} disabled={generating} style={{ padding: '9px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                                🖨️ {generating ? 'Generating...' : 'Generate Production Sheet'}
+                            </button>
+                        )}
+                        {so.productionSheetId && (
+                            <button onClick={() => navigate(PATHS.SALES.PRODUCTION_SHEET(so.productionSheetId))} style={{ padding: '9px 16px', background: '#f1f5f9', border: '1px solid #7c3aed', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#7c3aed' }}>
+                                📋 View Production Sheet
+                            </button>
+                        )}
+                        {notCancelled && !so.invoiceId && (
+                            <button onClick={() => navigate(`${PATHS.SALES.NEW_INVOICE}?soId=${id}`)} style={{ padding: '9px 16px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                                🧾 Create Invoice
+                            </button>
+                        )}
+                        <button onClick={() => window.print()} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
+                        {notCancelled && (
+                            <button onClick={() => navigate(`/sales/orders/${id}/edit`)} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✏️ Edit</button>
+                        )}
+                        {notCancelled && (
+                            <button onClick={handleCancel} disabled={cancelling} style={{ padding: '9px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✕ Cancel</button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div style={{ padding: '24px 28px' }}>
+                {/* Summary Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 24 }}>
+                    {[
+                        ['Grand Total', fmtCur(so.roundedTotal || so.grandTotal), '#16a34a'],
+                        ['Total Items', `${so.items?.length || 0} items`, '#2563eb'],
+                        ['GST Type', so.gstType || '—', '#6b7280'],
+                        ['Customer PO', so.customerPO || '—', '#6b7280'],
+                    ].map(([k, v, c]) => (
+                        <div key={k} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{k}</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: c, marginTop: 4 }}>{v}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Customer Info */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                    {[['Billing Address', so.billingAddress], ['Shipping Address', so.shippingAddress]].map(([title, addr]) => (
+                        <div key={title} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>{title}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>{so.customerName}</div>
+                            {so.customerGstin && <div style={{ fontSize: 12, color: '#6b7280' }}>GSTIN: {so.customerGstin}</div>}
+                            {addr && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, whiteSpace: 'pre-wrap' }}>{addr}</div>}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Items Table */}
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
+                    <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6' }}><h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Order Items</h2></div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead><tr>{['Sr', 'Product', 'Model No', 'HSN', 'UOM', 'Qty', 'Rate', 'GST%', 'Amount'].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                        <tbody>
+                            {(so.items || []).map((item, i) => (
+                                <tr key={i} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    <td style={{ ...td, color: '#9ca3af' }}>{i + 1}</td>
+                                    <td style={td}><div style={{ fontWeight: 500, color: '#1e293b' }}>{item.itemName}</div>{item.additionalNotes && <div style={{ color: '#9ca3af', fontSize: 11 }}>{item.additionalNotes}</div>}</td>
+                                    <td style={td}>{item.modelNo || '—'}</td>
+                                    <td style={{ ...td, color: '#6b7280' }}>{item.hsnCode || '—'}</td>
+                                    <td style={td}>{item.uom}</td>
+                                    <td style={{ ...td, color: '#2563eb', fontWeight: 600 }}>{item.qty}</td>
+                                    <td style={td}>₹{item.rate}</td>
+                                    <td style={{ ...td, color: '#6b7280' }}>{item.gstRate}%</td>
+                                    <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>₹{(item.amount || item.qty * item.rate || 0).toLocaleString('en-IN')}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {/* Totals Footer */}
+                    <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6' }}>
+                        <div style={{ minWidth: 280 }}>
+                            {[['Total Amount', fmtCur(so.totalAmount)], [so.gstType, fmtCur(so.totalGst)], ['Freight', fmtCur(so.freightAmount)], ['Round Off', fmtCur(so.roundOff)]].filter(([, v]) => v !== '₹0').map(([k, v]) => (
+                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#6b7280' }}><span>{k}</span><span>{v}</span></div>
+                            ))}
+                            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 18, color: '#16a34a' }}>
+                                <span>Grand Total</span><span>{fmtCur(so.roundedTotal || so.grandTotal)}</span>
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>{so.amountInWords}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Remarks */}
+                {so.remarks && (
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>Remarks</div>
+                        <div style={{ fontSize: 13, color: '#374151' }}>{so.remarks}</div>
+                    </div>
+                )}
+            </div>
+
+            {/* Print Styles */}
+            <style>{`@media print { button { display: none !important; } }`}</style>
+        </div>
+    );
+}

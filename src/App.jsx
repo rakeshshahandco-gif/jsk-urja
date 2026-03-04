@@ -51,6 +51,14 @@ import GRNFormPage from '@/features/purchase/GRNFormPage';
 import CashBookPage from '@/features/purchase/CashBookPage';
 import BankBookPage from '@/features/purchase/BankBookPage';
 import PurchaseComparisonReportPage from '@/features/reports/PurchaseComparisonReportPage';
+import SalesOrderListPage from '@/features/sales/SalesOrderListPage';
+import SalesOrderFormPage from '@/features/sales/SalesOrderFormPage';
+import SalesOrderDetailPage from '@/features/sales/SalesOrderDetailPage';
+import SalesInvoiceListPage from '@/features/sales/SalesInvoiceListPage';
+import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
+import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
+import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
+import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -330,6 +338,16 @@ function App() {
                                                         {/* Purchase Comparison Report */}
                                                         <Route path="/reports/purchase-comparison" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseComparisonReportPage /></ProtectedRoute>} />
 
+                                                        {/* Sales Module */}
+                                                        <Route path="/sales/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderListPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderDetailPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceListPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceFormPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceDetailPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ProductionSheetPage /></ProtectedRoute>} />
+                                                        <Route path="/sales/invoice-series" element={<ProtectedRoute requireRole={['admin']}><InvoiceSeriesPage /></ProtectedRoute>} />
 
                                                         {/* Redirects */}
                                                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

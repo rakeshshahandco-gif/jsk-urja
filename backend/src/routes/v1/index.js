@@ -21,6 +21,10 @@ import purchaseOrderRoute from './purchaseOrder.routes.js';
 import grnRoute from './grn.routes.js';
 import purchaseInvoiceRoute from './purchaseInvoice.routes.js';
 import paymentEntryRoute from './paymentEntry.routes.js';
+import salesOrderRoute from './salesOrder.routes.js';
+import salesInvoiceRoute from './salesInvoice.routes.js';
+import invoiceSeriesRoute from './invoiceSeries.routes.js';
+import productionSheetRoute from './productionSheet.routes.js';
 
 const router = express.Router();
 
@@ -117,6 +121,22 @@ const defaultRoutes = [
     {
         path: '/payment-entries',
         route: paymentEntryRoute,
+    },
+    {
+        path: '/sales-orders',
+        route: salesOrderRoute,
+    },
+    {
+        path: '/sales-invoices',
+        route: salesInvoiceRoute,
+    },
+    {
+        path: '/invoice-series',
+        route: invoiceSeriesRoute,
+    },
+    {
+        path: '/production-sheets',
+        route: productionSheetRoute,
     },
 ];
 

@@ -56,4 +56,15 @@ export const PATHS = {
         INVOICE_DETAIL: (id) => `/purchase/invoices/${id}`,
         PURCHASE_REPORT: '/reports/purchase-comparison',
     },
+    SALES: {
+        DASHBOARD: '/sales',
+        ORDERS: '/sales/orders',
+        NEW_ORDER: '/sales/orders/new',
+        ORDER_DETAIL: (id) => `/sales/orders/${id}`,
+        INVOICES: '/sales/invoices',
+        NEW_INVOICE: '/sales/invoices/new',
+        INVOICE_DETAIL: (id) => `/sales/invoices/${id}`,
+        PRODUCTION_SHEET: (id) => `/sales/production-sheets/${id}`,
+        INVOICE_SERIES: '/sales/invoice-series',
+    },
 };
