@@ -7,6 +7,7 @@ import { Button, Input, Select } from '@/components/ui';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { TaskReportTable } from './components/TaskReportTable';
+import styles from './CustomerMasterReport.module.scss';
 
 import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from './components/ExtendTaskModal';
@@ -125,53 +126,49 @@ const TaskReminderReport = () => {
     };
 
     return (
-        <div className="p-6 bg-gray-50 min-h-screen">
+        <div className={styles.container}>
 
             {/* ── Line 1: Title + Tabs ─────────────────────────────── */}
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-                <h1 className="text-xl font-bold text-gray-900 mr-2">Tasks</h1>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>Tasks</h1>
 
-                <div className="flex bg-white p-0.5 rounded-lg border border-gray-200 shadow-sm">
-                    <button
-                        onClick={() => setActiveTab('today')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'today' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Today
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('upcoming')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'upcoming' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Upcoming
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('all')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'all' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        All Tasks <span className="ml-1 text-xs px-1.5 py-0.5 bg-gray-100 rounded-full text-gray-500">{pagination.total}</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('recurring')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'recurring' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Recurring
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('closed')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'closed' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Closed
-                    </button>
+                <div style={{ display: 'flex', background: '#f1f5f9', padding: 3, borderRadius: 8, border: '1px solid #e2e8f0', gap: 2 }}>
+                    {[
+                        { key: 'today', label: 'Today' },
+                        { key: 'upcoming', label: 'Upcoming' },
+                        { key: 'all', label: 'All Tasks' },
+                        { key: 'recurring', label: 'Recurring' },
+                        { key: 'closed', label: 'Closed' },
+                    ].map(({ key, label }) => (
+                        <button
+                            key={key}
+                            onClick={() => setActiveTab(key)}
+                            style={{
+                                padding: '5px 14px',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: activeTab === key ? '#fff' : 'transparent',
+                                color: activeTab === key ? '#0d9488' : '#64748b',
+                                boxShadow: activeTab === key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {label}
+                            {key === 'all' && <span style={{ marginLeft: 4, fontSize: 11, padding: '1px 6px', background: '#f1f5f9', borderRadius: 999, color: '#64748b' }}>{pagination.total}</span>}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-
             {/* ── Line 2: All filters in one compact row ────────────── */}
-            <div className="flex flex-wrap items-center gap-2 mb-3 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12, background: '#fff', padding: '8px 12px', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
                 <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                    style={{ height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em', color: '#374151', outline: 'none', cursor: 'pointer' }}
                 >
                     <option value="">All Types</option>
                     {(options?.taskCategories || []).map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
@@ -180,7 +177,7 @@ const TaskReminderReport = () => {
                 <select
                     value={groupFilter}
                     onChange={(e) => setGroupFilter(e.target.value)}
-                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                    style={{ height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em', color: '#374151', outline: 'none', cursor: 'pointer' }}
                 >
                     <option value="">All Groups</option>
                     {(options?.taskGroups || []).map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
@@ -189,7 +186,7 @@ const TaskReminderReport = () => {
                 <select
                     value={assigneeFilter}
                     onChange={(e) => setAssigneeFilter(e.target.value)}
-                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                    style={{ height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 110, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em', color: '#374151', outline: 'none', cursor: 'pointer' }}
                 >
                     <option value="">All Assignees</option>
                     {(options?.users || []).map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
@@ -198,7 +195,7 @@ const TaskReminderReport = () => {
                 <select
                     value={priorityFilter}
                     onChange={(e) => setPriorityFilter(e.target.value)}
-                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                    style={{ height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em', color: '#374151', outline: 'none', cursor: 'pointer' }}
                 >
                     <option value="">All Priority</option>
                     <option value="LOW">Low</option>
@@ -210,7 +207,7 @@ const TaskReminderReport = () => {
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    style={{ height: 28, fontSize: 12, padding: '0 24px 0 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em' }}
+                    style={{ height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', minWidth: 100, appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '1em', color: '#374151', outline: 'none', cursor: 'pointer' }}
                 >
                     <option value="">All Status</option>
                     <option value="OPEN">Open</option>
@@ -220,23 +217,23 @@ const TaskReminderReport = () => {
                     <option value="OVERDUE">Overdue</option>
                 </select>
 
-                <div className="relative flex-1 min-w-[140px]">
-                    <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
+                    <Search size={13} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
                     <input
                         placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{ height: 28, fontSize: 12, paddingLeft: 24, paddingRight: 8, border: '1px solid #d1d5db', borderRadius: 6, width: '100%', outline: 'none' }}
+                        style={{ height: 32, fontSize: 13, paddingLeft: 28, paddingRight: 8, border: '1px solid #d1d5db', borderRadius: 6, width: '100%', outline: 'none', color: '#374151' }}
                     />
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
+            <div className={styles.reportContent} style={{ minHeight: 400 }}>
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center h-[400px] text-gray-500">
-                        <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                        <p className="font-medium">Loading your tasks...</p>
+                    <div className={styles.loaderContainer}>
+                        <Loader2 className={styles.spinner} />
+                        <p>Loading your tasks...</p>
                     </div>
                 ) : (
                     <TaskReportTable
@@ -252,38 +249,28 @@ const TaskReminderReport = () => {
                 )}
             </div>
 
-            {/* Pagination rudimentary */}
+            {/* Pagination */}
             {!loading && tasks.length > 0 && pagination.total > pagination.limit && (
-                <div className="mt-8 flex justify-center">
-                    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1 shadow-sm">
+                <div className={styles.pagination}>
+                    <div className={styles.paginationInfo}>
+                        Showing page {pagination.page} of {Math.ceil(pagination.total / pagination.limit)}
+                    </div>
+                    <div className={styles.paginationControls}>
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             disabled={pagination.page === 1}
                             onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                            className="h-8 w-8 p-0"
                         >
-                            &larr;
+                            ← Previous
                         </Button>
-                        <div className="flex gap-1 mx-2">
-                            {[...Array(Math.ceil(pagination.total / pagination.limit))].map((_, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => setPagination(p => ({ ...p, page: i + 1 }))}
-                                    className={`w-8 h-8 rounded-md text-sm font-bold transition-all ${pagination.page === i + 1 ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-50'}`}
-                                >
-                                    {i + 1}
-                                </button>
-                            ))}
-                        </div>
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             disabled={pagination.page >= Math.ceil(pagination.total / pagination.limit)}
                             onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                            className="h-8 w-8 p-0"
                         >
-                            &rarr;
+                            Next →
                         </Button>
                     </div>
                 </div>
@@ -297,6 +284,7 @@ const TaskReminderReport = () => {
             />
         </div>
     );
+
 };
 
 export default TaskReminderReport;
