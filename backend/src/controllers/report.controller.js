@@ -2,6 +2,9 @@ import pick from '../utils/pick.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import reportService from '../services/report.service.js';
 import reminderService from '../services/reminder.service.js';
+import { PurchaseOrder } from '../models/purchaseOrder.model.js';
+import { GRN } from '../models/grn.model.js';
+import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 
 const catchAsync = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((err) => next(err));
@@ -326,6 +329,147 @@ const getTaskReminderReport = catchAsync(async (req, res) => {
     res.send(result);
 });
 
+// ── Purchase Comparison Report ─────────────────────────────────────────
+const getPurchaseComparisonReport = catchAsync(async (req, res) => {
+    const { supplierId, dateFrom, dateTo } = req.query;
+
+    // Build PO query
+    const poQuery = { status: { $ne: 'Cancelled' } };
+    if (supplierId) poQuery.supplierId = supplierId;
+    if (dateFrom || dateTo) {
+        poQuery.poDate = {};
+        if (dateFrom) poQuery.poDate.$gte = new Date(dateFrom);
+        if (dateTo) poQuery.poDate.$lte = new Date(dateTo);
+    }
+
+    const pos = await PurchaseOrder.find(poQuery)
+        .populate('supplierId', 'supplierName supplierCode')
+        .sort({ poDate: -1 })
+        .lean();
+
+    const rows = [];
+    let totalOrderedValue = 0, totalReceivedValue = 0, totalInvoicedValue = 0;
+
+    for (const po of pos) {
+        // Get all GRNs for this PO
+        const grns = await GRN.find({ poId: po._id }).lean();
+        // Get all invoices for this PO
+        const invoices = await PurchaseInvoice.find({ poId: po._id, status: { $ne: 'Cancelled' } }).lean();
+
+        for (const poItem of po.items) {
+            // Sum received qty from GRNs
+            let receivedQty = 0;
+            for (const grn of grns) {
+                const gi = grn.items.find(g => g.itemId.toString() === poItem.itemId.toString());
+                if (gi) receivedQty += gi.receivedQty;
+            }
+
+            // Sum invoiced qty & get latest invoice rate
+            let invoicedQty = 0;
+            let invoiceRate = null;
+            for (const inv of invoices) {
+                const ii = inv.items.find(i => i.itemId.toString() === poItem.itemId.toString());
+                if (ii) {
+                    invoicedQty += ii.qty;
+                    invoiceRate = ii.rate; // last invoice rate
+                }
+            }
+
+            const pendingQty = Math.max(0, poItem.orderedQty - receivedQty);
+            const rateDiff = invoiceRate !== null ? Number((invoiceRate - poItem.rate).toFixed(2)) : null;
+            const orderedValue = Math.round(poItem.orderedQty * poItem.rate * 100) / 100;
+            const receivedValue = Math.round(receivedQty * poItem.rate * 100) / 100;
+            const invoicedValue = Math.round(invoicedQty * (invoiceRate || poItem.rate) * 100) / 100;
+
+            totalOrderedValue += orderedValue;
+            totalReceivedValue += receivedValue;
+            totalInvoicedValue += invoicedValue;
+
+            rows.push({
+                poId: po._id,
+                poNumber: po.poNumber,
+                poDate: po.poDate,
+                poStatus: po.status,
+                supplier: po.supplierId?.supplierName || po.supplierName,
+                supplierCode: po.supplierId?.supplierCode || '',
+                itemName: poItem.itemName,
+                itemCode: poItem.itemCode,
+                uom: poItem.uom,
+                orderedQty: poItem.orderedQty,
+                receivedQty: Math.round(receivedQty * 100) / 100,
+                invoicedQty: Math.round(invoicedQty * 100) / 100,
+                pendingQty: Math.round(pendingQty * 100) / 100,
+                poRate: poItem.rate,
+                invoiceRate: invoiceRate,
+                rateDiff,
+                orderedValue,
+                receivedValue,
+                invoicedValue,
+            });
+        }
+    }
+
+    // Direct GRN rows (no PO)
+    const grnQuery = { sourceType: 'Direct GRN' };
+    if (supplierId) grnQuery.supplierId = supplierId;
+    if (dateFrom || dateTo) {
+        grnQuery.grnDate = {};
+        if (dateFrom) grnQuery.grnDate.$gte = new Date(dateFrom);
+        if (dateTo) grnQuery.grnDate.$lte = new Date(dateTo);
+    }
+    const directGrns = await GRN.find(grnQuery)
+        .populate('supplierId', 'supplierName supplierCode')
+        .lean();
+
+    for (const grn of directGrns) {
+        const invoices = await PurchaseInvoice.find({ grnId: grn._id, status: { $ne: 'Cancelled' } }).lean();
+        for (const gi of grn.items) {
+            let invoicedQty = 0, invoiceRate = null;
+            for (const inv of invoices) {
+                const ii = inv.items.find(i => i.itemId.toString() === gi.itemId.toString());
+                if (ii) { invoicedQty += ii.qty; invoiceRate = ii.rate; }
+            }
+            const receivedValue = Math.round(gi.receivedQty * gi.rate * 100) / 100;
+            const invoicedValue = Math.round(invoicedQty * (invoiceRate || gi.rate) * 100) / 100;
+            totalReceivedValue += receivedValue;
+            totalInvoicedValue += invoicedValue;
+
+            rows.push({
+                poId: null,
+                poNumber: '—',
+                poDate: grn.grnDate,
+                poStatus: 'Direct GRN',
+                supplier: grn.supplierId?.supplierName || grn.supplierName,
+                supplierCode: grn.supplierId?.supplierCode || '',
+                itemName: gi.itemName,
+                itemCode: gi.itemCode,
+                uom: gi.uom,
+                orderedQty: 0,
+                receivedQty: gi.receivedQty,
+                invoicedQty: Math.round(invoicedQty * 100) / 100,
+                pendingQty: Math.max(0, gi.receivedQty - invoicedQty),
+                poRate: gi.rate,
+                invoiceRate,
+                rateDiff: invoiceRate !== null ? Number((invoiceRate - gi.rate).toFixed(2)) : null,
+                orderedValue: 0,
+                receivedValue,
+                invoicedValue,
+            });
+        }
+    }
+
+    res.json(new ApiResponse(200, {
+        rows,
+        summary: {
+            totalRows: rows.length,
+            totalOrderedValue: Math.round(totalOrderedValue * 100) / 100,
+            totalReceivedValue: Math.round(totalReceivedValue * 100) / 100,
+            totalInvoicedValue: Math.round(totalInvoicedValue * 100) / 100,
+            totalPendingValue: Math.round((totalOrderedValue - totalReceivedValue) * 100) / 100,
+        },
+    }, 'Purchase comparison report'));
+});
+
 export default {
     getCustomerReport,
     getReportOptions,
@@ -344,10 +488,11 @@ export default {
     getFollowupDashboardList,
     getFollowupDashboardDetail,
     exportFollowupDashboardList,
-    exportFollowupDashboardDetail, // Ensure this was exported in previous steps
+    exportFollowupDashboardDetail,
     getFollowupTaskReportAll,
     getFollowupTaskReportSingle,
     exportFollowupTaskReport,
     getTaskReminderReport,
-    getManageTasks
+    getManageTasks,
+    getPurchaseComparisonReport,
 };

@@ -261,7 +261,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         lrNumber: value.lrNumber || '',
         freightAmount: value.freightAmount || 0,
         freightGstRate: value.freightGstRate || 0,
-        status: 'Posted',
+        status: 'Confirmed',
         paymentStatus: 'Unpaid',
         createdBy: req.user._id,
     });
@@ -391,4 +391,22 @@ export const cancelPurchaseInvoice = asyncHandler(async (req, res) => {
 export const getInvoicesByPO = asyncHandler(async (req, res) => {
     const invoices = await PurchaseInvoice.find({ poId: req.params.poId }).sort({ invoiceDate: -1 });
     res.json(new ApiResponse(200, invoices, 'Invoices for PO'));
+});
+
+// ── GET /by-grn/:grnId ────────────────────────────────────────────────────────
+export const getInvoicesByGRN = asyncHandler(async (req, res) => {
+    const invoices = await PurchaseInvoice.find({ grnId: req.params.grnId }).sort({ invoiceDate: -1 });
+    res.json(new ApiResponse(200, invoices, 'Invoices for GRN'));
+});
+
+// ── PATCH /:id/confirm ────────────────────────────────────────────────────────
+export const confirmPurchaseInvoice = asyncHandler(async (req, res) => {
+    const inv = await PurchaseInvoice.findById(req.params.id);
+    if (!inv) throw new ApiError(404, 'Invoice not found');
+    if (inv.status === 'Cancelled') throw new ApiError(400, 'Cannot confirm a cancelled invoice');
+    if (inv.status === 'Confirmed') throw new ApiError(400, 'Invoice is already confirmed');
+    inv.status = 'Confirmed';
+    inv.updatedBy = req.user._id;
+    await inv.save();
+    res.json(new ApiResponse(200, inv, 'Invoice confirmed'));
 });

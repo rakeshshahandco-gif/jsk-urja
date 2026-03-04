@@ -103,7 +103,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     },
     paidAmount: { type: Number, default: 0 },
 
-    status: { type: String, enum: ['Draft', 'Posted', 'Cancelled'], default: 'Draft' },
+    status: { type: String, enum: ['Draft', 'Confirmed', 'Posted', 'Cancelled'], default: 'Draft' },
     remarks: { type: String, default: '' },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

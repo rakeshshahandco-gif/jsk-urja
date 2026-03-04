@@ -49,8 +49,11 @@ export const PATHS = {
         NEW_ORDER: '/purchase/orders/new',
         ORDER_DETAIL: (id) => `/purchase/orders/${id}`,
         GRN: '/purchase/grn',
+        GRN_NEW: '/purchase/grn/new',
+        GRN_DETAIL: (id) => `/purchase/grn/${id}`,
         INVOICES: '/purchase/invoices',
         NEW_INVOICE: '/purchase/invoices/new',
         INVOICE_DETAIL: (id) => `/purchase/invoices/${id}`,
+        PURCHASE_REPORT: '/reports/purchase-comparison',
     },
 };

@@ -30,8 +30,10 @@ const PI = '/purchase-invoices';
 export const getPurchaseInvoices = async (params) => { const r = await api.get(PI, { params }); return r.data.data; };
 export const getPurchaseInvoiceById = async (id) => { const r = await api.get(`${PI}/${id}`); return r.data.data; };
 export const getInvoicesByPO = async (poId) => { const r = await api.get(`${PI}/by-po/${poId}`); return r.data.data; };
+export const getInvoicesByGRN = async (grnId) => { const r = await api.get(`${PI}/by-grn/${grnId}`); return r.data.data; };
 export const createPurchaseInvoice = async (data) => { const r = await api.post(PI, data); return r.data.data; };
 export const updateInvoicePayment = async (id, data) => { const r = await api.patch(`${PI}/${id}/payment`, data); return r.data.data; };
+export const confirmPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/confirm`); return r.data.data; };
 export const cancelPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/cancel`); return r.data.data; };
 
 // ── Payment Entries ───────────────────────────────────────────────────────────
@@ -40,3 +42,6 @@ export const createPaymentEntry = async (data) => { const r = await api.post(PE,
 export const getPaymentsByInvoice = async (invoiceId) => { const r = await api.get(`${PE}/by-invoice/${invoiceId}`); return r.data.data; };
 export const getCashBook = async (params) => { const r = await api.get(`${PE}/cash-book`, { params }); return r.data.data; };
 export const getBankBook = async (params) => { const r = await api.get(`${PE}/bank-book`, { params }); return r.data.data; };
+
+// ── Purchase Comparison Report ────────────────────────────────────────────────
+export const getPurchaseComparisonReport = async (params) => { const r = await api.get('/reports/purchase-comparison', { params }); return r.data.data; };

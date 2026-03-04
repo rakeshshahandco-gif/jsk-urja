@@ -83,11 +83,9 @@ export const createPaymentEntry = asyncHandler(async (req, res) => {
         createdBy: req.user._id,
     });
 
-    // Update invoice payment status
+    // Update invoice payment status (use updateOne to avoid re-validating stale enum values like 'Posted')
     const { paymentStatus, paidAmount } = await computeInvoicePaymentStatus(invoice._id, invoice);
-    invoice.paymentStatus = paymentStatus;
-    invoice.paidAmount = paidAmount;
-    await invoice.save();
+    await PurchaseInvoice.findByIdAndUpdate(invoice._id, { paymentStatus, paidAmount }, { runValidators: false });
 
     res.status(201).json(new ApiResponse(201, entry, `Payment of ₹${value.amountPaid} recorded`));
 });

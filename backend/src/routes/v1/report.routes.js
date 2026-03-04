@@ -69,4 +69,7 @@ router.get('/task-reminders', reportController.getTaskReminderReport);
 // Manage Tasks Page
 router.get('/manage-tasks', reportController.getManageTasks);
 
+// Purchase Comparison Report
+router.get('/purchase-comparison', reportController.getPurchaseComparisonReport);
+
 export default router;

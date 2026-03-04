@@ -20,7 +20,7 @@ import supplierRoute from './supplier.routes.js';
 import purchaseOrderRoute from './purchaseOrder.routes.js';
 import grnRoute from './grn.routes.js';
 import purchaseInvoiceRoute from './purchaseInvoice.routes.js';
-// import paymentEntryRoute from './paymentEntry.routes.js';
+import paymentEntryRoute from './paymentEntry.routes.js';
 
 const router = express.Router();
 
@@ -114,10 +114,10 @@ const defaultRoutes = [
         path: '/purchase-invoices',
         route: purchaseInvoiceRoute,
     },
-    // {
-    //     path: '/payment-entries',
-    //     route: paymentEntryRoute,
-    // },
+    {
+        path: '/payment-entries',
+        route: paymentEntryRoute,
+    },
 ];
 
 defaultRoutes.forEach((route) => {
