@@ -6,20 +6,30 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
 const STATUS_COLORS = {
-    'Draft': { bg: '#1e293b', text: '#94a3b8', border: '#334155' },
-    'Released': { bg: '#1e3a5f', text: '#60a5fa', border: '#1d4ed8' },
-    'In Process': { bg: '#1c2a18', text: '#86efac', border: '#16a34a' },
-    'WIP – Waiting Material': { bg: '#450a0a', text: '#fca5a5', border: '#dc2626' },
-    'On Hold': { bg: '#2e1065', text: '#c4b5fd', border: '#7c3aed' },
-    'Completed': { bg: '#052e16', text: '#6ee7b7', border: '#059669' },
-    'Closed': { bg: '#1e293b', text: '#475569', border: '#334155' },
+    'Draft': { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' },
+    'Released': { bg: '#eff6ff', text: '#2563eb', border: '#93c5fd' },
+    'In Process': { bg: '#f0fdf4', text: '#16a34a', border: '#86efac' },
+    'WIP – Waiting Material': { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5' },
+    'On Hold': { bg: '#faf5ff', text: '#9333ea', border: '#d8b4fe' },
+    'Completed': { bg: '#f0fdf4', text: '#059669', border: '#6ee7b7' },
+    'Closed': { bg: '#f8fafc', text: '#94a3b8', border: '#e2e8f0' },
+};
+
+const STATUS_CARD_BORDER = {
+    'Draft': '#cbd5e1',
+    'Released': '#93c5fd',
+    'In Process': '#86efac',
+    'WIP – Waiting Material': '#fca5a5',
+    'On Hold': '#d8b4fe',
+    'Completed': '#6ee7b7',
+    'Closed': '#e2e8f0',
 };
 
 const PRIORITY_COLORS = {
     'Low': '#64748b',
-    'Medium': '#3b82f6',
-    'High': '#f59e0b',
-    'Urgent': '#ef4444',
+    'Medium': '#2563eb',
+    'High': '#d97706',
+    'Urgent': '#dc2626',
 };
 
 export default function WorkOrderListPage() {
@@ -39,9 +49,7 @@ export default function WorkOrderListPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => {
-        fetchWorkOrders();
-    }, [search, statusFilter]);
+    useEffect(() => { fetchWorkOrders(); }, [search, statusFilter]);
 
     useGlobalSync('workorder', (payload) => {
         if (payload.action === 'create') setWos(prev => [payload.data, ...prev]);
@@ -63,7 +71,7 @@ export default function WorkOrderListPage() {
         try {
             await deleteWorkOrder(id);
             toast.success('Deleted');
-            load();
+            fetchWorkOrders();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setDeleting(null); }
     };
@@ -74,21 +82,22 @@ export default function WorkOrderListPage() {
     };
 
     return (
-        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Work Orders</h1>
-                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
+                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>Work Orders</h1>
+                    <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>
                         {wos.length} record{wos.length !== 1 ? 's' : ''}
                     </p>
                 </div>
                 <button
                     onClick={() => navigate(PATHS.PRODUCTION.NEW_WO)}
                     style={{
-                        background: 'linear-gradient(135deg,#3b82f6,#6366f1)', color: '#fff',
-                        border: 'none', borderRadius: '10px', padding: '10px 20px',
-                        fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                        background: '#0d9488', color: '#fff', border: 'none',
+                        borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
+                        cursor: 'pointer', boxShadow: '0 2px 8px rgba(13,148,136,0.3)',
                     }}
                 >
                     + New Work Order
@@ -96,23 +105,23 @@ export default function WorkOrderListPage() {
             </div>
 
             {/* Filters */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 <input
                     placeholder="Search WO No, Product, Supervisor..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     style={{
-                        flex: 1, minWidth: '240px', padding: '10px 14px',
-                        background: '#1e293b', border: '1px solid #334155', borderRadius: '8px',
-                        color: '#f1f5f9', fontSize: '14px', outline: 'none',
+                        flex: 1, minWidth: 240, padding: '7px 12px',
+                        background: '#fff', border: '1px solid #d1d5db', borderRadius: 7,
+                        color: '#374151', fontSize: 13, outline: 'none',
                     }}
                 />
                 <select
                     value={statusFilter}
                     onChange={e => setStatus(e.target.value)}
                     style={{
-                        padding: '10px 14px', background: '#1e293b', border: '1px solid #334155',
-                        borderRadius: '8px', color: '#f1f5f9', fontSize: '14px', cursor: 'pointer',
+                        padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db',
+                        borderRadius: 7, color: '#374151', fontSize: 13, cursor: 'pointer', outline: 'none',
                     }}
                 >
                     <option value="">All Statuses</option>
@@ -123,17 +132,18 @@ export default function WorkOrderListPage() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading...</div>
+                <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>Loading...</div>
             ) : wos.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '80px', color: '#64748b' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
-                    <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>No Work Orders</div>
-                    <div style={{ fontSize: '14px' }}>Create your first WO to start production</div>
+                <div style={{ textAlign: 'center', padding: 80, color: '#9ca3af' }}>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#6b7280' }}>No Work Orders</div>
+                    <div style={{ fontSize: 14 }}>Create your first WO to start production</div>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {wos.map(wo => {
                         const sc = STATUS_COLORS[wo.status] || STATUS_COLORS['Draft'];
+                        const cardBorder = STATUS_CARD_BORDER[wo.status] || '#e2e8f0';
                         const pc = PRIORITY_COLORS[wo.priority] || '#64748b';
                         const { done, total } = stageProgress(wo.stages);
                         const pct = total ? Math.round((done / total) * 100) : 0;
@@ -141,56 +151,64 @@ export default function WorkOrderListPage() {
 
                         return (
                             <div key={wo._id} style={{
-                                background: '#1e293b', border: `1px solid ${sc.border}`,
-                                borderRadius: '12px', padding: '20px',
-                                transition: 'box-shadow 0.15s',
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderLeft: `4px solid ${cardBorder}`,
+                                borderRadius: 12, padding: '16px 20px',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                transition: 'box-shadow 0.15s, transform 0.15s',
+                            }}
+                                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'none'; }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
                                     {/* Left */}
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                            <span style={{ fontWeight: 700, fontSize: '16px', color: '#f1f5f9' }}>{wo.woNumber}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{wo.woNumber}</span>
                                             <span style={{
-                                                padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+                                                padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                                                 background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`,
                                             }}>{wo.status}</span>
                                             <span style={{
-                                                padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
-                                                background: `${pc}22`, color: pc, border: `1px solid ${pc}55`,
+                                                padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                background: `${pc}15`, color: pc, border: `1px solid ${pc}40`,
                                             }}>{wo.priority}</span>
                                             {hasShortage && (
                                                 <span style={{
-                                                    padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 700,
-                                                    background: '#450a0a', color: '#fca5a5', border: '1px solid #dc2626',
+                                                    padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                    background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5',
                                                 }}>⚠️ Material Shortage</span>
                                             )}
                                         </div>
-                                        <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '13px' }}>
+                                        <div style={{ marginTop: 6, color: '#6b7280', fontSize: 13 }}>
                                             {wo.finishedProductName || 'N/A'} · Qty: {wo.targetQty} · Supervisor: {wo.supervisor || '—'}
                                         </div>
                                         {/* Progress bar */}
-                                        <div style={{ marginTop: '10px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                                <span style={{ fontSize: '11px', color: '#64748b' }}>Stage Progress</span>
-                                                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{done}/{total} stages</span>
+                                        <div style={{ marginTop: 10 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Stage Progress</span>
+                                                <span style={{ fontSize: 11, color: '#9ca3af' }}>{done}/{total} stages</span>
                                             </div>
-                                            <div style={{ height: '6px', background: '#334155', borderRadius: '3px', overflow: 'hidden' }}>
+                                            <div style={{ height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
                                                 <div style={{
                                                     height: '100%', width: `${pct}%`,
-                                                    background: 'linear-gradient(90deg,#3b82f6,#10b981)',
-                                                    borderRadius: '3px', transition: 'width 0.3s',
+                                                    background: pct === 100
+                                                        ? 'linear-gradient(90deg,#16a34a,#059669)'
+                                                        : 'linear-gradient(90deg,#2563eb,#0d9488)',
+                                                    borderRadius: 3, transition: 'width 0.3s',
                                                 }} />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Actions */}
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                                         <button
                                             onClick={() => navigate(PATHS.PRODUCTION.WO_DETAIL(wo._id))}
                                             style={{
-                                                padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                                                background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer',
+                                                padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                                                background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', cursor: 'pointer',
                                             }}
                                         >View</button>
                                         {wo.status === 'Draft' && (
@@ -198,16 +216,16 @@ export default function WorkOrderListPage() {
                                                 <button
                                                     onClick={() => handleRelease(wo._id)}
                                                     style={{
-                                                        padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                                                        background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer',
+                                                        padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                                                        background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', cursor: 'pointer',
                                                     }}
                                                 >Release</button>
                                                 <button
                                                     onClick={() => handleDelete(wo._id)}
                                                     disabled={deleting === wo._id}
                                                     style={{
-                                                        padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                                                        background: '#7f1d1d', color: '#fca5a5', border: 'none', cursor: 'pointer',
+                                                        padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                                                        background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer',
                                                     }}
                                                 >{deleting === wo._id ? '...' : 'Delete'}</button>
                                             </>
