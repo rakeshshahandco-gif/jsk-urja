@@ -10,28 +10,31 @@ import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
-// Shared compact styles
+// Shared compact styles — light/white theme
 const s = {
     sel: {
-        height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #334155',
-        borderRadius: 5, background: '#0f172a', color: '#f1f5f9', outline: 'none', cursor: 'pointer',
+        height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #d1d5db',
+        borderRadius: 5, background: '#fff', color: '#374151', outline: 'none', cursor: 'pointer',
         appearance: 'none', minWidth: 90,
-        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
+        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
         backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em'
     },
     inp: {
-        height: 28, fontSize: 11, padding: '0 6px', border: '1px solid #334155', color: '#f1f5f9',
-        borderRadius: 5, background: '#0f172a', outline: 'none', width: 88, colorScheme: 'dark'
+        height: 28, fontSize: 11, padding: '0 6px', border: '1px solid #d1d5db', color: '#374151',
+        borderRadius: 5, background: '#fff', outline: 'none', width: 88
     },
     tab: (active) => ({
-        padding: '3px 10px', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none',
-        cursor: 'pointer', background: active ? '#2563eb' : 'transparent',
-        color: active ? '#fff' : '#94a3b8', transition: 'all 0.15s'
+        padding: '3px 10px', fontSize: 11, fontWeight: 600, borderRadius: 5, border: 'none',
+        cursor: 'pointer',
+        background: active ? '#fff' : 'transparent',
+        color: active ? '#0d9488' : '#6b7280',
+        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+        transition: 'all 0.15s'
     }),
     resetBtn: {
         height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600,
-        border: '1px solid #334155', borderRadius: 5, background: '#0f172a',
-        color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+        border: '1px solid #d1d5db', borderRadius: 5, background: '#fff',
+        color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
     }
 };
 
@@ -140,23 +143,23 @@ const ManageTasksPage = () => {
     const totalPages = Math.ceil(pagination.total / pagination.limit) || 1;
 
     return (
-        <div style={{ padding: '10px 16px', background: '#0f172a', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 8, color: '#f1f5f9' }}>
+        <div style={{ padding: '16px 20px', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* ── LINE 1: Title + Tabs + Total badge ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9', whiteSpace: 'nowrap' }}>Manage Tasks</span>
-                <div style={{ display: 'flex', background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: 3, gap: 2 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>Manage Tasks</span>
+                <div style={{ display: 'flex', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: 3, gap: 2 }}>
                     {TABS.map(t => (
                         <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
                             {t.label}
-                            {t.id === 'all' && <span style={{ marginLeft: 4, background: activeTab === 'all' ? 'rgba(255,255,255,0.25)' : '#334155', borderRadius: 8, padding: '0 5px', fontSize: 10 }}>{pagination.total}</span>}
+                            {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{pagination.total}</span>}
                         </button>
                     ))}
                 </div>
             </div>
 
             {/* ── LINE 2: All Filters in one row ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#1e293b', border: '1px solid #334155', borderRadius: 7, padding: '6px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Group */}
                 <select style={s.sel} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
                     <option value="">All Groups</option>
@@ -219,7 +222,7 @@ const ManageTasksPage = () => {
             </div>
 
             {/* ── TABLE ── */}
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, flex: 1 }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, flex: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                 <ManageTasksTable
                     tasks={tasks}
                     loading={loading}
@@ -234,13 +237,13 @@ const ManageTasksPage = () => {
             {/* ── PAGINATION ── */}
             {!loading && pagination.total > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                    <span style={{ fontSize: 11, color: '#6b7280' }}>
                         {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
                     </span>
                     <button
                         disabled={pagination.page <= 1}
                         onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e293b', color: '#f1f5f9', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
+                        style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
                     >
                         <ChevronLeft size={13} />
                     </button>
@@ -250,7 +253,7 @@ const ManageTasksPage = () => {
                             <button
                                 key={pg}
                                 onClick={() => setPagination(p => ({ ...p, page: pg }))}
-                                style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #334155', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#2563eb' : '#1e293b', color: pagination.page === pg ? '#fff' : '#f1f5f9' }}
+                                style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#0d9488' : '#fff', color: pagination.page === pg ? '#fff' : '#374151' }}
                             >
                                 {pg}
                             </button>
@@ -259,7 +262,7 @@ const ManageTasksPage = () => {
                     <button
                         disabled={pagination.page >= totalPages}
                         onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #334155', borderRadius: 5, background: '#1e293b', color: '#f1f5f9', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
+                        style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
                     >
                         <ChevronRight size={13} />
                     </button>
