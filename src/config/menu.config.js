@@ -245,6 +245,12 @@ export const menuConfig = [
         roles: [ROLES.ADMIN], // Admin only
         children: [
             {
+                id: 'company-profile',
+                title: 'Company Profile',
+                path: PATHS.SETTINGS.COMPANY_PROFILE,
+                roles: [ROLES.ADMIN],
+            },
+            {
                 id: 'user-management',
                 title: 'User Management',
                 path: '/admin/users',

@@ -18,6 +18,9 @@ export const PATHS = {
         LOGIN: '/auth/login',
         REGISTER: '/auth/register',
     },
+    SETTINGS: {
+        COMPANY_PROFILE: '/company-profile',
+    },
     GROUPS: {
         ROOT: '/groups',
         DETAILS: (id) => `/groups/${id}`,

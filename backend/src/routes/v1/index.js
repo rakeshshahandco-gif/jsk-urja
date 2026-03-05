@@ -25,6 +25,7 @@ import salesOrderRoute from './salesOrder.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
+import companyProfileRoute from './companyProfile.routes.js';
 
 const router = express.Router();
 
@@ -137,6 +138,10 @@ const defaultRoutes = [
     {
         path: '/production-sheets',
         route: productionSheetRoute,
+    },
+    {
+        path: '/company-profile',
+        route: companyProfileRoute,
     },
 ];
 

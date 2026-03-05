@@ -27,6 +27,10 @@ app.use(morgan('dev'));
 const buildPath = path.join(__dirname, '../../dist');
 app.use(express.static(buildPath));
 
+// Serve Uploads Directory
+const uploadPath = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadPath));
+
 // API Routes
 app.use('/api/v1', routes);
 
