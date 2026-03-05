@@ -45,6 +45,8 @@ export default function PurchaseOrderFormPage() {
                     paymentTerms: supplier.paymentTerms || h.paymentTerms,
                     supplierAddress: addr,
                     supplierGstNumber: supplier.gstNumber || '',
+                    supplierState: supplier.state || '',
+                    supplierContact: supplier.phone || '',
                 }));
             }
         } else {
@@ -231,6 +233,14 @@ export default function PurchaseOrderFormPage() {
                                 <div>
                                     <span style={label}>Warehouse / Store</span>
                                     <input value={header.warehouse} onChange={e => setH('warehouse', e.target.value)} style={inp} placeholder="Store location" />
+                                </div>
+                                <div>
+                                    <span style={label}>Delivery Facility</span>
+                                    <input value={header.deliveryFacility} onChange={e => setH('deliveryFacility', e.target.value)} style={inp} placeholder="e.g. Unit 2 - Assembly" />
+                                </div>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <span style={label}>Delivery Address</span>
+                                    <input value={header.deliveryAddress} onChange={e => setH('deliveryAddress', e.target.value)} style={inp} placeholder="Direct shipping address if different from warehouse" />
                                 </div>
                             </div>
                         </div>

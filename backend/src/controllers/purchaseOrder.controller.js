@@ -32,6 +32,11 @@ const createPOSchema = Joi.object({
     remarks: Joi.string().optional().allow(''),
     supplierAddress: Joi.string().optional().allow(''),
     supplierGstNumber: Joi.string().optional().allow(''),
+    supplierState: Joi.string().optional().allow(''),
+    supplierStateCode: Joi.string().optional().allow(''),
+    supplierContact: Joi.string().optional().allow(''),
+    deliveryAddress: Joi.string().optional().allow(''),
+    deliveryFacility: Joi.string().optional().allow(''),
     transporterName: Joi.string().optional().allow(''),
     vehicleNo: Joi.string().optional().allow(''),
     lrNumber: Joi.string().optional().allow(''),
@@ -88,6 +93,11 @@ export const createPO = asyncHandler(async (req, res) => {
         poNumber,
         ...value,
         supplierName: supplier.supplierName,
+        supplierAddress: value.supplierAddress || supplier.address,
+        supplierGstNumber: value.supplierGstNumber || supplier.gstNumber,
+        supplierState: value.supplierState || supplier.state,
+        supplierStateCode: value.supplierStateCode || '',
+        supplierContact: value.supplierContact || supplier.phone,
         status: 'Ordered',
         ...totals,
         createdBy: req.user._id,
@@ -118,7 +128,7 @@ export const getPOs = asyncHandler(async (req, res) => {
 
 export const getPOById = asyncHandler(async (req, res) => {
     const po = await PurchaseOrder.findById(req.params.id)
-        .populate('supplierId', 'supplierName supplierCode gstType paymentTerms')
+        .populate('supplierId', 'supplierName supplierCode gstNumber address city state pincode gstType paymentTerms phone email')
         .populate('createdBy', 'name');
     if (!po) throw new ApiError(404, 'Purchase Order not found');
     res.json(new ApiResponse(200, po, 'PO fetched'));

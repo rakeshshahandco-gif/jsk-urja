@@ -39,6 +39,11 @@ const purchaseOrderSchema = new mongoose.Schema({
     remarks: { type: String, default: '' },
     supplierGstNumber: { type: String, default: '' },
     supplierAddress: { type: String, default: '' },
+    supplierState: { type: String, default: '' },
+    supplierStateCode: { type: String, default: '' },
+    supplierContact: { type: String, default: '' },
+    deliveryAddress: { type: String, default: '' },
+    deliveryFacility: { type: String, default: '' },
     items: [poItemSchema],
 
     // Transportation & Freight
