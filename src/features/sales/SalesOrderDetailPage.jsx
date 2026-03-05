@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getSalesOrderById, cancelSalesOrder, generateProductionSheet } from '@/services/salesApi';
+import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -19,13 +20,20 @@ export default function SalesOrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [so, setSO] = useState(null);
+    const [company, setCompany] = useState({});
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [cancelling, setCancelling] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
-        getSalesOrderById(id).then(setSO).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
+        Promise.all([
+            getSalesOrderById(id),
+            getCompanyProfile().catch(() => ({ data: {} }))
+        ]).then(([soRes, companyRes]) => {
+            setSO(soRes);
+            setCompany(companyRes?.data || {});
+        }).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
     }, [id]);
 
     useEffect(() => { load(); }, [load]);
@@ -59,8 +67,31 @@ export default function SalesOrderDetailPage() {
 
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            {/* Header */}
-            <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* Print Header (Only visible when printing) */}
+            <div className="print-header" style={{ display: 'none', marginBottom: '20px', borderBottom: '2px solid #e5e7eb', paddingBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                        {company.logoUrl && (
+                            <img src={company.logoUrl} alt="Company Logo" style={{ maxHeight: '60px', maxWidth: '180px', objectFit: 'contain' }} />
+                        )}
+                        <div>
+                            <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800 }}>{company.companyName || 'JSK URJA'}</h1>
+                            {company.address && <div style={{ fontSize: '12px', color: '#4b5563', maxWidth: '300px' }}>{company.address}</div>}
+                            {(company.city || company.state) && <div style={{ fontSize: '12px', color: '#4b5563' }}>{company.city} {company.state} {company.pincode}</div>}
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <h2 style={{ margin: '0 0 8px', fontSize: '20px', color: '#0f172a', fontWeight: 700 }}>SALES ORDER</h2>
+                        <div style={{ fontSize: '12px', color: '#4b5563' }}><strong>Order No:</strong> {so.soNumber}</div>
+                        <div style={{ fontSize: '12px', color: '#4b5563' }}><strong>Date:</strong> {fmt(so.soDate)}</div>
+                        {company.gstNumber && <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px' }}><strong>Our GSTIN:</strong> {company.gstNumber}</div>}
+                        {company.panNumber && <div style={{ fontSize: '12px', color: '#4b5563' }}><strong>Our PAN:</strong> {company.panNumber}</div>}
+                    </div>
+                </div>
+            </div>
+
+            {/* Application Header */}
+            <div data-no-print style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                     <div>
@@ -171,7 +202,16 @@ export default function SalesOrderDetailPage() {
             </div>
 
             {/* Print Styles */}
-            <style>{`@media print { button { display: none !important; } }`}</style>
+            <style>{`
+                @media print { 
+                    @page { margin: 1cm; }
+                    body { background: #fff !important; }
+                    button, [data-no-print] { display: none !important; } 
+                    .print-header { display: block !important; }
+                    * { color: #000 !important; box-shadow: none !important; }
+                    table th { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
+                }
+            `}</style>
         </div>
     );
 }

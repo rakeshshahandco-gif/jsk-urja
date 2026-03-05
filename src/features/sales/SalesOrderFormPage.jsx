@@ -6,7 +6,6 @@ import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
-const COMPANY = { name: 'JSK URJA', state: 'Maharashtra', stateCode: '27', gstin: '' };
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const label = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };

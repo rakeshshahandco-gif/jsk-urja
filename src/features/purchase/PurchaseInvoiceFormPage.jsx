@@ -7,6 +7,7 @@ import {
     updatePurchaseInvoice, getPurchaseInvoiceById
 } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
+import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -55,10 +56,12 @@ export default function PurchaseInvoiceFormPage() {
     useEffect(() => {
         const init = async () => {
             try {
-                const [sD, iD] = await Promise.all([
+                const [sD, iD, comp] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 500, sortBy: 'itemName:asc' })
+                    getItems({ limit: 500, sortBy: 'itemName:asc' }),
+                    getCompanyProfile().catch(() => ({ data: {} }))
                 ]);
+                const c = comp?.data || {};
                 setSuppliers(sD.suppliers || []);
                 setItems(Array.isArray(iD.data) ? iD.data : []);
 
@@ -75,11 +78,11 @@ export default function PurchaseInvoiceFormPage() {
                         supplierAddress: inv.supplierAddress || '',
                         supplierState: inv.supplierState || '',
                         supplierStateCode: inv.supplierStateCode || '',
-                        buyerName: inv.buyerName || 'JSK URJA',
-                        buyerGstin: inv.buyerGstin || '',
-                        buyerAddress: inv.buyerAddress || '',
-                        buyerState: inv.buyerState || 'Gujarat',
-                        buyerStateCode: inv.buyerStateCode || '24',
+                        buyerName: inv.buyerName || c.companyName || 'JSK URJA',
+                        buyerGstin: inv.buyerGstin || c.gstNumber || '',
+                        buyerAddress: inv.buyerAddress || c.address || '',
+                        buyerState: inv.buyerState || c.state || 'Maharashtra',
+                        buyerStateCode: inv.buyerStateCode || (c.gstNumber ? c.gstNumber.substring(0, 2) : '27'),
                         gstType: inv.gstType || 'CGST / SGST',
                         placeOfSupply: inv.placeOfSupply || 'Gujarat',
                         paymentTerms: inv.paymentTerms || '30 Days',
@@ -106,6 +109,15 @@ export default function PurchaseInvoiceFormPage() {
                         poItemId: r.poItemId || null,
                         maxQty: null // For edit, we assume user knows what they're doing or we'd need current stock/balances
                     })));
+                } else {
+                    setHeader(h => ({
+                        ...h,
+                        buyerName: c.companyName || h.buyerName,
+                        buyerGstin: c.gstNumber || h.buyerGstin,
+                        buyerAddress: c.address || h.buyerAddress,
+                        buyerState: c.state || h.buyerState,
+                        buyerStateCode: c.gstNumber ? c.gstNumber.substring(0, 2) : h.buyerStateCode
+                    }));
                 }
             } catch (err) { toast.error('Failed to load initial data'); }
             finally { setLoading(false); }
