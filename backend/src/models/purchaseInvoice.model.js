@@ -32,6 +32,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     poNumber: { type: String, default: '' },
     grnId: { type: mongoose.Schema.Types.ObjectId, ref: 'GRN', default: null },
     grnNumber: { type: String, default: '' },
+    poDate: { type: Date, default: null },
 
     // Supplier Info (snapshot at time of invoice)
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },

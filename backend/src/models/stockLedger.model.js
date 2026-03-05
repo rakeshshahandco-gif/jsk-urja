@@ -7,7 +7,7 @@ const stockLedgerSchema = new mongoose.Schema({
     itemName: { type: String, default: '' },
     transactionType: {
         type: String,
-        enum: ['GRN', 'WO_CONSUMPTION', 'OPENING', 'ADJUSTMENT', 'RETURN'],
+        enum: ['GRN', 'WO_CONSUMPTION', 'OPENING', 'ADJUSTMENT', 'RETURN', 'PURCHASE_INVOICE', 'PURCHASE_INVOICE_DELETE'],
         required: true,
     },
     referenceNo: { type: String, default: '' }, // GRN No, PO No, etc.

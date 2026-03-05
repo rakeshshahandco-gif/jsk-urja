@@ -21,15 +21,22 @@ const poItemSchema = Joi.object({
 });
 
 const createPOSchema = Joi.object({
-    poDate: Joi.date().optional(),
+    poDate: Joi.date().optional().allow(null, ''),
     supplierId: Joi.string().required(),
     supplierInvoiceNo: Joi.string().optional().allow(''),
-    invoiceDate: Joi.date().optional().allow(null),
+    invoiceDate: Joi.date().optional().allow(null, ''),
     gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional().allow(''),
     paymentTerms: Joi.string().optional().allow(''),
-    expectedDeliveryDate: Joi.date().optional().allow(null),
+    expectedDeliveryDate: Joi.date().optional().allow(null, ''),
     warehouse: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
+    supplierAddress: Joi.string().optional().allow(''),
+    supplierGstNumber: Joi.string().optional().allow(''),
+    transporterName: Joi.string().optional().allow(''),
+    vehicleNo: Joi.string().optional().allow(''),
+    lrNumber: Joi.string().optional().allow(''),
+    freightAmount: Joi.number().min(0).default(0),
+    freightGstRate: Joi.number().min(0).default(0),
     items: Joi.array().items(poItemSchema).min(1).required(),
 });
 
@@ -68,7 +75,7 @@ const calculateTotals = (items, gstType) => {
 
 // ── Controllers ────────────────────────────────────────────────────────────────
 export const createPO = asyncHandler(async (req, res) => {
-    const { error, value } = createPOSchema.validate(req.body);
+    const { error, value } = createPOSchema.validate(req.body, { allowUnknown: true });
     if (error) throw new ApiError(400, error.details[0].message);
 
     const supplier = await Supplier.findById(value.supplierId);
@@ -118,7 +125,7 @@ export const getPOById = asyncHandler(async (req, res) => {
 });
 
 export const updatePO = asyncHandler(async (req, res) => {
-    const { error, value } = updatePOSchema.validate(req.body);
+    const { error, value } = updatePOSchema.validate(req.body, { allowUnknown: true });
     if (error) throw new ApiError(400, error.details[0].message);
 
     const po = await PurchaseOrder.findById(req.params.id);

@@ -108,7 +108,7 @@
         color: $text-secondary;
         box-shadow: $shadow-sm;
         z-index: 10;
-        
+
         &:hover {
             background: $bg-secondary;
             color: $accent-teal;
@@ -124,8 +124,9 @@
     &::-webkit-scrollbar {
         width: 4px;
     }
+
     &::-webkit-scrollbar-thumb {
-        background-color: rgba(0,0,0,0.05);
+        background-color: rgba(0, 0, 0, 0.05);
         border-radius: 10px;
     }
 }
@@ -158,17 +159,19 @@
     font-size: 15px;
 
     &:hover {
-        background-color: rgba(34, 180, 204, 0.05);
-        color: $accent-teal;
+        background-color: rgba(0, 0, 0, 0.05);
+        color: $sidebar-text;
     }
 
     &.active {
-        background-color: $accent-teal;
-        color: $white;
+        background-color: $white;
+        color: $sidebar-text;
         border-radius: 10px;
+        box-shadow: $shadow-sm;
 
-        .icon, .arrow {
-            color: $white;
+        .icon,
+        .arrow {
+            color: $sidebar-text;
         }
     }
 }
@@ -179,10 +182,10 @@
     align-items: center;
     justify-content: center;
     width: 20px;
-    
+
     // Design shows 📝 and 📄 emojis as icons usually, but we hide them if requested.
     // However, the images show no icons usually.
-    display: none; 
+    display: none;
 }
 
 .label {
@@ -202,22 +205,23 @@
 }
 
 .subMenuContainer {
-    background-color: $accent-dark-teal;
+    background-color: #f1f5f9; // Light grey sub-container
 }
 
 .subMenuHeader {
     display: flex;
     align-items: center;
     padding: 12px 14px;
-    color: $white;
-    background-color: $accent-teal;
+    color: $sidebar-text;
+    background-color: $white;
     border-radius: 10px 10px 0 0;
     cursor: pointer;
     font-weight: 600;
     font-size: 15px;
+    box-shadow: $shadow-sm;
 
     .arrow {
-        color: $white;
+        color: $sidebar-text;
         opacity: 1;
     }
 }
@@ -231,18 +235,18 @@
         padding-left: 28px;
         padding-top: 10px;
         padding-bottom: 10px;
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(4, 45, 69, 0.65); // Muted $sidebar-text
         font-size: 14px;
         font-weight: 400;
 
         &:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: $white;
+            background-color: rgba(0, 0, 0, 0.03);
+            color: $sidebar-text;
         }
 
         &.active {
             background-color: transparent;
-            color: $white;
+            color: $sidebar-text;
             font-weight: 600;
         }
     }

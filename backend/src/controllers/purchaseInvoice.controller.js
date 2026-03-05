@@ -39,6 +39,74 @@ const generateInvoiceNumber = async () => {
     return `PI-${year}${month}-${String(count + 1).padStart(4, '0')}`;
 };
 
+const rollbackSideEffects = async (inv, userId) => {
+    const { flowType, items, isDirectPurchase } = inv;
+
+    // 1) Rollback GRN side effects
+    if (inv.grnId) {
+        const grn = await GRN.findById(inv.grnId);
+        if (grn) {
+            for (const invItem of items) {
+                const grnItem = grn.items.find(gi => gi.itemId.toString() === invItem.itemId.toString());
+                if (grnItem) {
+                    grnItem.invoicedQty = r2(grnItem.invoicedQty - invItem.qty);
+                }
+            }
+            const allInvoiced = grn.items.every(gi => gi.invoicedQty >= gi.receivedQty);
+            const someInvoiced = grn.items.some(gi => gi.invoicedQty > 0);
+            grn.invoiceStatus = allInvoiced ? 'Fully Invoiced' : (someInvoiced ? 'Partially Invoiced' : 'Pending');
+            grn.updatedBy = userId;
+            await grn.save();
+        }
+    }
+
+    // 2) Rollback PO side effects
+    if (inv.poId) {
+        const po = await PurchaseOrder.findById(inv.poId);
+        if (po) {
+            for (const invItem of items) {
+                const poItem = po.items.find(pi => pi.itemId.toString() === invItem.itemId.toString());
+                if (poItem) {
+                    poItem.invoicedQty = r2((poItem.invoicedQty || 0) - invItem.qty);
+                    if (flowType === 'PO→Direct Invoice') {
+                        poItem.receivedQty = r2(poItem.receivedQty - invItem.qty);
+                        poItem.pendingQty = r2(poItem.orderedQty - poItem.receivedQty);
+                    }
+                }
+            }
+            if (flowType === 'PO→Direct Invoice') {
+                const allReceived = po.items.every(pi => pi.pendingQty <= 0);
+                const someReceived = po.items.some(pi => pi.receivedQty > 0);
+                po.status = allReceived ? 'Fully Received' : (someReceived ? 'Partially Received' : 'Ordered');
+            }
+            po.updatedBy = userId;
+            await po.save();
+        }
+    }
+
+    // 3) Rollback Stock if Direct Purchase
+    if (isDirectPurchase) {
+        const { StockLog, ItemStock } = await import('../models/inventory.model.js');
+        // Subtract stock for items
+        for (const item of items) {
+            const stock = await ItemStock.findOne({ itemId: item.itemId });
+            if (stock) {
+                stock.quantity = r2(stock.quantity - item.qty);
+                await stock.save();
+                await StockLog.create({
+                    itemId: item.itemId,
+                    transactionType: 'PURCHASE_INVOICE_DELETE',
+                    referenceId: inv._id,
+                    referenceNumber: inv.invoiceNumber,
+                    quantity: -item.qty,
+                    remarks: `Reversal of PI ${inv.invoiceNumber}`,
+                    createdBy: userId,
+                });
+            }
+        }
+    }
+};
+
 const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRate = 0) => {
     let subTotal = 0, totalDiscount = 0, totalTaxable = 0;
     let totalCgst = 0, totalSgst = 0, totalIgst = 0;
@@ -157,6 +225,7 @@ const baseSchema = {
     remarks: Joi.string().optional().allow(''),
     poId: Joi.string().optional().allow('', null),
     grnId: Joi.string().optional().allow('', null),
+    poDate: Joi.date().optional(),
     transporterName: Joi.string().optional().allow(''),
     vehicleNo: Joi.string().optional().allow(''),
     lrNumber: Joi.string().optional().allow(''),
@@ -212,10 +281,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         for (const invItem of value.items) {
             const poItem = po.items.find(pi => pi.itemId.toString() === invItem.itemId.toString());
             if (!poItem) throw new ApiError(400, `Item "${invItem.itemName}" not found in PO`);
-            const availableQty = r2(poItem.orderedQty - poItem.receivedQty);
-            if (invItem.qty > availableQty) {
-                throw new ApiError(400, `Invoice Qty (${invItem.qty}) for "${invItem.itemName}" exceeds PO pending (${availableQty})`);
-            }
+            // We do not restrict invoicing more than PO for Direct Invoices (no GRN cases)
         }
     }
 
@@ -409,4 +475,105 @@ export const confirmPurchaseInvoice = asyncHandler(async (req, res) => {
     inv.updatedBy = req.user._id;
     await inv.save();
     res.json(new ApiResponse(200, inv, 'Invoice confirmed'));
+});
+
+// ── PUT /purchase-invoices/:id ────────────────────────────────────────────────
+export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
+    const { error, value } = createPISchema.validate(req.body, { allowUnknown: true });
+    if (error) throw new ApiError(400, error.details[0].message);
+
+    const inv = await PurchaseInvoice.findById(req.params.id);
+    if (!inv) throw new ApiError(404, 'Invoice not found');
+    if (inv.status === 'Cancelled') throw new ApiError(400, 'Cannot edit a cancelled invoice');
+    if (inv.paymentStatus === 'Paid') throw new ApiError(400, 'Cannot edit a fully paid invoice');
+
+    // Rollback side effects of OLD data
+    await rollbackSideEffects(inv, req.user._id);
+
+    // Apply NEW side effects
+    const { flowType, items: newItems } = value;
+    let po = null, grn = null, poNumber = '', grnNumber = '';
+
+    if (flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice') {
+        po = await PurchaseOrder.findById(value.poId);
+        if (!po) throw new ApiError(404, 'Purchase Order not found');
+        poNumber = po.poNumber;
+    }
+    if (flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice') {
+        grn = await GRN.findById(value.grnId);
+        if (!grn) throw new ApiError(404, 'GRN not found');
+        grnNumber = grn.grnNumber;
+    }
+
+    const totals = calculateInvoiceTotals(newItems, value.gstType, value.freightAmount || 0, value.freightGstRate || 0);
+    const isDirectStock = flowType === 'PO→Direct Invoice' || flowType === 'Direct Invoice';
+
+    Object.assign(inv, value, totals, {
+        poNumber, grnNumber, isDirectPurchase: isDirectStock,
+        updatedBy: req.user._id
+    });
+
+    await inv.save();
+
+    // Re-apply Side Effects
+    // 1) Update GRN
+    if (grn) {
+        let allInvoiced = true;
+        for (const invItem of newItems) {
+            const grnItem = grn.items.find(gi => gi.itemId.toString() === invItem.itemId.toString());
+            if (grnItem) {
+                grnItem.invoicedQty = r2(grnItem.invoicedQty + invItem.qty);
+                if (grnItem.invoicedQty < grnItem.receivedQty) allInvoiced = false;
+            }
+        }
+        grn.invoiceStatus = allInvoiced ? 'Fully Invoiced' : 'Partially Invoiced';
+        await grn.save();
+    }
+
+    // 2) Update PO
+    if (po) {
+        let allReceived = true;
+        for (const invItem of newItems) {
+            const poItem = po.items.find(pi => pi.itemId.toString() === invItem.itemId.toString());
+            if (poItem) {
+                poItem.invoicedQty = r2((poItem.invoicedQty || 0) + invItem.qty);
+                if (flowType === 'PO→Direct Invoice') {
+                    poItem.receivedQty = r2(poItem.receivedQty + invItem.qty);
+                    poItem.pendingQty = r2(poItem.orderedQty - poItem.receivedQty);
+                    if (poItem.pendingQty > 0) allReceived = false;
+                }
+            }
+        }
+        if (flowType === 'PO→Direct Invoice') {
+            po.status = allReceived ? 'Fully Received' : 'Partially Received';
+        }
+        await po.save();
+    }
+
+    // 3) Update Stock
+    if (isDirectStock) {
+        const stockItems = newItems.map(i => ({
+            itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
+            receivedQty: i.qty, rate: i.rate, warehouse: '',
+        }));
+        await updateStockForItems(stockItems, inv.invoiceNumber, inv._id, 'PURCHASE_INVOICE', req.user._id);
+    }
+
+    res.json(new ApiResponse(200, inv, 'Purchase Invoice updated'));
+});
+
+// ── DELETE /purchase-invoices/:id ─────────────────────────────────────────────
+export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
+    const inv = await PurchaseInvoice.findById(req.params.id);
+    if (!inv) throw new ApiError(404, 'Invoice not found');
+
+    if (inv.paymentStatus === 'Paid' || inv.paymentStatus === 'Partially Paid') {
+        throw new ApiError(400, 'Cannot delete an invoice with recorded payments. Delete payments first.');
+    }
+
+    // Rollback side effects
+    await rollbackSideEffects(inv, req.user._id);
+
+    await PurchaseInvoice.findByIdAndDelete(req.params.id);
+    res.json(new ApiResponse(200, null, 'Purchase Invoice deleted'));
 });

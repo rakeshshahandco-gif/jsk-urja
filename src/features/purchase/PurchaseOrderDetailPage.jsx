@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPurchaseOrderById, updatePOStatus } from '@/services/purchaseApi';
+import { getPurchaseOrderById, updatePOStatus, deletePurchaseOrder } from '@/services/purchaseApi';
 import { getGRNsByPO, createGRN } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -85,12 +85,30 @@ export default function PurchaseOrderDetailPage() {
                             {po.supplierName} · PO Date: {fmt(po.poDate)} · Expected: {fmt(po.expectedDeliveryDate)}
                         </div>
                     </div>
-                    {canReceive && (
-                        <button onClick={() => setShowGRN(true)}
-                            style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                            📦 Receive Material (GRN)
-                        </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        {['Draft', 'Ordered'].includes(po.status) && (
+                            <>
+                                <button onClick={() => navigate(PATHS.PURCHASE.EDIT_ORDER(po._id))}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                                    ✎ Edit Order
+                                </button>
+                                <button onClick={() => {
+                                    if (window.confirm('Delete this PO?')) {
+                                        deletePurchaseOrder(po._id).then(() => { toast.success('Deleted'); navigate(PATHS.PURCHASE.ORDERS); }).catch(e => toast.error(e.response?.data?.message || 'Failed'));
+                                    }
+                                }}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                                    🗑 Delete
+                                </button>
+                            </>
+                        )}
+                        {canReceive && (
+                            <button onClick={() => setShowGRN(true)}
+                                style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                                📦 Receive Material (GRN)
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

@@ -6,7 +6,7 @@ const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5d
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
 const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
-const EMPTY = { supplierName: '', contactPerson: '', phone: '', email: '', address: '', city: '', state: '', gstNumber: '', gstType: '', paymentTerms: '', remarks: '' };
+const EMPTY = { supplierName: '', contactPerson: '', phone: '', email: '', address: '', area: '', city: '', state: '', pincode: '', gstNumber: '', gstType: '', paymentTerms: '', remarks: '' };
 
 export default function SupplierListPage() {
     const [suppliers, setSuppliers] = useState([]);
@@ -27,7 +27,18 @@ export default function SupplierListPage() {
 
     const openCreate = () => setModal({ mode: 'create', data: { ...EMPTY } });
     const openEdit = (s) => setModal({ mode: 'edit', data: { ...s } });
-    const set = (k, v) => setModal(m => ({ ...m, data: { ...m.data, [k]: v } }));
+    const set = (k, v) => setModal(m => {
+        const newData = { ...m.data, [k]: v };
+        if (k === 'state') {
+            const stateClean = v.trim().toLowerCase();
+            if (stateClean === 'maharashtra') {
+                newData.gstType = 'CGST / SGST';
+            } else if (stateClean !== '') {
+                newData.gstType = 'IGST';
+            }
+        }
+        return { ...m, data: newData };
+    });
 
     const handleSave = async () => {
         setSaving(true);
@@ -120,14 +131,27 @@ export default function SupplierListPage() {
                                 ['contactPerson', 'Contact Person', 'text'],
                                 ['phone', 'Phone', 'text'],
                                 ['email', 'Email', 'email'],
-                                ['city', 'City', 'text'],
-                                ['state', 'State', 'text'],
                                 ['gstNumber', 'GST Number', 'text'],
                                 ['paymentTerms', 'Payment Terms', 'text'],
                             ].map(([k, label, type]) => (
                                 <div key={k}>
                                     <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{label}</label>
                                     <input type={type} value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} />
+                                </div>
+                            ))}
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Address / Street</label>
+                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} placeholder="Building, Street, Road..." />
+                            </div>
+                            {[
+                                ['area', 'Area / Locality'],
+                                ['city', 'City'],
+                                ['state', 'State'],
+                                ['pincode', 'Pincode'],
+                            ].map(([k, label]) => (
+                                <div key={k}>
+                                    <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{label}</label>
+                                    <input value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} placeholder={label} />
                                 </div>
                             ))}
                             <div>
@@ -137,10 +161,6 @@ export default function SupplierListPage() {
                                     <option>CGST / SGST</option>
                                     <option>IGST</option>
                                 </select>
-                            </div>
-                            <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Address</label>
-                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} />
                             </div>
                         </div>
                         <div style={{ marginBottom: 20 }}>

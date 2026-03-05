@@ -140,10 +140,9 @@ const createGRNAgainstPO = async (req, res) => {
             receivedQty: grnItem.receivedQty,
             rate: poItem.rate,
             amount: Math.round(grnItem.receivedQty * poItem.rate * 100) / 100,
-            qcStatus: grnItem.qcStatus || 'Accepted',
-            batchNo: grnItem.batchNo || '',
-            serialNo: grnItem.serialNo || '',
             remarks: grnItem.remarks || '',
+            discountPercent: poItem.discountPercent || 0,
+            taxPercent: poItem.taxPercent || 0,
         });
     }
 
@@ -156,6 +155,14 @@ const createGRNAgainstPO = async (req, res) => {
         supplierId: po.supplierId,
         supplierName: po.supplierName,
         warehouse: value.warehouse || po.warehouse || '',
+        supplierGstNumber: po.supplierGstNumber || '',
+        supplierAddress: po.supplierAddress || '',
+        gstType: po.gstType || 'CGST / SGST',
+        transporterName: po.transporterName || '',
+        vehicleNo: po.vehicleNo || '',
+        lrNumber: po.lrNumber || '',
+        freightAmount: po.freightAmount || 0,
+        freightGstRate: po.freightGstRate || 0,
         sourceType: 'Against PO',
         status: 'Confirmed',
         items: grnItems,

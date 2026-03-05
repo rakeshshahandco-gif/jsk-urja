@@ -12,5 +12,8 @@ router.get('/:id', piController.getPurchaseInvoiceById);
 router.patch('/:id/payment', piController.updatePaymentStatus);
 router.patch('/:id/cancel', piController.cancelPurchaseInvoice);
 router.patch('/:id/confirm', piController.confirmPurchaseInvoice);
+router.route('/:id')
+    .put(piController.updatePurchaseInvoice)
+    .delete(piController.deletePurchaseInvoice);
 
 export default router;

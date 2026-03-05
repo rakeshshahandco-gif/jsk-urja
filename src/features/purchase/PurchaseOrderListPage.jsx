@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPurchaseOrders } from '@/services/purchaseApi';
+import { getPurchaseOrders, deletePurchaseOrder } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -92,10 +92,28 @@ export default function PurchaseOrderListPage() {
                                         <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{po.status}</span>
                                     </td>
                                     <td style={td} onClick={e => e.stopPropagation()}>
-                                        <button onClick={() => navigate(PATHS.PURCHASE.ORDER_DETAIL(po._id))}
-                                            style={{ padding: '5px 12px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                            View →
-                                        </button>
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <button onClick={() => navigate(PATHS.PURCHASE.ORDER_DETAIL(po._id))}
+                                                style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                View
+                                            </button>
+                                            {['Draft', 'Ordered'].includes(po.status) && (
+                                                <>
+                                                    <button onClick={() => navigate(`${PATHS.PURCHASE.ORDERS}/edit/${po._id}`)}
+                                                        style={{ padding: '5px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                        ✎
+                                                    </button>
+                                                    <button onClick={() => {
+                                                        if (window.confirm('Delete this PO?')) {
+                                                            deletePurchaseOrder(po._id).then(() => { toast.success('Deleted'); load(); }).catch(e => toast.error(e.response?.data?.message || 'Failed'));
+                                                        }
+                                                    }}
+                                                        style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                        🗑
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );

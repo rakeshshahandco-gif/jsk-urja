@@ -35,6 +35,8 @@ export const createPurchaseInvoice = async (data) => { const r = await api.post(
 export const updateInvoicePayment = async (id, data) => { const r = await api.patch(`${PI}/${id}/payment`, data); return r.data.data; };
 export const confirmPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/confirm`); return r.data.data; };
 export const cancelPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/cancel`); return r.data.data; };
+export const updatePurchaseInvoice = async (id, data) => { const r = await api.put(`${PI}/${id}`, data); return r.data.data; };
+export const deletePurchaseInvoice = async (id) => { const r = await api.delete(`${PI}/${id}`); return r.data; };
 
 // ── Payment Entries ───────────────────────────────────────────────────────────
 const PE = '/payment-entries';

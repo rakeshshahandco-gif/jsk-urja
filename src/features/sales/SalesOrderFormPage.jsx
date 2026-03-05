@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createSalesOrder, getSalesOrderById, updateSalesOrder } from '@/services/salesApi';
+import { getCustomers } from '@/services/customerApi';
+import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -40,6 +42,107 @@ export default function SalesOrderFormPage() {
         items: [BLANK_ITEM()],
     });
 
+    const [customerOptions, setCustomerOptions] = useState([]);
+    const [showCustDropdown, setShowCustDropdown] = useState(false);
+    const [custHighlightIndex, setCustHighlightIndex] = useState(-1);
+    const custRef = useRef(null);
+    const custSearchTimeout = useRef(null);
+
+    const [itemOptions, setItemOptions] = useState([]);
+    const [activeItemRow, setActiveItemRow] = useState(null);
+    const itemRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (custRef.current && !custRef.current.contains(e.target)) setShowCustDropdown(false);
+            if (itemRef.current && !itemRef.current.contains(e.target)) setActiveItemRow(null);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleCustomerSearch = (val) => {
+        setF('customerName', val);
+        setCustHighlightIndex(-1);
+        if (!val.trim()) { setCustomerOptions([]); setShowCustDropdown(false); return; }
+        setShowCustDropdown(true);
+        if (custSearchTimeout.current) clearTimeout(custSearchTimeout.current);
+        custSearchTimeout.current = setTimeout(async () => {
+            try {
+                // Fetch broadly, we will filter strictly on the client side
+                const res = await getCustomers({ search: val, limit: 40 });
+                const list = res?.results || res?.data?.results || res?.data || res || [];
+                if (Array.isArray(list)) setCustomerOptions(list);
+            } catch (e) { console.error('Error searching customers:', e); }
+        }, 300);
+    };
+
+    const handleCustomerSelect = (c) => {
+        const primaryContact = c.contactPersons?.find(cp => cp.isPrimary) || c.contactPersons?.[0] || {};
+        const stateName = c.state || '';
+
+        let stateCode = '';
+        if (c.stateCode) stateCode = c.stateCode;
+        else if (c.gstNumber && c.gstNumber.length >= 2) stateCode = c.gstNumber.substring(0, 2);
+
+        // Build a comprehensive address string from the master
+        const addrParts = [c.address, c.area, c.taluka, c.city, c.district].filter(Boolean);
+        let fullAddress = addrParts.join(', ');
+        if (c.pincode) fullAddress += ` - ${c.pincode}`;
+        if (stateName && !fullAddress.includes(stateName)) fullAddress += `\n${stateName}`;
+
+        setForm(p => {
+            const up = {
+                ...p,
+                customerName: c.customerName || c.company || '',
+                customerPhone: primaryContact.mobile || '',
+                customerEmail: c.companyEmail || primaryContact.email || '',
+                customerGstin: c.gstNumber || '',
+                customerState: stateName,
+                customerStateCode: stateCode,
+                billingAddress: fullAddress || '',
+                shippingAddress: fullAddress || '',
+            };
+            const isMH = stateName.trim().toLowerCase() === 'maharashtra' || stateCode === '27';
+            up.gstType = c.gstType ? c.gstType : (isMH ? 'CGST / SGST' : ((stateName.trim() || stateCode) ? 'IGST' : p.gstType));
+            return up;
+        });
+        setShowCustDropdown(false);
+    };
+
+    const handleItemSearch = async (val, index) => {
+        setItem(index, 'itemName', val);
+        if (!val.trim()) { setItemOptions([]); setActiveItemRow(null); return; }
+        setActiveItemRow(index);
+        try {
+            const res = await getItems({ search: val, limit: 15 });
+            const list = res?.data || res?.results || res || [];
+            if (Array.isArray(list)) setItemOptions(list);
+        } catch (e) { console.error('Error searching items:', e); }
+    };
+
+    const handleItemSelect = (selected, index) => {
+        setForm(p => {
+            const items = [...p.items];
+            const currentItem = items[index];
+            const rate = selected.standardRate || selected.rate || selected.salesPrice || 0;
+            const updated = {
+                ...currentItem,
+                itemId: selected._id,
+                itemName: selected.itemName || selected.name || '',
+                modelNo: selected.modelNo || selected.sku || '',
+                hsnCode: selected.hsnCode || '',
+                uom: selected.uom || 'NOS',
+                rate: rate,
+                gstRate: selected.taxRate || selected.gstRate || 18,
+            };
+            updated.amount = (Number(updated.qty) || 0) * (Number(updated.rate) || 0);
+            items[index] = updated;
+            return { ...p, items };
+        });
+        setActiveItemRow(null);
+    };
+
     useEffect(() => {
         if (isEdit) {
             getSalesOrderById(id).then(so => {
@@ -54,7 +157,17 @@ export default function SalesOrderFormPage() {
         }
     }, [id]);
 
-    const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+    const setF = (k, v) => {
+        setForm(p => {
+            const updated = { ...p, [k]: v };
+            // Auto-set GST type when customer state changes
+            if (k === 'customerState') {
+                const isMH = v.trim().toLowerCase() === 'maharashtra';
+                updated.gstType = isMH ? 'CGST / SGST' : (v.trim() ? 'IGST' : p.gstType);
+            }
+            return updated;
+        });
+    };
     const setItem = (i, k, v) => setForm(p => {
         const items = [...p.items];
         items[i] = { ...items[i], [k]: v };
@@ -137,9 +250,16 @@ export default function SalesOrderFormPage() {
                             </select>
                         </Field>
                         <Field label="GST Type">
-                            <select value={form.gstType} onChange={e => setF('gstType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-                                <option>CGST / SGST</option><option>IGST</option>
-                            </select>
+                            <div style={{ position: 'relative' }}>
+                                <select value={form.gstType} onChange={e => setF('gstType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option>CGST / SGST</option><option>IGST</option>
+                                </select>
+                                {form.customerState && (
+                                    <span style={{ position: 'absolute', right: 28, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: '#9ca3af', pointerEvents: 'none' }}>
+                                        {form.customerState.trim().toLowerCase() === 'maharashtra' ? '✓ Intra-state' : '✓ Inter-state'}
+                                    </span>
+                                )}
+                            </div>
                         </Field>
                         <div style={{ gridColumn: 'span 1' }}></div>
                         <Field label="Remarks" ><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical', gridColumn: 'span 3' }} placeholder="Any remarks..." /></Field>
@@ -149,7 +269,70 @@ export default function SalesOrderFormPage() {
                 {/* Customer Info */}
                 <Section title="Customer Details">
                     <Grid cols={3}>
-                        <Field label="Customer Name *"><input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={inp} placeholder="Customer / Company Name" /></Field>
+                        <Field label="Customer Name *">
+                            <div ref={custRef} style={{ position: 'relative' }}>
+                                <input
+                                    value={form.customerName}
+                                    onChange={e => handleCustomerSearch(e.target.value)}
+                                    onFocus={() => customerOptions.length && setShowCustDropdown(true)}
+                                    onKeyDown={e => {
+                                        if (!showCustDropdown) return;
+                                        const visibleOptions = customerOptions.filter(c => {
+                                            const search = form.customerName.toLowerCase().trim();
+                                            return (c.customerName || '').toLowerCase().startsWith(search) || (c.company || '').toLowerCase().startsWith(search);
+                                        });
+                                        if (e.key === 'ArrowDown') { e.preventDefault(); setCustHighlightIndex(p => Math.min(p + 1, visibleOptions.length - 1)); }
+                                        else if (e.key === 'ArrowUp') { e.preventDefault(); setCustHighlightIndex(p => Math.max(p - 1, 0)); }
+                                        else if (e.key === 'Enter' && custHighlightIndex >= 0 && custHighlightIndex < visibleOptions.length) {
+                                            e.preventDefault(); handleCustomerSelect(visibleOptions[custHighlightIndex]);
+                                        }
+                                        else if (e.key === 'Escape') { setShowCustDropdown(false); }
+                                    }}
+                                    style={inp}
+                                    placeholder="Search Customer Master..."
+                                />
+                                {showCustDropdown && customerOptions.length > 0 && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                                        {customerOptions.filter(c => {
+                                            const search = form.customerName.toLowerCase().trim();
+                                            const name = (c.customerName || '').toLowerCase();
+                                            const company = (c.company || '').toLowerCase();
+                                            // STRICT PREFIX MATCHING
+                                            return name.startsWith(search) || company.startsWith(search);
+                                        })
+                                            .sort((a, b) => {
+                                                const search = form.customerName.toLowerCase().trim();
+                                                const n1 = (a.customerName || a.company || '').toLowerCase();
+                                                const n2 = (b.customerName || b.company || '').toLowerCase();
+                                                // EXACT MATCH FIRST
+                                                if (n1 === search && n2 !== search) return -1;
+                                                if (n2 === search && n1 !== search) return 1;
+                                                return n1.localeCompare(n2);
+                                            })
+                                            .slice(0, 15)
+                                            .map((c, idx) => (
+                                                <div
+                                                    key={c._id}
+                                                    onClick={() => handleCustomerSelect(c)}
+                                                    style={{
+                                                        padding: '8px 12px',
+                                                        borderBottom: '1px solid #f3f4f6',
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.2s',
+                                                        background: custHighlightIndex === idx ? '#f1f5f9' : 'transparent'
+                                                    }}
+                                                    onMouseEnter={() => setCustHighlightIndex(idx)}
+                                                >
+                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{c.customerName || c.company}</div>
+                                                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                                                        {c.city ? c.city + ' • ' : ''}{c.contactPersons?.[0]?.mobile || '—'}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+                        </Field>
                         <Field label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} placeholder="+91 XXXXXXXXXX" /></Field>
                         <Field label="Email"><input value={form.customerEmail} onChange={e => setF('customerEmail', e.target.value)} style={inp} placeholder="email@domain.com" /></Field>
                         <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="27XXXXX..." /></Field>
@@ -177,7 +360,29 @@ export default function SalesOrderFormPage() {
                                     return (
                                         <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                             <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
-                                            <td style={{ ...td, minWidth: 160 }}><input value={item.itemName} onChange={e => setItem(i, 'itemName', e.target.value)} style={{ ...inp, borderColor: !item.itemName ? '#fca5a5' : '#d1d5db' }} placeholder="Product name" /></td>
+                                            <td style={{ ...td, minWidth: 160 }}>
+                                                <div ref={activeItemRow === i ? itemRef : null} style={{ position: 'relative' }}>
+                                                    <input value={item.itemName} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemName ? '#fca5a5' : '#d1d5db' }} placeholder="Search Item..." />
+                                                    {activeItemRow === i && itemOptions.length > 0 && (
+                                                        <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                                                            {itemOptions.filter(it => {
+                                                                const s = (item.itemName || '').toLowerCase();
+                                                                const n = (it.itemName || it.name || '').toLowerCase();
+                                                                const m = (it.modelNo || it.sku || '').toLowerCase();
+                                                                return n.includes(s) || m.includes(s);
+                                                            }).map((it) => (
+                                                                <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemName || it.name}</div>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                                                                        <span>{it.modelNo || it.sku || ''}</span>
+                                                                        <span>HSN: {it.hsnCode || '—'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td style={{ ...td, minWidth: 100 }}><input value={item.modelNo} onChange={e => setItem(i, 'modelNo', e.target.value)} style={inp} /></td>
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} /></td>
                                             <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} /></td>

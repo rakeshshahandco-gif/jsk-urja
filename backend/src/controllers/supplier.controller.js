@@ -10,6 +10,7 @@ const supplierSchema = Joi.object({
     phone: Joi.string().optional().allow(''),
     email: Joi.string().email().optional().allow(''),
     address: Joi.string().optional().allow(''),
+    area: Joi.string().optional().allow(''),
     city: Joi.string().optional().allow(''),
     state: Joi.string().optional().allow(''),
     pincode: Joi.string().optional().allow(''),
@@ -32,7 +33,7 @@ const generateSupplierCode = async () => {
 };
 
 export const createSupplier = asyncHandler(async (req, res) => {
-    const { error, value } = supplierSchema.validate(req.body);
+    const { error, value } = supplierSchema.validate(req.body, { allowUnknown: true });
     if (error) throw new ApiError(400, error.details[0].message);
 
     const supplierCode = await generateSupplierCode();

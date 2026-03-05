@@ -19,6 +19,8 @@ const grnItemSchema = new mongoose.Schema({
     batchNo: { type: String, default: '' },
     serialNo: { type: String, default: '' },
     remarks: { type: String, default: '' },
+    discountPercent: { type: Number, default: 0 },
+    taxPercent: { type: Number, default: 0 },
 }, { _id: true });
 
 const grnSchema = new mongoose.Schema({
@@ -32,6 +34,14 @@ const grnSchema = new mongoose.Schema({
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
     supplierName: { type: String, default: '' },
     warehouse: { type: String, default: '' },
+    supplierGstNumber: { type: String, default: '' },
+    supplierAddress: { type: String, default: '' },
+    gstType: { type: String, default: 'CGST / SGST' },
+    transporterName: { type: String, default: '' },
+    vehicleNo: { type: String, default: '' },
+    lrNumber: { type: String, default: '' },
+    freightAmount: { type: Number, default: 0 },
+    freightGstRate: { type: Number, default: 0 },
 
     // Source type
     sourceType: {

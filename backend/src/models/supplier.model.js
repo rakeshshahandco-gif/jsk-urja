@@ -7,6 +7,7 @@ const supplierSchema = new mongoose.Schema({
     phone: { type: String, trim: true, default: '' },
     email: { type: String, trim: true, lowercase: true, default: '' },
     address: { type: String, trim: true, default: '' },
+    area: { type: String, trim: true, default: '' },
     city: { type: String, trim: true, default: '' },
     state: { type: String, trim: true, default: '' },
     pincode: { type: String, trim: true, default: '' },

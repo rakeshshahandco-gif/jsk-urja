@@ -37,7 +37,16 @@ const purchaseOrderSchema = new mongoose.Schema({
         default: 'Draft',
     },
     remarks: { type: String, default: '' },
+    supplierGstNumber: { type: String, default: '' },
+    supplierAddress: { type: String, default: '' },
     items: [poItemSchema],
+
+    // Transportation & Freight
+    transporterName: { type: String, default: '' },
+    vehicleNo: { type: String, default: '' },
+    lrNumber: { type: String, default: '' },
+    freightAmount: { type: Number, default: 0 },
+    freightGstRate: { type: Number, default: 0 },
 
     // Totals
     subTotal: { type: Number, default: 0 },
