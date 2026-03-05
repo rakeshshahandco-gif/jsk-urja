@@ -35,7 +35,7 @@ const genSONumber = async () => {
 };
 
 const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '') => {
-    let totalQty = 0, totalAmount = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0;
+    let totalQty = 0, totalTaxableSum = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0;
     const isIGST = gstType === 'IGST';
 
     const processedItems = items.map(item => {
@@ -55,25 +55,25 @@ const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '') 
             cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
             sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
         }
-        const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
+        const itemTotalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
 
         totalQty += qty;
-        totalAmount += taxableAmount;
+        totalTaxableSum += taxableAmount;
         totalCgst += cgstAmount;
         totalSgst += sgstAmount;
         totalIgst += igstAmount;
 
-        return { ...item, qty, rate, amount, taxableAmount: amount, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount, totalAmount };
+        return { ...item, qty, rate, amount, taxableAmount: amount, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount, totalAmount: itemTotalAmount };
     });
 
     const freight = Number(freightAmount) || 0;
     const freightGst = freight > 0 && freightGstRate > 0 ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
     const totalGst = totalCgst + totalSgst + totalIgst + freightGst;
-    const grandTotal = totalAmount + totalGst + freight;
+    const grandTotal = totalTaxableSum + totalGst + freight;
     const roundedTotal = Math.round(grandTotal);
     const roundOff = Math.round((roundedTotal - grandTotal) * 100) / 100;
 
-    return { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff };
+    return { processedItems, totalQty, totalAmount: totalTaxableSum, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff };
 };
 
 // ------- CREATE SALES ORDER -------
