@@ -39,6 +39,7 @@ router
 router.get('/template/download', customerController.downloadTemplate);
 router.post('/import', upload.single('file'), customerController.importCustomers);
 
+router.get('/search', customerController.searchCustomers);
 router.get('/types', customerController.getCustomerTypes);
 router.get('/stickers', customerController.getCustomerStickers);
 

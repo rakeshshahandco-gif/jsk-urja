@@ -7,7 +7,7 @@ const psItemSchema = new mongoose.Schema({
     notes: { type: String, default: '' },
     voltCurrent: { type: String, default: '' },
     qty: { type: Number, default: 0 },
-    extraChange: { type: String, default: '' },
+    hours: { type: String, default: '' },
     dummyLoad: { type: String, default: '' },
 }, { _id: true });
 
@@ -25,9 +25,6 @@ const productionSheetSchema = new mongoose.Schema({
     orderDate: { type: Date, default: null },
     notes: { type: String, default: '' },
     modelNo: { type: String, default: '' },
-    orderedBy: { type: String, default: '' },
-    proIC: { type: String, default: '' },
-    repeatOrder: { type: String, default: '' },
 
     // Product Config
     stickerType: { type: String, default: '' },

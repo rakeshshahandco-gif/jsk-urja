@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createSalesOrder, getSalesOrderById, updateSalesOrder } from '@/services/salesApi';
-import { getCustomers } from '@/services/customerApi';
+import { getCustomers, searchCustomers } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -61,6 +61,7 @@ export default function SalesOrderFormPage() {
     const [itemOptions, setItemOptions] = useState([]);
     const [activeItemRow, setActiveItemRow] = useState(null);
     const itemRef = useRef(null);
+    const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -82,49 +83,59 @@ export default function SalesOrderFormPage() {
     const handleCustomerSearch = (val) => {
         setF('customerName', val);
         setCustHighlightIndex(-1);
-        if (!val.trim()) { setCustomerOptions([]); setShowCustDropdown(false); return; }
+
+        if (!val.trim()) {
+            setForm(p => ({
+                ...p,
+                customerName: '',
+                customerCode: '',
+                customerPhone: '',
+                customerEmail: '',
+                customerGstin: '',
+                customerState: '',
+                customerStateCode: '',
+                billingAddress: '',
+                shippingAddress: '',
+                customerId: null
+            }));
+            setCustomerOptions([]);
+            setShowCustDropdown(false);
+            return;
+        }
+
+        if (val.length < 2) {
+            setCustomerOptions([]);
+            setShowCustDropdown(false);
+            return;
+        }
+
         setShowCustDropdown(true);
         if (custSearchTimeout.current) clearTimeout(custSearchTimeout.current);
         custSearchTimeout.current = setTimeout(async () => {
             try {
-                // Fetch broadly, we will filter strictly on the client side
-                const res = await getCustomers({ search: val, limit: 40 });
-                const list = res?.results || res?.data?.results || res?.data || res || [];
-                if (Array.isArray(list)) setCustomerOptions(list);
+                const results = await searchCustomers(val);
+                if (Array.isArray(results)) setCustomerOptions(results);
             } catch (e) { console.error('Error searching customers:', e); }
         }, 300);
     };
 
     const handleCustomerSelect = (c) => {
-        const primaryContact = c.contactPersons?.find(cp => cp.isPrimary) || c.contactPersons?.[0] || {};
-        const stateName = c.state || '';
+        const displayName = c.gstin ? `${c.name} (${c.gstin})` : c.name;
 
-        let stateCode = '';
-        if (c.stateCode) stateCode = c.stateCode;
-        else if (c.gstNumber && c.gstNumber.length >= 2) stateCode = c.gstNumber.substring(0, 2);
-
-        // Build a comprehensive address string from the master
-        const addrParts = [c.address, c.area, c.taluka, c.city, c.district].filter(Boolean);
-        let fullAddress = addrParts.join(', ');
-        if (c.pincode) fullAddress += ` - ${c.pincode}`;
-        if (stateName && !fullAddress.includes(stateName)) fullAddress += `\n${stateName}`;
-
-        setForm(p => {
-            const isMH = stateName.trim().toLowerCase() === 'maharashtra' || stateCode === '27';
-            return {
-                ...p,
-                customerName: c.customerName || c.company || '',
-                customerCode: c.customerCode || '',
-                customerPhone: primaryContact.mobile || '',
-                customerEmail: c.companyEmail || primaryContact.email || '',
-                customerGstin: c.gstNumber || '',
-                customerState: stateName,
-                customerStateCode: stateCode,
-                billingAddress: fullAddress || '',
-                shippingAddress: fullAddress || '',
-                gstType: c.gstType ? c.gstType : (isMH ? 'CGST / SGST' : ((stateName.trim() || stateCode) ? 'IGST' : p.gstType))
-            };
-        });
+        setForm(p => ({
+            ...p,
+            customerName: displayName,
+            customerCode: c.customerCode || '',
+            customerPhone: c.phone || '',
+            customerEmail: c.email || '',
+            customerGstin: c.gstin || '',
+            customerState: c.state || '',
+            customerStateCode: c.stateCode || '',
+            billingAddress: c.billingAddress || '',
+            shippingAddress: c.shippingAddress || '',
+            gstType: c.gstType || p.gstType,
+            customerId: c.id
+        }));
         setShowCustDropdown(false);
     };
 
@@ -174,7 +185,6 @@ export default function SalesOrderFormPage() {
                 });
             }).catch(() => toast.error('Failed to load SO'));
         } else {
-            // Force reset when creating a new Sales Order
             setForm({
                 customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
                 customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
@@ -188,16 +198,6 @@ export default function SalesOrderFormPage() {
         }
     }, [id, isEdit]);
 
-    const setF = (k, v) => {
-        setForm(p => {
-            let gstType = p.gstType;
-            if (k === 'customerState') {
-                const isMH = v.trim().toLowerCase() === 'maharashtra';
-                gstType = isMH ? 'CGST / SGST' : (v.trim() ? 'IGST' : p.gstType);
-            }
-            return { ...p, [k]: v, gstType };
-        });
-    };
     const setItem = (i, k, v) => setForm(p => {
         const items = p.items.map((item, idx) => {
             if (idx !== i) return item;
@@ -212,7 +212,6 @@ export default function SalesOrderFormPage() {
     const addItem = () => setForm(p => ({ ...p, items: [...p.items, BLANK_ITEM()] }));
     const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
 
-    // COMPUTED TOTALS (live)
     const isIGST = form.gstType === 'IGST';
     const processedItems = form.items.map(item => {
         const qty = Number(item.qty) || 0;
@@ -251,12 +250,10 @@ export default function SalesOrderFormPage() {
         finally { setSaving(false); }
     };
 
-
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             <style>
                 {`
-                    /* Hide scroll arrows on number inputs */
                     .no-spin::-webkit-inner-spin-button, 
                     .no-spin::-webkit-outer-spin-button { 
                         -webkit-appearance: none; 
@@ -267,7 +264,6 @@ export default function SalesOrderFormPage() {
                     }
                 `}
             </style>
-            {/* Header */}
             <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -283,7 +279,6 @@ export default function SalesOrderFormPage() {
                         <span>This order is <strong>{form.status}</strong>. General details are locked, but items can still be updated.</span>
                     </div>
                 )}
-                {/* Order Info */}
                 <Section title="Order Information">
                     <Grid cols={3}>
                         <Field label="Order Date"><input type="date" value={form.soDate || ''} onChange={e => setF('soDate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
@@ -298,13 +293,10 @@ export default function SalesOrderFormPage() {
                                 <option>Credit</option><option>Cash</option>
                             </select>
                         </Field>
-                        <div style={{ gridColumn: 'span 2' }}></div>
-                        <div style={{ gridColumn: 'span 1' }}></div>
-                        <Field label="Remarks" ><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical', gridColumn: 'span 3' }} placeholder="Any remarks..." disabled={form.status && form.status !== 'Draft'} /></Field>
+                        <Field label="Remarks" ><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical' }} placeholder="Any remarks..." disabled={form.status && form.status !== 'Draft'} /></Field>
                     </Grid>
                 </Section>
 
-                {/* Customer Info */}
                 <Section title="Customer Details">
                     <Grid cols={3}>
                         <Field label="Customer Name *">
@@ -314,44 +306,24 @@ export default function SalesOrderFormPage() {
                                     disabled={form.status && form.status !== 'Draft'}
                                     onKeyDown={e => {
                                         if (!showCustDropdown) return;
-                                        const visibleOptions = customerOptions.filter(c => {
-                                            const search = form.customerName.toLowerCase().trim();
-                                            return (c.customerName || '').toLowerCase().startsWith(search) || (c.company || '').toLowerCase().startsWith(search);
-                                        });
-                                        if (e.key === 'ArrowDown') { e.preventDefault(); setCustHighlightIndex(p => Math.min(p + 1, visibleOptions.length - 1)); }
+                                        if (e.key === 'ArrowDown') { e.preventDefault(); setCustHighlightIndex(p => Math.min(p + 1, customerOptions.length - 1)); }
                                         else if (e.key === 'ArrowUp') { e.preventDefault(); setCustHighlightIndex(p => Math.max(p - 1, 0)); }
-                                        else if (e.key === 'Enter' && custHighlightIndex >= 0 && custHighlightIndex < visibleOptions.length) {
-                                            e.preventDefault(); handleCustomerSelect(visibleOptions[custHighlightIndex]);
+                                        else if (e.key === 'Enter' && custHighlightIndex >= 0 && custHighlightIndex < customerOptions.length) {
+                                            e.preventDefault(); handleCustomerSelect(customerOptions[custHighlightIndex]);
                                         }
                                         else if (e.key === 'Escape') { setShowCustDropdown(false); }
                                     }}
                                 />
                                 {form.customerCode && <div style={{ fontSize: 11, color: '#0d9488', fontWeight: 700, marginTop: 4 }}>SELECTED CODE: {form.customerCode}</div>}
-                                {showCustDropdown && customerOptions.length > 0 && (form.status !== 'Draft' ? false : true) && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                                        {customerOptions.filter(c => {
-                                            const search = form.customerName.toLowerCase().trim();
-                                            const name = (c.customerName || '').toLowerCase();
-                                            const company = (c.company || '').toLowerCase();
-                                            // STRICT PREFIX MATCHING
-                                            return name.startsWith(search) || company.startsWith(search);
-                                        })
-                                            .sort((a, b) => {
-                                                const search = form.customerName.toLowerCase().trim();
-                                                const n1 = (a.customerName || a.company || '').toLowerCase();
-                                                const n2 = (b.customerName || b.company || '').toLowerCase();
-                                                // EXACT MATCH FIRST
-                                                if (n1 === search && n2 !== search) return -1;
-                                                if (n2 === search && n1 !== search) return 1;
-                                                return n1.localeCompare(n2);
-                                            })
-                                            .slice(0, 15)
-                                            .map((c, idx) => (
+                                {showCustDropdown && (!form.status || form.status === 'Draft') && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 250, overflowY: 'auto', zIndex: 100, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' }}>
+                                        {customerOptions.length > 0 ? (
+                                            customerOptions.slice(0, 10).map((c, idx) => (
                                                 <div
-                                                    key={c._id}
+                                                    key={c.id}
                                                     onClick={() => handleCustomerSelect(c)}
                                                     style={{
-                                                        padding: '8px 12px',
+                                                        padding: '10px 14px',
                                                         borderBottom: '1px solid #f3f4f6',
                                                         cursor: 'pointer',
                                                         transition: 'background 0.2s',
@@ -359,34 +331,74 @@ export default function SalesOrderFormPage() {
                                                     }}
                                                     onMouseEnter={() => setCustHighlightIndex(idx)}
                                                 >
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{c.company || c.customerName}</div>
-                                                    <div style={{ fontSize: 11, color: '#6b7280' }}>Code: {c.customerCode || '—'} · {c.city || 'No City'} · {c.state || 'No State'}</div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{c.name}</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginTop: 3 }}>
+                                                        {c.gstin && <div style={{ fontSize: 11, color: '#0d9488', fontWeight: 600 }}>GSTIN: {c.gstin}</div>}
+                                                        {c.phone && <div style={{ fontSize: 11, color: '#6b7280' }}>Phone: {c.phone}</div>}
+                                                        {(c.city || c.state) && <div style={{ fontSize: 11, color: '#6366f1', fontStyle: 'italic' }}>Location: {[c.city, c.state].filter(Boolean).join(', ')}</div>}
+                                                    </div>
                                                 </div>
-                                            ))}
+                                            ))
+                                        ) : (
+                                            <div style={{ padding: '14px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No customer found</div>
+                                        )}
+                                        <div
+                                            onClick={() => navigate(PATHS.CUSTOMERS + '/new')}
+                                            style={{
+                                                padding: '12px 14px',
+                                                borderTop: '2px solid #f3f4f6',
+                                                cursor: 'pointer',
+                                                color: '#0d9488',
+                                                fontSize: 13,
+                                                fontWeight: 700,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 8,
+                                                background: '#f0fdfa'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#e6fffa'}
+                                            onMouseLeave={e => e.currentTarget.style.background = '#f0fdfa'}
+                                        >
+                                            <span style={{ fontSize: 16 }}>+</span>
+                                            Create New Customer
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         </Field>
-                        <Field label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} placeholder="+91 XXXXXXXXXX" disabled={form.status && form.status !== 'Draft'} /></Field>
-                        <Field label="Email"><input value={form.customerEmail} onChange={e => setF('customerEmail', e.target.value)} style={inp} placeholder="email@domain.com" disabled={form.status && form.status !== 'Draft'} /></Field>
-                        <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="27XXXXX..." disabled={form.status && form.status !== 'Draft'} /></Field>
-                        <Field label="State"><input value={form.customerState} onChange={e => setF('customerState', e.target.value)} style={inp} placeholder="Maharashtra" disabled={form.status && form.status !== 'Draft'} /></Field>
-                        <Field label="State Code"><input value={form.customerStateCode} onChange={e => setF('customerStateCode', e.target.value)} style={inp} placeholder="27" disabled={form.status && form.status !== 'Draft'} /></Field>
+                        <Field label="Phone">
+                            <input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="+91 XXXXXXXXXX" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
+                        <Field label="Email">
+                            <input value={form.customerEmail} onChange={e => setF('customerEmail', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="email@domain.com" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
+                        <Field label="GSTIN">
+                            <input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="27XXXXX..." readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
+                        <Field label="State">
+                            <input value={form.customerState} onChange={e => setF('customerState', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="Maharashtra" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
+                        <Field label="State Code">
+                            <input value={form.customerStateCode} onChange={e => setF('customerStateCode', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="27" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
                         <div style={{ gridColumn: 'span 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <Field label="Billing Address"><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} disabled={form.status && form.status !== 'Draft'} /></Field>
-                            <Field label="Shipping Address"><textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} disabled={form.status && form.status !== 'Draft'} /></Field>
+                            <Field label="Billing Address">
+                                <textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', background: form.customerId ? '#f9fafb' : '#fff' }} readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                            </Field>
+                            <Field label="Shipping Address">
+                                <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', background: form.customerId ? '#f9fafb' : '#fff' }} readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                            </Field>
                         </div>
                         <Field label="Customer PO No."><input value={form.customerPO} onChange={e => setF('customerPO', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
                         <Field label="Customer PO Date"><input type="date" value={form.customerPODate || ''} onChange={e => setF('customerPODate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
                     </Grid>
                 </Section>
 
-                {/* Items Table - Production Details */}
                 <Section title="Production Details">
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
-                                {['Sr', 'Item Code *', 'Item Name', 'Model No', 'Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                                {['Sr', 'Item Code *', 'Item Name', 'Model No', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                                 {form.items.map((item, i) => {
@@ -399,13 +411,7 @@ export default function SalesOrderFormPage() {
                                                     <input value={item.itemCode || ''} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemCode ? '#fca5a5' : '#d1d5db' }} placeholder="Item Code..." autoComplete="off" />
                                                     {activeItemRow === i && itemOptions.length > 0 && (
                                                         <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                                                            {itemOptions.filter(it => {
-                                                                const s = (item.itemCode || '').toLowerCase();
-                                                                const n = (it.itemName || it.name || '').toLowerCase();
-                                                                const m = (it.modelNo || it.sku || '').toLowerCase();
-                                                                const c = (it.itemCode || '').toLowerCase();
-                                                                return n.includes(s) || m.includes(s) || c.includes(s);
-                                                            }).map((it) => (
+                                                            {itemOptions.map((it) => (
                                                                 <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                                                     <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemCode || 'No Code'} - {it.itemName || it.name}</div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
@@ -440,7 +446,6 @@ export default function SalesOrderFormPage() {
                     </div>
                 </Section>
 
-                {/* Freight + Totals */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <Section title="Order Summary">
                         <div style={{ display: 'grid', gap: 6 }}>
@@ -486,7 +491,6 @@ export default function SalesOrderFormPage() {
                     </Section>
                 </div>
 
-                {/* Form Actions Footer */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24, padding: '20px 0', borderTop: '1px solid #e5e7eb' }}>
                     <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 14 }}>Cancel</button>
                     {(!form.status || form.status === 'Draft') && (

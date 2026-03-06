@@ -52,6 +52,8 @@ export const getItems = asyncHandler(async (req, res) => {
         page = 1, limit = 25, sortBy = 'itemName:asc'
     } = req.query;
 
+    console.log('GET /items query:', req.query);
+
     const filter = {};
     if (itemCategory) filter.itemCategory = itemCategory;
     if (itemType) filter.itemType = itemType;
@@ -67,12 +69,42 @@ export const getItems = asyncHandler(async (req, res) => {
                 { itemName: { $regex: searchParts[1], $options: 'i' } }
             ];
         } else {
-            const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            filter.$or = [
-                { itemName: { $regex: safeSearch, $options: 'i' } },
-                { itemCode: { $regex: safeSearch, $options: 'i' } },
-                { hsnCode: { $regex: safeSearch, $options: 'i' } },
-            ];
+            const isNumeric = /^\d+$/.test(search.trim());
+
+            if (isNumeric) {
+                // ── Smart Numeric Search (e.g., "20") ──
+                // Prevents matching "120.3" or "1206" when searching for "20"
+                const num = search.trim();
+                filter.$or = [
+                    // Code matches: Ends with the number (e.g., I00020, JSK-20)
+                    { itemCode: { $regex: `(?:^|\\D)0*${num}$`, $options: 'i' } },
+                    // Name matches: Whole number match (e.g., "20mm", but NOT "120")
+                    { itemName: { $regex: `(^|[^0-9])${num}([^0-9]|$)`, $options: 'i' } },
+                    // HSN matches: Contains the number
+                    { hsnCode: { $regex: num, $options: 'i' } },
+                ];
+            } else {
+                const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const standardRegex = { $regex: safeSearch, $options: 'i' };
+
+                filter.$or = [
+                    { itemName: standardRegex },
+                    { itemCode: standardRegex },
+                    { hsnCode: standardRegex },
+                ];
+
+                // ── Fuzzy Alphanumeric Search for Item Codes (e.g., "I20" -> /I.*20/i) ──
+                const fuzzyMatch = search.trim().match(/^([a-zA-Z\s\-_]+)(\d+)$/);
+                if (fuzzyMatch) {
+                    const alpha = fuzzyMatch[1].replace(/[\s\-_]/g, '');
+                    const num = fuzzyMatch[2];
+                    if (alpha && num) {
+                        filter.$or.push({
+                            itemCode: { $regex: `${alpha}.*${num}`, $options: 'i' }
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -81,10 +113,17 @@ export const getItems = asyncHandler(async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const [field, dir] = sortBy.split(':');
-    const sort = { [field || 'itemName']: dir === 'desc' ? -1 : 1 };
+    const sortField = field || 'itemName';
+    const sortDir = dir === 'desc' ? -1 : 1;
+    const sort = { [sortField]: sortDir };
 
     const [items, total] = await Promise.all([
-        Item.find(filter).sort(sort).skip(skip).limit(limitNum).lean(),
+        Item.find(filter)
+            .collation({ locale: 'en', numericOrdering: true })
+            .sort(sort)
+            .skip(skip)
+            .limit(limitNum)
+            .lean(),
         Item.countDocuments(filter),
     ]);
 

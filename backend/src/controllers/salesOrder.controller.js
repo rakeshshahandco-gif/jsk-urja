@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { ProductionSheet } from '../models/productionSheet.model.js';
+import Customer from '../models/customer.model.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -177,6 +178,17 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         if (existing) return res.json({ success: true, data: existing, message: 'Production sheet already exists' });
     }
 
+    // Pull sticker type from customer master
+    let stickerType = '';
+    try {
+        const customer = await Customer.findOne({ customerCode: so.customerCode }).populate('stickers');
+        if (customer && customer.stickers && customer.stickers.length > 0) {
+            stickerType = customer.stickers[0].name;
+        }
+    } catch (e) {
+        console.error('Error fetching customer stickers:', e);
+    }
+
     const year = new Date().getFullYear();
     const last = await ProductionSheet.findOne({ psNumber: { $regex: `^PS-${year}-` } }).sort({ psNumber: -1 });
     let psNumber;
@@ -192,9 +204,9 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         itemCode: item.itemCode || '',
         modelNo: item.modelNo || item.itemName || '',
         notes: item.additionalNotes || '',
-        voltCurrent: '',
+        voltCurrent: item.additionalNotes || '',
         qty: item.qty,
-        extraChange: '',
+        hours: '',
         dummyLoad: '',
     }));
 
@@ -208,6 +220,7 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         deliveryDate: so.deliveryDate,
         orderCategory: so.orderCategory,
         orderDate: so.soDate,
+        stickerType,
         notes: so.remarks || '',
         modelNo: so.items.map(i => [i.itemCode, i.modelNo || i.itemName].filter(Boolean).join(' - ')).join(', ') || '',
         items: psItems,

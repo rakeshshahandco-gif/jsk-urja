@@ -4,20 +4,20 @@ import toast from 'react-hot-toast';
 
 const inp = {
     padding: '10px 14px',
-    background: '#0f172a',
-    border: '1px solid #334155',
+    background: '#fff',
+    border: '1px solid #e2e8f0',
     borderRadius: '8px',
-    color: '#f1f5f9',
+    color: '#1e293b',
     fontSize: '14px',
     outline: 'none',
     width: '100%',
     boxSizing: 'border-box',
-    transition: 'border-color 0.2s',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
 };
 
 const lbl = {
     fontSize: '12px',
-    color: '#94a3b8',
+    color: '#64748b',
     display: 'block',
     marginBottom: '6px',
     fontWeight: 600,
@@ -139,21 +139,21 @@ export default function CompanyProfilePage() {
     }
 
     return (
-        <div style={{ padding: '32px', fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ padding: '32px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
                 <div style={{ marginBottom: '24px' }}>
-                    <h1 style={{ margin: '0 0 8px', fontSize: '26px', fontWeight: 800, color: '#f8fafc' }}>
+                    <h1 style={{ margin: '0 0 8px', fontSize: '26px', fontWeight: 800, color: '#0f172a' }}>
                         🏢 Company Profile
                     </h1>
-                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px' }}>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
                         Manage your company's core details, address, and tax information. These will be used across your invoices and documents.
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '28px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
+                <form onSubmit={handleSubmit} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '28px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
 
                     <div style={{ marginBottom: '24px' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             Business Information
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
@@ -176,7 +176,7 @@ export default function CompanyProfilePage() {
                     </div>
 
                     <div style={{ marginBottom: '24px' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             Tax Details
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -200,7 +200,7 @@ export default function CompanyProfilePage() {
                     </div>
 
                     <div style={{ marginBottom: '24px' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             Bank Information
                         </h3>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -224,7 +224,7 @@ export default function CompanyProfilePage() {
                     </div>
 
                     <div style={{ marginBottom: '32px' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             Address Details
                         </h3>
                         <div style={{ display: 'grid', gap: '16px' }}>
@@ -256,7 +256,7 @@ export default function CompanyProfilePage() {
                     </div>
 
                     <div style={{ marginBottom: '32px' }}>
-                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
                             Branding
                         </h3>
                         <div>
@@ -275,14 +275,14 @@ export default function CompanyProfilePage() {
                             <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#64748b' }}>Select a local image or PDF file to upload.</p>
 
                             {profile.logoFile ? (
-                                <div style={{ marginTop: '16px', padding: '12px', background: '#0f172a', borderRadius: '8px', display: 'inline-block', border: '1px solid #334155', color: '#60a5fa' }}>
+                                <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', display: 'inline-block', border: '1px solid #e2e8f0', color: '#2563eb' }}>
                                     Selected File: {profile.logoFile.name}
                                 </div>
                             ) : profile.logoUrl ? (
-                                <div style={{ marginTop: '16px', padding: '12px', background: '#0f172a', borderRadius: '8px', display: 'inline-block', border: '1px solid #334155' }}>
-                                    <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>Current Logo:</p>
+                                <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', display: 'inline-block', border: '1px solid #e2e8f0' }}>
+                                    <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#64748b' }}>Current Logo:</p>
                                     {profile.logoUrl.endsWith('.pdf') ? (
-                                        <a href={profile.logoUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>
+                                        <a href={profile.logoUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none' }}>
                                             📄 View Existing PDF Logo
                                         </a>
                                     ) : (
@@ -293,10 +293,10 @@ export default function CompanyProfilePage() {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #334155', paddingTop: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '24px' }}>
                         <button type="submit" disabled={saving} style={{
                             padding: '12px 28px',
-                            background: saving ? '#475569' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                            background: saving ? '#94a3b8' : 'linear-gradient(135deg, #2563eb, #4f46e5)',
                             color: '#fff',
                             border: 'none',
                             borderRadius: '8px',

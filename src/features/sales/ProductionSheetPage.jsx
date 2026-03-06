@@ -32,9 +32,6 @@ export default function ProductionSheetPage() {
             setPS(psData);
             setForm({
                 ...psData,
-                orderedBy: psData.orderedBy || '',
-                proIC: psData.proIC || '',
-                repeatOrder: psData.repeatOrder || '',
                 testing: {
                     dateTime: psData.testing?.dateTime || '',
                     testedBy: psData.testing?.testedBy || '',
@@ -126,15 +123,7 @@ export default function ProductionSheetPage() {
                     </div>
                     <div className="o-row">
                         <div className="o-cell"><span className="o-label">CLIENT CODE:-</span> <span className="o-value">{ps.customerCode || '—'}</span></div>
-                        <div className="o-cell"><span className="o-label">ORDERED BY:-</span> <span className="o-value">{ps.orderedBy || '—'}</span></div>
-                    </div>
-                    <div className="o-row">
-                        <div className="o-cell"><span className="o-label">ADDRESS:-</span> <span className="o-value">{ps.customerAddress || '—'}</span></div>
-                        <div className="o-cell"><span className="o-label">NAME OF PRO IC:-</span> <span className="o-value">{ps.proIC || '—'}</span></div>
-                    </div>
-                    <div className="o-row">
                         <div className="o-cell"><span className="o-label">DELIVERY DATE:-</span> <span className="o-value">{fmt(ps.deliveryDate)}</span></div>
-                        <div className="o-cell"><span className="o-label">REPEAT ORDER:-</span> <span className="o-value">{ps.repeatOrder || '—'}</span></div>
                     </div>
                     <div className="o-row" style={{ height: '30px' }}>
                         <div className="o-cell" style={{ flex: 1 }}><span className="o-label">STICKER:-</span> <span className="o-value">{ps.stickerType || '—'}</span></div>
@@ -156,7 +145,7 @@ export default function ProductionSheetPage() {
                             <th>MODEL NO</th>
                             <th style={{ width: '150px' }}>VOLT/CURRENT</th>
                             <th style={{ width: '80px' }}>QUANTITY</th>
-                            <th style={{ width: '80px' }}>EXTRA CHANGE</th>
+                            <th style={{ width: '80px' }}>HOURS</th>
                             <th style={{ width: '80px' }}>DUMMY LOAD</th>
                         </tr>
                     </thead>
@@ -167,7 +156,7 @@ export default function ProductionSheetPage() {
                                 <td>{item.modelNo || '—'}</td>
                                 <td>{item.voltCurrent || '—'}</td>
                                 <td style={{ textAlign: 'center' }}>{item.qty} Nos</td>
-                                <td>{item.extraChange || '—'}</td>
+                                <td>{item.hours || '—'}</td>
                                 <td>{item.dummyLoad || '—'}</td>
                             </tr>
                         ))}
@@ -279,25 +268,7 @@ export default function ProductionSheetPage() {
                 <Section title="Order Details" icon="📦">
                     <G cols={3}>
                         <F l="Client Code"><input value={ps.customerCode || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
-                        <F l="Ordered By">
-                            <input value={editing ? form.orderedBy : ps.orderedBy || ''}
-                                onChange={e => setF('orderedBy', e.target.value)}
-                                readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
-                        </F>
-                        <F l="Pro IC">
-                            <input value={editing ? form.proIC : ps.proIC || ''}
-                                onChange={e => setF('proIC', e.target.value)}
-                                readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
-                        </F>
                         <F l="Delivery Date"><input value={fmt(ps.deliveryDate)} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
-                        <F l="Repeat Order">
-                            <input value={editing ? form.repeatOrder : ps.repeatOrder || ''}
-                                onChange={e => setF('repeatOrder', e.target.value)}
-                                readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
-                        </F>
                         <F l="Sticker Type">
                             <input value={editing ? form.stickerType : ps.stickerType || ''}
                                 onChange={e => setF('stickerType', e.target.value)}
@@ -332,7 +303,7 @@ export default function ProductionSheetPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Model No', 'Volt / Current', 'Qty', 'Extra Change', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'Model No', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -343,9 +314,9 @@ export default function ProductionSheetPage() {
                                         <td style={td}>{item.voltCurrent}</td>
                                         <td style={td}>{item.qty} Nos</td>
                                         <td style={td}>
-                                            {editing ? <input value={item.extraChange || ''} onChange={e => {
-                                                const its = [...form.items]; its[i].extraChange = e.target.value; setF('items', its);
-                                            }} style={inp} /> : item.extraChange}
+                                            {editing ? <input value={item.hours || ''} onChange={e => {
+                                                const its = [...form.items]; its[i].hours = e.target.value; setF('items', its);
+                                            }} style={inp} /> : item.hours}
                                         </td>
                                         <td style={td}>
                                             {editing ? <input value={item.dummyLoad || ''} onChange={e => {

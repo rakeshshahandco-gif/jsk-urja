@@ -7,6 +7,7 @@ import conversationService from '../services/conversation.service.js';
 import Followup from '../models/followup.model.js';
 import Conversation from '../models/conversation.model.js';
 import Reminder from '../models/reminder.model.js';
+import Customer from '../models/customer.model.js';
 
 const catchAsync = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((err) => next(err));
@@ -207,6 +208,85 @@ const getConversationHistory = catchAsync(async (req, res) => {
     });
 
     res.send(new ApiResponse(200, mergedHistory, 'History fetched successfully'));
+});
+
+const searchCustomers = catchAsync(async (req, res) => {
+    const { q } = req.query;
+    console.log(`🔍 Customer search hit for: "${q}"`);
+
+    if (!q || q.length < 2) {
+        return res.send(new ApiResponse(200, [], 'Query too short'));
+    }
+
+    const searchRegex = { $regex: q, $options: 'i' };
+    const baseFilter = {
+        isDeleted: { $ne: true },
+        $or: [
+            { customerName: searchRegex },
+            { company: searchRegex },
+            { companyBrand: searchRegex },
+            { gstNumber: searchRegex },
+            { 'contactPersons.name': searchRegex },
+            { 'contactPersons.mobile': searchRegex },
+            { 'contactPersons.email': searchRegex },
+        ],
+    };
+
+    // Diagnostics: Count all including inactive
+    const totalFound = await Customer.countDocuments(baseFilter);
+    console.log(`📊 Found total ${totalFound} matches (active + inactive)`);
+
+    const filter = {
+        ...baseFilter,
+        status: { $ne: 'inactive' },
+    };
+
+    const customers = await Customer.find(filter)
+        .sort({ company: 1, customerName: 1 })
+        .limit(15)
+        .lean();
+
+    console.log(`✅ Returning ${customers.length} active customers`);
+
+    const formattedResults = customers.map(c => {
+        const primaryContact = c.contactPersons?.find(cp => cp.isPrimary) || c.contactPersons?.[0] || {};
+        const stateName = c.state || '';
+        let stateCode = c.stateCode || '';
+        if (!stateCode && c.gstNumber && c.gstNumber.length >= 2) {
+            stateCode = c.gstNumber.substring(0, 2);
+        }
+
+        const addrParts = [c.address, c.taluka, c.city, c.district].filter(Boolean);
+        let fullAddress = addrParts.join(', ');
+        if (c.pincode) fullAddress += ` - ${c.pincode}`;
+
+        // Comprehensive name display
+        let displayName = c.company || c.customerName || 'No Name';
+        if (c.company && c.customerName && c.company !== c.customerName) {
+            displayName = `${c.company} (${c.customerName})`;
+        }
+
+        return {
+            id: c._id,
+            name: displayName,
+            company: c.company || '',
+            customerName: c.customerName || '',
+            brand: c.companyBrand || '',
+            phone: primaryContact.mobile || '',
+            email: c.companyEmail || primaryContact.email || '',
+            gstin: c.gstNumber || '',
+            state: stateName,
+            stateCode: stateCode,
+            billingAddress: fullAddress,
+            shippingAddress: fullAddress,
+            customerCode: c.customerCode || '',
+            customerType: c.customerType || '',
+            gstType: c.gstType || '',
+            city: c.city || '',
+        };
+    });
+
+    res.send(new ApiResponse(200, formattedResults));
 });
 
 const updateCustomer = catchAsync(async (req, res) => {
@@ -568,4 +648,5 @@ export default {
     importCustomers,
     getCustomerTypes,
     getCustomerStickers,
+    searchCustomers,
 };

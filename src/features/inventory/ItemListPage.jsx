@@ -61,6 +61,7 @@ const ItemListPage = () => {
     const [catFilter, setCatFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
     const [activeFilter, setActiveFilter] = useState('true');
+    const [sortBy, setSortBy] = useState('itemCode:asc');
     const [page, setPage] = useState(1);
     const [meta, setMeta] = useState({ total: 0, pages: 1 });
     const limit = 25;
@@ -68,7 +69,15 @@ const ItemListPage = () => {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { page, limit, search: search || undefined, itemCategory: catFilter || undefined, itemType: typeFilter || undefined, isActive: activeFilter };
+            const params = {
+                page,
+                limit,
+                search: search || undefined,
+                itemCategory: catFilter || undefined,
+                itemType: typeFilter || undefined,
+                isActive: activeFilter,
+                sortBy
+            };
             const res = await getItems(params);
             setItems(res.data || []);
             setMeta(res.meta || { total: 0, pages: 1 });
@@ -76,7 +85,7 @@ const ItemListPage = () => {
             console.error('Load Items Error:', err);
             addToast(err?.response?.data?.message || 'Failed to load items', 'error');
         } finally { setLoading(false); }
-    }, [page, search, catFilter, typeFilter, activeFilter]);
+    }, [page, search, catFilter, typeFilter, activeFilter, sortBy]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -95,12 +104,28 @@ const ItemListPage = () => {
         }).catch(err => console.error('Failed to fetch item types', err));
     }, []);
 
-    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setActiveFilter('true'); setPage(1); };
+    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setPage(1); };
 
     const handleDelete = async (id, name) => {
         if (!window.confirm(`Deactivate "${name}"?`)) return;
         try { await deleteItem(id); addToast('Item deactivated', 'success'); load(); }
         catch { addToast('Failed to deactivate item', 'error'); }
+    };
+
+    const toggleSort = (field) => {
+        const [currField, currDir] = sortBy.split(':');
+        if (currField === field) {
+            setSortBy(`${field}:${currDir === 'asc' ? 'desc' : 'asc'}`);
+        } else {
+            setSortBy(`${field}:asc`);
+        }
+        setPage(1);
+    };
+
+    const SortIndicator = ({ field }) => {
+        const [currField, currDir] = sortBy.split(':');
+        if (currField !== field) return <span style={{ color: '#d1d5db', marginLeft: 4, fontSize: 10 }}>↕</span>;
+        return <span style={{ color: '#2563eb', marginLeft: 4, fontSize: 10 }}>{currDir === 'asc' ? '▲' : '▼'}</span>;
     };
 
     return (
@@ -138,6 +163,12 @@ const ItemListPage = () => {
                     <option value="false">Inactive</option>
                     <option value="">All Status</option>
                 </select>
+                <select style={s.sel} value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }}>
+                    <option value="itemCode:asc">Sort: Item Code (A-Z)</option>
+                    <option value="itemName:asc">Sort: Item Name (A-Z)</option>
+                    <option value="itemGroupName:asc">Sort: Group (A-Z)</option>
+                    <option value="currentStock:desc">Sort: Stock (High-Low)</option>
+                </select>
                 <button onClick={reset} style={{ height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <RotateCcw size={11} /> Reset
                 </button>
@@ -162,15 +193,20 @@ const ItemListPage = () => {
                             <thead>
                                 <tr>
                                     <th style={s.th}>#</th>
-                                    <th style={s.th}>Item Code</th>
-                                    <th style={s.th}>Item Name</th>
-                                    <th style={s.th}>Group</th>
+                                    <th style={{ ...s.th, cursor: 'pointer' }} onClick={() => toggleSort('itemCode')}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>Item Code <SortIndicator field="itemCode" /></div>
+                                    </th>
+                                    <th style={{ ...s.th, cursor: 'pointer' }} onClick={() => toggleSort('itemName')}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>Item Name <SortIndicator field="itemName" /></div>
+                                    </th>
+                                    <th style={{ ...s.th, cursor: 'pointer' }} onClick={() => toggleSort('itemGroupName')}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>Group <SortIndicator field="itemGroupName" /></div>
+                                    </th>
                                     <th style={s.th}>Category</th>
                                     <th style={s.th}>Type</th>
                                     <th style={s.th}>UOM</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Stock</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Rate ₹</th>
-                                    <th style={{ ...s.th, textAlign: 'center' }}>GST %</th>
                                     <th style={s.th}>Status</th>
                                     <th style={{ ...s.th, textAlign: 'center' }}>⚙</th>
                                 </tr>
@@ -212,9 +248,6 @@ const ItemListPage = () => {
                                                 )}
                                             </td>
                                             <td style={{ ...s.td, textAlign: 'right' }}>₹{(item.sellingPrice || 0).toFixed(2)}</td>
-                                            <td style={{ ...s.td, textAlign: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280' }}>{item.salesGst}%</span>
-                                            </td>
                                             <td style={s.td}>
                                                 <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: item.isActive ? '#dcfce7' : '#fee2e2', color: item.isActive ? '#166534' : '#991b1b' }}>
                                                     {item.isActive ? 'Active' : 'Inactive'}

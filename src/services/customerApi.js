@@ -163,6 +163,16 @@ export const importCustomers = async (formData) => {
     }
 };
 
+export const searchCustomers = async (q) => {
+    try {
+        const response = await apiClient.get('/customers/search', { params: { q } });
+        return response.data.data;
+    } catch (error) {
+        console.error('Error searching customers:', error);
+        throw error;
+    }
+};
+
 export default {
     getCustomers,
     getCustomer,
@@ -175,4 +185,5 @@ export default {
     getConversationHistory,
     downloadCustomerTemplate,
     importCustomers,
+    searchCustomers,
 };

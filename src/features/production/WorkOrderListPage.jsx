@@ -212,24 +212,22 @@ export default function WorkOrderListPage() {
                                             }}
                                         >View</button>
                                         {wo.status === 'Draft' && (
-                                            <>
-                                                <button
-                                                    onClick={() => handleRelease(wo._id)}
-                                                    style={{
-                                                        padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
-                                                        background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', cursor: 'pointer',
-                                                    }}
-                                                >Release</button>
-                                                <button
-                                                    onClick={() => handleDelete(wo._id)}
-                                                    disabled={deleting === wo._id}
-                                                    style={{
-                                                        padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
-                                                        background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer',
-                                                    }}
-                                                >{deleting === wo._id ? '...' : 'Delete'}</button>
-                                            </>
+                                            <button
+                                                onClick={() => handleRelease(wo._id)}
+                                                style={{
+                                                    padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                                                    background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', cursor: 'pointer',
+                                                }}
+                                            >Release</button>
                                         )}
+                                        <button
+                                            onClick={() => handleDelete(wo._id)}
+                                            disabled={deleting === wo._id}
+                                            style={{
+                                                padding: '6px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+                                                background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer',
+                                            }}
+                                        >{deleting === wo._id ? '...' : 'Delete'}</button>
                                     </div>
                                 </div>
                             </div>

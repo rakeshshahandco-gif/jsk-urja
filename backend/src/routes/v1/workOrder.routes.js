@@ -8,6 +8,7 @@ router.use(protect);
 
 // Dashboard stats
 router.get('/dashboard-stats', woController.getDashboardStats);
+router.post('/bulk-cleanup', woController.bulkCleanup);
 
 // CRUD
 router.route('/')

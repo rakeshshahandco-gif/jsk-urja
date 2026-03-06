@@ -345,13 +345,7 @@ export default function SalesInvoiceFormPage() {
                                                 <input value={item.itemName} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemName ? '#fca5a5' : '#d1d5db' }} placeholder="Search Item..." />
                                                 {activeItemRow === i && itemOptions.length > 0 && (
                                                     <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                                                        {itemOptions.filter(it => {
-                                                            const s = (item.itemName || '').toLowerCase();
-                                                            const n = (it.itemName || it.name || '').toLowerCase();
-                                                            const m = (it.modelNo || it.sku || '').toLowerCase();
-                                                            const c = (it.itemCode || '').toLowerCase();
-                                                            return n.includes(s) || m.includes(s) || c.includes(s);
-                                                        }).map((it) => (
+                                                        {itemOptions.map((it) => (
                                                             <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                                                 <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemName || it.name}</div>
                                                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>

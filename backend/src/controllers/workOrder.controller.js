@@ -14,10 +14,25 @@ import {
 
 // ── Auto-generate WO Number ──────────────────────────────────────────────────
 const generateWoNumber = async () => {
-    const count = await WorkOrder.countDocuments();
-    const padded = String(count + 1).padStart(5, '0');
     const year = new Date().getFullYear();
-    return `WO-${year}-${padded}`;
+    const prefix = `WO-${year}-`;
+
+    // Find the latest WO for this year by sorting numerically on the suffix
+    const lastWo = await WorkOrder.findOne({
+        woNumber: { $regex: `^${prefix}` }
+    }).sort({ woNumber: -1 }).lean();
+
+    let nextNum = 1;
+    if (lastWo && lastWo.woNumber) {
+        const lastParts = lastWo.woNumber.split('-');
+        const lastSeq = parseInt(lastParts[lastParts.length - 1], 10);
+        if (!isNaN(lastSeq)) {
+            nextNum = lastSeq + 1;
+        }
+    }
+
+    const padded = String(nextNum).padStart(5, '0');
+    return `${prefix}${padded}`;
 };
 
 // ── Derive WO-level status from stages ──────────────────────────────────────
@@ -188,6 +203,13 @@ export const releaseWorkOrder = asyncHandler(async (req, res) => {
     if (!wo) throw new ApiError(404, 'Work Order not found');
     if (wo.status !== 'Draft') throw new ApiError(400, 'Only Draft WOs can be released');
 
+    // ── Material Check before Release ───────────────────────────────────────
+    const mandatoryShortages = wo.materialStatus.filter(m => m.isMandatory && m.shortQty > 0);
+    if (mandatoryShortages.length > 0) {
+        const itemNames = mandatoryShortages.map(m => m.itemName).join(', ');
+        throw new ApiError(400, `Cannot release WO due to mandatory material shortage: ${itemNames}. Please restock or untick them as mandatory to proceed.`);
+    }
+
     wo.status = 'Released';
     wo.updatedBy = req.user._id;
     await wo.save();
@@ -341,6 +363,13 @@ export const addProductionLog = asyncHandler(async (req, res) => {
     const seq = Number(req.params.seq);
     const stage = wo.stages.find(s => s.seq === seq);
     if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+
+    // ── Material Check before Production Log ───────────────────────────────
+    const mandatoryShortages = wo.materialStatus.filter(m => m.isMandatory && m.shortQty > 0);
+    if (mandatoryShortages.length > 0) {
+        const itemNames = mandatoryShortages.map(m => m.itemName).join(', ');
+        throw new ApiError(400, `Production blocked: mandatory material shortage (${itemNames}). Please restock or untick as mandatory.`);
+    }
 
     // Stage Dependency Math:
     const expectedOutput = stage.outputQty + value.outputQty;
@@ -518,7 +547,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 export const deleteWorkOrder = asyncHandler(async (req, res) => {
     const wo = await WorkOrder.findById(req.params.id);
     if (!wo) throw new ApiError(404, 'Work Order not found');
-    if (wo.status !== 'Draft') throw new ApiError(400, 'Only Draft WOs can be deleted');
+    // if (wo.status !== 'Draft') throw new ApiError(400, 'Only Draft WOs can be deleted');
 
     await WorkOrder.findByIdAndDelete(req.params.id);
     res.json(new ApiResponse(200, null, 'Work Order deleted'));
@@ -546,3 +575,21 @@ const getDefaultChecklist = (stageName) => {
     }
     return [];
 };
+
+// ── Temporary Cleanup Route ────────────────────────────────────────────────
+export const bulkCleanup = asyncHandler(async (req, res) => {
+    // Keep only the most recent one
+    const wos = await WorkOrder.find({}).sort({ createdAt: -1 });
+    if (wos.length <= 1) {
+        return res.json(new ApiResponse(200, null, 'Already clean (1 or 0 WOs)'));
+    }
+
+    const toKeep = wos[0];
+    const toDelete = wos.slice(1).map(w => w._id);
+
+    const result = await WorkOrder.deleteMany({ _id: { $in: toDelete } });
+    res.json(new ApiResponse(200, {
+        kept: toKeep.woNumber,
+        deletedCount: result.deletedCount
+    }, 'Cleanup successful'));
+});
