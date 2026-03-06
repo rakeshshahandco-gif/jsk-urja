@@ -31,8 +31,8 @@ const TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing',
 
 // ─── Input style ─────────────────────────────────────────────────────────────
 const inp = {
-    padding: '8px 12px', background: '#0f172a', border: '1px solid #334155',
-    borderRadius: '6px', color: '#f1f5f9', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box',
+    padding: '8px 12px', background: '#ffffff', border: '1px solid #d1d5db',
+    borderRadius: '6px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box',
 };
 
 export default function WorkOrderDetailPage() {
@@ -59,17 +59,17 @@ export default function WorkOrderDetailPage() {
         finally { setSaving(false); }
     };
 
-    if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b', background: '#0f172a', minHeight: '100vh' }}>Loading...</div>;
-    if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#0f172a', minHeight: '100vh' }}>Work Order not found</div>;
+    if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b', background: '#f8f9fa', minHeight: '100vh' }}>Loading...</div>;
+    if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
 
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const mandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
 
     return (
-        <div style={{ fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* Top bar */}
-            <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 28px' }}>
+            <div style={{ background: '#ffffff', borderBottom: '1px solid #e5e7eb', padding: '16px 28px' }}>
                 <button
                     onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS)}
                     style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '8px' }}
@@ -100,7 +100,7 @@ export default function WorkOrderDetailPage() {
                         <span style={{ fontSize: '11px', color: '#64748b' }}>Overall Progress</span>
                         <span style={{ fontSize: '11px', color: '#94a3b8' }}>{pct}%</span>
                     </div>
-                    <div style={{ height: '8px', background: '#334155', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#3b82f6,#10b981)', transition: 'width 0.4s' }} />
                     </div>
                 </div>
@@ -123,14 +123,14 @@ export default function WorkOrderDetailPage() {
             )}
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid #1e293b', background: '#0f172a', paddingLeft: '28px' }}>
+            <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid #e5e7eb', background: '#ffffff', paddingLeft: '28px' }}>
                 {TABS.map((t, i) => (
                     <button key={t} onClick={() => setTab(i)}
                         style={{
                             padding: '14px 18px', border: 'none', background: 'none', cursor: 'pointer',
                             fontSize: '13px', fontWeight: tab === i ? 700 : 500,
-                            color: tab === i ? '#60a5fa' : '#64748b',
-                            borderBottom: tab === i ? '2px solid #3b82f6' : '2px solid transparent',
+                            color: tab === i ? '#2563eb' : '#64748b',
+                            borderBottom: tab === i ? '2px solid #2563eb' : '2px solid transparent',
                             transition: 'all 0.15s',
                         }}
                     >{t}</button>
@@ -190,8 +190,8 @@ function OverviewTab({ wo, load }) {
     };
 
     const inputStyle = {
-        width: '100%', padding: '6px 10px', background: '#0f172a', border: '1px solid #334155',
-        borderRadius: '6px', color: '#f1f5f9', fontSize: '13px', outline: 'none'
+        width: '100%', padding: '6px 10px', background: '#ffffff', border: '1px solid #d1d5db',
+        borderRadius: '6px', color: '#1e293b', fontSize: '13px', outline: 'none'
     };
 
     const rows = [
@@ -236,9 +236,9 @@ function OverviewTab({ wo, load }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 {rows.map(([k, v]) => (
-                    <div key={k} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div key={k} style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>{k}</div>
-                        <div style={{ fontSize: '14px', color: '#f1f5f9', fontWeight: 500 }}>{v}</div>
+                        <div style={{ fontSize: '14px', color: '#1e293b', fontWeight: 500 }}>{v}</div>
                     </div>
                 ))}
             </div>
@@ -373,9 +373,9 @@ function BomMaterialTab({ wo, load }) {
             <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
-                        <tr style={{ background: '#1e293b' }}>
+                        <tr style={{ background: '#f9fafb' }}>
                             {['Item', 'UOM', 'Required Qty', 'Available', 'Short Qty', 'Mandatory', 'Procurement Status', 'Remarks'].map(h => (
-                                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600, borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th>
+                                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -386,35 +386,35 @@ function BomMaterialTab({ wo, load }) {
                             const upd = updates[m._id] || {};
                             return (
                                 <tr key={m._id}
-                                    style={{ background: isMandShort ? '#1a0608' : i % 2 === 0 ? '#0f172a' : '#1e293b' }}>
-                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#fca5a5' : '#f1f5f9', fontWeight: isMandShort ? 600 : 400, borderBottom: '1px solid #1e293b' }}>
+                                    style={{ background: isMandShort ? '#fff1f2' : i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
+                                    <td style={{ padding: '10px 12px', color: isMandShort ? '#dc2626' : '#374151', fontWeight: isMandShort ? 600 : 400, borderBottom: '1px solid #e5e7eb' }}>
                                         {m.itemName}
                                         {isMandShort && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#dc2626', color: '#fff', padding: '1px 5px', borderRadius: '3px' }}>SHORT</span>}
                                     </td>
-                                    <td style={{ padding: '10px 12px', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>{m.uom || '—'}</td>
-                                    <td style={{ padding: '10px 12px', color: '#f1f5f9', borderBottom: '1px solid #1e293b' }}>{m.requiredQty}</td>
-                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #1e293b' }}>
+                                    <td style={{ padding: '10px 12px', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>{m.uom || '—'}</td>
+                                    <td style={{ padding: '10px 12px', color: '#1e293b', borderBottom: '1px solid #e5e7eb' }}>{m.requiredQty}</td>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <input type="number" defaultValue={m.availableStock}
                                             onChange={e => setUpd(m._id, 'availableStock', Number(e.target.value))}
                                             style={{ ...inp, width: '80px' }} />
                                     </td>
-                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #1e293b' }}>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <input type="number" defaultValue={m.shortQty}
                                             onChange={e => setUpd(m._id, 'shortQty', Number(e.target.value))}
-                                            style={{ ...inp, width: '70px', color: isShort ? '#ef4444' : '#f1f5f9' }} />
+                                            style={{ ...inp, width: '70px', color: isShort ? '#dc2626' : '#1e293b' }} />
                                     </td>
-                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #1e293b' }}>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <input type="checkbox" defaultChecked={m.isMandatory}
                                             onChange={e => setUpd(m._id, 'isMandatory', e.target.checked)} />
                                     </td>
-                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #1e293b' }}>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <select defaultValue={m.procurementStatus}
                                             onChange={e => setUpd(m._id, 'procurementStatus', e.target.value)}
                                             style={{ ...inp, width: '140px', cursor: 'pointer' }}>
                                             {['Not Ordered', 'Ordered', 'In Transit', 'Received'].map(s => <option key={s}>{s}</option>)}
                                         </select>
                                     </td>
-                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #1e293b' }}>
+                                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #e5e7eb' }}>
                                         <input type="text" defaultValue={m.remarks}
                                             onChange={e => setUpd(m._id, 'remarks', e.target.value)}
                                             placeholder="Notes..." style={{ ...inp, width: '120px' }} />
@@ -442,7 +442,7 @@ function ProcessExecutionTab({ wo, load }) {
             {'Not editable: WO must be Released or In Process to update stages. Current: ' + wo.status
                 ? null : null}
             {!canEdit && (
-                <div style={{ background: '#1c1408', border: '1px solid #92400e', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', color: '#fcd34d', fontSize: '13px' }}>
+                <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', color: '#92400e', fontSize: '13px' }}>
                     ⚠️ WO must be Released or In Process to update stages. Current status: <strong>{wo.status}</strong>
                 </div>
             )}
@@ -544,7 +544,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
     };
 
     return (
-        <div style={{ background: '#1e293b', border: `1px solid ${sc.color}44`, borderRadius: '12px', overflow: 'hidden' }}>
+        <div style={{ background: '#ffffff', border: `1px solid #e5e7eb`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             {/* Stage header */}
             <div
                 onClick={() => setOpen(o => !o)}
@@ -556,9 +556,9 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                 <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '12px', color: '#475569' }}>#{stage.seq}</span>
-                        <span style={{ fontWeight: 600, fontSize: '15px', color: '#f1f5f9' }}>{stage.stageName}</span>
+                        <span style={{ fontWeight: 600, fontSize: '15px', color: '#1e293b' }}>{stage.stageName}</span>
                         {(stage.isQcGate || stage.isTestGate) && (
-                            <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#4c1d95', color: '#c4b5fd', fontWeight: 600 }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: '#f3e8ff', color: '#7e22ce', fontWeight: 700 }}>
                                 {stage.isQcGate ? 'QC GATE' : 'TEST GATE'}
                             </span>
                         )}
@@ -573,23 +573,23 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
 
             {/* Expanded edit form */}
             {open && (
-                <div style={{ borderTop: '1px solid #334155', padding: '20px', background: '#0f172a' }}>
+                <div style={{ borderTop: '1px solid #f3f4f6', padding: '20px', background: '#ffffff' }}>
 
                     {/* Stage Level Info */}
                     <div>
-                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Overall Status</label>
+                        <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Overall Status</label>
                         <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canEdit} style={{ ...inp, cursor: canEdit ? 'pointer' : 'not-allowed' }}>
                             {['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'].map(s => <option key={s}>{s}</option>)}
                         </select>
                     </div>
 
                     <div style={{ marginBottom: '16px' }}>
-                        <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Remarks</label>
+                        <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>Remarks</label>
                         <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} disabled={!canEdit} />
                     </div>
 
                     {/* Aggregate Totals (Read Only) */}
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#f9fafb', padding: '12px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Max Allowed</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{maxAllowedOutput}</div></div>
                         <div style={{ width: '1px', background: '#334155' }}></div>
                         <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Pending Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fca5a5' }}>{pendingOutput}</div></div>
@@ -608,7 +608,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                     {/* Execution Logs Table */}
                     <div style={{ marginBottom: '20px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>Execution Runs ({productionLogs.length})</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Execution Runs ({productionLogs.length})</div>
                             {canEdit && !showNewLog && (
                                 <button onClick={() => setShowNewLog(true)} style={{ padding: '4px 10px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>+ Add Run Log</button>
                             )}
@@ -617,7 +617,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                         {productionLogs.length > 0 && (
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '12px' }}>
                                 <thead>
-                                    <tr style={{ background: '#1e293b', color: '#94a3b8', textAlign: 'left' }}>
+                                    <tr style={{ background: '#f8f9fa', color: '#6b7280', textAlign: 'left' }}>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Date</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Shift</th>
                                         <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Operator</th>
@@ -631,14 +631,14 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                                 </thead>
                                 <tbody>
                                     {productionLogs.map((l, i) => (
-                                        <tr key={l._id || i} style={{ borderBottom: '1px solid #1e293b' }}>
-                                            <td style={{ padding: '8px', color: '#f1f5f9' }}>{l.date ? new Date(l.date).toLocaleDateString() : '—'}</td>
-                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.shift || '—'}</td>
-                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.operator || '—'}</td>
-                                            <td style={{ padding: '8px', color: '#3b82f6', fontWeight: 600 }}>{l.inputQty}</td>
-                                            <td style={{ padding: '8px', color: '#10b981', fontWeight: 600 }}>{l.outputQty}</td>
-                                            <td style={{ padding: '8px', color: '#a78bfa' }}>{l.reworkQty}</td>
-                                            <td style={{ padding: '8px', color: '#ef4444' }}>{l.rejectionQty}</td>
+                                        <tr key={l._id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px', color: '#1e293b' }}>{l.date ? new Date(l.date).toLocaleDateString() : '—'}</td>
+                                            <td style={{ padding: '8px', color: '#6b7280' }}>{l.shift || '—'}</td>
+                                            <td style={{ padding: '8px', color: '#6b7280' }}>{l.operator || '—'}</td>
+                                            <td style={{ padding: '8px', color: '#2563eb', fontWeight: 600 }}>{l.inputQty}</td>
+                                            <td style={{ padding: '8px', color: '#16a34a', fontWeight: 600 }}>{l.outputQty}</td>
+                                            <td style={{ padding: '8px', color: '#7c3aed' }}>{l.reworkQty}</td>
+                                            <td style={{ padding: '8px', color: '#dc2626' }}>{l.rejectionQty}</td>
                                             <td style={{ padding: '8px', color: '#94a3b8' }}>{l.remarks || l.rejectionReason}</td>
                                             <td style={{ padding: '8px', textAlign: 'right' }}>
                                                 {canEdit && l._id && (
@@ -653,14 +653,14 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
 
                         {/* Add Run Log Form */}
                         {showNewLog && (
-                            <div style={{ background: '#1e293b', border: '1px solid #3b82f6', borderRadius: '8px', padding: '16px' }}>
+                            <div style={{ background: '#f9fafb', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px' }}>
                                 <div style={{ fontSize: '12px', fontWeight: 600, color: '#60a5fa', marginBottom: '12px' }}>New Run Details</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '12px' }}>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Date</label><input type="date" value={newLog.date} onChange={e => setLog('date', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Shift</label><input value={newLog.shift} onChange={e => setLog('shift', e.target.value)} placeholder="e.g. Morning" style={{ ...inp, padding: '6px' }} /></div>
                                     <div style={{ gridColumn: 'span 3' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px', background: '#0f172a', padding: '10px', borderRadius: '6px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px', background: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Input Qty</label><input type="number" min="0" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#10b981', fontWeight: 700 }}>Good Output Qty</label><input type="number" min="0" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px', border: '1px solid #10b981' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#a78bfa' }}>Rework Qty</label><input type="number" min="0" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
@@ -688,7 +688,7 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                     {canEdit && (
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #334155', paddingTop: '16px' }}>
                             <button onClick={() => setOpen(false)}
-                                style={{ padding: '8px 16px', borderRadius: '7px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                                style={{ padding: '8px 16px', borderRadius: '7px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                                 Cancel
                             </button>
                             <button onClick={save} disabled={saving}
@@ -745,13 +745,13 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
     };
 
     return (
-        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: sc.bg, border: `2px solid ${sc.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: sc.color, fontWeight: 700 }}>
                     {sc.icon}
                 </div>
                 <div>
-                    <span style={{ fontWeight: 700, fontSize: '15px', color: '#f1f5f9' }}>#{stage.seq} {stage.stageName}</span>
+                    <span style={{ fontWeight: 700, fontSize: '15px', color: '#1e293b' }}>#{stage.seq} {stage.stageName}</span>
                     <span style={{ marginLeft: '8px', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: sc.bg, color: sc.color }}>{stage.status}</span>
                 </div>
             </div>
@@ -762,8 +762,8 @@ function QcStagePanel({ stage, woId, canEdit, load }) {
                     <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginBottom: '10px' }}>CHECKLIST</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {checklist.map((c, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#0f172a', padding: '10px 14px', borderRadius: '8px' }}>
-                                <span style={{ flex: 1, fontSize: '13px', color: '#e2e8f0' }}>{c.item}</span>
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f9fafb', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                                <span style={{ flex: 1, fontSize: '13px', color: '#1e293b' }}>{c.item}</span>
                                 <select value={c.result} onChange={e => setCheck(i, 'result', e.target.value)}
                                     disabled={!canEdit}
                                     style={{ padding: '5px 10px', background: '#1e293b', border: `1px solid ${c.result === 'Pass' ? '#10b981' : c.result === 'Fail' ? '#ef4444' : '#334155'}`, borderRadius: '6px', color: c.result === 'Pass' ? '#10b981' : c.result === 'Fail' ? '#ef4444' : '#94a3b8', cursor: 'pointer', fontWeight: 600, fontSize: '12px' }}>

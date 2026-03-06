@@ -14,6 +14,10 @@ const companyProfileSchema = Joi.object({
     pincode: Joi.string().allow('', null),
     gstNumber: Joi.string().allow('', null),
     panNumber: Joi.string().allow('', null),
+    email: Joi.string().allow('', null),
+    phone: Joi.string().allow('', null),
+    urn: Joi.string().allow('', null),
+    cin: Joi.string().allow('', null),
     logoUrl: Joi.string().allow('', null),
 });
 

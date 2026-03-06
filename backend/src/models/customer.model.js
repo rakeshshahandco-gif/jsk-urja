@@ -67,6 +67,15 @@ const customerSchema = mongoose.Schema(
             type: String,
             default: '',
         },
+        sticker: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        stickers: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Sticker',
+        }],
         city: {
             type: String,
             trim: true,
@@ -123,6 +132,11 @@ const customerSchema = mongoose.Schema(
         isDeleted: {
             type: Boolean,
             default: false,
+        },
+        customerCode: {
+            type: String,
+            unique: true,
+            trim: true,
         },
     },
     {

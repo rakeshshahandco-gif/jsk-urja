@@ -90,6 +90,7 @@ export const createSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.create({
         ...body,
         soNumber,
+        customerCode: body.customerCode || '', // Expecting frontend to pass this if available
         items: processedItems,
         totalQty,
         totalAmount,
@@ -188,7 +189,9 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
 
     const psItems = so.items.map((item, i) => ({
         srNo: i + 1,
+        itemCode: item.itemCode || '',
         modelNo: item.modelNo || item.itemName || '',
+        notes: item.additionalNotes || '',
         voltCurrent: '',
         qty: item.qty,
         extraChange: '',
@@ -200,10 +203,13 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         soNumber: so.soNumber,
         psNumber,
         customerName: so.customerName,
+        customerCode: so.customerCode || '',
         customerAddress: so.shippingAddress || so.billingAddress,
         deliveryDate: so.deliveryDate,
         orderCategory: so.orderCategory,
         orderDate: so.soDate,
+        notes: so.remarks || '',
+        modelNo: so.items.map(i => [i.itemCode, i.modelNo || i.itemName].filter(Boolean).join(' - ')).join(', ') || '',
         items: psItems,
         status: 'Pending',
         createdBy: req.user.id,

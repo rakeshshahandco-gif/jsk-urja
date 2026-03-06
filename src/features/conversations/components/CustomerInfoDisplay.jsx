@@ -25,6 +25,10 @@ export const CustomerInfoDisplay = ({ customer }) => {
             </div>
             <div className={styles.infoGrid}>
                 <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Customer Code:</span>
+                    <span className={styles.infoValue} style={{ fontWeight: 'bold', color: '#0d9488' }}>{customer.customerCode || '-'}</span>
+                </div>
+                <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Customer Name:</span>
                     <span className={styles.infoValue}>{customer.customerName || customer.name || 'Not Provided'}</span>
                 </div>

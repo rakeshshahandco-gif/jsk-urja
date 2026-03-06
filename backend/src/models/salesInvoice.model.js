@@ -48,6 +48,11 @@ const salesInvoiceSchema = new mongoose.Schema({
     customerGstin: { type: String, default: '' },
     customerPhone: { type: String, default: '' },
     shippingAddress: { type: String, default: '' },
+    shippingCity: { type: String, default: '' },
+    shippingState: { type: String, default: '' },
+    shippingStateCode: { type: String, default: '' },
+    shippingPostalCode: { type: String, default: '' },
+    shippingCountry: { type: String, default: '' },
     shippingGstin: { type: String, default: '' },
     shippingPhone: { type: String, default: '' },
 

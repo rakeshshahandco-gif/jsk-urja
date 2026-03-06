@@ -9,7 +9,7 @@ const contactPersonSchema = Joi.object().keys({
     mobile5: Joi.string().optional().allow('').trim(),
     email: Joi.string().optional().allow('').email().trim().lowercase(),
     isPrimary: Joi.boolean().optional().default(false),
-});
+}).unknown(true);
 
 const createCustomer = {
     body: Joi.object().keys({
@@ -37,12 +37,14 @@ const createCustomer = {
         customerStatus: Joi.string().valid('hot', 'warm', 'cold', 'active', 'inactive').optional(),
         status: Joi.string().valid('running_high', 'running_low', 'inactive', 'lead').optional(),
         customerType: Joi.string().optional().allow(''),
+        sticker: Joi.string().optional().allow(''),
         gstNumber: Joi.string().optional().allow(''),
         gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional(),
         notes: Joi.string().optional().allow(''),
         tags: Joi.array().items(Joi.string()).optional(),
+        stickers: Joi.array().items(Joi.string().hex().length(24)).optional(),
         interestedProducts: Joi.array().items(Joi.string()).optional(),
-    }),
+    }).options({ allowUnknown: true }),
 };
 
 const getCustomers = {
@@ -89,14 +91,17 @@ const updateCustomer = {
             pincode: Joi.string().allow('').trim(),
             status: Joi.string().valid('lead', 'running_high', 'running_low', 'inactive'),
             customerType: Joi.string().allow(''),
+            sticker: Joi.string().allow(''),
             gstNumber: Joi.string().allow(''),
             gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional(),
             notes: Joi.string().allow(''),
             tags: Joi.array().items(Joi.string()),
+            stickers: Joi.array().items(Joi.string().hex().length(24)),
             interestedProducts: Joi.array().items(Joi.string()).optional(),
             contactPersons: Joi.array().items(contactPersonSchema),
         })
-        .min(1),
+        .min(1)
+        .options({ allowUnknown: true }),
 };
 
 const deleteCustomer = {

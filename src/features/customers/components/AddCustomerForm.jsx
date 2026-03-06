@@ -5,6 +5,8 @@ import { INDIAN_STATES, STATE_GST_CODES, DEMAND_PRODUCTS, SALES_PERSONS } from '
 import { Maximize2, Minimize2, Plus } from 'lucide-react';
 import styles from './CustomerForm.module.scss';
 import { createCustomer, getCustomerTypes } from '@/services/customerApi';
+import { getStickers } from '@/services/stickerApi';
+import { AddStickerModal } from './AddStickerModal';
 import toast from 'react-hot-toast';
 
 // Mock DB for Company Names (In real app, this comes from API)
@@ -18,7 +20,7 @@ const MOCK_DB_COMPANIES = [
 ];
 
 export const AddCustomerForm = ({ closeModal }) => {
-    const { register, handleSubmit, control, setValue, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
+    const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
     const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
@@ -31,6 +33,8 @@ export const AddCustomerForm = ({ closeModal }) => {
         { value: 'dealer', label: 'Dealer' },
         { value: 'distributor', label: 'Distributor' }
     ]);
+    const [dynamicStickers, setDynamicStickers] = useState([]);
+    const [showAddSticker, setShowAddSticker] = useState(false);
 
     // Watch company and state field values
     const [companyValue, stateValue] = useWatch({
@@ -121,6 +125,21 @@ export const AddCustomerForm = ({ closeModal }) => {
             }
         };
         fetchTypes();
+    }, []);
+
+    // Fetch dynamic stickers
+    useEffect(() => {
+        const fetchStickers = async () => {
+            try {
+                const stickers = await getStickers();
+                if (stickers && stickers.length > 0) {
+                    setDynamicStickers(stickers.map(s => ({ value: s._id, label: s.name })));
+                }
+            } catch (error) {
+                console.error('Failed to load dynamic stickers:', error);
+            }
+        };
+        fetchStickers();
     }, []);
 
     // Check for similar companies when input changes
@@ -351,6 +370,27 @@ export const AddCustomerForm = ({ closeModal }) => {
                             </div>
                         )}
 
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                            <div style={{ flex: 1 }}>
+                                <MultiSelect
+                                    label="Stickers / Labels"
+                                    name="stickers"
+                                    control={control}
+                                    options={dynamicStickers}
+                                    placeholder="Assign labels..."
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowAddSticker(true)}
+                                title="Add New Sticker Master"
+                                style={{ height: '42px', padding: '0 12px' }}
+                            >
+                                <Plus size={18} />
+                            </Button>
+                        </div>
+
                         <Select
                             label="Status"
                             options={[
@@ -408,6 +448,15 @@ export const AddCustomerForm = ({ closeModal }) => {
                     </Button>
                 </div>
             </form>
+            <AddStickerModal
+                isOpen={showAddSticker}
+                onClose={() => setShowAddSticker(false)}
+                onSave={(newSticker) => {
+                    setDynamicStickers(prev => [...prev, { value: newSticker._id, label: newSticker.name }]);
+                    const current = watch('stickers') || [];
+                    setValue('stickers', [...current, newSticker._id], { shouldDirty: true });
+                }}
+            />
         </>
     );
 };

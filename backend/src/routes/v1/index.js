@@ -26,6 +26,7 @@ import salesInvoiceRoute from './salesInvoice.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
+import stickerRoute from './sticker.routes.js';
 
 const router = express.Router();
 
@@ -142,6 +143,10 @@ const defaultRoutes = [
     {
         path: '/company-profile',
         route: companyProfileRoute,
+    },
+    {
+        path: '/stickers',
+        route: stickerRoute,
     },
 ];
 

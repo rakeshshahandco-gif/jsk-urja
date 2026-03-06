@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 
 const psItemSchema = new mongoose.Schema({
     srNo: { type: Number },
+    itemCode: { type: String, default: '' },
     modelNo: { type: String, default: '' },
+    notes: { type: String, default: '' },
     voltCurrent: { type: String, default: '' },
     qty: { type: Number, default: 0 },
     extraChange: { type: String, default: '' },
@@ -16,10 +18,16 @@ const productionSheetSchema = new mongoose.Schema({
 
     // Order Info (snapshot from SO)
     customerName: { type: String, default: '' },
+    customerCode: { type: String, default: '' },
     customerAddress: { type: String, default: '' },
     deliveryDate: { type: Date, default: null },
     orderCategory: { type: String, default: '' },
     orderDate: { type: Date, default: null },
+    notes: { type: String, default: '' },
+    modelNo: { type: String, default: '' },
+    orderedBy: { type: String, default: '' },
+    proIC: { type: String, default: '' },
+    repeatOrder: { type: String, default: '' },
 
     // Product Config
     stickerType: { type: String, default: '' },
@@ -51,6 +59,7 @@ const productionSheetSchema = new mongoose.Schema({
         personName: { type: String, default: '' },
         comments: { type: String, default: '' },
         signature: { type: String, default: '' },
+        loadReceived: { type: String, default: 'NO' },
     },
 
     // Load Test Details

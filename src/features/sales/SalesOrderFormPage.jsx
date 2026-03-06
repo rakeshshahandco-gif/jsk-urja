@@ -46,6 +46,7 @@ export default function SalesOrderFormPage() {
     const [form, setForm] = useState({
         customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
         customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
+        customerCode: '',
         deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
         freightAmount: '', freightGstRate: 0,
         items: [BLANK_ITEM()],
@@ -113,6 +114,7 @@ export default function SalesOrderFormPage() {
             return {
                 ...p,
                 customerName: c.customerName || c.company || '',
+                customerCode: c.customerCode || '',
                 customerPhone: primaryContact.mobile || '',
                 customerEmail: c.companyEmail || primaryContact.email || '',
                 customerGstin: c.gstNumber || '',
@@ -127,7 +129,7 @@ export default function SalesOrderFormPage() {
     };
 
     const handleItemSearch = async (val, index) => {
-        setItem(index, 'itemName', val);
+        setItem(index, 'itemCode', val);
         if (!val.trim()) { setItemOptions([]); setActiveItemRow(null); return; }
         setActiveItemRow(index);
         try {
@@ -307,10 +309,8 @@ export default function SalesOrderFormPage() {
                     <Grid cols={3}>
                         <Field label="Customer Name *">
                             <div ref={custRef} style={{ position: 'relative' }}>
-                                <input
-                                    value={form.customerName}
-                                    onChange={e => handleCustomerSearch(e.target.value)}
-                                    onFocus={() => customerOptions.length && setShowCustDropdown(true)}
+                                <input placeholder="Search company or name..." value={form.customerName} onChange={e => handleCustomerSearch(e.target.value)}
+                                    onFocus={() => form.customerName && setShowCustDropdown(true)} style={inp}
                                     disabled={form.status && form.status !== 'Draft'}
                                     onKeyDown={e => {
                                         if (!showCustDropdown) return;
@@ -325,10 +325,9 @@ export default function SalesOrderFormPage() {
                                         }
                                         else if (e.key === 'Escape') { setShowCustDropdown(false); }
                                     }}
-                                    style={inp}
-                                    placeholder="Search Customer Master..."
                                 />
-                                {showCustDropdown && customerOptions.length > 0 && (
+                                {form.customerCode && <div style={{ fontSize: 11, color: '#0d9488', fontWeight: 700, marginTop: 4 }}>SELECTED CODE: {form.customerCode}</div>}
+                                {showCustDropdown && customerOptions.length > 0 && (form.status !== 'Draft' ? false : true) && (
                                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                                         {customerOptions.filter(c => {
                                             const search = form.customerName.toLowerCase().trim();
@@ -360,10 +359,8 @@ export default function SalesOrderFormPage() {
                                                     }}
                                                     onMouseEnter={() => setCustHighlightIndex(idx)}
                                                 >
-                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{c.customerName || c.company}</div>
-                                                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                                                        {c.city ? c.city + ' • ' : ''}{c.contactPersons?.[0]?.mobile || '—'}
-                                                    </div>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{c.company || c.customerName}</div>
+                                                    <div style={{ fontSize: 11, color: '#6b7280' }}>Code: {c.customerCode || '—'} · {c.city || 'No City'} · {c.state || 'No State'}</div>
                                                 </div>
                                             ))}
                                     </div>
@@ -384,12 +381,12 @@ export default function SalesOrderFormPage() {
                     </Grid>
                 </Section>
 
-                {/* Items Table */}
-                <Section title="Order Items">
+                {/* Items Table - Production Details */}
+                <Section title="Production Details">
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
-                                {['Sr', 'Product Name *', 'Model No', 'Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                                {['Sr', 'Item Code *', 'Item Name', 'Model No', 'Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                                 {form.items.map((item, i) => {
@@ -397,22 +394,22 @@ export default function SalesOrderFormPage() {
                                     return (
                                         <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                             <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
-                                            <td style={{ ...td, minWidth: 160 }}>
+                                            <td style={{ ...td, minWidth: 140 }}>
                                                 <div ref={activeItemRow === i ? itemRef : null} style={{ position: 'relative' }}>
-                                                    <input value={item.itemName} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemName ? '#fca5a5' : '#d1d5db' }} placeholder="Search Item..." autoComplete="off" />
+                                                    <input value={item.itemCode || ''} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemCode ? '#fca5a5' : '#d1d5db' }} placeholder="Item Code..." autoComplete="off" />
                                                     {activeItemRow === i && itemOptions.length > 0 && (
                                                         <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
                                                             {itemOptions.filter(it => {
-                                                                const s = (item.itemName || '').toLowerCase();
+                                                                const s = (item.itemCode || '').toLowerCase();
                                                                 const n = (it.itemName || it.name || '').toLowerCase();
                                                                 const m = (it.modelNo || it.sku || '').toLowerCase();
                                                                 const c = (it.itemCode || '').toLowerCase();
                                                                 return n.includes(s) || m.includes(s) || c.includes(s);
                                                             }).map((it) => (
                                                                 <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemName || it.name}</div>
+                                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemCode || 'No Code'} - {it.itemName || it.name}</div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                                                                        <span>{it.itemCode ? `Code: ${it.itemCode}` : ''} {it.modelNo || it.sku || ''}</span>
+                                                                        <span>{it.modelNo || it.sku || ''}</span>
                                                                         <span>HSN: {it.hsnCode || '—'}</span>
                                                                     </div>
                                                                 </div>
@@ -420,7 +417,9 @@ export default function SalesOrderFormPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                {item.itemCode && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4, fontWeight: 500 }}>Code: {item.itemCode}</div>}
+                                            </td>
+                                            <td style={{ ...td, minWidth: 160 }}>
+                                                <input value={item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Item Name" />
                                             </td>
                                             <td style={{ ...td, minWidth: 100 }}><input value={item.modelNo} onChange={e => setItem(i, 'modelNo', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
@@ -474,6 +473,10 @@ export default function SalesOrderFormPage() {
                                     <span>₹{(totalGst / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                 </div>
                             )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#4b5563', paddingTop: 4, fontWeight: 600 }}>
+                                <span>Total Tax</span>
+                                <span>₹{totalGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, color: '#16a34a', fontWeight: 800, padding: '12px 0 0', borderTop: '2px solid #16a34a' }}>
                                 <span>Rounded Total</span>
                                 <span>₹{roundedTotal.toLocaleString('en-IN')}</span>

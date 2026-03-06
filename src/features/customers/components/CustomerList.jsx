@@ -263,6 +263,7 @@ export const CustomerList = () => {
                                 <table className={styles.table}>
                                     <thead>
                                         <tr>
+                                            <th>Code</th>
                                             <th>Name</th>
                                             <th>Company</th>
                                             <th>Primary Contact</th>
@@ -279,7 +280,24 @@ export const CustomerList = () => {
 
                                             return (
                                                 <tr key={customer._id}>
-                                                    <td className={styles.nameCell}>{customer.customerName || customer.name || 'Not Provided'}</td>
+                                                    <td><strong>{customer.customerCode || '—'}</strong></td>
+                                                    <td className={styles.nameCell}>
+                                                        <div>{customer.customerName || customer.name || 'Not Provided'}</div>
+                                                        {customer.stickers && customer.stickers.length > 0 && (
+                                                            <div className={styles.stickerContainer}>
+                                                                {customer.stickers.map(s => (
+                                                                    <span
+                                                                        key={s._id}
+                                                                        className={styles.stickerTag}
+                                                                        style={{ backgroundColor: s.color || '#64748b' }}
+                                                                        title={s.description}
+                                                                    >
+                                                                        {s.name}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                     <td className={styles.companyCell}>
                                                         {customer.company || '-'}
                                                         {customer.companyBrand ? ` (${customer.companyBrand})` : ''}

@@ -3,14 +3,34 @@ import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Generate a new unique customer code (e.g., CU001)
+ * @returns {Promise<string>}
+ */
+const genCustomerCode = async (offset = 0) => {
+    // Look for codes that follow the CU000 pattern
+    const last = await Customer.findOne({ customerCode: { $regex: /^CU\d+$/ } }).sort({ customerCode: -1 });
+    let nextNum = 1;
+    if (last && last.customerCode) {
+        const numericPart = last.customerCode.replace('CU', '');
+        nextNum = parseInt(numericPart, 10) + 1;
+    }
+    return `CU${String(nextNum + offset).padStart(3, '0')}`;
+};
+
+/**
  * Create a customer
  * @param {Object} body
  * @returns {Promise<Customer>}
  */
 const createCustomer = async (body) => {
     logger.info('📝 Creating customer:', { customerName: body.customerName, company: body.company });
+
+    if (!body.customerCode) {
+        body.customerCode = await genCustomerCode();
+    }
+
     const customer = await Customer.create(body);
-    logger.info(`✅ Customer created successfully with ID: ${customer._id}`);
+    logger.info(`✅ Customer created successfully with ID: ${customer._id}, Code: ${customer.customerCode}`);
     return customer;
 };
 
@@ -62,7 +82,8 @@ const queryCustomers = async (filter, options) => {
     const customers = await Customer.find(finalFilter)
         .sort(sort)
         .skip(skip)
-        .limit(limit);
+        .limit(limit)
+        .populate('stickers');
 
     const totalResults = await Customer.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalResults / limit);
@@ -82,7 +103,7 @@ const queryCustomers = async (filter, options) => {
  * @returns {Promise<Customer>}
  */
 const getCustomerById = async (id) => {
-    return Customer.findOne({ _id: id, isDeleted: false });
+    return Customer.findOne({ _id: id, isDeleted: false }).populate('stickers');
 };
 
 /**
@@ -138,6 +159,12 @@ const findByMobiles = async (mobiles) => {
  * @returns {Promise<Array>}
  */
 const bulkCreateCustomers = async (customers) => {
+    // Assign codes if missing
+    for (let i = 0; i < customers.length; i++) {
+        if (!customers[i].customerCode) {
+            customers[i].customerCode = await genCustomerCode(i);
+        }
+    }
     return Customer.insertMany(customers, { ordered: false });
 };
 
@@ -145,8 +172,16 @@ const bulkCreateCustomers = async (customers) => {
  * Get all unique customer types
  * @returns {Promise<Array<string>>}
  */
+/**
+ * Get all unique customer stickers
+ * @returns {Promise<Array<string>>}
+ */
 const getCustomerTypes = async () => {
     return Customer.distinct('customerType', { isDeleted: false, customerType: { $ne: '' } });
+};
+
+const getCustomerStickers = async () => {
+    return Customer.distinct('sticker', { isDeleted: false, sticker: { $ne: '' } });
 };
 
 export default {
@@ -158,4 +193,5 @@ export default {
     findByMobiles,
     bulkCreateCustomers,
     getCustomerTypes,
+    getCustomerStickers,
 };

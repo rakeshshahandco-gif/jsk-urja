@@ -37,7 +37,15 @@ export default function CompanyProfilePage() {
         pincode: '',
         gstNumber: '',
         panNumber: '',
+        email: '',
+        phone: '',
+        urn: '',
+        cin: '',
         logoUrl: '',
+        bankName: '',
+        accountNo: '',
+        branchName: '',
+        ifscCode: '',
     });
 
     useEffect(() => {
@@ -57,6 +65,14 @@ export default function CompanyProfilePage() {
                     pincode: res.data.pincode || '',
                     gstNumber: res.data.gstNumber || '',
                     panNumber: res.data.panNumber || '',
+                    email: res.data.email || '',
+                    phone: res.data.phone || '',
+                    urn: res.data.urn || '',
+                    cin: res.data.cin || '',
+                    bankName: res.data.bankName || '',
+                    accountNo: res.data.accountNo || '',
+                    branchName: res.data.branchName || '',
+                    ifscCode: res.data.ifscCode || '',
                     logoUrl: res.data.logoUrl || '',
                 });
             }
@@ -85,6 +101,14 @@ export default function CompanyProfilePage() {
             formData.append('pincode', profile.pincode);
             formData.append('gstNumber', profile.gstNumber);
             formData.append('panNumber', profile.panNumber);
+            formData.append('email', profile.email);
+            formData.append('phone', profile.phone);
+            formData.append('urn', profile.urn);
+            formData.append('cin', profile.cin);
+            formData.append('bankName', profile.bankName);
+            formData.append('accountNo', profile.accountNo);
+            formData.append('branchName', profile.branchName);
+            formData.append('ifscCode', profile.ifscCode);
 
             // Only append file if a new one was selected
             if (profile.logoFile) {
@@ -138,6 +162,17 @@ export default function CompanyProfilePage() {
                                 <input type="text" name="companyName" value={profile.companyName} onChange={handleChange} required style={inp} placeholder="e.g. JSK URJA" />
                             </div>
                         </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+                            <div>
+                                <span style={lbl}>Company Email</span>
+                                <input type="email" name="email" value={profile.email} onChange={handleChange} style={inp} placeholder="info@company.com" />
+                            </div>
+                            <div>
+                                <span style={lbl}>Phone Number</span>
+                                <input type="text" name="phone" value={profile.phone} onChange={handleChange} style={inp} placeholder="+91 9876543210" />
+                            </div>
+                        </div>
                     </div>
 
                     <div style={{ marginBottom: '24px' }}>
@@ -152,6 +187,38 @@ export default function CompanyProfilePage() {
                             <div>
                                 <span style={lbl}>PAN / Income Tax No.</span>
                                 <input type="text" name="panNumber" value={profile.panNumber} onChange={handleChange} style={inp} placeholder="10-character PAN" />
+                            </div>
+                            <div>
+                                <span style={lbl}>CIN (Corporate Identification Number)</span>
+                                <input type="text" name="cin" value={profile.cin} onChange={handleChange} style={inp} placeholder="CIN Number" />
+                            </div>
+                            <div>
+                                <span style={lbl}>URN / Registration Number</span>
+                                <input type="text" name="urn" value={profile.urn} onChange={handleChange} style={inp} placeholder="URN Number" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#60a5fa', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
+                            Bank Information
+                        </h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div>
+                                <span style={lbl}>Bank Name</span>
+                                <input type="text" name="bankName" value={profile.bankName} onChange={handleChange} style={inp} placeholder="Bank Name" />
+                            </div>
+                            <div>
+                                <span style={lbl}>Account Number</span>
+                                <input type="text" name="accountNo" value={profile.accountNo} onChange={handleChange} style={inp} placeholder="Account Number" />
+                            </div>
+                            <div>
+                                <span style={lbl}>Branch Name</span>
+                                <input type="text" name="branchName" value={profile.branchName} onChange={handleChange} style={inp} placeholder="Branch Name" />
+                            </div>
+                            <div>
+                                <span style={lbl}>IFSC Code</span>
+                                <input type="text" name="ifscCode" value={profile.ifscCode} onChange={handleChange} style={inp} placeholder="IFSC Code" />
                             </div>
                         </div>
                     </div>

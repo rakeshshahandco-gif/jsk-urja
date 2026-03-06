@@ -29,6 +29,7 @@ const salesOrderSchema = new mongoose.Schema({
     // Customer
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
     customerName: { type: String, required: true },
+    customerCode: { type: String, default: '' },
     billingAddress: { type: String, default: '' },
     shippingAddress: { type: String, default: '' },
     customerGstin: { type: String, default: '' },

@@ -15,8 +15,8 @@ const Field = ({ label, required, children }) => (
 );
 
 const inputSt = {
-    width: '100%', padding: '10px 14px', background: '#1e293b',
-    border: '1px solid #334155', borderRadius: '8px', color: '#f1f5f9',
+    width: '100%', padding: '10px 14px', background: '#ffffff',
+    border: '1px solid #d1d5db', borderRadius: '8px', color: '#1e293b',
     fontSize: '14px', outline: 'none', boxSizing: 'border-box',
 };
 
@@ -58,7 +58,7 @@ export default function WorkOrderFormPage() {
     };
 
     return (
-        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '700px', margin: '0 auto' }}>
                 {/* Header */}
                 <div style={{ marginBottom: '24px' }}>
@@ -71,7 +71,7 @@ export default function WorkOrderFormPage() {
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                    <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
 
                         {/* BOM Selection */}
                         <Field label="Bill of Materials (BOM)" required>
@@ -134,7 +134,7 @@ export default function WorkOrderFormPage() {
                         </Field>
 
                         {/* Info box */}
-                        <div style={{ background: '#0f172a', border: '1px solid #1e40af', borderRadius: '8px', padding: '14px', fontSize: '13px', color: '#93c5fd' }}>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '14px', fontSize: '13px', color: '#1d4ed8' }}>
                             ℹ️ After creating the WO, go to the <strong>BOM & Material</strong> tab to review component availability before releasing to production.
                         </div>
 
@@ -142,7 +142,7 @@ export default function WorkOrderFormPage() {
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                             <button
                                 type="button" onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS)}
-                                style={{ padding: '10px 20px', borderRadius: '8px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                                style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}
                             >Cancel</button>
                             <button
                                 type="submit" disabled={saving}

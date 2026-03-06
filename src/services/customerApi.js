@@ -68,6 +68,16 @@ export const getCustomerTypes = async () => {
     }
 };
 
+export const getCustomerStickers = async () => {
+    try {
+        const response = await apiClient.get('/customers/stickers');
+        return response.data.data;
+    } catch (error) {
+        console.error('Error fetching customer stickers:', error);
+        throw new Error(error.response?.data?.message || error.message);
+    }
+};
+
 export const createCustomer = async (customerData) => {
     try {
         const response = await apiClient.post('/customers', customerData);
@@ -160,6 +170,7 @@ export default {
     updateCustomer,
     deleteCustomer,
     getCustomerTypes,
+    getCustomerStickers,
     getCustomerConversations,
     getConversationHistory,
     downloadCustomerTemplate,

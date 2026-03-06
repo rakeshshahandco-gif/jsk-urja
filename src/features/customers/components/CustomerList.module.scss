@@ -146,6 +146,23 @@
     &.status_inactive { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
 }
 
+.stickerContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.stickerTag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #fff;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
 .actionButtons {
     display: flex;
     gap: 6px;

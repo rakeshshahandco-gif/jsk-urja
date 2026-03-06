@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createSalesInvoice, getSalesOrderById, getInvoiceSeries } from '@/services/salesApi';
+import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries } from '@/services/salesApi';
 import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -19,7 +19,67 @@ const Section = ({ title, children }) => (
     </div>
 );
 const G = ({ cols = 3, g = 12, children }) => <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: g }}>{children}</div>;
-const F = ({ label: l, children }) => <div><label style={lbl}>{l}</label>{children}</div>;
+const F = ({ label: l, children, style = {} }) => <div style={style}><label style={lbl}>{l}</label>{children}</div>;
+
+const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
+    const [submitting, setSubmitting] = useState(false);
+    const [data, setData] = useState({
+        seriesName: '',
+        financialYear: '2025-26',
+        prefix: '',
+        startNumber: 1,
+        padLength: 5,
+        isDefault: false,
+    });
+
+    if (!isOpen) return null;
+
+    const handleSave = async () => {
+        if (!data.seriesName || !data.financialYear || !data.prefix) return toast.error('Name, FY and Prefix are required');
+        setSubmitting(true);
+        try {
+            const res = await createInvoiceSeries(data);
+            toast.success('Series created!');
+            onSave(res);
+            onClose();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to create series');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+            <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>+ Create New Invoice Series</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <F label="Series Name *" style={{ gridColumn: 'span 2' }}>
+                        <input value={data.seriesName} onChange={e => setData(p => ({ ...p, seriesName: e.target.value }))} style={inp} placeholder="e.g. GST/SALE" />
+                    </F>
+                    <F label="Prefix (Unique) *">
+                        <input value={data.prefix} onChange={e => setData(p => ({ ...p, prefix: e.target.value }))} style={inp} placeholder="GST" />
+                    </F>
+                    <F label="Financial Year *">
+                        <input value={data.financialYear} onChange={e => setData(p => ({ ...p, financialYear: e.target.value }))} style={inp} placeholder="2025-26" />
+                    </F>
+                    <F label="Start Number">
+                        <input type="number" value={data.startNumber} onChange={e => setData(p => ({ ...p, startNumber: e.target.value }))} style={inp} />
+                    </F>
+                    <F label="Digits Padding">
+                        <input type="number" value={data.padLength} onChange={e => setData(p => ({ ...p, padLength: e.target.value }))} style={inp} />
+                    </F>
+                </div>
+                <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                    <button onClick={handleSave} disabled={submitting} style={{ padding: '8px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>
+                        {submitting ? 'Creating...' : 'ADD & CONTINUE'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function SalesInvoiceFormPage() {
     const navigate = useNavigate();
@@ -27,6 +87,7 @@ export default function SalesInvoiceFormPage() {
     const soId = searchParams.get('soId');
     const [saving, setSaving] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
+    const [showAddSeries, setShowAddSeries] = useState(false);
     const [form, setForm] = useState({
         invoiceDate: new Date().toISOString().slice(0, 10),
         seriesId: '',
@@ -40,10 +101,16 @@ export default function SalesInvoiceFormPage() {
         customerName: '',
         customerGstin: '',
         customerPhone: '',
-        billingAddress: '',
         billingState: '',
         billingStateCode: '',
         shippingAddress: '',
+        shippingCity: '',
+        shippingState: '',
+        shippingStateCode: '',
+        shippingPostalCode: '',
+        shippingCountry: 'India',
+        shippingGstin: '',
+        shippingPhone: '',
         gstType: 'CGST / SGST',
         placeOfSupply: '',
         paymentType: 'Credit',
@@ -76,13 +143,17 @@ export default function SalesInvoiceFormPage() {
         if (newGst !== form.gstType) setF('gstType', newGst);
     }, [form.billingState, form.billingStateCode]);
 
-    useEffect(() => {
+    const loadSeries = useCallback(() => {
         getInvoiceSeries({ active: true }).then(s => {
             setSeriesList(s || []);
             const def = (s || []).find(x => x.isDefault);
-            if (def) setForm(p => ({ ...p, seriesId: def._id }));
+            if (def && !form.seriesId) setForm(p => ({ ...p, seriesId: def._id }));
         }).catch(() => { });
-    }, []);
+    }, [form.seriesId]);
+
+    useEffect(() => {
+        loadSeries();
+    }, [loadSeries]);
 
     useEffect(() => {
         if (!soId) return;
@@ -210,10 +281,13 @@ export default function SalesInvoiceFormPage() {
                 <Section title="Invoice Details">
                     <G cols={4}>
                         <F label="Invoice Series *">
-                            <select value={form.seriesId} onChange={e => setF('seriesId', e.target.value)} style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}>
-                                <option value="">-- Select Series --</option>
-                                {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN) {s.isDefault ? '✓ Default' : ''}</option>)}
-                            </select>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <select value={form.seriesId} onChange={e => setF('seriesId', e.target.value)} style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}>
+                                    <option value="">-- Select Series --</option>
+                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN) {s.isDefault ? '✓ Default' : ''}</option>)}
+                                </select>
+                                <button type="button" onClick={() => setShowAddSeries(true)} style={{ background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>+</button>
+                            </div>
                         </F>
                         <F label="Invoice Date *"><input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={inp} /></F>
                         <F label="Payment Type">
@@ -237,10 +311,21 @@ export default function SalesInvoiceFormPage() {
                         <F label="Billing State"><input value={form.billingState} onChange={e => setF('billingState', e.target.value)} style={inp} placeholder="Maharashtra" /></F>
                         <F label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={inp} placeholder="27" /></F>
                         <F label="Place of Supply"><input value={form.placeOfSupply} onChange={e => setF('placeOfSupply', e.target.value)} style={inp} /></F>
-                        <div style={{ gridColumn: 'span 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <F label="Billing Address"><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></F>
-                            <F label="Shipping Address"><textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></F>
+                        <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -8, borderBottom: '1px solid #f3f4f6', paddingBottom: 4 }}>
+                            <h4 style={{ margin: 0, fontSize: 11, color: '#374151' }}>BILLING & SHIPPING ADDRESS</h4>
+                            <button type="button" onClick={() => setForm(p => ({ ...p, shippingAddress: p.billingAddress, shippingCity: p.city || '', shippingState: p.billingState, shippingStateCode: p.billingStateCode, shippingGstin: p.customerGstin, shippingPhone: p.customerPhone }))} style={{ fontSize: 11, background: '#f0fdfa', border: '1px solid #ccfbf1', color: '#0d9488', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>Same as Billing</button>
                         </div>
+                        <F label="Billing Address" style={{ gridColumn: 'span 1' }}><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></F>
+                        <F label="Shipping Address" style={{ gridColumn: 'span 2' }}>
+                            <G cols={2} g={10}>
+                                <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', gridColumn: 'span 2' }} placeholder="Shipping Address..." />
+                                <input value={form.shippingCity} onChange={e => setF('shippingCity', e.target.value)} style={inp} placeholder="City" />
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <input value={form.shippingState} onChange={e => setF('shippingState', e.target.value)} style={{ ...inp, flex: 2 }} placeholder="State" />
+                                    <input value={form.shippingStateCode} onChange={e => setF('shippingStateCode', e.target.value)} style={{ ...inp, flex: 1 }} placeholder="Code" />
+                                </div>
+                            </G>
+                        </F>
                         <F label="Buyer Order No"><input value={form.buyerOrderNo} onChange={e => setF('buyerOrderNo', e.target.value)} style={inp} /></F>
                         <F label="Buyer Order Date"><input type="date" value={form.buyerOrderDate || ''} onChange={e => setF('buyerOrderDate', e.target.value)} style={inp} /></F>
                     </G>
@@ -336,6 +421,14 @@ export default function SalesInvoiceFormPage() {
                     </Section>
                 </div>
             </div>
+            <AddSeriesModal
+                isOpen={showAddSeries}
+                onClose={() => setShowAddSeries(false)}
+                onSave={(newSeries) => {
+                    setSeriesList(p => [newSeries, ...p]);
+                    setF('seriesId', newSeries._id);
+                }}
+            />
         </div>
     );
 }
