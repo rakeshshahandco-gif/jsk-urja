@@ -1,16 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { menuConfig, ROLES } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarItem } from './SidebarItem';
 import styles from './Sidebar.module.scss';
-import clsx from 'clsx';
 
 export const Sidebar = () => {
-    const [collapsed, setCollapsed] = useState(false);
     const { user, hasPermission } = useAuth();
     const userRole = user?.role || ROLES.VIEWER;
 
-    // console.log('Sidebar Debug:', { userRole, permissions: user?.permissions });
     console.log('Sidebar Debug:', { userRole, permissions: user?.permissions });
 
     // Filter items based on user role and permissions
@@ -30,9 +27,6 @@ export const Sidebar = () => {
         }).map(item => {
             if (item.children) {
                 const filteredChildren = filterItems(item.children);
-                // If item has children but all are filtered out, should we hide the parent?
-                // For now, let's keep it if it has a title, unless we want to hide empty groups.
-                // A common pattern is to hide groups if they have no visible children.
                 if (filteredChildren.length === 0 && item.children.length > 0) {
                     return null; // Hide parent if all children are hidden
                 }
@@ -45,36 +39,22 @@ export const Sidebar = () => {
     const visibleMenuItems = filterItems(menuConfig);
 
     return (
-        <aside className={clsx(styles.sidebar, { [styles.collapsed]: collapsed })}>
+        <aside className={styles.sidebar}>
             <div className={styles.header}>
-                {!collapsed && (
-                    <div className={styles.brand}>
-                        <div className={styles.logoWrapper}>
-                            <div className={styles.brandText}>
-                                <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
-                                <span className={styles.tagline}>CRM Application</span>
-                            </div>
+                <div className={styles.brand}>
+                    <div className={styles.logoWrapper}>
+                        <div className={styles.brandText}>
+                            <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
+                            <span className={styles.tagline}>CRM Application</span>
                         </div>
                     </div>
-                )}
-                {collapsed && (
-                    <div className={styles.collapsedLogo}>
-                         <span className={styles.one}>J</span>U
-                    </div>
-                )}
-                <button
-                    className={styles.toggleBtn}
-                    onClick={() => setCollapsed(!collapsed)}
-                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                >
-                    {collapsed ? '»' : '«'}
-                </button>
+                </div>
             </div>
 
             <nav className={styles.nav}>
                 <ul className={styles.menuList}>
                     {visibleMenuItems.map(item => (
-                        <SidebarItem key={item.id} item={item} collapsed={collapsed} />
+                        <SidebarItem key={item.id} item={item} />
                     ))}
                 </ul>
             </nav>

@@ -164,14 +164,14 @@
     }
 
     &.active {
-        background-color: $white;
-        color: $sidebar-text;
+        background-color: $primary;
+        color: #fff;
         border-radius: 10px;
-        box-shadow: $shadow-sm;
+        box-shadow: 0 2px 8px rgba($primary, 0.3);
 
         .icon,
         .arrow {
-            color: $sidebar-text;
+            color: #fff;
         }
     }
 }
@@ -246,8 +246,21 @@
 
         &.active {
             background-color: transparent;
-            color: $sidebar-text;
+            color: $primary;
             font-weight: 600;
+            position: relative;
+
+            &::before {
+                content: '';
+                position: absolute;
+                left: 16px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 3px;
+                height: 16px;
+                background-color: $primary;
+                border-radius: 2px;
+            }
         }
     }
 }

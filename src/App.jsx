@@ -104,7 +104,7 @@ function App() {
                                             <Sidebar />
                                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                                                 <Header />
-                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "90vh", overflow: "auto" }}>
                                                     <Routes>
                                                         <Route path="/" element={<Navigate to="/customers/list" replace />} />
                                                         <Route

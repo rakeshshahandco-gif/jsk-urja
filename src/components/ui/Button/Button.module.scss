@@ -30,6 +30,17 @@
     }
 }
 
+.startIcon,
+.endIcon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+
+    svg {
+        display: block;
+    }
+}
+
 // Variants
 .primary {
     background-color: $primary;
@@ -83,10 +94,10 @@
 
 // Sizes
 .sm {
-    padding: 2px 10px;
+    padding: 0 12px;
     font-size: 0.8125rem; // 13px
-    height: 28px;
-    gap: 4px;
+    height: 32px;
+    gap: 6px;
 }
 
 .md {

@@ -194,14 +194,14 @@ export const CustomerList = () => {
                     )}
                 </div>
                 <div className={styles.actions}>
-                    <Button variant="outline" size="sm" onClick={handleImportCustomers}>
-                        <Upload size={16} /> Import
+                    <Button variant="outline" size="sm" startIcon={<Upload size={15} />} onClick={handleImportCustomers}>
+                        Import
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => navigate('/tasks/create')}>
-                        <Plus size={16} /> Create Task
+                    <Button variant="outline" size="sm" startIcon={<Plus size={15} />} onClick={() => navigate('/tasks/create')}>
+                        Create Task
                     </Button>
-                    <Button size="sm" onClick={handleAddCustomer}>
-                        <Plus size={16} /> Add Customer
+                    <Button size="sm" startIcon={<Plus size={15} />} onClick={handleAddCustomer}>
+                        Add Customer
                     </Button>
                 </div>
             </div>
