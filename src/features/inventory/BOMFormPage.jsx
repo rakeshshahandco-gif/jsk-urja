@@ -88,9 +88,21 @@ const BOMFormPage = () => {
 
     // ── FETCH DATA & AUTO REFRESH ─────────────────────────────────────────────
     const fetchItems = () => {
-        getItems({ limit: 1000 }).then(res => {
-            setItems(res.data);
-            setFinishedProducts(res.data.filter(i => i.itemCategory === 'FINISHED_GOOD'));
+        getItems({ limit: 5000 }).then(res => {
+            const list = Array.isArray(res.data) ? res.data : (Array.isArray(res) ? res : []);
+            setItems(list);
+            setFinishedProducts(list.filter(i => {
+                const cat = (i.itemCategory || '').trim().toUpperCase();
+                const type = (i.itemType || '').trim().toUpperCase();
+                const group = (i.itemGroupName || '').trim().toUpperCase();
+
+                const isFinishedCat = cat.includes('FINISHED') || cat.includes('FG');
+                const isFinishedType = type.includes('PRODUCT') || type.includes('MANUFACTUR') || type.includes('FINISHED');
+                const isFinishedGroup = group.includes('FINISHED');
+                const isManufacturable = i.isManufacturable === true || i.isManufacturable === 'true';
+
+                return isFinishedCat || isFinishedType || isFinishedGroup || isManufacturable;
+            }));
         }).catch(() => console.error('Silent fail on refresh items'));
     };
 
@@ -121,7 +133,7 @@ const BOMFormPage = () => {
     }, [id, isEdit]);
 
     const handleCreateNewItem = () => {
-        window.open(PATHS.INVENTORY.ITEMS.NEW, '_blank');
+        window.open(PATHS.INVENTORY.NEW_ITEM, '_blank');
     };
 
     // ── AUTO-FILL POINTS & RATES FROM ITEM MASTER WHEN ITEMS LOAD ──────────────
@@ -286,11 +298,20 @@ const BOMFormPage = () => {
                             <div style={{ gridColumn: 'span 2' }}>
                                 <Field label="Finished Product *">
                                     <SearchableSelect
-                                        options={finishedProducts.map(p => ({ value: p._id, label: `${p.itemCode} — ${p.itemName}` }))}
+                                        options={finishedProducts.map(p => ({ value: p._id, label: p.itemName, meta: p.itemCode }))}
                                         value={form.finishedProductId}
                                         onChange={val => setForm({ ...form, finishedProductId: val })}
                                         placeholder="— Search Product from Item Master —"
                                         onCreateNew={handleCreateNewItem}
+                                        noOptionsMessage={
+                                            <div style={{ padding: '8px', color: '#64748b' }}>
+                                                No finished products available.
+                                                <br />
+                                                <span style={{ fontSize: '11px' }}>
+                                                    Please mark items as <strong>Finished Good</strong> or <strong>Manufacturable</strong> in Item Master.
+                                                </span>
+                                            </div>
+                                        }
                                     />
                                 </Field>
                             </div>
@@ -350,7 +371,7 @@ const BOMFormPage = () => {
                                             <td style={{ ...s.td, textAlign: 'center', color: '#94a3b8', fontWeight: 700, fontSize: 11 }}>{idx + 1}</td>
                                             <td style={{ ...s.td, minWidth: 200 }}>
                                                 <SearchableSelect
-                                                    options={items.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                                                    options={items.map(i => ({ value: i._id, label: i.itemName, meta: i.itemCode }))}
                                                     value={comp.itemId}
                                                     onChange={val => handleComponentChange(idx, 'itemId', val)}
                                                     placeholder="Search and Select Item..."

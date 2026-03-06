@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getSuppliers, getPurchaseOrders, getPurchaseOrderById, createGRN } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -36,7 +37,7 @@ export default function GRNFormPage() {
 
     useEffect(() => {
         getSuppliers({ limit: 200 }).then(d => setSuppliers(d.suppliers || [])).catch(() => { });
-        getItems({ limit: 500, sortBy: 'itemName:asc' }).then(d => setAllItems(Array.isArray(d.data) ? d.data : [])).catch(() => { });
+        getItems({ limit: 5000, sortBy: 'itemName:asc' }).then(d => setAllItems(Array.isArray(d.data) ? d.data : [])).catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -327,10 +328,13 @@ export default function GRNFormPage() {
                                                 <tr key={idx} style={{ borderBottom: '1px solid #1e293b' }}>
                                                     <td style={{ padding: '8px 12px', color: '#475569', width: '30px' }}>{idx + 1}</td>
                                                     <td style={{ padding: '8px 12px', minWidth: '160px' }}>
-                                                        <select value={item.itemId} onChange={e => setDirectItem(idx, 'itemId', e.target.value)} style={{ ...inp, fontSize: '12px', cursor: 'pointer' }}>
-                                                            <option value="">— Select —</option>
-                                                            {allItems.map(it => <option key={it._id} value={it._id}>{it.itemName}</option>)}
-                                                        </select>
+                                                        <SearchableSelect
+                                                            options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                            value={item.itemId}
+                                                            onChange={v => setDirectItem(idx, 'itemId', v)}
+                                                            placeholder="— Search —"
+                                                            dark={true}
+                                                        />
                                                     </td>
                                                     <td style={{ padding: '8px 12px', width: '80px' }}><input value={item.hsnCode} onChange={e => setDirectItem(idx, 'hsnCode', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
                                                     <td style={{ padding: '8px 12px', width: '60px' }}><input value={item.uom} onChange={e => setDirectItem(idx, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} /></td>

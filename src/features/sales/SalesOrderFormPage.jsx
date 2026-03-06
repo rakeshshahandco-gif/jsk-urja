@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { createSalesOrder, getSalesOrderById, updateSalesOrder } from '@/services/salesApi';
 import { getCustomers, searchCustomers } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -58,17 +59,35 @@ export default function SalesOrderFormPage() {
     const custRef = useRef(null);
     const custSearchTimeout = useRef(null);
 
-    const [itemOptions, setItemOptions] = useState([]);
-    const [activeItemRow, setActiveItemRow] = useState(null);
-    const itemRef = useRef(null);
+    const [allItems, setAllItems] = useState([]);
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (custRef.current && !custRef.current.contains(e.target)) setShowCustDropdown(false);
-            if (itemRef.current && !itemRef.current.contains(e.target)) setActiveItemRow(null);
         };
         document.addEventListener('mousedown', handleClickOutside);
+
+        // Pre-load items
+        getItems({ limit: 5000 }).then(res => {
+            const list = res?.data || res?.results || res || [];
+            if (Array.isArray(list)) {
+                const filtered = list.filter(i => {
+                    const cat = (i.itemCategory || '').trim().toUpperCase();
+                    const type = (i.itemType || '').trim().toUpperCase();
+                    const group = (i.itemGroupName || '').trim().toUpperCase();
+
+                    const isFinishedCat = cat.includes('FINISHED') || cat.includes('FG');
+                    const isFinishedType = type.includes('PRODUCT') || type.includes('MANUFACTUR') || type.includes('FINISHED');
+                    const isFinishedGroup = group.includes('FINISHED');
+                    const isManufacturable = i.isManufacturable === true || i.isManufacturable === 'true';
+
+                    return isFinishedCat || isFinishedType || isFinishedGroup || isManufacturable;
+                });
+                setAllItems(filtered);
+            }
+        }).catch(e => console.error('Error loading items:', e));
+
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
@@ -139,18 +158,9 @@ export default function SalesOrderFormPage() {
         setShowCustDropdown(false);
     };
 
-    const handleItemSearch = async (val, index) => {
-        setItem(index, 'itemCode', val);
-        if (!val.trim()) { setItemOptions([]); setActiveItemRow(null); return; }
-        setActiveItemRow(index);
-        try {
-            const res = await getItems({ search: val, itemCategory: 'FINISHED_GOOD', limit: 15 });
-            const list = res?.data || res?.results || res || [];
-            if (Array.isArray(list)) setItemOptions(list);
-        } catch (e) { console.error('Error searching items:', e); }
-    };
-
-    const handleItemSelect = (selected, index) => {
+    const handleItemSelect = (val, index) => {
+        const selected = allItems.find(it => it._id === val);
+        if (!selected) return;
         setForm(p => {
             const items = p.items.map((item, idx) => {
                 if (idx !== index) return item;
@@ -159,18 +169,18 @@ export default function SalesOrderFormPage() {
                     itemId: selected._id,
                     itemCode: selected.itemCode || '',
                     itemName: selected.itemName || selected.name || '',
-                    modelNo: '',
+                    modelNo: selected.modelNo || '',
                     additionalNotes: '',
                     hsnCode: selected.hsnCode || '',
                     uom: selected.uom || 'NOS',
                     rate,
                     gstRate: selected.taxRate || selected.gstRate || 18,
+                    qty: item.qty || 1, // Keep existing quantity or default to 1
                 };
                 return { ...updated, amount: (Number(updated.qty) || 0) * (Number(updated.rate) || 0) };
             });
             return { ...p, items };
         });
-        setActiveItemRow(null);
     };
 
     useEffect(() => {
@@ -407,22 +417,21 @@ export default function SalesOrderFormPage() {
                                         <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                             <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
                                             <td style={{ ...td, minWidth: 140 }}>
-                                                <div ref={activeItemRow === i ? itemRef : null} style={{ position: 'relative' }}>
-                                                    <input value={item.itemCode || ''} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemCode ? '#fca5a5' : '#d1d5db' }} placeholder="Item Code..." autoComplete="off" />
-                                                    {activeItemRow === i && itemOptions.length > 0 && (
-                                                        <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                                                            {itemOptions.map((it) => (
-                                                                <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemCode || 'No Code'} - {it.itemName || it.name}</div>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                                                                        <span>{it.modelNo || it.sku || ''}</span>
-                                                                        <span>HSN: {it.hsnCode || '—'}</span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
+                                                <SearchableSelect
+                                                    options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                    value={item.itemId}
+                                                    onChange={v => handleItemSelect(v, i)}
+                                                    placeholder="Item Code..."
+                                                    noOptionsMessage={
+                                                        <div style={{ padding: '8px', color: '#64748b' }}>
+                                                            No saleable products found.
+                                                            <br />
+                                                            <span style={{ fontSize: '11px' }}>
+                                                                Check <strong>Finished Good</strong> or <strong>Manufacturable</strong> status in Item Master.
+                                                            </span>
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    }
+                                                />
                                             </td>
                                             <td style={{ ...td, minWidth: 160 }}>
                                                 <input value={item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Item Name" />

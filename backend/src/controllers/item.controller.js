@@ -109,7 +109,7 @@ export const getItems = asyncHandler(async (req, res) => {
     }
 
     const pageNum = Math.max(parseInt(page, 10), 1);
-    const limitNum = Math.min(parseInt(limit, 10), 200);
+    const limitNum = Math.min(parseInt(limit, 10), 5000);
     const skip = (pageNum - 1) * limitNum;
 
     const [field, dir] = sortBy.split(':');

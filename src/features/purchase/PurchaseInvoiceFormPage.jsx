@@ -8,6 +8,7 @@ import {
 } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
 import { getCompanyProfile } from '@/services/settingsApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -58,7 +59,7 @@ export default function PurchaseInvoiceFormPage() {
             try {
                 const [sD, iD, comp] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 500, sortBy: 'itemName:asc' }),
+                    getItems({ limit: 5000, sortBy: 'itemName:asc' }),
                     getCompanyProfile().catch(() => ({ data: {} }))
                 ]);
                 const c = comp?.data || {};
@@ -580,10 +581,13 @@ export default function PurchaseInvoiceFormPage() {
                                                         <td style={{ padding: '6px 10px', color: '#475569', width: '28px' }}>{i + 1}</td>
                                                         <td style={{ padding: '6px 10px', minWidth: '160px' }}>
                                                             {isManual || !row.itemId ? (
-                                                                <select value={row.itemId} onChange={e => setRow(i, 'itemId', e.target.value)} style={{ ...inp, fontSize: '12px' }}>
-                                                                    <option value="">— Select —</option>
-                                                                    {items.map(it => <option key={it._id} value={it._id}>{it.itemName}</option>)}
-                                                                </select>
+                                                                <SearchableSelect
+                                                                    options={items.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                                    value={row.itemId}
+                                                                    onChange={v => setRow(i, 'itemId', v)}
+                                                                    placeholder="— Search Item —"
+                                                                    dark={true}
+                                                                />
                                                             ) : (
                                                                 <div style={{ color: '#f1f5f9', fontWeight: 500 }}>{row.itemName}<div style={{ color: '#64748b', fontSize: '10px' }}>{row.itemCode}</div></div>
                                                             )}

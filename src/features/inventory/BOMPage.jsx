@@ -31,7 +31,7 @@ const BOMPage = () => {
     const fetchBoms = async () => {
         try {
             setLoading(true);
-            const response = await getBOMs(filters);
+            const response = await getBOMs({ ...filters, limit: 1000 });
             setBoms(response.data);
         } catch (error) {
             addToast('Failed to fetch BOMs', 'error');

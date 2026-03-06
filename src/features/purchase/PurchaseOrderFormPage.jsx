@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { createPurchaseOrder, getPurchaseOrderById, updatePurchaseOrder } from '@/services/purchaseApi';
 import { getSuppliers } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -66,7 +67,7 @@ export default function PurchaseOrderFormPage() {
             try {
                 const [supData, itemData] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 500, sortBy: 'itemName:asc' })
+                    getItems({ limit: 5000, sortBy: 'itemName:asc' })
                 ]);
                 setSuppliers(supData.suppliers || []);
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
@@ -299,10 +300,13 @@ export default function PurchaseOrderFormPage() {
                                                 <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
                                                     <td style={{ padding: '8px 10px', color: '#475569', width: '30px' }}>{i + 1}</td>
                                                     <td style={{ padding: '8px 10px', minWidth: '200px' }}>
-                                                        <select value={item.itemId} onChange={e => setItem(i, 'itemId', e.target.value)} style={{ ...inp, fontSize: '12px' }}>
-                                                            <option value="">— Select Item —</option>
-                                                            {items.map(it => <option key={it._id} value={it._id}>{it.itemName} ({it.itemCode})</option>)}
-                                                        </select>
+                                                        <SearchableSelect
+                                                            options={items.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                            value={item.itemId}
+                                                            onChange={v => setItem(i, 'itemId', v)}
+                                                            placeholder="— Search Item —"
+                                                            dark={true}
+                                                        />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '120px' }}>
                                                         <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />

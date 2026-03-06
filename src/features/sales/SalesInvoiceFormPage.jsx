@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries } from '@/services/salesApi';
 import { getItems } from '@/services/itemApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -121,19 +122,29 @@ export default function SalesInvoiceFormPage() {
         items: [BLANK_ITEM()],
     });
 
-    const [itemOptions, setItemOptions] = useState([]);
-    const [activeItemRow, setActiveItemRow] = useState(null);
-    const itemRef = useRef(null);
+    const [allItems, setAllItems] = useState([]);
 
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (activeItemRow !== null && itemRef.current && !itemRef.current.contains(e.target)) {
-                setActiveItemRow(null);
+        // Pre-load items
+        getItems({ limit: 5000 }).then(res => {
+            const list = res?.data || res?.results || res || [];
+            if (Array.isArray(list)) {
+                const filtered = list.filter(i => {
+                    const cat = (i.itemCategory || '').trim().toUpperCase();
+                    const type = (i.itemType || '').trim().toUpperCase();
+                    const group = (i.itemGroupName || '').trim().toUpperCase();
+
+                    const isFinishedCat = cat.includes('FINISHED') || cat.includes('FG');
+                    const isFinishedType = type.includes('PRODUCT') || type.includes('MANUFACTUR') || type.includes('FINISHED');
+                    const isFinishedGroup = group.includes('FINISHED');
+                    const isManufacturable = i.isManufacturable === true || i.isManufacturable === 'true';
+
+                    return isFinishedCat || isFinishedType || isFinishedGroup || isManufacturable;
+                });
+                setAllItems(filtered);
             }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [activeItemRow]);
+        }).catch(e => console.error('Error loading items:', e));
+    }, []);
 
     useEffect(() => {
         const state = (form.billingState || '').trim().toLowerCase();
@@ -186,18 +197,9 @@ export default function SalesInvoiceFormPage() {
     const addItem = () => setForm(p => ({ ...p, items: [...p.items, BLANK_ITEM()] }));
     const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }));
 
-    const handleItemSearch = async (val, index) => {
-        setItem(index, 'itemName', val);
-        if (!val.trim()) { setItemOptions([]); setActiveItemRow(null); return; }
-        setActiveItemRow(index);
-        try {
-            const res = await getItems({ search: val, itemCategory: 'FINISHED_GOOD', limit: 15 });
-            const list = res?.data || res?.results || res || [];
-            if (Array.isArray(list)) setItemOptions(list);
-        } catch (e) { console.error('Error searching items:', e); }
-    };
-
-    const handleItemSelect = (selected, index) => {
+    const handleItemSelect = (val, index) => {
+        const selected = allItems.find(it => it._id === val);
+        if (!selected) return;
         setForm(p => {
             const items = p.items.map((item, idx) => {
                 if (idx !== index) return item;
@@ -206,16 +208,16 @@ export default function SalesInvoiceFormPage() {
                     ...item,
                     itemId: selected._id,
                     itemName: selected.itemName || selected.name || '',
-                    modelNo: '',
+                    modelNo: selected.modelNo || '',
                     hsnCode: selected.hsnCode || '',
                     uom: selected.uom || 'NOS',
                     rate,
                     gstRate: selected.taxRate || selected.salesGst || selected.gstRate || 18,
+                    qty: item.qty || 1,
                 };
             });
             return { ...p, items };
         });
-        setActiveItemRow(null);
     };
 
     // Live totals
@@ -341,22 +343,21 @@ export default function SalesInvoiceFormPage() {
                                     <tr key={i}>
                                         <td style={{ ...td, color: '#9ca3af', width: 28 }}>{i + 1}</td>
                                         <td style={{ ...td, minWidth: 140 }}>
-                                            <div ref={activeItemRow === i ? itemRef : null} style={{ position: 'relative' }}>
-                                                <input value={item.itemName} onChange={e => handleItemSearch(e.target.value, i)} onFocus={() => itemOptions.length && setActiveItemRow(i)} style={{ ...inp, borderColor: !item.itemName ? '#fca5a5' : '#d1d5db' }} placeholder="Search Item..." />
-                                                {activeItemRow === i && itemOptions.length > 0 && (
-                                                    <div style={{ position: 'absolute', top: '100%', left: 0, width: 300, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 220, overflowY: 'auto', zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                                                        {itemOptions.map((it) => (
-                                                            <div key={it._id} onClick={() => handleItemSelect(it, i)} style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{it.itemName || it.name}</div>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                                                                    <span>{it.modelNo || it.sku || ''}</span>
-                                                                    <span>HSN: {it.hsnCode || '—'}</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                            <SearchableSelect
+                                                options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                value={item.itemId}
+                                                onChange={v => handleItemSelect(v, i)}
+                                                placeholder="Search code/name..."
+                                                noOptionsMessage={
+                                                    <div style={{ padding: '8px', color: '#64748b' }}>
+                                                        No saleable products found.
+                                                        <br />
+                                                        <span style={{ fontSize: '11px' }}>
+                                                            Check <strong>Finished Good</strong> or <strong>Manufacturable</strong> status in Item Master.
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
+                                                }
+                                            />
                                         </td>
                                         <td style={{ ...td, minWidth: 90 }}><input value={item.modelNo} onChange={e => setItem(i, 'modelNo', e.target.value)} style={inp} /></td>
                                         <td style={{ ...td, width: 80 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} /></td>

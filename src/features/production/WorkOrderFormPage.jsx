@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createWorkOrder } from '@/services/workOrderApi';
 import { getBOMs } from '@/services/bomApi';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -35,7 +36,7 @@ export default function WorkOrderFormPage() {
     });
 
     useEffect(() => {
-        getBOMs({ status: 'Approved', limit: 200 })
+        getBOMs({ status: 'Approved', limit: 5000 })
             .then(d => setBoms(Array.isArray(d.data) ? d.data : []))
             .catch(() => { });
     }, []);
@@ -75,19 +76,16 @@ export default function WorkOrderFormPage() {
 
                         {/* BOM Selection */}
                         <Field label="Bill of Materials (BOM)" required>
-                            <select
+                            <SearchableSelect
+                                options={boms.map(b => ({
+                                    value: b._id,
+                                    label: `${b.finishedProductId?.name || b.finishedProductName || ''} ${b.version ? `(${b.version})` : ''}`,
+                                    meta: b.bomNumber
+                                }))}
                                 value={form.bomId}
-                                onChange={e => set('bomId', e.target.value)}
-                                style={{ ...inputSt, cursor: 'pointer' }}
-                                required
-                            >
-                                <option value="">— Select BOM —</option>
-                                {boms.map(b => (
-                                    <option key={b._id} value={b._id}>
-                                        {b.bomNumber} — {b.finishedProductId?.name || b.finishedProductName || ''} {b.version ? `(${b.version})` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={v => set('bomId', v)}
+                                placeholder="— Search BOM Number or Product —"
+                            />
                         </Field>
 
                         {/* Qty + Priority */}
