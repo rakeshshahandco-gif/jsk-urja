@@ -30,8 +30,9 @@ export const SidebarItem = ({ item, collapsed }) => {
         return (
             <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })}>
                 <div
-                    className={clsx(styles.link, { 
-                        [styles.active]: isChildActive && !isOpen,
+                    className={clsx(styles.link, {
+                        // [styles.active]: isChildActive && !isOpen,
+                        [styles.active]: isChildActive,
                         [styles.subMenuHeader]: isOpen && !collapsed
                     })}
                     onClick={toggleSubMenu}

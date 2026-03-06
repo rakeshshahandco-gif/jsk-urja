@@ -8,6 +8,10 @@ const router = express.Router();
 
 router.get('/generate-code', protect, itemController.generateCode);
 
+// Template download and bulk import routes (must be before /:id)
+router.get('/template/download', protect, itemController.downloadTemplate);
+router.post('/import', protect, itemController.upload.single('file'), itemController.importItems);
+
 router
     .route('/')
     .get(protect, validate(itemValidation.getItems), itemController.getItems)
