@@ -109,7 +109,7 @@ function App() {
                                                     <Header />
                                                     <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "90vh", overflow: "auto" }}>
                                                         <Routes>
-                                                            <Route path="/" element={<Navigate to="/customers/list" replace />} />
+                                                            <Route path="/" element={<Navigate to="/tasks/list" replace />} />
                                                             <Route
                                                                 path="/customers"
                                                                 element={

@@ -38,7 +38,7 @@ export const PermissionDenied = ({ requiredRole, requiredPermission }) => {
                     <Button onClick={() => navigate(-1)} variant="outline">
                         Go Back
                     </Button>
-                    <Button onClick={() => navigate('/customers/list')}>
+                    <Button onClick={() => navigate('/tasks/list')}>
                         Go to Dashboard
                     </Button>
                 </div>

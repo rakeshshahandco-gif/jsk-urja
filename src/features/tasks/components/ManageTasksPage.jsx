@@ -39,9 +39,9 @@ const s = {
 };
 
 const TABS = [
+    { id: 'overdue', api: 'OVERDUE', label: 'Overdue' },
     { id: 'today', api: 'TODAY', label: 'Today' },
     { id: 'upcoming', api: 'UPCOMING', label: 'Upcoming' },
-    { id: 'overdue', api: 'OVERDUE', label: 'Overdue' },
     { id: 'all', api: 'ALL', label: 'All Tasks' },
     { id: 'closed', api: 'CLOSED', label: 'Closed' },
 ];
@@ -51,7 +51,7 @@ const ManageTasksPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    const [activeTab, setActiveTab] = useState('today');
+    const [activeTab, setActiveTab] = useState(null);
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -70,9 +70,18 @@ const ManageTasksPage = () => {
         getReportOptions()
             .then(d => setOptions({ taskGroups: d.taskGroups || [], users: d.users || [] }))
             .catch(() => { });
+
+        // Initial tab check: if overdue exists, select it, else today
+        api.get('/reports/manage-tasks', { params: { tab: 'OVERDUE', limit: 1 } })
+            .then(res => {
+                if (res.data.meta?.total > 0) setActiveTab('overdue');
+                else setActiveTab('today');
+            })
+            .catch(() => setActiveTab('today'));
     }, []);
 
     const fetchTasks = useCallback(async () => {
+        if (!activeTab) return;
         setLoading(true);
         try {
             const tab = TABS.find(t => t.id === activeTab)?.api || 'ALL';

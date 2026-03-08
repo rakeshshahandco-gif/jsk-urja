@@ -9,22 +9,22 @@ import toast from 'react-hot-toast';
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
 const WO_STATUS_COLORS = {
-    'Draft': { color: '#94a3b8', bg: '#1e293b' },
-    'Released': { color: '#60a5fa', bg: '#1e3a5f' },
-    'In Process': { color: '#86efac', bg: '#1c2a18' },
-    'WIP – Waiting Material': { color: '#fca5a5', bg: '#450a0a' },
-    'On Hold': { color: '#c4b5fd', bg: '#2e1065' },
-    'Completed': { color: '#6ee7b7', bg: '#052e16' },
-    'Closed': { color: '#475569', bg: '#1e293b' },
+    'Draft': { color: '#000000', bg: '#e2e8f0' },
+    'Released': { color: '#000000', bg: '#bfdbfe' },
+    'In Process': { color: '#000000', bg: '#a7f3d0' },
+    'WIP – Waiting Material': { color: '#000000', bg: '#fecaca' },
+    'On Hold': { color: '#000000', bg: '#e9d5ff' },
+    'Completed': { color: '#000000', bg: '#6ee7b7' },
+    'Closed': { color: '#000000', bg: '#cbd5e1' },
 };
 
 const STAGE_STATUS_COLORS = {
-    'Not Started': { color: '#64748b', bg: '#1e293b', icon: '○' },
-    'Running': { color: '#f59e0b', bg: '#1c1408', icon: '▶' },
-    'Completed': { color: '#10b981', bg: '#052e16', icon: '✓' },
-    'QC Hold': { color: '#f97316', bg: '#1c0e00', icon: '⏸' },
-    'Failed': { color: '#ef4444', bg: '#450a0a', icon: '✕' },
-    'Rework': { color: '#a78bfa', bg: '#1e1035', icon: '↺' },
+    'Not Started': { color: '#000000', bg: '#e2e8f0', icon: '○' },
+    'Running': { color: '#000000', bg: '#fde68a', icon: '▶' },
+    'Completed': { color: '#000000', bg: '#a7f3d0', icon: '✓' },
+    'QC Hold': { color: '#000000', bg: '#fed7aa', icon: '⏸' },
+    'Failed': { color: '#000000', bg: '#fecaca', icon: '✕' },
+    'Rework': { color: '#000000', bg: '#ddd6fe', icon: '↺' },
 };
 
 const TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing', 'WIP & Exceptions', 'Material History'];

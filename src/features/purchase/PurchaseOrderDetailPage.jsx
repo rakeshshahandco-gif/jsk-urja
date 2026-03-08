@@ -101,10 +101,10 @@ export default function PurchaseOrderDetailPage() {
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#fff', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT-ONLY COMPLETE LAYOUT (A4 Container) */}
-            <div className="print-only" style={{ display: 'none', width: '100%', margin: 0, padding: 0 }}>
-                <div style={{ border: '2px solid #333', padding: '30px', minHeight: '1000px', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+            <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, margin: '0 auto' }}>
+                <div style={{ border: '1px solid #000', padding: '20px', minHeight: '280mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box' }}>
                     {/* Print Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '3px solid #333', paddingBottom: '20px', marginBottom: '25px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '25px' }}>
                         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                             {company.logoUrl && (
                                 <img src={company.logoUrl} alt="Company Logo" style={{ maxHeight: '80px', maxWidth: '220px', objectFit: 'contain' }} />
@@ -118,21 +118,21 @@ export default function PurchaseOrderDetailPage() {
                             </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <h2 style={{ margin: '0 0 15px', fontSize: '26px', color: '#fff', fontWeight: 900, background: '#333', padding: '6px 20px', display: 'inline-block' }}>PURCHASE ORDER</h2>
+                            <h2 style={{ margin: '0 0 15px', fontSize: '26px', color: '#000', fontWeight: 900, background: '#f3f4f6', border: '1px solid #000', padding: '6px 20px', display: 'inline-block' }}>PURCHASE ORDER</h2>
                             <table style={{ borderCollapse: 'collapse', float: 'right', textAlign: 'left', fontSize: '13px' }}>
                                 <tbody>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '2px solid #333', fontWeight: 800 }}>PO NO.</td><td style={{ padding: '3px 0 3px 12px', fontWeight: 700 }}>{po.poNumber}</td></tr>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '2px solid #333', fontWeight: 800 }}>PO DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.poDate)}</td></tr>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '2px solid #333', fontWeight: 800 }}>DUE DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.expectedDeliveryDate)}</td></tr>
+                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>PO NO.</td><td style={{ padding: '3px 0 3px 12px', fontWeight: 700 }}>{po.poNumber}</td></tr>
+                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>PO DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.poDate)}</td></tr>
+                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>DUE DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.expectedDeliveryDate)}</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     {/* Parties Section */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', border: '2px solid #333', marginBottom: '25px' }}>
-                        <div style={{ padding: '15px', borderRight: '2px solid #333' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px', color: '#666' }}>VENDORS / SUPPLIER</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', border: '1px solid #000', marginBottom: '25px' }}>
+                        <div style={{ padding: '15px', borderRight: '1px solid #000' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px', color: '#666' }}>VENDORS / SUPPLIER</div>
                             <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{po.supplierName || po.supplierId?.supplierName}</div>
                             <div style={{ fontSize: '13px', marginBottom: '4px', lineHeight: '1.4' }}>
                                 {po.supplierAddress || (po.supplierId?.address ? `${po.supplierId.address}, ${po.supplierId.city}, ${po.supplierId.state}` : '')}
@@ -154,7 +154,7 @@ export default function PurchaseOrderDetailPage() {
                             )}
                         </div>
                         <div style={{ padding: '15px' }}>
-                            <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px', color: '#666' }}>DELIVER TO / SHIP TO</div>
+                            <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px', color: '#666' }}>DELIVER TO / SHIP TO</div>
                             <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{po.deliveryFacility || company.companyName || 'JSK URJA'}</div>
                             {po.deliveryAddress && <div style={{ fontSize: '13px', marginBottom: '4px', lineHeight: '1.4' }}>{po.deliveryAddress}</div>}
                             {company.contactNumber && <div style={{ fontSize: '13px', marginTop: '8px' }}><strong>Contact:</strong> {company.contactNumber}</div>}
@@ -163,65 +163,57 @@ export default function PurchaseOrderDetailPage() {
 
                     {/* Metadata Table */}
                     <div style={{ marginBottom: '25px' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #333', fontSize: '13px' }}>
-                            <thead style={{ background: '#f0f0f0' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '13px' }}>
+                            <thead style={{ background: '#f5f5f5' }}>
                                 <tr>
                                     {['Mode of Dispatch', 'Terms of Payment', 'GST Calculation Type'].map((h, i) => (
-                                        <th key={i} style={{ border: '1px solid #333', padding: '8px 12px', textAlign: 'left', fontWeight: 800 }}>{h}</th>
+                                        <th key={i} style={{ border: '1px solid #000', padding: '8px 12px', textAlign: 'left', fontWeight: 800 }}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td style={{ border: '1px solid #333', padding: '8px 12px' }}>{po.dispatchMode || 'By Road'}</td>
-                                    <td style={{ border: '1px solid #333', padding: '8px 12px' }}>{po.paymentTerms || '—'}</td>
-                                    <td style={{ border: '1px solid #333', padding: '8px 12px' }}>{po.gstType || '—'}</td>
+                                <tr style={{ borderBottom: '1px solid #000' }}>
+                                    <td style={{ borderRight: '1px solid #000', padding: '8px 12px' }}>{po.dispatchMode || 'By Road'}</td>
+                                    <td style={{ borderRight: '1px solid #000', padding: '8px 12px' }}>{po.paymentTerms || '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>{po.gstType || '—'}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
                     {/* Items Table */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #333', fontSize: '13px', marginBottom: 'auto' }}>
-                        <thead style={{ background: '#333', color: '#fff' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '13px', marginBottom: 'auto' }}>
+                        <thead style={{ background: '#f5f5f5', color: '#000' }}>
                             <tr>
                                 {['Sr.', 'Item Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => (
-                                    <th key={i} style={{ border: '1px solid #333', padding: '10px', textAlign: h === 'Item Description' ? 'left' : 'center', fontWeight: 800 }}>{h}</th>
+                                    <th key={i} style={{ border: '1px solid #000', padding: '10px', textAlign: h === 'Item Description' ? 'left' : 'center', fontWeight: 800 }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {(po.items || []).map((it, i) => (
                                 <tr key={i}>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', verticalAlign: 'top' }}>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', verticalAlign: 'top' }}>
                                         <div style={{ fontWeight: 800, fontSize: '14px' }}>{it.itemName}</div>
                                         {it.itemCode && <div style={{ fontSize: '11px', color: '#555', marginTop: '2px' }}>Code: {it.itemCode}</div>}
                                         {it.description && <div style={{ fontSize: '11px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>{it.description}</div>}
                                     </td>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{it.hsnCode || '—'}</td>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top', fontWeight: 800 }}>{it.orderedQty}</td>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{it.uom}</td>
-                                    <td style={{ borderRight: '1px solid #333', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'right', verticalAlign: 'top' }}>{it.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{it.hsnCode || '—'}</td>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top', fontWeight: 800 }}>{it.orderedQty}</td>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{it.uom}</td>
+                                    <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'right', verticalAlign: 'top' }}>{it.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td style={{ borderBottom: '1px solid #eee', padding: '10px', textAlign: 'right', verticalAlign: 'top', fontWeight: 800 }}>{(it.orderedQty * it.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                             ))}
-                            {/* Filling empty space */}
-                            {Array.from({ length: Math.max(0, 8 - (po.items?.length || 0)) }).map((_, i) => (
-                                <tr key={`empty-${i}`}>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ borderRight: '1px solid #333', padding: '15px' }}></td>
-                                    <td style={{ padding: '15px' }}></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                        <tfoot style={{ borderTop: '2px solid #333' }}>
+                            {/* Filling empty space to maintain structure without internal grid lines */}
                             <tr>
-                                <td colSpan={4} rowSpan={6} style={{ borderRight: '1px solid #333', padding: '15px', verticalAlign: 'top' }}>
+                                <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000', height: `${Math.max(0, 10 - (po.items?.length || 0)) * 25}px` }} colSpan="7"></td>
+                            </tr>
+                        </tbody>
+                        <tfoot style={{ borderTop: '1px solid #000' }}>
+                            <tr>
+                                <td colSpan={4} rowSpan={6} style={{ borderRight: '1px solid #000', padding: '15px', verticalAlign: 'top' }}>
                                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>AMOUNT IN WORDS:</div>
                                     <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{po.amountInWords || '—'}</div>
                                     {po.remarks && (
@@ -231,37 +223,37 @@ export default function PurchaseOrderDetailPage() {
                                         </div>
                                     )}
                                 </td>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TAXABLE AMOUNT</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TAXABLE AMOUNT</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{itemTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                             <tr>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>FREIGHT / SHIPPING</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>FREIGHT / SHIPPING</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
-                            <tr style={{ background: '#f9fafb' }}>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>TOTAL TAXABLE</td>
+                            <tr style={{ background: '#f5f5f5' }}>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>TOTAL TAXABLE</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>{totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                             {isIGST ? (
                                 <tr>
-                                    <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>IGST</td>
+                                    <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>IGST</td>
                                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                             ) : (
                                 <>
                                     <tr>
-                                        <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>CGST</td>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>CGST</td>
                                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     </tr>
                                     <tr>
-                                        <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SGST</td>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SGST</td>
                                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     </tr>
                                 </>
                             )}
-                            <tr style={{ background: '#333', color: '#fff' }}>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#fff' }}>GRAND TOTAL</td>
-                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#fff' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <tr style={{ background: '#f5f5f5', color: '#000' }}>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>GRAND TOTAL</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -278,13 +270,13 @@ export default function PurchaseOrderDetailPage() {
                                 <li>The company reserves the right to cancel the order if delivery is delayed beyond the expected date.</li>
                             </ol>
                         </div>
-                        <div style={{ border: '2px solid #333', display: 'flex', flexDirection: 'column', height: '140px' }}>
-                            <div style={{ background: '#f0f0f0', padding: '6px', fontSize: '11px', fontWeight: 800, textAlign: 'center', borderBottom: '1px solid #333' }}>
+                        <div style={{ border: '1px solid #000', display: 'flex', flexDirection: 'column', height: '140px' }}>
+                            <div style={{ background: '#f5f5f5', padding: '6px', fontSize: '11px', fontWeight: 800, textAlign: 'center', borderBottom: '1px solid #000' }}>
                                 For {company.companyName || 'JSK URJA'}
                             </div>
                             <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '10px' }}>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div style={{ width: '150px', borderTop: '1px solid #333', margin: '0 auto 5px' }}></div>
+                                    <div style={{ width: '150px', borderTop: '1px solid #000', margin: '0 auto 5px' }}></div>
                                     <div style={{ fontSize: '11px', fontWeight: 800 }}>AUTHORIZED SIGNATORY</div>
                                 </div>
                             </div>
@@ -525,8 +517,8 @@ export default function PurchaseOrderDetailPage() {
             {/* Print Styles */}
             <style>{`
                 @media print { 
-                    @page { margin: 1cm; size: A4 portrait; }
-                    body { background: #fff !important; margin: 0; padding: 0; }
+                    @page { margin: 0.5cm; size: A4 portrait; }
+                    body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 210mm; }
                     
                     /* Hide everything in the body by default */
                     body * { visibility: hidden; }
@@ -537,13 +529,14 @@ export default function PurchaseOrderDetailPage() {
                         position: absolute; 
                         left: 0; 
                         top: 0; 
-                        width: 100%; 
+                        width: 210mm !important; 
                         display: block !important; 
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
 
                     button, [data-no-print] { display: none !important; } 
-                    * { color: #000 !important; box-shadow: none !important; }
-                    table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    * { color: #000 !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }
             `}</style>
         </div>

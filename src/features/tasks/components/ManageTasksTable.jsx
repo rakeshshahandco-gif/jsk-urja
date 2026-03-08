@@ -134,90 +134,117 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
                     </tr>
                 </thead>
                 <tbody>
-                    {tasks.map((task, idx) => {
-                        const due = task.dueDate ? new Date(task.dueDate) : null;
-                        const overdue = due && new Date() > due && task.status !== 'COMPLETED' && task.status !== 'CANCELLED';
-                        const done = task.status === 'COMPLETED' || task.status === 'CANCELLED';
-                        const p = task.priority || 'MEDIUM';
-                        const st = task.status || 'OPEN';
+                    {(() => {
+                        let lastCategory = null;
+                        const now = new Date();
+                        now.setHours(0, 0, 0, 0);
+                        const endOfToday = new Date(now);
+                        endOfToday.setHours(23, 59, 59, 999);
 
-                        return (
-                            <tr key={task._id}
-                                style={{ background: '#fff' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
-                                onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                            >
-                                {/* Row # */}
-                                <td style={{ ...td, color: '#9ca3af', textAlign: 'center', fontSize: 10 }}>{idx + 1}</td>
+                        return tasks.map((task, idx) => {
+                            const due = task.dueDate ? new Date(task.dueDate) : null;
+                            const done = task.status === 'COMPLETED' || task.status === 'CANCELLED';
 
-                                {/* Task Name */}
-                                <td style={td}>
-                                    <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={task.title}>
-                                        {task.title}
-                                    </div>
-                                    {task.description && (
-                                        <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={task.description}>
-                                            {task.description}
-                                        </div>
-                                    )}
-                                </td>
+                            let category = 'UPCOMING';
+                            if (done) category = 'CLOSED';
+                            else if (!due) category = 'NO_DATE';
+                            else if (due < now) category = 'OVERDUE';
+                            else if (due <= endOfToday) category = 'TODAY';
 
-                                {/* Group */}
-                                <td style={td}>
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: '100%', color: task.groupId?.name ? '#e2e8f0' : '#475569', fontStyle: task.groupId?.name ? 'normal' : 'italic' }} title={task.groupId?.name}>
-                                        {task.groupId?.name || '—'}
-                                    </span>
-                                </td>
+                            let header = null;
+                            if (category !== lastCategory) {
+                                lastCategory = category;
+                                const labels = {
+                                    OVERDUE: { text: '🚨 Overdue Tasks', color: '#dc2626', bg: '#fef2f2' },
+                                    TODAY: { text: '📅 Today\'s Tasks', color: '#16a34a', bg: '#f0fdf4' },
+                                    UPCOMING: { text: '⏭ Upcoming Tasks', color: '#2563eb', bg: '#eff6ff' },
+                                    CLOSED: { text: '✅ Closed / Completed Tasks', color: '#6b7280', bg: '#f9fafb' },
+                                    NO_DATE: { text: '📋 Tasks with No Due Date', color: '#94a3b8', bg: '#f8f9fa' }
+                                };
+                                const head = labels[category];
+                                if (head) {
+                                    header = (
+                                        <tr key={`header-${category}`}>
+                                            <td colSpan="8" style={{ padding: '8px 12px', background: head.bg, borderBottom: '1px solid #e2e8f0' }}>
+                                                <div style={{ fontSize: 11, fontWeight: 800, color: head.color, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    {head.text}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+                            }
 
-                                {/* Due */}
-                                <td style={td}>
-                                    {due ? (
-                                        <div style={{ lineHeight: 1.3 }}>
-                                            <div style={{ fontWeight: 600, color: overdue ? '#dc2626' : '#1e293b', whiteSpace: 'nowrap' }}>{format(due, 'dd/MM/yy')}</div>
-                                            <div style={{ fontSize: 10, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 2 }}><Clock3 size={9} />{format(due, 'HH:mm')}</div>
-                                        </div>
-                                    ) : <span style={{ color: '#9ca3af' }}>—</span>}
-                                </td>
+                            const overdue = category === 'OVERDUE';
+                            const p = task.priority || 'MEDIUM';
+                            const st = task.status || 'OPEN';
 
-                                {/* Assignee */}
-                                <td style={td}><Assignees list={task.assigneeIds} /></td>
-
-                                {/* Priority badge */}
-                                <td style={td}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: priorityBg[p], color: priorityTxt[p] }}>
-                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: priorityDot[p], flexShrink: 0 }} />
-                                        {p}
-                                    </span>
-                                </td>
-
-                                {/* Status badge */}
-                                <td style={td}>
-                                    <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: statusBg[st], color: statusTxt[st] }}>
-                                        {st.replace('_', ' ')}
-                                    </span>
-                                </td>
-
-                                {/* Actions */}
-                                <td style={{ ...td, textAlign: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                                        {!done ? (
-                                            <>
-                                                <IconBtn onClick={() => onCloseTask(task._id)} title="Close task" color="#16a34a" bg="#f0fdf4">
-                                                    <Check size={12} />
-                                                </IconBtn>
-                                                <IconBtn onClick={() => onExtend(task)} title="Extend due date" color="#2563eb" bg="#eff6ff">
-                                                    <Clock3 size={12} />
-                                                </IconBtn>
-                                            </>
-                                        ) : (
-                                            <CheckCircle2 size={15} style={{ color: '#22c55e' }} />
-                                        )}
-                                        <Menu task={task} onEdit={onEdit} onDelete={onDelete} onViewDetails={onViewDetails} />
-                                    </div>
-                                </td>
-                            </tr>
-                        );
-                    })}
+                            return (
+                                <React.Fragment key={task._id}>
+                                    {header}
+                                    <tr
+                                        style={{ background: '#fff' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
+                                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                                    >
+                                        <td style={{ ...td, color: '#9ca3af', textAlign: 'center', fontSize: 10 }}>{idx + 1}</td>
+                                        <td style={td}>
+                                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={task.title}>
+                                                {task.title}
+                                            </div>
+                                            {task.description && (
+                                                <div style={{ fontSize: 10, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={task.description}>
+                                                    {task.description}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td style={td}>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: '100%', color: task.groupId?.name ? '#000000' : '#94a3b8', fontStyle: task.groupId?.name ? 'normal' : 'italic', fontWeight: task.groupId?.name ? 500 : 400 }} title={task.groupId?.name}>
+                                                {task.groupId?.name || '—'}
+                                            </span>
+                                        </td>
+                                        <td style={td}>
+                                            {due ? (
+                                                <div style={{ lineHeight: 1.3 }}>
+                                                    <div style={{ fontWeight: 600, color: overdue ? '#dc2626' : '#1e293b', whiteSpace: 'nowrap' }}>{format(due, 'dd/MM/yy')}</div>
+                                                    <div style={{ fontSize: 10, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 2 }}><Clock3 size={9} />{format(due, 'HH:mm')}</div>
+                                                </div>
+                                            ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                                        </td>
+                                        <td style={td}><Assignees list={task.assigneeIds} /></td>
+                                        <td style={td}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: priorityBg[p], color: priorityTxt[p] }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: priorityDot[p], flexShrink: 0 }} />
+                                                {p}
+                                            </span>
+                                        </td>
+                                        <td style={td}>
+                                            <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: statusBg[st], color: statusTxt[st] }}>
+                                                {st.replace('_', ' ')}
+                                            </span>
+                                        </td>
+                                        <td style={{ ...td, textAlign: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                                                {!done ? (
+                                                    <>
+                                                        <IconBtn onClick={() => onCloseTask(task._id)} title="Close task" color="#16a34a" bg="#f0fdf4">
+                                                            <Check size={12} />
+                                                        </IconBtn>
+                                                        <IconBtn onClick={() => onExtend(task)} title="Extend due date" color="#2563eb" bg="#eff6ff">
+                                                            <Clock3 size={12} />
+                                                        </IconBtn>
+                                                    </>
+                                                ) : (
+                                                    <CheckCircle2 size={15} style={{ color: '#22c55e' }} />
+                                                )}
+                                                <Menu task={task} onEdit={onEdit} onDelete={onDelete} onViewDetails={onViewDetails} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </React.Fragment>
+                            );
+                        });
+                    })()}
                 </tbody>
             </table>
         </div>

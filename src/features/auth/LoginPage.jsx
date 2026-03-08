@@ -35,7 +35,7 @@ export const LoginPage = () => {
         setLoading(false);
 
         if (result.success) {
-            navigate('/customers/list');
+            navigate('/tasks/list');
         } else {
             setError(result.error || 'Login failed. Please try again.');
         }

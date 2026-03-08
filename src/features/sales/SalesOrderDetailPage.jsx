@@ -68,10 +68,10 @@ export default function SalesOrderDetailPage() {
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT ONLY LAYOUT */}
-            <div className="print-only" style={{ display: 'none', background: '#fff' }}>
-                <div style={{ padding: '0px' }}>
+            <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, margin: '0 auto' }}>
+                <div style={{ padding: '8mm', minHeight: '270mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box', border: '1px solid #000' }}>
                     {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #e5e7eb', paddingBottom: '16px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '16px' }}>
                         <div style={{ width: '40%' }}>
                             {company.logoUrl ? (
                                 <img src={company.logoUrl} alt="Company Logo" style={{ maxHeight: '70px', maxWidth: '200px', objectFit: 'contain' }} />
@@ -90,8 +90,14 @@ export default function SalesOrderDetailPage() {
                         </div>
                     </div>
 
-                    <div style={{ textAlign: 'right', marginBottom: '10px', fontSize: '11px', color: '#6b7280' }}>
-                        SO-{so.soNumber}
+                    <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+                        <h2 style={{ fontSize: '22px', border: '1px solid #000', display: 'inline-block', padding: '6px 40px', background: '#f5f5f5', color: '#000', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>
+                            Sales Order
+                        </h2>
+                    </div>
+
+                    <div style={{ textAlign: 'right', marginBottom: '10px', fontSize: '13px', color: '#000', fontWeight: 800 }}>
+                        SALES ORDER NO: SO-{so.soNumber}
                     </div>
 
                     {/* Info Block */}
@@ -134,105 +140,109 @@ export default function SalesOrderDetailPage() {
                     </div>
 
                     {/* Items Table */}
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '16px', border: '1px solid #e5e7eb' }}>
-                        <thead>
-                            <tr style={{ background: '#f9fafb' }}>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '30px' }}>Sr</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', width: '80px' }}>Item Code</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left' }}>Item Name</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', width: '100px' }}>Additional Notes</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '60px' }}>HSN</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '60px' }}>Qty</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', width: '70px' }}>Rate</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', width: '90px' }}>Amount</th>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: 'auto', border: '1px solid #000' }}>
+                        <thead style={{ background: '#f5f5f5', color: '#000' }}>
+                            <tr>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '30px', fontWeight: 800 }}>Sr</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '85px', fontWeight: 800 }}>Item Code</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', fontWeight: 800 }}>Item Name</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '100px', fontWeight: 800 }}>Additional Notes</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>HSN</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>Qty</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '80px', fontWeight: 800 }}>Rate</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '100px', fontWeight: 800 }}>Amount</th>
                             </tr>
                         </thead>
                         <tbody>
                             {(so.items || []).map((item, i) => (
                                 <tr key={i}>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textTransform: 'uppercase' }}>{item.itemCode || '—'}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', fontWeight: 'bold', textTransform: 'uppercase' }}>{item.itemName}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', fontSize: '9px' }}>{item.additionalNotes || '—'}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontSize: '9px' }}>{item.hsnCode || '—'}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textAlign: 'center' }}>{item.qty} {item.uom}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.rate || 0).toFixed(2)}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.amount || (item.qty * item.rate) || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textTransform: 'uppercase' }}>{item.itemCode || '—'}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', fontWeight: 'bold', textTransform: 'uppercase' }}>{item.itemName}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', fontSize: '9px' }}>{item.additionalNotes || '—'}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontSize: '9px' }}>{item.hsnCode || '—'}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontWeight: 'bold' }}>{item.qty} {item.uom}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.rate || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold' }}>₹ {Number(item.amount || (item.qty * item.rate) || 0).toFixed(2)}</td>
                                 </tr>
                             ))}
+                            {/* Filling middle space to ensure full-page height without internal grid lines */}
+                            <tr>
+                                <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000', height: `${Math.max(0, 10 - (so.items?.length || 0)) * 20}px` }} colSpan="8"></td>
+                            </tr>
                         </tbody>
                         <tbody>
-                            <tr>
-                                <td colSpan="5" style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold' }}>
+                            <tr style={{ background: '#f5f5f5' }}>
+                                <td colSpan="5" style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>Total Quantity:</div>
                                 </td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
+                                <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>
                                     {so.items?.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)}
                                 </td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', fontWeight: 'bold' }}>Total</td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.totalAmount || 0).toFixed(2)}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'left', fontWeight: 'bold' }}>Total</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.totalAmount || 0).toFixed(2)}</td>
                             </tr>
                             {so.freightAmount > 0 && (
                                 <tr>
                                     <td colSpan="6" style={{ border: 'none' }}></td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Freight</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>₹ {Number(so.freightAmount || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Freight</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.freightAmount || 0).toFixed(2)}</td>
                                 </tr>
                             )}
                             {so.gstType === 'CGST / SGST' ? (
                                 <>
                                     {so.totalCgst > 0 && (
                                         <tr>
-                                            <td colSpan="3" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>CGST</td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalCgst || 0).toFixed(2)}</td>
+                                            <td colSpan="6" style={{ border: 'none' }}></td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>CGST</td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalCgst || 0).toFixed(2)}</td>
                                         </tr>
                                     )}
                                     {so.totalSgst > 0 && (
                                         <tr>
-                                            <td colSpan="3" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>SGST</td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalSgst || 0).toFixed(2)}</td>
+                                            <td colSpan="6" style={{ border: 'none' }}></td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>SGST</td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalSgst || 0).toFixed(2)}</td>
                                         </tr>
                                     )}
                                     {(so.totalCgst > 0 || so.totalSgst > 0) && (
-                                        <tr>
-                                            <td colSpan="3" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Total Tax</td>
-                                            <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
+                                        <tr style={{ background: '#f5f5f5' }}>
+                                            <td colSpan="6" style={{ border: 'none' }}></td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '10px' }}>Total Tax</td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
                                         </tr>
                                     )}
                                 </>
                             ) : (
                                 so.totalGst > 0 && (
                                     <tr>
-                                        <td colSpan="3" style={{ border: 'none' }}></td>
-                                        <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Output Tax {so.gstType}</td>
-                                        <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
+                                        <td colSpan="6" style={{ border: 'none' }}></td>
+                                        <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Output Tax {so.gstType}</td>
+                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
                                     </tr>
                                 )
                             )}
                             {so.roundOff !== 0 && (
                                 <tr>
-                                    <td colSpan="3" style={{ border: 'none' }}></td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Round Off</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right' }}>{Number(so.roundOff || 0).toFixed(2)}</td>
+                                    <td colSpan="6" style={{ border: 'none' }}></td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Round Off</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>{Number(so.roundOff || 0).toFixed(2)}</td>
                                 </tr>
                             )}
-                            <tr>
+                            <tr style={{ background: '#f5f5f5' }}>
                                 <td colSpan="6" style={{ border: 'none' }}></td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold' }}>Grand Total:</td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.grandTotal || 0).toFixed(2)}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '14px' }}>Grand Total:</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold', fontSize: '14px' }}>₹ {Number(so.grandTotal || 0).toFixed(2)}</td>
                             </tr>
                             <tr>
                                 <td colSpan="6" style={{ border: 'none' }}></td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold' }}>Rounded Total:</td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', fontWeight: 'bold', fontSize: '12px' }}>₹ {Number(so.roundedTotal || so.grandTotal || 0).toFixed(2)}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>Rounded Total:</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px' }}>₹ {Number(so.roundedTotal || so.grandTotal || 0).toFixed(2)}</td>
                             </tr>
                             <tr>
                                 <td colSpan="6" style={{ border: 'none' }}></td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontWeight: 'bold' }}>In Words:</td>
-                                <td style={{ border: '1px solid #e5e7eb', padding: '6px', fontSize: '9px', fontStyle: 'italic', textTransform: 'capitalize' }}>{so.amountInWords}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>In Words:</td>
+                                <td style={{ border: '1px solid #000', padding: '6px', fontSize: '9px', fontStyle: 'italic', textTransform: 'capitalize' }}>{so.amountInWords}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -251,9 +261,9 @@ export default function SalesOrderDetailPage() {
                         </div>
 
                         {/* Signature Block */}
-                        <div style={{ marginTop: '20px', textAlign: 'right', fontSize: '10px' }}>
-                            <div style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>For {company.companyName}</div>
-                            <div style={{ marginTop: '40px', fontWeight: 'bold' }}>Authorized Signatory</div>
+                        <div style={{ marginTop: '20px', textAlign: 'right', fontSize: '13px' }}>
+                            <div style={{ fontWeight: 900, textTransform: 'uppercase', marginBottom: '40px' }}>For {company.companyName || 'JSK INNOVATIVE TECH P LTD'}</div>
+                            <div style={{ fontWeight: 900 }}>Authorized Signatory</div>
                         </div>
                     </div>
                 </div>
@@ -387,7 +397,7 @@ export default function SalesOrderDetailPage() {
             <style>{`
                 @media print { 
                     @page { margin: 0; size: A4 portrait; }
-                    body { background: #fff !important; margin: 0; padding: 0; }
+                    body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 210mm; }
                     
                     /* Hide everything in the body by default */
                     body * { visibility: hidden; }
@@ -398,15 +408,15 @@ export default function SalesOrderDetailPage() {
                         position: absolute; 
                         left: 0; 
                         top: 0; 
-                        width: 100%; 
+                        width: 210mm !important; 
                         display: block !important; 
-                        padding: 10mm;
-                        box-sizing: border-box;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
 
                     button, [data-no-print], .no-print, #app-sidebar, #app-header { display: none !important; } 
-                    * { color: #000 !important; box-shadow: none !important; }
-                    table th { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    * { color: #000 !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    table th { background: #f5f5f5 !important; }
                 }
             `}</style>
         </div>

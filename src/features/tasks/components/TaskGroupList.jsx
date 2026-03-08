@@ -87,45 +87,70 @@ export const TaskGroupList = () => {
                 </Button>
             </div>
 
-            <div className={styles.grid}>
-                {groups.map((group) => (
-                    <div key={group._id} className={styles.card}>
-                        {group.name !== 'General' && (
-                            <div className={styles.actionRow}>
-                                <button className={styles.iconBtn} onClick={() => handleEdit(group)} title="Edit Group">
-                                    <Edit2 size={13} />
-                                </button>
-                                <button className={clsx(styles.iconBtn, styles.danger)} onClick={() => handleDelete(group._id)} title="Delete Group">
-                                    <Trash2 size={13} />
-                                </button>
-                            </div>
-                        )}
-                        <h3 className={styles.cardTitle}>{group.name}</h3>
-                        <p className={styles.cardNotes}>{group.notes || 'No notes provided.'}</p>
-
-                        <div className={styles.memberSect}>
-                            <p className={styles.memberTitle}>
-                                <Users size={12} /> MEMBERS ({group.userIds?.length || 0})
-                            </p>
-                            <div className={styles.memberPills}>
-                                {group.userIds?.slice(0, 5).map(u => (
-                                    <span key={u._id} className={styles.pill}>
-                                        {u.name || (u.firstName ? u.firstName + ' ' + u.lastName : u.email)}
+            <div className={styles.tableWrapper}>
+                <table className={styles.table}>
+                    <thead>
+                        <tr>
+                            <th style={{ width: 50, textAlign: 'center' }}>#</th>
+                            <th style={{ width: '20%' }}>Group Name</th>
+                            <th>Description</th>
+                            <th style={{ width: '25%' }}>Members</th>
+                            <th style={{ width: 100 }}>Visibility</th>
+                            <th style={{ width: 100 }}>Created</th>
+                            <th style={{ width: 80, textAlign: 'right' }}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {groups.map((group, idx) => (
+                            <tr key={group._id}>
+                                <td style={{ textAlign: 'center', color: '#94a3b8' }}>{idx + 1}</td>
+                                <td>
+                                    <div className={styles.groupName}>{group.name}</div>
+                                </td>
+                                <td>
+                                    <div className={styles.notes} title={group.notes}>{group.notes || '—'}</div>
+                                </td>
+                                <td>
+                                    <div className={styles.memberPills}>
+                                        {group.userIds?.slice(0, 3).map(u => (
+                                            <span key={u._id} className={styles.pill}>
+                                                {u.name || (u.firstName ? u.firstName + ' ' + u.lastName : u.email)}
+                                            </span>
+                                        ))}
+                                        {group.userIds?.length > 3 && <span className={styles.pill}>+{group.userIds.length - 3}</span>}
+                                        {(!group.userIds || group.userIds.length === 0) && (
+                                            <span className={styles.noMembers}>No members</span>
+                                        )}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span className={clsx(styles.badge, styles[`visibility_${group.visibility}`])}>
+                                        {group.visibility}
                                     </span>
-                                ))}
-                                {group.userIds?.length > 5 && <span className={styles.pill}>+{group.userIds.length - 5} more</span>}
-                                {(!group.userIds || group.userIds.length === 0) && (
-                                    <span className={styles.noMembers}>No members assigned</span>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className={styles.footer}>
-                            <span>Visibility: {group.visibility}</span>
-                            <span>Created: {new Date(group.createdAt).toLocaleDateString()}</span>
-                        </div>
-                    </div>
-                ))}
+                                </td>
+                                <td style={{ whiteSpace: 'nowrap', color: '#64748b' }}>
+                                    {new Date(group.createdAt).toLocaleDateString('en-GB')}
+                                </td>
+                                <td style={{ textAlign: 'right' }}>
+                                    <div className={styles.actions}>
+                                        {group.name !== 'General' ? (
+                                            <>
+                                                <button className={styles.iconBtn} onClick={() => handleEdit(group)} title="Edit Group">
+                                                    <Edit2 size={13} />
+                                                </button>
+                                                <button className={clsx(styles.iconBtn, styles.danger)} onClick={() => handleDelete(group._id)} title="Delete Group">
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <span style={{ fontSize: 10, color: '#94a3b8', paddingRight: 8 }}>System</span>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
             {groups.length === 0 && (
@@ -181,13 +206,13 @@ const TaskGroupFormModal = ({ title, onSuccess, onCancel, initialData }) => {
         <form onSubmit={handleSubmit} className={styles.modalForm}>
             <div className={styles.field}>
                 <label className={styles.label}>Group Name *</label>
-                <input 
-                    className={styles.input} 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    placeholder="e.g. Finance Team" 
-                    autoFocus 
-                    required 
+                <input
+                    className={styles.input}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Finance Team"
+                    autoFocus
+                    required
                 />
             </div>
             <div className={styles.field}>

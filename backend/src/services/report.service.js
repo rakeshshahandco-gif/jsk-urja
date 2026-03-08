@@ -1271,7 +1271,7 @@ const queryManageTasks = async (filters, options) => {
             .populate('assigneeIds', 'name email')
             .populate('createdBy', 'name email')
             .populate('groupId', 'name')
-            .sort({ dueDate: 1, createdAt: -1 })
+            .sort({ status: -1, dueDate: 1, createdAt: -1 })
             .skip(skip)
             .limit(limit),
         Task.countDocuments(filter)
