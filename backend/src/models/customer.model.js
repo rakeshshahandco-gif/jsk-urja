@@ -138,6 +138,15 @@ const customerSchema = mongoose.Schema(
             unique: true,
             trim: true,
         },
+        creditPeriod: {
+            type: Number,
+            default: 0,
+        },
+        paymentType: {
+            type: String,
+            enum: ['Cash', 'Credit'],
+            default: 'Credit',
+        },
     },
     {
         timestamps: true,

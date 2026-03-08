@@ -140,8 +140,8 @@ export default function SalesOrderDetailPage() {
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '30px' }}>Sr</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', width: '80px' }}>Item Code</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left' }}>Item Name</th>
-                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', width: '80px' }}>Model No</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'left', width: '100px' }}>Additional Notes</th>
+                                <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '60px' }}>HSN</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', width: '60px' }}>Qty</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', width: '70px' }}>Rate</th>
                                 <th style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', width: '90px' }}>Amount</th>
@@ -153,8 +153,8 @@ export default function SalesOrderDetailPage() {
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textTransform: 'uppercase' }}>{item.itemCode || '—'}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', fontWeight: 'bold', textTransform: 'uppercase' }}>{item.itemName}</td>
-                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textTransform: 'uppercase' }}>{item.modelNo || '—'}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', fontSize: '9px' }}>{item.additionalNotes || '—'}</td>
+                                    <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontSize: '9px' }}>{item.hsnCode || '—'}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', verticalAlign: 'top', textAlign: 'center' }}>{item.qty} {item.uom}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.rate || 0).toFixed(2)}</td>
                                     <td style={{ border: '1px solid #e5e7eb', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.amount || (item.qty * item.rate) || 0).toFixed(2)}</td>
@@ -287,7 +287,7 @@ export default function SalesOrderDetailPage() {
                                     📋 View Production Sheet
                                 </button>
                             )}
-                            {notCancelled && !so.invoiceId && (
+                            {so.status === 'Confirmed' && !so.invoiceId && (
                                 <button onClick={() => navigate(`${PATHS.SALES.NEW_INVOICE}?soId=${id}`)} style={{ padding: '9px 16px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
                                     🧾 Create Invoice
                                 </button>
@@ -336,14 +336,13 @@ export default function SalesOrderDetailPage() {
                     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
                         <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6' }}><h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Order Items</h2></div>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead><tr>{['Sr', 'Item Code', 'Item Name', 'Model No', 'Additional Notes', 'HSN', 'UOM', 'Qty', 'Rate', 'GST%', 'Amount'].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                            <thead><tr>{['Sr', 'Item Code', 'Item Name', 'Additional Notes', 'HSN', 'UOM', 'Qty', 'Rate', 'GST%', 'Amount'].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
                             <tbody>
                                 {(so.items || []).map((item, i) => (
                                     <tr key={i} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                         <td style={{ ...td, color: '#9ca3af' }}>{i + 1}</td>
                                         <td style={td}>{item.itemCode || '—'}</td>
                                         <td style={td}><div style={{ fontWeight: 500, color: '#1e293b' }}>{item.itemName}</div></td>
-                                        <td style={td}>{item.modelNo || '—'}</td>
                                         <td style={{ ...td, fontSize: 11, color: '#6b7280' }}>{item.additionalNotes || '—'}</td>
                                         <td style={{ ...td, color: '#6b7280' }}>{item.hsnCode || '—'}</td>
                                         <td style={td}>{item.uom}</td>

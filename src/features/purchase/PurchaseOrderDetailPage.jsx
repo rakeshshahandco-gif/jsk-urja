@@ -85,14 +85,21 @@ export default function PurchaseOrderDetailPage() {
 
     const setFormItem = (poItemId, k, v) => setGRNForm(f => ({ ...f, [poItemId]: { ...f[poItemId], [k]: v } }));
 
-    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh' }}>Loading...</div>;
-    if (!po) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>PO not found</div>;
+    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#fff', minHeight: '100vh' }}>Loading...</div>;
+    if (!po) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#fff', minHeight: '100vh' }}>PO not found</div>;
 
     const sc = STATUS_COLORS[po.status] || STATUS_COLORS['Draft'];
     const canReceive = !['Completed', 'Cancelled'].includes(po.status);
 
+    const fnum = (n) => parseFloat((n || 0).toFixed(2));
+    const itemTaxable = (po.items || []).reduce((s, i) => fnum(s + (i.orderedQty * i.rate)), 0);
+    const freight = po.freightAmount || 0;
+    const totalTaxable = fnum(itemTaxable + freight);
+    const totalTax = po.taxTotal || 0;
+    const isIGST = po.gstType === 'IGST';
+
     return (
-        <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+        <div style={{ fontFamily: "'Inter', sans-serif", background: '#fff', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT-ONLY COMPLETE LAYOUT (A4 Container) */}
             <div className="print-only" style={{ display: 'none', width: '100%', margin: 0, padding: 0 }}>
                 <div style={{ border: '2px solid #333', padding: '30px', minHeight: '1000px', display: 'flex', flexDirection: 'column', background: '#fff' }}>
@@ -214,7 +221,7 @@ export default function PurchaseOrderDetailPage() {
                         </tbody>
                         <tfoot style={{ borderTop: '2px solid #333' }}>
                             <tr>
-                                <td colSpan={4} rowSpan={4} style={{ borderRight: '1px solid #333', padding: '15px', verticalAlign: 'top' }}>
+                                <td colSpan={4} rowSpan={6} style={{ borderRight: '1px solid #333', padding: '15px', verticalAlign: 'top' }}>
                                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>AMOUNT IN WORDS:</div>
                                     <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{po.amountInWords || '—'}</div>
                                     {po.remarks && (
@@ -224,22 +231,37 @@ export default function PurchaseOrderDetailPage() {
                                         </div>
                                     )}
                                 </td>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SUBTOTAL</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(po.grandTotal - po.taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TAXABLE AMOUNT</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{itemTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                             <tr>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TOTAL TAX</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(po.taxTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>FREIGHT / SHIPPING</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
-                            {po.discountTotal > 0 && (
+                            <tr style={{ background: '#f9fafb' }}>
+                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>TOTAL TAXABLE</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>{totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            {isIGST ? (
                                 <tr>
-                                    <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>DISCOUNT</td>
-                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>-{(po.discountTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>IGST</td>
+                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
+                            ) : (
+                                <>
+                                    <tr>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>CGST</td>
+                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SGST</td>
+                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                </>
                             )}
-                            <tr style={{ background: '#f0f0f0' }}>
-                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px' }}>GRAND TOTAL</td>
-                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <tr style={{ background: '#333', color: '#fff' }}>
+                                <td colSpan={2} style={{ borderRight: '1px solid #333', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#fff' }}>GRAND TOTAL</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#fff' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -338,10 +360,10 @@ export default function PurchaseOrderDetailPage() {
                 {/* Info Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
                     {[
+                        ['Total Taxable', `₹${totalTaxable.toLocaleString('en-IN')}`, '#2563eb'],
+                        ['Total GST', `₹${(po.taxTotal || 0).toLocaleString('en-IN')}`, '#d97706'],
                         ['Grand Total', `₹${(po.grandTotal || 0).toLocaleString('en-IN')}`, '#16a34a'],
-                        ['Tax', `₹${(po.taxTotal || 0).toLocaleString('en-IN')}`, '#2563eb'],
-                        ['Discount', `₹${(po.discountTotal || 0).toLocaleString('en-IN')}`, '#d97706'],
-                        ['Payment Terms', po.paymentTerms || '—', '#6b7280'],
+                        ['Freight', `₹${(po.freightAmount || 0).toLocaleString('en-IN')}`, '#6b7280'],
                     ].map(([k, v, c]) => (
                         <div key={k} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                             <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{k}</div>

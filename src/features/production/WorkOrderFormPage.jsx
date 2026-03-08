@@ -74,19 +74,28 @@ export default function WorkOrderFormPage() {
                 <form onSubmit={handleSubmit}>
                     <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
 
-                        {/* BOM Selection */}
-                        <Field label="Bill of Materials (BOM)" required>
-                            <SearchableSelect
-                                options={boms.map(b => ({
-                                    value: b._id,
-                                    label: `${b.finishedProductId?.name || b.finishedProductName || ''} ${b.version ? `(${b.version})` : ''}`,
-                                    meta: b.bomNumber
-                                }))}
-                                value={form.bomId}
-                                onChange={v => set('bomId', v)}
-                                placeholder="— Search BOM Number or Product —"
-                            />
-                        </Field>
+                        {/* WO Number Selection/Entry */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <Field label="Work Order Number (Manual/Auto)">
+                                <input
+                                    type="text" placeholder="Leave blank for auto-generate"
+                                    value={form.woNumber || ''} onChange={e => set('woNumber', e.target.value)}
+                                    style={inputSt}
+                                />
+                            </Field>
+                            <Field label="Bill of Materials (BOM)" required>
+                                <SearchableSelect
+                                    options={boms.map(b => ({
+                                        value: b._id,
+                                        label: `${b.bomNumber} - ${b.finishedProductId?.name || b.finishedProductName || ''} ${b.version ? `(${b.version})` : ''}`,
+                                        meta: b.bomNumber
+                                    }))}
+                                    value={form.bomId}
+                                    onChange={v => set('bomId', v)}
+                                    placeholder="— Search BOM Number or Product —"
+                                />
+                            </Field>
+                        </div>
 
                         {/* Qty + Priority */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

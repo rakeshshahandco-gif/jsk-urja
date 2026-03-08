@@ -12,8 +12,9 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
-const inp = { padding: '9px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '7px', color: '#f1f5f9', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box' };
-const lbl = { fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: 600 };
+const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
+const lbl = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600 };
+
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
 const FLOWS = [
@@ -48,9 +49,10 @@ export default function PurchaseInvoiceFormPage() {
         supplierGstin: '', supplierAddress: '', supplierState: '', supplierStateCode: '',
         buyerName: 'JSK URJA', buyerGstin: '', buyerAddress: '', buyerState: 'Maharashtra', buyerStateCode: '27',
         gstType: 'CGST / SGST', placeOfSupply: 'Maharashtra', paymentTerms: '30 Days', remarks: '',
-        poDate: '', transporterName: '', vehicleNo: '', lrNumber: '',
+        poNumber: '', poDate: '', transporterName: '', vehicleNo: '', lrNumber: '',
         freightAmount: 0, freightGstRate: 0,
     });
+
     const [rows, setRows] = useState([{ ...EMPTY_ROW }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
 
@@ -88,8 +90,10 @@ export default function PurchaseInvoiceFormPage() {
                         placeOfSupply: inv.placeOfSupply || 'Gujarat',
                         paymentTerms: inv.paymentTerms || '30 Days',
                         remarks: inv.remarks || '',
+                        poNumber: inv.poNumber || '',
                         poDate: inv.poDate ? inv.poDate.split('T')[0] : '',
                         transporterName: inv.transporterName || '',
+
                         vehicleNo: inv.vehicleNo || '',
                         lrNumber: inv.lrNumber || '',
                         freightAmount: inv.freightAmount || 0,
@@ -203,8 +207,10 @@ export default function PurchaseInvoiceFormPage() {
                     warehouse: poData.warehouse || h.warehouse,
                     supplierGstin: poData.supplierGstNumber || h.supplierGstin,
                     supplierAddress: poData.supplierAddress || h.supplierAddress,
+                    poNumber: poData.poNumber || '',
                     poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
                 }));
+
 
                 const newRows = (poData.items || [])
                     .map(pi => {
@@ -248,8 +254,10 @@ export default function PurchaseInvoiceFormPage() {
                     warehouse: poData.warehouse || h.warehouse,
                     supplierGstin: poData.supplierGstNumber || h.supplierGstin,
                     supplierAddress: poData.supplierAddress || h.supplierAddress,
+                    poNumber: poData.poNumber || '',
                     poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
                 }));
+
 
                 const grns = await getGRNsByPO(poId);
                 setGrnList(Array.isArray(grns) ? grns.filter(g => g.invoiceStatus !== 'Fully Invoiced') : []);
@@ -299,8 +307,10 @@ export default function PurchaseInvoiceFormPage() {
                 supplierGstin: grnData.supplierGstNumber || h.supplierGstin,
                 supplierAddress: grnData.supplierAddress || h.supplierAddress,
                 warehouse: grnData.warehouse || h.warehouse,
+                poNumber: grnData.poNumber || h.poNumber,
                 poDate: grnData.poDate ? grnData.poDate.split('T')[0] : h.poDate,
             }));
+
         } catch { toast.error('Failed to load GRN items'); }
         finally { setLoadingRef(false); }
     }, []);
@@ -371,7 +381,9 @@ export default function PurchaseInvoiceFormPage() {
                 invoiceDate: header.invoiceDate,
                 supplierInvoiceNo: header.supplierInvoiceNo,
                 poId: header.selectedPoId || null,
+                poNumber: header.poNumber || '',
                 grnId: header.selectedGrnId || null,
+
                 supplierGstin: header.supplierGstin,
                 supplierAddress: header.supplierAddress,
                 supplierState: header.supplierState,
@@ -384,7 +396,8 @@ export default function PurchaseInvoiceFormPage() {
                 gstType: header.gstType,
                 placeOfSupply: header.placeOfSupply,
                 paymentTerms: header.paymentTerms,
-                poDate: header.poDate || null,
+                poDate: flowType === 'Direct Invoice' ? null : (header.poDate || null),
+                poNumber: flowType === 'Direct Invoice' ? '' : (header.poNumber || ''),
                 remarks: header.remarks,
                 transporterName: header.transporterName,
                 vehicleNo: header.vehicleNo,
@@ -415,7 +428,8 @@ export default function PurchaseInvoiceFormPage() {
     };
 
     return (
-        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                 <button onClick={() => navigate(PATHS.PURCHASE.INVOICES)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px' }}>← Purchase Invoices</button>
                 <h1 style={{ margin: '0 0 20px', fontSize: '22px', fontWeight: 700 }}>
@@ -424,22 +438,22 @@ export default function PurchaseInvoiceFormPage() {
                 {loading ? <div style={{ color: '#94a3b8' }}>Loading invoice data...</div> : (
                     <>
                         {isEdit ? (
-                            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '12px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                                 <span style={{ fontSize: '20px' }}>{FLOWS.find(f => f.key === flowType)?.icon || '🧾'}</span>
                                 <div>
-                                    <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Current Flow</div>
-                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#60a5fa' }}>{FLOWS.find(f => f.key === flowType)?.label || flowType}</div>
+                                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Current Flow</div>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#2563eb' }}>{FLOWS.find(f => f.key === flowType)?.label || flowType}</div>
                                 </div>
                             </div>
                         ) : (
-                            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-                                <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Select Purchase Flow</h3>
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Select Purchase Flow</h3>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
                                     {FLOWS.map(f => (
                                         <div key={f.key} onClick={() => { setFlowType(f.key); setRows([{ ...EMPTY_ROW }]); setH('selectedPoId', ''); setH('selectedGrnId', ''); }}
-                                            style={{ padding: '12px 14px', borderRadius: '10px', border: `2px solid ${flowType === f.key ? '#3b82f6' : '#334155'}`, background: flowType === f.key ? '#1e3a5f' : '#0f172a', cursor: 'pointer', transition: 'all 0.15s' }}>
+                                            style={{ padding: '12px 14px', borderRadius: '10px', border: `2px solid ${flowType === f.key ? '#3b82f6' : '#e2e8f0'}`, background: flowType === f.key ? '#eff6ff' : '#ffffff', cursor: 'pointer', transition: 'all 0.15s' }}>
                                             <div style={{ fontSize: '20px', marginBottom: '6px' }}>{f.icon}</div>
-                                            <div style={{ fontSize: '12px', fontWeight: 700, color: flowType === f.key ? '#60a5fa' : '#f1f5f9', marginBottom: '4px' }}>{f.label}</div>
+                                            <div style={{ fontSize: '12px', fontWeight: 700, color: flowType === f.key ? '#2563eb' : '#1e293b', marginBottom: '4px' }}>{f.label}</div>
                                             <div style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>{f.desc}</div>
                                         </div>
                                     ))}
@@ -447,11 +461,12 @@ export default function PurchaseInvoiceFormPage() {
                             </div>
                         )}
 
+
                         <form onSubmit={handleSubmit}>
                             {/* Supplier + Buyer */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                                <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px' }}>
-                                    <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Supplier</h3>
+                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                    <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Supplier</h3>
                                     <div style={{ display: 'grid', gap: '10px' }}>
                                         <div><span style={lbl}>Supplier *</span>
                                             <select value={header.supplierId} onChange={e => onSupplierChange(e.target.value)} style={{ ...inp, cursor: isEdit && flowType !== 'Direct Invoice' ? 'not-allowed' : 'pointer' }} required disabled={isEdit && flowType !== 'Direct Invoice'}>
@@ -471,8 +486,8 @@ export default function PurchaseInvoiceFormPage() {
                                         <div><span style={lbl}>Supplier Address</span><textarea value={header.supplierAddress} onChange={e => setH('supplierAddress', e.target.value)} style={{ ...inp, height: '60px', resize: 'none' }} placeholder="Full address" /></div>
                                     </div>
                                 </div>
-                                <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px' }}>
-                                    <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Buyer (Our Company)</h3>
+                                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                    <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Buyer (Our Company)</h3>
                                     <div style={{ display: 'grid', gap: '10px' }}>
                                         <div><span style={lbl}>Company Name</span><input value={header.buyerName} onChange={e => setH('buyerName', e.target.value)} style={inp} /></div>
                                         <div><span style={lbl}>Our GSTIN</span><input value={header.buyerGstin} onChange={e => setH('buyerGstin', e.target.value)} style={inp} placeholder="Our GSTIN" /></div>
@@ -485,9 +500,10 @@ export default function PurchaseInvoiceFormPage() {
                                 </div>
                             </div>
 
+
                             {/* References + GST */}
-                            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-                                <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>GST & References</h3>
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>GST & References</h3>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                                     {needPO && (
                                         <div>
@@ -509,66 +525,55 @@ export default function PurchaseInvoiceFormPage() {
                                             {loadingRef && <span style={{ fontSize: '11px', color: '#64748b' }}>Loading...</span>}
                                         </div>
                                     )}
-                                    <div style={{ padding: '12px', background: '#1e293b', borderRadius: '10px', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>TAX TYPE</span>
-                                        <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: header.gstType === 'IGST' ? '#4f46e522' : '#05966922', color: header.gstType === 'IGST' ? '#818cf8' : '#34d399', border: `1px solid ${header.gstType === 'IGST' ? '#4f46e544' : '#05966944'}` }}>
+                                    <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>TAX TYPE</span>
+                                        <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, background: header.gstType === 'IGST' ? '#4f46e522' : '#05966922', color: header.gstType === 'IGST' ? '#4f46e5' : '#059669', border: `1px solid ${header.gstType === 'IGST' ? '#4f46e544' : '#05966944'}` }}>
                                             {header.gstType}
                                         </span>
-                                        <span style={{ fontSize: '10px', color: '#64748b' }}>(Auto-determined)</span>
+                                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Auto-determined)</span>
                                     </div>
                                     <div><span style={lbl}>Place of Supply</span><input value={header.placeOfSupply} onChange={e => setH('placeOfSupply', e.target.value)} style={inp} /></div>
                                     <div><span style={lbl}>Payment Terms</span><input value={header.paymentTerms} onChange={e => setH('paymentTerms', e.target.value)} style={inp} /></div>
-                                    <div style={{ gridColumn: 'span 3', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                                        <div><span style={lbl}>PO Date</span><input value={header.poDate} readOnly style={{ ...inp, background: '#1e293b' }} /></div>
-                                        <div style={{ gridColumn: 'span 2' }}><span style={lbl}>Remarks</span><input value={header.remarks} onChange={e => setH('remarks', e.target.value)} style={inp} /></div>
+                                    {flowType !== 'Direct Invoice' && (
+                                        <>
+                                            <div><span style={lbl}>PO Number</span><input value={header.poNumber} onChange={e => setH('poNumber', e.target.value)} style={{ ...inp, background: needPO ? '#f8f9fa' : '#ffffff' }} readOnly={needPO} placeholder="Manual PO #" /></div>
+                                            <div><span style={lbl}>PO Date</span><input type="date" value={header.poDate} onChange={e => setH('poDate', e.target.value)} style={{ ...inp, background: needPO ? '#f8f9fa' : '#ffffff' }} readOnly={needPO} /></div>
+                                        </>
+                                    )}
+                                    <div style={{ gridColumn: flowType === 'Direct Invoice' ? 'span 1' : 'span 2' }}>
+                                        <span style={lbl}>Remarks</span><input value={header.remarks} onChange={e => setH('remarks', e.target.value)} style={inp} placeholder="Any notes..." />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Transportation & Freight */}
-                            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-                                <h3 style={{ margin: '0 0 14px', fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>🚚 Transportation & Freight</h3>
+
+
+
+                            {/* Transportation Details */}
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px 20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                <h3 style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>🚛 Transportation Details</h3>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                                     <div><span style={lbl}>Transporter Name</span><input value={header.transporterName} onChange={e => setH('transporterName', e.target.value)} style={inp} placeholder="e.g. Blue Dart" /></div>
                                     <div><span style={lbl}>Vehicle No</span><input value={header.vehicleNo} onChange={e => setH('vehicleNo', e.target.value)} style={inp} placeholder="e.g. GJ01AB1234" /></div>
                                     <div><span style={lbl}>LR / Bilty No</span><input value={header.lrNumber} onChange={e => setH('lrNumber', e.target.value)} style={inp} placeholder="LR Number" /></div>
-                                    <div><span style={lbl}>Freight Amount (₹)</span><input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={inp} placeholder="0.00" /></div>
-                                    <div><span style={lbl}>GST on Freight</span>
-                                        <select value={header.freightGstRate} onChange={e => setH('freightGstRate', Number(e.target.value))} style={{ ...inp, cursor: 'pointer' }}>
-                                            <option value={0}>0% (Exempt)</option>
-                                            <option value={5}>5% GST</option>
-                                            <option value={12}>12% GST</option>
-                                            <option value={18}>18% GST</option>
-                                        </select>
-                                    </div>
-                                    {freightAmt > 0 && freightGst > 0 && (
-                                        <div style={{ background: '#0f172a', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' }}>
-                                            {!isIGST ? (<>
-                                                <div style={{ fontSize: '12px', color: '#94a3b8' }}>CGST ({freightGst / 2}%) = <strong style={{ color: '#3b82f6' }}>₹{freightCgst}</strong></div>
-                                                <div style={{ fontSize: '12px', color: '#94a3b8' }}>SGST ({freightGst / 2}%) = <strong style={{ color: '#7c3aed' }}>₹{freightSgst}</strong></div>
-                                            </>) : (
-                                                <div style={{ fontSize: '12px', color: '#94a3b8' }}>IGST ({freightGst}%) = <strong style={{ color: '#3b82f6' }}>₹{freightIgst}</strong></div>
-                                            )}
-                                            <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 700 }}>Total GST on Freight = ₹{freightGstTotal}</div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
+
                             {/* Items */}
-                            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+                                    <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
                                         Items {loadingRef ? '(loading...)' : ''}
                                     </h3>
-                                    {isManual && <button type="button" onClick={addRow} style={{ padding: '6px 14px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>+ Add Row</button>}
+                                    {isManual && <button type="button" onClick={addRow} style={{ padding: '6px 14px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>+ Add Row</button>}
                                 </div>
                                 <div style={{ overflowX: 'auto' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                         <thead>
-                                            <tr style={{ background: '#0f172a', color: '#64748b' }}>
+                                            <tr style={{ background: '#f8f9fa', color: '#64748b' }}>
                                                 {['#', 'Item', 'Description', 'HSN', 'UOM', 'Qty', 'Max Qty', 'Rate', 'Total', ''].map((h, i) =>
-                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' }}>{h}</th> : null
+                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th> : null
                                                 )}
                                             </tr>
                                         </thead>
@@ -577,8 +582,8 @@ export default function PurchaseInvoiceFormPage() {
                                                 const c = calcRow(row);
                                                 const isLocked = !isManual && row.itemId;
                                                 return (
-                                                    <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
-                                                        <td style={{ padding: '6px 10px', color: '#475569', width: '28px' }}>{i + 1}</td>
+                                                    <tr key={i} style={{ borderBottom: '1px solid #f8f9fa' }}>
+                                                        <td style={{ padding: '6px 10px', color: '#94a3b8', width: '28px' }}>{i + 1}</td>
                                                         <td style={{ padding: '6px 10px', minWidth: '160px' }}>
                                                             {isManual || !row.itemId ? (
                                                                 <SearchableSelect
@@ -586,10 +591,10 @@ export default function PurchaseInvoiceFormPage() {
                                                                     value={row.itemId}
                                                                     onChange={v => setRow(i, 'itemId', v)}
                                                                     placeholder="— Search Item —"
-                                                                    dark={true}
+                                                                    dark={false}
                                                                 />
                                                             ) : (
-                                                                <div style={{ color: '#f1f5f9', fontWeight: 500 }}>{row.itemName}<div style={{ color: '#64748b', fontSize: '10px' }}>{row.itemCode}</div></div>
+                                                                <div style={{ color: '#1e293b', fontWeight: 500 }}>{row.itemName}<div style={{ color: '#64748b', fontSize: '10px' }}>{row.itemCode}</div></div>
                                                             )}
                                                         </td>
                                                         <td style={{ padding: '6px 10px', minWidth: '200px' }}>
@@ -603,11 +608,11 @@ export default function PurchaseInvoiceFormPage() {
                                                         <td style={{ padding: '6px 10px', width: '70px' }}><input value={row.hsnCode} onChange={e => setRow(i, 'hsnCode', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
                                                         <td style={{ padding: '6px 10px', width: '55px' }}><input value={row.uom} onChange={e => setRow(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} readOnly={isLocked} /></td>
                                                         <td style={{ padding: '6px 10px', width: '100px' }}>
-                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#334155' }} />
+                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
                                                         </td>
                                                         <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{row.maxQty ?? '—'}</td>
                                                         <td style={{ padding: '6px 10px', width: '90px' }}><input type="number" min="0" step="0.01" value={row.rate} onChange={e => setRow(i, 'rate', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px' }} /></td>
-                                                        <td style={{ padding: '6px 10px', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total}</td>
+                                                        <td style={{ padding: '6px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total}</td>
                                                         <td style={{ padding: '6px 10px' }}>{isManual && rows.length > 1 && <button type="button" onClick={() => removeRow(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>}</td>
                                                     </tr>
                                                 );
@@ -618,32 +623,60 @@ export default function PurchaseInvoiceFormPage() {
 
                                 {/* Totals */}
                                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                                    <div style={{ background: '#0f172a', borderRadius: '10px', padding: '16px 24px', border: '1px solid #334155', minWidth: '300px' }}>
+                                    <div style={{ background: '#ffffff', borderRadius: '10px', padding: '16px 24px', border: '1px solid #e2e8f0', minWidth: '300px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                                         {[
                                             ['Taxable Amount', `₹${totals.taxable.toLocaleString()}`],
                                             ['Discount (−)', `₹${totals.disc.toLocaleString()}`],
                                             ...(isIGST ? [['IGST (Items)', `₹${totals.igst.toLocaleString()}`]] : [['CGST (Items)', `₹${totals.cgst.toLocaleString()}`], ['SGST (Items)', `₹${totals.sgst.toLocaleString()}`]]),
-                                            ...(freightAmt > 0 ? [['Freight Charges', `₹${freightAmt.toLocaleString()}`]] : []),
-                                            ...(freightAmt > 0 && freightGst > 0 && !isIGST ? [['CGST (Freight)', `₹${freightCgst}`], ['SGST (Freight)', `₹${freightSgst}`]] : []),
-                                            ...(freightAmt > 0 && freightGst > 0 && isIGST ? [['IGST (Freight)', `₹${freightIgst}`]] : []),
                                         ].map(([k, v]) => (
-                                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
+                                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
                                                 <span>{k}</span><span>{v}</span>
                                             </div>
                                         ))}
-                                        <div style={{ borderTop: '1px solid #334155', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '18px', color: '#10b981' }}>
+
+                                        {/* Integrated Freight Summary */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: '#64748b', padding: '10px 0', borderTop: '1px dashed #e2e8f0', marginTop: '4px' }}>
+                                            <span>Freight Summary</span>
+                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', Number(e.target.value))} style={{ ...inp, width: '80px', padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
+                                                <div style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <span>GST</span>
+                                                    <select value={header.freightGstRate} onChange={e => setH('freightGstRate', Number(e.target.value))} style={{ ...inp, width: '60px', padding: '4px', fontSize: '11px' }} title="Freight GST %">
+                                                        <option value={0}>0%</option>
+                                                        <option value={5}>5%</option>
+                                                        <option value={12}>12%</option>
+                                                        <option value={18}>18%</option>
+                                                    </select>
+                                                </div>
+                                                <span style={{ fontWeight: 600, color: '#4b5563', minWidth: '70px', textAlign: 'right' }}>₹{r2(freightAmt + freightGstTotal).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        {(freightAmt > 0 && freightGst > 0) && (
+                                            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '4px', marginBottom: '8px' }}>
+                                                {!isIGST ? (<>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight CGST ({freightGst / 2}%)</span><span>₹{freightCgst}</span></div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight SGST ({freightGst / 2}%)</span><span>₹{freightSgst}</span></div>
+                                                </>) : (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight IGST ({freightGst}%)</span><span>₹{freightIgst}</span></div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '18px', color: '#059669' }}>
                                             <span>Grand Total</span><span>₹{grandWithFreight.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
+
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={() => navigate(-1)} style={{ padding: '10px 20px', borderRadius: '8px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-                                <button type="submit" disabled={saving} style={{ padding: '10px 24px', borderRadius: '8px', background: saving ? '#334155' : 'linear-gradient(135deg,#3b82f6,#6366f1)', color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px' }}>
+                                <button type="button" onClick={() => navigate(-1)} style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                                <button type="submit" disabled={saving} style={{ padding: '10px 24px', borderRadius: '8px', background: saving ? '#e2e8f0' : 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(37,99,235,0.2)' }}>
                                     {saving ? (isEdit ? 'Updating...' : 'Posting...') : (isEdit ? '💾 Update Invoice' : '🧾 Post Invoice')}
                                 </button>
                             </div>
+
                         </form>
                     </>
                 )}

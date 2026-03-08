@@ -68,7 +68,10 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         isPrimary: true,
                     }
                 ],
+                creditPeriod: 0,
+                paymentType: 'Credit',
             };
+
         }
 
         const normalized = {
@@ -119,7 +122,10 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     email: '',
                     isPrimary: true,
                 }],
+            creditPeriod: customerData.creditPeriod || 0,
+            paymentType: customerData.paymentType || 'Credit',
         };
+
 
         console.log('✅ Normalized data:', normalized);
         return normalized;
@@ -628,7 +634,33 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option value="IGST">IGST</option>
                             </select>
                         </div>
+
+                        {/* Credit Period */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="creditPeriod">CREDIT PERIOD (DAYS)</label>
+                            <Input
+                                id="creditPeriod"
+                                type="number"
+                                {...register('creditPeriod', { valueAsNumber: true })}
+                                placeholder="0"
+                                min="0"
+                            />
+                        </div>
+
+                        {/* Payment Type */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="paymentType">PAYMENT TYPE</label>
+                            <select
+                                id="paymentType"
+                                {...register('paymentType')}
+                                className={styles['form-select']}
+                            >
+                                <option value="Credit">Credit</option>
+                                <option value="Cash">Cash</option>
+                            </select>
+                        </div>
                     </div>
+
 
                 </div>
 

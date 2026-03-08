@@ -39,7 +39,8 @@ export const Sidebar = () => {
     const visibleMenuItems = filterItems(menuConfig);
 
     return (
-        <aside className={styles.sidebar}>
+        <aside className={`${styles.sidebar} no-print`}>
+
             <div className={styles.header}>
                 <div className={styles.brand}>
                     <div className={styles.logoWrapper}>

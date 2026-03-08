@@ -45,17 +45,31 @@ const testDataSchema = new mongoose.Schema({
 // Production Log sub-document (for tracking multiple runs)
 // ─────────────────────────────────────────────
 const productionLogSchema = new mongoose.Schema({
-    date: { type: Date, required: true },
-    shift: { type: String, default: '' },
-    operator: { type: String, default: '' },
+    date: { type: Date, default: Date.now },
+    shift: { type: String, trim: true, default: '' },
+    operator: { type: String, trim: true, default: '' },
     inputQty: { type: Number, default: 0 },
     outputQty: { type: Number, default: 0 }, // Good Output
     reworkQty: { type: Number, default: 0 },
     rejectionQty: { type: Number, default: 0 },
-    rejectionReason: { type: String, default: '' },
-    remarks: { type: String, default: '' },
-    recordedAt: { type: Date, default: Date.now }
-}, { _id: true });
+    rejectionReason: { type: String, trim: true, default: '' },
+
+    // QC specific details
+    qcPassedQty: { type: Number, default: 0 },
+    qcRejectedQty: { type: Number, default: 0 },
+    qcReworkQty: { type: Number, default: 0 },
+
+    // For Pick & Place / TH Mounting shortages
+    missingComponents: [{
+        itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+        itemCode: String,
+        itemName: String,
+        quantity: Number,
+        remarks: String
+    }],
+
+    remarks: { type: String, trim: true, default: '' }
+}, { timestamps: true });
 
 // ─────────────────────────────────────────────
 // Stage sub-document
@@ -89,6 +103,7 @@ const materialStatusSchema = new mongoose.Schema({
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
     itemCode: { type: String },
     itemName: { type: String },
+    itemType: String, // PCB, SMD, TH, etc.
     uom: { type: String },
     requiredQty: { type: Number, default: 0 },
     availableStock: { type: Number, default: 0 },

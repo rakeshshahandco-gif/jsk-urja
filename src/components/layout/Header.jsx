@@ -2,7 +2,10 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
-import { LogOut, KeyRound, ChevronDown } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, Bell } from 'lucide-react';
+import { useNotification } from '@/contexts/NotificationContext';
+import { NotificationPanel } from './NotificationPanel';
+
 import { ROLE_CONFIG } from '@/utils/permissions';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
 import { menuConfig } from '@/config/menu.config';
@@ -13,14 +16,18 @@ export const Header = () => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { openModal } = useModal();
+    const { unreadCount } = useNotification();
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
     const menuRef = useRef(null);
+    const bellRef = useRef(null);
+
 
     // Dynamic page title logic
     const pageTitle = useMemo(() => {
         const path = location.pathname;
         let title = '';
-        
+
         const findTitle = (items) => {
             for (const item of items) {
                 if (item.path === path) return item.title;
@@ -62,10 +69,14 @@ export const Header = () => {
             if (menuRef.current && !menuRef.current.contains(event.target)) {
                 setShowUserMenu(false);
             }
+            if (bellRef.current && !bellRef.current.contains(event.target)) {
+                setShowNotifications(false);
+            }
         };
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+
     }, []);
 
     if (!user) return null;
@@ -73,14 +84,31 @@ export const Header = () => {
     const roleConfig = ROLE_CONFIG[user.role] || {};
 
     return (
-        <header className={styles.header}>
+        <header className={`${styles.header} no-print`}>
+
             <div className={styles.content}>
                 <div className={styles.pageHeader}>
                     <h2 className={styles.pageTitle}>{pageTitle}</h2>
                 </div>
 
                 <div className={styles.userSection}>
+                    <div className={styles.notificationWrapper} ref={bellRef}>
+                        <button
+                            className={styles.bellButton}
+                            onClick={() => setShowNotifications(!showNotifications)}
+                        >
+                            <Bell size={20} />
+                            {unreadCount > 0 && (
+                                <span className={styles.badge}>{unreadCount}</span>
+                            )}
+                        </button>
+                        {showNotifications && (
+                            <NotificationPanel onClose={() => setShowNotifications(false)} />
+                        )}
+                    </div>
+
                     <div className={styles.userMenu} ref={menuRef}>
+
                         <button
                             className={styles.userMenuButton}
                             onClick={() => setShowUserMenu(!showUserMenu)}

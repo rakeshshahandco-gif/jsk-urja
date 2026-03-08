@@ -7,6 +7,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { updateStockForItems } from './grn.controller.js';
 import Joi from 'joi';
+import { syncPurchaseRatesToBOMs } from '../services/bomPriceSync.service.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -86,26 +87,18 @@ const rollbackSideEffects = async (inv, userId) => {
 
     // 3) Rollback Stock if Direct Purchase
     if (isDirectPurchase) {
-        const { StockLog, ItemStock } = await import('../models/inventory.model.js');
-        // Subtract stock for items
-        for (const item of items) {
-            const stock = await ItemStock.findOne({ itemId: item.itemId });
-            if (stock) {
-                stock.quantity = r2(stock.quantity - item.qty);
-                await stock.save();
-                await StockLog.create({
-                    itemId: item.itemId,
-                    transactionType: 'PURCHASE_INVOICE_DELETE',
-                    referenceId: inv._id,
-                    referenceNumber: inv.invoiceNumber,
-                    quantity: -item.qty,
-                    remarks: `Reversal of PI ${inv.invoiceNumber}`,
-                    createdBy: userId,
-                });
-            }
-        }
+        // Subtract stock for items by passing negative qty
+        const stockItems = items.map(i => ({
+            itemId: i.itemId,
+            itemCode: i.itemCode || '',
+            itemName: i.itemName,
+            receivedQty: -(i.qty || 0),
+            rate: i.rate || 0,
+            warehouse: '',
+        }));
+        await updateStockForItems(stockItems, inv.invoiceNumber, inv._id, 'PURCHASE_INVOICE_DELETE', userId);
     }
-};
+}
 
 const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRate = 0) => {
     let subTotal = 0, totalDiscount = 0, totalTaxable = 0;
@@ -205,7 +198,8 @@ const baseSchema = {
         'PO→GRN→Invoice', 'PO→Direct Invoice', 'Direct GRN→Invoice', 'Direct Invoice'
     ).required(),
     supplierId: Joi.string().required(),
-    invoiceDate: Joi.date().optional(),
+    invoiceDate: Joi.date().optional().allow(null, ''),
+
     supplierInvoiceNo: Joi.string().optional().allow(''),
     supplierGstin: Joi.string().optional().allow(''),
     supplierAddress: Joi.string().optional().allow(''),
@@ -221,11 +215,19 @@ const baseSchema = {
     reverseCharge: Joi.boolean().default(false),
     irnNumber: Joi.string().optional().allow(''),
     paymentTerms: Joi.string().optional().allow(''),
-    dueDate: Joi.date().optional().allow(null),
+    dueDate: Joi.date().optional().allow(null, ''),
+
     remarks: Joi.string().optional().allow(''),
     poId: Joi.string().optional().allow('', null),
+    poNumber: Joi.string().optional().allow(''),
     grnId: Joi.string().optional().allow('', null),
-    poDate: Joi.date().optional(),
+    poDate: Joi.any().optional().allow('', null, '—', 'null', 'undefined'),
+
+
+
+
+
+
     transporterName: Joi.string().optional().allow(''),
     vehicleNo: Joi.string().optional().allow(''),
     lrNumber: Joi.string().optional().allow(''),
@@ -236,6 +238,18 @@ const baseSchema = {
 
 const createPISchema = Joi.object(baseSchema);
 
+// Helper to safely parse date or return null
+const parseDate = (val) => {
+    if (!val || val === '' || val === '—' || val === 'null' || val === 'undefined') return null;
+    try {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+        return null;
+    }
+};
+
+
 // ── POST /purchase-invoices ───────────────────────────────────────────────────
 export const createPurchaseInvoice = asyncHandler(async (req, res) => {
     const { error, value } = createPISchema.validate(req.body, { allowUnknown: false });
@@ -245,7 +259,8 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
     const supplier = await Supplier.findById(value.supplierId);
     if (!supplier) throw new ApiError(404, 'Supplier not found');
 
-    let po = null, grn = null, poNumber = '', grnNumber = '';
+    let po = null, grn = null, poNumber = value.poNumber || '', grnNumber = '';
+
 
     // ── Validate references and qty limits based on flow ──────────────────────
     if (flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice') {
@@ -295,6 +310,9 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         invoiceNumber,
         invoiceDate: value.invoiceDate || new Date(),
         flowType,
+
+
+
         isDirectPurchase: isDirectStock,
         supplierId: value.supplierId,
         supplierName: supplier.supplierName,
@@ -317,8 +335,11 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         reverseCharge: value.reverseCharge || false,
         irnNumber: value.irnNumber || '',
         paymentTerms: value.paymentTerms || supplier.paymentTerms || '',
-        dueDate: value.dueDate || null,
+        poDate: parseDate(value.poDate) || (po ? po.poDate : null),
         remarks: value.remarks || '',
+
+
+
         items: value.items,
         ...totals,
         // Transportation
@@ -387,6 +408,9 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         }));
         await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id);
     }
+
+    // 5) Update BOM rates and recalculate costs
+    await syncPurchaseRatesToBOMs(value.items, req.user._id);
 
     res.status(201).json(new ApiResponse(201, invoice, `Invoice ${invoiceNumber} posted`));
 });
@@ -492,7 +516,8 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
 
     // Apply NEW side effects
     const { flowType, items: newItems } = value;
-    let po = null, grn = null, poNumber = '', grnNumber = '';
+    let po = null, grn = null, poNumber = value.poNumber || '', grnNumber = '';
+
 
     if (flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice') {
         po = await PurchaseOrder.findById(value.poId);
@@ -510,8 +535,12 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
 
     Object.assign(inv, value, totals, {
         poNumber, grnNumber, isDirectPurchase: isDirectStock,
+        poDate: parseDate(value.poDate) || (po ? po.poDate : null),
         updatedBy: req.user._id
     });
+
+
+
 
     await inv.save();
 
@@ -558,6 +587,9 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
         }));
         await updateStockForItems(stockItems, inv.invoiceNumber, inv._id, 'PURCHASE_INVOICE', req.user._id);
     }
+
+    // 4) Update BOM rates and recalculate costs
+    await syncPurchaseRatesToBOMs(newItems, req.user._id);
 
     res.json(new ApiResponse(200, inv, 'Purchase Invoice updated'));
 });

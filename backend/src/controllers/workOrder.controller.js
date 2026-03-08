@@ -60,7 +60,14 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
     const bom = await BOM.findById(value.bomId).populate('finishedProductId');
     if (!bom) throw new ApiError(404, 'BOM not found');
 
-    const woNumber = await generateWoNumber();
+    // Use manual WO number if provided, otherwise auto-generate
+    const woNumber = value.woNumber?.trim() || await generateWoNumber();
+
+    // Check if manually provided WO number already exists
+    if (value.woNumber) {
+        const existing = await WorkOrder.findOne({ woNumber });
+        if (existing) throw new ApiError(400, `Work Order Number ${woNumber} already exists`);
+    }
 
     // Build initial stages from PRODUCTION_STAGES constant
     const stages = PRODUCTION_STAGES.map(s => ({
@@ -73,24 +80,29 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         checklist: s.isQcGate ? getDefaultChecklist(s.stageName) : [],
     }));
 
-    // Fetch current stock for all components
+    // Fetch current stock and itemType for all components
     const itemIds = (bom.components || []).map(c => c.itemId);
-    const items = await Item.find({ _id: { $in: itemIds } }).select('_id currentStock');
-    const stockMap = items.reduce((acc, item) => {
-        acc[item._id.toString()] = item.currentStock || 0;
+    const items = await Item.find({ _id: { $in: itemIds } }).select('_id currentStock itemType');
+    const itemMap = items.reduce((acc, item) => {
+        acc[item._id.toString()] = {
+            currentStock: item.currentStock || 0,
+            itemType: item.itemType || 'OTHER'
+        };
         return acc;
     }, {});
 
     // Build material status from BOM components
     const materialStatus = (bom.components || []).map(c => {
         const requiredQty = c.quantity * value.targetQty;
-        const availableStock = stockMap[c.itemId.toString()] || 0;
+        const itemInfo = itemMap[c.itemId.toString()] || { currentStock: 0, itemType: 'OTHER' };
+        const availableStock = itemInfo.currentStock;
         const shortQty = Math.max(0, requiredQty - availableStock);
 
         return {
             itemId: c.itemId,
             itemCode: c.itemCode || '',
             itemName: c.itemName || '',
+            itemType: itemInfo.itemType,
             uom: c.uom || '',
             requiredQty,
             availableStock,
@@ -305,22 +317,35 @@ const getPendingQty = (wo, currentStage) => {
 // Helper: Recalculate Stage Quantities and Status
 // ────────────────────────────────────────────────────────────────────────────
 const recalculateStageAndWo = (wo, stage) => {
-    // Recalculate Totals
+    // Recalculate Totals from logs
     stage.inputQty = stage.productionLogs.reduce((sum, log) => sum + (log.inputQty || 0), 0);
     stage.outputQty = stage.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
     stage.reworkQty = stage.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
     stage.rejectionQty = stage.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
 
-    // Auto Status Logic based on Rules
-    if (stage.outputQty === 0) {
-        stage.status = 'Not Started';
-    } else {
-        const pendingQty = getPendingQty(wo, stage);
-        if (pendingQty === 0) {
-            stage.status = 'Completed';
-        } else {
-            stage.status = 'Running';
+    // If it's a QC gate, verify the logs also have QC-specific fields summed up correctly
+    if (stage.isQcGate) {
+        // These can be useful for granular reporting in the UI
+        const totalPassed = stage.productionLogs.reduce((sum, log) => sum + (log.qcPassedQty || 0), 0);
+        const totalRejected = stage.productionLogs.reduce((sum, log) => sum + (log.qcRejectedQty || 0), 0);
+        const totalRework = stage.productionLogs.reduce((sum, log) => sum + (log.qcReworkQty || 0), 0);
+
+        // Ensure stage-level aggregates match log-level QC sums if they were used
+        if (totalPassed + totalRejected + totalRework > 0) {
+            stage.outputQty = totalPassed + totalRejected + totalRework;
+            stage.rejectionQty = totalRejected;
+            stage.reworkQty = totalRework;
         }
+    }
+
+    // Auto Status Logic
+    const maxAllowed = getMaxAllowedOutput(wo, stage);
+    if (stage.outputQty >= maxAllowed && maxAllowed > 0) {
+        stage.status = 'Completed';
+    } else if (stage.outputQty > 0 || stage.inputQty > 0) {
+        stage.status = 'Running';
+    } else {
+        stage.status = 'Not Started';
     }
 
     // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
@@ -364,29 +389,69 @@ export const addProductionLog = asyncHandler(async (req, res) => {
     const stage = wo.stages.find(s => s.seq === seq);
     if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
 
-    // ── Material Check before Production Log ───────────────────────────────
-    const mandatoryShortages = wo.materialStatus.filter(m => m.isMandatory && m.shortQty > 0);
-    if (mandatoryShortages.length > 0) {
-        const itemNames = mandatoryShortages.map(m => m.itemName).join(', ');
-        throw new ApiError(400, `Production blocked: mandatory material shortage (${itemNames}). Please restock or untick as mandatory.`);
+    // ── 1. STAGE-SPECIFIC MATERIAL DEPENDENCY ────────────────────────────────
+    if (seq === 1) { // PCB Stage
+        const pcbShortages = wo.materialStatus.filter(m => m.itemType === 'PCB' && m.shortQty > 0);
+        if (pcbShortages.length > 0) {
+            throw new ApiError(400, `PCB Stage blocked: Missing PCB items (${pcbShortages.map(m => m.itemName).join(', ')}).`);
+        }
     }
 
-    // Stage Dependency Math:
-    const expectedOutput = stage.outputQty + value.outputQty;
+    // Auto-populate missing components for Pick & Place and TH Mounting
+    if (seq === 2 || seq === 3) { // Pick & Place or TH Mounting
+        const relevantType = seq === 2 ? 'SMD' : 'TH';
+        const shortages = wo.materialStatus.filter(m => m.itemType === relevantType && m.shortQty > 0);
+
+        if (shortages.length > 0) {
+            // If the user didn't provide missingComponents, auto-identify them from shortages
+            if (!value.missingComponents || value.missingComponents.length === 0) {
+                value.missingComponents = shortages.map(s => ({
+                    itemId: s.itemId,
+                    itemCode: s.itemCode,
+                    itemName: s.itemName,
+                    quantity: s.shortQty,
+                    remarks: 'Auto-recorded shortage during production logging'
+                }));
+            }
+        }
+    }
+
+    // ── 2. QC RESULT AGGREGATION ─────────────────────────────────────────────
+    // For QC stages (7: 1st QC, 9: Final QC), outputQty should be the sum of results if not provided
+    if (stage.isQcGate) {
+        const passed = value.qcPassedQty || 0;
+        const rejected = value.qcRejectedQty || 0;
+        const rework = value.qcReworkQty || 0;
+        const totalOutput = passed + rejected + rework;
+
+        if (totalOutput > 0) {
+            value.outputQty = totalOutput;
+            value.reworkQty = rework;
+            value.rejectionQty = rejected;
+        }
+    }
+
+    // ── 3. SEQUENTIAL QUANTITY LIMITS ────────────────────────────────────────
+    const expectedOutput = stage.outputQty + (value.outputQty || 0);
     const maxAllowed = getMaxAllowedOutput(wo, stage);
     if (expectedOutput > maxAllowed) {
         if (stage.seq === 1) {
-            throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending is ${wo.targetQty - stage.outputQty}.`);
+            throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending: ${wo.targetQty - stage.outputQty}.`);
         } else {
-            throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Pending is ${maxAllowed - stage.outputQty}.`);
+            const prevStage = wo.stages.find(s => s.seq === seq - 1);
+            throw new ApiError(400, `Cannot exceed Previous Stage ("${prevStage?.stageName}") Output (${maxAllowed}). Pending: ${maxAllowed - stage.outputQty}.`);
         }
     }
 
     // Add Log
     stage.productionLogs.push(value);
 
-    // Recalculate
+    // Recalculate Totals & Status
     const { blocked } = recalculateStageAndWo(wo, stage);
+
+    // ── 4. FG COMPLETION LOGIC ───────────────────────────────────────────────
+    // If Final QC (seq 9) is completed, update FG stock if needed (or hand over to inventory controller)
+    // Note: Inventory update logic would typically be in a separate service, but we handle the status here.
 
     wo.updatedBy = req.user._id;
     await wo.save();

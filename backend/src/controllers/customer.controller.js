@@ -218,17 +218,18 @@ const searchCustomers = catchAsync(async (req, res) => {
         return res.send(new ApiResponse(200, [], 'Query too short'));
     }
 
-    const searchRegex = { $regex: q, $options: 'i' };
+    const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const startsWithRegex = { $regex: '^' + escapedQ, $options: 'i' };
     const baseFilter = {
         isDeleted: { $ne: true },
         $or: [
-            { customerName: searchRegex },
-            { company: searchRegex },
-            { companyBrand: searchRegex },
-            { gstNumber: searchRegex },
-            { 'contactPersons.name': searchRegex },
-            { 'contactPersons.mobile': searchRegex },
-            { 'contactPersons.email': searchRegex },
+            { customerName: startsWithRegex },
+            { company: startsWithRegex },
+            { companyBrand: startsWithRegex },
+            { gstNumber: startsWithRegex },
+            { 'contactPersons.name': startsWithRegex },
+            { 'contactPersons.mobile': startsWithRegex },
+            { 'contactPersons.email': startsWithRegex },
         ],
     };
 
@@ -283,6 +284,8 @@ const searchCustomers = catchAsync(async (req, res) => {
             customerType: c.customerType || '',
             gstType: c.gstType || '',
             city: c.city || '',
+            creditPeriod: c.creditPeriod || 0,
+            paymentType: c.paymentType || 'Credit',
         };
     });
 

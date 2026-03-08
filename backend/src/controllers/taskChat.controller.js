@@ -6,6 +6,8 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import TaskChatMessage from '../models/taskChatMessage.model.js';
 import { Task } from '../models/task.model.js';
 import { GroupMember } from '../models/groupMember.model.js';
+import { createNotification } from './notification.controller.js';
+
 
 const getChatRooms = asyncHandler(async (req, res) => {
     const userId = req.user.id;
@@ -78,7 +80,26 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     const populatedMessage = await message.populate('senderId', 'name username');
 
+    // NOTIFICATION: New Comment/Message
+    const notifyUsers = new Set([
+        task.createdBy.toString(),
+        ...(task.assigneeIds || []).map(id => id.toString())
+    ]);
+
+    for (const userId of notifyUsers) {
+        await createNotification({
+            recipient: userId,
+            actor: req.user.id,
+            task: task._id,
+            type: 'COMMENT',
+            title: 'New Comment on Task',
+            message: `${req.user.name} commented on: ${task.title}`,
+            metadata: { messageId: message._id }
+        });
+    }
+
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, populatedMessage, 'Message sent successfully'));
+
 });
 
 export default {

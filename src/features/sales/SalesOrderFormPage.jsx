@@ -45,11 +45,12 @@ export default function SalesOrderFormPage() {
     const isEdit = Boolean(id);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
-        customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
         customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
         customerCode: '',
+        soDate: new Date().toISOString().split('T')[0],
         deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
         freightAmount: '', freightGstRate: 0,
+        creditPeriod: 0,
         items: [BLANK_ITEM()],
     });
 
@@ -115,7 +116,8 @@ export default function SalesOrderFormPage() {
                 customerStateCode: '',
                 billingAddress: '',
                 shippingAddress: '',
-                customerId: null
+                customerId: null,
+                creditPeriod: 0
             }));
             setCustomerOptions([]);
             setShowCustDropdown(false);
@@ -153,7 +155,9 @@ export default function SalesOrderFormPage() {
             billingAddress: c.billingAddress || '',
             shippingAddress: c.shippingAddress || '',
             gstType: c.gstType || p.gstType,
-            customerId: c.id
+            customerId: c.id,
+            creditPeriod: c.creditPeriod || 0,
+            paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash')
         }));
         setShowCustDropdown(false);
     };
@@ -198,11 +202,12 @@ export default function SalesOrderFormPage() {
             setForm({
                 customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
                 customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
+                soDate: new Date().toISOString().split('T')[0],
                 deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
                 freightAmount: '', freightGstRate: 18,
+                creditPeriod: 0,
                 items: [BLANK_ITEM()],
             });
-            setActiveItemRow(null);
             setCustHighlightIndex(-1);
             setShowCustDropdown(false);
         }
@@ -298,11 +303,6 @@ export default function SalesOrderFormPage() {
                             </select>
                         </Field>
                         <Field label="Delivery Date"><input type="date" value={form.deliveryDate || ''} onChange={e => setF('deliveryDate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
-                        <Field label="Payment Type">
-                            <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={form.status && form.status !== 'Draft'}>
-                                <option>Credit</option><option>Cash</option>
-                            </select>
-                        </Field>
                         <Field label="Remarks" ><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical' }} placeholder="Any remarks..." disabled={form.status && form.status !== 'Draft'} /></Field>
                     </Grid>
                 </Section>
@@ -399,8 +399,15 @@ export default function SalesOrderFormPage() {
                                 <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', background: form.customerId ? '#f9fafb' : '#fff' }} readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
                             </Field>
                         </div>
-                        <Field label="Customer PO No."><input value={form.customerPO} onChange={e => setF('customerPO', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
                         <Field label="Customer PO Date"><input type="date" value={form.customerPODate || ''} onChange={e => setF('customerPODate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
+                        <Field label="Payment Type">
+                            <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={form.status && form.status !== 'Draft'}>
+                                <option>Credit</option><option>Cash</option>
+                            </select>
+                        </Field>
+                        <Field label="Credit Period (Days)">
+                            <input value={form.creditPeriod} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', fontWeight: 'bold' }} />
+                        </Field>
                     </Grid>
                 </Section>
 
@@ -408,7 +415,7 @@ export default function SalesOrderFormPage() {
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
-                                {['Sr', 'Item Code *', 'Item Name', 'Model No', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                                {['Sr', 'Item Code *', 'Item Name', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                                 {form.items.map((item, i) => {
@@ -436,7 +443,6 @@ export default function SalesOrderFormPage() {
                                             <td style={{ ...td, minWidth: 160 }}>
                                                 <input value={item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Item Name" />
                                             </td>
-                                            <td style={{ ...td, minWidth: 100 }}><input value={item.modelNo} onChange={e => setItem(i, 'modelNo', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} autoComplete="off" /></td>
@@ -507,9 +513,11 @@ export default function SalesOrderFormPage() {
                             {saving ? 'Saving...' : isEdit ? 'Save Draft' : 'Save as Draft'}
                         </button>
                     )}
-                    <button onClick={() => handleSubmit('Confirmed')} disabled={saving} style={{ padding: '10px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                        {saving ? 'Processing...' : (form.status === 'Draft' || !form.status) ? '✓ Submit Order' : '✓ Update Order'}
-                    </button>
+                    {(isEdit || form.id) && (form.status === 'Draft' || form.status === 'Confirmed') && (
+                        <button onClick={() => handleSubmit('Confirmed')} disabled={saving} style={{ padding: '10px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                            {saving ? 'Processing...' : form.status === 'Draft' ? '✓ Submit Order' : '✓ Update Order'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -27,6 +27,8 @@ import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
 import stickerRoute from './sticker.routes.js';
+import notificationRoute from './notification.routes.js';
+
 
 const router = express.Router();
 
@@ -148,6 +150,11 @@ const defaultRoutes = [
         path: '/stickers',
         route: stickerRoute,
     },
+    {
+        path: '/notifications',
+        route: notificationRoute,
+    },
+
 ];
 
 defaultRoutes.forEach((route) => {

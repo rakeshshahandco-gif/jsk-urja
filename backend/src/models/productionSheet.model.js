@@ -9,6 +9,7 @@ const psItemSchema = new mongoose.Schema({
     qty: { type: Number, default: 0 },
     hours: { type: String, default: '' },
     dummyLoad: { type: String, default: '' },
+    hsnCode: { type: String, default: '' },
 }, { _id: true });
 
 const productionSheetSchema = new mongoose.Schema({

@@ -52,7 +52,7 @@ const s = {
 
 const BLANK_COMPONENT = {
     itemId: '', itemCode: '', itemName: '', category: '', uom: '',
-    quantity: 0, rate: 0, totalCost: 0, points: 0, pointsLabourCost: 0, remarks: ''
+    quantity: '', rate: '', totalCost: 0, points: '', pointsLabourCost: 0, remarks: ''
 };
 
 // ── FIELD WRAPPER ─────────────────────────────────────────────────────────────
@@ -79,12 +79,14 @@ const BOMFormPage = () => {
         revisionDate: new Date().toISOString().split('T')[0],
         status: 'Draft', productionQuantity: 1, bomType: 'Production',
         components: [{ ...BLANK_COMPONENT }],
-        totalRawMaterialCost: 0, totalProcessCost: 0, overheadCost: 0,
-        labourCost: 0, labourCostPerPoint: 0.25, totalPointsLabourCost: 0,
+        totalRawMaterialCost: 0, totalProcessCost: '', overheadCost: '',
+        labourCost: '', labourCostPerPoint: 0.25, totalPointsLabourCost: 0,
         finalProductionCostPerUnit: 0,
         processes: { smtAssembly: false, manualAssembly: false, testingRequired: false, qcRequired: false, packingRequired: false },
         isDefault: false, scrapAccount: '', remarks: ''
     });
+
+    const [saving, setSaving] = useState(false);
 
     // ── FETCH DATA & AUTO REFRESH ─────────────────────────────────────────────
     const fetchItems = () => {
@@ -239,12 +241,34 @@ const BOMFormPage = () => {
 
     // ── SUBMIT ────────────────────────────────────────────────────────────────
     const onSubmit = async () => {
+        setSaving(true);
         try {
-            if (isEdit) { await updateBOM(id, form); addToast('BOM updated successfully', 'success'); }
-            else { await createBOM(form); addToast('BOM created successfully', 'success'); }
+            // Sanitize numeric fields: convert empty strings to 0 for backend validation
+            const sanitizedForm = {
+                ...form,
+                totalProcessCost: parseFloat(form.totalProcessCost) || 0,
+                overheadCost: parseFloat(form.overheadCost) || 0,
+                labourCost: parseFloat(form.labourCost) || 0,
+                components: form.components.map(c => ({
+                    ...c,
+                    quantity: parseFloat(c.quantity) || 0,
+                    rate: parseFloat(c.rate) || 0,
+                    points: parseFloat(c.points) || 0
+                }))
+            };
+
+            if (isEdit) {
+                await updateBOM(id, sanitizedForm);
+                addToast('BOM updated successfully', 'success');
+            } else {
+                await createBOM(sanitizedForm);
+                addToast('BOM created successfully', 'success');
+            }
             navigate(PATHS.INVENTORY.BOM.ROOT);
         } catch (error) {
             addToast(error.response?.data?.message || 'Failed to save BOM', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -255,14 +279,7 @@ const BOMFormPage = () => {
     return (
         <div style={s.page}>
             <style>{`
-                input[type=number]::-webkit-inner-spin-button, 
-                input[type=number]::-webkit-outer-spin-button { 
-                    -webkit-appearance: none; 
-                    margin: 0; 
-                }
-                input[type=number] {
-                    -moz-appearance: textfield;
-                }
+                /* Ensure numeric arrows are visible */
             `}</style>
             {/* ── STICKY HEADER ── */}
             <div style={s.header}>
@@ -385,19 +402,19 @@ const BOMFormPage = () => {
                                             </td>
                                             <td style={{ ...s.td, width: 80 }}>
                                                 <input type="number" style={{ ...s.tdInput, textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: 6, width: 70, background: '#fff', fontWeight: 700 }}
-                                                    value={comp.quantity} onChange={e => handleComponentChange(idx, 'quantity', e.target.value)} />
+                                                    value={comp.quantity === 0 ? '' : comp.quantity} onChange={e => handleComponentChange(idx, 'quantity', e.target.value)} />
                                             </td>
                                             <td style={{ ...s.td, color: '#64748b', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>{comp.uom || '—'}</td>
                                             <td style={{ ...s.td, width: 90 }}>
                                                 <input type="number" style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, width: 80, background: '#fff' }}
-                                                    value={comp.rate} onChange={e => handleComponentChange(idx, 'rate', e.target.value)} />
+                                                    value={comp.rate === 0 ? '' : comp.rate} onChange={e => handleComponentChange(idx, 'rate', e.target.value)} />
                                             </td>
                                             <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>
                                                 ₹{fmt(comp.totalCost)}
                                             </td>
                                             <td style={{ ...s.td, width: 60 }}>
                                                 <input type="number" min="0" style={{ ...s.tdInput, border: '1px solid #bfdbfe', borderRadius: 6, width: 52, background: '#eff6ff', color: '#2563eb', fontWeight: 700, textAlign: 'center' }}
-                                                    value={comp.points} onChange={e => handleComponentChange(idx, 'points', e.target.value)} />
+                                                    value={comp.points === 0 ? '' : comp.points} onChange={e => handleComponentChange(idx, 'points', e.target.value)} />
                                             </td>
                                             <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>
                                                 ₹{fmt(comp.pointsLabourCost)}
@@ -500,7 +517,7 @@ const BOMFormPage = () => {
                                     <span style={{ fontSize: 12, opacity: 0.7 }}>{label}</span>
                                     <input type="number"
                                         style={{ width: 80, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 8px', textAlign: 'right', color: '#fff', fontSize: 12, outline: 'none' }}
-                                        value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />
+                                        value={form[key] === 0 ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />
                                 </div>
                             ))}
                         </div>
@@ -539,8 +556,41 @@ const BOMFormPage = () => {
                     </div>
                 </div>
             </div>
+            <NavigationGuides />
         </div>
     );
 };
+
+// ─── Navigation Guides ───────────────────────────────────────────────────────
+function NavigationGuides() {
+    const scroll = (dir) => {
+        const main = document.querySelector('main');
+        if (!main) return;
+        const step = 400;
+        if (dir === 'up') main.scrollBy({ top: -step, behavior: 'smooth' });
+        if (dir === 'down') main.scrollBy({ top: step, behavior: 'smooth' });
+        if (dir === 'left') main.scrollBy({ left: -step, behavior: 'smooth' });
+        if (dir === 'right') main.scrollBy({ left: step, behavior: 'smooth' });
+    };
+
+    const guideStyle = {
+        position: 'fixed', zIndex: 999999, padding: '10px',
+        background: 'rgba(255, 255, 255, 0.4)', borderRadius: '50%',
+        border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)',
+        transition: 'all 0.2s', width: '40px', height: '40px', color: '#2563eb',
+        fontSize: '24px', fontWeight: 'bold'
+    };
+
+    return (
+        <>
+            <button onClick={() => scroll('up')} style={{ ...guideStyle, top: '80px', left: '50%', transform: 'translateX(-50%)' }} title="Scroll Up">↑</button>
+            <button onClick={() => scroll('down')} style={{ ...guideStyle, bottom: '20px', left: '50%', transform: 'translateX(-50%)' }} title="Scroll Down">↓</button>
+            <button onClick={() => scroll('left')} style={{ ...guideStyle, top: '50%', left: '260px', transform: 'translateY(-50%)' }} title="Scroll Left">←</button>
+            <button onClick={() => scroll('right')} style={{ ...guideStyle, top: '50%', right: '20px', transform: 'translateY(-50%)' }} title="Scroll Right">→</button>
+        </>
+    );
+}
 
 export default BOMFormPage;

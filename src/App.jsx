@@ -61,6 +61,8 @@ import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
 import './styles/main.scss';
@@ -77,303 +79,307 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <ToastProvider>
-                    <Toaster position="top-right" />
-                    <ModalProvider>
-                        <Routes>
-                            {/* Public routes - Login, Forgot Password, Reset Password */}
-                            <Route path="/login" element={<LoginPage />} />
-                            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                            <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <NotificationProvider>
+                    <ToastProvider>
+                        <Toaster position="top-right" />
+                        <ModalProvider>
+                            <Routes>
+                                {/* Public routes - Login, Forgot Password, Reset Password */}
+                                <Route path="/login" element={<LoginPage />} />
+                                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-                            {/* Full-screen page without sidebar */}
-                            <Route
-                                path="/customers/add"
-                                element={
-                                    <ProtectedRoute requirePermission="add_customer">
-                                        <AddCustomerPage />
-                                    </ProtectedRoute>
-                                }
-                            />
+                                {/* Full-screen page without sidebar */}
+                                <Route
+                                    path="/customers/add"
+                                    element={
+                                        <ProtectedRoute requirePermission="add_customer">
+                                            <AddCustomerPage />
+                                        </ProtectedRoute>
+                                    }
+                                />
 
-                            {/* Pages with sidebar and header */}
-                            <Route path="*" element={
-                                <ProtectedRoute>
-                                    <ErrorBoundary>
-                                        <div style={{ display: 'flex', minHeight: '100vh' }}>
-                                            <Sidebar />
-                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                                                <Header />
-                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "90vh", overflow: "auto" }}>
-                                                    <Routes>
-                                                        <Route path="/" element={<Navigate to="/customers/list" replace />} />
-                                                        <Route
-                                                            path="/customers"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="view_customers">
-                                                                    <CustomerList />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/customers/list"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="view_customers">
-                                                                    <CustomerList />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                {/* Pages with sidebar and header */}
+                                <Route path="*" element={
+                                    <ProtectedRoute>
+                                        <ErrorBoundary>
+                                            <div style={{ display: 'flex', minHeight: '100vh' }}>
+                                                <Sidebar />
+                                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                                                    <Header />
+                                                    <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "90vh", overflow: "auto" }}>
+                                                        <Routes>
+                                                            <Route path="/" element={<Navigate to="/customers/list" replace />} />
+                                                            <Route
+                                                                path="/customers"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="view_customers">
+                                                                        <CustomerList />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/customers/list"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="view_customers">
+                                                                        <CustomerList />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        {/* Follow-up Dashboard - shows all customers */}
-                                                        <Route
-                                                            path="/followups"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="view_customers">
-                                                                    <FollowupDashboard />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            {/* Follow-up Dashboard - shows all customers */}
+                                                            <Route
+                                                                path="/followups"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="view_customers">
+                                                                        <FollowupDashboard />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        {/* Follow-up and conversation pages require customerId */}
-                                                        <Route
-                                                            path="/followup/:customerId"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="talk_with_customer">
-                                                                    <FollowUpForm />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/talk/:customerId"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="talk_with_customer">
-                                                                    <TalkWithCustomerForm />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            {/* Follow-up and conversation pages require customerId */}
+                                                            <Route
+                                                                path="/followup/:customerId"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="talk_with_customer">
+                                                                        <FollowUpForm />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/talk/:customerId"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="talk_with_customer">
+                                                                        <TalkWithCustomerForm />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        {/* Redirect to customer list if no ID provided */}
-                                                        <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
-                                                        <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
+                                                            {/* Redirect to customer list if no ID provided */}
+                                                            <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
+                                                            <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
 
-                                                        <Route
-                                                            path="/admin/users"
-                                                            element={
-                                                                <ProtectedRoute requireRole="admin">
-                                                                    <UserManagement />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/company-profile"
-                                                            element={
-                                                                <ProtectedRoute requireRole="admin">
-                                                                    <CompanyProfilePage />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/admin/users"
+                                                                element={
+                                                                    <ProtectedRoute requireRole="admin">
+                                                                        <UserManagement />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/company-profile"
+                                                                element={
+                                                                    <ProtectedRoute requireRole="admin">
+                                                                        <CompanyProfilePage />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/customer-master"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager']}>
-                                                                    <CustomerMasterReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/customer-master"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                        <CustomerMasterReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/followups"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager']}>
-                                                                    <FollowUpTrackerReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/followups"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                        <FollowUpTrackerReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/reminders"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
-                                                                    <ReminderReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/reminders"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                        <ReminderReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/open-reminders"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
-                                                                    <OpenRemindersReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/open-reminders"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                        <OpenRemindersReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/conversation-history"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
-                                                                    <ConversationHistoryReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/conversation-history"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                        <ConversationHistoryReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/followup-dashboard"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager']}>
-                                                                    <FollowupDashboardReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/followup-dashboard"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                        <FollowupDashboardReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/followup-task-report"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager']}>
-                                                                    <FollowupTaskReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/followup-task-report"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                        <FollowupTaskReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reports/task-reminders"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <TaskReminderReport />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reports/task-reminders"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <TaskReminderReport />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/task-chats"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <TaskChatDashboard />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/task-chats/:taskId"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <TaskChatDashboard />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/task-chats"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <TaskChatDashboard />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/task-chats/:taskId"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <TaskChatDashboard />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/reminders"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="view_reminders">
-                                                                    <RemindersDashboard />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/reminders"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="view_reminders">
+                                                                        <RemindersDashboard />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        <Route
-                                                            path="/tasks/create"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="add_task">
-                                                                    <TaskCreatePage />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/tasks/list"
-                                                            element={
-                                                                <ProtectedRoute requirePermission="view_tasks">
-                                                                    <ManageTasksPage />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/tasks/groups"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <TaskGroupList />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            <Route
+                                                                path="/tasks/create"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="add_task">
+                                                                        <TaskCreatePage />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/tasks/list"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="view_tasks">
+                                                                        <ManageTasksPage />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/tasks/groups"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <TaskGroupList />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        {/* Groups */}
-                                                        <Route
-                                                            path="/groups"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <GroupList />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
-                                                        <Route
-                                                            path="/groups/:id"
-                                                            element={
-                                                                <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
-                                                                    <GroupDetails />
-                                                                </ProtectedRoute>
-                                                            }
-                                                        />
+                                                            {/* Groups */}
+                                                            <Route
+                                                                path="/groups"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <GroupList />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/groups/:id"
+                                                                element={
+                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                        <GroupDetails />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
 
-                                                        {/* Inventory */}
-                                                        <Route path="/inventory/items" element={<ProtectedRoute requirePermission="view_inventory"><ItemListPage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/items/new" element={<ProtectedRoute requirePermission="manage_inventory"><ItemFormPage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/items/:id" element={<ProtectedRoute requirePermission="manage_inventory"><ItemFormPage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/item-types" element={<ProtectedRoute requirePermission="manage_inventory"><ItemTypePage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/item-groups" element={<ProtectedRoute requirePermission="manage_inventory"><ItemGroupPage /></ProtectedRoute>} />
+                                                            {/* Inventory */}
+                                                            <Route path="/inventory/items" element={<ProtectedRoute requirePermission="view_inventory"><ItemListPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/items/new" element={<ProtectedRoute requirePermission="manage_inventory"><ItemFormPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/items/:id" element={<ProtectedRoute requirePermission="manage_inventory"><ItemFormPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/item-types" element={<ProtectedRoute requirePermission="manage_inventory"><ItemTypePage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/item-groups" element={<ProtectedRoute requirePermission="manage_inventory"><ItemGroupPage /></ProtectedRoute>} />
 
-                                                        <Route path="/inventory/bom" element={<ProtectedRoute requirePermission="view_inventory"><BOMPage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/bom/new" element={<ProtectedRoute requirePermission="manage_inventory"><BOMFormPage /></ProtectedRoute>} />
-                                                        <Route path="/inventory/bom/edit/:id" element={<ProtectedRoute requirePermission="manage_inventory"><BOMFormPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/bom" element={<ProtectedRoute requirePermission="view_inventory"><BOMPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/bom/new" element={<ProtectedRoute requirePermission="manage_inventory"><BOMFormPage /></ProtectedRoute>} />
+                                                            <Route path="/inventory/bom/edit/:id" element={<ProtectedRoute requirePermission="manage_inventory"><BOMFormPage /></ProtectedRoute>} />
 
-                                                        {/* Production */}
-                                                        <Route path="/production" element={<ProtectedRoute requirePermission="view_production"><ProductionDashboard /></ProtectedRoute>} />
-                                                        <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="view_production"><WorkOrderListPage /></ProtectedRoute>} />
-                                                        <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderFormPage /></ProtectedRoute>} />
-                                                        <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderDetailPage /></ProtectedRoute>} />
+                                                            {/* Production */}
+                                                            <Route path="/production" element={<ProtectedRoute requirePermission="view_production"><ProductionDashboard /></ProtectedRoute>} />
+                                                            <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="view_production"><WorkOrderListPage /></ProtectedRoute>} />
+                                                            <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="manage_production"><WorkOrderDetailPage /></ProtectedRoute>} />
 
-                                                        {/* Purchase Module */}
-                                                        <Route path="/purchase/suppliers" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SupplierListPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderListPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderFormPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/orders/edit/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderFormPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderDetailPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/grn" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><GRNListPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/grn/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><GRNFormPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceListPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceFormPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/invoices/edit/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceFormPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/cash-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><CashBookPage /></ProtectedRoute>} />
-                                                        <Route path="/purchase/bank-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><BankBookPage /></ProtectedRoute>} />
+                                                            {/* Purchase Module */}
+                                                            <Route path="/purchase/suppliers" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SupplierListPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderListPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderFormPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/orders/edit/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderFormPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseOrderDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/grn" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><GRNListPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/grn/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><GRNFormPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceListPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceFormPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/invoices/edit/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceFormPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/cash-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><CashBookPage /></ProtectedRoute>} />
+                                                            <Route path="/purchase/bank-book" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><BankBookPage /></ProtectedRoute>} />
 
-                                                        {/* Purchase Comparison Report */}
-                                                        <Route path="/reports/purchase-comparison" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseComparisonReportPage /></ProtectedRoute>} />
+                                                            {/* Purchase Comparison Report */}
+                                                            <Route path="/reports/purchase-comparison" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><PurchaseComparisonReportPage /></ProtectedRoute>} />
 
-                                                        {/* Sales Module */}
-                                                        <Route path="/sales/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderListPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderDetailPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceListPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceFormPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceDetailPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ProductionSheetPage /></ProtectedRoute>} />
-                                                        <Route path="/sales/invoice-series" element={<ProtectedRoute requireRole={['admin']}><InvoiceSeriesPage /></ProtectedRoute>} />
+                                                            {/* Sales Module */}
+                                                            <Route path="/sales/orders" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderListPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/orders/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderFormPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/orders/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesOrderDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/invoices" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceListPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/invoices/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceFormPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ProductionSheetPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/invoice-series" element={<ProtectedRoute requireRole={['admin']}><InvoiceSeriesPage /></ProtectedRoute>} />
 
-                                                        {/* Redirects */}
-                                                        <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
-                                                    </Routes>
-                                                </main>
+                                                            {/* Redirects */}
+                                                            <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
+                                                        </Routes>
+                                                    </main>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </ErrorBoundary>
-                                </ProtectedRoute>
-                            } />
-                        </Routes>
-                    </ModalProvider>
-                </ToastProvider>
+                                        </ErrorBoundary>
+                                    </ProtectedRoute>
+                                } />
+                            </Routes>
+                        </ModalProvider>
+                    </ToastProvider>
+                </NotificationProvider>
             </AuthProvider>
+
         </BrowserRouter>
+
     );
 }
 

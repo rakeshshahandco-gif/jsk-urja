@@ -72,6 +72,7 @@ const salesOrderSchema = new mongoose.Schema({
 
     // Payment / Status
     paymentType: { type: String, enum: ['Cash', 'Credit'], default: 'Credit' },
+    creditPeriod: { type: Number, default: 0 },
     status: { type: String, enum: ['Draft', 'Confirmed', 'Dispatched', 'Invoiced', 'Closed', 'Cancelled'], default: 'Draft' },
 
     // Linked docs

@@ -7,8 +7,8 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
-const inp = { padding: '9px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '7px', color: '#f1f5f9', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box' };
-const label = { fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: 600 };
+const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
+const label = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em' };
 
 const EMPTY_ITEM = { itemId: '', itemName: '', itemCode: '', description: '', uom: 'NOS', orderedQty: 1, rate: 0, discountPercent: 0, taxPercent: 18, itemGroup: '' };
 
@@ -144,8 +144,18 @@ export default function PurchaseOrderFormPage() {
 
     const totals = lineItems.reduce((acc, item) => {
         const c = calcRow(item);
-        return { subTotal: fmt(acc.subTotal + c.gross), discount: fmt(acc.discount + c.disc), tax: fmt(acc.tax + c.tax), grand: fmt(acc.grand + c.total) };
-    }, { subTotal: 0, discount: 0, tax: 0, grand: 0 });
+        return {
+            itemTaxable: fmt(acc.itemTaxable + c.net),
+            itemTax: fmt(acc.itemTax + c.tax),
+            discount: fmt(acc.discount + c.disc)
+        };
+    }, { itemTaxable: 0, itemTax: 0, discount: 0 });
+
+    const freight = Number(header.freightAmount) || 0;
+    const freightTax = fmt(freight * (header.freightGstRate || 0) / 100);
+    const totalTaxable = fmt(totals.itemTaxable + freight);
+    const totalTax = fmt(totals.itemTax + freightTax);
+    const grandTotal = fmt(totalTaxable + totalTax);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -182,26 +192,26 @@ export default function PurchaseOrderFormPage() {
     };
 
     return (
-        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#0f172a', minHeight: '100vh', color: '#f1f5f9' }}>
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <button onClick={() => navigate(PATHS.PURCHASE.ORDERS)}
-                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px' }}>
-                    ← Purchase Orders
+                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    ← Back to Purchase Orders
                 </button>
-                <h1 style={{ margin: '0 0 24px', fontSize: '22px', fontWeight: 700 }}>
+                <h1 style={{ margin: '0 0 24px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
                     {isEdit ? '✎ Edit Purchase Order' : '🛒 New Purchase Order'}
                 </h1>
-                {loading ? <div style={{ color: '#94a3b8' }}>Loading order data...</div> : (
+                {loading ? <div style={{ color: '#64748b', padding: 40, textAlign: 'center' }}>Loading order data...</div> : (
 
                     <form onSubmit={handleSubmit}>
                         {/* PO Header */}
-                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '24px', marginBottom: '20px' }}>
-                            <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 700, color: '#94a3b8' }}>ORDER DETAILS</h2>
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                            <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ORDER DETAILS</h2>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
                                 {isEdit && header.poNumber && (
                                     <div>
                                         <span style={label}>PO Number</span>
-                                        <input value={header.poNumber} style={{ ...inp, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', fontWeight: 700 }} readOnly />
+                                        <input value={header.poNumber} style={{ ...inp, background: '#f1f5f9', border: '1.5px solid #e2e8f0', color: '#64748b', fontWeight: 700 }} readOnly />
                                     </div>
                                 )}
                                 <div style={{ gridColumn: isEdit && header.poNumber ? 'span 1' : 'span 2' }}>
@@ -217,11 +227,11 @@ export default function PurchaseOrderFormPage() {
                                 </div>
                                 <div style={{ gridColumn: 'span 2' }}>
                                     <span style={label}>Supplier Address</span>
-                                    <input value={header.supplierAddress} style={{ ...inp, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8' }} readOnly placeholder="Address will show once supplier is selected" />
+                                    <input value={header.supplierAddress} style={{ ...inp, background: '#f8fafc', border: '1.5px solid #e2e8f0', color: '#64748b' }} readOnly placeholder="Address will show once supplier is selected" />
                                 </div>
                                 <div>
                                     <span style={label}>Supplier GST Number</span>
-                                    <input value={header.supplierGstNumber} style={{ ...inp, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8' }} readOnly placeholder="GST Number" />
+                                    <input value={header.supplierGstNumber} style={{ ...inp, background: '#f8fafc', border: '1.5px solid #e2e8f0', color: '#64748b' }} readOnly placeholder="GST Number" />
                                 </div>
                                 <div>
                                     <span style={label}>Expected Delivery</span>
@@ -247,8 +257,8 @@ export default function PurchaseOrderFormPage() {
                         </div>
 
                         {/* Transportation & Freight */}
-                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '24px', marginBottom: '20px' }}>
-                            <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 700, color: '#94a3b8' }}>🚚 TRANSPORTATION & FREIGHT</h2>
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                            <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🚚 TRANSPORTATION & FREIGHT</h2>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
                                 <div>
                                     <span style={label}>Transporter Name</span>
@@ -279,17 +289,17 @@ export default function PurchaseOrderFormPage() {
                         </div>
 
                         {/* Line Items */}
-                        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '24px', marginBottom: '20px' }}>
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#94a3b8' }}>ITEMS</h2>
-                                <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#334155', color: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>+ Add Row</button>
+                                <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</h2>
+                                <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Row</button>
                             </div>
                             <div style={{ overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                     <thead>
-                                        <tr style={{ background: '#0f172a', color: '#64748b' }}>
+                                        <tr style={{ background: '#f8fafc', color: '#64748b' }}>
                                             {['#', 'Item', 'Group', 'UOM', 'Qty', 'Rate', 'Disc%', 'Tax%', 'Amount', ''].map(h => (
-                                                <th key={h} style={{ padding: '9px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '1px solid #334155' }}>{h}</th>
+                                                <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -297,7 +307,7 @@ export default function PurchaseOrderFormPage() {
                                         {lineItems.map((item, i) => {
                                             const c = calcRow(item);
                                             return (
-                                                <tr key={i} style={{ borderBottom: '1px solid #1e293b' }}>
+                                                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                     <td style={{ padding: '8px 10px', color: '#475569', width: '30px' }}>{i + 1}</td>
                                                     <td style={{ padding: '8px 10px', minWidth: '200px' }}>
                                                         <SearchableSelect
@@ -305,7 +315,6 @@ export default function PurchaseOrderFormPage() {
                                                             value={item.itemId}
                                                             onChange={v => setItem(i, 'itemId', v)}
                                                             placeholder="— Search Item —"
-                                                            dark={true}
                                                         />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '120px' }}>
@@ -326,7 +335,7 @@ export default function PurchaseOrderFormPage() {
                                                     <td style={{ padding: '8px 10px', width: '70px' }}>
                                                         <input type="number" min="0" value={item.taxPercent} onChange={e => setItem(i, 'taxPercent', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total.toLocaleString()}</td>
+                                                    <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total.toLocaleString()}</td>
                                                     <td style={{ padding: '8px 10px' }}>
                                                         {lineItems.length > 1 && (
                                                             <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>
@@ -341,29 +350,44 @@ export default function PurchaseOrderFormPage() {
 
                             {/* Totals Summary */}
                             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                                <div style={{ background: '#0f172a', borderRadius: '10px', padding: '16px 24px', border: '1px solid #334155', minWidth: '280px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
-                                        <span>Subtotal</span><span>₹{totals.subTotal.toLocaleString()}</span>
+                                <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '16px 24px', border: '1px solid #e2e8f0', minWidth: '320px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                        <span>Item Taxable Amount</span>
+                                        <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{totals.itemTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
-                                        <span>Discount (−)</span><span>₹{totals.discount.toLocaleString()}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                        <span>Freight / Shipping (+)</span>
+                                        <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', padding: '8px 0', borderTop: '1px dashed #cbd5e1', borderBottom: '1px dashed #cbd5e1', fontSize: '14px', color: '#0f172a', fontWeight: 700 }}>
+                                        <span>Total Taxable</span>
+                                        <span>₹{totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+
                                     {header.gstType === 'IGST' ? (
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
-                                            <span>IGST (+)</span><span>₹{totals.tax.toLocaleString()}</span>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                            <span>IGST (+)</span>
+                                            <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                         </div>
                                     ) : (
                                         <>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
-                                                <span>CGST (+)</span><span>₹{fmt(totals.tax / 2).toLocaleString()}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                                <span>CGST (+)</span>
+                                                <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{fmt(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94a3b8' }}>
-                                                <span>SGST (+)</span><span>₹{fmt(totals.tax / 2).toLocaleString()}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                                <span>SGST (+)</span>
+                                                <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{fmt(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                             </div>
                                         </>
                                     )}
-                                    <div style={{ borderTop: '1px solid #334155', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '16px', color: '#10b981' }}>
-                                        <span>Grand Total</span><span>₹{totals.grand.toLocaleString()}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#4b5563', fontWeight: 600, borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                                        <span>Total Tax Amount</span>
+                                        <span>₹{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div style={{ borderTop: '2px solid #059669', marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '20px', color: '#059669' }}>
+                                        <span>Grand Total</span>
+                                        <span>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0 })}</span>
                                     </div>
                                 </div>
                             </div>
@@ -371,11 +395,11 @@ export default function PurchaseOrderFormPage() {
 
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                             <button type="button" onClick={() => navigate(-1)}
-                                style={{ padding: '10px 20px', borderRadius: '8px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                style={{ padding: '10px 24px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
                                 Cancel
                             </button>
                             <button type="submit" disabled={saving}
-                                style={{ padding: '10px 24px', borderRadius: '8px', background: saving ? '#334155' : '#fff', color: saving ? '#fff' : '#0f172a', border: '1px solid #334155', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                                style={{ padding: '10px 28px', borderRadius: '8px', background: saving ? '#cbd5e1' : '#2563eb', color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}>
                                 {saving ? (isEdit ? 'Updating...' : 'Creating...') : (isEdit ? '💾 Update Purchase Order' : '📤 Create Purchase Order')}
                             </button>
                         </div>

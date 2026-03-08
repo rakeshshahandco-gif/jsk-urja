@@ -18,7 +18,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4000, // <-- change to any port you want
-    open: true, // optional: auto-opens browser
+    port: 4000,
+    host: '0.0.0.0', // Listen on all interfaces to ensure accessibility
+    open: false,
   },
 })

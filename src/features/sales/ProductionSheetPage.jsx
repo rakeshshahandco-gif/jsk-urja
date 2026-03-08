@@ -142,7 +142,7 @@ export default function ProductionSheetPage() {
                     <thead>
                         <tr style={{ fontWeight: 900 }}>
                             <th style={{ width: '40px' }}>SR NO</th>
-                            <th>MODEL NO</th>
+                            <th style={{ width: '80px' }}>HSN</th>
                             <th style={{ width: '150px' }}>VOLT/CURRENT</th>
                             <th style={{ width: '80px' }}>QUANTITY</th>
                             <th style={{ width: '80px' }}>HOURS</th>
@@ -153,7 +153,7 @@ export default function ProductionSheetPage() {
                         {(ps.items || []).map((item, i) => (
                             <tr key={i} style={{ height: '25px' }}>
                                 <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                                <td>{item.modelNo || '—'}</td>
+                                <td style={{ textAlign: 'center' }}>{item.hsnCode || '—'}</td>
                                 <td>{item.voltCurrent || '—'}</td>
                                 <td style={{ textAlign: 'center' }}>{item.qty} Nos</td>
                                 <td>{item.hours || '—'}</td>
@@ -303,14 +303,14 @@ export default function ProductionSheetPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Model No', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'HSN', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
                                 {(editing ? form.items : ps.items || []).map((item, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                         <td style={td}>{i + 1}</td>
-                                        <td style={td}>{item.modelNo}</td>
+                                        <td style={td}>{item.hsnCode || '—'}</td>
                                         <td style={td}>{item.voltCurrent}</td>
                                         <td style={td}>{item.qty} Nos</td>
                                         <td style={td}>

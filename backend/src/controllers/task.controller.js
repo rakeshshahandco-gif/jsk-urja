@@ -8,6 +8,8 @@ import { TaskGroup } from '../models/taskGroup.model.js';
 import { GroupMember } from '../models/groupMember.model.js';
 import { calculateNextDueDate } from '../utils/recurrence.js';
 import { v4 as uuidv4 } from 'uuid';
+import { createNotification } from './notification.controller.js';
+
 
 // ---------------------------
 // HELPERS
@@ -118,7 +120,25 @@ const createTask = asyncHandler(async (req, res) => {
   }
 
   const task = await Task.create(taskData);
+
+  // NOTIFICATION: Task Assigned
+  if (task.assigneeIds && task.assigneeIds.length > 0) {
+    for (const assigneeId of task.assigneeIds) {
+      await createNotification({
+        recipient: assigneeId,
+        actor: req.user.id,
+        task: task._id,
+        type: 'ASSIGNED',
+        title: 'New Task Assigned',
+        message: `You have been assigned a new task: ${task.title}`
+      });
+    }
+  } else if (task.assignToAll) {
+    // Optional: Notify all if required, but usually avoided to prevent spam
+  }
+
   res.status(httpStatus.CREATED).send({ success: true, data: task });
+
 });
 
 // ---------------------------
@@ -282,6 +302,10 @@ const updateTask = asyncHandler(async (req, res) => {
     }
   }
 
+  const prevAssignees = task.assigneeIds.map(id => id.toString());
+  const newAssignees = up.assigneeIds ? up.assigneeIds.map(id => id.toString()) : prevAssignees;
+  const statusChanged = up.status && up.status !== task.status;
+
   Object.assign(task, up);
 
   // Backup safeguard after applying updates
@@ -291,7 +315,37 @@ const updateTask = asyncHandler(async (req, res) => {
 
   task.updatedBy = req.user.id;
   await task.save();
+
+  // NOTIFICATION: Reassigned
+  const addedAssignees = newAssignees.filter(id => !prevAssignees.includes(id));
+  for (const assigneeId of addedAssignees) {
+    await createNotification({
+      recipient: assigneeId,
+      actor: req.user.id,
+      task: task._id,
+      type: 'ASSIGNED',
+      title: 'Task Assigned',
+      message: `You have been assigned to: ${task.title}`
+    });
+  }
+
+  // NOTIFICATION: Status Change
+  if (statusChanged) {
+    const notifyUsers = new Set([...newAssignees, task.createdBy.toString()]);
+    for (const userId of notifyUsers) {
+      await createNotification({
+        recipient: userId,
+        actor: req.user.id,
+        task: task._id,
+        type: 'STATUS_CHANGE',
+        title: 'Task Status Updated',
+        message: `Status of "${task.title}" changed to ${task.status}`
+      });
+    }
+  }
+
   res.send({ success: true, data: task });
+
 });
 
 // ---------------------------
@@ -365,7 +419,19 @@ const closeTask = asyncHandler(async (req, res) => {
   }
 
   await task.save();
+
+  // NOTIFICATION: Task Completed
+  await createNotification({
+    recipient: task.createdBy,
+    actor: req.user.id,
+    task: task._id,
+    type: 'COMPLETED',
+    title: 'Task Completed',
+    message: `Task "${task.title}" has been marked as completed`
+  });
+
   res.send({ success: true, data: task });
+
 });
 
 const updateTaskStatus = asyncHandler(async (req, res) => {

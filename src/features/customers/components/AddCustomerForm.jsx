@@ -411,6 +411,23 @@ export const AddCustomerForm = ({ closeModal }) => {
                                 control={control}
                             />
                         </div>
+
+                        <Input
+                            label="Credit Period (Days)"
+                            type="number"
+                            placeholder="0"
+                            min="0"
+                            {...register('creditPeriod', { valueAsNumber: true })}
+                        />
+
+                        <Select
+                            label="Payment Type"
+                            options={[
+                                { value: 'Credit', label: 'Credit' },
+                                { value: 'Cash', label: 'Cash' },
+                            ]}
+                            {...register('paymentType')}
+                        />
                     </div>
                 </section>
 

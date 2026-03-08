@@ -1,6 +1,7 @@
 import Joi from 'joi';
 
 const createWorkOrderSchema = Joi.object({
+    woNumber: Joi.string().optional().allow(''),
     bomId: Joi.string().required(),
     targetQty: Joi.number().min(1).required(),
     priority: Joi.string().valid('Low', 'Medium', 'High', 'Urgent').default('Medium'),
@@ -78,11 +79,28 @@ const addProductionLogSchema = Joi.object({
     date: Joi.date().required(),
     shift: Joi.string().optional().allow(''),
     operator: Joi.string().optional().allow(''),
-    inputQty: Joi.number().min(0).required(),
-    outputQty: Joi.number().min(0).required(),
+    inputQty: Joi.number().min(0).optional(),
+    outputQty: Joi.number().min(0).optional(),
     reworkQty: Joi.number().min(0).default(0),
     rejectionQty: Joi.number().min(0).default(0),
     rejectionReason: Joi.string().optional().allow(''),
+
+    // QC specific details
+    qcPassedQty: Joi.number().min(0).optional(),
+    qcRejectedQty: Joi.number().min(0).optional(),
+    qcReworkQty: Joi.number().min(0).optional(),
+
+    // Missing components
+    missingComponents: Joi.array().items(
+        Joi.object({
+            itemId: Joi.string().required(),
+            itemCode: Joi.string().optional().allow(''),
+            itemName: Joi.string().optional().allow(''),
+            quantity: Joi.number().min(0).required(),
+            remarks: Joi.string().optional().allow(''),
+        })
+    ).optional(),
+
     remarks: Joi.string().optional().allow(''),
 });
 

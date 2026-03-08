@@ -27,7 +27,7 @@ const STAGE_STATUS_COLORS = {
     'Rework': { color: '#a78bfa', bg: '#1e1035', icon: '↺' },
 };
 
-const TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing', 'WIP & Exceptions'];
+const TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing', 'WIP & Exceptions', 'Material History'];
 
 // ─── Input style ─────────────────────────────────────────────────────────────
 const inp = {
@@ -144,8 +144,44 @@ export default function WorkOrderDetailPage() {
                 {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
                 {tab === 4 && <WipTab wo={wo} />}
+                {tab === 5 && <MaterialHistoryTab wo={wo} />}
             </div>
+
+            <NavigationGuides />
         </div>
+    );
+}
+
+// ─── Navigation Guides ───────────────────────────────────────────────────────
+function NavigationGuides() {
+    const scroll = (dir) => {
+        const main = document.querySelector('main');
+        if (!main) return;
+        const step = 400;
+        if (dir === 'up') main.scrollBy({ top: -step, behavior: 'smooth' });
+        if (dir === 'down') main.scrollBy({ top: step, behavior: 'smooth' });
+        if (dir === 'left') main.scrollBy({ left: -step, behavior: 'smooth' });
+        if (dir === 'right') main.scrollBy({ left: step, behavior: 'smooth' });
+    };
+
+    const guideStyle = {
+        position: 'fixed', zIndex: 999999, padding: '10px',
+        background: 'rgba(255, 255, 255, 0.4)', borderRadius: '50%',
+        border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backdropFilter: 'blur(4px)',
+        transition: 'all 0.2s', width: '40px', height: '40px', color: '#1d4ed8',
+        fontSize: '24px', fontWeight: 'bold'
+    };
+
+    return (
+        <>
+            {/* Edge Guides */}
+            <button onClick={() => scroll('up')} style={{ ...guideStyle, top: '80px', left: '50%', transform: 'translateX(-50%)' }} title="Scroll Up">↑</button>
+            <button onClick={() => scroll('down')} style={{ ...guideStyle, bottom: '20px', left: '50%', transform: 'translateX(-50%)' }} title="Scroll Down">↓</button>
+            <button onClick={() => scroll('left')} style={{ ...guideStyle, top: '50%', left: '260px', transform: 'translateY(-50%)' }} title="Scroll Left">←</button>
+            <button onClick={() => scroll('right')} style={{ ...guideStyle, top: '50%', right: '20px', transform: 'translateY(-50%)' }} title="Scroll Right">→</button>
+        </>
     );
 }
 
@@ -438,9 +474,32 @@ function ProcessExecutionTab({ wo, load }) {
 
     return (
         <div>
+            {/* Stage Summary Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                {(wo.stages || []).map(s => {
+                    const sc = STAGE_STATUS_COLORS[s.status] || STAGE_STATUS_COLORS['Not Started'];
+                    return (
+                        <div key={s.seq} style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>#{s.seq} {s.stageName}</span>
+                                <span style={{ fontSize: '10px', fontWeight: 700, color: sc.color }}>{s.status}</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                    <span style={{ color: '#94a3b8' }}>Output:</span>
+                                    <span style={{ fontWeight: 700, color: '#10b981' }}>{s.outputQty || 0}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                    <span style={{ color: '#94a3b8' }}>Rej/Rw:</span>
+                                    <span style={{ fontWeight: 600, color: '#ef4444' }}>{(s.rejectionQty || 0) + (s.reworkQty || 0)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
             <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700 }}>Stage Execution</h2>
-            {'Not editable: WO must be Released or In Process to update stages. Current: ' + wo.status
-                ? null : null}
             {!canEdit && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', color: '#92400e', fontSize: '13px' }}>
                     ⚠️ WO must be Released or In Process to update stages. Current status: <strong>{wo.status}</strong>
@@ -478,6 +537,10 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
         reworkQty: 0,
         rejectionQty: 0,
         rejectionReason: '',
+        qcPassedQty: 0,
+        qcRejectedQty: 0,
+        qcReworkQty: 0,
+        missingComponents: [],
         remarks: ''
     });
     const [showNewLog, setShowNewLog] = useState(false);
@@ -527,7 +590,8 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
             setShowNewLog(false);
             setNewLog({
                 date: new Date().toISOString().split('T')[0], shift: '', operator: '',
-                inputQty: 0, outputQty: 0, reworkQty: 0, rejectionQty: 0, rejectionReason: '', remarks: ''
+                inputQty: 0, outputQty: 0, reworkQty: 0, rejectionQty: 0, rejectionReason: '',
+                qcPassedQty: 0, qcRejectedQty: 0, qcReworkQty: 0, missingComponents: [], remarks: ''
             });
             load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
@@ -590,19 +654,15 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
 
                     {/* Aggregate Totals (Read Only) */}
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', background: '#f9fafb', padding: '12px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Max Allowed</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{maxAllowedOutput}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Pending Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#fca5a5' }}>{pendingOutput}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Input</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Balance in Process</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{balanceInProcess}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Good Output</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f1f5f9' }}>{totalOutput}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rework</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#a78bfa' }}>{totalRework}</div></div>
-                        <div style={{ width: '1px', background: '#334155' }}></div>
-                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Rejection</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>{totalRejection}</div></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Max Allowed</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>{maxAllowedOutput}</div></div>
+                        <div style={{ width: '1px', background: '#e5e7eb' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#fca5a5' }}>Prev. Pending</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444' }}>{pendingOutput}</div></div>
+                        <div style={{ width: '1px', background: '#e5e7eb' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Started</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#3b82f6' }}>{totalInput}</div></div>
+                        <div style={{ width: '1px', background: '#e5e7eb' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#94a3b8' }}>Total Completed</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981' }}>{totalOutput}</div></div>
+                        <div style={{ width: '1px', background: '#e5e7eb' }}></div>
+                        <div style={{ flex: 1, textAlign: 'center' }}><div style={{ fontSize: '11px', color: '#f59e0b' }}>Total Pending</div><div style={{ fontSize: '16px', fontWeight: 600, color: '#f59e0b' }}>{balanceInProcess}</div></div>
                     </div>
 
                     {/* Execution Logs Table */}
@@ -618,28 +678,35 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '12px' }}>
                                 <thead>
                                     <tr style={{ background: '#f8f9fa', color: '#6b7280', textAlign: 'left' }}>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Date</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Shift</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Operator</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>In</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Out</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rw</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Rej</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}>Remarks</th>
-                                        <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}></th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Date</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Shift</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Operator</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Started</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Completed</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Pending</th>
+                                        <th style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {productionLogs.map((l, i) => (
                                         <tr key={l._id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '8px', color: '#1e293b' }}>{l.date ? new Date(l.date).toLocaleDateString() : '—'}</td>
+                                            <td style={{ padding: '8px', color: '#1e293b', whiteSpace: 'nowrap' }}>{l.date ? new Date(l.date).toLocaleDateString() : '—'}</td>
                                             <td style={{ padding: '8px', color: '#6b7280' }}>{l.shift || '—'}</td>
                                             <td style={{ padding: '8px', color: '#6b7280' }}>{l.operator || '—'}</td>
-                                            <td style={{ padding: '8px', color: '#2563eb', fontWeight: 600 }}>{l.inputQty}</td>
-                                            <td style={{ padding: '8px', color: '#16a34a', fontWeight: 600 }}>{l.outputQty}</td>
-                                            <td style={{ padding: '8px', color: '#7c3aed' }}>{l.reworkQty}</td>
-                                            <td style={{ padding: '8px', color: '#dc2626' }}>{l.rejectionQty}</td>
-                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{l.remarks || l.rejectionReason}</td>
+                                            <td style={{ padding: '8px', color: '#2563eb', fontWeight: 500 }}>{l.inputQty}</td>
+                                            <td style={{ padding: '8px', color: '#16a34a', fontWeight: 700 }}>{l.outputQty}</td>
+                                            <td style={{ padding: '8px', color: '#f59e0b', fontWeight: 600 }}>{Math.max(0, l.inputQty - l.outputQty)}</td>
+                                            <td style={{ padding: '8px' }}>
+                                                {l.missingComponents?.length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                        {l.missingComponents.map((mc, idx) => (
+                                                            <span key={idx} style={{ fontSize: '9px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                Short: {mc.itemName}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td style={{ padding: '8px', textAlign: 'right' }}>
                                                 {canEdit && l._id && (
                                                     <button onClick={() => handleDeleteLog(l._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px' }}>✕</button>
@@ -654,32 +721,35 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
                         {/* Add Run Log Form */}
                         {showNewLog && (
                             <div style={{ background: '#f9fafb', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px' }}>
-                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#60a5fa', marginBottom: '12px' }}>New Run Details</div>
+                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#3b82f6', marginBottom: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>New Production Run - {stage.stageName}</span>
+                                    {stage.isQcGate && <span style={{ color: '#7e22ce' }}>[QC GATE MODE]</span>}
+                                </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '12px' }}>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Date</label><input type="date" value={newLog.date} onChange={e => setLog('date', e.target.value)} style={{ ...inp, padding: '6px' }} /></div>
                                     <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Shift</label><input value={newLog.shift} onChange={e => setLog('shift', e.target.value)} placeholder="e.g. Morning" style={{ ...inp, padding: '6px' }} /></div>
-                                    <div style={{ gridColumn: 'span 3' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Run operator..." style={{ ...inp, padding: '6px' }} /></div>
+                                    <div style={{ gridColumn: 'span 3' }}><label style={{ fontSize: '10px', color: '#94a3b8' }}>Operator Name</label><input value={newLog.operator} onChange={e => setLog('operator', e.target.value)} placeholder="Enter operator name..." style={{ ...inp, padding: '6px' }} /></div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px', background: '#ffffff', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
-                                    <div><label style={{ fontSize: '10px', color: '#94a3b8' }}>Input Qty</label><input type="number" min="0" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#10b981', fontWeight: 700 }}>Good Output Qty</label><input type="number" min="0" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '6px', border: '1px solid #10b981' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#a78bfa' }}>Rework Qty</label><input type="number" min="0" value={newLog.reworkQty} onChange={e => setLog('reworkQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                    <div><label style={{ fontSize: '10px', color: '#ef4444' }}>Rejection Qty</label><input type="number" min="0" value={newLog.rejectionQty} onChange={e => setLog('rejectionQty', Number(e.target.value))} style={{ ...inp, padding: '6px' }} /></div>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                                    <div>
-                                        <label style={{ fontSize: '10px', color: '#94a3b8' }}>Remarks</label>
-                                        <input value={newLog.remarks} onChange={e => setLog('remarks', e.target.value)} placeholder="General remarks..." style={{ ...inp, padding: '6px' }} />
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '10px', color: '#94a3b8' }}>Rejection Reason (if any)</label>
-                                        <input value={newLog.rejectionReason} onChange={e => setLog('rejectionReason', e.target.value)} style={{ ...inp, padding: '6px' }} />
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '12px', background: '#ffffff', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                                    <div><label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Qty Started</label><input type="number" min="0" value={newLog.inputQty} onChange={e => setLog('inputQty', Number(e.target.value))} style={{ ...inp, padding: '8px', fontSize: '14px', border: '1px solid #3b82f6' }} /></div>
+                                    <div><label style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>Qty Completed</label><input type="number" min="0" value={newLog.outputQty} onChange={e => setLog('outputQty', Number(e.target.value))} style={{ ...inp, padding: '8px', fontSize: '14px', border: '1px solid #16a34a' }} /></div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <label style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>Pending Qty</label>
+                                        <div style={{ padding: '8px', fontSize: '18px', fontWeight: 700, color: '#f59e0b', background: '#fffbeb', borderRadius: '7px' }}>
+                                            {Math.max(0, (newLog.inputQty || 0) - (newLog.outputQty || 0))}
+                                        </div>
                                     </div>
                                 </div>
 
+                                <div style={{ display: 'none' }}>
+                                    <input value={newLog.remarks} onChange={e => setLog('remarks', e.target.value)} />
+                                    <input value={newLog.rejectionReason} onChange={e => setLog('rejectionReason', e.target.value)} />
+                                </div>
+
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                    <button onClick={() => setShowNewLog(false)} disabled={saving} style={{ padding: '6px 12px', background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
-                                    <button onClick={handleAddLog} disabled={saving} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Run Log'}</button>
+                                    <button onClick={() => setShowNewLog(false)} disabled={saving} style={{ padding: '6px 12px', background: 'transparent', color: '#64748b', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Cancel</button>
+                                    <button onClick={handleAddLog} disabled={saving} style={{ padding: '6px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save Run Log'}</button>
                                 </div>
                             </div>
                         )}
@@ -922,6 +992,77 @@ function WipTab({ wo }) {
                     </table>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// ─── Material History Tab ───────────────────────────────────────────────────
+function MaterialHistoryTab({ wo }) {
+    // Flatten all production logs from all stages that have missingComponents
+    const history = (wo.stages || []).flatMap(s =>
+        (s.productionLogs || []).filter(l => l.missingComponents?.length > 0).map(l => ({
+            stageName: s.stageName,
+            date: l.date,
+            operator: l.operator,
+            missing: l.missingComponents,
+            remarks: l.remarks
+        }))
+    ).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return (
+        <div style={{ maxWidth: '900px' }}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>Missing Component History</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '24px', lineHeight: '1.5' }}>
+                This is a permanent traceability log of components that were reported as missing during specific production stages.
+                Even if materials are later received, this record preserves the state of the assembly at each run.
+            </p>
+
+            {history.length === 0 ? (
+                <div style={{ background: '#ffffff', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '60px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '12px' }}>📋</div>
+                    <div style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 500 }}>No missing components recorded in any production runs.</div>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {history.map((h, i) => (
+                        <div key={i} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                                <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#1e293b' }}>{h.stageName}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                        Registered on {new Date(h.date).toLocaleDateString()} by <strong>{h.operator || 'Unknown Operator'}</strong>
+                                    </div>
+                                </div>
+                                <span style={{ fontSize: '10px', background: '#fffbeb', color: '#92400e', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, border: '1px solid #fde68a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    Run Shortage
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '10px' }}>
+                                {h.missing.map((it, idx) => (
+                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                                        <div>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>{it.itemName}</div>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>{it.itemCode}</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444' }}>Qty: {it.quantity}</div>
+                                            <div style={{ fontSize: '10px', color: '#94a3b8' }}>Missing pcs</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {h.remarks && (
+                                <div style={{ marginTop: '16px', background: '#f1f5f9', padding: '10px 14px', borderRadius: '6px', fontSize: '12px', color: '#475569', display: 'flex', gap: '8px' }}>
+                                    <span style={{ opacity: 0.6 }}>💬</span>
+                                    <span>{h.remarks}</span>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

@@ -208,6 +208,7 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         qty: item.qty,
         hours: '',
         dummyLoad: '',
+        hsnCode: item.hsnCode || '',
     }));
 
     const ps = await ProductionSheet.create({

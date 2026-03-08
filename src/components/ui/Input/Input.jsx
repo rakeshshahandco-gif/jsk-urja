@@ -1,6 +1,7 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useRef } from 'react';
 import clsx from 'clsx';
 import PropTypes from 'prop-types';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 import styles from './Input.module.scss';
 
 export const Input = forwardRef(({
@@ -21,6 +22,38 @@ export const Input = forwardRef(({
     ...props
 }, ref) => {
     const inputId = id || name;
+    const internalRef = useRef(null);
+
+    const setRefs = (el) => {
+        internalRef.current = el;
+        if (typeof ref === 'function') {
+            ref(el);
+        } else if (ref) {
+            ref.current = el;
+        }
+    };
+
+    const handleIncrement = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (internalRef.current) {
+            internalRef.current.stepUp();
+            // Trigger both input and change events for react-hook-form and other listeners
+            internalRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+            internalRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
+
+    const handleDecrement = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (internalRef.current) {
+            internalRef.current.stepDown();
+            // Trigger both input and change events for react-hook-form and other listeners
+            internalRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+            internalRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
 
     return (
         <div className={clsx(styles.container, className)}>
@@ -39,7 +72,7 @@ export const Input = forwardRef(({
                 {startIcon && <span className={clsx(styles.icon, styles.start)}>{startIcon}</span>}
 
                 <input
-                    ref={ref}
+                    ref={setRefs}
                     id={inputId}
                     name={name}
                     type={type}
@@ -49,10 +82,31 @@ export const Input = forwardRef(({
                     placeholder={placeholder}
                     className={clsx(styles.input, styles[variant], {
                         [styles.hasStartIcon]: !!startIcon,
-                        [styles.hasEndIcon]: !!endIcon
+                        [styles.hasEndIcon]: !!endIcon || (type === 'number' && !readOnly && !disabled)
                     })}
                     {...props}
                 />
+
+                {type === 'number' && !readOnly && !disabled && (
+                    <div className={styles.numberControls}>
+                        <button
+                            type="button"
+                            className={styles.controlBtn}
+                            onClick={handleIncrement}
+                            tabIndex="-1"
+                        >
+                            <ChevronUp size={12} />
+                        </button>
+                        <button
+                            type="button"
+                            className={styles.controlBtn}
+                            onClick={handleDecrement}
+                            tabIndex="-1"
+                        >
+                            <ChevronDown size={12} />
+                        </button>
+                    </div>
+                )}
 
                 {endIcon && <span className={clsx(styles.icon, styles.end)}>{endIcon}</span>}
             </div>

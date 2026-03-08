@@ -36,7 +36,7 @@ export default function PurchaseOrderListPage() {
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
     return (
-        <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+        <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#fff', minHeight: '100vh', color: '#1e293b' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
