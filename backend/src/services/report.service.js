@@ -6,6 +6,7 @@ import Conversation from '../models/conversation.model.js';
 import Followup from '../models/followup.model.js';
 import reminderService from './reminder.service.js';
 import mongoose from 'mongoose';
+import { Item } from '../models/item.model.js';
 
 /**
  * Build dynamic MongoDB query for customer report
@@ -1379,6 +1380,168 @@ const queryTaskReminderReport = async (filters, options) => {
     };
 };
 
+/**
+ * Build Item Master Report Query
+ */
+const buildItemReportQuery = (filters) => {
+    const filter = {};
+    if (filters.itemCategory) filter.itemCategory = filters.itemCategory;
+    if (filters.itemType) filter.itemType = filters.itemType;
+    if (filters.itemGroupName) filter.itemGroupName = filters.itemGroupName;
+    if (filters.isActive !== undefined) filter.isActive = filters.isActive === 'true';
+
+    if (filters.search || filters.q) {
+        const search = filters.search || filters.q;
+        const searchParts = search.split(/\s+[—\-]\s+/).map(s => s.trim()).filter(Boolean);
+
+        if (searchParts.length > 1) {
+            filter.$or = [
+                { itemCode: { $regex: searchParts[0], $options: 'i' } },
+                { itemName: { $regex: searchParts[1], $options: 'i' } }
+            ];
+        } else {
+            const isNumeric = /^\d+$/.test(search.trim());
+            if (isNumeric) {
+                const num = search.trim();
+                filter.$or = [
+                    { itemCode: { $regex: `(?:^|\\D)0*${num}$`, $options: 'i' } },
+                    { itemName: { $regex: `(^|[^0-9])${num}([^0-9]|$)`, $options: 'i' } },
+                    { hsnCode: { $regex: num, $options: 'i' } },
+                ];
+            } else {
+                const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const standardRegex = { $regex: safeSearch, $options: 'i' };
+                filter.$or = [
+                    { itemName: standardRegex },
+                    { itemCode: standardRegex },
+                    { hsnCode: standardRegex },
+                ];
+            }
+        }
+    }
+    return filter;
+};
+
+/**
+ * Generate Item Master Excel Report
+ */
+const generateItemExcelReport = async (filters, options) => {
+    const filter = buildItemReportQuery(filters);
+    const [field, dir] = (options.sortBy || 'itemName:asc').split(':');
+    const sort = { [field]: dir === 'desc' ? -1 : 1 };
+
+    const items = await Item.find(filter)
+        .sort(sort)
+        .limit(10000)
+        .lean();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Item Master');
+
+    worksheet.columns = [
+        { header: 'Item Code', key: 'itemCode', width: 20 },
+        { header: 'Item Name', key: 'itemName', width: 35 },
+        { header: 'Group', key: 'itemGroupName', width: 20 },
+        { header: 'Category', key: 'itemCategory', width: 20 },
+        { header: 'Type', key: 'itemType', width: 15 },
+        { header: 'UOM', key: 'uom', width: 10 },
+        { header: 'HSN Code', key: 'hsnCode', width: 15 },
+        { header: 'Current Stock', key: 'currentStock', width: 15 },
+        { header: 'Selling Price', key: 'sellingPrice', width: 15 },
+        { header: 'Status', key: 'status', width: 12 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    items.forEach(i => {
+        worksheet.addRow({
+            itemCode: i.itemCode,
+            itemName: i.itemName,
+            itemGroupName: i.itemGroupName || '-',
+            itemCategory: i.itemCategory,
+            itemType: i.itemType,
+            uom: i.uom,
+            hsnCode: i.hsnCode || '-',
+            currentStock: i.currentStock,
+            sellingPrice: i.sellingPrice,
+            status: i.isActive ? 'Active' : 'Inactive'
+        });
+    });
+
+    return await workbook.xlsx.writeBuffer();
+};
+
+/**
+ * Generate Item Master PDF Report
+ */
+const generateItemPDFReport = async (filters, options) => {
+    const filter = buildItemReportQuery(filters);
+    const [field, dir] = (options.sortBy || 'itemName:asc').split(':');
+    const sort = { [field]: dir === 'desc' ? -1 : 1 };
+
+    const items = await Item.find(filter)
+        .sort(sort)
+        .limit(1000)
+        .lean();
+
+    const htmlContent = `
+        <html>
+        <head>
+            <style>
+                body { font-family: Helvetica, sans-serif; font-size: 10px; padding: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+                th { background-color: #f3f4f6; }
+                h1 { margin-bottom: 5px; }
+                .summary { margin-bottom: 15px; font-size: 11px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <h1>Item Master Report</h1>
+            <div class="summary">
+                Generated on: ${new Date().toLocaleString()} | Total Items: ${items.length}
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Item Name</th>
+                        <th>Group</th>
+                        <th>Category</th>
+                        <th>UOM</th>
+                        <th>Stock</th>
+                        <th>Rate</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${items.map(i => `
+                        <tr>
+                            <td>${i.itemCode}</td>
+                            <td>${i.itemName}</td>
+                            <td>${i.itemGroupName || '-'}</td>
+                            <td>${i.itemCategory}</td>
+                            <td>${i.uom}</td>
+                            <td>${i.currentStock}</td>
+                            <td>₹${(i.sellingPrice || 0).toFixed(2)}</td>
+                            <td>${i.isActive ? 'Active' : 'Inactive'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent);
+    const pdfBuffer = await page.pdf({ format: 'A4', landscape: true, printBackground: true });
+    await browser.close();
+    return pdfBuffer;
+};
+
 export default {
     buildReportQuery,
     queryCustomerReport,
@@ -1405,5 +1568,8 @@ export default {
     // Task Reminder Report
     queryTaskReminderReport,
     // Manage Tasks Page
-    queryManageTasks
+    queryManageTasks,
+    // Item Master
+    generateItemExcelReport,
+    generateItemPDFReport
 };

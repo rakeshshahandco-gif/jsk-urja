@@ -4,13 +4,17 @@ import { validate } from '../../middlewares/validate.middleware.js';
 import itemValidation from '../../validations/item.validation.js';
 import * as itemController from '../../controllers/item.controller.js';
 
+console.log('ITEM ROUTES LOADED AT', new Date().toISOString());
+
 const router = express.Router();
 
 router.get('/generate-code', protect, itemController.generateCode);
+router.get('/export/excel', protect, itemController.exportItemsExcel);
+router.get('/export/pdf', protect, itemController.exportItemsPDF);
 
 router
     .route('/')
-    .get(protect, validate(itemValidation.getItems), itemController.getItems)
+    .get(protect, itemController.getItems)
     .post(protect, validate(itemValidation.createItem), itemController.createItem);
 
 router

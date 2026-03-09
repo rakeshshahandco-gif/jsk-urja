@@ -137,12 +137,12 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
 }
 
 .menuItem {
     position: relative;
-    border-radius: 10px;
+    border-radius: 6px;
     overflow: hidden;
     transition: all 0.2s ease;
 }
@@ -150,13 +150,13 @@
 .link {
     display: flex;
     align-items: center;
-    padding: 12px 14px;
+    padding: 8px 12px;
     text-decoration: none;
     color: $sidebar-text;
     transition: all 0.2s ease;
     cursor: pointer;
     font-weight: 500;
-    font-size: 15px;
+    font-size: 14px;
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.05);
@@ -164,14 +164,14 @@
     }
 
     &.active {
-        background-color: $primary;
-        color: #fff;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba($primary, 0.3);
+        background-color: rgba($primary, 0.1);
+        color: $primary;
+        border-radius: 6px;
+        // box-shadow: 0 2px 8px rgba($primary, 0.3);
 
         .icon,
         .arrow {
-            color: #fff;
+            color: $primary;
         }
     }
 }
@@ -205,20 +205,20 @@
 }
 
 .subMenuContainer {
-    background-color: #f1f5f9; // Light grey sub-container
+    background-color: #f8fafc; // Even lighter grey for sub-container
 }
 
 .subMenuHeader {
     display: flex;
     align-items: center;
-    padding: 12px 14px;
+    padding: 8px 12px;
     color: $sidebar-text;
     background-color: $white;
-    border-radius: 10px 10px 0 0;
+    border-radius: 6px 6px 0 0;
     cursor: pointer;
     font-weight: 600;
-    font-size: 15px;
-    box-shadow: $shadow-sm;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 
     .arrow {
         color: $sidebar-text;
@@ -228,16 +228,16 @@
 
 .subMenu {
     list-style: none;
-    padding: 6px 0;
+    padding: 2px 0;
     margin: 0;
 
     .link {
-        padding-left: 28px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        color: rgba(4, 45, 69, 0.65); // Muted $sidebar-text
-        font-size: 14px;
-        font-weight: 400;
+        padding-left: 32px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        color: rgba(4, 45, 69, 0.7); // Muted $sidebar-text
+        font-size: 13px;
+        font-weight: 500;
 
         &:hover {
             background-color: rgba(0, 0, 0, 0.03);
@@ -245,7 +245,7 @@
         }
 
         &.active {
-            background-color: transparent;
+            background-color: rgba($primary, 0.08);
             color: $primary;
             font-weight: 600;
             position: relative;
@@ -253,11 +253,11 @@
             &::before {
                 content: '';
                 position: absolute;
-                left: 16px;
+                left: 14px;
                 top: 50%;
                 transform: translateY(-50%);
                 width: 3px;
-                height: 16px;
+                height: 14px;
                 background-color: $primary;
                 border-radius: 2px;
             }

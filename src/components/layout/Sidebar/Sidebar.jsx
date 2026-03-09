@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { menuConfig, ROLES } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarItem } from './SidebarItem';
@@ -6,9 +7,24 @@ import styles from './Sidebar.module.scss';
 
 export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
+    const location = useLocation();
     const userRole = user?.role || ROLES.VIEWER;
 
-    console.log('Sidebar Debug:', { userRole, permissions: user?.permissions });
+    const [expandedMenuId, setExpandedMenuId] = useState(null);
+
+    // Initial state based on current location
+    useEffect(() => {
+        const activeParent = menuConfig.find(item =>
+            item.children?.some(child => location.pathname.startsWith(child.path))
+        );
+        if (activeParent) {
+            setExpandedMenuId(activeParent.id);
+        }
+    }, [location.pathname]);
+
+    const handleToggle = (id) => {
+        setExpandedMenuId(prevId => prevId === id ? null : id);
+    };
 
     // Filter items based on user role and permissions
     const filterItems = (items) => {
@@ -55,7 +71,12 @@ export const Sidebar = () => {
             <nav className={styles.nav}>
                 <ul className={styles.menuList}>
                     {visibleMenuItems.map(item => (
-                        <SidebarItem key={item.id} item={item} />
+                        <SidebarItem
+                            key={item.id}
+                            item={item}
+                            isOpen={expandedMenuId === item.id}
+                            onToggle={() => handleToggle(item.id)}
+                        />
                     ))}
                 </ul>
             </nav>

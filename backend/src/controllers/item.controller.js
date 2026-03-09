@@ -2,6 +2,8 @@ import httpStatus from 'http-status';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { Item } from '../models/item.model.js';
+import reportService from '../services/report.service.js';
+import pick from '../utils/pick.js';
 
 // ── Auto-generate item code ─────────────────────────────────────────────────
 const generateItemCode = async (itemType = 'ITEM') => {
@@ -48,15 +50,16 @@ export const createItem = asyncHandler(async (req, res) => {
 // ── LIST ────────────────────────────────────────────────────────────────────
 export const getItems = asyncHandler(async (req, res) => {
     const {
-        search, itemCategory, itemType, isActive,
+        search, itemCategory, itemType, itemGroupName, isActive,
         page = 1, limit = 25, sortBy = 'itemName:asc'
     } = req.query;
 
-    console.log('GET /items query:', req.query);
+    console.log('GET /items full query:', JSON.stringify(req.query, null, 2));
 
     const filter = {};
     if (itemCategory) filter.itemCategory = itemCategory;
     if (itemType) filter.itemType = itemType;
+    if (itemGroupName) filter.itemGroupName = itemGroupName;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     if (search) {
@@ -177,6 +180,30 @@ export const deleteItem = asyncHandler(async (req, res) => {
 });
 
 // ── GENERATE CODE (utility endpoint) ────────────────────────────────────────
+// ── EXPORT EXCEL ──────────────────────────────────────────────────────────
+export const exportItemsExcel = asyncHandler(async (req, res) => {
+    const filters = pick(req.query, ['search', 'itemCategory', 'itemType', 'itemGroupName', 'isActive']);
+    const options = pick(req.query, ['sortBy']);
+
+    const buffer = await reportService.generateItemExcelReport(filters, options);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.send(buffer);
+});
+
+// ── EXPORT PDF ────────────────────────────────────────────────────────────
+export const exportItemsPDF = asyncHandler(async (req, res) => {
+    const filters = pick(req.query, ['search', 'itemCategory', 'itemType', 'itemGroupName', 'isActive']);
+    const options = pick(req.query, ['sortBy']);
+
+    const buffer = await reportService.generateItemPDFReport(filters, options);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_${new Date().toISOString().split('T')[0]}.pdf`);
+    res.send(buffer);
+});
+
 export const generateCode = asyncHandler(async (req, res) => {
     const code = await generateItemCode(req.query.itemType || 'OTHER');
     res.send({ success: true, data: { itemCode: code } });

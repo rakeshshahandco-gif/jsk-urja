@@ -223,27 +223,7 @@ export default function SalesInvoiceDetailPage() {
                                             <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>Freight & Forwarding:</td>
                                             <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.freightAmount || 0).toFixed(2)}</td>
                                         </tr>
-                                        {!isIGST ? (
-                                            <>
-                                                <tr>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>CGST {inv.items?.[0]?.gstRate / 2}%:</td>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.totalCgst || 0).toFixed(2)}</td>
-                                                </tr>
-                                                <tr>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>SGST {inv.items?.[0]?.gstRate / 2}%:</td>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.totalSgst || 0).toFixed(2)}</td>
-                                                </tr>
-                                                <tr style={{ background: '#f5f5f5' }}>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>Total Tax:</td>
-                                                    <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.totalGst || 0).toFixed(2)}</td>
-                                                </tr>
-                                            </>
-                                        ) : (
-                                            <tr>
-                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>IGST {inv.items?.[0]?.gstRate || 18}%:</td>
-                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.totalIgst || 0).toFixed(2)}</td>
-                                            </tr>
-                                        )}
+
                                         <tr style={{ background: '#f5f5f5' }}>
                                             <td style={{ padding: '3mm 2mm', fontWeight: 900, fontSize: '13pt' }}>Rounded Total:</td>
                                             <td style={{ padding: '3mm 2mm', textAlign: 'right', fontWeight: 900, fontSize: '13pt' }}>₹ {(inv.roundedTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -417,7 +397,7 @@ export default function SalesInvoiceDetailPage() {
                                 </div>
                                 <div style={{ width: '300px', padding: 10 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span>Freight:</span> <span>{fmtCur(inv.freightAmount)}</span></div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span>Tax:</span> <span>{fmtCur(isIGST ? inv.totalIgst : (inv.totalCgst + inv.totalSgst))}</span></div>
+
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '2px solid #333', fontWeight: 900, fontSize: 18 }}>
                                         <span>Total:</span> <span>{fmtCur(inv.roundedTotal)}</span>
                                     </div>

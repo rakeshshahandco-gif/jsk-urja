@@ -134,6 +134,7 @@ export default function SalesOrderDetailPage() {
                                     <tr><td style={{ fontWeight: 'bold' }}>Delivery Date:</td><td>{fmt(so.deliveryDate)}</td></tr>
                                     <tr><td style={{ fontWeight: 'bold', verticalAlign: 'top' }}>Customer's<br />Purchase Order:</td><td style={{ verticalAlign: 'top' }}>{so.customerPO || 'VERBAL'}</td></tr>
                                     <tr><td style={{ fontWeight: 'bold', verticalAlign: 'top' }}>Customer's<br />Purchase Order Date:</td><td style={{ verticalAlign: 'top' }}>{fmt(so.customerPODate || so.soDate)}</td></tr>
+                                    <tr><td style={{ fontWeight: 'bold' }}>Sticker / Label:</td><td>{so.stickerType || '—'}</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -189,39 +190,7 @@ export default function SalesOrderDetailPage() {
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.freightAmount || 0).toFixed(2)}</td>
                                 </tr>
                             )}
-                            {so.gstType === 'CGST / SGST' ? (
-                                <>
-                                    {so.totalCgst > 0 && (
-                                        <tr>
-                                            <td colSpan="6" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>CGST</td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalCgst || 0).toFixed(2)}</td>
-                                        </tr>
-                                    )}
-                                    {so.totalSgst > 0 && (
-                                        <tr>
-                                            <td colSpan="6" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>SGST</td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalSgst || 0).toFixed(2)}</td>
-                                        </tr>
-                                    )}
-                                    {(so.totalCgst > 0 || so.totalSgst > 0) && (
-                                        <tr style={{ background: '#f5f5f5' }}>
-                                            <td colSpan="6" style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '10px' }}>Total Tax</td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
-                                        </tr>
-                                    )}
-                                </>
-                            ) : (
-                                so.totalGst > 0 && (
-                                    <tr>
-                                        <td colSpan="6" style={{ border: 'none' }}></td>
-                                        <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '9px' }}>Output Tax {so.gstType}</td>
-                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalGst || 0).toFixed(2)}</td>
-                                    </tr>
-                                )
-                            )}
+
                             {so.roundOff !== 0 && (
                                 <tr>
                                     <td colSpan="6" style={{ border: 'none' }}></td>
@@ -327,6 +296,10 @@ export default function SalesOrderDetailPage() {
                                 <div style={{ fontSize: 18, fontWeight: 700, color: c, marginTop: 4 }}>{v}</div>
                             </div>
                         ))}
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>Sticker / Label</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: '#7c3aed', marginTop: 4 }}>{so.stickerType || '—'}</div>
+                        </div>
                     </div>
 
                     {/* Customer Info */}

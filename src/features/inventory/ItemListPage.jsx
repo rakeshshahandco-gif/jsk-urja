@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package } from 'lucide-react';
-import { getItems, deleteItem } from '@/services/itemApi';
+import { getItems, deleteItem, exportItemsExcel, exportItemsPDF } from '@/services/itemApi';
+import { FileDown, FileText } from 'lucide-react';
 import { getItemTypes } from '@/services/itemTypeApi';
+import { getItemGroups } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 
@@ -56,10 +58,12 @@ const ItemListPage = () => {
     const { addToast } = useToast();
     const [items, setItems] = useState([]);
     const [types, setTypes] = useState(STATIC_TYPES);
+    const [groups, setGroups] = useState([{ value: '', label: 'All Groups' }]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [catFilter, setCatFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
+    const [groupFilter, setGroupFilter] = useState('');
     const [activeFilter, setActiveFilter] = useState('true');
     const [sortBy, setSortBy] = useState('itemCode:asc');
     const [page, setPage] = useState(1);
@@ -75,6 +79,7 @@ const ItemListPage = () => {
                 search: search || undefined,
                 itemCategory: catFilter || undefined,
                 itemType: typeFilter || undefined,
+                itemGroupName: groupFilter || undefined,
                 isActive: activeFilter,
                 sortBy
             };
@@ -85,7 +90,7 @@ const ItemListPage = () => {
             console.error('Load Items Error:', err);
             addToast(err?.response?.data?.message || 'Failed to load items', 'error');
         } finally { setLoading(false); }
-    }, [page, search, catFilter, typeFilter, activeFilter, sortBy]);
+    }, [page, search, catFilter, typeFilter, groupFilter, activeFilter, sortBy]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -102,9 +107,16 @@ const ItemListPage = () => {
                 setTypes([{ value: '', label: 'All Types' }, ...dynamicTypes]);
             }
         }).catch(err => console.error('Failed to fetch item types', err));
+
+        getItemGroups().then(data => {
+            if (data && data.length > 0) {
+                const dynamicGroups = data.map(g => ({ value: g.name, label: g.name }));
+                setGroups([{ value: '', label: 'All Groups' }, ...dynamicGroups]);
+            }
+        }).catch(err => console.error('Failed to fetch item groups', err));
     }, []);
 
-    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setPage(1); };
+    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setGroupFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setPage(1); };
 
     const handleDelete = async (id, name) => {
         if (!window.confirm(`Deactivate "${name}"?`)) return;
@@ -120,6 +132,54 @@ const ItemListPage = () => {
             setSortBy(`${field}:asc`);
         }
         setPage(1);
+    };
+
+    const handleExportExcel = async () => {
+        try {
+            const params = {
+                search: search || undefined,
+                itemCategory: catFilter || undefined,
+                itemType: typeFilter || undefined,
+                itemGroupName: groupFilter || undefined,
+                isActive: activeFilter,
+                sortBy
+            };
+            const blob = await exportItemsExcel(params);
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Item_Master_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (err) {
+            console.error('Export Excel Error:', err);
+            addToast('Failed to export Excel', 'error');
+        }
+    };
+
+    const handleExportPDF = async () => {
+        try {
+            const params = {
+                search: search || undefined,
+                itemCategory: catFilter || undefined,
+                itemType: typeFilter || undefined,
+                itemGroupName: groupFilter || undefined,
+                isActive: activeFilter,
+                sortBy
+            };
+            const blob = await exportItemsPDF(params);
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Item_Master_${new Date().toISOString().split('T')[0]}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+        } catch (err) {
+            console.error('Export PDF Error:', err);
+            addToast('Failed to export PDF', 'error');
+        }
     };
 
     const SortIndicator = ({ field }) => {
@@ -138,12 +198,28 @@ const ItemListPage = () => {
                     <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Item Master</span>
                     <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '1px 8px', borderRadius: 10, fontWeight: 600 }}>{meta.total} items</span>
                 </div>
-                <button
-                    onClick={() => navigate('/inventory/items/new')}
-                    style={{ height: 30, padding: '0 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                >
-                    <Plus size={13} /> New Item
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                        onClick={handleExportExcel}
+                        style={{ height: 30, padding: '0 12px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Export All Filtered Data to Excel"
+                    >
+                        <FileDown size={13} /> Excel
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
+                        style={{ height: 30, padding: '0 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Export All Filtered Data to PDF"
+                    >
+                        <FileText size={13} /> PDF
+                    </button>
+                    <button
+                        onClick={() => navigate('/inventory/items/new')}
+                        style={{ height: 30, padding: '0 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                    >
+                        <Plus size={13} /> New Item
+                    </button>
+                </div>
             </div>
 
             {/* Filter bar */}
@@ -154,6 +230,9 @@ const ItemListPage = () => {
                 </div>
                 <select style={s.sel} value={catFilter} onChange={e => { setCatFilter(e.target.value); setPage(1); }}>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <select style={s.sel} value={groupFilter} onChange={e => { setGroupFilter(e.target.value); setPage(1); }}>
+                    {groups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
                 </select>
                 <select style={s.sel} value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1); }}>
                     {types.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}

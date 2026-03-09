@@ -45,6 +45,7 @@ const salesOrderSchema = new mongoose.Schema({
     // Order Info
     orderCategory: { type: String, enum: ['Order', 'Sample', 'Replacement'], default: 'Order' },
     deliveryDate: { type: Date, default: null },
+    stickerType: { type: String, default: '' },
     orderedBy: { type: String, default: '' },
     remarks: { type: String, default: '' },
 

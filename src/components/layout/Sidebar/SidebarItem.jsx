@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
@@ -6,11 +6,8 @@ import clsx from 'clsx';
 // Placeholder icons - in real app would map to generic Icon component
 const IconPlaceholder = ({ name }) => <span>Build</span>; // Fallback
 
-export const SidebarItem = ({ item, collapsed }) => {
-    const [isOpen, setIsOpen] = useState(false);
+export const SidebarItem = ({ item, collapsed, isOpen, onToggle }) => {
     const location = useLocation();
-
-    const toggleSubMenu = () => setIsOpen(!isOpen);
 
     // Check if item has children
     const hasChildren = item.children && item.children.length > 0;
@@ -19,22 +16,15 @@ export const SidebarItem = ({ item, collapsed }) => {
     // For parent items, check if any child is active
     const isChildActive = hasChildren && item.children.some(child => location.pathname.startsWith(child.path));
 
-    // Effect to auto-expand if child is active
-    React.useEffect(() => {
-        if (isChildActive) {
-            setIsOpen(true);
-        }
-    }, [isChildActive]);
-
     if (hasChildren) {
         return (
             <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })}>
                 <div
-                    className={clsx(styles.link, { 
-                        [styles.active]: isChildActive && !isOpen,
+                    className={clsx(styles.link, {
+                        [styles.active]: isChildActive,
                         [styles.subMenuHeader]: isOpen && !collapsed
                     })}
-                    onClick={toggleSubMenu}
+                    onClick={onToggle}
                 >
                     <span className={styles.icon}>
                         📝

@@ -118,7 +118,16 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                 } : { enabled: false }
             };
             if (task?._id) {
-                await updateTask(task._id, payload);
+                // Sanitize payload: Remove fields not allowed by backend validation during update
+                const {
+                    _id, id, groupId,
+                    createdAt, updatedAt,
+                    createdBy, __v,
+                    extensionHistory,
+                    ...sanitizedPayload
+                } = payload;
+
+                await updateTask(task._id, sanitizedPayload);
                 toast.success('Task updated');
             } else {
                 await createTask(payload);
@@ -246,8 +255,8 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                 </div>
                 <div className={styles.recurrenceBox}>
                     <input type="checkbox" id="recurrenceEnabled" {...register('recurrence.enabled')} />
-                    <label 
-                        htmlFor="recurrenceEnabled" 
+                    <label
+                        htmlFor="recurrenceEnabled"
                         className={clsx({ [styles.active]: recurrenceEnabled })}
                     >
                         <RefreshCw size={12} /> Recurring

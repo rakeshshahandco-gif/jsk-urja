@@ -24,6 +24,7 @@ import TaskChatDashboard from '@/features/taskChats/TaskChatDashboard';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
+import { TaskEditPage } from '@/features/tasks/components/TaskEditPage';
 import ManageTasksPage from '@/features/tasks/components/ManageTasksPage';
 import { TaskGroupList } from '@/features/tasks/components/TaskGroupList';
 import ItemListPage from '@/features/inventory/ItemListPage';
@@ -279,6 +280,14 @@ function App() {
                                                                 element={
                                                                     <ProtectedRoute requirePermission="add_task">
                                                                         <TaskCreatePage />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/tasks/edit/:id"
+                                                                element={
+                                                                    <ProtectedRoute requirePermission="add_task">
+                                                                        <TaskEditPage />
                                                                     </ProtectedRoute>
                                                                 }
                                                             />

@@ -65,23 +65,26 @@ const bodySchema = Joi.object({
     remarks: Joi.string().allow('').optional(),
 }).unknown(true);
 
-const createItem = { body: bodySchema };
+const createItem = { body: bodySchema.unknown(true) };
 const updateItem = {
     params: Joi.object({ id: Joi.string().required() }),
-    body: bodySchema
+    body: bodySchema.unknown(true)
 };
-const getItem = { params: Joi.object({ id: Joi.string().required() }) };
+const getItem = {
+    params: Joi.object({ id: Joi.string().required() }),
+    query: Joi.object({ itemGroupName: Joi.string().optional() }).unknown(true)
+};
 const deleteItem = { params: Joi.object({ id: Joi.string().required() }) };
 const getItems = {
     query: Joi.object({
         search: Joi.string().allow('').optional(),
         itemCategory: Joi.string().valid(...CATEGORIES).optional(),
         itemType: Joi.string().allow('').optional(),
-        isActive: Joi.string().allow('').optional(),
+        itemGroupName: Joi.string().allow('').optional(),
         page: Joi.number().integer().optional(),
         limit: Joi.number().integer().optional(),
         sortBy: Joi.string().allow('').optional(),
-    })
+    }).unknown(true)
 };
 
 export default { createItem, updateItem, getItem, deleteItem, getItems };

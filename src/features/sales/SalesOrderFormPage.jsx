@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { createSalesOrder, getSalesOrderById, updateSalesOrder } from '@/services/salesApi';
 import { getCustomers, searchCustomers } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
+import { getStickers } from '@/services/stickerApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -51,6 +52,7 @@ export default function SalesOrderFormPage() {
         deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
         freightAmount: '', freightGstRate: 0,
         creditPeriod: 0,
+        stickerType: '',
         items: [BLANK_ITEM()],
     });
 
@@ -61,6 +63,7 @@ export default function SalesOrderFormPage() {
     const custSearchTimeout = useRef(null);
 
     const [allItems, setAllItems] = useState([]);
+    const [stickerOptions, setStickerOptions] = useState([]);
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
@@ -74,20 +77,15 @@ export default function SalesOrderFormPage() {
             const list = res?.data || res?.results || res || [];
             if (Array.isArray(list)) {
                 const filtered = list.filter(i => {
-                    const cat = (i.itemCategory || '').trim().toUpperCase();
-                    const type = (i.itemType || '').trim().toUpperCase();
-                    const group = (i.itemGroupName || '').trim().toUpperCase();
-
-                    const isFinishedCat = cat.includes('FINISHED') || cat.includes('FG');
-                    const isFinishedType = type.includes('PRODUCT') || type.includes('MANUFACTUR') || type.includes('FINISHED');
-                    const isFinishedGroup = group.includes('FINISHED');
-                    const isManufacturable = i.isManufacturable === true || i.isManufacturable === 'true';
-
-                    return isFinishedCat || isFinishedType || isFinishedGroup || isManufacturable;
+                    return i.itemCategory === 'FINISHED_GOOD';
                 });
                 setAllItems(filtered);
             }
         }).catch(e => console.error('Error loading items:', e));
+
+        getStickers().then(res => {
+            if (Array.isArray(res)) setStickerOptions(res.map(s => s.name));
+        }).catch(e => console.error('Error loading stickers:', e));
 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
@@ -168,7 +166,7 @@ export default function SalesOrderFormPage() {
         setForm(p => {
             const items = p.items.map((item, idx) => {
                 if (idx !== index) return item;
-                const rate = selected.standardRate || selected.rate || selected.salesPrice || 0;
+                const rate = selected.standardRate || selected.rate || selected.salesPrice || '';
                 const updated = {
                     itemId: selected._id,
                     itemCode: selected.itemCode || '',
@@ -179,7 +177,7 @@ export default function SalesOrderFormPage() {
                     uom: selected.uom || 'NOS',
                     rate,
                     gstRate: selected.taxRate || selected.gstRate || 18,
-                    qty: item.qty || 1, // Keep existing quantity or default to 1
+                    qty: item.qty || '', // Keep existing quantity or default empty
                 };
                 return { ...updated, amount: (Number(updated.qty) || 0) * (Number(updated.rate) || 0) };
             });
@@ -446,8 +444,8 @@ export default function SalesOrderFormPage() {
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" placeholder="0" /></td>
-                                            <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" placeholder="0.00" /></td>
+                                            <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
+                                            <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
                                             <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 90, whiteSpace: 'nowrap' }}>₹{amt.toLocaleString('en-IN')}</td>
                                             <td style={{ ...td, width: 36 }}>
                                                 {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }}>✕</button>}

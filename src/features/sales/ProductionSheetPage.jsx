@@ -130,11 +130,7 @@ export default function ProductionSheetPage() {
                         <div className="o-cell" style={{ flex: 1 }}><span className="o-label">SIGN:-</span> <span className="o-value"></span></div>
                     </div>
                     <div className="o-row" style={{ height: '30px' }}>
-                        <div className="o-cell" style={{ flex: 1 }}><span className="o-label">CABINET:-</span> <span className="o-value">{ps.cabinetType || '—'}</span></div>
-                    </div>
-                    <div className="o-row" style={{ height: '30px' }}>
-                        <div className="o-cell"><span className="o-label">WIRES:-</span> <span className="o-value">{ps.wires || '—'}</span></div>
-                        <div className="o-cell"><span className="o-label">Order category:</span> <span className="o-value">{ps.orderCategory || 'Order'}</span></div>
+                        <div className="o-cell" style={{ flex: 1 }}><span className="o-label">Order category:</span> <span className="o-value">{ps.orderCategory || 'Order'}</span></div>
                     </div>
                 </div>
 
@@ -142,7 +138,6 @@ export default function ProductionSheetPage() {
                     <thead>
                         <tr style={{ fontWeight: 900 }}>
                             <th style={{ width: '40px' }}>SR NO</th>
-                            <th style={{ width: '80px' }}>HSN</th>
                             <th style={{ width: '150px' }}>VOLT/CURRENT</th>
                             <th style={{ width: '80px' }}>QUANTITY</th>
                             <th style={{ width: '80px' }}>HOURS</th>
@@ -153,7 +148,6 @@ export default function ProductionSheetPage() {
                         {(ps.items || []).map((item, i) => (
                             <tr key={i} style={{ height: '25px' }}>
                                 <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                                <td style={{ textAlign: 'center' }}>{item.hsnCode || '—'}</td>
                                 <td>{item.voltCurrent || '—'}</td>
                                 <td style={{ textAlign: 'center' }}>{item.qty} Nos</td>
                                 <td>{item.hours || '—'}</td>
@@ -161,7 +155,7 @@ export default function ProductionSheetPage() {
                             </tr>
                         ))}
                         {Array.from({ length: Math.max(0, 3 - (ps.items?.length || 0)) }).map((_, i) => (
-                            <tr key={`e-${i}`} style={{ height: '25px' }}><td /><td /><td /><td /><td /><td /></tr>
+                            <tr key={`e-${i}`} style={{ height: '25px' }}><td /><td /><td /><td /><td /></tr>
                         ))}
                     </tbody>
                 </table>
@@ -275,18 +269,6 @@ export default function ProductionSheetPage() {
                                 readOnly={!editing}
                                 style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
                         </F>
-                        <F l="Cabinet Type">
-                            <input value={editing ? form.cabinetType : ps.cabinetType || ''}
-                                onChange={e => setF('cabinetType', e.target.value)}
-                                readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
-                        </F>
-                        <F l="Wires">
-                            <input value={editing ? form.wires : ps.wires || ''}
-                                onChange={e => setF('wires', e.target.value)}
-                                readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
-                        </F>
                         <F l="Status">
                             {editing ? (
                                 <select value={form.status} onChange={e => setF('status', e.target.value)} style={inp}>
@@ -303,14 +285,13 @@ export default function ProductionSheetPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'HSN', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
                                 {(editing ? form.items : ps.items || []).map((item, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                         <td style={td}>{i + 1}</td>
-                                        <td style={td}>{item.hsnCode || '—'}</td>
                                         <td style={td}>{item.voltCurrent}</td>
                                         <td style={td}>{item.qty} Nos</td>
                                         <td style={td}>

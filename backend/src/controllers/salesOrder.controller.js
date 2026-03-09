@@ -88,9 +88,23 @@ export const createSO = asyncHandler(async (req, res) => {
         body.items, body.freightAmount, body.freightGstRate, body.gstType
     );
 
+    // Pull sticker type from customer master
+    let stickerType = body.stickerType || '';
+    if (!stickerType && body.customerId) {
+        try {
+            const customer = await Customer.findById(body.customerId).populate('stickers');
+            if (customer && customer.stickers && customer.stickers.length > 0) {
+                stickerType = customer.stickers[0].name;
+            }
+        } catch (e) {
+            console.error('Error fetching customer stickers for SO:', e);
+        }
+    }
+
     const so = await SalesOrder.create({
         ...body,
         soNumber,
+        stickerType,
         customerCode: body.customerCode || '', // Expecting frontend to pass this if available
         items: processedItems,
         totalQty,
@@ -162,6 +176,18 @@ export const updateSO = asyncHandler(async (req, res) => {
         body.amountInWords = numWords(roundedTotal);
     }
 
+    // Update stickerType if customer changed or it's missing
+    if (body.customerId && (body.customerId !== String(so.customerId) || !so.stickerType)) {
+        try {
+            const customer = await Customer.findById(body.customerId).populate('stickers');
+            if (customer && customer.stickers && customer.stickers.length > 0) {
+                body.stickerType = customer.stickers[0].name;
+            }
+        } catch (e) {
+            console.error('Error updating customer stickers for SO:', e);
+        }
+    }
+
     Object.assign(so, body);
     so.updatedBy = req.user.id;
     await so.save();
@@ -178,15 +204,17 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         if (existing) return res.json({ success: true, data: existing, message: 'Production sheet already exists' });
     }
 
-    // Pull sticker type from customer master
-    let stickerType = '';
-    try {
-        const customer = await Customer.findOne({ customerCode: so.customerCode }).populate('stickers');
-        if (customer && customer.stickers && customer.stickers.length > 0) {
-            stickerType = customer.stickers[0].name;
+    // Pull sticker type from Sales Order or Customer Master
+    let stickerType = so.stickerType || '';
+    if (!stickerType) {
+        try {
+            const customer = await Customer.findOne({ customerCode: so.customerCode }).populate('stickers');
+            if (customer && customer.stickers && customer.stickers.length > 0) {
+                stickerType = customer.stickers[0].name;
+            }
+        } catch (e) {
+            console.error('Error fetching customer stickers:', e);
         }
-    } catch (e) {
-        console.error('Error fetching customer stickers:', e);
     }
 
     const year = new Date().getFullYear();

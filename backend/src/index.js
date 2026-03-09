@@ -1,3 +1,4 @@
+console.log('--- BACKEND STARTING ---');
 import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';
@@ -19,7 +20,8 @@ connectDB().then((connected) => {
     initSocket(httpServer);
 
     server = httpServer.listen(config.port, () => {
-        logger.info(`Server running on port ${config.port}`);
+        console.log(`Server started at ${new Date().toISOString()} on port ${config.port}`);
+        logger.info(`Listening to port ${config.port}`);
         logger.info(`🌐 API available at: http://localhost:${config.port}/api/v1`);
     });
 }).catch((err) => {

@@ -30,3 +30,13 @@ export const generateItemCode = async (itemType = 'OTHER') => {
     const res = await api.get('/items/generate-code', { params: { itemType } });
     return res.data.data?.itemCode;
 };
+
+export const exportItemsExcel = async (params = {}) => {
+    const res = await api.get('/items/export/excel', { params, responseType: 'blob' });
+    return res.data;
+};
+
+export const exportItemsPDF = async (params = {}) => {
+    const res = await api.get('/items/export/pdf', { params, responseType: 'blob' });
+    return res.data;
+};
