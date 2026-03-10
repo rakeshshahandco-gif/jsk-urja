@@ -217,6 +217,7 @@ export default function SalesInvoiceFormPage() {
                     ...item,
                     itemId: selected._id,
                     itemName: selected.itemName || selected.name || '',
+                    description: selected.description || selected.itemName || selected.name || '',
                     modelNo: selected.modelNo || '',
                     hsnCode: selected.hsnCode || '',
                     uom: selected.uom || 'NOS',
@@ -382,7 +383,7 @@ export default function SalesInvoiceFormPage() {
                                         <td style={{ ...td, color: '#9ca3af', width: 28 }}>{i + 1}</td>
                                         <td style={{ ...td, minWidth: 140 }}>
                                             <SearchableSelect
-                                                options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                options={allItems.map(it => ({ value: it._id, label: it.description || it.itemName, meta: it.itemCode }))}
                                                 value={item.itemId}
                                                 onChange={v => handleItemSelect(v, i)}
                                                 placeholder="Search code/name..."

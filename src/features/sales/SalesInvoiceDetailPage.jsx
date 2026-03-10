@@ -187,8 +187,8 @@ export default function SalesInvoiceDetailPage() {
                                 {(inv.items || []).map((it, i) => (
                                     <tr key={i}>
                                         <td style={{ textAlign: 'center', fontWeight: 'bold', border: '1px solid #000', padding: '2mm' }}>{i + 1}</td>
-                                        <td style={{ fontWeight: 800, border: '1px solid #000', padding: '2mm' }}>{it.itemName}</td>
-                                        <td style={{ fontSize: '8pt', whiteSpace: 'pre-wrap', border: '1px solid #000', padding: '2mm' }}>{it.description || it.modelNo || '—'}</td>
+                                        <td style={{ fontWeight: 800, border: '1px solid #000', padding: '2mm', textTransform: 'uppercase' }}>{it.description || it.itemName}</td>
+                                        <td style={{ fontSize: '8pt', whiteSpace: 'pre-wrap', border: '1px solid #000', padding: '2mm' }}>{it.modelNo || '—'}</td>
                                         <td style={{ textAlign: 'center', border: '1px solid #000', padding: '2mm' }}>{it.hsnCode}</td>
                                         <td style={{ textAlign: 'center', border: '1px solid #000', padding: '2mm' }}>{it.qty} Nos</td>
                                         <td style={{ textAlign: 'right', paddingRight: '2mm', border: '1px solid #000' }}>₹ {(it.rate || 0).toFixed(2)}</td>
@@ -408,8 +408,8 @@ export default function SalesInvoiceDetailPage() {
                                         <tr key={i}>
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{i + 1}</td>
                                             <td style={{ border: '1px solid #333', padding: 8 }}>
-                                                <strong style={{ textTransform: 'uppercase' }}>{it.itemName}</strong>
-                                                <div style={{ fontSize: 11 }}>{it.description || it.modelNo}</div>
+                                                <strong style={{ textTransform: 'uppercase' }}>{it.description || it.itemName}</strong>
+                                                <div style={{ fontSize: 11 }}>{it.modelNo}</div>
                                             </td>
                                             {gstApplicable && <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{it.hsnCode || '—'}</td>}
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{it.qty}</td>

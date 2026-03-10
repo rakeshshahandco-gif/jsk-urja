@@ -180,6 +180,7 @@ export default function SalesOrderFormPage() {
                     itemId: selected._id,
                     itemCode: selected.itemCode || '',
                     itemName: selected.itemName || selected.name || '',
+                    description: selected.description || selected.itemName || selected.name || '',
                     modelNo: selected.modelNo || '',
                     additionalNotes: '',
                     hsnCode: selected.hsnCode || '',
@@ -454,7 +455,7 @@ export default function SalesOrderFormPage() {
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
-                                {['Sr', 'Item Code *', 'Item Name', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                                {['Sr', 'Item Code *', 'Description', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                                 {form.items.map((item, i) => {
@@ -480,7 +481,7 @@ export default function SalesOrderFormPage() {
                                                 />
                                             </td>
                                             <td style={{ ...td, minWidth: 160 }}>
-                                                <input value={item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Item Name" />
+                                                <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" />
                                             </td>
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} autoComplete="off" /></td>

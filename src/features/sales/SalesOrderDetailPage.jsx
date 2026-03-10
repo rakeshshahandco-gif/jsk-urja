@@ -150,7 +150,7 @@ export default function SalesOrderDetailPage() {
                             <tr>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '30px', fontWeight: 800 }}>Sr</th>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '85px', fontWeight: 800 }}>Item Code</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', fontWeight: 800 }}>Item Name</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', fontWeight: 800 }}>Description</th>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '100px', fontWeight: 800 }}>Additional Notes</th>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>HSN</th>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>Qty</th>
@@ -164,7 +164,7 @@ export default function SalesOrderDetailPage() {
                                 <tr key={i}>
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', verticalAlign: 'top' }}>{i + 1}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textTransform: 'uppercase' }}>{item.itemCode || '—'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', fontWeight: 'bold', textTransform: 'uppercase' }}>{item.itemName}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', fontWeight: 'bold', textTransform: 'uppercase' }}>{item.description || item.itemName}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', fontSize: '9px' }}>{item.additionalNotes || '—'}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontSize: '9px' }}>{item.hsnCode || '—'}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontWeight: 'bold' }}>{item.qty} {item.uom}</td>
@@ -344,13 +344,13 @@ export default function SalesOrderDetailPage() {
                     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 20 }}>
                         <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6' }}><h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Order Items</h2></div>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead><tr>{['Sr', 'Item Code', 'Item Name', 'Additional Notes', 'HSN', 'UOM', 'Qty', 'Rate', gstApplicable ? 'GST%' : null, 'Amount'].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                            <thead><tr>{['Sr', 'Item Code', 'Description', 'Additional Notes', 'HSN', 'UOM', 'Qty', 'Rate', gstApplicable ? 'GST%' : null, 'Amount'].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
                             <tbody>
                                 {(so.items || []).map((item, i) => (
                                     <tr key={i} onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                         <td style={{ ...td, color: '#9ca3af' }}>{i + 1}</td>
                                         <td style={td}>{item.itemCode || '—'}</td>
-                                        <td style={td}><div style={{ fontWeight: 500, color: '#1e293b' }}>{item.itemName}</div></td>
+                                        <td style={td}><div style={{ fontWeight: 500, color: '#1e293b' }}>{item.description || item.itemName}</div></td>
                                         <td style={{ ...td, fontSize: 11, color: '#6b7280' }}>{item.additionalNotes || '—'}</td>
                                         <td style={{ ...td, color: '#6b7280' }}>{item.hsnCode || '—'}</td>
                                         <td style={td}>{item.uom}</td>

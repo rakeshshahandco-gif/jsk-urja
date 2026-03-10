@@ -4,6 +4,7 @@ const soItemSchema = new mongoose.Schema({
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
     itemCode: { type: String, default: '' },
     itemName: { type: String, required: true },
+    description: { type: String, default: '' },
     modelNo: { type: String, default: '' },
     additionalNotes: { type: String, default: '' },
     hsnCode: { type: String, default: '' },

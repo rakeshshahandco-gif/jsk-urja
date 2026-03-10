@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { Item } from '../models/item.model.js';
+import { ItemGroup } from '../models/itemGroup.model.js';
 import reportService from '../services/report.service.js';
 import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
@@ -365,6 +366,23 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
 
     if (itemsToInsert.length === 0) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'No valid data found in the Excel file');
+    }
+
+    // Auto-create missing Item Groups
+    const uniqueGroups = [...new Set(itemsToInsert.map(i => i.itemData.itemGroupName).filter(Boolean))];
+    for (const gName of uniqueGroups) {
+        const exists = await ItemGroup.findOne({ name: { $regex: new RegExp(`^${gName}$`, 'i') } });
+        if (!exists) {
+            let baseCode = gName.replace(/[^A-Z0-9]/ig, '').substring(0, 10).toUpperCase() || 'GRP';
+            try {
+                await ItemGroup.create({ name: gName, code: baseCode, createdBy: req.user.id });
+            } catch (err) {
+                // If code collision, append random digits
+                if (err.code === 11000) {
+                    await ItemGroup.create({ name: gName, code: `${baseCode}_${Math.floor(Math.random() * 10000)}`, createdBy: req.user.id });
+                }
+            }
+        }
     }
 
     // Insert items one by one to handle code generation correctly and individual failures
