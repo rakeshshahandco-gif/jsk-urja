@@ -268,6 +268,7 @@ export const CustomerList = () => {
                                             <th>Company</th>
                                             <th>Primary Contact</th>
                                             <th>Mobile</th>
+                                            <th>GST Reg</th>
                                             <th>Status</th>
                                             <th style={{ textAlign: 'center' }}>Actions</th>
                                         </tr>
@@ -304,6 +305,7 @@ export const CustomerList = () => {
                                                     </td>
                                                     <td>{primaryContact ? (primaryContact.name || '-') : '-'}</td>
                                                     <td>{primaryContact ? (primaryContact.mobile || '-') : '-'}</td>
+                                                    <td>{customer.gstRegistrationType || '-'}</td>
                                                     <td>
                                                         <span className={clsx(styles.badge, statusClass)}>
                                                             {currentStatus}

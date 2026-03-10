@@ -56,6 +56,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 tags: [],
                 gstNumber: '',
                 gstType: '',
+                gstRegistrationType: '',
                 contactPersons: [
                     {
                         name: '',
@@ -100,6 +101,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
             gstType: customerData.gstType || '',
+            gstRegistrationType: customerData.gstRegistrationType || '',
             customerCode: customerData.customerCode || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
@@ -632,6 +634,22 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option value="">Select Type</option>
                                 <option value="CGST / SGST">CGST / SGST</option>
                                 <option value="IGST">IGST</option>
+                            </select>
+                        </div>
+
+                        {/* GST Registration Type */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="gstRegistrationType">GST REGISTRATION TYPE</label>
+                            <select
+                                id="gstRegistrationType"
+                                {...register('gstRegistrationType')}
+                                className={styles['form-select']}
+                            >
+                                <option value="">Select Type</option>
+                                <option value="Registered">Registered</option>
+                                <option value="Unregistered">Unregistered</option>
+                                <option value="Composite">Composite</option>
+                                <option value="Consumer">Consumer</option>
                             </select>
                         </div>
 

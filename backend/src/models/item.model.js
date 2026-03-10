@@ -29,6 +29,11 @@ const itemSchema = new mongoose.Schema({
         type: String,
         default: 'OTHER'
     },
+    description: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     points: {
         type: String,
         trim: true,

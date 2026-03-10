@@ -12,7 +12,7 @@ export default function InvoiceSeriesPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ seriesName: '', financialYear: '', prefix: '', startNumber: 1, padLength: 5, isDefault: false, description: '' });
+    const [form, setForm] = useState({ seriesName: '', financialYear: '', prefix: '', startNumber: 1, padLength: 5, gstApplicable: true, isDefault: false, description: '' });
     const [saving, setSaving] = useState(false);
 
     const load = async () => {
@@ -24,14 +24,32 @@ export default function InvoiceSeriesPage() {
 
     useEffect(() => { load(); }, []);
 
-    const openNew = () => { setEditing(null); setForm({ seriesName: '', financialYear: '25-26', prefix: '25-26/', startNumber: 1, padLength: 5, isDefault: false, description: '' }); setShowModal(true); };
-    const openEdit = (s) => { setEditing(s); setForm({ seriesName: s.seriesName, financialYear: s.financialYear, prefix: s.prefix, startNumber: s.startNumber, padLength: s.padLength, isDefault: s.isDefault, description: s.description || '' }); setShowModal(true); };
+    const openNew = () => { setEditing(null); setForm({ seriesName: '', financialYear: '25-26', prefix: '25-26/', startNumber: 1, padLength: 5, gstApplicable: true, isDefault: false, description: '' }); setShowModal(true); };
+    const openEdit = (s) => {
+        setEditing(s);
+        setForm({
+            seriesName: s.seriesName,
+            financialYear: s.financialYear,
+            prefix: s.prefix,
+            startNumber: s.startNumber,
+            padLength: s.padLength,
+            gstApplicable: s.gstApplicable === false ? false : true,
+            isDefault: !!s.isDefault,
+            description: s.description || ''
+        });
+        setShowModal(true);
+    };
 
     const handleSave = async () => {
         if (!form.seriesName || !form.financialYear || !form.prefix) return toast.error('Name, FY, and prefix are required');
         setSaving(true);
+        console.log('DEBUG: Saving Series Form:', JSON.stringify(form, null, 2));
         try {
-            if (editing) { await updateInvoiceSeries(editing._id, form); toast.success('Updated!'); }
+            if (editing) {
+                const res = await updateInvoiceSeries(editing._id, form);
+                console.log('DEBUG: Update response:', res);
+                toast.success('Updated!');
+            }
             else { await createInvoiceSeries(form); toast.success('Series created!'); }
             setShowModal(false);
             load();
@@ -75,6 +93,7 @@ export default function InvoiceSeriesPage() {
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Prefix: <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, color: '#0d9488', fontWeight: 700 }}>{s.prefix}</code></div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Start: <strong>{s.startNumber}</strong> · Pad: <strong>{s.padLength}</strong> digits</div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Last Used: <strong style={{ color: s.currentNumber > 0 ? '#374151' : '#9ca3af' }}>{s.currentNumber > 0 ? `${s.prefix}${String(s.currentNumber).padStart(s.padLength, '0')}` : 'None yet'}</strong></div>
+                                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Tax Mode: <strong style={{ color: s.gstApplicable ? '#0d9488' : '#7c3aed' }}>{s.gstApplicable ? 'GST Invoicing' : 'Without GST'}</strong></div>
                                 <div style={{ fontSize: 13, color: s.isActive ? '#16a34a' : '#dc2626', fontWeight: 600, marginBottom: 12 }}>{s.isActive ? '● Active' : '○ Inactive'}</div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <button onClick={() => openEdit(s)} style={{ flex: 1, padding: '7px 0', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', color: '#374151', fontWeight: 600, fontSize: 12 }}>Edit</button>
@@ -102,10 +121,16 @@ export default function InvoiceSeriesPage() {
                                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Description</label>
                                 <textarea value={form.description} onChange={e => f('description', e.target.value)} style={{ ...inp, height: 60, resize: 'vertical' }} />
                             </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
-                                <input type="checkbox" checked={form.isDefault} onChange={e => f('isDefault', e.target.checked)} style={{ width: 16, height: 16 }} />
-                                <span style={{ fontWeight: 600 }}>Set as Default Series</span>
-                            </label>
+                            <div style={{ display: 'flex', gap: 16 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                                    <input type="checkbox" checked={form.gstApplicable} onChange={e => f('gstApplicable', e.target.checked)} style={{ width: 16, height: 16 }} />
+                                    <span style={{ fontWeight: 600 }}>GST Applicable</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                                    <input type="checkbox" checked={form.isDefault} onChange={e => f('isDefault', e.target.checked)} style={{ width: 16, height: 16 }} />
+                                    <span style={{ fontWeight: 600 }}>Set as Default Series</span>
+                                </label>
+                            </div>
                         </div>
                         <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                             <button onClick={() => setShowModal(false)} style={{ padding: '8px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Cancel</button>

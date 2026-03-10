@@ -23,6 +23,7 @@ const bodySchema = Joi.object({
     itemCategory: Joi.string().valid(...CATEGORIES).required(),
     itemType: Joi.string().allow('').optional(),
     uom: Joi.string().valid(...UOMS).optional(),
+    description: Joi.string().allow('').optional(),
     points: Joi.string().allow('').optional(),
 
     openingStock: Joi.number().min(0).optional(),

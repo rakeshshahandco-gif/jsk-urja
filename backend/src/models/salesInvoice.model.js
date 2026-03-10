@@ -65,6 +65,7 @@ const salesInvoiceSchema = new mongoose.Schema({
 
     // GST
     gstType: { type: String, enum: ['CGST / SGST', 'IGST'], default: 'CGST / SGST' },
+    gstApplicable: { type: Boolean, default: true },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: Boolean, default: false },
 

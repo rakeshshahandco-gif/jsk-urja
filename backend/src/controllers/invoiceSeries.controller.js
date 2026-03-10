@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
+import logger from '../utils/logger.js';
 
 // LIST
 export const getSeries = asyncHandler(async (req, res) => {
@@ -16,30 +17,69 @@ export const getSeriesById = asyncHandler(async (req, res) => {
     res.json({ success: true, data: s });
 });
 
-// CREATE
 export const createSeries = asyncHandler(async (req, res) => {
-    const { seriesName, financialYear, prefix, startNumber, padLength, isDefault, description } = req.body;
+    const { seriesName, financialYear, prefix, startNumber, padLength, gstApplicable, isDefault, description } = req.body;
     if (!seriesName || !financialYear || !prefix) throw new ApiError(httpStatus.BAD_REQUEST, 'seriesName, financialYear and prefix are required');
 
     // If new series is default, unset others
-    if (isDefault) await InvoiceSeries.updateMany({}, { isDefault: false });
+    if (isDefault === true || String(isDefault) === 'true') {
+        await InvoiceSeries.updateMany({}, { isDefault: false });
+    }
 
     const s = await InvoiceSeries.create({
-        seriesName, financialYear, prefix, startNumber: startNumber || 1,
-        padLength: padLength || 5, isDefault: isDefault || false,
-        description: description || '', isActive: true,
+        seriesName,
+        financialYear,
+        prefix,
+        startNumber: startNumber || 1,
+        padLength: padLength || 5,
+        gstApplicable: String(gstApplicable) === 'true' || gstApplicable === true,
+        isDefault: String(isDefault) === 'true' || isDefault === true,
+        description: description || '',
+        isActive: true,
         createdBy: req.user.id,
     });
     res.status(httpStatus.CREATED).json({ success: true, data: s });
 });
 
-// UPDATE
 export const updateSeries = asyncHandler(async (req, res) => {
-    const s = await InvoiceSeries.findById(req.params.id);
+    const { id } = req.params;
+    const body = req.body;
+
+    logger.info(`DEBUG_BODY: UpdateSeries ID: ${id}, Body keys: ${Object.keys(body).join(', ')}`);
+    logger.info(`DEBUG_VAL: gstApplicable from body: ${body.gstApplicable} (${typeof body.gstApplicable})`);
+
+    const s = await InvoiceSeries.findById(id);
     if (!s) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found');
-    if (req.body.isDefault) await InvoiceSeries.updateMany({ _id: { $ne: s._id } }, { isDefault: false });
-    Object.assign(s, req.body);
+
+    // Unset defaults if this one is becoming default
+    if (body.isDefault === true && !s.isDefault) {
+        await InvoiceSeries.updateMany({ _id: { $ne: id } }, { isDefault: false });
+    }
+
+    // Manually update fields
+    if (body.seriesName !== undefined) s.seriesName = body.seriesName;
+    if (body.financialYear !== undefined) s.financialYear = body.financialYear;
+    if (body.prefix !== undefined) s.prefix = body.prefix;
+    if (body.startNumber !== undefined) s.startNumber = Number(body.startNumber);
+    if (body.padLength !== undefined) s.padLength = Number(body.padLength);
+
+    // Explicitly handle booleans
+    if (body.gstApplicable !== undefined) {
+        s.gstApplicable = String(body.gstApplicable) === 'true' || body.gstApplicable === true;
+    }
+    if (body.isDefault !== undefined) {
+        s.isDefault = String(body.isDefault) === 'true' || body.isDefault === true;
+    }
+    if (body.isActive !== undefined) {
+        s.isActive = String(body.isActive) === 'true' || body.isActive === true;
+    }
+
+    if (body.description !== undefined) s.description = body.description;
+
+    logger.info(`DEBUG_BEFORE_SAVE: ${s.seriesName} gstApplicable: ${s.gstApplicable}`);
     await s.save();
+    logger.info(`DEBUG_AFTER_SAVE: ${s.seriesName} gstApplicable: ${s.gstApplicable}`);
+
     res.json({ success: true, data: s });
 });
 

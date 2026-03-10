@@ -338,6 +338,18 @@ export const AddCustomerForm = ({ closeModal }) => {
                             disabled // Automatically selected
                         />
 
+                        <Select
+                            label="GST Registration Type"
+                            options={[
+                                { value: '', label: '-- Select Type --' },
+                                { value: 'Registered', label: 'Registered' },
+                                { value: 'Unregistered', label: 'Unregistered' },
+                                { value: 'Composite', label: 'Composite' },
+                                { value: 'Consumer', label: 'Consumer' },
+                            ]}
+                            {...register('gstRegistrationType')}
+                        />
+
                         {!isCustomType ? (
                             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                                 <div style={{ flex: 1 }}>

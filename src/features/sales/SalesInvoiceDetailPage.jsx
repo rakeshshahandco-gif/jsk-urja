@@ -69,6 +69,7 @@ export default function SalesInvoiceDetailPage() {
 
     const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS.Unpaid;
     const isIGST = inv.gstType === 'IGST';
+    const gstApplicable = inv.gstApplicable !== false;
     const notCancelled = inv.status !== 'Cancelled';
     const notFullyPaid = inv.paymentStatus !== 'Paid';
 
@@ -90,7 +91,9 @@ export default function SalesInvoiceDetailPage() {
 
                     {/* header: SALES INVOICE title */}
                     <div style={{ textAlign: 'center', marginBottom: '4mm', padding: '4mm 0' }}>
-                        <h1 style={{ margin: 0, fontSize: '20pt', fontWeight: 900, textTransform: 'uppercase', background: '#f5f5f5', borderBottom: '2px solid #000', display: 'inline-block', padding: '2mm 15mm' }}>SALES INVOICE</h1>
+                        <h1 style={{ margin: 0, fontSize: '20pt', fontWeight: 900, textTransform: 'uppercase', background: '#f5f5f5', borderBottom: '2px solid #000', display: 'inline-block', padding: '2mm 15mm' }}>
+                            {gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE (NON-GST)'}
+                        </h1>
                     </div>
 
                     <div className="p-section" style={{ border: 'none', flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -102,21 +105,21 @@ export default function SalesInvoiceDetailPage() {
                                 ) : <div style={{ fontWeight: 900, fontSize: '20pt', color: '#ddd' }}>LOGO</div>}
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2mm' }}>
-                                <div style={{ fontSize: '18pt', fontWeight: 800, color: '#000', marginBottom: '1mm' }}>{company.companyName || 'JSK INNOVATIVE TECHNOLOGY PVT LTD'}</div>
+                                <div style={{ fontSize: '18pt', fontWeight: 800, color: '#000', marginBottom: '1mm' }}>{company.companyName}</div>
                                 <div style={{ fontSize: '9pt', maxWidth: '130mm' }}>{company.address}</div>
                                 {company.city && <div style={{ fontSize: '9pt' }}>{company.city}, {company.state} - {company.pincode}</div>}
                                 <div style={{ fontSize: '9pt' }}>Phone: {company.phone} | Email: {company.email}</div>
-                                <div style={{ fontSize: '12pt', fontWeight: 800, marginTop: '2mm' }}>GSTIN: {company.gstNumber}</div>
+                                {gstApplicable && company.gstNumber && <div style={{ fontSize: '12pt', fontWeight: 800, marginTop: '2mm' }}>GSTIN: {company.gstNumber}</div>}
                             </div>
                         </div>
 
                         {/* 2. Statutory Details Section */}
                         <div className="p-flex" style={{ borderBottom: '1px solid #000' }}>
                             <div style={{ flex: 1, borderRight: '1px solid #000', padding: '1mm 2mm' }}>
-                                <span className="p-label">URN :</span> <span className="p-value" style={{ fontWeight: 800 }}>{company.urn || 'UDYAM-MH-18-0098031'}</span>
+                                <span className="p-label">URN :</span> <span className="p-value" style={{ fontWeight: 800 }}>{company.urn || '—'}</span>
                             </div>
                             <div style={{ flex: 1, padding: '1mm 2mm' }}>
-                                <span className="p-label">CIN:</span> <span className="p-value" style={{ fontWeight: 800 }}>{company.cin || 'U29220MH2012PTC263176'}</span>
+                                <span className="p-label">CIN:</span> <span className="p-value" style={{ fontWeight: 800 }}>{company.cin || '—'}</span>
                             </div>
                         </div>
 
@@ -153,7 +156,7 @@ export default function SalesInvoiceDetailPage() {
                                 </div>
                                 <div style={{ fontSize: '9pt', marginLeft: '18mm' }}>{inv.billingState} ({inv.billingStateCode})</div>
                                 <div style={{ fontSize: '9pt', marginTop: '1mm' }}><span className="p-label">Phone:</span> {inv.customerPhone}</div>
-                                <div style={{ fontSize: '9pt' }}><span className="p-label">GSTIN:</span> {inv.customerGstin}</div>
+                                {gstApplicable && inv.customerGstin && <div style={{ fontSize: '9pt' }}><span className="p-label">GSTIN:</span> {inv.customerGstin}</div>}
                             </div>
                             <div style={{ flex: 1, padding: '2mm' }}>
                                 <div className="p-label" style={{ marginBottom: '1mm' }}>Shipped To : <span style={{ fontWeight: 800, fontSize: '10pt' }}>{inv.customerName}</span></div>
@@ -163,7 +166,7 @@ export default function SalesInvoiceDetailPage() {
                                 </div>
                                 <div style={{ fontSize: '9pt', marginLeft: '18mm' }}>{inv.shippingState || inv.billingState} ({inv.shippingStateCode || inv.billingStateCode})</div>
                                 <div style={{ fontSize: '9pt', marginTop: '1mm' }}><span className="p-label">Phone:</span> {inv.shippingPhone || inv.customerPhone}</div>
-                                <div style={{ fontSize: '9pt' }}><span className="p-label">GSTIN:</span> {inv.shippingGstin || inv.customerGstin}</div>
+                                {gstApplicable && (inv.shippingGstin || inv.customerGstin) && <div style={{ fontSize: '9pt' }}><span className="p-label">GSTIN:</span> {inv.shippingGstin || inv.customerGstin}</div>}
                             </div>
                         </div>
 
@@ -219,10 +222,39 @@ export default function SalesInvoiceDetailPage() {
                             <div style={{ flex: 1 }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <tbody>
-                                        <tr>
-                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 900 }}>Freight & Forwarding:</td>
-                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right', fontWeight: 900 }}>₹ {(inv.freightAmount || 0).toFixed(2)}</td>
-                                        </tr>
+                                        {gstApplicable && (
+                                            <>
+                                                {isIGST ? (
+                                                    <tr>
+                                                        <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 600 }}>IGST:</td>
+                                                        <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right' }}>₹ {(inv.totalIgst || inv.totalTaxAmount || 0).toFixed(2)}</td>
+                                                    </tr>
+                                                ) : (
+                                                    <>
+                                                        <tr>
+                                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 600 }}>CGST:</td>
+                                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right' }}>₹ {(inv.totalCgst || (inv.totalTaxAmount / 2) || 0).toFixed(2)}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 600 }}>SGST:</td>
+                                                            <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right' }}>₹ {(inv.totalSgst || (inv.totalTaxAmount / 2) || 0).toFixed(2)}</td>
+                                                        </tr>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                        {inv.freightAmount > 0 && (
+                                            <tr>
+                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 600 }}>Freight & Forwarding:</td>
+                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right' }}>₹ {(inv.freightAmount || 0).toFixed(2)}</td>
+                                            </tr>
+                                        )}
+                                        {inv.roundOff !== 0 && (
+                                            <tr>
+                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', fontWeight: 600 }}>Round Off:</td>
+                                                <td style={{ padding: '2mm', borderBottom: '1px solid #000', textAlign: 'right' }}>₹ {(inv.roundOff || 0).toFixed(2)}</td>
+                                            </tr>
+                                        )}
 
                                         <tr style={{ background: '#f5f5f5' }}>
                                             <td style={{ padding: '3mm 2mm', fontWeight: 900, fontSize: '13pt' }}>Rounded Total:</td>
@@ -315,7 +347,7 @@ export default function SalesInvoiceDetailPage() {
                         {/* On-screen Invoice Render (similar to print but styled for screen) */}
                         <div style={{ border: '2px solid #333', color: '#000', padding: '10px' }}>
                             <div style={{ textAlign: 'center', borderBottom: '2px solid #333', paddingBottom: 10, marginBottom: 10 }}>
-                                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>TAX INVOICE</h1>
+                                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>{gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE (NON-GST)'}</h1>
                             </div>
 
                             <div style={{ display: 'flex', borderBottom: '1px solid #333', marginBottom: 0 }}>
@@ -325,13 +357,13 @@ export default function SalesInvoiceDetailPage() {
                                 <div style={{ flex: 1, padding: 10, textAlign: 'center' }}>
                                     <h2 style={{ margin: 0, fontSize: 20 }}>{company.companyName}</h2>
                                     <div style={{ fontSize: 12 }}>{company.address}</div>
-                                    <div style={{ fontSize: 13, fontWeight: 800, marginTop: 5 }}>GSTIN: {company.gstNumber}</div>
+                                    {gstApplicable && company.gstNumber && <div style={{ fontSize: 13, fontWeight: 800, marginTop: 5 }}>GSTIN: {company.gstNumber}</div>}
                                 </div>
                             </div>
 
                             <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
-                                <div style={{ flex: 1, padding: '5px 10px', borderRight: '1px solid #333' }}><strong>URN:</strong> {company.urn}</div>
-                                <div style={{ flex: 1, padding: '5px 10px' }}><strong>CIN:</strong> {company.cin}</div>
+                                <div style={{ flex: 1, padding: '5px 10px', borderRight: '1px solid #333' }}><strong>URN:</strong> {company.urn || '—'}</div>
+                                <div style={{ flex: 1, padding: '5px 10px' }}><strong>CIN:</strong> {company.cin || '—'}</div>
                             </div>
 
                             <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
@@ -348,15 +380,15 @@ export default function SalesInvoiceDetailPage() {
                             <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
                                 <div style={{ flex: 1, padding: 10, borderRight: '1px solid #333' }}>
                                     <strong>Billed To:</strong>
-                                    <div>{inv.customerName}</div>
+                                    <div style={{ fontWeight: 700 }}>{inv.customerName}</div>
                                     <div style={{ fontSize: 12 }}>{inv.billingAddress}</div>
-                                    <div style={{ fontSize: 12 }}>GSTIN: {inv.customerGstin}</div>
+                                    {gstApplicable && inv.customerGstin && <div style={{ fontSize: 12 }}>GSTIN: {inv.customerGstin}</div>}
                                 </div>
                                 <div style={{ flex: 1, padding: 10 }}>
                                     <strong>Shipped To:</strong>
-                                    <div>{inv.customerName}</div>
+                                    <div style={{ fontWeight: 700 }}>{inv.customerName}</div>
                                     <div style={{ fontSize: 12 }}>{inv.shippingAddress}</div>
-                                    <div style={{ fontSize: 12 }}>GSTIN: {inv.shippingGstin || inv.customerGstin}</div>
+                                    {gstApplicable && (inv.shippingGstin || inv.customerGstin) && <div style={{ fontSize: 12 }}>GSTIN: {inv.shippingGstin || inv.customerGstin}</div>}
                                 </div>
                             </div>
 
@@ -365,7 +397,7 @@ export default function SalesInvoiceDetailPage() {
                                     <tr style={{ background: '#f8f9fa' }}>
                                         <th style={{ border: '1px solid #333', padding: 8 }}>Sr</th>
                                         <th style={{ border: '1px solid #333', padding: 8, textAlign: 'left' }}>Description</th>
-                                        <th style={{ border: '1px solid #333', padding: 8 }}>HSN</th>
+                                        {gstApplicable && <th style={{ border: '1px solid #333', padding: 8 }}>HSN</th>}
                                         <th style={{ border: '1px solid #333', padding: 8 }}>Qty</th>
                                         <th style={{ border: '1px solid #333', padding: 8, textAlign: 'right' }}>Rate</th>
                                         <th style={{ border: '1px solid #333', padding: 8, textAlign: 'right' }}>Amount</th>
@@ -376,10 +408,10 @@ export default function SalesInvoiceDetailPage() {
                                         <tr key={i}>
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{i + 1}</td>
                                             <td style={{ border: '1px solid #333', padding: 8 }}>
-                                                <strong>{it.itemName}</strong>
-                                                <div style={{ fontSize: 11 }}>{it.description}</div>
+                                                <strong style={{ textTransform: 'uppercase' }}>{it.itemName}</strong>
+                                                <div style={{ fontSize: 11 }}>{it.description || it.modelNo}</div>
                                             </td>
-                                            <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{it.hsnCode}</td>
+                                            {gstApplicable && <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{it.hsnCode || '—'}</td>}
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'center' }}>{it.qty}</td>
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'right' }}>{fmtCur(it.rate)}</td>
                                             <td style={{ border: '1px solid #333', padding: 8, textAlign: 'right' }}>{fmtCur(it.taxableAmount)}</td>
@@ -396,7 +428,21 @@ export default function SalesInvoiceDetailPage() {
                                     <div style={{ fontSize: 12 }}>IFSC: {company.ifscCode}</div>
                                 </div>
                                 <div style={{ width: '300px', padding: 10 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}><span>Freight:</span> <span>{fmtCur(inv.freightAmount)}</span></div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>Total Taxable:</span> <span>{fmtCur(inv.totalTaxableAmount)}</span></div>
+                                    {gstApplicable && (
+                                        <>
+                                            {isIGST ? (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>IGST:</span> <span>{fmtCur(inv.totalIgst || inv.totalTaxAmount)}</span></div>
+                                            ) : (
+                                                <>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>CGST:</span> <span>{fmtCur(inv.totalCgst || inv.totalTaxAmount / 2)}</span></div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>SGST:</span> <span>{fmtCur(inv.totalSgst || inv.totalTaxAmount / 2)}</span></div>
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>Freight:</span> <span>{fmtCur(inv.freightAmount)}</span></div>
+                                    {inv.roundOff !== 0 && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 13 }}><span>Round Off:</span> <span>{fmtCur(inv.roundOff)}</span></div>}
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '2px solid #333', fontWeight: 900, fontSize: 18 }}>
                                         <span>Total:</span> <span>{fmtCur(inv.roundedTotal)}</span>

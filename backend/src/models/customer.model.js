@@ -129,6 +129,11 @@ const customerSchema = mongoose.Schema(
             enum: ['CGST / SGST', 'IGST', ''],
             default: '',
         },
+        gstRegistrationType: {
+            type: String,
+            enum: ['Registered', 'Unregistered', 'Composite', 'Consumer', ''],
+            default: '',
+        },
         isDeleted: {
             type: Boolean,
             default: false,

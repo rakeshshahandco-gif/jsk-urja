@@ -30,6 +30,7 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
         prefix: '',
         startNumber: 1,
         padLength: 5,
+        gstApplicable: true,
         isDefault: false,
     });
 
@@ -70,6 +71,10 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
                     <F label="Digits Padding">
                         <input type="number" value={data.padLength} onChange={e => setData(p => ({ ...p, padLength: e.target.value }))} style={inp} />
                     </F>
+                    <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginTop: 4 }}>
+                        <input type="checkbox" checked={data.gstApplicable} onChange={e => setData(p => ({ ...p, gstApplicable: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                        <span style={{ fontWeight: 600 }}>GST Applicable (Enabled by default)</span>
+                    </label>
                 </div>
                 <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                     <button onClick={onClose} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
@@ -116,6 +121,7 @@ export default function SalesInvoiceFormPage() {
         placeOfSupply: '',
         paymentType: 'Credit',
         paymentTerms: '',
+        gstApplicable: true,
         freightAmount: '',
         freightGstRate: 0,
         remarks: '',
@@ -158,7 +164,9 @@ export default function SalesInvoiceFormPage() {
         getInvoiceSeries({ active: true }).then(s => {
             setSeriesList(s || []);
             const def = (s || []).find(x => x.isDefault);
-            if (def && !form.seriesId) setForm(p => ({ ...p, seriesId: def._id }));
+            if (def && !form.seriesId) {
+                setForm(p => ({ ...p, seriesId: def._id, gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true }));
+            }
         }).catch(() => { });
     }, [form.seriesId]);
 
@@ -181,10 +189,11 @@ export default function SalesInvoiceFormPage() {
                 billingStateCode: so.customerStateCode || '',
                 shippingAddress: so.shippingAddress || '',
                 gstType: so.gstType || 'CGST / SGST',
+                gstApplicable: so.gstApplicable !== undefined ? so.gstApplicable : true,
                 buyerOrderNo: so.customerPO || '',
                 buyerOrderDate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
                 paymentType: so.paymentType || 'Credit',
-                items: so.items?.length ? so.items.map(i => ({ itemName: i.itemName || '', modelNo: i.modelNo || '', hsnCode: i.hsnCode || '', uom: i.uom || 'NOS', qty: i.qty || '', rate: i.rate || '', gstRate: i.gstRate || 18, discountPercent: 0 })) : [BLANK_ITEM()],
+                items: so.items?.length ? so.items.map(i => ({ itemName: i.itemName || '', modelNo: i.modelNo || '', hsnCode: i.hsnCode || '', uom: i.uom || 'NOS', qty: i.qty || '', rate: i.rate || '', gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), discountPercent: 0 })) : [BLANK_ITEM()],
             }));
         }).catch(() => toast.error('Failed to load SO details'));
     }, [soId]);
@@ -222,6 +231,8 @@ export default function SalesInvoiceFormPage() {
 
     // Live totals
     const isIGST = form.gstType === 'IGST';
+    const gstApplicable = form.gstApplicable !== false;
+
     const processedItems = form.items.map(item => {
         const qty = Number(item.qty) || 0;
         const rate = Number(item.rate) || 0;
@@ -229,17 +240,17 @@ export default function SalesInvoiceFormPage() {
         const disc = Number(item.discountPercent) || 0;
         const discAmt = Math.round(gross * disc / 100 * 100) / 100;
         const taxable = gross - discAmt;
-        const gstRate = Number(item.gstRate) || 18;
+        const gstRate = gstApplicable ? (Number(item.gstRate) || 18) : 0;
         const cgstAmt = isIGST ? 0 : Math.round(taxable * gstRate / 2 / 100 * 100) / 100;
         const igstAmt = isIGST ? Math.round(taxable * gstRate / 100 * 100) / 100 : 0;
-        return { ...item, gross, discAmt, taxable, cgstAmt, igstAmt, lineTotal: taxable + (isIGST ? igstAmt : cgstAmt * 2) };
+        return { ...item, gross, discAmt, taxable, cgstAmt, igstAmt, lineTotal: taxable + (gstApplicable ? (isIGST ? igstAmt : cgstAmt * 2) : 0) };
     });
     const totalItemTaxable = processedItems.reduce((s, i) => s + i.taxable, 0);
-    const totalItemGst = processedItems.reduce((s, i) => s + (isIGST ? i.igstAmt : i.cgstAmt * 2), 0);
+    const totalItemGst = gstApplicable ? processedItems.reduce((s, i) => s + (isIGST ? i.igstAmt : i.cgstAmt * 2), 0) : 0;
 
     const freight = Number(form.freightAmount) || 0;
-    const freightGstRate = Number(form.freightGstRate) || (processedItems[0]?.gstRate || 18);
-    const freightGst = Math.round(freight * freightGstRate / 100 * 100) / 100;
+    const freightGstRate = gstApplicable ? (Number(form.freightGstRate) || (processedItems[0]?.gstRate || 18)) : 0;
+    const freightGst = gstApplicable ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
 
     const totalTaxable = totalItemTaxable + freight;
     const totalGst = totalItemGst + freightGst;
@@ -284,12 +295,35 @@ export default function SalesInvoiceFormPage() {
                     <G cols={4}>
                         <F label="Invoice Series *">
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <select value={form.seriesId} onChange={e => setF('seriesId', e.target.value)} style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}>
+                                <select
+                                    value={form.seriesId}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const selected = seriesList.find(s => s._id === val);
+                                        const isGst = selected ? (selected.gstApplicable !== false) : true;
+                                        setForm(p => ({
+                                            ...p,
+                                            seriesId: val,
+                                            gstApplicable: isGst,
+                                            items: p.items.map(item => ({
+                                                ...item,
+                                                gstRate: isGst ? (item.gstRate || 18) : 0
+                                            })),
+                                            freightGstRate: isGst ? (p.freightGstRate || 18) : 0
+                                        }));
+                                    }}
+                                    style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}
+                                >
                                     <option value="">-- Select Series --</option>
-                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN) {s.isDefault ? '✓ Default' : ''}</option>)}
+                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN)</option>)}
                                 </select>
                                 <button type="button" onClick={() => setShowAddSeries(true)} style={{ background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>+</button>
                             </div>
+                            {form.seriesId && !form.gstApplicable && (
+                                <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span>⚠️</span> This series is non-GST. Tax will not be applied.
+                                </div>
+                            )}
                         </F>
                         <F label="Invoice Date *"><input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={inp} /></F>
                         <F label="Payment Type">
@@ -337,7 +371,11 @@ export default function SalesInvoiceFormPage() {
                 <Section title="Items">
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-                            <thead><tr>{['#', 'Product *', 'Model', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Taxable', isIGST ? 'IGST' : 'CGST+SGST', 'Line Total', ''].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                            <thead>
+                                <tr>
+                                    {['#', 'Product *', 'Model', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Taxable', gstApplicable ? (isIGST ? 'IGST' : 'CGST+SGST') : null, 'Line Total', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
+                                </tr>
+                            </thead>
                             <tbody>
                                 {processedItems.map((item, i) => (
                                     <tr key={i}>
@@ -359,14 +397,14 @@ export default function SalesInvoiceFormPage() {
                                                 }
                                             />
                                         </td>
-                                        <td style={{ ...td, minWidth: 90 }}><input value={item.modelNo} onChange={e => setItem(i, 'modelNo', e.target.value)} style={inp} /></td>
-                                        <td style={{ ...td, width: 80 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} /></td>
-                                        <td style={{ ...td, width: 60 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} /></td>
-                                        <td style={{ ...td, width: 70 }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...inp, borderColor: !item.qty ? '#fca5a5' : '#d1d5db' }} /></td>
-                                        <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...inp, borderColor: !item.rate ? '#fca5a5' : '#d1d5db' }} /></td>
-                                        <td style={{ ...td, width: 60 }}><input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} style={inp} /></td>
+                                        <td style={{ ...td, minWidth: 90 }}><input value={item.modelNo} onChange={setItem ? (e => setItem(i, 'modelNo', e.target.value)) : undefined} style={inp} /></td>
+                                        <td style={{ ...td, width: 80 }}><input value={item.hsnCode} onChange={setItem ? (e => setItem(i, 'hsnCode', e.target.value)) : undefined} style={inp} /></td>
+                                        <td style={{ ...td, width: 60 }}><input value={item.uom} onChange={setItem ? (e => setItem(i, 'uom', e.target.value)) : undefined} style={inp} /></td>
+                                        <td style={{ ...td, width: 70 }}><input type="number" min="0" value={item.qty} onChange={setItem ? (e => setItem(i, 'qty', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.qty ? '#fca5a5' : '#d1d5db' }} /></td>
+                                        <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.rate} onChange={setItem ? (e => setItem(i, 'rate', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.rate ? '#fca5a5' : '#d1d5db' }} /></td>
+                                        <td style={{ ...td, width: 60 }}><input type="number" min="0" max="100" value={item.discountPercent} onChange={setItem ? (e => setItem(i, 'discountPercent', e.target.value)) : undefined} style={inp} /></td>
                                         <td style={{ ...td, color: '#6b7280', width: 80, textAlign: 'right' }}>₹{item.taxable.toFixed(2)}</td>
-                                        <td style={{ ...td, color: '#2563eb', width: 90, textAlign: 'right' }}>{isIGST ? `₹${item.igstAmt.toFixed(2)} (${item.gstRate}%)` : `₹${(item.cgstAmt * 2).toFixed(2)} (${item.gstRate}%)`}</td>
+                                        {gstApplicable && <td style={{ ...td, color: '#2563eb', width: 90, textAlign: 'right' }}>{isIGST ? `₹${item.igstAmt.toFixed(2)} (${item.gstRate}%)` : `₹${(item.cgstAmt * 2).toFixed(2)} (${item.gstRate}%)`}</td>}
                                         <td style={{ ...td, color: '#16a34a', fontWeight: 700, width: 90, textAlign: 'right' }}>₹{item.lineTotal.toFixed(2)}</td>
                                         <td style={{ ...td, width: 28 }}>{form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}</td>
                                     </tr>
@@ -393,10 +431,12 @@ export default function SalesInvoiceFormPage() {
                                 <span>Freight / Shipping</span>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <input type="number" min="0" value={form.freightAmount} onChange={e => setF('freightAmount', e.target.value)} style={{ ...inp, width: 80, padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
-                                    <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <span>GST%</span>
-                                        <input type="number" min="0" max="28" value={form.freightGstRate} onChange={e => setF('freightGstRate', e.target.value)} style={{ ...inp, width: 45, padding: '4px 4px', fontSize: 10 }} placeholder="%" title="Freight GST %" />
-                                    </div>
+                                    {gstApplicable && (
+                                        <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <span>GST%</span>
+                                            <input type="number" min="0" max="28" value={form.freightGstRate} onChange={e => setF('freightGstRate', e.target.value)} style={{ ...inp, width: 45, padding: '4px 4px', fontSize: 10 }} placeholder="%" title="Freight GST %" />
+                                        </div>
+                                    )}
                                     <span style={{ fontWeight: 600, color: '#4b5563', minWidth: 60, textAlign: 'right' }}>₹{freight.toFixed(2)}</span>
                                 </div>
                             </div>
@@ -404,10 +444,18 @@ export default function SalesInvoiceFormPage() {
                                 <span>Total Taxable</span>
                                 <span>₹{totalTaxable.toFixed(2)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2563eb', paddingTop: 4 }}>
-                                <span>GST ({form.gstType})</span>
-                                <span>₹{totalGst.toFixed(2)}</span>
-                            </div>
+                            {gstApplicable && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2563eb', paddingTop: 4 }}>
+                                    <span>GST ({form.gstType})</span>
+                                    <span>₹{totalGst.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {!gstApplicable && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#f59e0b', paddingTop: 4, fontWeight: 700 }}>
+                                    <span>TAX MODE</span>
+                                    <span>WITHOUT GST</span>
+                                </div>
+                            )}
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, color: '#16a34a', fontWeight: 800, padding: '12px 0 0', borderTop: '2px solid #16a34a' }}>
                                 <span>Rounded Total</span>
                                 <span>₹{roundedTotal.toLocaleString('en-IN')}</span>

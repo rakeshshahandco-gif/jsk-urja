@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { Item } from '../models/item.model.js';
 import reportService from '../services/report.service.js';
 import pick from '../utils/pick.js';
+import ExcelJS from 'exceljs';
 
 // ── Auto-generate item code ─────────────────────────────────────────────────
 const generateItemCode = async (itemType = 'ITEM') => {
@@ -180,31 +181,253 @@ export const deleteItem = asyncHandler(async (req, res) => {
 });
 
 // ── GENERATE CODE (utility endpoint) ────────────────────────────────────────
-// ── EXPORT EXCEL ──────────────────────────────────────────────────────────
-export const exportItemsExcel = asyncHandler(async (req, res) => {
-    const filters = pick(req.query, ['search', 'itemCategory', 'itemType', 'itemGroupName', 'isActive']);
-    const options = pick(req.query, ['sortBy']);
+// ── EXPORT TEMPLATE ────────────────────────────────────────────────────────
+export const exportItemTemplate = asyncHandler(async (req, res) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Items Template');
 
-    const buffer = await reportService.generateItemExcelReport(filters, options);
+    // Define columns
+    worksheet.columns = [
+        { header: 'Item Code (Leave empty to auto-generate)', key: 'itemCode', width: 35 },
+        { header: 'Item Name*', key: 'itemName', width: 40 },
+        { header: 'Description', key: 'description', width: 40 },
+        { header: 'Category (RAW_MATERIAL, WIP, FINISHED_GOOD, TRADING, CONSUMABLE)', key: 'itemCategory', width: 60 },
+        { header: 'Group', key: 'itemGroupName', width: 20 },
+        { header: 'Type', key: 'itemType', width: 20 },
+        { header: 'HSN Code', key: 'hsnCode', width: 20 },
+        { header: 'UOM*', key: 'uom', width: 15 },
+        { header: 'Opening Stock', key: 'openingStock', width: 20 },
+        { header: 'Min Stock Level', key: 'minStockLevel', width: 20 },
+        { header: 'Selling Price', key: 'sellingPrice', width: 20 },
+        { header: 'Purchase Price', key: 'purchasePrice', width: 20 },
+        { header: 'Active (TRUE/FALSE)', key: 'isActive', width: 20 }
+    ];
+
+    // Style header
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    const buffer = await workbook.xlsx.writeBuffer();
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_Template.xlsx`);
     res.send(buffer);
 });
 
-// ── EXPORT PDF ────────────────────────────────────────────────────────────
-export const exportItemsPDF = asyncHandler(async (req, res) => {
-    const filters = pick(req.query, ['search', 'itemCategory', 'itemType', 'itemGroupName', 'isActive']);
-    const options = pick(req.query, ['sortBy']);
+// ── IMPORT EXCEL ──────────────────────────────────────────────────────────
+export const importItemsExcel = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Please upload an Excel file');
+    }
 
-    const buffer = await reportService.generateItemPDFReport(filters, options);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0]; // Get the first worksheet
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_${new Date().toISOString().split('T')[0]}.pdf`);
-    res.send(buffer);
+    if (!worksheet) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid Excel file format');
+    }
+
+    const itemsToInsert = [];
+    const errors = [];
+    let rowCount = 0;
+
+    // Validate headers and find column indexes
+    const headerRow = worksheet.getRow(1);
+    const colMap = {};
+    headerRow.eachCell((cell, colNumber) => {
+        const val = cell.value?.toString().trim().toLowerCase() || '';
+        if (val.includes('item code')) colMap.itemCode = colNumber;
+        else if (val.includes('item name')) colMap.itemName = colNumber;
+        else if (val.includes('description')) colMap.description = colNumber;
+        else if (val.includes('category')) colMap.category = colNumber;
+        else if (val.includes('group')) colMap.group = colNumber;
+        else if (val.includes('type')) colMap.type = colNumber;
+        else if (val.includes('hsn')) colMap.hsn = colNumber;
+        else if (val.includes('uom')) colMap.uom = colNumber;
+        else if (val.includes('opening stock')) colMap.openingStock = colNumber;
+        else if (val.includes('min stock')) colMap.minStock = colNumber;
+        else if (val.includes('selling price')) colMap.sellingPrice = colNumber;
+        else if (val.includes('purchase price')) colMap.purchasePrice = colNumber;
+        else if (val.includes('active')) colMap.active = colNumber;
+    });
+
+    if (!colMap.itemName) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid template format. Could not find "Item Name" column.');
+    }
+
+    const parseCategory = (val) => {
+        if (!val) return 'RAW_MATERIAL';
+        const str = val.toUpperCase().replace(/[^A-Z_]/g, '');
+        if (str.includes('FINISH') || str.includes('FINISHED')) return 'FINISHED_GOOD';
+        if (str.includes('WIP') || str.includes('SEMI')) return 'WIP';
+        if (str.includes('TRADE') || str.includes('TRADING')) return 'TRADING';
+        if (str.includes('CONSUME') || str.includes('CONSUMABLE')) return 'CONSUMABLE';
+        return 'RAW_MATERIAL'; // Default
+    };
+
+    const parseUom = (val) => {
+        if (!val) return 'NOS';
+        const str = val.toUpperCase().trim();
+        const valid = ['NOS', 'PCS', 'METER', 'KG', 'BOX', 'SET', 'ROLL', 'LITRE'];
+        if (valid.includes(str)) return str;
+        if (str === 'NO' || str === 'NUMBERS') return 'NOS';
+        if (str === 'PIECES' || str === 'PC') return 'PCS';
+        if (str === 'MTR' || str === 'METERS') return 'METER';
+        if (str === 'KGS' || str === 'KILOGRAM') return 'KG';
+        if (str === 'BOXES') return 'BOX';
+        if (str === 'SETS') return 'SET';
+        if (str === 'ROLLS') return 'ROLL';
+        if (str === 'LTR' || str === 'LITERS') return 'LITRE';
+        return 'NOS';
+    };
+
+    // Process rows starting from row 2
+    for (let i = 2; i <= worksheet.rowCount; i++) {
+        const row = worksheet.getRow(i);
+        // Skip empty rows
+        if (!row.hasValues) continue;
+
+        rowCount++;
+
+        try {
+            const rawItemCode = colMap.itemCode ? (row.getCell(colMap.itemCode).value?.toString().trim() || '') : '';
+            const itemName = colMap.itemName ? row.getCell(colMap.itemName).value?.toString().trim() : '';
+            const description = colMap.description ? (row.getCell(colMap.description).value?.toString().trim() || '') : '';
+
+            const rawCategory = colMap.category ? (row.getCell(colMap.category).value?.toString().trim() || '') : '';
+            const itemCategory = parseCategory(rawCategory);
+
+            const itemGroupName = colMap.group ? row.getCell(colMap.group).value?.toString().trim() : undefined;
+            const itemType = colMap.type ? (row.getCell(colMap.type).value?.toString().trim() || 'OTHER') : 'OTHER';
+            const hsnCode = colMap.hsn ? (row.getCell(colMap.hsn).value?.toString().trim() || '') : '';
+
+            const rawUom = colMap.uom ? (row.getCell(colMap.uom).value?.toString().trim() || '') : '';
+            const uom = parseUom(rawUom);
+
+            const openingStock = colMap.openingStock ? (Number(row.getCell(colMap.openingStock).value) || 0) : 0;
+            const minStockLevel = colMap.minStock ? (Number(row.getCell(colMap.minStock).value) || 0) : 0;
+            const sellingPrice = colMap.sellingPrice ? (Number(row.getCell(colMap.sellingPrice).value) || 0) : 0;
+            const purchasePrice = colMap.purchasePrice ? (Number(row.getCell(colMap.purchasePrice).value) || 0) : 0;
+
+            // Handle boolean or string for isActive
+            let isActive = true;
+            if (colMap.active) {
+                const activeVal = row.getCell(colMap.active).value;
+                if (activeVal !== null && activeVal !== undefined) {
+                    const strVal = activeVal.toString().trim().toLowerCase();
+                    if (strVal === 'false' || strVal === '0') isActive = false;
+                }
+            }
+
+            if (!itemName) {
+                errors.push(`Row ${i}: Item Name is required`);
+                continue;
+            }
+
+            let itemCode = rawItemCode;
+            if (!itemCode) {
+                // We will auto-generate it later just before insert to avoid duplicates in batch
+                itemCode = null;
+            } else {
+                itemCode = itemCode.toUpperCase();
+            }
+
+            itemsToInsert.push({
+                rowNum: i,
+                itemData: {
+                    itemCode,
+                    itemName,
+                    description,
+                    itemCategory,
+                    itemGroupName,
+                    itemType,
+                    hsnCode,
+                    uom,
+                    openingStock,
+                    currentStock: openingStock, // Seed currentStock
+                    minStockLevel,
+                    sellingPrice,
+                    purchasePrice,
+                    isActive,
+                    createdBy: req.user.id
+                }
+            });
+
+        } catch (error) {
+            errors.push(`Row ${i}: Error processing data - ${error.message}`);
+        }
+    }
+
+    if (itemsToInsert.length === 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'No valid data found in the Excel file');
+    }
+
+    // Insert items one by one to handle code generation correctly and individual failures
+    let successCount = 0;
+
+    // We could potentially do bulk insert, but since we have auto-generating item codes that depend on the count,
+    // sequential inserts are safer, though slightly slower. For typical item masters (a few thousand max), it's acceptable.
+    for (const itemObj of itemsToInsert) {
+        try {
+            let codeToUse = itemObj.itemData.itemCode;
+
+            if (codeToUse) {
+                const existing = await Item.findOne({ itemCode: codeToUse });
+                if (existing) {
+                    // It exists, so we update it with new data
+                    // First, remove currentStock from itemData so we don't blindly overwrite it
+                    delete itemObj.itemData.currentStock;
+
+                    // If opening stock changed, adjust current stock accordingly
+                    if (itemObj.itemData.openingStock !== undefined && itemObj.itemData.openingStock !== existing.openingStock) {
+                        const diff = itemObj.itemData.openingStock - (existing.openingStock || 0);
+                        existing.currentStock = (existing.currentStock || 0) + diff;
+                    }
+
+                    Object.assign(existing, itemObj.itemData);
+                    existing.updatedBy = req.user.id;
+                    await existing.save();
+
+                    successCount++;
+                    continue; // Skip the create below
+                }
+            } else {
+                codeToUse = await generateItemCode(itemObj.itemData.itemType);
+                itemObj.itemData.itemCode = codeToUse;
+            }
+
+            await Item.create(itemObj.itemData);
+            successCount++;
+        } catch (err) {
+            errors.push(`Row ${itemObj.rowNum}: Failed to save - ${err.message}`);
+        }
+    }
+
+    const message = `Successfully imported ${successCount} items. ${errors.length > 0 ? `Encountered ${errors.length} errors.` : ''}`;
+
+    res.status(httpStatus.OK).send({
+        success: true,
+        message,
+        errors: errors.length > 0 ? errors : undefined,
+        successCount,
+        errorCount: errors.length
+    });
 });
 
 export const generateCode = asyncHandler(async (req, res) => {
     const code = await generateItemCode(req.query.itemType || 'OTHER');
     res.send({ success: true, data: { itemCode: code } });
+});
+
+export const exportItemsExcel = asyncHandler(async (req, res) => {
+    res.status(501).send({ success: false, message: 'Not Implemented' });
+});
+
+export const exportItemsPDF = asyncHandler(async (req, res) => {
+    res.status(501).send({ success: false, message: 'Not Implemented' });
 });

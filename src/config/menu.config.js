@@ -239,6 +239,26 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'service',
+        title: 'Service',
+        icon: 'SettingsIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            {
+                id: 'complaints',
+                title: 'Customer Complaints',
+                path: '/service/complaints',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'replacement-dispatches',
+                title: 'Replacement Dispatches',
+                path: '/service/replacement-dispatches/new',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+        ],
+    },
+    {
         id: 'admin',
         title: 'Admin',
         icon: 'SettingsIcon',

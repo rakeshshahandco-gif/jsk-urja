@@ -28,6 +28,12 @@ import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
 import stickerRoute from './sticker.routes.js';
 import notificationRoute from './notification.routes.js';
+import complaintRoute from './complaint.routes.js';
+import replacementDispatchRoute from './replacementDispatch.routes.js';
+import faultyReceiptRoute from './faultyReceipt.routes.js';
+import repairJobCardRoute from './repairJobCard.routes.js';
+import repairedStockInwardRoute from './repairedStockInward.routes.js';
+import scrapEntryRoute from './scrapEntry.routes.js';
 
 
 const router = express.Router();
@@ -153,6 +159,31 @@ const defaultRoutes = [
     {
         path: '/notifications',
         route: notificationRoute,
+    },
+    // ── Service / Replacement Module ──────────────────────────────────────────
+    {
+        path: '/complaints',
+        route: complaintRoute,
+    },
+    {
+        path: '/replacement-dispatches',
+        route: replacementDispatchRoute,
+    },
+    {
+        path: '/faulty-receipts',
+        route: faultyReceiptRoute,
+    },
+    {
+        path: '/repair-job-cards',
+        route: repairJobCardRoute,
+    },
+    {
+        path: '/repaired-stock-inwards',
+        route: repairedStockInwardRoute,
+    },
+    {
+        path: '/scrap-entries',
+        route: scrapEntryRoute,
     },
 
 ];

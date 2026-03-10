@@ -43,7 +43,7 @@ const TABS = [
 
 // ── DEFAULT FORM STATE ───────────────────────────────────────────────────────
 const DEFAULT = {
-    itemCode: '', itemName: '', itemGroupName: '', itemCategory: 'RAW_MATERIAL', itemType: 'OTHER', uom: 'NOS', points: '',
+    itemCode: '', itemName: '', itemGroupName: '', itemCategory: 'RAW_MATERIAL', itemType: 'OTHER', uom: 'NOS', points: '', description: '',
     openingStock: 0, currentStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
     defaultSupplier: '', purchaseRate: 0, purchaseGst: 18, hsnCode: '', leadTimeDays: 0,
     sellingPrice: 0, mrp: 0, warrantyMonths: 0, salesGst: 18, productDescription: '',
@@ -184,6 +184,12 @@ const ItemFormPage = () => {
                                 </Field>
                             </div>
                         </div>
+                        {/* Description */}
+                        <div>
+                            <Field label="Description">
+                                <textarea style={{ ...f.textarea, minHeight: 40 }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Brief description of the item..." />
+                            </Field>
+                        </div>
                         {/* Row 2: Category + Type + Group + UOM + Points */}
                         <div style={f.row(3)}>
                             <Field label="Item Category *">
@@ -254,6 +260,10 @@ const ItemFormPage = () => {
                                 <Toggle value={form.allowNegativeStock} onChange={v => set('allowNegativeStock', v)} />
                             </div>
                         </div>
+                        {/* Row 4: Description */}
+                        <Field label="Description">
+                            <textarea style={{ ...f.textarea, minHeight: 70 }} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Enter a general description for this item (e.g., specifications, usage notes, etc.)" />
+                        </Field>
 
                     </div>
                 )}

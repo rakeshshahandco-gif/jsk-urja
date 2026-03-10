@@ -61,6 +61,16 @@ import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
+// Service / Replacement Module
+import ComplaintListPage from '@/features/service/ComplaintListPage';
+import ComplaintFormPage from '@/features/service/ComplaintFormPage';
+import ComplaintDetailPage from '@/features/service/ComplaintDetailPage';
+import ReplacementDispatchFormPage from '@/features/service/ReplacementDispatchFormPage';
+import ReplacementDispatchPrintPage from '@/features/service/ReplacementDispatchPrintPage';
+import FaultyReceiptFormPage from '@/features/service/FaultyReceiptFormPage';
+import RepairJobCardFormPage from '@/features/service/RepairJobCardFormPage';
+import RepairedStockInwardFormPage from '@/features/service/RepairedStockInwardFormPage';
+import ScrapEntryFormPage from '@/features/service/ScrapEntryFormPage';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 
@@ -371,6 +381,18 @@ function App() {
                                                             <Route path="/sales/invoices/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><SalesInvoiceDetailPage /></ProtectedRoute>} />
                                                             <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ProductionSheetPage /></ProtectedRoute>} />
                                                             <Route path="/sales/invoice-series" element={<ProtectedRoute requireRole={['admin']}><InvoiceSeriesPage /></ProtectedRoute>} />
+
+                                                            {/* Service / Replacement Module */}
+                                                            <Route path="/service/complaints" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintListPage /></ProtectedRoute>} />
+                                                            <Route path="/service/complaints/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/complaints/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/service/replacement-dispatches/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ReplacementDispatchFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/replacement-dispatches/:id/print" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ReplacementDispatchPrintPage /></ProtectedRoute>} />
+                                                            <Route path="/service/faulty-receipts/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><FaultyReceiptFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/repair-job-cards/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><RepairJobCardFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><RepairedStockInwardFormPage /></ProtectedRoute>} />
+                                                            <Route path="/service/scrap-entries/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ScrapEntryFormPage /></ProtectedRoute>} />
 
                                                             {/* Redirects */}
                                                             <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />

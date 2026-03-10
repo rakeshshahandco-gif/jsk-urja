@@ -40,3 +40,19 @@ export const exportItemsPDF = async (params = {}) => {
     const res = await api.get('/items/export/pdf', { params, responseType: 'blob' });
     return res.data;
 };
+
+export const exportItemTemplate = async () => {
+    const res = await api.get('/items/export/template', { responseType: 'blob' });
+    return res.data;
+};
+
+export const importItemsExcel = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post('/items/import/excel', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return res.data;
+};

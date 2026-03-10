@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package } from 'lucide-react';
-import { getItems, deleteItem, exportItemsExcel, exportItemsPDF } from '@/services/itemApi';
+import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload } from 'lucide-react';
+import { getItems, deleteItem, exportItemsExcel, exportItemsPDF, importItemsExcel, exportItemTemplate } from '@/services/itemApi';
 import { FileDown, FileText } from 'lucide-react';
 import { getItemTypes } from '@/services/itemTypeApi';
 import { getItemGroups } from '@/services/itemGroupApi';
@@ -60,6 +60,8 @@ const ItemListPage = () => {
     const [types, setTypes] = useState(STATIC_TYPES);
     const [groups, setGroups] = useState([{ value: '', label: 'All Groups' }]);
     const [loading, setLoading] = useState(true);
+    const [isImporting, setIsImporting] = useState(false);
+    const fileInputRef = useRef(null);
     const [search, setSearch] = useState('');
     const [catFilter, setCatFilter] = useState('');
     const [typeFilter, setTypeFilter] = useState('');
@@ -182,6 +184,45 @@ const ItemListPage = () => {
         }
     };
 
+    const handleExportTemplate = async () => {
+        try {
+            const blob = await exportItemTemplate();
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'Item_Master_Template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            addToast('Template downloaded successfully', 'success');
+        } catch (err) {
+            console.error('Export Template Error:', err);
+            addToast('Failed to export template', 'error');
+        }
+    };
+
+    const handleImportExcel = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        try {
+            const res = await importItemsExcel(file);
+            addToast(res.message || 'Import successful', 'success');
+            load(); // Reload the list
+        } catch (err) {
+            console.error('Import Error:', err);
+            addToast(err?.response?.data?.message || 'Failed to import items', 'error');
+            if (err?.response?.data?.errors) {
+                // If there are detailed element errors
+                console.error('Import Details:', err.response.data.errors);
+            }
+        } finally {
+            setIsImporting(false);
+            if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+        }
+    };
+
     const SortIndicator = ({ field }) => {
         const [currField, currDir] = sortBy.split(':');
         if (currField !== field) return <span style={{ color: '#d1d5db', marginLeft: 4, fontSize: 10 }}>↕</span>;
@@ -199,6 +240,33 @@ const ItemListPage = () => {
                     <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '1px 8px', borderRadius: 10, fontWeight: 600 }}>{meta.total} items</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        style={{ display: 'none' }}
+                        ref={fileInputRef}
+                        onChange={handleImportExcel}
+                    />
+                    <button
+                        onClick={handleExportTemplate}
+                        style={{ height: 30, padding: '0 12px', background: '#f8fafc', color: '#374151', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Download Format for Import"
+                        disabled={isImporting}
+                    >
+                        <FileText size={13} /> Template
+                    </button>
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{ height: 30, padding: '0 12px', background: isImporting ? '#9ca3af' : '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: isImporting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Import Items from Excel"
+                        disabled={isImporting}
+                    >
+                        {isImporting ? <div style={{ width: 13, height: 13, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> : <Upload size={13} />}
+                        {isImporting ? 'Importing...' : 'Import'}
+                    </button>
+
+                    <div style={{ width: 1, height: 20, background: '#d1d5db', margin: '0 4px' }} />
+
                     <button
                         onClick={handleExportExcel}
                         style={{ height: 30, padding: '0 12px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}

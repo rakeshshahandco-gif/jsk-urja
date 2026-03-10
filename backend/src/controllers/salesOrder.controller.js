@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { ProductionSheet } from '../models/productionSheet.model.js';
+import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import Customer from '../models/customer.model.js';
 
 // --- helpers ---
@@ -35,26 +36,31 @@ const genSONumber = async () => {
     return `SO-${year}-${String(next).padStart(5, '0')}`;
 };
 
-const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '') => {
+const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '', gstApplicable = true) => {
     let totalQty = 0, totalTaxableSum = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0;
     const isIGST = gstType === 'IGST';
+
+    // Force GST to 0 if not applicable
+    const effectiveGstApplicable = gstApplicable === true || gstApplicable === 'true';
 
     const processedItems = items.map(item => {
         const qty = Number(item.qty) || 0;
         const rate = Number(item.rate) || 0;
         const amount = qty * rate;
-        const gstRate = Number(item.gstRate) || 18;
+        const gstRate = effectiveGstApplicable ? (Number(item.gstRate) || 18) : 0;
         const taxableAmount = amount;
 
         let cgstRate = 0, cgstAmount = 0, sgstRate = 0, sgstAmount = 0, igstRate = 0, igstAmount = 0;
-        if (isIGST) {
-            igstRate = gstRate;
-            igstAmount = Math.round(taxableAmount * igstRate / 100 * 100) / 100;
-        } else {
-            cgstRate = gstRate / 2;
-            sgstRate = gstRate / 2;
-            cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
-            sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
+        if (effectiveGstApplicable) {
+            if (isIGST) {
+                igstRate = gstRate;
+                igstAmount = Math.round(taxableAmount * igstRate / 100 * 100) / 100;
+            } else {
+                cgstRate = gstRate / 2;
+                sgstRate = gstRate / 2;
+                cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
+                sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
+            }
         }
         const itemTotalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
 
@@ -68,7 +74,8 @@ const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '') 
     });
 
     const freight = Number(freightAmount) || 0;
-    const freightGst = freight > 0 && freightGstRate > 0 ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
+    const freightGstCount = effectiveGstApplicable ? Number(freightGstRate) : 0;
+    const freightGst = effectiveGstApplicable && freight > 0 && freightGstCount > 0 ? Math.round(freight * freightGstCount / 100 * 100) / 100 : 0;
     const totalGst = totalCgst + totalSgst + totalIgst + freightGst;
     const grandTotal = totalTaxableSum + totalGst + freight;
     const roundedTotal = Math.round(grandTotal);
@@ -83,9 +90,21 @@ export const createSO = asyncHandler(async (req, res) => {
     if (!body.customerName) throw new ApiError(httpStatus.BAD_REQUEST, 'Customer name is required');
     if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
 
-    const soNumber = await genSONumber();
+    // Get SO number from series if provided
+    let soNumber, gstApplicable = true;
+    if (body.seriesId) {
+        const series = await InvoiceSeries.findById(body.seriesId);
+        if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
+        soNumber = series.nextInvoiceNumber();
+        gstApplicable = series.gstApplicable === false ? false : true;
+        series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
+        await series.save();
+    } else {
+        soNumber = await genSONumber();
+    }
+
     const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
-        body.items, body.freightAmount, body.freightGstRate, body.gstType
+        body.items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
     );
 
     // Pull sticker type from customer master
@@ -104,8 +123,9 @@ export const createSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.create({
         ...body,
         soNumber,
+        gstApplicable,
         stickerType,
-        customerCode: body.customerCode || '', // Expecting frontend to pass this if available
+        customerCode: body.customerCode || '',
         items: processedItems,
         totalQty,
         totalAmount,
@@ -163,7 +183,7 @@ export const updateSO = asyncHandler(async (req, res) => {
     const body = req.body;
     if (body.items) {
         const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
-            body.items, body.freightAmount ?? so.freightAmount, body.freightGstRate ?? so.freightGstRate, body.gstType ?? so.gstType
+            body.items, body.freightAmount ?? so.freightAmount, body.freightGstRate ?? so.freightGstRate, body.gstType ?? so.gstType, so.gstApplicable
         );
         body.items = processedItems;
         body.totalQty = totalQty;

@@ -7,6 +7,7 @@ const invoiceSeriesSchema = new mongoose.Schema({
     startNumber: { type: Number, default: 1 },
     currentNumber: { type: Number, default: 0 }, // last used number (0 = none used yet)
     padLength: { type: Number, default: 5 },  // zero pad: 00001
+    gstApplicable: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     description: { type: String, default: '' },

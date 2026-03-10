@@ -26,28 +26,33 @@ const numWords = (n) => {
     return result + ' Only';
 };
 
-const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = 'CGST / SGST') => {
+const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = 'CGST / SGST', gstApplicable = true) => {
     const isIGST = gstType === 'IGST';
     let totalQty = 0, subTotal = 0, totalDiscount = 0, totalTaxableAmount = 0;
     let totalCgst = 0, totalSgst = 0, totalIgst = 0;
+
+    // Force GST to 0 if not applicable
+    const effectiveGstApplicable = gstApplicable === true || gstApplicable === 'true';
 
     const processedItems = items.map(item => {
         const qty = Number(item.qty) || 0;
         const rate = Number(item.rate) || 0;
         const discPct = Number(item.discountPercent) || 0;
-        const gstRate = Number(item.gstRate) || 18;
+        const gstRate = effectiveGstApplicable ? (Number(item.gstRate) || 18) : 0;
         const gross = qty * rate;
         const discAmt = Math.round(gross * discPct / 100 * 100) / 100;
         const taxableAmount = gross - discAmt;
 
         let cgstRate = 0, cgstAmount = 0, sgstRate = 0, sgstAmount = 0, igstRate = 0, igstAmount = 0;
-        if (isIGST) {
-            igstRate = gstRate;
-            igstAmount = Math.round(taxableAmount * igstRate / 100 * 100) / 100;
-        } else {
-            cgstRate = gstRate / 2; sgstRate = gstRate / 2;
-            cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
-            sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
+        if (effectiveGstApplicable) {
+            if (isIGST) {
+                igstRate = gstRate;
+                igstAmount = Math.round(taxableAmount * igstRate / 100 * 100) / 100;
+            } else {
+                cgstRate = gstRate / 2; sgstRate = gstRate / 2;
+                cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
+                sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
+            }
         }
         const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
 
@@ -61,7 +66,8 @@ const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType
     });
 
     const freight = Number(freightAmount) || 0;
-    const freightGstAmt = freight > 0 && freightGstRate > 0 ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
+    const freightGstRateCount = effectiveGstApplicable ? (Number(freightGstRate) || 0) : 0;
+    const freightGstAmt = effectiveGstApplicable && freight > 0 && freightGstRateCount > 0 ? Math.round(freight * freightGstRateCount / 100 * 100) / 100 : 0;
     const totalGst = totalCgst + totalSgst + totalIgst + freightGstAmt;
     const grandTotal = totalTaxableAmount + totalGst + freight;
     const roundedTotal = Math.round(grandTotal);
@@ -77,11 +83,12 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
 
     // Get invoice number from series
-    let invoiceNumber;
+    let invoiceNumber, gstApplicable = true;
     if (body.seriesId) {
         const series = await InvoiceSeries.findById(body.seriesId);
         if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive invoice series');
         invoiceNumber = series.nextInvoiceNumber();
+        gstApplicable = series.gstApplicable === false ? false : true;
         series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
         await series.save();
     } else {
@@ -98,12 +105,13 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     }
 
     const { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount } = calcInvoiceTotals(
-        body.items, body.freightAmount, body.freightGstRate, body.gstType
+        body.items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
     );
 
     const inv = await SalesInvoice.create({
         ...body,
         invoiceNumber,
+        gstApplicable,
         items: processedItems,
         totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst,
         grandTotal, roundedTotal, roundOff, freightGstAmount,
