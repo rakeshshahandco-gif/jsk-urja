@@ -62,6 +62,117 @@ export default function WorkOrderDetailPage() {
     if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b', background: '#f8f9fa', minHeight: '100vh' }}>Loading...</div>;
     if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
 
+    const handlePrintProductionSheet = () => {
+        const printWindow = window.open('', '', 'width=900,height=800');
+
+        let emptyRows1 = '';
+        for (let i = 0; i < 5; i++) {
+            emptyRows1 += `<tr style="height:45px">
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+            </tr>`;
+        }
+
+        let emptyRows2 = '';
+        for (let i = 0; i < 6; i++) {
+            emptyRows2 += `<tr style="height:35px">
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px; border-left: 2px solid #000;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+                <td style="border:1px solid #000; padding:4px;"></td>
+            </tr>`;
+        }
+
+        const html = `
+            <html>
+            <head>
+                <title>Production Sheet - ${wo.woNumber}</title>
+                <style>
+                    body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 20px; box-sizing: border-box; }
+                    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000; }
+                    .header-table td { border: 1px solid #000; padding: 6px; }
+                    .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000; text-align: center; }
+                    .grid-table th { background: #f8f9fa; border: 1px solid #000; padding: 6px; font-weight: bold; }
+                    .grid-table td { border: 1px solid #000; padding: 6px; }
+                    .section-title { font-weight: bold; font-size: 12px; background: #f8f9fa; text-align: center; padding: 6px; border: 1px solid #000; text-transform: uppercase; }
+                    @media print {
+                        @page { size: A4 portrait; margin: 10mm; }
+                        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 190mm; }
+                    }
+                </style>
+            </head>
+            <body>
+                <table class="header-table">
+                    <tr>
+                        <td>Status : ${wo.status}</td>
+                        <td>Company : JSK Innovative Technology Pvt Ltd</td>
+                    </tr>
+                    <tr>
+                        <td>Item to Manufacture : ${wo.finishedProductName || '—'}</td>
+                        <td>Qty to Manufacture : ${wo.targetQty}</td>
+                    </tr>
+                    <tr>
+                        <td>Bom No : ${wo.bomVersion || '—'}</td>
+                        <td>Target Warehouse : ${wo.targetWarehouse || 'Finished Goods - JITPL'}</td>
+                    </tr>
+                    <tr>
+                        <td>Planned Start Date : ${wo.plannedStart ? new Date(wo.plannedStart).toLocaleString() : 'None'}</td>
+                        <td>Actual Start Date : ${wo.actualStart ? new Date(wo.actualStart).toLocaleString() : 'None'}</td>
+                    </tr>
+                </table>
+
+                <table class="grid-table">
+                    <tr>
+                        <th style="width:120px;"></th>
+                        <th>Wo No</th><th>Date</th><th>Qty-Panel</th><th>Qty</th><th>Sign</th><th>Ent.</th>
+                    </tr>
+                    <tr><td style="font-weight:bold; height:60px;">SMD</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td style="font-weight:bold; height:60px;">Wave/Reflow</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td style="font-weight:bold; height:60px;">Lac/Clean</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td style="font-weight:bold; height:60px;">Dummy</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                    <tr><td style="font-weight:bold; height:60px;">Faulty</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+                </table>
+
+                <table class="grid-table" style="margin-top:20px;">
+                    <tr>
+                        <td colspan="4" class="section-title">TH-MOUNTING</td>
+                        <td colspan="4" class="section-title" style="border-left: 2px solid #000;">TOUCH-UP</td>
+                    </tr>
+                    <tr>
+                        <th>DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
+                        <th style="border-left: 2px solid #000;">DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
+                    </tr>
+                    ${emptyRows2}
+                    <tr>
+                        <td colspan="4" class="section-title">1ST QC</td>
+                        <td colspan="4" class="section-title" style="border-left: 2px solid #000;">FINAL QC</td>
+                    </tr>
+                    <tr>
+                        <th>DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
+                        <th style="border-left: 2px solid #000;">DATE</th><th>NAME</th><th>QTY</th><th>SIGN</th>
+                    </tr>
+                    ${emptyRows2}
+                </table>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 250);
+    };
+
     const sc = WO_STATUS_COLORS[wo.status] || WO_STATUS_COLORS['Draft'];
     const pct = wo.stages?.length ? Math.round((wo.stages.filter(s => s.status === 'Completed').length / wo.stages.length) * 100) : 0;
     const mandatoryShortages = (wo.materialStatus || []).filter(m => m.isMandatory && m.shortQty > 0);
@@ -86,6 +197,10 @@ export default function WorkOrderDetailPage() {
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={handlePrintProductionSheet}
+                            style={{ padding: '9px 18px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >🖨️ Print Production Sheet</button>
                         {wo.status === 'Draft' && (
                             <button
                                 onClick={handleRelease} disabled={saving}
