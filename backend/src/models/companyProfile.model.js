@@ -87,6 +87,10 @@ const companyProfileSchema = new mongoose.Schema(
             trim: true,
             default: '',
         },
+        logoHeight: {
+            type: Number,
+            default: 65,
+        },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

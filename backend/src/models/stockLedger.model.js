@@ -8,8 +8,14 @@ const stockLedgerSchema = new mongoose.Schema({
     transactionType: {
         type: String,
         enum: ['GRN', 'WO_CONSUMPTION', 'OPENING', 'ADJUSTMENT', 'RETURN', 'PURCHASE_INVOICE', 'PURCHASE_INVOICE_DELETE',
-            'REPLACEMENT_DISPATCH', 'FAULTY_RECEIPT', 'REPAIR_INWARD', 'REPAIR_TO_QC', 'SCRAP_ENTRY'],
+            'REPLACEMENT_DISPATCH', 'FAULTY_RECEIPT', 'REPAIR_INWARD', 'REPAIR_TO_QC', 'SCRAP_ENTRY',
+            'PROD_FAILURE', 'REWORK_ISSUE', 'REWORK_CONSUMPTION', 'REWORK_QC_PASS', 'REWORK_SCRAP'],
         required: true,
+    },
+    stockBucket: {
+        type: String,
+        enum: ['SALEABLE', 'FAULTY', 'REPAIR', 'SCRAP', 'REPLACEMENT_DISPATCHED', 'FAILED_PRODUCTION'],
+        default: 'SALEABLE'
     },
     referenceNo: { type: String, default: '' }, // GRN No, PO No, etc.
     referenceId: { type: mongoose.Schema.Types.ObjectId, default: null },

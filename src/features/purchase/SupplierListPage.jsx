@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getSuppliers, deleteSupplier, createSupplier, updateSupplier } from '@/services/purchaseApi';
+import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
@@ -14,6 +14,7 @@ export default function SupplierListPage() {
     const [search, setSearch] = useState('');
     const [modal, setModal] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -61,6 +62,31 @@ export default function SupplierListPage() {
         catch (e) { toast.error(e.response?.data?.message || e.message); }
     };
 
+    const handleDownloadTemplate = async () => {
+        try {
+            const blob = await downloadSupplierTemplate();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Supplier_Master_Template.xlsx';
+            a.click();
+        } catch (e) { toast.error('Failed to download template'); }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        setImporting(true);
+        try {
+            const res = await importSuppliersExcel(formData);
+            toast.success(res.message);
+            load();
+        } catch (e) { toast.error(e.response?.data?.message || e.message); }
+        finally { setImporting(false); e.target.value = ''; }
+    };
+
     return (
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* Header */}
@@ -69,10 +95,20 @@ export default function SupplierListPage() {
                     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>🏭 Supplier Master</h1>
                     <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Manage all your material suppliers</p>
                 </div>
-                <button onClick={openCreate}
-                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                    + Add Supplier
-                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={handleDownloadTemplate}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                        📥 Template
+                    </button>
+                    <label style={{ padding: '9px 18px', borderRadius: 8, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'inline-block' }}>
+                        {importing ? '⌛ Importing...' : '📤 Import Excel'}
+                        <input type="file" hidden accept=".xlsx, .xls" onChange={handleImport} disabled={importing} />
+                    </label>
+                    <button onClick={openCreate}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                        + Add Supplier
+                    </button>
+                </div>
             </div>
 
             {/* Search */}

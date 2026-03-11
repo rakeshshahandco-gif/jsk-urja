@@ -45,6 +45,8 @@ const purchaseOrderSchema = new mongoose.Schema({
     deliveryAddress: { type: String, default: '' },
     deliveryFacility: { type: String, default: '' },
     items: [poItemSchema],
+    complaintId: { type: mongoose.Schema.Types.ObjectId, ref: 'Complaint', default: null },
+    complaintNo: { type: String, default: '' },
 
     // Transportation & Freight
     transporterName: { type: String, default: '' },

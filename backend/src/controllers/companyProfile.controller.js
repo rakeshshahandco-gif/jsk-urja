@@ -19,6 +19,7 @@ const companyProfileSchema = Joi.object({
     urn: Joi.string().allow('', null),
     cin: Joi.string().allow('', null),
     logoUrl: Joi.string().allow('', null),
+    logoHeight: Joi.number().min(20).max(150).allow(null),
 });
 
 // @desc    Get company profile (Singleton)

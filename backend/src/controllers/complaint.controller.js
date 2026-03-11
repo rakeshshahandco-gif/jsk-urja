@@ -5,6 +5,8 @@ import { Complaint } from '../models/complaint.model.js';
 import { ReplacementDispatch } from '../models/replacementDispatch.model.js';
 import { FaultyReceipt } from '../models/faultyReceipt.model.js';
 import { RepairJobCard } from '../models/repairJobCard.model.js';
+import { PurchaseOrder } from '../models/purchaseOrder.model.js';
+import { GRN } from '../models/grn.model.js';
 
 // ── Auto-number generator ────────────────────────────────────────────────────
 const generateComplaintNo = async () => {
@@ -83,13 +85,15 @@ export const getComplaint = asyncHandler(async (req, res) => {
     if (!complaint) throw new ApiError(httpStatus.NOT_FOUND, 'Complaint not found');
 
     // Fetch linked docs
-    const [dispatches, receipts, jobCards] = await Promise.all([
+    const [dispatches, receipts, jobCards, purchaseOrders, grns] = await Promise.all([
         ReplacementDispatch.find({ complaintId: req.params.id }).lean(),
         FaultyReceipt.find({ complaintId: req.params.id }).lean(),
         RepairJobCard.find({ complaintId: req.params.id }).lean(),
+        PurchaseOrder.find({ complaintId: req.params.id }).lean(),
+        GRN.find({ complaintId: req.params.id }).lean(),
     ]);
 
-    res.send({ success: true, data: { ...complaint, dispatches, receipts, jobCards } });
+    res.send({ success: true, data: { ...complaint, dispatches, receipts, jobCards, purchaseOrders, grns } });
 });
 
 export const updateComplaint = asyncHandler(async (req, res) => {

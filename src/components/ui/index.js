@@ -5,3 +5,4 @@ export * from './Select';
 export * from './MultiSelect';
 export * from './ContactPersonInput';
 export * from './WhatsAppButton';
+export { default as SearchableSelect } from './SearchableSelect';

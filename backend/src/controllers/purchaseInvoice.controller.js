@@ -34,10 +34,15 @@ const amountInWords = (amount) => {
 };
 
 const generateInvoiceNumber = async () => {
-    const count = await PurchaseInvoice.countDocuments();
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    return `PI-${year}${month}-${String(count + 1).padStart(4, '0')}`;
+    const prefix = `PI-${year}${month}-`;
+    const lastInv = await PurchaseInvoice.findOne({ invoiceNumber: new RegExp(`^${prefix}`) }).sort({ invoiceNumber: -1 });
+    if (!lastInv) {
+        return `${prefix}0001`;
+    }
+    const lastNumber = parseInt(lastInv.invoiceNumber.replace(prefix, ''), 10) || 0;
+    return `${prefix}${String(lastNumber + 1).padStart(4, '0')}`;
 };
 
 const rollbackSideEffects = async (inv, userId) => {

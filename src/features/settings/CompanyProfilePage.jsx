@@ -46,6 +46,8 @@ export default function CompanyProfilePage() {
         accountNo: '',
         branchName: '',
         ifscCode: '',
+        logoUrl: '',
+        logoHeight: 65,
     });
 
     useEffect(() => {
@@ -74,6 +76,7 @@ export default function CompanyProfilePage() {
                     branchName: res.data.branchName || '',
                     ifscCode: res.data.ifscCode || '',
                     logoUrl: res.data.logoUrl || '',
+                    logoHeight: res.data.logoHeight || 65,
                 });
             }
         } catch (error) {
@@ -109,6 +112,7 @@ export default function CompanyProfilePage() {
             formData.append('accountNo', profile.accountNo);
             formData.append('branchName', profile.branchName);
             formData.append('ifscCode', profile.ifscCode);
+            formData.append('logoHeight', profile.logoHeight);
 
             // Only append file if a new one was selected
             if (profile.logoFile) {
@@ -122,6 +126,7 @@ export default function CompanyProfilePage() {
                 setProfile(prev => ({
                     ...prev,
                     logoUrl: data.data.logoUrl || prev.logoUrl,
+                    logoHeight: data.data.logoHeight || prev.logoHeight,
                     logoFile: null // clear picked file after upload
                 }));
             }
@@ -260,19 +265,38 @@ export default function CompanyProfilePage() {
                             Branding
                         </h3>
                         <div>
-                            <span style={lbl}>Company Logo (Image or PDF)</span>
+                            <span style={lbl}>Company Logo (Accepts: PNG, JPG, JPEG, PDF)</span>
                             <input
                                 type="file"
+                                id="logoInput"
                                 name="logoFile"
                                 onChange={(e) => {
                                     if (e.target.files && e.target.files[0]) {
                                         setProfile(prev => ({ ...prev, logoFile: e.target.files[0] }));
                                     }
                                 }}
-                                accept="image/*,.pdf"
-                                style={inp}
+                                accept="image/png,image/jpeg,image/jpg,application/pdf"
+                                style={{ ...inp, display: 'none' }}
                             />
-                            <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#64748b' }}>Select a local image or PDF file to upload.</p>
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => document.getElementById('logoInput').click()}
+                                    style={{
+                                        padding: '8px 16px',
+                                        background: '#f1f5f9',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '6px',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        color: '#475569'
+                                    }}
+                                >
+                                    📁 Choose New logo
+                                </button>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}> Max size: 5MB </span>
+                            </div>
 
                             {profile.logoFile ? (
                                 <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', display: 'inline-block', border: '1px solid #e2e8f0', color: '#2563eb' }}>
@@ -286,7 +310,21 @@ export default function CompanyProfilePage() {
                                             📄 View Existing PDF Logo
                                         </a>
                                     ) : (
-                                        <img src={profile.logoUrl} alt="Company Logo" style={{ maxHeight: '60px', maxWidth: '200px', objectFit: 'contain' }} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <img src={profile.logoUrl} alt="Company Logo" style={{ maxHeight: `${profile.logoHeight}px`, maxWidth: '200px', objectFit: 'contain' }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                <span style={{ fontSize: '12px', color: '#64748b' }}>Display Height:</span>
+                                                <input
+                                                    type="range"
+                                                    min="20"
+                                                    max="150"
+                                                    value={profile.logoHeight}
+                                                    onChange={(e) => setProfile(prev => ({ ...prev, logoHeight: e.target.value }))}
+                                                    style={{ width: '150px' }}
+                                                />
+                                                <span style={{ fontSize: '12px', fontWeight: 600 }}>{profile.logoHeight}px</span>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             ) : null}

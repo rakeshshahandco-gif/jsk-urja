@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-// Force restart to apply validation changes (version 2)
+// Force restart to apply validation changes (version 3)
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
@@ -15,7 +15,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Global Middlewares
-app.use(helmet({ contentSecurityPolicy: false })); // Disabled CSP to prevent blocking React assets
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Disabled CSP and allowed cross-origin resources
 app.use(cors({
     origin: ['http://localhost:4000', 'http://localhost:5173', "https://jsk-urja.onrender.com"],
     credentials: true,

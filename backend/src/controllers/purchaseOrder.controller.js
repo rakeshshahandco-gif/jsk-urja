@@ -42,6 +42,8 @@ const createPOSchema = Joi.object({
     lrNumber: Joi.string().optional().allow(''),
     freightAmount: Joi.number().min(0).default(0),
     freightGstRate: Joi.number().min(0).default(0),
+    complaintId: Joi.string().optional().allow(null, ''),
+    complaintNo: Joi.string().optional().allow(''),
     items: Joi.array().items(poItemSchema).min(1).required(),
 });
 
@@ -49,9 +51,13 @@ const updatePOSchema = createPOSchema.fork(['supplierId', 'items'], f => f.optio
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const generatePoNumber = async () => {
-    const count = await PurchaseOrder.countDocuments();
     const year = new Date().getFullYear();
-    return `PO-${year}-${String(count + 1).padStart(5, '0')}`;
+    const lastPO = await PurchaseOrder.findOne({ poNumber: new RegExp(`^PO-${year}-`) }).sort({ poNumber: -1 });
+    if (!lastPO) {
+        return `PO-${year}-00001`;
+    }
+    const lastNumber = parseInt(lastPO.poNumber.split('-')[2], 10) || 0;
+    return `PO-${year}-${String(lastNumber + 1).padStart(5, '0')}`;
 };
 
 const calculateTotals = (items, gstType) => {
@@ -100,6 +106,8 @@ export const createPO = asyncHandler(async (req, res) => {
         supplierContact: value.supplierContact || supplier.phone,
         status: 'Ordered',
         ...totals,
+        complaintId: value.complaintId || null,
+        complaintNo: value.complaintNo || '',
         createdBy: req.user._id,
     });
 
@@ -181,8 +189,7 @@ export const updatePOStatus = asyncHandler(async (req, res) => {
 export const deletePO = asyncHandler(async (req, res) => {
     const po = await PurchaseOrder.findById(req.params.id);
     if (!po) throw new ApiError(404, 'PO not found');
-    if (po.status !== 'Draft' && po.status !== 'Ordered')
-        throw new ApiError(400, 'Only Draft or Ordered POs can be deleted');
+    // Allow deletion of any PO as long as no GRN exists
 
     const { GRN } = await import('../models/grn.model.js');
     const hasGRN = await GRN.exists({ poId: po._id });

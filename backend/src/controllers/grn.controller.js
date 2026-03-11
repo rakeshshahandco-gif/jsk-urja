@@ -88,6 +88,8 @@ const createGRNAgainstPOSchema = Joi.object({
     grnDate: Joi.date().optional(),
     warehouse: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
+    complaintId: Joi.string().optional().allow(null, ''),
+    complaintNo: Joi.string().optional().allow(''),
     items: Joi.array().items(grnItemAgainstPO).min(1).required(),
 });
 
@@ -97,6 +99,8 @@ const createDirectGRNSchema = Joi.object({
     grnDate: Joi.date().optional(),
     warehouse: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
+    complaintId: Joi.string().optional().allow(null, ''),
+    complaintNo: Joi.string().optional().allow(''),
     items: Joi.array().items(grnItemDirect).min(1).required(),
 });
 
@@ -168,6 +172,8 @@ const createGRNAgainstPO = async (req, res) => {
         items: grnItems,
         totalAmount: Math.round(grnItems.reduce((s, i) => s + i.amount, 0) * 100) / 100,
         remarks: value.remarks || '',
+        complaintId: value.complaintId || po.complaintId || null,
+        complaintNo: value.complaintNo || po.complaintNo || '',
         createdBy: req.user._id,
     });
 
@@ -231,6 +237,8 @@ const createDirectGRN = async (req, res) => {
         items: grnItems,
         totalAmount: Math.round(grnItems.reduce((s, i) => s + i.amount, 0) * 100) / 100,
         remarks: value.remarks || '',
+        complaintId: value.complaintId || null,
+        complaintNo: value.complaintNo || '',
         createdBy: req.user._id,
     });
 

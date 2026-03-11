@@ -1,8 +1,172 @@
+import httpStatus from 'http-status';
+import ExcelJS from 'exceljs';
 import { Supplier } from '../models/supplier.model.js';
-import { ApiError } from '../utils/ApiError.js';
+import { AccountLedger } from '../models/accountLedger.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
+
+// @desc    Export Supplier Template
+// @route   GET /api/v1/suppliers/export/template
+// @access  Private
+export const exportSupplierTemplate = asyncHandler(async (req, res) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Suppliers Template');
+
+    worksheet.columns = [
+        { header: 'Supplier Code (Leave empty to auto-generate)', key: 'supplierCode', width: 35 },
+        { header: 'Supplier Name*', key: 'supplierName', width: 40 },
+        { header: 'Contact Person', key: 'contactPerson', width: 25 },
+        { header: 'Phone', key: 'phone', width: 20 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'GST Number', key: 'gstNumber', width: 20 },
+        { header: 'GST Type (CGST / SGST, IGST)', key: 'gstType', width: 25 },
+        { header: 'PAN Number', key: 'panNumber', width: 20 },
+        { header: 'Address', key: 'address', width: 40 },
+        { header: 'City', key: 'city', width: 20 },
+        { header: 'State', key: 'state', width: 20 },
+        { header: 'Pincode', key: 'pincode', width: 15 },
+        { header: 'Bank Name', key: 'bankName', width: 25 },
+        { header: 'Bank Account No', key: 'bankAccountNo', width: 25 },
+        { header: 'Bank IFSC', key: 'bankIfsc', width: 20 },
+        { header: 'Active (TRUE/FALSE)', key: 'isActive', width: 20 },
+        { header: 'Remarks', key: 'remarks', width: 30 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=Supplier_Master_Template.xlsx');
+    res.send(buffer);
+});
+
+// @desc    Import Suppliers from Excel
+// @route   POST /api/v1/suppliers/import/excel
+// @access  Private
+export const importSuppliersExcel = asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(httpStatus.BAD_REQUEST, 'Please upload an Excel file');
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.worksheets[0];
+
+    if (!worksheet) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid Excel file format');
+
+    const suppliersToInsert = [];
+    const errors = [];
+    const headerRow = worksheet.getRow(1);
+    const colMap = {};
+
+    headerRow.eachCell((cell, colNumber) => {
+        const val = cell.value?.toString().trim().toLowerCase() || '';
+        if (val.includes('supplier code')) colMap.supplierCode = colNumber;
+        else if (val.includes('supplier name')) colMap.supplierName = colNumber;
+        else if (val.includes('contact person')) colMap.contactPerson = colNumber;
+        else if (val.includes('phone')) colMap.phone = colNumber;
+        else if (val.includes('email')) colMap.email = colNumber;
+        else if (val.includes('gst number')) colMap.gstNumber = colNumber;
+        else if (val.includes('gst type')) colMap.gstType = colNumber;
+        else if (val.includes('pan number')) colMap.panNumber = colNumber;
+        else if (val.includes('address')) colMap.address = colNumber;
+        else if (val.includes('city')) colMap.city = colNumber;
+        else if (val.includes('state')) colMap.state = colNumber;
+        else if (val.includes('pincode')) colMap.pincode = colNumber;
+        else if (val.includes('bank name')) colMap.bankName = colNumber;
+        else if (val.includes('bank account no')) colMap.bankAccountNo = colNumber;
+        else if (val.includes('bank ifsc')) colMap.bankIfsc = colNumber;
+        else if (val.includes('active')) colMap.active = colNumber;
+        else if (val.includes('remarks')) colMap.remarks = colNumber;
+    });
+
+    if (!colMap.supplierName) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid template. "Supplier Name" column missing.');
+    }
+
+    for (let i = 2; i <= worksheet.rowCount; i++) {
+        const row = worksheet.getRow(i);
+        if (!row.hasValues) continue;
+
+        try {
+            const supplierName = row.getCell(colMap.supplierName).value?.toString().trim();
+            if (!supplierName) {
+                errors.push(`Row ${i}: Supplier Name is required`);
+                continue;
+            }
+
+            const supplierData = {
+                supplierName,
+                supplierCode: colMap.supplierCode ? row.getCell(colMap.supplierCode).value?.toString().trim().toUpperCase() : null,
+                contactPerson: colMap.contactPerson ? row.getCell(colMap.contactPerson).value?.toString().trim() : '',
+                phone: colMap.phone ? row.getCell(colMap.phone).value?.toString().trim() : '',
+                email: colMap.email ? row.getCell(colMap.email).value?.toString().trim().toLowerCase() : '',
+                gstNumber: colMap.gstNumber ? row.getCell(colMap.gstNumber).value?.toString().trim().toUpperCase() : '',
+                gstType: colMap.gstType ? row.getCell(colMap.gstType).value?.toString().trim() : '',
+                panNumber: colMap.panNumber ? row.getCell(colMap.panNumber).value?.toString().trim().toUpperCase() : '',
+                address: colMap.address ? row.getCell(colMap.address).value?.toString().trim() : '',
+                city: colMap.city ? row.getCell(colMap.city).value?.toString().trim() : '',
+                state: colMap.state ? row.getCell(colMap.state).value?.toString().trim() : '',
+                pincode: colMap.pincode ? row.getCell(colMap.pincode).value?.toString().trim() : '',
+                bankName: colMap.bankName ? row.getCell(colMap.bankName).value?.toString().trim() : '',
+                bankAccountNo: colMap.bankAccountNo ? row.getCell(colMap.bankAccountNo).value?.toString().trim() : '',
+                bankIfsc: colMap.bankIfsc ? row.getCell(colMap.bankIfsc).value?.toString().trim().toUpperCase() : '',
+                remarks: colMap.remarks ? row.getCell(colMap.remarks).value?.toString().trim() : '',
+                createdBy: req.user._id
+            };
+
+            if (colMap.active) {
+                const activeVal = row.getCell(colMap.active).value?.toString().toLowerCase();
+                if (activeVal === 'false' || activeVal === '0') supplierData.isActive = false;
+            }
+
+            suppliersToInsert.push({ rowNum: i, data: supplierData });
+        } catch (err) {
+            errors.push(`Row ${i}: ${err.message}`);
+        }
+    }
+
+    let successCount = 0;
+    for (const item of suppliersToInsert) {
+        try {
+            let supplier;
+            if (item.data.supplierCode) {
+                supplier = await Supplier.findOne({ supplierCode: item.data.supplierCode });
+            }
+
+            if (supplier) {
+                Object.assign(supplier, item.data);
+                supplier.updatedBy = req.user._id;
+                await supplier.save();
+            } else {
+                if (!item.data.supplierCode) {
+                    item.data.supplierCode = await generateSupplierCode();
+                }
+                supplier = await Supplier.create(item.data);
+
+                // Create Ledger
+                await AccountLedger.create({
+                    name: supplier.supplierName,
+                    group: 'Current Liabilities',
+                    type: 'Supplier',
+                    referenceId: supplier._id,
+                    referenceModel: 'Supplier',
+                    createdBy: req.user._id
+                });
+            }
+            successCount++;
+        } catch (err) {
+            errors.push(`Row ${item.rowNum}: ${err.message}`);
+        }
+    }
+
+    res.json(new ApiResponse(200, { successCount, errorCount: errors.length, errors }, 'Import completed'));
+});
 
 const supplierSchema = Joi.object({
     supplierName: Joi.string().required(),
@@ -38,6 +202,23 @@ export const createSupplier = asyncHandler(async (req, res) => {
 
     const supplierCode = await generateSupplierCode();
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
+
+    // Create Ledger in Chart of Accounts
+    try {
+        await AccountLedger.create({
+            name: supplier.supplierName,
+            group: 'Current Liabilities',
+            type: 'Supplier',
+            referenceId: supplier._id,
+            referenceModel: 'Supplier',
+            openingBalance: supplier.openingBalance || 0,
+            currentBalance: supplier.openingBalance || 0,
+            createdBy: req.user._id
+        });
+    } catch (ledgerErr) {
+        console.error('❌ Failed to create ledger for supplier:', ledgerErr);
+    }
+
     res.status(201).json(new ApiResponse(201, supplier, 'Supplier created'));
 });
 

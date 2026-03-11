@@ -44,7 +44,7 @@ const TABS = [
 // ── DEFAULT FORM STATE ───────────────────────────────────────────────────────
 const DEFAULT = {
     itemCode: '', itemName: '', itemGroupName: '', itemCategory: 'RAW_MATERIAL', itemType: 'OTHER', uom: 'NOS', points: '', description: '',
-    openingStock: 0, currentStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
+    openingStock: 0, currentStock: 0, faultyStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
     defaultSupplier: '', purchaseRate: 0, purchaseGst: 18, hsnCode: '', leadTimeDays: 0,
     sellingPrice: 0, mrp: 0, warrantyMonths: 0, salesGst: 18, productDescription: '',
     isManufacturable: false, bomLink: '', productionTimeHours: 0, machineRequired: '', qcRequired: false, stdProductionCost: 0,
@@ -272,9 +272,10 @@ const ItemFormPage = () => {
                 {activeTab === 'stock' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div style={f.sectionTitle}>Stock Information</div>
-                        <div style={f.row(4)}>
+                        <div style={f.row(5)}>
                             <Field label="Opening Stock"><input style={f.input} type="number" min="0" value={form.openingStock} onChange={e => num('openingStock', e.target.value)} /></Field>
                             <Field label="Current Stock"><input style={f.input} type="number" min="0" value={form.currentStock} onChange={e => num('currentStock', e.target.value)} title="Manually adjust to simulate stock purchase/movement" /></Field>
+                            <Field label="Faulty Stock"><input style={f.input} type="number" min="0" value={form.faultyStock} onChange={e => num('faultyStock', e.target.value)} /></Field>
                             <Field label="Min Stock (Reorder)"><input style={f.input} type="number" min="0" value={form.minStockLevel} onChange={e => num('minStockLevel', e.target.value)} /></Field>
                             <Field label="Max Stock"><input style={f.input} type="number" min="0" value={form.maxStockLevel} onChange={e => num('maxStockLevel', e.target.value)} /></Field>
                         </div>

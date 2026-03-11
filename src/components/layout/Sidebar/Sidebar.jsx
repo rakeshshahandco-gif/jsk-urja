@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { menuConfig, ROLES } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarItem } from './SidebarItem';
+import { getCompanyProfile } from '@/services/settingsApi';
 import styles from './Sidebar.module.scss';
 
 export const Sidebar = () => {
@@ -11,6 +12,21 @@ export const Sidebar = () => {
     const userRole = user?.role || ROLES.VIEWER;
 
     const [expandedMenuId, setExpandedMenuId] = useState(null);
+    const [logoUrl, setLogoUrl] = useState(null);
+    const [logoHeight, setLogoHeight] = useState(65);
+
+    useEffect(() => {
+        getCompanyProfile()
+            .then(res => {
+                if (res.data?.logoUrl) {
+                    setLogoUrl(res.data.logoUrl);
+                }
+                if (res.data?.logoHeight) {
+                    setLogoHeight(res.data.logoHeight);
+                }
+            })
+            .catch(() => { });
+    }, []);
 
     // Initial state based on current location
     useEffect(() => {
@@ -60,6 +76,16 @@ export const Sidebar = () => {
             <div className={styles.header}>
                 <div className={styles.brand}>
                     <div className={styles.logoWrapper}>
+                        {logoUrl && !logoUrl.toLowerCase().endsWith('.pdf') && (
+                            <img
+                                src={logoUrl}
+                                alt="Logo"
+                                className={styles.logoImage}
+                                style={{ maxHeight: `${logoHeight}px` }}
+                                crossOrigin="anonymous"
+                                onError={() => setLogoUrl(null)}
+                            />
+                        )}
                         <div className={styles.brandText}>
                             <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
                             <span className={styles.tagline}>CRM Application</span>

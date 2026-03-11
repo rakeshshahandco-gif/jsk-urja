@@ -1,4 +1,5 @@
 import Customer from '../models/customer.model.js';
+import { AccountLedger } from '../models/accountLedger.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 
@@ -30,6 +31,22 @@ const createCustomer = async (body) => {
     }
 
     const customer = await Customer.create(body);
+
+    // Create Ledger in Chart of Accounts
+    try {
+        await AccountLedger.create({
+            name: customer.company || customer.customerName,
+            group: 'Current Assets',
+            type: 'Customer',
+            referenceId: customer._id,
+            referenceModel: 'Customer',
+            openingBalance: customer.openingBalance || 0,
+            currentBalance: customer.openingBalance || 0
+        });
+    } catch (ledgerErr) {
+        logger.error('❌ Failed to create ledger for customer:', ledgerErr);
+    }
+
     logger.info(`✅ Customer created successfully with ID: ${customer._id}, Code: ${customer.customerCode}`);
     return customer;
 };

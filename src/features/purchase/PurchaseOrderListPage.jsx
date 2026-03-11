@@ -97,22 +97,20 @@ export default function PurchaseOrderListPage() {
                                                 style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                 View
                                             </button>
-                                            {['Draft', 'Ordered'].includes(po.status) && (
-                                                <>
-                                                    <button onClick={() => navigate(`${PATHS.PURCHASE.ORDERS}/edit/${po._id}`)}
-                                                        style={{ padding: '5px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                                        ✎
-                                                    </button>
-                                                    <button onClick={() => {
-                                                        if (window.confirm('Delete this PO?')) {
-                                                            deletePurchaseOrder(po._id).then(() => { toast.success('Deleted'); load(); }).catch(e => toast.error(e.response?.data?.message || 'Failed'));
-                                                        }
-                                                    }}
-                                                        style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                                        🗑
-                                                    </button>
-                                                </>
+                                            {po.status !== 'Completed' && po.status !== 'Cancelled' && (
+                                                <button onClick={() => navigate(`${PATHS.PURCHASE.ORDERS}/edit/${po._id}`)}
+                                                    style={{ padding: '5px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                    ✎
+                                                </button>
                                             )}
+                                            <button onClick={() => {
+                                                if (window.confirm('Are you sure you want to delete this Purchase Order? This action cannot be undone.')) {
+                                                    deletePurchaseOrder(po._id).then(() => { toast.success('Deleted'); load(); }).catch(e => toast.error(e.response?.data?.message || 'Failed to delete'));
+                                                }
+                                            }}
+                                                style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                🗑
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

@@ -172,9 +172,9 @@ export const menuConfig = [
                 permission: 'view_production',
             },
             {
-                id: 'work-orders',
-                title: 'Work Orders',
-                path: PATHS.PRODUCTION.WORK_ORDERS,
+                id: 'prod-rework',
+                title: 'Failure & Rework',
+                path: PATHS.PRODUCTION.REWORK.DASHBOARD,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
                 permission: 'view_production',
             },
@@ -247,7 +247,13 @@ export const menuConfig = [
             {
                 id: 'complaints',
                 title: 'Customer Complaints',
-                path: '/service/complaints',
+                path: PATHS.SERVICE.COMPLAINTS,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+            },
+            {
+                id: 'replacement-dashboard',
+                title: 'Replacement Dashboard',
+                path: PATHS.SERVICE.REPLACEMENT_DASHBOARD,
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
             },
             {
@@ -257,6 +263,26 @@ export const menuConfig = [
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
             },
         ],
+    },
+    {
+        id: 'accounts',
+        title: 'Accounts',
+        icon: 'AccountBalanceWalletIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        children: [
+            { id: 'receipt-entry', title: 'Receipt Entry', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF] },
+            { id: 'payment-entry', title: 'Payment Entry', path: PATHS.ACCOUNTS.PAYMENT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF] },
+            { id: 'vouchers', title: 'Voucher Register', path: PATHS.ACCOUNTS.VOUCHER_LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF] },
+            { id: 'cash-bank', title: 'Cash / Bank Master', path: PATHS.ACCOUNTS.CASH_BANK_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER] },
+            { id: 'voucher-types', title: 'Voucher Types', path: PATHS.ACCOUNTS.VOUCHER_TYPE_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER] },
+            { id: 'ledger-report', title: 'Ledger Report', path: PATHS.ACCOUNTS.LEDGER_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER] },
+            { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER] },
+            { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER] },
+            { id: 'outstanding', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER] },
+            { id: 'fixed-assets-master', title: 'Fixed Asset Master', path: PATHS.ACCOUNTS.FIXED_ASSETS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF] },
+            { id: 'asset-category-master', title: 'Asset Category Master', path: PATHS.ACCOUNTS.ASSET_CATEGORIES, roles: [ROLES.ADMIN, ROLES.MANAGER] },
+            { id: 'asset-location-master', title: 'Asset Location Master', path: PATHS.ACCOUNTS.ASSET_LOCATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER] },
+        ]
     },
     {
         id: 'admin',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, AlertTriangle, Truck, Package, Wrench, CheckCircle, XCircle, Edit2, Plus } from 'lucide-react';
+import { ChevronLeft, AlertTriangle, Truck, Package, Wrench, CheckCircle, XCircle, Edit2, Plus, Clipboard } from 'lucide-react';
 import { getComplaint } from '@/services/serviceApi';
 import { useToast } from '@/components/ui/Toast';
 
@@ -186,6 +186,40 @@ const ComplaintDetailPage = () => {
                                     + Scrap Entry
                                 </button>
                             </div>
+                        </div>
+                    ))}
+                </Section>
+            )}
+
+            {/* Linked Purchase Orders */}
+            {data.purchaseOrders?.length > 0 && (
+                <Section icon={Clipboard} title={`Purchase Orders for Replacement (${data.purchaseOrders.length})`} color="#2563eb">
+                    {data.purchaseOrders.map(po => (
+                        <div key={po._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
+                            <div>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2563eb' }}>{po.poNumber}</span>
+                                <span style={{ marginLeft: 10, color: '#374151', fontWeight: 600 }}>{po.supplierName}</span>
+                                <span style={{ marginLeft: 10, color: '#6b7280' }}>{new Date(po.poDate).toLocaleDateString('en-IN')}</span>
+                                <span style={{ marginLeft: 10, background: '#dbeafe', color: '#1e40af', padding: '1px 8px', borderRadius: 8, fontSize: 10, fontWeight: 600 }}>{po.status}</span>
+                            </div>
+                            <button onClick={() => navigate(`/purchase/orders/${po._id}/grn/new`)}
+                                style={{ height: 24, padding: '0 10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                                + Create GRN
+                            </button>
+                        </div>
+                    ))}
+                </Section>
+            )}
+
+            {/* Linked GRNs */}
+            {data.grns?.length > 0 && (
+                <Section icon={Package} title={`Goods Receipts (${data.grns.length})`} color="#059669">
+                    {data.grns.map(g => (
+                        <div key={g._id} style={{ padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#059669' }}>{g.grnNumber}</span>
+                            <span style={{ marginLeft: 10, color: '#374151', fontWeight: 600 }}>{g.supplierName}</span>
+                            <span style={{ marginLeft: 10, color: '#6b7280' }}>{new Date(g.grnDate).toLocaleDateString('en-IN')}</span>
+                            <span style={{ marginLeft: 10 }}>{g.items?.reduce((s, i) => s + i.receivedQty, 0)} pcs received</span>
                         </div>
                     ))}
                 </Section>

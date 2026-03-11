@@ -34,13 +34,33 @@ import faultyReceiptRoute from './faultyReceipt.routes.js';
 import repairJobCardRoute from './repairJobCard.routes.js';
 import repairedStockInwardRoute from './repairedStockInward.routes.js';
 import scrapEntryRoute from './scrapEntry.routes.js';
+import productionFailureRoute from './productionFailure.routes.js';
+import reworkJobCardRoute from './reworkJobCard.routes.js';
+import reworkMaterialIssueRoute from './reworkMaterialIssue.routes.js';
+import reworkOutputRoute from './reworkOutput.routes.js';
+import retestConfirmationRoute from './retestConfirmation.routes.js';
+import productionScrapRoute from './productionScrap.routes.js';
+import cashBankAccountRoute from './cashBankAccount.routes.js';
+import voucherTypeRoute from './voucherType.routes.js';
+import voucherRoute from './voucher.routes.js';
+import ledgerRoute from './ledger.routes.js';
+import assetCategoryRoute from './assetCategory.routes.js';
+import assetLocationRoute from './assetLocation.routes.js';
+import fixedAssetRoute from './fixedAsset.routes.js';
+import assetTransferRoute from './assetTransfer.routes.js';
+import assetMaintenanceRoute from './assetMaintenance.routes.js';
+import assetDisposalRoute from './assetDisposal.routes.js';
 
 
 const router = express.Router();
 
 // Route definitions will go here
 router.get('/health', (req, res) => {
-    res.send({ status: 'OK', version: '1.2.0', uptime: process.uptime() });
+    res.send({
+        status: 'OK',
+        version: '1.2.0-debug',
+        registeredPaths: defaultRoutes.map(r => r.path)
+    });
 });
 
 const defaultRoutes = [
@@ -184,6 +204,72 @@ const defaultRoutes = [
     {
         path: '/scrap-entries',
         route: scrapEntryRoute,
+    },
+    // ── Production Failure & Rework Module ──────────────────────────────────
+    {
+        path: '/production-rework-failures',
+        route: productionFailureRoute,
+    },
+    {
+        path: '/production-rework-job-cards',
+        route: reworkJobCardRoute,
+    },
+    {
+        path: '/production-rework-material-issues',
+        route: reworkMaterialIssueRoute,
+    },
+    {
+        path: '/production-rework-outputs',
+        route: reworkOutputRoute,
+    },
+    {
+        path: '/production-rework-retests',
+        route: retestConfirmationRoute,
+    },
+    {
+        path: '/production-rework-scraps',
+        route: productionScrapRoute,
+    },
+    // ── Accounts Module ──────────────────────────────────────────────────────
+    {
+        path: '/cash-bank-accounts',
+        route: cashBankAccountRoute,
+    },
+    {
+        path: '/voucher-types',
+        route: voucherTypeRoute,
+    },
+    {
+        path: '/vouchers',
+        route: voucherRoute,
+    },
+    {
+        path: '/ledgers',
+        route: ledgerRoute,
+    },
+    {
+        path: '/asset-categories',
+        route: assetCategoryRoute,
+    },
+    {
+        path: '/asset-locations',
+        route: assetLocationRoute,
+    },
+    {
+        path: '/fixed-assets',
+        route: fixedAssetRoute,
+    },
+    {
+        path: '/asset-transfers',
+        route: assetTransferRoute,
+    },
+    {
+        path: '/asset-maintenance',
+        route: assetMaintenanceRoute,
+    },
+    {
+        path: '/asset-disposals',
+        route: assetDisposalRoute,
     },
 
 ];

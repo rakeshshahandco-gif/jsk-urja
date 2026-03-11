@@ -348,12 +348,13 @@ export default function PurchaseInvoiceFormPage() {
     }, { taxable: 0, disc: 0, cgst: 0, sgst: 0, igst: 0, grand: 0 });
 
     const freightAmt = Number(header.freightAmount) || 0;
-    const freightGst = Number(header.freightGstRate) || 0;
+    const freightGst = Number(header.freightGstRate) || (rows.length > 0 ? rows[0].gstRate : 18);
     const freightCgst = !isIGST ? r2(freightAmt * freightGst / 2 / 100) : 0;
     const freightSgst = !isIGST ? r2(freightAmt * freightGst / 2 / 100) : 0;
     const freightIgst = isIGST ? r2(freightAmt * freightGst / 100) : 0;
     const freightGstTotal = r2(freightCgst + freightSgst + freightIgst);
-    const grandWithFreight = r2(totals.grand + freightAmt + freightGstTotal);
+    const totalTaxableWithFreight = r2(totals.taxable + freightAmt);
+    const grandWithFreight = r2(totalTaxableWithFreight + totals.cgst + totals.sgst + totals.igst + freightGstTotal);
 
     const needPO = flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice';
     const needGRN = flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice';
@@ -639,28 +640,9 @@ export default function PurchaseInvoiceFormPage() {
                                             <span>Freight Summary</span>
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                 <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', Number(e.target.value))} style={{ ...inp, width: '80px', padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
-                                                <div style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                    <span>GST</span>
-                                                    <select value={header.freightGstRate} onChange={e => setH('freightGstRate', Number(e.target.value))} style={{ ...inp, width: '60px', padding: '4px', fontSize: '11px' }} title="Freight GST %">
-                                                        <option value={0}>0%</option>
-                                                        <option value={5}>5%</option>
-                                                        <option value={12}>12%</option>
-                                                        <option value={18}>18%</option>
-                                                    </select>
-                                                </div>
-                                                <span style={{ fontWeight: 600, color: '#4b5563', minWidth: '70px', textAlign: 'right' }}>₹{r2(freightAmt + freightGstTotal).toLocaleString()}</span>
+                                                <span style={{ fontWeight: 600, color: '#4b5563', minWidth: '70px', textAlign: 'right' }}>₹{r2(freightAmt).toLocaleString()}</span>
                                             </div>
                                         </div>
-                                        {(freightAmt > 0 && freightGst > 0) && (
-                                            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '4px', marginBottom: '8px' }}>
-                                                {!isIGST ? (<>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight CGST ({freightGst / 2}%)</span><span>₹{freightCgst}</span></div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight SGST ({freightGst / 2}%)</span><span>₹{freightSgst}</span></div>
-                                                </>) : (
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8' }}><span>Freight IGST ({freightGst}%)</span><span>₹{freightIgst}</span></div>
-                                                )}
-                                            </div>
-                                        )}
 
                                         <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '18px', color: '#059669' }}>
                                             <span>Grand Total</span><span>₹{grandWithFreight.toLocaleString()}</span>

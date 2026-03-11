@@ -50,6 +50,7 @@ const itemSchema = new mongoose.Schema({
     minStockLevel: { type: Number, default: 0 },
     maxStockLevel: { type: Number, default: 0 },
     currentStock: { type: Number, default: 0 },
+    faultyStock: { type: Number, default: 0 },
     valuationRate: { type: Number, default: 0 },
     warehouseLocation: { type: String, trim: true, default: '' },
     batchTracking: { type: Boolean, default: false },

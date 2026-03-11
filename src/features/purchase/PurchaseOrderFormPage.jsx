@@ -4,6 +4,8 @@ import { createPurchaseOrder, getPurchaseOrderById, updatePurchaseOrder } from '
 import { getSuppliers } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { getComplaints, getComplaint } from '@/services/serviceApi';
+import { getCustomers } from '@/services/customerApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -21,6 +23,9 @@ export default function PurchaseOrderFormPage() {
     const [saving, setSaving] = useState(false);
     const [suppliers, setSuppliers] = useState([]);
     const [items, setItems] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [complaints, setComplaints] = useState([]);
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
     const [header, setHeader] = useState({
         supplierId: '', poDate: new Date().toISOString().split('T')[0],
@@ -29,6 +34,7 @@ export default function PurchaseOrderFormPage() {
         supplierAddress: '', supplierGstNumber: '',
         transporterName: '', vehicleNo: '', lrNumber: '',
         freightAmount: 0, freightGstRate: 0,
+        complaintId: '', complaintNo: '',
     });
     const [lineItems, setLineItems] = useState([{ ...EMPTY_ITEM }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
@@ -62,14 +68,82 @@ export default function PurchaseOrderFormPage() {
         }
     };
 
+    const handleCustomerChange = async (customerId) => {
+        setSelectedCustomerId(customerId);
+        setH('complaintId', '');
+        setH('complaintNo', '');
+        if (customerId) {
+            try {
+                const compData = await getComplaints({ customerId, status: 'Approved', limit: 100 });
+                setComplaints(compData.data || []);
+            } catch (err) {
+                toast.error('Failed to load complaints for customer');
+            }
+        } else {
+            setComplaints([]);
+        }
+    };
+
+    const handleComplaintChange = async (complaintId) => {
+        const found = complaints.find(c => c._id === complaintId);
+        setHeader(h => ({
+            ...h,
+            complaintId: complaintId || '',
+            complaintNo: found ? found.complaintNo : '',
+        }));
+
+        if (complaintId) {
+            try {
+                const fullComplaint = await getComplaint(complaintId);
+                if (fullComplaint && fullComplaint.items) {
+                    const newItems = fullComplaint.items.map(ci => ({
+                        itemId: ci.itemId?._id || ci.itemId || '',
+                        itemName: ci.itemName || '',
+                        itemCode: ci.itemCode || '',
+                        description: ci.notes || '',
+                        uom: ci.uom || 'NOS',
+                        orderedQty: ci.approvedReplacementQty || ci.qtyFaultyReported || 1,
+                        rate: 0, // Purchase rate will be fetched if itemId is set
+                        discountPercent: 0,
+                        taxPercent: 18,
+                        itemGroup: ''
+                    }));
+
+                    // Update items with purchase rates
+                    const enrichedItems = await Promise.all(newItems.map(async (newItem) => {
+                        if (newItem.itemId) {
+                            const foundItem = items.find(it => it._id === newItem.itemId);
+                            if (foundItem) {
+                                return {
+                                    ...newItem,
+                                    rate: foundItem.purchaseRate || 0,
+                                    taxPercent: foundItem.purchaseGst || 18,
+                                    itemGroup: foundItem.itemGroupName || ''
+                                };
+                            }
+                        }
+                        return newItem;
+                    }));
+
+                    setLineItems(enrichedItems);
+                    toast.success('Items pulled from complaint!');
+                }
+            } catch (err) {
+                toast.error('Failed to pull items from complaint');
+            }
+        }
+    };
+
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [supData, itemData] = await Promise.all([
+                const [supData, itemData, custData] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 5000, sortBy: 'itemName:asc' })
+                    getItems({ limit: 5000, sortBy: 'itemName:asc' }),
+                    getCustomers({ limit: 1000 })
                 ]);
                 setSuppliers(supData.suppliers || []);
+                setCustomers(custData.results || []);
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
                 setItems(itemsList);
 
@@ -90,6 +164,8 @@ export default function PurchaseOrderFormPage() {
                         lrNumber: po.lrNumber || '',
                         freightAmount: po.freightAmount || 0,
                         freightGstRate: po.freightGstRate || 0,
+                        complaintId: po.complaintId?._id || po.complaintId || '',
+                        complaintNo: po.complaintNo || '',
                     });
                     setLineItems(po.items.map(i => ({
                         itemId: i.itemId?._id || i.itemId,
@@ -152,7 +228,9 @@ export default function PurchaseOrderFormPage() {
     }, { itemTaxable: 0, itemTax: 0, discount: 0 });
 
     const freight = Number(header.freightAmount) || 0;
-    const freightTax = fmt(freight * (header.freightGstRate || 0) / 100);
+    const freightGstRate = Number(header.freightGstRate) || (lineItems[0]?.taxPercent || 18);
+    const freightTax = fmt(freight * freightGstRate / 100);
+
     const totalTaxable = fmt(totals.itemTaxable + freight);
     const totalTax = fmt(totals.itemTax + freightTax);
     const grandTotal = fmt(totalTaxable + totalTax);
@@ -253,6 +331,25 @@ export default function PurchaseOrderFormPage() {
                                     <span style={label}>Delivery Address</span>
                                     <input value={header.deliveryAddress} onChange={e => setH('deliveryAddress', e.target.value)} style={inp} placeholder="Direct shipping address if different from warehouse" />
                                 </div>
+                                <div style={{ gridColumn: 'span 1' }}>
+                                    <span style={label}>Customer (for Complaints)</span>
+                                    <SearchableSelect
+                                        options={customers.map(c => ({ value: c._id, label: c.customerName || c.name, meta: c.customerCode }))}
+                                        value={selectedCustomerId}
+                                        onChange={handleCustomerChange}
+                                        placeholder="— Select Customer —"
+                                    />
+                                </div>
+                                <div style={{ gridColumn: 'span 1' }}>
+                                    <span style={label}>Link to Complaint</span>
+                                    <SearchableSelect
+                                        options={complaints.map(c => ({ value: c._id, label: `${c.complaintNo} - ${c.customerName}`, meta: c.status }))}
+                                        value={header.complaintId}
+                                        onChange={handleComplaintChange}
+                                        placeholder={selectedCustomerId ? "— Select Complaint —" : "Select Customer First"}
+                                        disabled={!selectedCustomerId || complaints.length === 0}
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -275,15 +372,6 @@ export default function PurchaseOrderFormPage() {
                                 <div>
                                     <span style={label}>Freight Amount (₹)</span>
                                     <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={inp} />
-                                </div>
-                                <div>
-                                    <span style={label}>GST on Freight</span>
-                                    <select value={header.freightGstRate} onChange={e => setH('freightGstRate', Number(e.target.value))} style={{ ...inp, cursor: 'pointer' }}>
-                                        <option value={0}>0% (Exempt)</option>
-                                        <option value={5}>5% GST</option>
-                                        <option value={12}>12% GST</option>
-                                        <option value={18}>18% GST</option>
-                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -355,9 +443,12 @@ export default function PurchaseOrderFormPage() {
                                         <span>Item Taxable Amount</span>
                                         <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{totals.itemTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
-                                        <span>Freight / Shipping (+)</span>
-                                        <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '13px', color: '#64748b', padding: '4px 0' }}>
+                                        <span>Freight / Shipping</span>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={{ ...inp, width: '80px', padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
+                                            <span style={{ color: '#1e293b', fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>₹{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        </div>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', padding: '8px 0', borderTop: '1px dashed #cbd5e1', borderBottom: '1px dashed #cbd5e1', fontSize: '14px', color: '#0f172a', fontWeight: 700 }}>
                                         <span>Total Taxable</span>

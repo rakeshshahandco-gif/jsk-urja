@@ -109,23 +109,19 @@ export default function PurchaseInvoiceListPage() {
                                                 View
                                             </button>
                                             {inv.status !== 'Cancelled' && inv.paymentStatus !== 'Paid' && (
-                                                <>
-                                                    <button onClick={() => navigate(PATHS.PURCHASE.EDIT_INVOICE(inv._id))}
-                                                        style={{ padding: '5px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                                        ✎
-                                                    </button>
-                                                    {inv.paymentStatus !== 'Paid' && (
-                                                        <button onClick={() => {
-                                                            if (window.confirm('Delete this Invoice?')) {
-                                                                deletePurchaseInvoice(inv._id).then(() => { toast.success('Deleted'); load(); }).catch(e => toast.error(e.response?.data?.message || 'Failed'));
-                                                            }
-                                                        }}
-                                                            style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                                                            🗑
-                                                        </button>
-                                                    )}
-                                                </>
+                                                <button onClick={() => navigate(PATHS.PURCHASE.EDIT_INVOICE(inv._id))}
+                                                    style={{ padding: '5px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #93c5fd', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                    ✎
+                                                </button>
                                             )}
+                                            <button onClick={() => {
+                                                if (window.confirm('Are you sure you want to delete this Purchase Invoice? This will rollback stock and GRN status if applicable. This action cannot be undone.')) {
+                                                    deletePurchaseInvoice(inv._id).then(() => { toast.success('Deleted'); load(); }).catch(e => toast.error(e.response?.data?.message || 'Failed to delete'));
+                                                }
+                                            }}
+                                                style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                                                🗑
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

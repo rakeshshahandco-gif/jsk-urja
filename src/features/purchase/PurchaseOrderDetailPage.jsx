@@ -94,8 +94,11 @@ export default function PurchaseOrderDetailPage() {
     const fnum = (n) => parseFloat((n || 0).toFixed(2));
     const itemTaxable = (po.items || []).reduce((s, i) => fnum(s + (i.orderedQty * i.rate)), 0);
     const freight = po.freightAmount || 0;
+    const freightGstRate = po.freightGstRate || ((po.items && po.items.length > 0) ? po.items[0].taxPercent : 18);
+    const freightTax = fnum(freight * freightGstRate / 100);
+
     const totalTaxable = fnum(itemTaxable + freight);
-    const totalTax = po.taxTotal || 0;
+    const totalTax = po.taxTotal ? po.taxTotal : fnum((po.items || []).reduce((s, i) => s + (i.orderedQty * i.rate * i.taxPercent / 100), 0) + freightTax);
     const isIGST = po.gstType === 'IGST';
 
     return (

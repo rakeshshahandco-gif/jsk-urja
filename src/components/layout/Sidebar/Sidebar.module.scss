@@ -22,7 +22,7 @@
 }
 
 .header {
-    height: 60px;
+    height: 80px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -39,7 +39,17 @@
     .logoWrapper {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 15px; // Increased gap
+        overflow: visible; // Allow logo to stand out
+    }
+
+    .logoImage {
+        max-height: 65px; // Larger logo
+        max-width: auto;
+        width: auto;
+        object-fit: contain;
+        transition: all 0.3s ease;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     }
 
     .brandText {

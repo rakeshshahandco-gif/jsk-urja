@@ -198,6 +198,7 @@ export const exportItemTemplate = asyncHandler(async (req, res) => {
         { header: 'HSN Code', key: 'hsnCode', width: 20 },
         { header: 'UOM*', key: 'uom', width: 15 },
         { header: 'Opening Stock', key: 'openingStock', width: 20 },
+        { header: 'Faulty Stock', key: 'faultyStock', width: 20 },
         { header: 'Min Stock Level', key: 'minStockLevel', width: 20 },
         { header: 'Selling Price', key: 'sellingPrice', width: 20 },
         { header: 'Purchase Price', key: 'purchasePrice', width: 20 },
@@ -251,6 +252,7 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
         else if (val.includes('hsn')) colMap.hsn = colNumber;
         else if (val.includes('uom')) colMap.uom = colNumber;
         else if (val.includes('opening stock')) colMap.openingStock = colNumber;
+        else if (val.includes('faulty stock')) colMap.faultyStock = colNumber;
         else if (val.includes('min stock')) colMap.minStock = colNumber;
         else if (val.includes('selling price')) colMap.sellingPrice = colNumber;
         else if (val.includes('purchase price')) colMap.purchasePrice = colNumber;
@@ -311,6 +313,7 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
             const uom = parseUom(rawUom);
 
             const openingStock = colMap.openingStock ? (Number(row.getCell(colMap.openingStock).value) || 0) : 0;
+            const faultyStock = colMap.faultyStock ? (Number(row.getCell(colMap.faultyStock).value) || 0) : 0;
             const minStockLevel = colMap.minStock ? (Number(row.getCell(colMap.minStock).value) || 0) : 0;
             const sellingPrice = colMap.sellingPrice ? (Number(row.getCell(colMap.sellingPrice).value) || 0) : 0;
             const purchasePrice = colMap.purchasePrice ? (Number(row.getCell(colMap.purchasePrice).value) || 0) : 0;
@@ -350,7 +353,8 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
                     hsnCode,
                     uom,
                     openingStock,
-                    currentStock: openingStock, // Seed currentStock
+                    currentStock: openingStock + faultyStock, // Seed currentStock with both healthy and faulty
+                    faultyStock,
                     minStockLevel,
                     sellingPrice,
                     purchasePrice,

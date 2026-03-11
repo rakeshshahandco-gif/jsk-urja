@@ -214,7 +214,7 @@ export default function PurchaseInvoiceDetailPage() {
                             {inv.freightAmount > 0 && (
                                 <tr style={{ borderTop: 'none' }}>
                                     <td colSpan={8} style={{ borderRight: '1px solid #000', padding: '4px 10px', textAlign: 'right', fontWeight: 700 }}>Add: Freight Charges</td>
-                                    <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600 }}>{(inv.freightAmount + (inv.freightTotalGst || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600 }}>{(inv.freightAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                             )}
                             {inv.roundOff !== 0 && (
@@ -399,7 +399,7 @@ export default function PurchaseInvoiceDetailPage() {
                                     isIGST ? ['IGST', fmtCur(inv.totalIgst)] : null,
                                     !isIGST ? ['CGST', fmtCur(inv.totalCgst)] : null,
                                     !isIGST ? ['SGST', fmtCur(inv.totalSgst)] : null,
-                                    ...(inv.freightAmount > 0 ? [['Freight', fmtCur(inv.freightAmount)], inv.freightTotalGst > 0 ? ['Freight GST', fmtCur(inv.freightTotalGst)] : null] : []),
+                                    ...(inv.freightAmount > 0 ? [['Freight', fmtCur(inv.freightAmount)]] : []),
                                     inv.roundOff ? ['Round Off', fmtCur(inv.roundOff)] : null,
                                 ].filter(Boolean).map(([k, v]) => (
                                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: '#6b7280' }}>

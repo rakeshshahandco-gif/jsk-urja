@@ -71,6 +71,32 @@ import FaultyReceiptFormPage from '@/features/service/FaultyReceiptFormPage';
 import RepairJobCardFormPage from '@/features/service/RepairJobCardFormPage';
 import RepairedStockInwardFormPage from '@/features/service/RepairedStockInwardFormPage';
 import ScrapEntryFormPage from '@/features/service/ScrapEntryFormPage';
+import ReplacementDashboard from '@/features/service/ReplacementDashboard';
+
+// Accounts Module
+import ReceiptEntryPage from '@/features/accounts/ReceiptEntryPage';
+import PaymentEntryPage from '@/features/accounts/PaymentEntryPage';
+import VoucherListPage from '@/features/accounts/VoucherListPage';
+import CashBankMasterPage from '@/features/accounts/CashBankMasterPage';
+import VoucherTypeMasterPage from '@/features/accounts/VoucherTypeMasterPage';
+import LedgerReportPage from '@/features/accounts/LedgerReportPage';
+import OutstandingReportPage from '@/features/accounts/OutstandingReportPage';
+import AssetCategoryPage from '@/features/fixedAssets/AssetCategoryPage';
+import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
+import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
+import AssetDetailPage from '@/features/fixedAssets/AssetDetailPage';
+
+// Production Rework Module
+import ProductionReworkDashboard from '@/features/productionRework/ProductionReworkDashboard';
+import ProductionFailureListPage from '@/features/productionRework/ProductionFailureListPage';
+import ProductionFailureFormPage from '@/features/productionRework/ProductionFailureFormPage';
+import ReworkJobCardListPage from '@/features/productionRework/ReworkJobCardListPage';
+import ReworkJobCardFormPage from '@/features/productionRework/ReworkJobCardFormPage';
+import ReworkMaterialIssueFormPage from '@/features/productionRework/ReworkMaterialIssueFormPage';
+import ReworkOutputFormPage from '@/features/productionRework/ReworkOutputFormPage';
+import RetestConfirmationFormPage from '@/features/productionRework/RetestConfirmationFormPage';
+import ProductionScrapFormPage from '@/features/productionRework/ProductionScrapFormPage';
+
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 
@@ -387,6 +413,7 @@ function App() {
                                                             <Route path="/service/complaints/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintFormPage /></ProtectedRoute>} />
                                                             <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintFormPage /></ProtectedRoute>} />
                                                             <Route path="/service/complaints/:id" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ComplaintDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/service/replacement-dashboard" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ReplacementDashboard /></ProtectedRoute>} />
                                                             <Route path="/service/replacement-dispatches/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ReplacementDispatchFormPage /></ProtectedRoute>} />
                                                             <Route path="/service/replacement-dispatches/:id/print" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ReplacementDispatchPrintPage /></ProtectedRoute>} />
                                                             <Route path="/service/faulty-receipts/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><FaultyReceiptFormPage /></ProtectedRoute>} />
@@ -394,8 +421,39 @@ function App() {
                                                             <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><RepairedStockInwardFormPage /></ProtectedRoute>} />
                                                             <Route path="/service/scrap-entries/new" element={<ProtectedRoute requireRole={['admin', 'manager', 'staff']}><ScrapEntryFormPage /></ProtectedRoute>} />
 
+                                                            {/* Production Rework Module */}
+                                                            <Route path="/production/rework/dashboard" element={<ProtectedRoute requirePermission="view_production"><ProductionReworkDashboard /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/failures" element={<ProtectedRoute requirePermission="view_production"><ProductionFailureListPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/failures/new" element={<ProtectedRoute requirePermission="manage_production"><ProductionFailureFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/failures/:id" element={<ProtectedRoute requirePermission="view_production"><ProductionFailureListPage /></ProtectedRoute>} /> {/* Details handled by list/modal or separate if needed */}
+
+                                                            <Route path="/production/rework/job-cards" element={<ProtectedRoute requirePermission="view_production"><ReworkJobCardListPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/job-cards/new" element={<ProtectedRoute requirePermission="manage_production"><ReworkJobCardFormPage /></ProtectedRoute>} />
+
+                                                            <Route path="/production/rework/material-issues/new" element={<ProtectedRoute requirePermission="manage_production"><ReworkMaterialIssueFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/outputs/new" element={<ProtectedRoute requirePermission="manage_production"><ReworkOutputFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/retests/new" element={<ProtectedRoute requirePermission="manage_production"><RetestConfirmationFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rework/scraps/new" element={<ProtectedRoute requirePermission="manage_production"><ProductionScrapFormPage /></ProtectedRoute>} />
+
+
                                                             {/* Redirects */}
                                                             <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
+
+                                                            {/* Accounts Module Routes */}
+                                                            <Route path="/accounts/receipt-entry" element={<ProtectedRoute><ReceiptEntryPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/payment-entry" element={<ProtectedRoute><PaymentEntryPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/vouchers" element={<ProtectedRoute><VoucherListPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute><CashBankMasterPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/masters/voucher-types" element={<ProtectedRoute><VoucherTypeMasterPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/reports/ledger" element={<ProtectedRoute><LedgerReportPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/reports/cash-book" element={<ProtectedRoute><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
+                                                            <Route path="/accounts/reports/bank-book" element={<ProtectedRoute><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
+                                                            <Route path="/accounts/reports/outstanding" element={<ProtectedRoute><OutstandingReportPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/fixed-assets" element={<ProtectedRoute><FixedAssetMasterPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute><AssetDetailPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/asset-categories" element={<ProtectedRoute><AssetCategoryPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/asset-locations" element={<ProtectedRoute><AssetLocationPage /></ProtectedRoute>} />
+
                                                         </Routes>
                                                     </main>
                                                 </div>

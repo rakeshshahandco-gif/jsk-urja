@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getSuppliers, getPurchaseOrders, getPurchaseOrderById, createGRN } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { getComplaints } from '@/services/serviceApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -20,6 +21,7 @@ export default function GRNFormPage() {
     const [suppliers, setSuppliers] = useState([]);
     const [poList, setPoList] = useState([]);
     const [allItems, setAllItems] = useState([]);
+    const [complaints, setComplaints] = useState([]);
     const [saving, setSaving] = useState(false);
     const [loadingPO, setLoadingPO] = useState(false);
 
@@ -27,6 +29,7 @@ export default function GRNFormPage() {
         supplierId: '', selectedPoId: prefillPoId,
         grnDate: new Date().toISOString().split('T')[0],
         warehouse: '', remarks: '',
+        complaintId: '', complaintNo: '',
     });
     // For Against PO → items come from PO
     const [poItems, setPoItems] = useState([]); // { poItem, receivedQty, qcStatus, batchNo, serialNo, remarks }
@@ -37,6 +40,7 @@ export default function GRNFormPage() {
 
     useEffect(() => {
         getSuppliers({ limit: 200 }).then(d => setSuppliers(d.suppliers || [])).catch(() => { });
+        getComplaints({ status: 'Approved', limit: 100 }).then(d => setComplaints(d.data || [])).catch(() => { });
         getItems({ limit: 5000, sortBy: 'itemName:asc' }).then(d => setAllItems(Array.isArray(d.data) ? d.data : [])).catch(() => { });
     }, []);
 
@@ -81,6 +85,12 @@ export default function GRNFormPage() {
                 remarks: '',
             }));
             setPoItems(pendingItems);
+            setHeader(h => ({
+                ...h,
+                supplierId: poData.supplierId?._id || poData.supplierId,
+                complaintId: poData.complaintId?._id || poData.complaintId || '',
+                complaintNo: poData.complaintNo || '',
+            }));
             if (pendingItems.length === 0) toast.info('All items in this PO are already fully received');
         } catch { toast.error('Failed to load PO items'); }
         finally { setLoadingPO(false); }
@@ -229,19 +239,26 @@ export default function GRNFormPage() {
                                 <input value={header.warehouse} onChange={e => setH('warehouse', e.target.value)} style={inp} placeholder="e.g. Main Warehouse" />
                             </div>
 
-                            {sourceType === 'Against PO' && (
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <span style={lbl}>Purchase Order *</span>
-                                    <select value={header.selectedPoId} onChange={e => onPoChange(e.target.value)} style={{ ...inp, cursor: 'pointer' }} required>
-                                        <option value="">— Select PO —</option>
-                                        {poList.map(po => <option key={po._id} value={po._id}>{po.poNumber} – {po.supplierName} ({po.status})</option>)}
-                                    </select>
-                                    {loadingPO && <span style={{ fontSize: '11px', color: '#60a5fa' }}>Loading PO items...</span>}
-                                </div>
-                            )}
-                            <div style={{ gridColumn: sourceType === 'Against PO' ? 'span 1' : 'span 3' }}>
+                            <div style={{ gridColumn: 'span 2' }}>
                                 <span style={lbl}>Remarks</span>
                                 <input value={header.remarks} onChange={e => setH('remarks', e.target.value)} style={inp} placeholder="Optional remarks" />
+                            </div>
+                            <div style={{ gridColumn: 'span 1' }}>
+                                <span style={lbl}>Link to Complaint</span>
+                                {sourceType === 'Against PO' ? (
+                                    <input value={header.complaintNo ? `Linked to ${header.complaintNo}` : 'No Complaint Linked'} style={{ ...inp, background: '#1e293b', color: '#94a3b8' }} readOnly />
+                                ) : (
+                                    <SearchableSelect
+                                        options={complaints.map(c => ({ value: c._id, label: `${c.complaintNo} - ${c.customerName}` }))}
+                                        value={header.complaintId}
+                                        onChange={v => {
+                                            const found = complaints.find(c => c._id === v);
+                                            setHeader(h => ({ ...h, complaintId: v, complaintNo: found ? found.complaintNo : '' }));
+                                        }}
+                                        placeholder="— Select Complaint —"
+                                        dark={true}
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>

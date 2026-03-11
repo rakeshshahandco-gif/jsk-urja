@@ -60,6 +60,8 @@ const grnSchema = new mongoose.Schema({
     },
 
     items: [grnItemSchema],
+    complaintId: { type: mongoose.Schema.Types.ObjectId, ref: 'Complaint', default: null },
+    complaintNo: { type: String, default: '' },
     totalAmount: { type: Number, default: 0 },
     remarks: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

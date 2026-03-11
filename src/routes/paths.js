@@ -45,6 +45,19 @@ export const PATHS = {
         WORK_ORDERS: '/production/work-orders',
         NEW_WO: '/production/work-orders/new',
         WO_DETAIL: (id) => `/production/work-orders/${id}`,
+        REWORK: {
+            DASHBOARD: '/production/rework',
+            FAILURES: '/production/rework/failures',
+            NEW_FAILURE: '/production/rework/failures/new',
+            FAILURE_DETAILS: (id) => `/production/rework/failures/${id}`,
+            JOB_CARDS: '/production/rework/job-cards',
+            NEW_JOB_CARD: '/production/rework/job-cards/new',
+            JOB_CARD_DETAILS: (id) => `/production/rework/job-cards/${id}`,
+            MATERIAL_ISSUES: '/production/rework/material-issues',
+            OUTPUTS: '/production/rework/outputs',
+            RETESTS: '/production/rework/retests',
+            SCRAPS: '/production/rework/scraps',
+        }
     },
     PURCHASE: {
         SUPPLIERS: '/purchase/suppliers',
@@ -72,4 +85,23 @@ export const PATHS = {
         PRODUCTION_SHEET: (id) => `/sales/production-sheets/${id}`,
         INVOICE_SERIES: '/sales/invoice-series',
     },
+    SERVICE: {
+        COMPLAINTS: '/service/complaints',
+        REPLACEMENT_DASHBOARD: '/service/replacement-dashboard',
+    },
+    ACCOUNTS: {
+        ROOT: '/accounts',
+        RECEIPT_ENTRY: '/accounts/receipt-entry',
+        PAYMENT_ENTRY: '/accounts/payment-entry',
+        VOUCHER_LIST: '/accounts/vouchers',
+        CASH_BANK_MASTER: '/accounts/masters/cash-bank',
+        VOUCHER_TYPE_MASTER: '/accounts/masters/voucher-types',
+        LEDGER_REPORT: '/accounts/reports/ledger',
+        CASH_BOOK: '/accounts/reports/cash-book',
+        BANK_BOOK: '/accounts/reports/bank-book',
+        OUTSTANDING_REPORT: '/accounts/reports/outstanding',
+        FIXED_ASSETS: '/accounts/fixed-assets',
+        ASSET_CATEGORIES: '/accounts/asset-categories',
+        ASSET_LOCATIONS: '/accounts/asset-locations',
+    }
 };

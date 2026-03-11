@@ -29,6 +29,7 @@ const bodySchema = Joi.object({
     openingStock: Joi.number().min(0).optional(),
     minStockLevel: Joi.number().min(0).optional(),
     maxStockLevel: Joi.number().min(0).optional(),
+    faultyStock: Joi.number().min(0).optional(),
     valuationRate: Joi.number().min(0).optional(),
     warehouseLocation: Joi.string().allow('').optional(),
     batchTracking: Joi.boolean().optional(),
