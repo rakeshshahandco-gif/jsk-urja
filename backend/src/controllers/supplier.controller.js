@@ -107,7 +107,7 @@ export const importSuppliersExcel = asyncHandler(async (req, res) => {
                 phone: colMap.phone ? row.getCell(colMap.phone).value?.toString().trim() : '',
                 email: colMap.email ? row.getCell(colMap.email).value?.toString().trim().toLowerCase() : '',
                 gstNumber: colMap.gstNumber ? row.getCell(colMap.gstNumber).value?.toString().trim().toUpperCase() : '',
-                gstType: colMap.gstType ? row.getCell(colMap.gstType).value?.toString().trim() : '',
+                gstType: colMap.gstType ? row.getCell(colMap.gstType).value?.toString().trim().replace(/\s+/g, '') : '',
                 panNumber: colMap.panNumber ? row.getCell(colMap.panNumber).value?.toString().trim().toUpperCase() : '',
                 address: colMap.address ? row.getCell(colMap.address).value?.toString().trim() : '',
                 city: colMap.city ? row.getCell(colMap.city).value?.toString().trim() : '',
@@ -140,10 +140,48 @@ export const importSuppliersExcel = asyncHandler(async (req, res) => {
             }
 
             if (supplier) {
+                // Auto-set GST Type based on state if not provided or incorrectly formatted
+                let currentGstType = item.data.gstType ? item.data.gstType.toUpperCase().replace(/\s+/g, '') : '';
+
+                if (item.data.state) {
+                    const st = item.data.state.trim().toLowerCase();
+                    const isMh = st.includes('maharashtra') || st === 'mh';
+
+                    if (!currentGstType || currentGstType === 'CGST/SGST' || currentGstType === 'CGSTSGST') {
+                        item.data.gstType = isMh ? 'CGST / SGST' : 'IGST';
+                    } else if (currentGstType === 'IGST') {
+                        item.data.gstType = 'IGST';
+                    } else {
+                        // If it's something else but looks like Local, fix it
+                        if (currentGstType.includes('CGST') || currentGstType.includes('SGST')) {
+                            item.data.gstType = 'CGST / SGST';
+                        }
+                    }
+                }
+
                 Object.assign(supplier, item.data);
                 supplier.updatedBy = req.user._id;
                 await supplier.save();
             } else {
+                // Auto-set GST Type based on state for new suppliers
+                let currentGstType = item.data.gstType ? item.data.gstType.toUpperCase().replace(/\s+/g, '') : '';
+
+                if (item.data.state) {
+                    const st = item.data.state.trim().toLowerCase();
+                    const isMh = st.includes('maharashtra') || st === 'mh';
+
+                    if (!currentGstType || currentGstType === 'CGST/SGST' || currentGstType === 'CGSTSGST') {
+                        item.data.gstType = isMh ? 'CGST / SGST' : 'IGST';
+                    } else if (currentGstType === 'IGST') {
+                        item.data.gstType = 'IGST';
+                    } else {
+                        // If it's something else but looks like Local, fix it
+                        if (currentGstType.includes('CGST') || currentGstType.includes('SGST')) {
+                            item.data.gstType = 'CGST / SGST';
+                        }
+                    }
+                }
+
                 if (!item.data.supplierCode) {
                     item.data.supplierCode = await generateSupplierCode();
                 }

@@ -32,7 +32,7 @@ export default function SupplierListPage() {
         const newData = { ...m.data, [k]: v };
         if (k === 'state') {
             const stateClean = v.trim().toLowerCase();
-            if (stateClean === 'maharashtra') {
+            if (stateClean === 'maharashtra' || stateClean === 'mh') {
                 newData.gstType = 'CGST / SGST';
             } else if (stateClean !== '') {
                 newData.gstType = 'IGST';
@@ -187,7 +187,47 @@ export default function SupplierListPage() {
                             ].map(([k, label]) => (
                                 <div key={k}>
                                     <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{label}</label>
-                                    <input value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} placeholder={label} />
+                                    <input value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} placeholder={label} list={k === 'state' ? 'state-list' : undefined} />
+                                    {k === 'state' && (
+                                        <datalist id="state-list">
+                                            <option value="Andhra Pradesh" />
+                                            <option value="Arunachal Pradesh" />
+                                            <option value="Assam" />
+                                            <option value="Bihar" />
+                                            <option value="Chhattisgarh" />
+                                            <option value="Goa" />
+                                            <option value="Gujarat" />
+                                            <option value="Haryana" />
+                                            <option value="Himachal Pradesh" />
+                                            <option value="Jharkhand" />
+                                            <option value="Karnataka" />
+                                            <option value="Kerala" />
+                                            <option value="Madhya Pradesh" />
+                                            <option value="Maharashtra" />
+                                            <option value="Manipur" />
+                                            <option value="Meghalaya" />
+                                            <option value="Mizoram" />
+                                            <option value="Nagaland" />
+                                            <option value="Odisha" />
+                                            <option value="Punjab" />
+                                            <option value="Rajasthan" />
+                                            <option value="Sikkim" />
+                                            <option value="Tamil Nadu" />
+                                            <option value="Telangana" />
+                                            <option value="Tripura" />
+                                            <option value="Uttar Pradesh" />
+                                            <option value="Uttarakhand" />
+                                            <option value="West Bengal" />
+                                            <option value="Andaman and Nicobar Islands" />
+                                            <option value="Chandigarh" />
+                                            <option value="Dadra and Nagar Haveli and Daman and Diu" />
+                                            <option value="Delhi" />
+                                            <option value="Jammu and Kashmir" />
+                                            <option value="Ladakh" />
+                                            <option value="Lakshadweep" />
+                                            <option value="Puducherry" />
+                                        </datalist>
+                                    )}
                                 </div>
                             ))}
                             <div>
