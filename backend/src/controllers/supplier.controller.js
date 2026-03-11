@@ -135,8 +135,16 @@ export const importSuppliersExcel = asyncHandler(async (req, res) => {
     for (const item of suppliersToInsert) {
         try {
             let supplier;
+            // 1. Try to find by supplierCode if provided
             if (item.data.supplierCode) {
                 supplier = await Supplier.findOne({ supplierCode: item.data.supplierCode });
+            }
+
+            // 2. If not found by code, try by supplierName (case-insensitive)
+            if (!supplier && item.data.supplierName) {
+                supplier = await Supplier.findOne({
+                    supplierName: { $regex: new RegExp(`^${item.data.supplierName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+                });
             }
 
             if (supplier) {
