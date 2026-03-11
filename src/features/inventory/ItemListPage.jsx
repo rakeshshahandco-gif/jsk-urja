@@ -353,6 +353,7 @@ const ItemListPage = () => {
                                     <th style={s.th}>Type</th>
                                     <th style={s.th}>UOM</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Stock</th>
+                                    <th style={{ ...s.th, textAlign: 'right' }}>Faulty</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Rate ₹</th>
                                     <th style={s.th}>Status</th>
                                     <th style={{ ...s.th, textAlign: 'center' }}>⚙</th>
@@ -393,6 +394,9 @@ const ItemListPage = () => {
                                                 {item.currentStock <= item.minStockLevel && item.minStockLevel > 0 && (
                                                     <span style={{ fontSize: 9, color: '#dc2626', marginLeft: 4 }}>LOW</span>
                                                 )}
+                                            </td>
+                                            <td style={{ ...s.td, textAlign: 'right', color: '#dc2626' }}>
+                                                {item.faultyStock ?? 0}
                                             </td>
                                             <td style={{ ...s.td, textAlign: 'right' }}>₹{(item.sellingPrice || 0).toFixed(2)}</td>
                                             <td style={s.td}>
