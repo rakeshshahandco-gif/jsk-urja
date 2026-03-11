@@ -375,15 +375,30 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
     // Auto-create missing Item Groups
     const uniqueGroups = [...new Set(itemsToInsert.map(i => i.itemData.itemGroupName).filter(Boolean))];
     for (const gName of uniqueGroups) {
-        const exists = await ItemGroup.findOne({ name: { $regex: new RegExp(`^${gName}$`, 'i') } });
+        // Escape special characters for regex search (e.g. parentheses in "Digital Dimmer (JUDDN)")
+        const safeGName = gName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const exists = await ItemGroup.findOne({ name: { $regex: new RegExp(`^${safeGName}$`, 'i') } });
+
         if (!exists) {
             let baseCode = gName.replace(/[^A-Z0-9]/ig, '').substring(0, 10).toUpperCase() || 'GRP';
             try {
                 await ItemGroup.create({ name: gName, code: baseCode, createdBy: req.user.id });
             } catch (err) {
-                // If code collision, append random digits
+                // If collision, try with random code or handle existing name
                 if (err.code === 11000) {
-                    await ItemGroup.create({ name: gName, code: `${baseCode}_${Math.floor(Math.random() * 10000)}`, createdBy: req.user.id });
+                    // If it was a code collision, try once more with a random code
+                    if (err.keyPattern && err.keyPattern.code) {
+                        try {
+                            await ItemGroup.create({
+                                name: gName,
+                                code: `${baseCode}_${Math.floor(Math.random() * 10000)}`,
+                                createdBy: req.user.id
+                            });
+                        } catch (err2) {
+                            // If name collision or second code collision, just ignore as group effectively exists
+                            console.log(`Note: Item Group "${gName}" creation skipped during import (already exists or collision).`);
+                        }
+                    }
                 }
             }
         }
