@@ -308,23 +308,28 @@ export const AddCustomerForm = ({ closeModal }) => {
                             label="GST Number"
                             placeholder="27ABCDE1234F1Z5"
                             maxLength={15}
-                            {...register('gstNumber', {
-                                pattern: { value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
-                                validate: (value) => {
-                                    if (!value) return true;
-                                    if (!stateValue) return true;
-                                    const code = STATE_GST_CODES[stateValue];
-                                    if (code && !value.startsWith(code)) {
-                                        return `GST must start with ${code} for ${stateValue}`;
+                            {...(function() {
+                                const { onChange, ...rest } = register('gstNumber', {
+                                    pattern: { value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
+                                    validate: (value) => {
+                                        if (!value) return true;
+                                        if (!stateValue) return true;
+                                        const code = STATE_GST_CODES[stateValue];
+                                        if (code && !value.startsWith(code)) {
+                                            return `GST must start with ${code} for ${stateValue}`;
+                                        }
+                                        return true;
                                     }
-                                    return true;
-                                }
-                            })}
+                                });
+                                return {
+                                    ...rest,
+                                    onChange: (e) => {
+                                        e.target.value = e.target.value.toUpperCase();
+                                        onChange(e);
+                                    }
+                                };
+                            })()}
                             error={errors.gstNumber}
-                            onChange={(e) => {
-                                e.target.value = e.target.value.toUpperCase();
-                                setValue('gstNumber', e.target.value, { shouldValidate: true, shouldDirty: true });
-                            }}
                         />
 
                         <Select

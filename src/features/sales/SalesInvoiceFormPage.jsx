@@ -11,7 +11,7 @@ const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280',
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
 const td = { padding: '7px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
 
-const BLANK_ITEM = () => ({ itemName: '', modelNo: '', hsnCode: '', uom: 'NOS', qty: '', rate: '', gstRate: 18, discountPercent: 0 });
+const BLANK_ITEM = () => ({ itemId: null, itemCode: '', itemName: '', modelNo: '', additionalNotes: '', hsnCode: '', uom: 'NOS', qty: '', rate: '', gstRate: 18, discountPercent: 0 });
 
 const Section = ({ title, children }) => (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -193,7 +193,7 @@ export default function SalesInvoiceFormPage() {
                 buyerOrderNo: so.customerPO || '',
                 buyerOrderDate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
                 paymentType: so.paymentType || 'Credit',
-                items: so.items?.length ? so.items.map(i => ({ itemName: i.itemName || '', modelNo: i.modelNo || '', hsnCode: i.hsnCode || '', uom: i.uom || 'NOS', qty: i.qty || '', rate: i.rate || '', gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), discountPercent: 0 })) : [BLANK_ITEM()],
+                items: so.items?.length ? so.items.map(i => ({ itemId: i.itemId || null, itemCode: i.itemCode || '', itemName: i.itemName || '', modelNo: i.modelNo || '', additionalNotes: i.additionalNotes || '', hsnCode: i.hsnCode || '', uom: i.uom || 'NOS', qty: i.qty || '', rate: i.rate || '', gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), discountPercent: 0 })) : [BLANK_ITEM()],
             }));
         }).catch(() => toast.error('Failed to load SO details'));
     }, [soId]);
@@ -374,7 +374,7 @@ export default function SalesInvoiceFormPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead>
                                 <tr>
-                                    {['#', 'Product *', 'Model', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Taxable', gstApplicable ? (isIGST ? 'IGST' : 'CGST+SGST') : null, 'Line Total', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['#', 'Product *', 'Add. Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Taxable', 'Line Total', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -398,14 +398,13 @@ export default function SalesInvoiceFormPage() {
                                                 }
                                             />
                                         </td>
-                                        <td style={{ ...td, minWidth: 90 }}><input value={item.modelNo} onChange={setItem ? (e => setItem(i, 'modelNo', e.target.value)) : undefined} style={inp} /></td>
+                                        <td style={{ ...td, minWidth: 90 }}><input value={item.additionalNotes || item.modelNo} onChange={setItem ? (e => setItem(i, 'additionalNotes', e.target.value)) : undefined} style={inp} /></td>
                                         <td style={{ ...td, width: 80 }}><input value={item.hsnCode} onChange={setItem ? (e => setItem(i, 'hsnCode', e.target.value)) : undefined} style={inp} /></td>
                                         <td style={{ ...td, width: 60 }}><input value={item.uom} onChange={setItem ? (e => setItem(i, 'uom', e.target.value)) : undefined} style={inp} /></td>
                                         <td style={{ ...td, width: 70 }}><input type="number" min="0" value={item.qty} onChange={setItem ? (e => setItem(i, 'qty', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.qty ? '#fca5a5' : '#d1d5db' }} /></td>
                                         <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.rate} onChange={setItem ? (e => setItem(i, 'rate', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.rate ? '#fca5a5' : '#d1d5db' }} /></td>
                                         <td style={{ ...td, width: 60 }}><input type="number" min="0" max="100" value={item.discountPercent} onChange={setItem ? (e => setItem(i, 'discountPercent', e.target.value)) : undefined} style={inp} /></td>
                                         <td style={{ ...td, color: '#6b7280', width: 80, textAlign: 'right' }}>₹{item.taxable.toFixed(2)}</td>
-                                        {gstApplicable && <td style={{ ...td, color: '#2563eb', width: 90, textAlign: 'right' }}>{isIGST ? `₹${item.igstAmt.toFixed(2)} (${item.gstRate}%)` : `₹${(item.cgstAmt * 2).toFixed(2)} (${item.gstRate}%)`}</td>}
                                         <td style={{ ...td, color: '#16a34a', fontWeight: 700, width: 90, textAlign: 'right' }}>₹{item.lineTotal.toFixed(2)}</td>
                                         <td style={{ ...td, width: 28 }}>{form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}</td>
                                     </tr>

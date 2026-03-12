@@ -46,7 +46,6 @@ export default function CompanyProfilePage() {
         accountNo: '',
         branchName: '',
         ifscCode: '',
-        logoUrl: '',
         logoHeight: 65,
     });
 

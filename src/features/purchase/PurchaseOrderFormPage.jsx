@@ -1,31 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { createPurchaseOrder, getPurchaseOrderById, updatePurchaseOrder } from '@/services/purchaseApi';
 import { getSuppliers } from '@/services/purchaseApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
-import { getComplaints, getComplaint } from '@/services/serviceApi';
-import { getCustomers } from '@/services/customerApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 const label = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em' };
 
-const EMPTY_ITEM = { itemId: '', itemName: '', itemCode: '', description: '', uom: 'NOS', orderedQty: 1, rate: 0, discountPercent: 0, taxPercent: 18, itemGroup: '' };
+const EMPTY_ITEM = { itemId: '', itemName: '', itemCode: '', description: '', hsnCode: '', uom: 'NOS', orderedQty: 1, rate: 0, discountPercent: 0, taxPercent: 18, itemGroup: '' };
 
 const fmt = (n) => parseFloat((n || 0).toFixed(2));
 
+let globalIsSubmitting = false;
+
 export default function PurchaseOrderFormPage() {
+    const navigate = useNavigate();
     const { id } = useParams();
     const isEdit = !!id;
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
     const [suppliers, setSuppliers] = useState([]);
     const [items, setItems] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [complaints, setComplaints] = useState([]);
-    const [selectedCustomerId, setSelectedCustomerId] = useState('');
 
     const [header, setHeader] = useState({
         supplierId: '', poDate: new Date().toISOString().split('T')[0],
@@ -33,8 +31,7 @@ export default function PurchaseOrderFormPage() {
         expectedDeliveryDate: '', warehouse: '',
         supplierAddress: '', supplierGstNumber: '',
         transporterName: '', vehicleNo: '', lrNumber: '',
-        freightAmount: 0, freightGstRate: 0,
-        complaintId: '', complaintNo: '',
+        freightAmount: 0, freightGstRate: 0
     });
     const [lineItems, setLineItems] = useState([{ ...EMPTY_ITEM }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
@@ -68,82 +65,15 @@ export default function PurchaseOrderFormPage() {
         }
     };
 
-    const handleCustomerChange = async (customerId) => {
-        setSelectedCustomerId(customerId);
-        setH('complaintId', '');
-        setH('complaintNo', '');
-        if (customerId) {
-            try {
-                const compData = await getComplaints({ customerId, status: 'Approved', limit: 100 });
-                setComplaints(compData.data || []);
-            } catch (err) {
-                toast.error('Failed to load complaints for customer');
-            }
-        } else {
-            setComplaints([]);
-        }
-    };
-
-    const handleComplaintChange = async (complaintId) => {
-        const found = complaints.find(c => c._id === complaintId);
-        setHeader(h => ({
-            ...h,
-            complaintId: complaintId || '',
-            complaintNo: found ? found.complaintNo : '',
-        }));
-
-        if (complaintId) {
-            try {
-                const fullComplaint = await getComplaint(complaintId);
-                if (fullComplaint && fullComplaint.items) {
-                    const newItems = fullComplaint.items.map(ci => ({
-                        itemId: ci.itemId?._id || ci.itemId || '',
-                        itemName: ci.itemName || '',
-                        itemCode: ci.itemCode || '',
-                        description: ci.notes || '',
-                        uom: ci.uom || 'NOS',
-                        orderedQty: ci.approvedReplacementQty || ci.qtyFaultyReported || 1,
-                        rate: 0, // Purchase rate will be fetched if itemId is set
-                        discountPercent: 0,
-                        taxPercent: 18,
-                        itemGroup: ''
-                    }));
-
-                    // Update items with purchase rates
-                    const enrichedItems = await Promise.all(newItems.map(async (newItem) => {
-                        if (newItem.itemId) {
-                            const foundItem = items.find(it => it._id === newItem.itemId);
-                            if (foundItem) {
-                                return {
-                                    ...newItem,
-                                    rate: foundItem.purchaseRate || 0,
-                                    taxPercent: foundItem.purchaseGst || 18,
-                                    itemGroup: foundItem.itemGroupName || ''
-                                };
-                            }
-                        }
-                        return newItem;
-                    }));
-
-                    setLineItems(enrichedItems);
-                    toast.success('Items pulled from complaint!');
-                }
-            } catch (err) {
-                toast.error('Failed to pull items from complaint');
-            }
-        }
-    };
 
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [supData, itemData, custData] = await Promise.all([
+                const [supData, itemData] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 5000, sortBy: 'itemName:asc' }),
-                    getCustomers({ limit: 1000 })
+                    getItems({ limit: 5000, sortBy: 'itemName:asc' })
                 ]);
                 setSuppliers(supData.suppliers || []);
-                setCustomers(custData.results || []);
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
                 setItems(itemsList);
 
@@ -151,6 +81,7 @@ export default function PurchaseOrderFormPage() {
                     const po = await getPurchaseOrderById(id);
                     setHeader({
                         poNumber: po.poNumber,
+                        status: po.status,
                         supplierId: po.supplierId?._id || po.supplierId,
                         poDate: po.poDate ? po.poDate.split('T')[0] : '',
                         gstType: po.gstType || 'CGST / SGST',
@@ -163,14 +94,13 @@ export default function PurchaseOrderFormPage() {
                         vehicleNo: po.vehicleNo || '',
                         lrNumber: po.lrNumber || '',
                         freightAmount: po.freightAmount || 0,
-                        freightGstRate: po.freightGstRate || 0,
-                        complaintId: po.complaintId?._id || po.complaintId || '',
-                        complaintNo: po.complaintNo || '',
+                        freightGstRate: po.freightGstRate || 0
                     });
                     setLineItems(po.items.map(i => ({
                         itemId: i.itemId?._id || i.itemId,
                         itemName: i.itemName,
                         itemCode: i.itemCode,
+                        hsnCode: i.hsnCode || '',
                         description: i.description,
                         uom: i.uom,
                         orderedQty: i.orderedQty,
@@ -200,6 +130,7 @@ export default function PurchaseOrderFormPage() {
             if (found) {
                 updated.itemName = found.itemName;
                 updated.itemCode = found.itemCode;
+                updated.hsnCode = found.hsnCode || '';
                 updated.uom = found.uom || 'NOS';
                 updated.rate = found.purchaseRate || 0;
                 updated.taxPercent = found.purchaseGst || 18;
@@ -237,18 +168,22 @@ export default function PurchaseOrderFormPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving || globalIsSubmitting) return;
+        
         if (!header.supplierId) return toast.error('Please select a supplier');
         if (lineItems.some(i => !i.itemId)) return toast.error('Please select item for all rows');
 
+        globalIsSubmitting = true;
         setSaving(true);
         try {
             const payload = {
                 ...header,
+                status: isEdit ? header.status : 'Ordered',
                 freightAmount: Number(header.freightAmount) || 0,
                 freightGstRate: Number(header.freightGstRate) || 0,
                 items: lineItems.map(i => ({
                     itemId: i.itemId, itemCode: i.itemCode, itemName: i.itemName,
-                    description: i.description, uom: i.uom,
+                    description: i.description, hsnCode: i.hsnCode || '', uom: i.uom,
                     orderedQty: Number(i.orderedQty) || 0, rate: Number(i.rate) || 0,
                     discountPercent: Number(i.discountPercent) || 0, taxPercent: Number(i.taxPercent) || 0,
                     componentCategory: i.itemGroup || '',
@@ -264,9 +199,12 @@ export default function PurchaseOrderFormPage() {
                 toast.success(`Purchase Order ${result.poNumber} created!`);
             }
             navigate(PATHS.PURCHASE.ORDER_DETAIL(result?._id));
+            setTimeout(() => { globalIsSubmitting = false; }, 2000); // release lock after navigation
         } catch (err) {
             toast.error(err.response?.data?.message || err.message || 'Failed to create PO');
-        } finally { setSaving(false); }
+            globalIsSubmitting = false;
+            setSaving(false);
+        }
     };
 
     return (
@@ -281,7 +219,8 @@ export default function PurchaseOrderFormPage() {
                 </h1>
                 {loading ? <div style={{ color: '#64748b', padding: 40, textAlign: 'center' }}>Loading order data...</div> : (
 
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} style={{ pointerEvents: saving ? 'none' : 'auto', opacity: saving ? 0.7 : 1 }}>
+                        <fieldset disabled={saving} style={{ border: 'none', padding: 0, margin: 0 }}>
                         {/* PO Header */}
                         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                             <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ORDER DETAILS</h2>
@@ -323,33 +262,6 @@ export default function PurchaseOrderFormPage() {
                                     <span style={label}>Warehouse / Store</span>
                                     <input value={header.warehouse} onChange={e => setH('warehouse', e.target.value)} style={inp} placeholder="Store location" />
                                 </div>
-                                <div>
-                                    <span style={label}>Delivery Facility</span>
-                                    <input value={header.deliveryFacility} onChange={e => setH('deliveryFacility', e.target.value)} style={inp} placeholder="e.g. Unit 2 - Assembly" />
-                                </div>
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <span style={label}>Delivery Address</span>
-                                    <input value={header.deliveryAddress} onChange={e => setH('deliveryAddress', e.target.value)} style={inp} placeholder="Direct shipping address if different from warehouse" />
-                                </div>
-                                <div style={{ gridColumn: 'span 1' }}>
-                                    <span style={label}>Customer (for Complaints)</span>
-                                    <SearchableSelect
-                                        options={customers.map(c => ({ value: c._id, label: c.customerName || c.name, meta: c.customerCode }))}
-                                        value={selectedCustomerId}
-                                        onChange={handleCustomerChange}
-                                        placeholder="— Select Customer —"
-                                    />
-                                </div>
-                                <div style={{ gridColumn: 'span 1' }}>
-                                    <span style={label}>Link to Complaint</span>
-                                    <SearchableSelect
-                                        options={complaints.map(c => ({ value: c._id, label: `${c.complaintNo} - ${c.customerName}`, meta: c.status }))}
-                                        value={header.complaintId}
-                                        onChange={handleComplaintChange}
-                                        placeholder={selectedCustomerId ? "— Select Complaint —" : "Select Customer First"}
-                                        disabled={!selectedCustomerId || complaints.length === 0}
-                                    />
-                                </div>
                             </div>
                         </div>
 
@@ -369,10 +281,6 @@ export default function PurchaseOrderFormPage() {
                                     <span style={label}>LR / Bilty No</span>
                                     <input value={header.lrNumber} onChange={e => setH('lrNumber', e.target.value)} style={inp} placeholder="LR Number" />
                                 </div>
-                                <div>
-                                    <span style={label}>Freight Amount (₹)</span>
-                                    <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={inp} />
-                                </div>
                             </div>
                         </div>
 
@@ -386,7 +294,7 @@ export default function PurchaseOrderFormPage() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', color: '#64748b' }}>
-                                            {['#', 'Item', 'Group', 'UOM', 'Qty', 'Rate', 'Disc%', 'Tax%', 'Amount', ''].map(h => (
+                                            {['#', 'Item', 'Group', 'HSN/SAC', 'UOM', 'Qty', 'Rate', 'Disc%', 'Amount', ''].map(h => (
                                                 <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                                             ))}
                                         </tr>
@@ -408,6 +316,9 @@ export default function PurchaseOrderFormPage() {
                                                     <td style={{ padding: '8px 10px', minWidth: '120px' }}>
                                                         <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
+                                                    <td style={{ padding: '8px 10px', width: '100px' }}>
+                                                        <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} placeholder="HSN/SAC" style={{ ...inp, fontSize: '12px' }} />
+                                                    </td>
                                                     <td style={{ padding: '8px 10px', width: '70px' }}>
                                                         <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
@@ -420,9 +331,7 @@ export default function PurchaseOrderFormPage() {
                                                     <td style={{ padding: '8px 10px', width: '70px' }}>
                                                         <input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', width: '70px' }}>
-                                                        <input type="number" min="0" value={item.taxPercent} onChange={e => setItem(i, 'taxPercent', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
-                                                    </td>
+
                                                     <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total.toLocaleString()}</td>
                                                     <td style={{ padding: '8px 10px' }}>
                                                         {lineItems.length > 1 && (
@@ -494,6 +403,7 @@ export default function PurchaseOrderFormPage() {
                                 {saving ? (isEdit ? 'Updating...' : 'Creating...') : (isEdit ? '💾 Update Purchase Order' : '📤 Create Purchase Order')}
                             </button>
                         </div>
+                        </fieldset>
                     </form>
                 )}
             </div>

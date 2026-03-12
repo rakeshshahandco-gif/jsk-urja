@@ -23,14 +23,25 @@ export default function SalesOrderListPage() {
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('');
 
+    const isMounted = React.useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
+
     const load = async () => {
         setLoading(true);
         try {
             const data = await getSalesOrders({ search, status });
-            setOrders(data.salesOrders || []);
-            setTotal(data.total || 0);
-        } catch { toast.error('Failed to load orders'); }
-        finally { setLoading(false); }
+            if (isMounted.current) {
+                setOrders(data.salesOrders || []);
+                setTotal(data.total || 0);
+            }
+        } catch { 
+            if (isMounted.current) toast.error('Failed to load orders'); 
+        } finally { 
+            if (isMounted.current) setLoading(false); 
+        }
     };
 
     useEffect(() => { load(); }, [search, status]);

@@ -23,12 +23,18 @@ export default function PurchaseOrderListPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
 
+    const isMounted = React.useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
+
     const load = useCallback(() => {
         setLoading(true);
         getPurchaseOrders({ search, status: statusFilter, limit: 50 })
-            .then(d => setPOs(d.purchaseOrders || []))
-            .catch(() => toast.error('Failed to load orders'))
-            .finally(() => setLoading(false));
+            .then(d => { if (isMounted.current) setPOs(d.purchaseOrders || []) })
+            .catch(() => { if (isMounted.current) toast.error('Failed to load orders') })
+            .finally(() => { if (isMounted.current) setLoading(false) });
     }, [search, statusFilter]);
 
     useEffect(() => { load(); }, [load]);

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getPurchaseOrderById, updatePOStatus, deletePurchaseOrder, getSupplierById } from '@/services/purchaseApi';
 import { getGRNsByPO, createGRN } from '@/services/purchaseApi';
 import { getCompanyProfile } from '@/services/settingsApi';
+import { useAuth } from '@/hooks/useAuth';
+import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { Printer, FileText, ChevronLeft, Package, Trash2, Edit } from 'lucide-react';
@@ -22,6 +24,7 @@ const th = { padding: '9px 14px', textAlign: 'left', color: '#6b7280', fontWeigh
 const td = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
 export default function PurchaseOrderDetailPage() {
+    const { user } = useAuth();
     const { id } = useParams();
     const navigate = useNavigate();
     const [po, setPO] = useState(null);
@@ -68,7 +71,14 @@ export default function PurchaseOrderDetailPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
+    const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    }) : '—';
 
     const handleGRNSubmit = async () => {
         const items = Object.values(grnForm).filter(i => i.receivedQty > 0);
@@ -105,35 +115,37 @@ export default function PurchaseOrderDetailPage() {
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#fff', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT-ONLY COMPLETE LAYOUT (A4 Container) */}
             <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, margin: '0 auto' }}>
-                <div style={{ border: '1px solid #000', padding: '20px', minHeight: '280mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box' }}>
-                    {/* Print Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '25px' }}>
-                        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <div className="print-content" style={{ border: '1px solid #000', padding: '20px', height: '270mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box' }}>
+                    {/* Header Section */}
+                    <div className="p-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '25px' }}>
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
                             {company.logoUrl && (
-                                <img src={company.logoUrl} alt="Company Logo" style={{ maxHeight: '80px', maxWidth: '220px', objectFit: 'contain' }} />
+                                <img src={company.logoUrl} alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
                             )}
                             <div>
-                                <h1 style={{ margin: '0 0 4px', fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>{company.companyName || 'JSK URJA'}</h1>
-                                {company.address && <div style={{ fontSize: '13px', color: '#333', maxWidth: '400px', lineHeight: '1.4' }}>{company.address}</div>}
-                                {(company.city || company.state) && <div style={{ fontSize: '13px', color: '#333' }}>{company.city}, {company.state} - {company.pincode}</div>}
-                                {company.gstNumber && <div style={{ fontSize: '13px', color: '#333', marginTop: '6px' }}><strong>GSTIN:</strong> {company.gstNumber}</div>}
-                                {company.email && <div style={{ fontSize: '13px', color: '#333' }}><strong>Email:</strong> {company.email}</div>}
+                                <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'JSK URJA'}</div>
+                                <div style={{ fontSize: '9pt', color: '#000', lineHeight: '1.4', maxWidth: '400px' }}>
+                                    {company.address}<br />
+                                    {(company.city || company.state) ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}` : ''}<br />
+                                    Phone: {company.phone} | Email: {company.email}<br />
+                                    {company.gstNumber && <strong>GSTIN: {company.gstNumber}</strong>}
+                                </div>
                             </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <h2 style={{ margin: '0 0 15px', fontSize: '26px', color: '#000', fontWeight: 900, background: '#f3f4f6', border: '1px solid #000', padding: '6px 20px', display: 'inline-block' }}>PURCHASE ORDER</h2>
-                            <table style={{ borderCollapse: 'collapse', float: 'right', textAlign: 'left', fontSize: '13px' }}>
+                            <h1 style={{ margin: '0 0 4px 0', fontSize: '16pt', fontWeight: 900, textTransform: 'uppercase', color: '#64748b' }}>PURCHASE ORDER</h1>
+                            <div style={{ fontSize: '14pt', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>{po.poNumber}</div>
+                            <table style={{ borderCollapse: 'collapse', float: 'right', textAlign: 'left', fontSize: '11px' }}>
                                 <tbody>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>PO NO.</td><td style={{ padding: '3px 0 3px 12px', fontWeight: 700 }}>{po.poNumber}</td></tr>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>PO DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.poDate)}</td></tr>
-                                    <tr><td style={{ padding: '3px 12px 3px 0', borderRight: '1px solid #000', fontWeight: 800 }}>DUE DATE</td><td style={{ padding: '3px 0 3px 12px' }}>{fmt(po.expectedDeliveryDate)}</td></tr>
+                                    <tr><td style={{ padding: '2px 10px 2px 0', borderRight: '1px solid #000', fontWeight: 800 }}>PO DATE</td><td style={{ padding: '2px 0 2px 10px' }}>{fmt(po.poDate)}</td></tr>
+                                    <tr><td style={{ padding: '2px 10px 2px 0', borderRight: '1px solid #000', fontWeight: 800 }}>DUE DATE</td><td style={{ padding: '2px 0 2px 10px' }}>{fmt(po.expectedDeliveryDate)}</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     {/* Parties Section */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', border: '1px solid #000', marginBottom: '25px' }}>
+                    <div className="p-summary" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', border: '1px solid #000', marginBottom: '25px' }}>
                         <div style={{ padding: '15px', borderRight: '1px solid #000' }}>
                             <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px', color: '#666' }}>VENDORS / SUPPLIER</div>
                             <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{po.supplierName || po.supplierId?.supplierName}</div>
@@ -158,8 +170,11 @@ export default function PurchaseOrderDetailPage() {
                         </div>
                         <div style={{ padding: '15px' }}>
                             <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px', color: '#666' }}>DELIVER TO / SHIP TO</div>
-                            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{po.deliveryFacility || company.companyName || 'JSK URJA'}</div>
-                            {po.deliveryAddress && <div style={{ fontSize: '13px', marginBottom: '4px', lineHeight: '1.4' }}>{po.deliveryAddress}</div>}
+                            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{company.companyName || 'JSK URJA'}</div>
+                            <div style={{ fontSize: '13px', color: '#333', maxWidth: '400px', lineHeight: '1.4' }}>
+                                {company.address && <div>{company.address}</div>}
+                                {(company.city || company.state) && <div>{company.city}, {company.state} - {company.pincode}</div>}
+                            </div>
                             {company.contactNumber && <div style={{ fontSize: '13px', marginTop: '8px' }}><strong>Contact:</strong> {company.contactNumber}</div>}
                         </div>
                     </div>
@@ -169,7 +184,7 @@ export default function PurchaseOrderDetailPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '13px' }}>
                             <thead style={{ background: '#f5f5f5' }}>
                                 <tr>
-                                    {['Mode of Dispatch', 'Terms of Payment', 'GST Calculation Type'].map((h, i) => (
+                                    {['Mode of Dispatch', 'Terms of Payment'].map((h, i) => (
                                         <th key={i} style={{ border: '1px solid #000', padding: '8px 12px', textAlign: 'left', fontWeight: 800 }}>{h}</th>
                                     ))}
                                 </tr>
@@ -177,8 +192,7 @@ export default function PurchaseOrderDetailPage() {
                             <tbody>
                                 <tr style={{ borderBottom: '1px solid #000' }}>
                                     <td style={{ borderRight: '1px solid #000', padding: '8px 12px' }}>{po.dispatchMode || 'By Road'}</td>
-                                    <td style={{ borderRight: '1px solid #000', padding: '8px 12px' }}>{po.paymentTerms || '—'}</td>
-                                    <td style={{ padding: '8px 12px' }}>{po.gstType || '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>{po.paymentTerms || '—'}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -188,7 +202,7 @@ export default function PurchaseOrderDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000', fontSize: '13px', marginBottom: 'auto' }}>
                         <thead style={{ background: '#f5f5f5', color: '#000' }}>
                             <tr>
-                                {['Sr.', 'Item Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'Total'].map((h, i) => (
+                                {['Sr.', 'Item Description', 'HSN/SAC', 'Qty', 'Unit', 'Rate', 'Total', ''].map((h, i) => (
                                     <th key={i} style={{ border: '1px solid #000', padding: '10px', textAlign: h === 'Item Description' ? 'left' : 'center', fontWeight: 800 }}>{h}</th>
                                 ))}
                             </tr>
@@ -207,18 +221,15 @@ export default function PurchaseOrderDetailPage() {
                                     <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'center', verticalAlign: 'top' }}>{it.uom}</td>
                                     <td style={{ borderRight: '1px solid #000', borderBottom: '1px solid #eee', padding: '10px', textAlign: 'right', verticalAlign: 'top' }}>{it.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                     <td style={{ borderBottom: '1px solid #eee', padding: '10px', textAlign: 'right', verticalAlign: 'top', fontWeight: 800 }}>{(it.orderedQty * it.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ borderLeft: '1px solid #000', borderBottom: '1px solid #eee' }}></td>
                                 </tr>
                             ))}
-                            {/* Filling empty space to maintain structure without internal grid lines */}
-                            <tr>
-                                <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000', height: `${Math.max(0, 10 - (po.items?.length || 0)) * 25}px` }} colSpan="7"></td>
-                            </tr>
                         </tbody>
-                        <tfoot style={{ borderTop: '1px solid #000' }}>
+                        <tfoot className="p-footer" style={{ borderTop: '1px solid #000' }}>
                             <tr>
                                 <td colSpan={4} rowSpan={6} style={{ borderRight: '1px solid #000', padding: '15px', verticalAlign: 'top' }}>
                                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>AMOUNT IN WORDS:</div>
-                                    <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{po.amountInWords || '—'}</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{numberToWords(po.grandTotal)}</div>
                                     {po.remarks && (
                                         <div style={{ marginTop: '15px' }}>
                                             <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>REMARKS / SPECIAL INSTRUCTIONS:</div>
@@ -226,37 +237,44 @@ export default function PurchaseOrderDetailPage() {
                                         </div>
                                     )}
                                 </td>
-                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TAXABLE AMOUNT</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>TOTAL TAXABLE</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{itemTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ borderLeft: '1px solid #000' }}></td>
                             </tr>
                             <tr>
                                 <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>FREIGHT / SHIPPING</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ borderLeft: '1px solid #000' }}></td>
                             </tr>
                             <tr style={{ background: '#f5f5f5' }}>
-                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>TOTAL TAXABLE</td>
+                                <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>TAXABLE AMOUNT</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800 }}>{totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ borderLeft: '1px solid #000' }}></td>
                             </tr>
                             {isIGST ? (
                                 <tr>
-                                    <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>IGST</td>
+                                    <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>IGST @ {(po.items?.[0]?.taxPercent || 18)}%</td>
                                     <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ borderLeft: '1px solid #000' }}></td>
                                 </tr>
                             ) : (
                                 <>
                                     <tr>
-                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>CGST</td>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>CGST @ {(po.items?.[0]?.taxPercent || 18) / 2}%</td>
                                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ borderLeft: '1px solid #000' }}></td>
                                     </tr>
                                     <tr>
-                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SGST</td>
+                                        <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>SGST @ {(po.items?.[0]?.taxPercent || 18) / 2}%</td>
                                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ borderLeft: '1px solid #000' }}></td>
                                     </tr>
                                 </>
                             )}
                             <tr style={{ background: '#f5f5f5', color: '#000' }}>
                                 <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>GRAND TOTAL</td>
                                 <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ borderLeft: '1px solid #000' }}></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -273,15 +291,14 @@ export default function PurchaseOrderDetailPage() {
                                 <li>The company reserves the right to cancel the order if delivery is delayed beyond the expected date.</li>
                             </ol>
                         </div>
-                        <div style={{ border: '1px solid #000', display: 'flex', flexDirection: 'column', height: '140px' }}>
+                        <div style={{ border: '1px solid #000', display: 'flex', flexDirection: 'column', height: '140px', width: '220px' }}>
                             <div style={{ background: '#f5f5f5', padding: '6px', fontSize: '11px', fontWeight: 800, textAlign: 'center', borderBottom: '1px solid #000' }}>
                                 For {company.companyName || 'JSK URJA'}
                             </div>
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: '10px' }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    <div style={{ width: '150px', borderTop: '1px solid #000', margin: '0 auto 5px' }}></div>
-                                    <div style={{ fontSize: '11px', fontWeight: 800 }}>AUTHORIZED SIGNATORY</div>
-                                </div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>{user?.name || 'Authorized User'}</div>
+                                {user?.phone && <div style={{ fontSize: '10px', color: '#333' }}>Mob: {user.phone}</div>}
+                                <div style={{ width: '160px', borderTop: '1px solid #000', margin: '4px auto 0', paddingTop: '4px', fontSize: '11px', fontWeight: 800, textAlign: 'center' }}>AUTHORIZED SIGNATORY</div>
                             </div>
                         </div>
                     </div>
@@ -375,7 +392,7 @@ export default function PurchaseOrderDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr>
-                                {['Item', 'UOM', 'Ordered Qty', 'Received Qty', 'Pending Qty', 'Rate', 'Tax%', 'Total Amount'].map(h => (
+                                {['Item', 'HSN/SAC', 'UOM', 'Ordered Qty', 'Received Qty', 'Pending Qty', 'Rate', 'Tax%', 'Total Amount'].map(h => (
                                     <th key={h} style={th}>{h}</th>
                                 ))}
                             </tr>
@@ -389,6 +406,7 @@ export default function PurchaseOrderDetailPage() {
                                         <div style={{ color: '#1e293b', fontWeight: 500 }}>{item.itemName}</div>
                                         <div style={{ color: '#9ca3af', fontSize: 11 }}>{item.itemCode}</div>
                                     </td>
+                                    <td style={td}>{item.hsnCode || '—'}</td>
                                     <td style={td}>{item.uom}</td>
                                     <td style={{ ...td, color: '#2563eb', fontWeight: 600 }}>{item.orderedQty}</td>
                                     <td style={{ ...td, color: '#16a34a', fontWeight: 600 }}>{item.receivedQty}</td>
@@ -520,8 +538,8 @@ export default function PurchaseOrderDetailPage() {
             {/* Print Styles */}
             <style>{`
                 @media print { 
-                    @page { margin: 0.5cm; size: A4 portrait; }
-                    body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 210mm; }
+                    @page { margin: 0; size: A4 portrait; }
+                    body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 210mm; height: 297mm; overflow: hidden; }
                     
                     /* Hide everything in the body by default */
                     body * { visibility: hidden; }
@@ -533,13 +551,32 @@ export default function PurchaseOrderDetailPage() {
                         left: 0; 
                         top: 0; 
                         width: 210mm !important; 
-                        display: block !important; 
+                        height: 297mm !important;
+                        max-height: 297mm !important;
+                        display: flex !important; 
+                        flex-direction: column !important;
                         margin: 0 !important;
                         padding: 0 !important;
+                        overflow: hidden !important;
+                        box-sizing: border-box !important;
                     }
 
-                    button, [data-no-print] { display: none !important; } 
+                    .print-content {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+
+                    button, [data-no-print], .no-print, #app-sidebar, #app-header { display: none !important; } 
                     * { color: #000 !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    table th { background: #f5f5f5 !important; }
+                    
+                    /* Prevent breaking critical blocks */
+                    .p-header, .p-footer, .p-summary { page-break-inside: avoid !important; }
+                    
+                    /* Adjust table row height for dense content if needed */
+                    table td { padding: 4px 8px !important; }
                 }
             `}</style>
         </div>

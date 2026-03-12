@@ -5,6 +5,7 @@ import { getCustomers, searchCustomers } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
 import { getStickers } from '@/services/stickerApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -16,20 +17,6 @@ const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 1
 
 const BLANK_ITEM = () => ({ itemId: null, itemCode: '', itemName: '', modelNo: '', additionalNotes: '', hsnCode: '', uom: 'NOS', qty: '', rate: '', gstRate: 18 });
 
-const numWords = (n) => {
-    const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    if (!n) return 'Zero Rupees Only';
-    const tw = (num) => {
-        if (num < 20) return a[num];
-        if (num < 100) return b[Math.floor(num / 10)] + (num % 10 ? ' ' + a[num % 10] : '');
-        if (num < 1000) return a[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + tw(num % 100) : '');
-        if (num < 100000) return tw(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + tw(num % 1000) : '');
-        if (num < 10000000) return tw(Math.floor(num / 100000)) + ' Lakh' + (num % 100000 ? ' ' + tw(num % 100000) : '');
-        return tw(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 ? ' ' + tw(num % 10000000) : '');
-    };
-    return tw(Math.floor(n)) + ' Rupees Only';
-};
 
 const Section = ({ title, children }) => (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -148,11 +135,9 @@ export default function SalesOrderFormPage() {
     };
 
     const handleCustomerSelect = (c) => {
-        const displayName = c.gstin ? `${c.name} (${c.gstin})` : c.name;
-
         setForm(p => ({
             ...p,
-            customerName: displayName,
+            customerName: c.name,
             customerCode: c.customerCode || '',
             customerPhone: c.phone || '',
             customerEmail: c.email || '',
@@ -553,7 +538,7 @@ export default function SalesOrderFormPage() {
                                 <span>Rounded Total</span>
                                 <span>₹{roundedTotal.toLocaleString('en-IN')}</span>
                             </div>
-                            <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic', marginTop: 4, textAlign: 'right' }}>{numWords(roundedTotal)}</div>
+                            <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic', marginTop: 4, textAlign: 'right' }}>{numberToWords(roundedTotal)}</div>
                         </div>
                     </Section>
                 </div>

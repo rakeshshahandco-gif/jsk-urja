@@ -602,21 +602,23 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             <label htmlFor="gstNumber">GST NUMBER</label>
                             <Input
                                 id="gstNumber"
-                                {...register('gstNumber', {
-                                    pattern: {
-                                        value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-                                        message: 'Invalid GST format'
-                                    }
-                                })}
+                                {...(function() {
+                                    const { onChange, ...rest } = register('gstNumber', {
+                                        pattern: {
+                                            value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                                            message: 'Invalid GST format'
+                                        }
+                                    });
+                                    return {
+                                        ...rest,
+                                        onChange: (e) => {
+                                            e.target.value = e.target.value.toUpperCase();
+                                            onChange(e);
+                                        }
+                                    };
+                                })()}
                                 placeholder="22AAAAA0000A1Z5"
                                 maxLength={15}
-                                onInput={(e) => {
-                                    // Just visual upper casing at DOM level to not affect React Hook Form
-                                    const start = e.target.selectionStart;
-                                    const end = e.target.selectionEnd;
-                                    e.target.value = e.target.value.toUpperCase();
-                                    e.target.setSelectionRange(start, end);
-                                }}
                                 style={{ textTransform: 'uppercase' }}
                             />
                             {errors.gstNumber && <span className={styles.error}>{errors.gstNumber.message}</span>}

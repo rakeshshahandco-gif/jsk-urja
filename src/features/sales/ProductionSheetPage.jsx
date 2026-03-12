@@ -81,8 +81,8 @@ export default function ProductionSheetPage() {
         finally { setSaving(false); }
     };
 
-    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
-    const fmtDT = (d) => d ? new Date(d).toLocaleString('en-IN') : '—';
+    const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
+    const fmtDT = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
 
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
     if (!ps) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Production Sheet not found.</div>;
@@ -111,6 +111,7 @@ export default function ProductionSheetPage() {
                     .o-row { display: flex; border-bottom: 1px solid #000; }
                     .o-cell { flex: 1; display: flex; border-right: 1px solid #000; padding: 4px 8px; font-size: 9pt; height: 22px; align-items: center; }
                     .o-cell:last-child { border-right: none; }
+                    @page { margin: 0; }
                 `}</style>
 
                 <div className="o-header">ORDER DETAILS</div>
@@ -138,7 +139,8 @@ export default function ProductionSheetPage() {
                     <thead>
                         <tr style={{ fontWeight: 900 }}>
                             <th style={{ width: '40px' }}>SR NO</th>
-                            <th style={{ width: '150px' }}>VOLT/CURRENT</th>
+                            <th style={{ width: '150px' }}>ITEM CODE</th>
+                            <th style={{ width: '250px' }}>VOLT/CURRENT</th>
                             <th style={{ width: '80px' }}>QUANTITY</th>
                             <th style={{ width: '80px' }}>HOURS</th>
                             <th style={{ width: '80px' }}>DUMMY LOAD</th>
@@ -148,7 +150,11 @@ export default function ProductionSheetPage() {
                         {(ps.items || []).map((item, i) => (
                             <tr key={i} style={{ height: '25px' }}>
                                 <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                                <td>{item.voltCurrent || '—'}</td>
+                                <td>{item.itemCode || '—'}</td>
+                                <td>
+                                    {item.voltCurrent || '—'}
+                                    {item.additionalNotes && <div style={{ fontSize: '8pt', color: '#333', borderTop: '0.5px solid #ccc', marginTop: '2px', paddingTop: '2px' }}>{item.additionalNotes}</div>}
+                                </td>
                                 <td style={{ textAlign: 'center' }}>{item.qty} Nos</td>
                                 <td>{item.hours || '—'}</td>
                                 <td>{item.dummyLoad || '—'}</td>
@@ -188,8 +194,10 @@ export default function ProductionSheetPage() {
                 <div className="o-header" style={{ borderTop: 'none' }}>PACKING DETAILS</div>
                 <div className="o-table" style={{ borderTop: 'none' }}>
                     <div className="o-row"><div className="o-cell"><span className="o-label">DATE & TIME:</span> <span>{ps.packing?.dateTime ? fmtDT(ps.packing.dateTime) : ''}</span></div></div>
-                    <div className="o-row"><div className="o-cell"><span className="o-label">HANDOVER DATE & TIME:</span> <span>{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></div></div>
-                    <div className="o-row"><div className="o-cell"><span className="o-label">DELIVERY DATE & TIME:</span> <span>{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></div></div>
+                    <div className="o-row">
+                        <div className="o-cell"><span className="o-label">HANDOVER D/T:</span> <span>{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></div>
+                        <div className="o-cell"><span className="o-label">DELIVERY D/T:</span> <span>{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></div>
+                    </div>
                     <div className="o-row"><div className="o-cell"><span className="o-label">DELIVERY TROUGH:</span> <span>{ps.packing?.deliveryThrough || ''}</span></div></div>
                     <div className="o-row"><div className="o-cell"><span className="o-label">NAME OF PERSON:</span> <span>{ps.packing?.personName || ''}</span></div></div>
                     <div className="o-row">
@@ -285,14 +293,18 @@ export default function ProductionSheetPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'Item Code', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
                                 {(editing ? form.items : ps.items || []).map((item, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                         <td style={td}>{i + 1}</td>
-                                        <td style={td}>{item.voltCurrent}</td>
+                                        <td style={td}>{item.itemCode || '—'}</td>
+                                        <td style={td}>
+                                            <div>{item.voltCurrent}</div>
+                                            {item.additionalNotes && <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px', borderTop: '1px solid #f3f4f6', paddingTop: '4px' }}>{item.additionalNotes}</div>}
+                                        </td>
                                         <td style={td}>{item.qty} Nos</td>
                                         <td style={td}>
                                             {editing ? <input value={item.hours || ''} onChange={e => {

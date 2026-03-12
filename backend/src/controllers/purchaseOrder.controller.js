@@ -11,6 +11,7 @@ const poItemSchema = Joi.object({
     itemCode: Joi.string().optional().allow(''),
     itemName: Joi.string().required(),
     description: Joi.string().optional().allow(''),
+    hsnCode: Joi.string().optional().allow(''),
     uom: Joi.string().optional().allow(''),
     orderedQty: Joi.number().min(0.01).required(),
     rate: Joi.number().min(0).required(),

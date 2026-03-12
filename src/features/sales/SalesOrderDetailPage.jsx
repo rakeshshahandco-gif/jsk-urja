@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getSalesOrderById, cancelSalesOrder, generateProductionSheet } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
+import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -17,6 +18,7 @@ const th = { padding: '9px 14px', textAlign: 'left', color: '#6b7280', fontWeigh
 const td = { padding: '10px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
 export default function SalesOrderDetailPage() {
+    const { user } = useAuth();
     const { id } = useParams();
     const navigate = useNavigate();
     const [so, setSO] = useState(null);
@@ -38,7 +40,14 @@ export default function SalesOrderDetailPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
+    const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    }) : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
     const handleGeneratePS = async () => {
@@ -70,75 +79,81 @@ export default function SalesOrderDetailPage() {
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT ONLY LAYOUT */}
-            <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, margin: '0 auto' }}>
-                <div style={{ padding: '8mm', minHeight: '270mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box', border: '1px solid #000' }}>
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '16px' }}>
-                        <div style={{ width: '40%' }}>
-                            {company.logoUrl ? (
-                                <img src={company.logoUrl} alt="Company Logo" style={{ maxHeight: '70px', maxWidth: '200px', objectFit: 'contain' }} />
-                            ) : (
-                                <div style={{ fontSize: '20px', fontWeight: 900, color: '#1e293b', letterSpacing: '1px' }}>{company.companyName || 'JSK URJA'}</div>
+                <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0 }}>
+                    <div className="print-content" style={{ padding: '10mm', minHeight: '270mm', display: 'flex', flexDirection: 'column', background: '#fff', boxSizing: 'border-box' }}>
+                        {/* Header Section */}
+                        <div className="p-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                            {company.logoUrl && (
+                                <img src={company.logoUrl} alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
                             )}
-                        </div>
-                        <div style={{ width: '60%', textAlign: 'left', fontSize: '10px', lineHeight: '1.4' }}>
-                            <h2 style={{ fontSize: '15px', margin: '0 0 4px 0', textTransform: 'uppercase', fontWeight: 800 }}>{company.companyName || 'JSK URJA'}</h2>
-                            <div style={{ textTransform: 'uppercase', color: '#374151' }}>
-                                {company.address}<br />
-                                {(company.city || company.state) ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}. State Code: ${company.stateCode || ''}` : ''}<br />
-                                {(company.phone || company.email) && `Phone: ${company.phone || ''} Email: ${company.email || ''}`}<br />
-                                {gstApplicable && company.gstNumber && `GSTIN: ${company.gstNumber}`}
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '20pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'JSK URJA'}</div>
+                                <div style={{ fontSize: '9pt', color: '#000', lineHeight: '1.3', maxWidth: '450px' }}>
+                                    {company.address}<br />
+                                    {(company.city || company.state) ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}. State Code: ${company.stateCode || ''}` : ''}<br />
+                                    {(company.phone || company.email) && `Phone: ${company.phone || ''} Email: ${company.email || ''}`}<br />
+                                    {gstApplicable && company.gstNumber && <strong>GSTIN: {company.gstNumber}</strong>}
+                                </div>
                             </div>
                         </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <h1 style={{ margin: '0 0 2px 0', fontSize: '16pt', fontWeight: 900, textTransform: 'uppercase', color: '#64748b' }}>
+                                {gstApplicable ? 'SALES ORDER' : 'SALES ORDER'}
+                            </h1>
+                            {!gstApplicable && <div style={{ fontSize: '10pt', fontWeight: 700, marginBottom: '4px' }}>(NON-GST)</div>}
+                            <div style={{ fontSize: '14pt', fontWeight: 700, color: '#334155' }}>{so.soNumber}</div>
+                        </div>
                     </div>
 
-                    <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-                        <h2 style={{ fontSize: '22px', border: '1px solid #000', display: 'inline-block', padding: '6px 40px', background: '#f5f5f5', color: '#000', margin: 0, fontWeight: 900, textTransform: 'uppercase' }}>
-                            {gstApplicable ? 'Sales Order' : 'Sales Order (Non-GST)'}
-                        </h2>
-                    </div>
+                    <div style={{ borderBottom: '1.5px solid #000', marginBottom: '20px' }}></div>
 
-                    <div style={{ textAlign: 'right', marginBottom: '10px', fontSize: '13px', color: '#000', fontWeight: 800 }}>
-                        SALES ORDER NO: {so.soNumber}
-                    </div>
-
-                    {/* Info Block */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '16px' }}>
-                        <div style={{ width: '45%' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', border: 'none' }}>
+                    {/* Info Block (Parties & Order Details) */}
+                    <div className="p-summary" style={{ display: 'flex', justifyContent: 'space-between', gap: '40px', marginBottom: '20px' }}>
+                        <div style={{ flex: 1 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <tbody>
                                     <tr>
-                                        <td style={{ width: '100px', fontWeight: 'bold', verticalAlign: 'top' }}>Customer Name:</td>
-                                        <td style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{so.customerName}</td>
+                                        <td style={{ width: '120px', fontSize: '11pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Customer Name:</td>
+                                        <td style={{ fontSize: '11pt', fontWeight: 800, padding: '4px 0', textTransform: 'uppercase' }}>
+                                            {so.customerName ? so.customerName.replace(new RegExp(`\\s*\\(${so.customerGstin}\\)$`), '') : ''}
+                                        </td>
                                     </tr>
                                     <tr>
-                                        <td style={{ width: '100px', fontWeight: 'bold', verticalAlign: 'top' }}>Customer Code:</td>
-                                        <td style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{so.customerCode || '—'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style={{ fontWeight: 'bold', verticalAlign: 'top', paddingTop: '8px' }}>Address:</td>
-                                        <td style={{ verticalAlign: 'top', paddingTop: '8px', textTransform: 'uppercase', color: '#374151' }}>
+                                        <td style={{ fontSize: '10pt', fontWeight: 800, padding: '12px 0 4px 0', verticalAlign: 'top' }}>Address:</td>
+                                        <td style={{ fontSize: '10pt', padding: '12px 0 4px 0', lineHeight: 1.4, color: '#333' }}>
                                             {so.billingAddress || so.shippingAddress || '—'}
                                         </td>
                                     </tr>
-                                    {gstApplicable && (
+                                    {so.customerPhone && (
                                         <tr>
-                                            <td style={{ fontWeight: 'bold', verticalAlign: 'top', paddingTop: '8px' }}>GSTIN:</td>
-                                            <td style={{ verticalAlign: 'top', paddingTop: '8px', textTransform: 'uppercase' }}>{so.customerGstin || '—'}</td>
+                                            <td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Contact No:</td>
+                                            <td style={{ fontSize: '10pt', padding: '4px 0', color: '#333' }}>{so.customerPhone}</td>
+                                        </tr>
+                                    )}
+                                    {so.customerEmail && (
+                                        <tr>
+                                            <td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Email ID:</td>
+                                            <td style={{ fontSize: '10pt', padding: '4px 0', color: '#333' }}>{so.customerEmail}</td>
+                                        </tr>
+                                    )}
+                                    {gstApplicable && so.customerGstin && (
+                                        <tr>
+                                            <td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>GST No:</td>
+                                            <td style={{ fontSize: '10pt', padding: '4px 0', color: '#333' }}>{so.customerGstin}</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
-                        <div style={{ width: '40%' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', border: 'none' }}>
+                        <div style={{ width: '300px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <tbody>
-                                    <tr><td style={{ fontWeight: 'bold', width: '120px' }}>Date:</td><td>{fmt(so.soDate)}</td></tr>
-                                    <tr><td style={{ fontWeight: 'bold' }}>Order Category:</td><td>{so.orderCategory || 'ORDER'}</td></tr>
-                                    <tr><td style={{ fontWeight: 'bold' }}>Delivery Date:</td><td>{fmt(so.deliveryDate)}</td></tr>
-                                    <tr><td style={{ fontWeight: 'bold', verticalAlign: 'top' }}>Customer's<br />Purchase Order:</td><td style={{ verticalAlign: 'top' }}>{so.customerPO || 'VERBAL'}</td></tr>
-                                    <tr><td style={{ fontWeight: 'bold', verticalAlign: 'top' }}>Customer's<br />Purchase Order Date:</td><td style={{ verticalAlign: 'top' }}>{fmt(so.customerPODate || so.soDate)}</td></tr>
-                                    <tr><td style={{ fontWeight: 'bold' }}>Sticker / Label:</td><td>{so.stickerType || '—'}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', width: '140px' }}>Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.soDate)}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Order Category:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{so.orderCategory || 'Order'}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Delivery Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.deliveryDate)}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Customer's<br />Purchase Order:</td><td style={{ fontSize: '10pt', padding: '4px 0', verticalAlign: 'top' }}>{so.customerPO || 'VERBAL'}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Customer's<br />PO Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.customerPODate || so.soDate)}</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -148,15 +163,15 @@ export default function SalesOrderDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: 'auto', border: '1px solid #000' }}>
                         <thead style={{ background: '#f5f5f5', color: '#000' }}>
                             <tr>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '30px', fontWeight: 800 }}>Sr</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '85px', fontWeight: 800 }}>Item Code</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', fontWeight: 800 }}>Description</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '100px', fontWeight: 800 }}>Additional Notes</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '30px', fontWeight: 800 }}>SR</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '85px', fontWeight: 800 }}>ITEM CODE</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', fontWeight: 800 }}>DESCRIPTION</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'left', width: '100px', fontWeight: 800 }}>ADDITIONAL NOTES</th>
                                 <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>HSN</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>Qty</th>
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '80px', fontWeight: 800 }}>Rate</th>
-                                {gstApplicable && <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '50px', fontWeight: 800 }}>GST%</th>}
-                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '100px', fontWeight: 800 }}>Amount</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'center', width: '60px', fontWeight: 800 }}>QTY</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '80px', fontWeight: 800 }}>RATE</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', textAlign: 'right', width: '100px', fontWeight: 800 }}>AMOUNT</th>
+                                <th style={{ border: '1px solid #000', padding: '8px 6px', width: 'auto' }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -169,18 +184,15 @@ export default function SalesOrderDetailPage() {
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontSize: '9px' }}>{item.hsnCode || '—'}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', verticalAlign: 'top', textAlign: 'center', fontWeight: 'bold' }}>{item.qty} {item.uom}</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>₹ {Number(item.rate || 0).toFixed(2)}</td>
-                                    {gstApplicable && <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', verticalAlign: 'top' }}>{item.gstRate}%</td>}
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', verticalAlign: 'top', fontWeight: 'bold' }}>₹ {Number(item.amount || (item.qty * item.rate) || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                                 </tr>
                             ))}
-                            {/* Filling middle space to ensure full-page height without internal grid lines */}
-                            <tr>
-                                <td style={{ borderLeft: '1px solid #000', borderRight: '1px solid #000', height: `${Math.max(0, 8 - (so.items?.length || 0)) * 20}px` }} colSpan={gstApplicable ? "9" : "8"}></td>
-                            </tr>
+
                         </tbody>
                         <tbody style={{ borderTop: '2px solid #000' }}>
                             <tr style={{ background: '#f5f5f5' }}>
-                                <td colSpan={gstApplicable ? "6" : "5"} style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>
+                                <td colSpan="5" style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>
                                     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>Total Quantity:</div>
                                 </td>
                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>
@@ -188,62 +200,79 @@ export default function SalesOrderDetailPage() {
                                 </td>
                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'left', fontWeight: 'bold' }}>Total Taxable</td>
                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number(so.totalAmount || 0).toFixed(2)}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                             </tr>
+                            {so.freightAmount > 0 && (
+                                <tr>
+                                    <td colSpan="6" style={{ border: 'none' }}></td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>Freight</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.freightAmount || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px' }}></td>
+                                </tr>
+                            )}
+
+                            {gstApplicable && (
+                                <tr>
+                                    <td colSpan="6" style={{ border: 'none' }}></td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>Taxable Amount</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold' }}>₹ {Number((so.totalAmount || 0) + (so.freightAmount || 0)).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px' }}></td>
+                                </tr>
+                            )}
+
                             {gstApplicable && (
                                 <>
                                     {isIGST ? (
                                         <tr>
-                                            <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
-                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>IGST</td>
+                                            <td colSpan="6" style={{ border: 'none' }}></td>
+                                            <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>IGST @ {(so.items?.[0]?.taxPercent || 18)}%</td>
                                             <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalIgst || so.totalGst || 0).toFixed(2)}</td>
+                                            <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                                         </tr>
                                     ) : (
                                         <>
                                             <tr>
-                                                <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
-                                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>CGST</td>
+                                                <td colSpan="6" style={{ border: 'none' }}></td>
+                                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>CGST @ {(so.items?.[0]?.taxPercent || 18) / 2}%</td>
                                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalCgst || so.totalGst / 2 || 0).toFixed(2)}</td>
+                                                <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
-                                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>SGST</td>
+                                                <td colSpan="6" style={{ border: 'none' }}></td>
+                                                <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>SGST @ {(so.items?.[0]?.taxPercent || 18) / 2}%</td>
                                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.totalSgst || so.totalGst / 2 || 0).toFixed(2)}</td>
+                                                <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                                             </tr>
                                         </>
                                     )}
                                 </>
                             )}
-                            {so.freightAmount > 0 && (
-                                <tr>
-                                    <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
-                                    <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>Freight</td>
-                                    <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>₹ {Number(so.freightAmount || 0).toFixed(2)}</td>
-                                </tr>
-                            )}
 
                             {so.roundOff !== 0 && (
                                 <tr>
-                                    <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
+                                    <td colSpan="6" style={{ border: 'none' }}></td>
                                     <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>Round Off</td>
                                     <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right' }}>{Number(so.roundOff || 0).toFixed(2)}</td>
+                                    <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                                 </tr>
                             )}
                             <tr style={{ background: '#f5f5f5' }}>
-                                <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
+                                <td colSpan="6" style={{ border: 'none' }}></td>
                                 <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold', fontSize: '14px' }}>Rounded Total:</td>
                                 <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'right', fontWeight: 'bold', fontSize: '14px' }}>₹ {Number(so.roundedTotal || so.grandTotal || 0).toFixed(2)}</td>
+                                <td style={{ border: '1px solid #000', padding: '6px' }}></td>
                             </tr>
                             <tr>
-                                <td colSpan={gstApplicable ? "7" : "6"} style={{ border: 'none' }}></td>
+                                <td colSpan="6" style={{ border: 'none' }}></td>
                                 <td style={{ border: '1px solid #000', padding: '6px', fontWeight: 'bold' }}>In Words:</td>
-                                <td style={{ border: '1px solid #000', padding: '6px', fontSize: '9px', fontStyle: 'italic', textTransform: 'capitalize' }}>{so.amountInWords}</td>
+                                <td colSpan="2" style={{ border: '1px solid #000', padding: '6px', fontSize: '9px', fontStyle: 'italic', textTransform: 'capitalize' }}>{so.amountInWords}</td>
                             </tr>
                         </tbody>
                     </table>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '30px' }}>
                         {/* Footer Bank Details */}
-                        <div style={{ fontSize: '9px', marginTop: '16px' }}>
+                        <div style={{ fontSize: '9px' }}>
                             <b style={{ textTransform: 'uppercase' }}>COMPANY BANK DETAILS:</b><br />
                             <table style={{ borderCollapse: 'collapse', marginTop: '4px' }}>
                                 <tbody>
@@ -254,10 +283,20 @@ export default function SalesOrderDetailPage() {
                             </table>
                         </div>
 
-                        {/* Signature Block */}
-                        <div style={{ marginTop: '20px', textAlign: 'right', fontSize: '13px' }}>
-                            <div style={{ fontWeight: 900, textTransform: 'uppercase', marginBottom: '40px' }}>For {company.companyName || 'JSK INNOVATIVE TECH P LTD'}</div>
-                            <div style={{ fontWeight: 900 }}>Authorized Signatory</div>
+                        <div style={{ textAlign: 'center', fontSize: '8pt', color: '#666' }}>
+                            This is a computer generated order and does not require a physical signature.
+                        </div>
+
+                        {/* Authorized Signatory Box */}
+                        <div style={{ border: '1px solid #000', width: '220px', display: 'flex', flexDirection: 'column', height: '100px' }}>
+                            <div style={{ background: '#f5f5f5', padding: '5px', fontSize: '9px', fontWeight: 800, textAlign: 'center', borderBottom: '1px solid #000' }}>
+                                For {company.companyName || 'JSK URJA'}
+                            </div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '8px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>{user?.name || 'Authorized User'}</div>
+                                {user?.phone && <div style={{ fontSize: '9px', color: '#333' }}>Mob: {user.phone}</div>}
+                                <div style={{ width: '160px', borderTop: '1px solid #000', marginTop: '4px', paddingTop: '2px', fontSize: '9px', fontWeight: 800, textAlign: 'center' }}>AUTHORIZED SIGNATORY</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -363,7 +402,7 @@ export default function SalesOrderDetailPage() {
                             </tbody>
                         </table>
                         {/* Totals Footer */}
-                        <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6' }}>
+                        <div className="p-footer" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6' }}>
                             <div style={{ minWidth: 280 }}>
                                 {[['Total Taxable Amount', fmtCur(so.totalAmount)],
                                 ...(gstApplicable ? (so.gstType === 'CGST / SGST'
@@ -393,28 +432,11 @@ export default function SalesOrderDetailPage() {
 
             {/* Print Styles */}
             <style>{`
-                @media print { 
-                    @page { margin: 0; size: A4 portrait; }
-                    body { background: #fff !important; margin: 0 !important; padding: 0 !important; width: 210mm; }
-                    
-                    /* Hide everything in the body by default */
-                    body * { visibility: hidden; }
-                    
-                    /* Show only the print-only container and its children */
-                    .print-only, .print-only * { visibility: visible !important; }
-                    .print-only { 
-                        position: absolute; 
-                        left: 0; 
-                        top: 0; 
-                        width: 210mm !important; 
-                        display: block !important; 
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-
-                    button, [data-no-print], .no-print, #app-sidebar, #app-header { display: none !important; } 
-                    * { color: #000 !important; box-shadow: none !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                    table th { background: #f5f5f5 !important; }
+                @media print {
+                    .no-print { display: none !important; }
+                    .print-only { display: block !important; padding: 0 !important; }
+                    @page { size: A4; margin: 0; }
+                    body { background: #fff !important; }
                 }
             `}</style>
         </div>
