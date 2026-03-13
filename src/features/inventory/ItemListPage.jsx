@@ -282,6 +282,25 @@ const ItemListPage = () => {
                         <FileText size={13} /> PDF
                     </button>
                     <button
+                        onClick={async () => {
+                            if (!window.confirm('CRITICAL WARNING: This will permanently delete ALL ITEMS and ALL ITEM GROUPS from the entire database. Are you absolutely sure?')) return;
+                            try {
+                                setLoading(true);
+                                const res = await fetch('/api/v1/items/debug/delete-all', { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                                if (res.ok) { addToast('All items and groups deleted successfully!', 'success'); load(); }
+                                else { addToast('Failed to delete data', 'error'); }
+                            } catch (e) {
+                                addToast('Error: ' + e.message, 'error');
+                            } finally {
+                                setLoading(false);
+                            }
+                        }}
+                        style={{ height: 30, padding: '0 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                        title="Delete everything in Item Master"
+                    >
+                        <Trash2 size={13} /> Delete All Data
+                    </button>
+                    <button
                         onClick={() => navigate('/inventory/items/new')}
                         style={{ height: 30, padding: '0 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                     >

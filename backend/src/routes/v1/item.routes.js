@@ -11,6 +11,19 @@ console.log('ITEM ROUTES LOADED AT', new Date().toISOString());
 
 const router = express.Router();
 
+import { Item } from '../../models/item.model.js';
+import { ItemGroup } from '../../models/itemGroup.model.js';
+
+router.post('/debug/delete-all', async (req, res) => {
+    try {
+        await Item.deleteMany({});
+        await ItemGroup.deleteMany({});
+        res.json({ success: true, message: 'All items and item groups deleted.' });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/generate-code', protect, itemController.generateCode);
 router.get('/export/template', protect, itemController.exportItemTemplate);
 router.get('/export/excel', protect, itemController.exportItemsExcel);
