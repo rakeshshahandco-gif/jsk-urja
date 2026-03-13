@@ -17,6 +17,7 @@ const poItemSchema = Joi.object({
     rate: Joi.number().min(0).required(),
     discountPercent: Joi.number().min(0).max(100).default(0),
     taxPercent: Joi.number().min(0).default(0),
+    additionalNotes: Joi.string().optional().allow(''),
     componentCategory: Joi.string().optional().allow(''),
     bomRef: Joi.string().optional().allow(''),
 });
@@ -45,6 +46,7 @@ const createPOSchema = Joi.object({
     freightGstRate: Joi.number().min(0).default(0),
     complaintId: Joi.string().optional().allow(null, ''),
     complaintNo: Joi.string().optional().allow(''),
+    stickerType: Joi.string().optional().allow(''),
     items: Joi.array().items(poItemSchema).min(1).required(),
 });
 

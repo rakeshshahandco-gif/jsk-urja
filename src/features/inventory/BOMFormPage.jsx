@@ -20,9 +20,8 @@ const s = {
     cancelBtn: { padding: '9px 20px', background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: 9, fontSize: 14, fontWeight: 600, color: '#64748b', cursor: 'pointer' },
     saveBtn: { padding: '9px 22px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 700, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(37,99,235,0.35)' },
     // Layout
-    body: { padding: '24px 28px', maxWidth: 1600, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' },
+    body: { padding: '24px 28px', maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 },
     left: { display: 'flex', flexDirection: 'column', gap: 18 },
-    right: { display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 72 },
     // Cards
     card: { background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: '22px 24px' },
     cardTitle: { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 18px 0', display: 'flex', alignItems: 'center', gap: 8 },
@@ -484,75 +483,73 @@ const BOMFormPage = () => {
                                 placeholder="Additional details about this BOM version..." />
                         </Field>
                     </div>
-                </div>
 
-                {/* ── RIGHT COLUMN ── */}
-                <div style={s.right}>
-                    {/* COST SUMMARY */}
-                    <div style={{ background: 'linear-gradient(145deg, #1e3a5f, #1e293b)', borderRadius: 16, padding: 24, color: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
-                        <p style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Calculator size={14} /> Costing Summary
-                        </p>
-
-                        {/* Raw Material */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 12 }}>
-                            <span style={{ fontSize: 13, opacity: 0.85 }}>Raw Material</span>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }}>₹{fmt(form.totalRawMaterialCost)}</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+                        {/* PROCESS FLOW */}
+                        <div style={s.card}>
+                            <p style={s.cardTitle}><Activity size={14} /> Process Flow</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {Object.entries(form.processes).map(([key, value]) => (
+                                    <label key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: value ? '#eff6ff' : 'transparent', transition: 'background 0.15s' }}>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', textTransform: 'capitalize' }}>
+                                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                                        </span>
+                                        <input type="checkbox" style={{ width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer' }}
+                                            checked={value} onChange={e => setForm({ ...form, processes: { ...form.processes, [key]: e.target.checked } })} />
+                                    </label>
+                                ))}
+                            </div>
+                            {/* TIP */}
+                            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 14, display: 'flex', gap: 10, marginTop: 16 }}>
+                                <AlertCircle size={18} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+                                <p style={{ fontSize: 11, color: '#92400e', margin: 0, lineHeight: 1.6 }}>
+                                    <strong>Pro Tip:</strong> Ensure individual item rates are updated in the Item Master to get accurate BOM costing automatically.
+                                </p>
+                            </div>
                         </div>
 
-                        {/* Component Labour */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
-                            <span style={{ fontSize: 12, color: '#fcd34d', fontWeight: 600 }}>Component Labour (Points)</span>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#fcd34d', fontSize: 13 }}>₹{fmt(form.totalPointsLabourCost)}</span>
-                        </div>
-
-                        {/* Editable costs */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                            {[
-                                ['Process Cost', 'totalProcessCost'],
-                                ['Overhead Cost', 'overheadCost'],
-                                ['Other Labour', 'labourCost'],
-                            ].map(([label, key]) => (
-                                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: 12, opacity: 0.7 }}>{label}</span>
-                                    <input type="number"
-                                        style={{ width: 80, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 8px', textAlign: 'right', color: '#fff', fontSize: 12, outline: 'none' }}
-                                        value={form[key] === 0 ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Final Cost */}
-                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 16, textAlign: 'center' }}>
-                            <p style={{ fontSize: 10, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px 0' }}>Final Cost Per Unit</p>
-                            <p style={{ fontSize: 34, fontWeight: 900, margin: 0, background: 'linear-gradient(135deg, #93c5fd, #c4b5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                ₹{fmt(form.finalProductionCostPerUnit)}
+                        {/* COST SUMMARY */}
+                        <div style={{ background: 'linear-gradient(145deg, #1e3a5f, #1e293b)', borderRadius: 16, padding: 24, color: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Calculator size={14} /> Costing Summary
                             </p>
-                        </div>
-                    </div>
 
-                    {/* PROCESS FLOW */}
-                    <div style={s.card}>
-                        <p style={s.cardTitle}><Activity size={14} /> Process Flow</p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {Object.entries(form.processes).map(([key, value]) => (
-                                <label key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: value ? '#eff6ff' : 'transparent', transition: 'background 0.15s' }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', textTransform: 'capitalize' }}>
-                                        {key.replace(/([A-Z])/g, ' $1').trim()}
-                                    </span>
-                                    <input type="checkbox" style={{ width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer' }}
-                                        checked={value} onChange={e => setForm({ ...form, processes: { ...form.processes, [key]: e.target.checked } })} />
-                                </label>
-                            ))}
-                        </div>
-                    </div>
+                            {/* Raw Material */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 12 }}>
+                                <span style={{ fontSize: 13, opacity: 0.85 }}>Raw Material</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }}>₹{fmt(form.totalRawMaterialCost)}</span>
+                            </div>
 
-                    {/* TIP */}
-                    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 14, display: 'flex', gap: 10 }}>
-                        <AlertCircle size={18} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
-                        <p style={{ fontSize: 11, color: '#92400e', margin: 0, lineHeight: 1.6 }}>
-                            <strong>Pro Tip:</strong> Ensure individual item rates are updated in the Item Master to get accurate BOM costing automatically.
-                        </p>
+                            {/* Component Labour */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
+                                <span style={{ fontSize: 12, color: '#fcd34d', fontWeight: 600 }}>Component Labour (Points)</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#fcd34d', fontSize: 13 }}>₹{fmt(form.totalPointsLabourCost)}</span>
+                            </div>
+
+                            {/* Editable costs */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                                {[
+                                    ['Process Cost', 'totalProcessCost'],
+                                    ['Overhead Cost', 'overheadCost'],
+                                    ['Other Labour', 'labourCost'],
+                                ].map(([label, key]) => (
+                                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: 12, opacity: 0.7 }}>{label}</span>
+                                        <input type="number"
+                                            style={{ width: 80, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '5px 8px', textAlign: 'right', color: '#fff', fontSize: 12, outline: 'none' }}
+                                            value={form[key] === 0 ? '' : form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Final Cost */}
+                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: 16, textAlign: 'center' }}>
+                                <p style={{ fontSize: 10, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px 0' }}>Final Cost Per Unit</p>
+                                <p style={{ fontSize: 34, fontWeight: 900, margin: 0, background: 'linear-gradient(135deg, #93c5fd, #c4b5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                    ₹{fmt(form.finalProductionCostPerUnit)}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

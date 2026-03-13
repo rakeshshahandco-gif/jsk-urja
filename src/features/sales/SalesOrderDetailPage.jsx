@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getSalesOrderById, cancelSalesOrder, generateProductionSheet } from '@/services/salesApi';
+import { sendOrder as sendOrderApi } from '@/services/communicationApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import CommunicationModal from '@/components/communication/CommunicationModal';
+import { Mail, MessageSquare, Send } from 'lucide-react';
 
 const STATUS_COLORS = {
     Draft: { color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
@@ -26,6 +29,7 @@ export default function SalesOrderDetailPage() {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+    const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -66,6 +70,21 @@ export default function SalesOrderDetailPage() {
         try { await cancelSalesOrder(id); toast.success('Cancelled'); load(); }
         catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
         finally { setCancelling(false); }
+    };
+
+    const handleSendComm = async (commData) => {
+        const payload = { ...commData, id, type: 'Sales Order' };
+        toast.promise(
+            sendOrderApi(payload),
+            {
+                loading: `Preparing and sending ${commData.channel}...`,
+                success: `${commData.channel} sent successfully!`,
+                error: (err) => err.response?.data?.message || `Failed to send ${commData.channel}.`,
+            }
+        ).then(() => {
+            setIsCommModalOpen(false);
+            // Optionally reload logs in the future
+        });
     };
 
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
@@ -152,8 +171,8 @@ export default function SalesOrderDetailPage() {
                                     <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', width: '140px' }}>Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.soDate)}</td></tr>
                                     <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Order Category:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{so.orderCategory || 'Order'}</td></tr>
                                     <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Delivery Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.deliveryDate)}</td></tr>
-                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Customer's<br />Purchase Order:</td><td style={{ fontSize: '10pt', padding: '4px 0', verticalAlign: 'top' }}>{so.customerPO || 'VERBAL'}</td></tr>
-                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Customer's<br />PO Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.customerPODate || so.soDate)}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Customer&apos;s<br />Purchase Order:</td><td style={{ fontSize: '10pt', padding: '4px 0', verticalAlign: 'top' }}>{so.customerPO || 'VERBAL'}</td></tr>
+                                    <tr><td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0' }}>Customer&apos;s<br />PO Date:</td><td style={{ fontSize: '10pt', padding: '4px 0' }}>{fmt(so.customerPODate || so.soDate)}</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -320,6 +339,18 @@ export default function SalesOrderDetailPage() {
                             <div style={{ color: '#9ca3af', fontSize: 13, marginTop: 2 }}>Date: {fmt(so.soDate)} · Delivery: {fmt(so.deliveryDate)}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button 
+                                onClick={() => setIsCommModalOpen(true)}
+                                style={{ padding: '9px 16px', background: '#25d366', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(37,211,102,0.3)' }}
+                            >
+                                <MessageSquare size={16} /> Send WhatsApp
+                            </button>
+                            <button 
+                                onClick={() => setIsCommModalOpen(true)}
+                                style={{ padding: '9px 16px', background: '#ea4335', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 8px rgba(234,67,53,0.3)' }}
+                            >
+                                <Mail size={16} /> Send Email
+                            </button>
                             {notCancelled && !so.productionSheetId && (
                                 <button onClick={handleGeneratePS} disabled={generating} style={{ padding: '9px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                                     🖨️ {generating ? 'Generating...' : 'Generate Production Sheet'}
@@ -439,6 +470,19 @@ export default function SalesOrderDetailPage() {
                     body { background: #fff !important; }
                 }
             `}</style>
+
+            <CommunicationModal 
+                isOpen={isCommModalOpen}
+                onClose={() => setIsCommModalOpen(false)}
+                onSend={handleSendComm}
+                type="Sales Order"
+                data={{
+                    recipientName: so.customerName,
+                    email: so.customerEmail,
+                    phone: so.customerPhone,
+                    number: so.soNumber,
+                }}
+            />
         </div>
     );
 }

@@ -5,6 +5,7 @@ const siItemSchema = new mongoose.Schema({
     itemCode: { type: String, default: '' },
     itemName: { type: String, required: true },
     modelNo: { type: String, default: '' },
+    additionalNotes: { type: String, default: '' },
     description: { type: String, default: '' },
     hsnCode: { type: String, default: '' },
     uom: { type: String, default: 'NOS' },

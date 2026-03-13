@@ -36,7 +36,7 @@ export const ForgotPasswordPage = () => {
                         <CheckCircle size={64} className={styles.successIcon} />
                         <h1 className={styles.title}>Check Your Email</h1>
                         <p className={styles.subtitle}>
-                            If an account exists with that email address, we've sent you a password reset link.
+                            If an account exists with that email address, we&apos;ve sent you a password reset link.
                         </p>
                         <p className={styles.hint}>
                             The link will expire in 30 minutes.
@@ -69,7 +69,7 @@ export const ForgotPasswordPage = () => {
                     <h1 className={styles.companyName}>JSK URJA</h1>
                     <h2 className={styles.title}>Forgot Password?</h2>
                     <p className={styles.subtitle}>
-                        Enter your email address and we'll send you a link to reset your password.
+                        Enter your email address and we&apos;ll send you a link to reset your password.
                     </p>
                 </div>
 

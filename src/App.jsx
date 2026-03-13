@@ -12,6 +12,7 @@ import { TalkWithCustomerForm } from '@/features/conversations/components/TalkWi
 import { UserManagement } from '@/features/users/UserManagement';
 import { LoginPage } from '@/features/auth/LoginPage';
 import CompanyProfilePage from '@/features/settings/CompanyProfilePage';
+import WhatsAppSettingsPage from '@/features/settings/WhatsAppSettingsPage';
 import { CustomerMasterReport } from '@/features/reports/CustomerMasterReport';
 import { FollowUpTrackerReport } from '@/features/reports/FollowUpTrackerReport';
 import ReminderReport from '@/features/reports/ReminderReport';
@@ -61,6 +62,7 @@ import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
+
 // Service / Replacement Module
 import ComplaintListPage from '@/features/service/ComplaintListPage';
 import ComplaintFormPage from '@/features/service/ComplaintFormPage';
@@ -209,6 +211,14 @@ function App() {
                                                                 element={
                                                                     <ProtectedRoute requireRole="admin">
                                                                         <CompanyProfilePage />
+                                                                    </ProtectedRoute>
+                                                                }
+                                                            />
+                                                            <Route
+                                                                path="/settings/whatsapp"
+                                                                element={
+                                                                    <ProtectedRoute requireRole="admin">
+                                                                        <WhatsAppSettingsPage />
                                                                     </ProtectedRoute>
                                                                 }
                                                             />

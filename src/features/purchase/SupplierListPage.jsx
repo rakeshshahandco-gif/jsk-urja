@@ -130,7 +130,7 @@ export default function SupplierListPage() {
                         {loading ? (
                             <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
                         ) : suppliers.length === 0 ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No suppliers found. Click "Add Supplier" to get started.</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No suppliers found. Click &quot;Add Supplier&quot; to get started.</td></tr>
                         ) : suppliers.map((s) => (
                             <tr key={s._id}
                                 onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}

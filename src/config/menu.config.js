@@ -297,6 +297,13 @@ export const menuConfig = [
                 roles: [ROLES.ADMIN],
             },
             {
+                id: 'whatsapp-settings',
+                title: 'WhatsApp Settings',
+                path: PATHS.SETTINGS.WHATSAPP,
+                roles: [ROLES.ADMIN],
+                icon: 'WhatsAppIcon',
+            },
+            {
                 id: 'user-management',
                 title: 'User Management',
                 path: '/admin/users',

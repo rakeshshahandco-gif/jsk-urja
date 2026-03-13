@@ -47,10 +47,10 @@ const catLabel = {
 };
 
 const s = {
-    sel: { height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', outline: 'none', cursor: 'pointer', appearance: 'none', minWidth: 100, backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em' },
-    inp: { height: 28, fontSize: 11, padding: '0 6px 0 22px', border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', outline: 'none', flex: 1 },
-    th: { padding: '5px 10px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb', background: '#f8fafc', whiteSpace: 'nowrap' },
-    td: { padding: '4px 10px', fontSize: 11, color: '#374151', verticalAlign: 'middle', borderBottom: '1px solid #f3f4f6' },
+    sel: { height: 32, fontSize: 13, padding: '0 24px 0 8px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', outline: 'none', cursor: 'pointer', appearance: 'none', minWidth: 120, backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '0.9em' },
+    inp: { height: 32, fontSize: 13, padding: '0 8px 0 24px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', outline: 'none', flex: 1 },
+    th: { padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb', background: '#f8fafc', whiteSpace: 'nowrap' },
+    td: { padding: '10px 12px', fontSize: 15, color: '#1e293b', verticalAlign: 'middle', borderBottom: '1px solid #f3f4f6' },
 };
 
 const ItemListPage = () => {
@@ -355,7 +355,6 @@ const ItemListPage = () => {
                                     <th style={{ ...s.th, textAlign: 'right' }}>Stock</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Faulty</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Rate ₹</th>
-                                    <th style={s.th}>Status</th>
                                     <th style={{ ...s.th, textAlign: 'center' }}>⚙</th>
                                 </tr>
                             </thead>
@@ -369,19 +368,19 @@ const ItemListPage = () => {
                                             onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
                                             onMouseLeave={e => e.currentTarget.style.background = rowBg}
                                         >
-                                            <td style={{ ...s.td, color: '#9ca3af', fontSize: 10 }}>{(page - 1) * limit + idx + 1}</td>
+                                            <td style={{ ...s.td, color: '#9ca3af', fontSize: 12 }}>{(page - 1) * limit + idx + 1}</td>
                                             <td style={s.td}>
-                                                <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#2563eb' }}>{item.itemCode}</span>
+                                                <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: '#2563eb' }}>{item.itemCode}</span>
                                             </td>
                                             <td style={s.td}>
-                                                <div style={{ fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.itemName}>{item.itemName}</div>
-                                                {item.hsnCode && <div style={{ fontSize: 10, color: '#9ca3af' }}>HSN: {item.hsnCode}</div>}
+                                                <div style={{ fontWeight: 700, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.itemName}>{item.itemName}</div>
+                                                {item.hsnCode && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>HSN: {item.hsnCode}</div>}
                                             </td>
                                             <td style={s.td}>
-                                                <span style={{ fontSize: 11, color: '#374151' }}>{item.itemGroupName || '—'}</span>
+                                                <span style={{ fontSize: 13, color: '#334155', fontWeight: 500 }}>{item.itemGroupName || '—'}</span>
                                             </td>
                                             <td style={s.td}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: cStyle.bg, color: cStyle.color }}>
+                                                <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4, background: cStyle.bg, color: cStyle.color, textTransform: 'uppercase' }}>
                                                     {catLabel[item.itemCategory] || item.itemCategory}
                                                 </span>
                                             </td>
@@ -399,11 +398,6 @@ const ItemListPage = () => {
                                                 {item.faultyStock ?? 0}
                                             </td>
                                             <td style={{ ...s.td, textAlign: 'right' }}>₹{(item.sellingPrice || 0).toFixed(2)}</td>
-                                            <td style={s.td}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: item.isActive ? '#dcfce7' : '#fee2e2', color: item.isActive ? '#166534' : '#991b1b' }}>
-                                                    {item.isActive ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
                                             <td style={{ ...s.td, textAlign: 'center' }}>
                                                 <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
                                                     <button onClick={() => navigate(`/inventory/items/${item._id}`)}

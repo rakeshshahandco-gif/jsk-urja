@@ -62,7 +62,29 @@ const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType
         totalTaxableAmount += taxableAmount;
         totalCgst += cgstAmount; totalSgst += sgstAmount; totalIgst += igstAmount;
 
-        return { ...item, qty, rate, discountAmount: discAmt, taxableAmount, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount, totalAmount };
+        return {
+            itemId: item.itemId,
+            itemCode: item.itemCode || '',
+            itemName: item.itemName || '',
+            modelNo: item.modelNo || '',
+            description: item.description || '',
+            additionalNotes: item.additionalNotes || '',
+            hsnCode: item.hsnCode || '',
+            uom: item.uom || 'NOS',
+            qty,
+            rate,
+            discountPercent: discPct,
+            discountAmount: discAmt,
+            taxableAmount,
+            gstRate,
+            cgstRate,
+            cgstAmount,
+            sgstRate,
+            sgstAmount,
+            igstRate,
+            igstAmount,
+            totalAmount
+        };
     });
 
     const freight = Number(freightAmount) || 0;
@@ -104,12 +126,14 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         }
     }
 
+    const { items: _items, ...otherData } = body;
+
     const { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount } = calcInvoiceTotals(
-        body.items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
+        _items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
     );
 
     const inv = await SalesInvoice.create({
-        ...body,
+        ...otherData,
         invoiceNumber,
         gstApplicable,
         items: processedItems,

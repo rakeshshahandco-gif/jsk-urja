@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { createPurchaseOrder, getPurchaseOrderById, updatePurchaseOrder } from '@/services/purchaseApi';
 import { getSuppliers } from '@/services/purchaseApi';
+import { getStickers as getStickerList } from '@/services/stickerApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
@@ -10,7 +11,7 @@ import toast from 'react-hot-toast';
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 const label = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em' };
 
-const EMPTY_ITEM = { itemId: '', itemName: '', itemCode: '', description: '', hsnCode: '', uom: 'NOS', orderedQty: 1, rate: 0, discountPercent: 0, taxPercent: 18, itemGroup: '' };
+const EMPTY_ITEM = { itemId: '', itemName: '', itemCode: '', description: '', hsnCode: '', uom: 'NOS', orderedQty: 1, rate: 0, discountPercent: 0, taxPercent: 18, itemGroup: '', additionalNotes: '' };
 
 const fmt = (n) => parseFloat((n || 0).toFixed(2));
 
@@ -24,6 +25,7 @@ export default function PurchaseOrderFormPage() {
     const [saving, setSaving] = useState(false);
     const [suppliers, setSuppliers] = useState([]);
     const [items, setItems] = useState([]);
+    const [stickerOptions, setStickerOptions] = useState([]);
 
     const [header, setHeader] = useState({
         supplierId: '', poDate: new Date().toISOString().split('T')[0],
@@ -31,7 +33,8 @@ export default function PurchaseOrderFormPage() {
         expectedDeliveryDate: '', warehouse: '',
         supplierAddress: '', supplierGstNumber: '',
         transporterName: '', vehicleNo: '', lrNumber: '',
-        freightAmount: 0, freightGstRate: 0
+        freightAmount: 0, freightGstRate: 0,
+        stickerType: ''
     });
     const [lineItems, setLineItems] = useState([{ ...EMPTY_ITEM }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
@@ -69,11 +72,13 @@ export default function PurchaseOrderFormPage() {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [supData, itemData] = await Promise.all([
+                const [supData, itemData, stickRes] = await Promise.all([
                     getSuppliers({ limit: 200 }),
-                    getItems({ limit: 5000, sortBy: 'itemName:asc' })
+                    getItems({ limit: 5000, sortBy: 'itemName:asc' }),
+                    getStickerList().catch(() => [])
                 ]);
                 setSuppliers(supData.suppliers || []);
+                if (Array.isArray(stickRes)) setStickerOptions(stickRes.map(s => s.name));
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
                 setItems(itemsList);
 
@@ -94,7 +99,8 @@ export default function PurchaseOrderFormPage() {
                         vehicleNo: po.vehicleNo || '',
                         lrNumber: po.lrNumber || '',
                         freightAmount: po.freightAmount || 0,
-                        freightGstRate: po.freightGstRate || 0
+                        freightGstRate: po.freightGstRate || 0,
+                        stickerType: po.stickerType || ''
                     });
                     setLineItems(po.items.map(i => ({
                         itemId: i.itemId?._id || i.itemId,
@@ -107,7 +113,8 @@ export default function PurchaseOrderFormPage() {
                         rate: i.rate,
                         discountPercent: i.discountPercent || 0,
                         taxPercent: i.taxPercent || 18,
-                        itemGroup: i.componentCategory || ''
+                        itemGroup: i.componentCategory || '',
+                        additionalNotes: i.additionalNotes || ''
                     })));
                 }
             } catch (err) {
@@ -181,12 +188,14 @@ export default function PurchaseOrderFormPage() {
                 status: isEdit ? header.status : 'Ordered',
                 freightAmount: Number(header.freightAmount) || 0,
                 freightGstRate: Number(header.freightGstRate) || 0,
+                stickerType: header.stickerType || '',
                 items: lineItems.map(i => ({
                     itemId: i.itemId, itemCode: i.itemCode, itemName: i.itemName,
                     description: i.description, hsnCode: i.hsnCode || '', uom: i.uom,
                     orderedQty: Number(i.orderedQty) || 0, rate: Number(i.rate) || 0,
                     discountPercent: Number(i.discountPercent) || 0, taxPercent: Number(i.taxPercent) || 0,
                     componentCategory: i.itemGroup || '',
+                    additionalNotes: i.additionalNotes || '',
                 })),
             };
             let result;
@@ -262,6 +271,13 @@ export default function PurchaseOrderFormPage() {
                                     <span style={label}>Warehouse / Store</span>
                                     <input value={header.warehouse} onChange={e => setH('warehouse', e.target.value)} style={inp} placeholder="Store location" />
                                 </div>
+                                <div>
+                                    <span style={label}>Sticker Type</span>
+                                    <select value={header.stickerType} onChange={e => setH('stickerType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                        <option value="">-- No Sticker --</option>
+                                        {stickerOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -294,7 +310,7 @@ export default function PurchaseOrderFormPage() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', color: '#64748b' }}>
-                                            {['#', 'Item', 'Group', 'HSN/SAC', 'UOM', 'Qty', 'Rate', 'Disc%', 'Amount', ''].map(h => (
+                                            {['#', 'Item', 'Group', 'Additional Notes', 'HSN/SAC', 'UOM', 'Qty', 'Rate', 'Disc%', 'Amount', ''].map(h => (
                                                 <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                                             ))}
                                         </tr>
@@ -315,6 +331,9 @@ export default function PurchaseOrderFormPage() {
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '120px' }}>
                                                         <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />
+                                                    </td>
+                                                    <td style={{ padding: '8px 10px', minWidth: '150px' }}>
+                                                        <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} placeholder="Additional Notes" style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', width: '100px' }}>
                                                         <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} placeholder="HSN/SAC" style={{ ...inp, fontSize: '12px' }} />

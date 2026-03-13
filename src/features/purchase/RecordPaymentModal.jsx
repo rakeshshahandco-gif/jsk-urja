@@ -246,7 +246,7 @@ export default function RecordPaymentModal({ invoice, onClose, onSuccess }) {
                                     </div>
                                     {form.chequeStatus === 'Pending' && (
                                         <div style={{ background: '#1c1000', border: '1px solid #f59e0b', borderRadius: '8px', padding: '10px 14px', color: '#f59e0b', fontSize: '12px' }}>
-                                            ⚠️ Cheque is Pending — Invoice will show "Pending Clearance" until cheque is cleared.
+                                            ⚠️ Cheque is Pending — Invoice will show &quot;Pending Clearance&quot; until cheque is cleared.
                                         </div>
                                     )}
                                 </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getPurchaseOrderById, updatePOStatus, deletePurchaseOrder, getSupplierById } from '@/services/purchaseApi';
+import { sendOrder as sendOrderApi } from '@/services/communicationApi';
 import { getGRNsByPO, createGRN } from '@/services/purchaseApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,6 +10,8 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { Printer, FileText, ChevronLeft, Package, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui';
+import CommunicationModal from '@/components/communication/CommunicationModal';
+import { Send } from 'lucide-react';
 
 const STATUS_COLORS = {
     'Draft': { color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1' },
@@ -34,6 +37,7 @@ export default function PurchaseOrderDetailPage() {
     const [showGRN, setShowGRN] = useState(false);
     const [grnForm, setGRNForm] = useState({});
     const [saving, setSaving] = useState(false);
+    const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const load = useCallback(() => {
         Promise.all([
@@ -55,7 +59,9 @@ export default function PurchaseOrderDetailPage() {
                 try {
                     const supData = await getSupplierById(poData.supplierId._id || poData.supplierId);
                     finalPO = { ...poData, supplierId: supData };
-                } catch (e) { }
+                } catch (e) {
+                    console.error('Failed to fetch supplier details', e);
+                }
             }
 
             setPO(finalPO);
@@ -94,6 +100,20 @@ export default function PurchaseOrderDetailPage() {
     };
 
     const setFormItem = (poItemId, k, v) => setGRNForm(f => ({ ...f, [poItemId]: { ...f[poItemId], [k]: v } }));
+
+    const handleSendComm = async (commData) => {
+        const payload = { ...commData, id: po._id, type: 'Purchase Order' };
+        toast.promise(
+            sendOrderApi(payload),
+            {
+                loading: `Preparing and sending ${commData.channel}...`,
+                success: `${commData.channel} sent successfully!`,
+                error: (err) => err.response?.data?.message || `Failed to send ${commData.channel}.`,
+            }
+        ).then(() => {
+            setIsCommModalOpen(false);
+        });
+    };
 
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#fff', minHeight: '100vh' }}>Loading...</div>;
     if (!po) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#fff', minHeight: '100vh' }}>PO not found</div>;
@@ -344,6 +364,18 @@ export default function PurchaseOrderDetailPage() {
                             <Button variant="outline" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, border: '1px solid #ef4444', color: '#ef4444' }}>
                                 <FileText size={18} /> Export PDF
                             </Button>
+                            <Button 
+                                onClick={() => setIsCommModalOpen(true)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, background: '#25d366', color: '#fff' }}
+                            >
+                                <MessageSquare size={18} /> Send WhatsApp
+                            </Button>
+                            <Button 
+                                onClick={() => setIsCommModalOpen(true)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, background: '#ea4335', color: '#fff' }}
+                            >
+                                <Mail size={18} /> Send Email
+                            </Button>
                             {['Draft', 'Ordered'].includes(po.status) && (
                                 <>
                                     <Button variant="secondary" onClick={() => navigate(PATHS.PURCHASE.EDIT_ORDER(po._id))} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
@@ -435,7 +467,7 @@ export default function PurchaseOrderDetailPage() {
                         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#1e293b' }}>📦 GRN History ({grns.length})</h2>
                     </div>
                     {grns.length === 0 ? (
-                        <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>No GRNs yet. Click "Receive Material" to create one.</div>
+                        <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>No GRNs yet. Click &quot;Receive Material&quot; to create one.</div>
                     ) : grns.map((grn, i) => (
                         <div key={grn._id} style={{ padding: '16px 20px', borderBottom: i < grns.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -579,6 +611,19 @@ export default function PurchaseOrderDetailPage() {
                     table td { padding: 4px 8px !important; }
                 }
             `}</style>
+
+            <CommunicationModal 
+                isOpen={isCommModalOpen}
+                onClose={() => setIsCommModalOpen(false)}
+                onSend={handleSendComm}
+                type="Purchase Order"
+                data={{
+                    recipientName: po.supplierName || po.supplierId?.supplierName,
+                    email: po.supplierId?.email,
+                    phone: po.supplierId?.phone,
+                    number: po.poNumber,
+                }}
+            />
         </div>
     );
 }

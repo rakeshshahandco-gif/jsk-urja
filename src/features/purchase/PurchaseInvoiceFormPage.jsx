@@ -382,7 +382,6 @@ export default function PurchaseInvoiceFormPage() {
                 invoiceDate: header.invoiceDate,
                 supplierInvoiceNo: header.supplierInvoiceNo,
                 poId: header.selectedPoId || null,
-                poNumber: header.poNumber || '',
                 grnId: header.selectedGrnId || null,
 
                 supplierGstin: header.supplierGstin,

@@ -82,6 +82,12 @@ export default function PurchaseInvoiceDetailPage() {
     const sc = STATUS_COLORS[inv.status] || STATUS_COLORS.Draft;
     const pc = PAY_COLORS[livePaymentStatus] || PAY_COLORS.Unpaid;
     const isIGST = inv.gstType === 'IGST';
+    const gstApplicable = Boolean(
+        (inv.totalIgst || 0) > 0 ||
+        (inv.totalCgst || 0) > 0 ||
+        (inv.totalSgst || 0) > 0 ||
+        (inv.items || []).some(it => (it.gstRate ?? it.taxPercent ?? 0) > 0)
+    );
     const notCancelled = inv.status !== 'Cancelled';
     const notFullyPaid = livePaymentStatus !== 'Paid';
 

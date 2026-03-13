@@ -49,7 +49,7 @@ export const ConversationHistoryTable = ({
 
             {conversations.length === 0 ? (
                 <div className={styles.emptyState}>
-                    <p>No conversations yet. Click "Add Conversation" to start tracking.</p>
+                    <p>No conversations yet. Click &quot;Add Conversation&quot; to start tracking.</p>
                 </div>
             ) : (
                 <div className={styles.tableContainer}>

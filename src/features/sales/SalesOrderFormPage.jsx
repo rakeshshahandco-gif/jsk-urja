@@ -328,6 +328,12 @@ export default function SalesOrderFormPage() {
                             </select>
                         </Field>
                         <Field label="Delivery Date"><input type="date" value={form.deliveryDate || ''} onChange={e => setF('deliveryDate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
+                        <Field label="Sticker Type">
+                            <select value={form.stickerType || ''} onChange={e => setF('stickerType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={form.status && form.status !== 'Draft'}>
+                                <option value="">-- No Sticker --</option>
+                                {stickerOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </Field>
                         <Field label="Remarks" ><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical' }} placeholder="Any remarks..." disabled={form.status && form.status !== 'Draft'} /></Field>
                     </Grid>
                 </Section>

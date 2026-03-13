@@ -380,7 +380,7 @@ const ItemFormPage = () => {
                         )}
                         {!form.isManufacturable && (
                             <div style={{ padding: 16, background: '#f0fdf4', borderRadius: 8, border: '1px dashed #86efac', color: '#166534', fontSize: 12 }}>
-                                Toggle "Is Manufacturable" to enter production details (BOM, machine, QC, cost).
+                                Toggle &quot;Is Manufacturable&quot; to enter production details (BOM, machine, QC, cost).
                             </div>
                         )}
                     </div>

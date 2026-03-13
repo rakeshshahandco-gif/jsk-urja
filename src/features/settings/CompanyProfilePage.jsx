@@ -150,7 +150,7 @@ export default function CompanyProfilePage() {
                         🏢 Company Profile
                     </h1>
                     <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-                        Manage your company's core details, address, and tax information. These will be used across your invoices and documents.
+                        Manage your company&apos;s core details, address, and tax information. These will be used across your invoices and documents.
                     </p>
                 </div>
 

@@ -1,4 +1,4 @@
-console.log('--- BACKEND STARTING ---');
+console.log('--- BACKEND STARTING (RESTART ATTEMPT) ---');
 import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';

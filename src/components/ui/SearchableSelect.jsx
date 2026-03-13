@@ -281,7 +281,7 @@ export default function SearchableSelect({
                             onMouseOver={e => e.currentTarget.style.background = dark ? '#2e4a6d' : '#dbeafe'}
                             onMouseOut={e => e.currentTarget.style.background = theme.accentBg}
                         >
-                            <Plus size={14} /> Create new item "{searchTerm}"
+                            <Plus size={14} /> Create new item &quot;{searchTerm}&quot;
                         </div>
                     )}
                 </div>

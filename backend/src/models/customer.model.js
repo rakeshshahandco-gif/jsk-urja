@@ -37,6 +37,11 @@ const customerSchema = mongoose.Schema(
                 trim: true,
                 default: "",
             },
+            whatsApp: {
+                type: String,
+                trim: true,
+                default: "",
+            },
             email: {
                 type: String,
                 trim: true,

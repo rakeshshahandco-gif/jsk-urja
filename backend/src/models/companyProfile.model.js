@@ -91,6 +91,20 @@ const companyProfileSchema = new mongoose.Schema(
             type: Number,
             default: 65,
         },
+        emailSettings: {
+            senderName: { type: String, trim: true, default: '' },
+            emailId: { type: String, trim: true, default: '' },
+            appPassword: { type: String, trim: true, default: '' },
+            replyTo: { type: String, trim: true, default: '' },
+        },
+        whatsAppSettings: {
+            appId: { type: String, trim: true, default: '' },
+            phoneNumberId: { type: String, trim: true, default: '' },
+            accessToken: { type: String, trim: true, default: '' },
+            businessAccountId: { type: String, trim: true, default: '' },
+            provider: { type: String, enum: ['meta', 'ultramsg', 'none'], default: 'none' },
+            instanceId: { type: String, trim: true, default: '' }, // For 3rd party like UltraMsg
+        },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

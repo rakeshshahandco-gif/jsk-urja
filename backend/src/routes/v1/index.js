@@ -26,6 +26,7 @@ import salesInvoiceRoute from './salesInvoice.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
+import communicationRoute from './communication.routes.js';
 import stickerRoute from './sticker.routes.js';
 import notificationRoute from './notification.routes.js';
 import complaintRoute from './complaint.routes.js';
@@ -49,21 +50,33 @@ import assetLocationRoute from './assetLocation.routes.js';
 import fixedAssetRoute from './fixedAsset.routes.js';
 import assetTransferRoute from './assetTransfer.routes.js';
 import assetMaintenanceRoute from './assetMaintenance.routes.js';
+import whatsappSettingsRoute from './whatsappSettings.routes.js';
 import assetDisposalRoute from './assetDisposal.routes.js';
 
 
 const router = express.Router();
 
-// Route definitions will go here
+// Debug middleware to trace requests
+router.use((req, res, next) => {
+    console.log(`[ROUTER DEBUG] Incoming: ${req.method} ${req.originalUrl} | Base: ${req.baseUrl} | Path: ${req.path}`);
+    next();
+});
+
 router.get('/health', (req, res) => {
     res.send({
         status: 'OK',
-        version: '1.2.0-debug',
-        registeredPaths: defaultRoutes.map(r => r.path)
     });
 });
 
 const defaultRoutes = [
+    {
+        path: '/communication',
+        route: communicationRoute,
+    },
+    {
+        path: '/whatsapp-settings',
+        route: whatsappSettingsRoute,
+    },
     {
         path: '/auth',
         route: authRoute,

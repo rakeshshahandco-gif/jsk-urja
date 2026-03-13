@@ -1,10 +1,18 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const run = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        const uri = process.env.MONGODB_URL || process.env.MONGODB_URI;
+        if (!uri) throw new Error('MONGODB_URL or MONGODB_URI not found in env');
+        await mongoose.connect(uri);
         const { SalesOrder } = await import('./src/models/salesOrder.model.js');
         const { SalesInvoice } = await import('./src/models/salesInvoice.model.js');
 

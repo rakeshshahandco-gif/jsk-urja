@@ -14,7 +14,7 @@ export const PermissionDenied = ({ requiredRole, requiredPermission }) => {
                 <ShieldAlert size={80} className={styles.icon} />
                 <h1 className={styles.title}>Access Denied</h1>
                 <p className={styles.message}>
-                    You don't have permission to access this page.
+                    You don&apos;t have permission to access this page.
                 </p>
 
                 {requiredRole && (

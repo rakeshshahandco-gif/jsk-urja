@@ -134,7 +134,7 @@ export const FollowupDashboard = () => {
                     color: '#b91c1c'
                 }}>
                     <p style={{ fontWeight: 600, marginBottom: '12px' }}>{error}</p>
-                    <Button onClick={fetchCustomersWithFollowups} variant="outline">
+                    <Button onClick={fetchDashboardData} variant="outline">
                         Retry Loading
                     </Button>
                 </div>
@@ -267,7 +267,7 @@ export const FollowupDashboard = () => {
                 color: '#1e40af'
             }}>
                 <p style={{ margin: 0, fontSize: '0.875rem' }}>
-                    <strong>💡 Tip:</strong> Click "Open Follow-up" to manage conversations and set follow-up reminders for each customer.
+                    <strong>💡 Tip:</strong> Click &quot;Open Follow-up&quot; to manage conversations and set follow-up reminders for each customer.
                 </p>
             </div>
         </div>

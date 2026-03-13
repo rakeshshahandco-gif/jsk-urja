@@ -24,3 +24,17 @@ export const deleteBOM = async (id) => {
     const response = await api.delete(`/boms/${id}`);
     return response.data;
 };
+
+export const exportBOMTemplate = async () => {
+    const response = await api.get('/boms/export/template', { responseType: 'blob' });
+    return response.data;
+};
+
+export const importBOMsExcel = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/boms/import/excel', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};

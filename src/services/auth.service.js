@@ -4,15 +4,11 @@ import { clearAuthData, saveAuthData } from '@/utils/auth';
 export const authService = {
     // Login user
     login: async (username, password) => {
-        try {
-            const { data } = await api.post('/auth/login', { username, password });
-            if (data.success && data.data.token) {
-                saveAuthData(data.data, data.data.token);
-            }
-            return data;
-        } catch (error) {
-            throw error;
+        const { data } = await api.post('/auth/login', { username, password });
+        if (data.success && data.data.token) {
+            saveAuthData(data.data, data.data.token);
         }
+        return data;
     },
 
     // Register user (Admin only usually, but endpoint exists)

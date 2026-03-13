@@ -7,20 +7,35 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
-const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
+const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
+const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
-const td = { padding: '7px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
+const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
+const lbl = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' };
 
-const BLANK_ITEM = () => ({ itemId: null, itemCode: '', itemName: '', modelNo: '', additionalNotes: '', hsnCode: '', uom: 'NOS', qty: '', rate: '', gstRate: 18, discountPercent: 0 });
+const BLANK_ITEM = () => ({
+    itemId: '',
+    itemCode: '',
+    itemName: '',
+    modelNo: '',
+    description: '',
+    additionalNotes: '',
+    hsnCode: '',
+    uom: 'NOS',
+    qty: '',
+    rate: '',
+    gstRate: 18,
+    discountPercent: 0
+});
 
 const Section = ({ title, children }) => (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', paddingBottom: 8 }}>{title}</h3>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', paddingBottom: 10 }}>{title}</h3>
         {children}
     </div>
 );
-const G = ({ cols = 3, g = 12, children }) => <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: g }}>{children}</div>;
-const F = ({ label: l, children, style = {} }) => <div style={style}><label style={lbl}>{l}</label>{children}</div>;
+const Grid = ({ cols = 3, children }) => <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>{children}</div>;
+const Field = ({ label, children, style = {} }) => <div style={style}><label style={labelStyle}>{label}</label>{children}</div>;
 
 const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
     const [submitting, setSubmitting] = useState(false);
@@ -56,21 +71,21 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
             <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
                 <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>+ Create New Invoice Series</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <F label="Series Name *" style={{ gridColumn: 'span 2' }}>
+                    <Field label="Series Name *" style={{ gridColumn: 'span 2' }}>
                         <input value={data.seriesName} onChange={e => setData(p => ({ ...p, seriesName: e.target.value }))} style={inp} placeholder="e.g. GST/SALE" />
-                    </F>
-                    <F label="Prefix (Unique) *">
+                    </Field>
+                    <Field label="Prefix (Unique) *">
                         <input value={data.prefix} onChange={e => setData(p => ({ ...p, prefix: e.target.value }))} style={inp} placeholder="GST" />
-                    </F>
-                    <F label="Financial Year *">
+                    </Field>
+                    <Field label="Financial Year *">
                         <input value={data.financialYear} onChange={e => setData(p => ({ ...p, financialYear: e.target.value }))} style={inp} placeholder="2025-26" />
-                    </F>
-                    <F label="Start Number">
+                    </Field>
+                    <Field label="Start Number">
                         <input type="number" value={data.startNumber} onChange={e => setData(p => ({ ...p, startNumber: e.target.value }))} style={inp} />
-                    </F>
-                    <F label="Digits Padding">
+                    </Field>
+                    <Field label="Digits Padding">
                         <input type="number" value={data.padLength} onChange={e => setData(p => ({ ...p, padLength: e.target.value }))} style={inp} />
-                    </F>
+                    </Field>
                     <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginTop: 4 }}>
                         <input type="checkbox" checked={data.gstApplicable} onChange={e => setData(p => ({ ...p, gstApplicable: e.target.checked }))} style={{ width: 16, height: 16 }} />
                         <span style={{ fontWeight: 600 }}>GST Applicable (Enabled by default)</span>
@@ -193,7 +208,21 @@ export default function SalesInvoiceFormPage() {
                 buyerOrderNo: so.customerPO || '',
                 buyerOrderDate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
                 paymentType: so.paymentType || 'Credit',
-                items: so.items?.length ? so.items.map(i => ({ itemId: i.itemId || null, itemCode: i.itemCode || '', itemName: i.itemName || '', modelNo: i.modelNo || '', additionalNotes: i.additionalNotes || '', hsnCode: i.hsnCode || '', uom: i.uom || 'NOS', qty: i.qty || '', rate: i.rate || '', gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), discountPercent: 0 })) : [BLANK_ITEM()],
+                remarks: so.remarks || '',
+                items: so.items?.length ? so.items.map(i => ({ 
+                    itemId: i.itemId || null, 
+                    itemCode: i.itemCode || i.code || i.sku || '', 
+                    itemName: i.itemName || i.name || '', 
+                    modelNo: i.modelNo || '', 
+                    description: i.description || i.productDescription || i.itemName || i.name || '',
+                    additionalNotes: i.additionalNotes || i.itemNotes || i.notes || i.addNotes || i.remark || '', 
+                    hsnCode: i.hsnCode || '', 
+                    uom: i.uom || 'NOS', 
+                    qty: i.qty || '', 
+                    rate: i.rate || '', 
+                    gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), 
+                    discountPercent: 0 
+                })) : [BLANK_ITEM()],
             }));
         }).catch(() => toast.error('Failed to load SO details'));
     }, [soId]);
@@ -216,14 +245,16 @@ export default function SalesInvoiceFormPage() {
                 return {
                     ...item,
                     itemId: selected._id,
+                    itemCode: selected.itemCode || selected.code || '',
                     itemName: selected.itemName || selected.name || '',
-                    description: selected.description || selected.itemName || selected.name || '',
+                    description: selected.description || selected.productDescription || selected.itemName || selected.name || '',
                     modelNo: selected.modelNo || '',
                     hsnCode: selected.hsnCode || '',
                     uom: selected.uom || 'NOS',
                     rate,
                     gstRate: selected.taxRate || selected.salesGst || selected.gstRate || 18,
                     qty: item.qty || 1,
+                    additionalNotes: item.additionalNotes || '',
                 };
             });
             return { ...p, items };
@@ -265,7 +296,20 @@ export default function SalesInvoiceFormPage() {
         try {
             const payload = {
                 ...form,
-                items: form.items.map(i => ({ ...i, qty: Number(i.qty), rate: Number(i.rate), gstRate: Number(i.gstRate) || 18, discountPercent: Number(i.discountPercent) || 0 }))
+                items: form.items.map(i => ({ 
+                    itemId: i.itemId,
+                    itemCode: i.itemCode,
+                    itemName: i.itemName,
+                    modelNo: i.modelNo,
+                    description: i.description,
+                    additionalNotes: i.additionalNotes,
+                    hsnCode: i.hsnCode,
+                    uom: i.uom,
+                    qty: Number(i.qty), 
+                    rate: Number(i.rate), 
+                    gstRate: Number(i.gstRate) || 18, 
+                    discountPercent: Number(i.discountPercent) || 0 
+                }))
             };
             const inv = await createSalesInvoice(payload);
             toast.success('Invoice created!');
@@ -291,122 +335,129 @@ export default function SalesInvoiceFormPage() {
             </div>
 
             <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
-                {/* Invoice Series + Dates */}
+                {/* Invoice Details */}
                 <Section title="Invoice Details">
-                    <G cols={4}>
-                        <F label="Invoice Series *">
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <select
-                                    value={form.seriesId}
-                                    onChange={e => {
-                                        const val = e.target.value;
-                                        const selected = seriesList.find(s => s._id === val);
-                                        const isGst = selected ? (selected.gstApplicable !== false) : true;
-                                        setForm(p => ({
-                                            ...p,
-                                            seriesId: val,
-                                            gstApplicable: isGst,
-                                            items: p.items.map(item => ({
-                                                ...item,
-                                                gstRate: isGst ? (item.gstRate || 18) : 0
-                                            })),
-                                            freightGstRate: isGst ? (p.freightGstRate || 18) : 0
-                                        }));
-                                    }}
-                                    style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}
+                    <Grid cols={3}>
+                        <Field label="Invoice Series">
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <select value={form.seriesId} onChange={e => {
+                                    const val = e.target.value;
+                                    const selected = seriesList.find(s => s._id === val);
+                                    const isGst = selected ? (selected.gstApplicable !== false) : true;
+                                    setForm(p => ({
+                                        ...p,
+                                        seriesId: val,
+                                        gstApplicable: isGst,
+                                        items: p.items.map(item => ({
+                                            ...item,
+                                            gstRate: isGst ? (item.gstRate || 18) : 0
+                                        })),
+                                        freightGstRate: isGst ? (p.freightGstRate || 18) : 0
+                                    }));
+                                }}
+                                    style={{ ...inp, flex: 1, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}
                                 >
                                     <option value="">-- Select Series --</option>
-                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN)</option>)}
+                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix})</option>)}
                                 </select>
-                                <button type="button" onClick={() => setShowAddSeries(true)} style={{ background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>+</button>
+                                <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 32, background: '#f8fafc', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }} title="Add Series">＋</button>
                             </div>
                             {form.seriesId && !form.gstApplicable && (
                                 <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <span>⚠️</span> This series is non-GST. Tax will not be applied.
                                 </div>
                             )}
-                        </F>
-                        <F label="Invoice Date *"><input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={inp} /></F>
-                        <F label="Payment Type">
+                        </Field>
+                        <Field label="Invoice Date *"><input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={inp} /></Field>
+                        <Field label="Payment Type">
                             <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                                 <option>Credit</option><option>Cash</option>
                             </select>
-                        </F>
-                        <F label="Linked SO">{soId ? <input value={form.soNumber} readOnly style={{ ...inp, background: '#f1f5f9', color: '#6b7280' }} /> : <input value={form.soNumber} onChange={e => setF('soNumber', e.target.value)} style={inp} placeholder="Optional SO Number" />}</F>
-                        <F label="Order Type"><input value={form.orderType} onChange={e => setF('orderType', e.target.value)} style={inp} placeholder="e.g. Supply" /></F>
-                        <F label="Dispatch Through"><input value={form.dispatchThrough} onChange={e => setF('dispatchThrough', e.target.value)} style={inp} placeholder="By Road / Courier" /></F>
-                        <F label="Payment Due Date"><input type="date" value={form.paymentDueDate || ''} onChange={e => setF('paymentDueDate', e.target.value)} style={inp} /></F>
-                    </G>
+                        </Field>
+                        <Field label="Linked SO">{soId ? <input value={form.soNumber} readOnly style={{ ...inp, background: '#f1f5f9', color: '#6b7280' }} /> : <input value={form.soNumber} onChange={e => setF('soNumber', e.target.value)} style={inp} placeholder="Optional SO Number" />}</Field>
+                        <Field label="Order Type"><input value={form.orderType} onChange={e => setF('orderType', e.target.value)} style={inp} placeholder="e.g. Supply" /></Field>
+                        <Field label="Dispatch Through"><input value={form.dispatchThrough} onChange={e => setF('dispatchThrough', e.target.value)} style={inp} placeholder="By Road / Courier" /></Field>
+                        <Field label="Payment Due Date"><input type="date" value={form.paymentDueDate || ''} onChange={e => setF('paymentDueDate', e.target.value)} style={inp} /></Field>
+                    </Grid>
                 </Section>
 
                 {/* Buyer Details */}
                 <Section title="Buyer Details">
-                    <G cols={3}>
-                        <F label="Customer Name *"><input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, borderColor: !form.customerName ? '#fca5a5' : '#d1d5db' }} placeholder="Customer / Company Name" /></F>
-                        <F label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="27XXXXX..." /></F>
-                        <F label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} /></F>
-                        <F label="Billing State"><input value={form.billingState} onChange={e => setF('billingState', e.target.value)} style={inp} placeholder="Maharashtra" /></F>
-                        <F label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={inp} placeholder="27" /></F>
-                        <F label="Place of Supply"><input value={form.placeOfSupply} onChange={e => setF('placeOfSupply', e.target.value)} style={inp} /></F>
+                    <Grid cols={3}>
+                        <Field label="Customer Name *"><input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, borderColor: !form.customerName ? '#fca5a5' : '#d1d5db' }} placeholder="Customer / Company Name" /></Field>
+                        <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="27XXXXX..." /></Field>
+                        <Field label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} /></Field>
+                        <Field label="Billing State"><input value={form.billingState} onChange={e => setF('billingState', e.target.value)} style={inp} placeholder="Maharashtra" /></Field>
+                        <Field label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={inp} placeholder="27" /></Field>
+                        <Field label="Place of Supply"><input value={form.placeOfSupply} onChange={e => setF('placeOfSupply', e.target.value)} style={inp} /></Field>
                         <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -8, borderBottom: '1px solid #f3f4f6', paddingBottom: 4 }}>
                             <h4 style={{ margin: 0, fontSize: 11, color: '#374151' }}>BILLING & SHIPPING ADDRESS</h4>
                             <button type="button" onClick={() => setForm(p => ({ ...p, shippingAddress: p.billingAddress, shippingCity: p.city || '', shippingState: p.billingState, shippingStateCode: p.billingStateCode, shippingGstin: p.customerGstin, shippingPhone: p.customerPhone }))} style={{ fontSize: 11, background: '#f0fdfa', border: '1px solid #ccfbf1', color: '#0d9488', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>Same as Billing</button>
                         </div>
-                        <F label="Billing Address" style={{ gridColumn: 'span 1' }}><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></F>
-                        <F label="Shipping Address" style={{ gridColumn: 'span 2' }}>
-                            <G cols={2} g={10}>
+                        <Field label="Billing Address" style={{ gridColumn: 'span 1' }}><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></Field>
+                        <Field label="Shipping Address" style={{ gridColumn: 'span 2' }}>
+                            <Grid cols={2}>
                                 <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', gridColumn: 'span 2' }} placeholder="Shipping Address..." />
                                 <input value={form.shippingCity} onChange={e => setF('shippingCity', e.target.value)} style={inp} placeholder="City" />
                                 <div style={{ display: 'flex', gap: 6 }}>
                                     <input value={form.shippingState} onChange={e => setF('shippingState', e.target.value)} style={{ ...inp, flex: 2 }} placeholder="State" />
                                     <input value={form.shippingStateCode} onChange={e => setF('shippingStateCode', e.target.value)} style={{ ...inp, flex: 1 }} placeholder="Code" />
                                 </div>
-                            </G>
-                        </F>
-                        <F label="Buyer Order No"><input value={form.buyerOrderNo} onChange={e => setF('buyerOrderNo', e.target.value)} style={inp} /></F>
-                        <F label="Buyer Order Date"><input type="date" value={form.buyerOrderDate || ''} onChange={e => setF('buyerOrderDate', e.target.value)} style={inp} /></F>
-                    </G>
+                            </Grid>
+                        </Field>
+                        <Field label="Buyer Order No"><input value={form.buyerOrderNo} onChange={e => setF('buyerOrderNo', e.target.value)} style={inp} /></Field>
+                        <Field label="Buyer Order Date"><input type="date" value={form.buyerOrderDate || ''} onChange={e => setF('buyerOrderDate', e.target.value)} style={inp} /></Field>
+                    </Grid>
                 </Section>
 
-                {/* Items */}
-                <Section title="Items">
+                {/* Production Details */}
+                <Section title="Production Details">
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead>
                                 <tr>
-                                    {['#', 'Product *', 'Add. Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Taxable', 'Line Total', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'Item Code', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
                                 {processedItems.map((item, i) => (
-                                    <tr key={i}>
-                                        <td style={{ ...td, color: '#9ca3af', width: 28 }}>{i + 1}</td>
+                                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                        <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
                                         <td style={{ ...td, minWidth: 140 }}>
                                             <SearchableSelect
-                                                options={allItems.map(it => ({ value: it._id, label: it.description || it.itemName, meta: it.itemCode }))}
+                                                options={allItems.map(it => ({ value: it._id, label: it.itemCode, meta: it.itemName }))}
                                                 value={item.itemId}
                                                 onChange={v => handleItemSelect(v, i)}
-                                                placeholder="Search code/name..."
-                                                noOptionsMessage={
-                                                    <div style={{ padding: '8px', color: '#64748b' }}>
-                                                        No saleable products found.
-                                                        <br />
-                                                        <span style={{ fontSize: '11px' }}>
-                                                            Check <strong>Finished Good</strong> or <strong>Manufacturable</strong> status in Item Master.
-                                                        </span>
-                                                    </div>
-                                                }
+                                                placeholder="Item Code..."
                                             />
                                         </td>
-                                        <td style={{ ...td, minWidth: 90 }}><input value={item.additionalNotes || item.modelNo} onChange={setItem ? (e => setItem(i, 'additionalNotes', e.target.value)) : undefined} style={inp} /></td>
-                                        <td style={{ ...td, width: 80 }}><input value={item.hsnCode} onChange={setItem ? (e => setItem(i, 'hsnCode', e.target.value)) : undefined} style={inp} /></td>
-                                        <td style={{ ...td, width: 60 }}><input value={item.uom} onChange={setItem ? (e => setItem(i, 'uom', e.target.value)) : undefined} style={inp} /></td>
-                                        <td style={{ ...td, width: 70 }}><input type="number" min="0" value={item.qty} onChange={setItem ? (e => setItem(i, 'qty', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.qty ? '#fca5a5' : '#d1d5db' }} /></td>
-                                        <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.rate} onChange={setItem ? (e => setItem(i, 'rate', e.target.value)) : undefined} style={{ ...inp, borderColor: !item.rate ? '#fca5a5' : '#d1d5db' }} /></td>
-                                        <td style={{ ...td, width: 60 }}><input type="number" min="0" max="100" value={item.discountPercent} onChange={setItem ? (e => setItem(i, 'discountPercent', e.target.value)) : undefined} style={inp} /></td>
-                                        <td style={{ ...td, color: '#6b7280', width: 80, textAlign: 'right' }}>₹{item.taxable.toFixed(2)}</td>
-                                        <td style={{ ...td, color: '#16a34a', fontWeight: 700, width: 90, textAlign: 'right' }}>₹{item.lineTotal.toFixed(2)}</td>
-                                        <td style={{ ...td, width: 28 }}>{form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}</td>
+                                        <td style={{ ...td, minWidth: 160 }}>
+                                            <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" />
+                                        </td>
+                                        <td style={{ ...td, minWidth: 120 }}>
+                                            <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} placeholder="Additional Notes" autoComplete="off" />
+                                        </td>
+                                        <td style={{ ...td, width: 90 }}>
+                                            <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} placeholder="HSN" autoComplete="off" />
+                                        </td>
+                                        <td style={{ ...td, width: 70 }}>
+                                            <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} placeholder="UOM" autoComplete="off" />
+                                        </td>
+                                        <td style={{ ...td, width: 80 }}>
+                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                        </td>
+                                        <td style={{ ...td, width: 90 }}>
+                                            <input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                        </td>
+                                        <td style={{ ...td, width: 60 }}>
+                                            <input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} style={{ ...tableInp, textAlign: 'center' }} autoComplete="off" className="no-spin" />
+                                        </td>
+                                        <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 100, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                            ₹{item.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td style={{ ...td, width: 36 }}>
+                                            {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
