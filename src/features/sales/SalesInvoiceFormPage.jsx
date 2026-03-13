@@ -209,6 +209,8 @@ export default function SalesInvoiceFormPage() {
                 buyerOrderDate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
                 paymentType: so.paymentType || 'Credit',
                 remarks: so.remarks || '',
+                freightAmount: so.freightAmount || '',
+                freightGstRate: so.freightGstRate || 0,
                 items: so.items?.length ? so.items.map(i => ({ 
                     itemId: i.itemId || null, 
                     itemCode: i.itemCode || i.code || i.sku || '', 

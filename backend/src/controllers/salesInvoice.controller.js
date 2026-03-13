@@ -4,6 +4,8 @@ import { ApiError } from '../utils/ApiError.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
+import { Item } from '../models/item.model.js';
+import { StockLedger } from '../models/stockLedger.model.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -146,6 +148,32 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         createdBy: req.user.id,
     });
 
+    // Stock Deduction and Ledger Entry
+    for (const pItem of processedItems) {
+        if (!pItem.itemId) continue;
+        const itemDoc = await Item.findById(pItem.itemId);
+        if (itemDoc) {
+            itemDoc.currentStock = (itemDoc.currentStock || 0) - pItem.qty;
+            await itemDoc.save();
+
+            await StockLedger.create({
+                date: new Date(),
+                itemId: itemDoc._id,
+                itemCode: itemDoc.itemCode,
+                itemName: itemDoc.itemName,
+                transactionType: 'SALES_INVOICE',
+                stockBucket: 'SALEABLE',
+                referenceNo: inv.invoiceNumber,
+                referenceId: inv._id,
+                outQty: pItem.qty,
+                rate: pItem.rate,
+                amount: pItem.qty * pItem.rate,
+                runningStock: itemDoc.currentStock,
+                createdBy: req.user.id
+            });
+        }
+    }
+
     // If linked to SO, update SO status
     if (body.soId) {
         await SalesOrder.findByIdAndUpdate(body.soId, { status: 'Invoiced', invoiceId: inv._id });
@@ -215,5 +243,34 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
     inv.paymentStatus = 'Cancelled';
     inv.updatedBy = req.user.id;
     await inv.save();
+
+    // Restore Stock and Log to Ledger
+    if (inv.items && inv.items.length > 0) {
+        for (const iItem of inv.items) {
+            if (!iItem.itemId) continue;
+            const itemDoc = await Item.findById(iItem.itemId);
+            if (itemDoc) {
+                itemDoc.currentStock = (itemDoc.currentStock || 0) + iItem.qty;
+                await itemDoc.save();
+
+                await StockLedger.create({
+                    date: new Date(),
+                    itemId: itemDoc._id,
+                    itemCode: itemDoc.itemCode,
+                    itemName: itemDoc.itemName,
+                    transactionType: 'SALES_INVOICE_CANCEL',
+                    stockBucket: 'SALEABLE',
+                    referenceNo: inv.invoiceNumber,
+                    referenceId: inv._id,
+                    inQty: iItem.qty,
+                    rate: iItem.rate,
+                    amount: iItem.qty * iItem.rate,
+                    runningStock: itemDoc.currentStock,
+                    createdBy: req.user.id
+                });
+            }
+        }
+    }
+
     res.json({ success: true, data: inv });
 });
