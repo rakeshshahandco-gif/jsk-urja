@@ -9,3 +9,19 @@ export const updateWhatsAppSettings = async (data) => {
     const response = await api.post('/whatsapp-settings', data);
     return response.data;
 };
+
+export const checkWhatsAppSession = async () => {
+    const response = await api.get('/whatsapp-settings/session-status');
+    return response.data;
+};
+
+export const connectWhatsApp = async () => {
+    const response = await api.post('/whatsapp-settings/connect', {}, { timeout: 120000 });
+    return response.data;
+};
+
+export const disconnectWhatsApp = async () => {
+    const response = await api.post('/whatsapp-settings/disconnect');
+    return response.data;
+};
+

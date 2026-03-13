@@ -171,7 +171,7 @@ const ItemFormPage = () => {
                             <div>
                                 <label style={f.label}>Item Code *</label>
                                 <div style={{ display: 'flex', gap: 4 }}>
-                                    <input style={{ ...f.input, flex: 1, fontFamily: 'monospace', fontWeight: 700 }} value={form.itemCode} onChange={e => set('itemCode', e.target.value.toUpperCase())} placeholder="JSK-EL-0001" />
+                                    <input style={{ ...f.input, flex: 1, fontFamily: 'monospace', fontWeight: 700 }} value={form.itemCode} onChange={e => set('itemCode', e.target.value.toUpperCase())} placeholder="I0001" />
                                     <button type="button" onClick={handleGenerateCode} disabled={generatingCode} title="Auto-generate code"
                                         style={{ height: 30, width: 30, border: '1px solid #d1d5db', borderRadius: 5, background: '#f9fafb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
                                         <RefreshCw size={12} style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }} />

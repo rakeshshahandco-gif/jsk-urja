@@ -1,12 +1,15 @@
 import express from 'express';
-import { protect, authorize } from '../../middlewares/auth.middleware.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 import * as whatsappSettingsController from '../../controllers/whatsappSettings.controller.js';
 
 const router = express.Router();
 
 router.use(protect);
 
-router.get('/', authorize('admin'), whatsappSettingsController.getSettings);
-router.post('/', authorize('admin'), whatsappSettingsController.updateSettings);
+router.get('/', whatsappSettingsController.getSettings);
+router.post('/', whatsappSettingsController.updateSettings);
+router.get('/session-status', whatsappSettingsController.getSessionStatus);
+router.post('/connect', whatsappSettingsController.connectWhatsApp);
+router.post('/disconnect', whatsappSettingsController.disconnectWhatsApp);
 
 export default router;

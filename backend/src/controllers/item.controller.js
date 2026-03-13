@@ -8,23 +8,38 @@ import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
 
 // ── Auto-generate item code ─────────────────────────────────────────────────
-const generateItemCode = async (itemType = 'ITEM') => {
-    const prefix = {
-        ELECTRICAL: 'JSK-EL',
-        PCB: 'JSK-PCB',
-        HOUSING: 'JSK-HSG',
-        IC: 'JSK-IC',
-        RESISTOR: 'JSK-RES',
-        CAPACITOR: 'JSK-CAP',
-        TRANSFORMER: 'JSK-TRF',
-        WIRE: 'JSK-WR',
-        PACKAGING: 'JSK-PKG',
-        FINISHED_PRODUCT: 'JSK-FP',
-        OTHER: 'JSK-ITM',
-    }[itemType] || 'JSK-ITM';
+const generateItemCode = async () => {
+    let newCode;
+    let isUnique = false;
+    let increment = 1;
 
-    const count = await Item.countDocuments();
-    return `${prefix}-${String(count + 1).padStart(4, '0')}`;
+    // We must ensure the code is absolutely unique, not just based on count
+    // which can be inaccurate if items were deleted.
+    const lastItem = await Item.findOne(
+        { itemCode: { $regex: /^I\d+$/ } },
+        { itemCode: 1 }
+    )
+        .collation({ locale: 'en', numericOrdering: true })
+        .sort({ itemCode: -1 })
+        .lean();
+
+    if (lastItem && lastItem.itemCode) {
+        const lastNum = parseInt(lastItem.itemCode.replace('I', ''), 10);
+        if (!isNaN(lastNum)) increment = lastNum + 1;
+    } else {
+        increment = 1;
+    }
+
+    while (!isUnique) {
+        newCode = `I${String(increment).padStart(4, '0')}`;
+        const exists = await Item.exists({ itemCode: newCode });
+        if (!exists) {
+            isUnique = true;
+        } else {
+            increment++;
+        }
+    }
+    return newCode;
 };
 
 // ── CREATE ──────────────────────────────────────────────────────────────────

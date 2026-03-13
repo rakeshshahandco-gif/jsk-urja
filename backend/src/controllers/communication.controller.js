@@ -1,6 +1,5 @@
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync.js';
-import PDFService from '../services/pdf.service.js';
 import EmailService from '../services/email.service.js';
 import CommunicationLog from '../models/communicationLog.model.js';
 import { CompanyProfile } from '../models/companyProfile.model.js';
@@ -11,15 +10,148 @@ import WhatsAppAutomationService from '../services/whatsapp.automation.js';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import PDFDocument from 'pdfkit';
 
+// ── Pure-JS PDF generator using pdfkit (no Chrome/Puppeteer needed) ──────────
+const generateOrderPDF = (order, company, type) => {
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 40, size: 'A4' });
+        const buffers = [];
+
+        doc.on('data', (chunk) => buffers.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(buffers)));
+        doc.on('error', reject);
+
+        const isSOType = type === 'Sales Order';
+        const docNumber = isSOType ? order.soNumber : order.poNumber;
+        const docDate = isSOType ? order.soDate : order.poDate;
+        const partyName = isSOType
+            ? order.customerName
+            : (order.supplierName || order.supplierId?.supplierName || 'Supplier');
+        const orderItems = order.items || [];
+
+        // ── Header ────────────────────────────────────────────────────────────
+        doc.fontSize(20).font('Helvetica-Bold').text(company.companyName || 'JSK URJA', 40, 40);
+        doc.fontSize(8).font('Helvetica').fillColor('#555').text(
+            [company.address, company.city, company.state, company.pincode].filter(Boolean).join(', '),
+            40, 65
+        );
+        if (company.phone) doc.text(`Phone: ${company.phone}  |  Email: ${company.email || ''}`, 40, 75);
+        if (company.gstNumber) doc.font('Helvetica-Bold').text(`GSTIN: ${company.gstNumber}`, 40, 85);
+
+        // ── Title ────────────────────────────────────────────────────────────
+        doc.fontSize(16).font('Helvetica-Bold').fillColor('#334155')
+            .text(type.toUpperCase(), 0, 40, { align: 'right', width: doc.page.width - 40 });
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#1e293b')
+            .text(docNumber, 0, 60, { align: 'right', width: doc.page.width - 40 });
+        doc.fontSize(9).font('Helvetica').fillColor('#555')
+            .text(`Date: ${docDate ? new Date(docDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')}`, 0, 75, { align: 'right', width: doc.page.width - 40 });
+
+        // ── Divider ──────────────────────────────────────────────────────────
+        doc.moveTo(40, 105).lineTo(doc.page.width - 40, 105).strokeColor('#000').lineWidth(1).stroke();
+        doc.moveDown(0.3);
+
+        // ── Party Info ───────────────────────────────────────────────────────
+        const partyY = 115;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151').text('BILL TO:', 40, partyY);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(partyName, 40, partyY + 12);
+        if (isSOType && order.billingAddress) {
+            doc.fontSize(9).font('Helvetica').fillColor('#555').text(order.billingAddress, 40, partyY + 26, { width: 250 });
+        } else if (!isSOType && order.supplierAddress) {
+            doc.fontSize(9).font('Helvetica').fillColor('#555').text(order.supplierAddress, 40, partyY + 26, { width: 250 });
+        }
+
+        // ── Table Header ─────────────────────────────────────────────────────
+        const tableStartY = 185;
+        const cols = { sr: 40, item: 65, hsn: 290, qty: 350, rate: 405, amount: 470 };
+        const tableW = doc.page.width - 80;
+
+        doc.rect(40, tableStartY - 5, tableW, 20).fill('#f1f5f9');
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151');
+        doc.text('#', cols.sr, tableStartY, { width: 20, align: 'center' });
+        doc.text('Item Description', cols.item, tableStartY, { width: 220 });
+        doc.text('HSN', cols.hsn, tableStartY, { width: 55, align: 'center' });
+        doc.text('Qty', cols.qty, tableStartY, { width: 50, align: 'center' });
+        doc.text('Rate', cols.rate, tableStartY, { width: 60, align: 'right' });
+        doc.text('Amount', cols.amount, tableStartY, { width: 70, align: 'right' });
+
+        // ── Table Rows ───────────────────────────────────────────────────────
+        let rowY = tableStartY + 20;
+        doc.font('Helvetica').fontSize(9).fillColor('#1e293b');
+
+        orderItems.forEach((item, i) => {
+            if (rowY > doc.page.height - 120) {
+                doc.addPage();
+                rowY = 50;
+            }
+            if (i % 2 === 0) doc.rect(40, rowY - 3, tableW, 18).fill('#fafafa').stroke('#f1f5f9');
+            doc.fillColor('#374151');
+            doc.text(String(i + 1), cols.sr, rowY, { width: 20, align: 'center' });
+            const itemName = item.itemName || item.description || '';
+            const itemCode = item.itemCode ? `(${item.itemCode})` : '';
+            doc.font('Helvetica-Bold').text(itemName, cols.item, rowY, { width: 220, lineBreak: false });
+            if (itemCode) {
+                doc.font('Helvetica').fontSize(7).fillColor('#9ca3af')
+                    .text(itemCode, cols.item, rowY + 9, { width: 220 });
+            }
+            const qty = item.qty || item.orderedQty || 0;
+            const rate = item.rate || 0;
+            const amount = qty * rate;
+            doc.font('Helvetica').fontSize(9).fillColor('#374151');
+            doc.text(item.hsnCode || '—', cols.hsn, rowY, { width: 55, align: 'center' });
+            doc.text(`${qty} ${item.uom || ''}`, cols.qty, rowY, { width: 50, align: 'center' });
+            doc.text(`₹${rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.rate, rowY, { width: 60, align: 'right' });
+            doc.font('Helvetica-Bold').text(`₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+            rowY += 20;
+        });
+
+        // ── Totals ───────────────────────────────────────────────────────────
+        rowY += 8;
+        doc.moveTo(380, rowY).lineTo(doc.page.width - 40, rowY).strokeColor('#e5e7eb').stroke();
+        rowY += 6;
+
+        const totalRows = [
+            ['Total Taxable', order.totalAmount || 0],
+            order.totalGst > 0 ? ['Total GST', order.totalGst || 0] : null,
+            order.freightAmount > 0 ? ['Freight', order.freightAmount || 0] : null,
+        ].filter(Boolean);
+
+        totalRows.forEach(([label, val]) => {
+            doc.font('Helvetica').fontSize(9).fillColor('#6b7280')
+                .text(label, 380, rowY, { width: 120 });
+            doc.text(`₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+            rowY += 15;
+        });
+
+        doc.moveTo(380, rowY).lineTo(doc.page.width - 40, rowY).strokeColor('#374151').stroke();
+        rowY += 5;
+        const grandTotal = order.roundedTotal || order.grandTotal || 0;
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#16a34a')
+            .text('GRAND TOTAL', 380, rowY, { width: 120 });
+        doc.text(`₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+
+        if (order.amountInWords) {
+            rowY += 18;
+            doc.font('Helvetica').fontSize(8).fillColor('#6b7280').text(`In Words: ${order.amountInWords}`, 40, rowY);
+        }
+
+        // ── Footer ───────────────────────────────────────────────────────────
+        const footerY = doc.page.height - 70;
+        doc.moveTo(40, footerY).lineTo(doc.page.width - 40, footerY).strokeColor('#e5e7eb').stroke();
+        doc.font('Helvetica').fontSize(8).fillColor('#9ca3af')
+            .text('This is a computer generated document.', 40, footerY + 8, { align: 'center' });
+
+        doc.end();
+    });
+};
+
+// ── Main send handler ─────────────────────────────────────────────────────────
 const sendOrder = catchAsync(async (req, res) => {
     const { type, id, channel, recipientName, email, phone, sendMode, groupName, subject, message } = req.body;
-    
+
     // Fetch Settings
     let settings = await WhatsAppSettings.findOne();
-    if (!settings) {
-        settings = await WhatsAppSettings.create({});
-    }
+    if (!settings) settings = await WhatsAppSettings.create({});
 
     const companyRes = await CompanyProfile.findOne();
     const company = companyRes || {};
@@ -50,92 +182,21 @@ const sendOrder = catchAsync(async (req, res) => {
     });
 
     try {
-        // 1. Generate PDF
-        // Note: In real implementation, this would use a more sophisticated HTML template
-        // that matches the print layout.
-        // 1. Generate professional HTML for PDF
-        const itemsHtml = (order.items || []).map((item, i) => `
-            <tr>
-                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${i + 1}</td>
-                <td style="border: 1px solid #000; padding: 6px;">${item.itemName || item.itemCode}</td>
-                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.orderedQty || item.qty}</td>
-                <td style="border: 1px solid #000; padding: 6px; text-align: center;">${item.uom}</td>
-                <td style="border: 1px solid #000; padding: 6px; text-align: right;">₹${(item.rate || 0).toFixed(2)}</td>
-                <td style="border: 1px solid #000; padding: 6px; text-align: right;">₹${((item.orderedQty || item.qty) * (item.rate || 0)).toFixed(2)}</td>
-            </tr>
-        `).join('');
+        // 1. Generate PDF using PDFKit (no browser needed)
+        const pdfBuffer = await generateOrderPDF(order, company, type);
 
-        const htmlContent = `
-            <html>
-                <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                        <div>
-                            <div style="font-size: 24px; font-weight: bold; color: #000;">${company.companyName || 'JSK URJA'}</div>
-                            <div style="font-size: 12px; margin-top: 5px; max-width: 400px;">
-                                ${company.address || ''}<br/>
-                                Phone: ${company.phone || ''} | Email: ${company.email || ''}<br/>
-                                ${company.gstNumber ? `<strong>GSTIN: ${company.gstNumber}</strong>` : ''}
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <h1 style="margin: 0; color: #64748b; font-size: 20px;">${type.toUpperCase()}</h1>
-                            <div style="font-size: 18px; font-weight: bold; margin-top: 5px;">${log.documentNumber}</div>
-                            <div style="font-size: 12px; margin-top: 5px;">Date: ${new Date(order.soDate || order.poDate || Date.now()).toLocaleDateString('en-IN')}</div>
-                        </div>
-                    </div>
-                    <hr style="border: 1px solid #000; margin-bottom: 20px;"/>
-                    <div style="display: flex; gap: 40px; margin-bottom: 20px;">
-                        <div style="flex: 1;">
-                            <div style="font-size: 12px; font-weight: bold; color: #666; text-transform: uppercase;">Recipient:</div>
-                            <div style="font-size: 16px; font-weight: bold; margin-top: 5px;">${recipientName}</div>
-                            <div style="font-size: 13px; margin-top: 5px;">
-                                ${email ? `Email: ${email}<br/>` : ''}
-                                ${phone ? `WhatsApp: ${phone}<br/>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px;">
-                        <thead>
-                            <tr style="background: #f1f5f9;">
-                                <th style="border: 1px solid #000; padding: 8px;">Sr.</th>
-                                <th style="border: 1px solid #000; padding: 8px; text-align: left;">Item Description</th>
-                                <th style="border: 1px solid #000; padding: 8px;">Qty</th>
-                                <th style="border: 1px solid #000; padding: 8px;">Unit</th>
-                                <th style="border: 1px solid #000; padding: 8px; text-align: right;">Rate</th>
-                                <th style="border: 1px solid #000; padding: 8px; text-align: right;">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${itemsHtml}
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="4" style="border: none; padding: 10px;"></td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: right; font-weight: bold;">Grand Total:</td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: right; font-weight: bold; font-size: 14px;">₹${(order.grandTotal || order.roundedTotal || 0).toFixed(2)}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                    <div style="margin-top: 40px; font-size: 11px; color: #999; text-align: center;">
-                        This is a computer generated document.
-                    </div>
-                </body>
-            </html>
-        `;
-
-        const pdfBuffer = await PDFService.generatePDF(htmlContent);
-        
-        const fileName = `${type === 'Sales Order' ? 'SO' : 'PO'}-${log.documentNumber}.pdf`;
+        const safeDocNumber = log.documentNumber.replace(/[\/\\?%*:|"<>]/g, '-');
+        const fileName = `${type === 'Sales Order' ? 'SO' : 'PO'}-${safeDocNumber}.pdf`;
         const tempFilePath = path.join(os.tmpdir(), fileName);
         fs.writeFileSync(tempFilePath, pdfBuffer);
 
         const results = [];
-        
+
         if (channel === 'Email' || channel === 'Both') {
             log.status = 'Sending';
             await log.save();
 
-            if (!company.emailSettings?.emailId) throw new Error('Email settings missing');
+            if (!company.emailSettings?.emailId) throw new Error('Email settings missing. Please configure Email in Settings.');
             await EmailService.sendEmail(company.emailSettings, {
                 to: email,
                 subject,
@@ -167,7 +228,7 @@ const sendOrder = catchAsync(async (req, res) => {
         log.status = 'Sent';
         await log.save();
 
-        // Cleanup
+        // Cleanup temp file
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
 
         res.status(httpStatus.OK).send({ message: 'Sent successfully', results });

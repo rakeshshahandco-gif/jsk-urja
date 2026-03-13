@@ -70,7 +70,7 @@ const ItemListPage = () => {
     const [sortBy, setSortBy] = useState('itemCode:asc');
     const [page, setPage] = useState(1);
     const [meta, setMeta] = useState({ total: 0, pages: 1 });
-    const limit = 25;
+    const [limit, setLimit] = useState(25);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -92,7 +92,7 @@ const ItemListPage = () => {
             console.error('Load Items Error:', err);
             addToast(err?.response?.data?.message || 'Failed to load items', 'error');
         } finally { setLoading(false); }
-    }, [page, search, catFilter, typeFilter, groupFilter, activeFilter, sortBy]);
+    }, [page, limit, search, catFilter, typeFilter, groupFilter, activeFilter, sortBy]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -118,7 +118,7 @@ const ItemListPage = () => {
         }).catch(err => console.error('Failed to fetch item groups', err));
     }, []);
 
-    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setGroupFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setPage(1); };
+    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setGroupFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setLimit(25); setPage(1); };
 
     const handleDelete = async (id, name) => {
         if (!window.confirm(`Deactivate "${name}"?`)) return;
@@ -316,6 +316,16 @@ const ItemListPage = () => {
                     <option value="itemGroupName:asc">Sort: Group (A-Z)</option>
                     <option value="currentStock:desc">Sort: Stock (High-Low)</option>
                 </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Show:</span>
+                    <select style={{ ...s.sel, width: 65, minWidth: 'auto', paddingRight: 20 }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={500}>500</option>
+                        <option value={1000}>1000</option>
+                    </select>
+                </div>
                 <button onClick={reset} style={{ height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <RotateCcw size={11} /> Reset
                 </button>
