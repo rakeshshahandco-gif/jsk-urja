@@ -202,7 +202,7 @@ export const exportItemTemplate = asyncHandler(async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Items Template');
 
-    // Define columns
+    // Define columns — order matches the user-specified template
     worksheet.columns = [
         { header: 'Item Code (Leave empty to auto-generate)', key: 'itemCode', width: 35 },
         { header: 'Item Name*', key: 'itemName', width: 40 },
@@ -210,6 +210,7 @@ export const exportItemTemplate = asyncHandler(async (req, res) => {
         { header: 'Category (RAW_MATERIAL, WIP, FINISHED_GOOD, TRADING, CONSUMABLE)', key: 'itemCategory', width: 60 },
         { header: 'Group', key: 'itemGroupName', width: 20 },
         { header: 'Type', key: 'itemType', width: 20 },
+        { header: 'Point (Leads)', key: 'points', width: 20 },
         { header: 'HSN Code', key: 'hsnCode', width: 20 },
         { header: 'UOM*', key: 'uom', width: 15 },
         { header: 'Opening Stock', key: 'openingStock', width: 20 },
@@ -217,10 +218,11 @@ export const exportItemTemplate = asyncHandler(async (req, res) => {
         { header: 'Min Stock Level', key: 'minStockLevel', width: 20 },
         { header: 'Selling Price', key: 'sellingPrice', width: 20 },
         { header: 'Purchase Price', key: 'purchasePrice', width: 20 },
+        { header: 'Valuation Rate', key: 'valuationRate', width: 20 },
         { header: 'Active (TRUE/FALSE)', key: 'isActive', width: 20 }
     ];
 
-    // Style header
+    // Style header row
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
         type: 'pattern',
@@ -231,7 +233,7 @@ export const exportItemTemplate = asyncHandler(async (req, res) => {
     const buffer = await workbook.xlsx.writeBuffer();
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=Item_Master_Template.xlsx`);
+    res.setHeader('Content-Disposition', 'attachment; filename=Item_Master_Template.xlsx');
     res.send(buffer);
 });
 
@@ -271,6 +273,8 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
         else if (val.includes('min stock')) colMap.minStock = colNumber;
         else if (val.includes('selling price')) colMap.sellingPrice = colNumber;
         else if (val.includes('purchase price')) colMap.purchasePrice = colNumber;
+        else if (val.includes('point')) colMap.points = colNumber;
+        else if (val.includes('valuation')) colMap.valuationRate = colNumber;
         else if (val.includes('active')) colMap.active = colNumber;
     });
 
@@ -332,6 +336,8 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
             const minStockLevel = colMap.minStock ? (Number(row.getCell(colMap.minStock).value) || 0) : 0;
             const sellingPrice = colMap.sellingPrice ? (Number(row.getCell(colMap.sellingPrice).value) || 0) : 0;
             const purchasePrice = colMap.purchasePrice ? (Number(row.getCell(colMap.purchasePrice).value) || 0) : 0;
+            const points = colMap.points ? row.getCell(colMap.points).value?.toString().trim() : '';
+            const valuationRate = colMap.valuationRate ? (Number(row.getCell(colMap.valuationRate).value) || 0) : 0;
 
             // Handle boolean or string for isActive
             let isActive = true;
@@ -373,6 +379,8 @@ export const importItemsExcel = asyncHandler(async (req, res) => {
                     minStockLevel,
                     sellingPrice,
                     purchasePrice,
+                    points,
+                    valuationRate,
                     isActive,
                     createdBy: req.user.id
                 }
@@ -477,7 +485,72 @@ export const generateCode = asyncHandler(async (req, res) => {
 });
 
 export const exportItemsExcel = asyncHandler(async (req, res) => {
-    res.status(501).send({ success: false, message: 'Not Implemented' });
+    // Fetch all active items (or all if ?all=true)
+    const filter = req.query.all === 'true' ? {} : { isActive: true };
+    const items = await Item.find(filter)
+        .collation({ locale: 'en', numericOrdering: true })
+        .sort({ itemCode: 1 })
+        .lean();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Items');
+
+    // Same column order as the import template
+    worksheet.columns = [
+        { header: 'Item Code (Leave empty to auto-generate)', key: 'itemCode', width: 35 },
+        { header: 'Item Name*', key: 'itemName', width: 40 },
+        { header: 'Description', key: 'description', width: 40 },
+        { header: 'Category (RAW_MATERIAL, WIP, FINISHED_GOOD, TRADING, CONSUMABLE)', key: 'itemCategory', width: 60 },
+        { header: 'Group', key: 'itemGroupName', width: 20 },
+        { header: 'Type', key: 'itemType', width: 20 },
+        { header: 'Point (Leads)', key: 'points', width: 20 },
+        { header: 'HSN Code', key: 'hsnCode', width: 20 },
+        { header: 'UOM*', key: 'uom', width: 15 },
+        { header: 'Opening Stock', key: 'openingStock', width: 20 },
+        { header: 'Faulty Stock', key: 'faultyStock', width: 20 },
+        { header: 'Min Stock Level', key: 'minStockLevel', width: 20 },
+        { header: 'Selling Price', key: 'sellingPrice', width: 20 },
+        { header: 'Purchase Price', key: 'purchasePrice', width: 20 },
+        { header: 'Valuation Rate', key: 'valuationRate', width: 20 },
+        { header: 'Active (TRUE/FALSE)', key: 'isActive', width: 20 }
+    ];
+
+    // Style header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    // Add data rows
+    for (const item of items) {
+        worksheet.addRow({
+            itemCode: item.itemCode || '',
+            itemName: item.itemName || '',
+            description: item.description || '',
+            itemCategory: item.itemCategory || '',
+            itemGroupName: item.itemGroupName || '',
+            itemType: item.itemType || '',
+            points: item.points || '',
+            hsnCode: item.hsnCode || '',
+            uom: item.uom || '',
+            openingStock: item.openingStock ?? 0,
+            faultyStock: item.faultyStock ?? 0,
+            minStockLevel: item.minStockLevel ?? 0,
+            sellingPrice: item.sellingPrice ?? 0,
+            purchasePrice: item.purchaseRate ?? 0,
+            valuationRate: item.valuationRate ?? 0,
+            isActive: item.isActive ? 'TRUE' : 'FALSE'
+        });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=Item_Master_Export.xlsx');
+    res.send(buffer);
 });
 
 export const exportItemsPDF = asyncHandler(async (req, res) => {
