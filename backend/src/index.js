@@ -1,16 +1,20 @@
-console.log('--- BACKEND STARTING (RESTART ATTEMPT) ---');
+console.log('--- BACKEND STARTING (v5 - stock management module) ---');
 import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';
 import logger from './utils/logger.js';
 import http from 'http';
 import { initSocket } from './config/socket.js';
+import { initializeUserManagement } from './utils/userInitializer.js';
 
 // Connect to Database
 let server;
 connectDB().then((connected) => {
     if (!connected) {
         logger.warn('⚠️  Starting server without database connection');
+    } else {
+        // Initialize User Management system on startup
+        initializeUserManagement().catch(err => logger.error('User Init Error:', err));
     }
 
     // Create HTTP server wrapping Express app

@@ -74,13 +74,15 @@ export const AuthProvider = ({ children }) => {
 
     const hasPermission = useCallback((permission) => {
         if (!user) return false;
-        return checkPermission(user.permissions || [], permission, user.role);
+        const userRoleIdent = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || 'viewer';
+        return checkPermission(user.permissions || [], permission, userRoleIdent);
     }, [user]);
 
     // Check if user has role
     const hasRole = useCallback((role) => {
         if (!user) return false;
-        return checkRole(user.role, role);
+        const userRoleIdent = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || 'viewer';
+        return checkRole(userRoleIdent, role);
     }, [user]);
 
     // Check if user is authenticated

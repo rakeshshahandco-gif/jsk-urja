@@ -7,6 +7,10 @@ import Followup from '../models/followup.model.js';
 import reminderService from './reminder.service.js';
 import mongoose from 'mongoose';
 import { Item } from '../models/item.model.js';
+import { Task } from '../models/task.model.js';
+import { TaskGroup } from '../models/taskGroup.model.js';
+import { TaskCategory } from '../models/taskCategory.model.js';
+import { User } from '../models/user.model.js';
 
 /**
  * Build dynamic MongoDB query for customer report
@@ -102,10 +106,30 @@ const queryCustomerReport = async (filters, options) => {
  * Fetch unique options for report filters
  * @returns {Promise<Object>}
  */
-const getReportOptions = async () => {
-    const { TaskCategory } = await import('../models/taskCategory.model.js');
-    const { TaskGroup } = await import('../models/taskGroup.model.js');
-    const { User } = await import('../models/user.model.js');
+const getReportOptions = async (user) => {
+    const { GroupMember } = await import('../models/groupMember.model.js');
+
+    // Build task group filter based on user role
+    let taskGroupFilter = {};
+    if (user && user.role !== 'admin') {
+        const userId = user._id || user.id;
+
+        // Get groupIds where this user is assigned to tasks or created tasks
+        const groupIdsFromTasks = await Task.distinct('groupId', {
+            $or: [
+                { assigneeIds: userId },
+                { createdBy: userId }
+            ]
+        });
+
+        taskGroupFilter = {
+            $or: [
+                { createdBy: userId },
+                { userIds: userId },
+                { _id: { $in: groupIdsFromTasks.filter(Boolean) } }
+            ]
+        };
+    }
 
     const [statuses, states, cities, products, types, taskCategories, taskGroups, users] = await Promise.all([
         Customer.distinct('status'),
@@ -114,7 +138,7 @@ const getReportOptions = async () => {
         Customer.distinct('interestedProducts'),
         Customer.distinct('customerType'),
         TaskCategory.find({}).select('name').sort('name'),
-        TaskGroup.find({}).select('name').sort('name'),
+        TaskGroup.find(taskGroupFilter).select('name').sort('name'),
         User.find({ isActive: true }).select('name').sort('name')
     ]);
 
@@ -1194,7 +1218,6 @@ const generateFollowupTaskReportExport = async (format, filters, customerId = nu
  * Reuses same logic as queryTaskReminderReport but adds createdById filter
  */
 const queryManageTasks = async (filters, options) => {
-    const { Task } = await import('../models/task.model.js');
     const { GroupMember } = await import('../models/groupMember.model.js');
 
     const tab = filters.tab || 'ALL';
@@ -1288,7 +1311,6 @@ const queryManageTasks = async (filters, options) => {
  * Task Reminder Report (Internal Tasks)
  */
 const queryTaskReminderReport = async (filters, options) => {
-    const { Task } = await import('../models/task.model.js');
     const { GroupMember } = await import('../models/groupMember.model.js');
 
     const tab = filters.tab || 'TODAY';

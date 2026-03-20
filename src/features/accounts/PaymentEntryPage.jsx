@@ -8,16 +8,19 @@ import {
     getOutstandingBills, createVoucher
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const PaymentEntryPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { openModal, closeModal } = useModal();
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [cashBankAccounts, setCashBankAccounts] = useState([]);
     const [ledgers, setLedgers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
         voucherTypeId: '',
@@ -44,14 +47,65 @@ const PaymentEntryPage = () => {
                 setCashBankAccounts(cbAccs);
                 setLedgers(allLedgers);
 
-                if (vTypes.length > 0) setFormData(prev => ({ ...prev, voucherTypeId: vTypes[0]._id }));
-                if (cbAccs.length > 0) setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
+                if (vTypes.length > 0) {
+                    const defaultType = vTypes.find(v => v.name.toUpperCase() === 'PAYMENT VOUCHER' || v.name.toUpperCase() === 'PAYMENT') || vTypes[0];
+                    setFormData(prev => ({ ...prev, voucherTypeId: defaultType._id }));
+                }
+                if (cbAccs.length > 0) {
+                    setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
+                }
+
+                // If launched from Invoice Detail, pre-fill details
+                const defaultSupplierId = location.state?.supplierId;
+                const defaultSupplierName = location.state?.supplierName || 'Supplier';
+                const defaultAmount = location.state?.amount || 0;
+                const defaultInvoiceId = location.state?.invoiceId;
+                const defaultInvoiceNo = location.state?.invoiceNumber;
+
+                if (defaultSupplierId) {
+                    const suppLedger = allLedgers.find(l => 
+                        (l.referenceId?.toString() === defaultSupplierId?.toString() && l.referenceModel === 'Supplier') || 
+                        l._id?.toString() === defaultSupplierId?.toString()
+                    );
+                    if (suppLedger) {
+                        setFormData(prev => {
+                            const newItems = [...prev.items];
+                            newItems[0].ledgerId = suppLedger._id;
+                            newItems[0].ledgerName = suppLedger.name;
+                            newItems[0].ledgerType = suppLedger.type;
+                            newItems[0].amount = defaultAmount;
+                            newItems[0].narration = `Against ${defaultInvoiceNo}`;
+
+                            if (defaultInvoiceId && defaultAmount) {
+                                newItems[0].adjustments = [{
+                                    refId: defaultInvoiceId,
+                                    refNumber: defaultInvoiceNo,
+                                    amount: defaultAmount,
+                                    adjustmentType: 'Against Bill',
+                                    refModel: 'PurchaseInvoice'
+                                }];
+                            }
+
+                            return { 
+                                ...prev, 
+                                items: newItems, 
+                                totalAmount: defaultAmount,
+                                narration: `Payment against Purchase Invoice ${defaultInvoiceNo}`
+                            };
+                        });
+                    } else {
+                        toast.error(`Supplier ledger for "${defaultSupplierName}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
+                    }
+                }
+
             } catch (error) {
                 toast.error('Failed to load initial data');
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
-    }, []);
+    }, [location.state]);
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;
@@ -215,12 +269,23 @@ const PaymentEntryPage = () => {
         const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
         if (invalidItem) return toast.error('All payment lines must have a ledger and amount');
 
+        // Validation against original invoice amount if linked
+        if (location.state?.invoiceId && location.state?.amount) {
+            const linkedItem = formData.items[0];
+            if (linkedItem.amount > location.state.amount) {
+                return toast.error(`Amount exceeding outstanding balance (${location.state.amount}). Advance payment logic not enabled.`);
+            }
+        }
+
+        setIsSubmitting(true);
         try {
-            await createVoucher(formData);
+            await createVoucher({ ...formData, nature: 'Payment' });
             toast.success('Payment voucher saved successfully');
             navigate(PATHS.ACCOUNTS.VOUCHERS);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save payment');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -233,8 +298,8 @@ const PaymentEntryPage = () => {
                 </div>
                 <div className="flex gap-3">
                     <Button variant="ghost" className="font-semibold text-gray-500" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}>Cancel</Button>
-                    <Button onClick={handleSave} className="flex items-center gap-2 px-8 font-bold">
-                        <Save className="w-4 h-4" /> Save Payment
+                    <Button onClick={handleSave} disabled={isSubmitting} className="flex items-center gap-2 px-8 font-bold">
+                        <Save className="w-4 h-4" /> {isSubmitting ? 'SAVING...' : 'SAVE PAYMENT'}
                     </Button>
                 </div>
             </div>
@@ -244,21 +309,33 @@ const PaymentEntryPage = () => {
                     <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Voucher Info</h3>
                     <div className="space-y-1">
                         <label className="text-[11px] font-bold text-gray-600 uppercase">Voucher Type</label>
-                        <Select
-                            name="voucherTypeId"
-                            value={formData.voucherTypeId}
-                            onChange={handleHeaderChange}
-                            options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
-                        />
+                        {location.state?.invoiceId ? (
+                            <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
+                                {voucherTypes.find(v => v._id === formData.voucherTypeId)?.name || 'Payment'}
+                            </div>
+                        ) : (
+                            <Select
+                                name="voucherTypeId"
+                                value={formData.voucherTypeId}
+                                onChange={handleHeaderChange}
+                                options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
+                            />
+                        )}
                     </div>
                     <div className="space-y-1">
                         <label className="text-[11px] font-bold text-gray-600 uppercase">Date</label>
-                        <Input
-                            type="date"
-                            name="date"
-                            value={formData.date}
-                            onChange={handleHeaderChange}
-                        />
+                        {location.state?.invoiceId ? (
+                            <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
+                                {formData.date}
+                            </div>
+                        ) : (
+                            <Input
+                                type="date"
+                                name="date"
+                                value={formData.date}
+                                onChange={handleHeaderChange}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -323,19 +400,26 @@ const PaymentEntryPage = () => {
                         {formData.items.map((item, index) => (
                             <tr key={item.id} className="group hover:bg-gray-50 transition-colors not-italic">
                                 <td className="px-6 py-4">
-                                    <SearchableSelect
-                                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
-                                        value={item.ledgerId}
-                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                        placeholder="Select supplier or expense..."
-                                    />
+                                    {(location.state?.source === 'purchase_invoice' || location.state?.supplierId) && index === 0 ? (
+                                        <div className="font-bold text-gray-800 bg-gray-200/50 px-3 py-3 rounded-xl border border-primary/30 cursor-not-allowed text-sm flex items-center justify-between">
+                                            <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
+                                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded uppercase tracking-tighter ml-2 italic">Locked Vendor</span>
+                                        </div>
+                                    ) : (
+                                        <SearchableSelect
+                                            options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                                            value={item.ledgerId}
+                                            onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                            placeholder="Select supplier or expense..."
+                                        />
+                                    )}
                                 </td>
                                 <td className="px-6 py-4">
                                     <Input
                                         type="number"
                                         placeholder="0.00"
-                                        value={item.amount}
-                                        onChange={(e) => handleItemChange(item.id, 'amount', e.target.value)}
+                                        value={item.amount || ''}
+                                        onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
                                         className="text-lg font-black font-mono"
                                     />
                                 </td>
@@ -359,14 +443,16 @@ const PaymentEntryPage = () => {
                                     />
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeItem(item.id)}
-                                        className="text-gray-200 hover:text-red-500 transition-colors"
-                                    >
-                                        <Trash2 className="w-5 h-5" />
-                                    </Button>
+                                    {!(location.state?.supplierId && index === 0) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeItem(item.id)}
+                                            className="text-gray-200 hover:text-red-500 transition-colors"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </Button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

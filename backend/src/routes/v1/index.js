@@ -23,6 +23,7 @@ import purchaseInvoiceRoute from './purchaseInvoice.routes.js';
 import paymentEntryRoute from './paymentEntry.routes.js';
 import salesOrderRoute from './salesOrder.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
+import accountReportRoutes from './accountReport.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
@@ -52,15 +53,14 @@ import assetTransferRoute from './assetTransfer.routes.js';
 import assetMaintenanceRoute from './assetMaintenance.routes.js';
 import whatsappSettingsRoute from './whatsappSettings.routes.js';
 import assetDisposalRoute from './assetDisposal.routes.js';
+import stockRoute from './stock.routes.js';
+import productionOutputRoute from './productionOutput.routes.js';
+import componentReplacementRoute from './componentReplacement.routes.js';
+import productionRejectionRoute from './productionRejection.routes.js';
+import accountMasterRoute from './accountMaster.routes.js';
 
 
 const router = express.Router();
-
-// Debug middleware to trace requests
-router.use((req, res, next) => {
-    console.log(`[ROUTER DEBUG] Incoming: ${req.method} ${req.originalUrl} | Base: ${req.baseUrl} | Path: ${req.path}`);
-    next();
-});
 
 router.get('/health', (req, res) => {
     res.send({
@@ -284,7 +284,31 @@ const defaultRoutes = [
         path: '/asset-disposals',
         route: assetDisposalRoute,
     },
-
+    // ── Stock & Production ────────────────────────────────────────────────────
+    {
+        path: '/stock',
+        route: stockRoute,
+    },
+    {
+        path: '/production-outputs',
+        route: productionOutputRoute,
+    },
+    {
+        path: '/component-replacements',
+        route: componentReplacementRoute,
+    },
+    {
+        path: '/production-rejections',
+        route: productionRejectionRoute,
+    },
+    {
+        path: '/accounts/masters',
+        route: accountMasterRoute,
+    },
+    {
+        path: '/accounts/reports',
+        route: accountReportRoutes,
+    },
 ];
 
 defaultRoutes.forEach((route) => {

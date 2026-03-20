@@ -19,7 +19,7 @@ const getCustomerReport = catchAsync(async (req, res) => {
 });
 
 const getReportOptions = catchAsync(async (req, res) => {
-    const options = await reportService.getReportOptions();
+    const options = await reportService.getReportOptions(req.user);
     res.send(new ApiResponse(200, options, 'Report filter options fetched successfully'));
 });
 

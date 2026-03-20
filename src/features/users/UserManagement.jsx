@@ -64,7 +64,7 @@ export const UserManagement = () => {
     const handleAddUser = () => {
         openModal(AddUserForm, {
             title: 'Add New User',
-            size: 'lg',
+            size: 'full',
             onSave: async (newUser) => {
                 try {
                     const response = await userService.createUser(newUser);
@@ -85,7 +85,7 @@ export const UserManagement = () => {
     const handleEditUser = (user) => {
         openModal(AddUserForm, {
             title: 'Edit User',
-            size: 'lg',
+            size: 'full',
             user,
             onSave: async (updatedData) => {
                 try {

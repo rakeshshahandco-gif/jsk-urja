@@ -13,6 +13,9 @@ router
     .post(validate(taskGroupValidation.createGroup), taskGroupController.createGroup)
     .get(validate(taskGroupValidation.getGroups), taskGroupController.getGroups);
 
+// ── My accessible groups (filtered by user) ──────────────────────────────
+router.get('/my', taskGroupController.getMyGroups);
+
 router
     .route('/:groupId')
     .get(validate(taskGroupValidation.getGroup), taskGroupController.getGroup)

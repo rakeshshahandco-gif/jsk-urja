@@ -9,7 +9,7 @@ import styles from './Sidebar.module.scss';
 export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
     const location = useLocation();
-    const userRole = user?.role || ROLES.VIEWER;
+    const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || ROLES.VIEWER;
 
     const [expandedMenuId, setExpandedMenuId] = useState(null);
     const [logoUrl, setLogoUrl] = useState(null);
@@ -45,6 +45,11 @@ export const Sidebar = () => {
     // Filter items based on user role and permissions
     const filterItems = (items) => {
         return items.filter(item => {
+            // Superadmin bypass
+            if (userRole === 'superadmin' || userRole === ROLES.SUPERADMIN || userRole === 'superadmin' || user?.roleName === 'superadmin') {
+                return true;
+            }
+
             // Check Role
             if (item.roles && !item.roles.includes(userRole)) {
                 return false;

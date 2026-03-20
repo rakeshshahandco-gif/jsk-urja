@@ -5,7 +5,6 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
-import RecordPaymentModal from './RecordPaymentModal';
 
 const STATUS_COLORS = {
     Confirmed: { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
@@ -27,7 +26,6 @@ export default function PurchaseInvoiceDetailPage() {
     const [payments, setPayments] = useState([]);
     const [company, setCompany] = useState({});
     const [loading, setLoading] = useState(true);
-    const [showPayModal, setShowPayModal] = useState(false);
     const [cancelling, setCancelling] = useState(false);
     const [activeTab, setActiveTab] = useState('invoice'); // invoice | payments
 
@@ -320,9 +318,18 @@ export default function PurchaseInvoiceDetailPage() {
                             )}
 
                             {notCancelled && notFullyPaid && (
-                                <button onClick={() => setShowPayModal(true)}
+                                <button onClick={() => navigate('/accounts/payment-entry', { 
+                                    state: { 
+                                        source: 'purchase_invoice',
+                                        invoiceId: inv._id, 
+                                        invoiceNumber: inv.invoiceNumber, 
+                                        supplierId: inv.supplierId?._id || inv.supplierId, 
+                                        supplierName: inv.supplierName,
+                                        amount: inv.grandTotal - inv.paidAmount 
+                                    } 
+                                })}
                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                                    💳 Record Payment
+                                    💳 Make Payment
                                 </button>
                             )}
                             <button onClick={() => window.print()} style={{ padding: '9px 18px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
@@ -491,13 +498,7 @@ export default function PurchaseInvoiceDetailPage() {
                 )}
             </div>
 
-            {showPayModal && (
-                <RecordPaymentModal
-                    invoice={{ ...inv, paidAmount: livePaidAmount }}
-                    onClose={() => setShowPayModal(false)}
-                    onSuccess={() => { setShowPayModal(false); load(); setActiveTab('payments'); }}
-                />
-            )}
+
 
             {/* Print Styles */}
             <style>{`

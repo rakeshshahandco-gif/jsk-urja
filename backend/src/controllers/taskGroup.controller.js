@@ -46,17 +46,35 @@ const deleteGroup = asyncHandler(async (req, res) => {
     res.send(new ApiResponse(httpStatus.OK, null, 'Group deleted successfully'));
 });
 
-// List Groups
+// List Groups — admins see all; users see only groups they created, are members of, or have tasks in
 const getGroups = asyncHandler(async (req, res) => {
-    const filter = pick(req.query, ['visibility']);
+    let groups;
 
-    // No RBAC visibility logic - all users see all task groups
+    if (req.user.role === 'admin') {
+        // Admin only: show all groups
+        groups = await TaskGroup.find({}).populate('userIds', 'name email').sort({ name: 1 });
+    } else {
+        const userId = req.user._id;
 
-    let groups = await TaskGroup.find(filter).populate('userIds', 'name email').sort({ createdAt: -1 });
+        // Find groupIds where this user has tasks assigned to them
+        const tasksWithUser = await Task.distinct('groupId', {
+            $or: [
+                { assigneeIds: userId },
+                { createdBy: userId }
+            ]
+        });
 
-    // Ensure "General" group exists for this user if they are listing groups
-    // Removed per user request
+        // Build OR filter: created by user OR user is in userIds OR has task in group
+        const accessibleGroupIds = tasksWithUser.filter(Boolean);
 
+        groups = await TaskGroup.find({
+            $or: [
+                { createdBy: userId },
+                { userIds: userId },
+                { _id: { $in: accessibleGroupIds } }
+            ]
+        }).populate('userIds', 'name email').sort({ name: 1 });
+    }
 
     res.send(new ApiResponse(httpStatus.OK, groups, 'Groups fetched successfully'));
 });
@@ -100,9 +118,39 @@ const updateGroup = asyncHandler(async (req, res) => {
     res.send(new ApiResponse(httpStatus.OK, group, 'Group updated successfully'));
 });
 
+
+// ── Get groups accessible to current user (filtered) ────────────────────
+const getMyGroups = asyncHandler(async (req, res) => {
+    let groups;
+    const userId = req.user._id;
+
+    if (req.user.role === 'admin') {
+        groups = await TaskGroup.find({}).select('_id name').sort({ name: 1 });
+    } else {
+        // Condition 3: groups where user has tasks (assigned or created)
+        const groupIdsFromTasks = await Task.distinct('groupId', {
+            $or: [
+                { assigneeIds: userId },
+                { createdBy: userId }
+            ]
+        });
+
+        groups = await TaskGroup.find({
+            $or: [
+                { createdBy: userId },
+                { userIds: userId },
+                { _id: { $in: groupIdsFromTasks.filter(Boolean) } }
+            ]
+        }).select('_id name').sort({ name: 1 });
+    }
+
+    res.send(new ApiResponse(httpStatus.OK, groups, 'My groups fetched'));
+});
+
 export default {
     createGroup,
     getGroups,
+    getMyGroups,
     getGroup,
     updateGroup,
     deleteGroup,

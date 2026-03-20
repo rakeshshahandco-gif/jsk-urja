@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
-import { Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, RotateCcw, ChevronLeft, ChevronRight, LayoutList, Zap, Plus } from 'lucide-react';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { ManageTasksTable } from './ManageTasksTable';
+import PriorityTaskView from './PriorityTaskView';
 import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
 import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 
-// Shared compact styles — light/white theme
+// ─── Shared compact styles ─────────────────────────────────────────────────
 const s = {
     sel: {
         height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #d1d5db',
@@ -46,11 +47,18 @@ const TABS = [
     { id: 'closed', api: 'CLOSED', label: 'Closed' },
 ];
 
+const VIEW_MODES = [
+    { id: 'existing', label: 'Existing View', Icon: LayoutList },
+    { id: 'priority', label: 'Priority View', Icon: Zap },
+];
+
+// ─── Component ─────────────────────────────────────────────────────────────
 const ManageTasksPage = () => {
     const { addToast } = useToast();
     const navigate = useNavigate();
     const { user } = useAuth();
 
+    const [viewMode, setViewMode] = useState('existing');
     const [activeTab, setActiveTab] = useState(null);
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);
@@ -67,11 +75,19 @@ const ManageTasksPage = () => {
     const [selectedTask, setSelectedTask] = useState(null);
 
     useEffect(() => {
+        // Load users from report options
         getReportOptions()
-            .then(d => setOptions({ taskGroups: d.taskGroups || [], users: d.users || [] }))
+            .then(d => setOptions(prev => ({ ...prev, users: d.users || [] })))
             .catch(() => { });
 
-        // Initial tab check: if overdue exists, select it, else today
+        // Load groups from dedicated filtered endpoint (respects user membership)
+        api.get('/task-groups/my')
+            .then(res => {
+                const groups = res.data?.data || res.data || [];
+                setOptions(prev => ({ ...prev, taskGroups: Array.isArray(groups) ? groups : [] }));
+            })
+            .catch(() => { });
+
         api.get('/reports/manage-tasks', { params: { tab: 'OVERDUE', limit: 1 } })
             .then(res => {
                 if (res.data.meta?.total > 0) setActiveTab('overdue');
@@ -154,28 +170,71 @@ const ManageTasksPage = () => {
     return (
         <div style={{ padding: '16px 20px', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-            {/* ── LINE 1: Title + Tabs + Total badge ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* ── LINE 1: Title + View Toggle + Tabs + New Task ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>Manage Tasks</span>
+
+                {/* View Mode Toggle */}
                 <div style={{ display: 'flex', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: 3, gap: 2 }}>
-                    {TABS.map(t => (
-                        <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
-                            {t.label}
-                            {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{pagination.total}</span>}
-                        </button>
-                    ))}
+                    {VIEW_MODES.map(vm => {
+                        const active = viewMode === vm.id;
+                        return (
+                            <button
+                                key={vm.id}
+                                onClick={() => setViewMode(vm.id)}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 5,
+                                    padding: '4px 12px', fontSize: 11, fontWeight: 700,
+                                    borderRadius: 5, border: 'none', cursor: 'pointer',
+                                    background: active ? (vm.id === 'priority' ? '#0d9488' : '#fff') : 'transparent',
+                                    color: active ? (vm.id === 'priority' ? '#fff' : '#0d9488') : '#6b7280',
+                                    boxShadow: active ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                                    transition: 'all 0.18s',
+                                }}
+                            >
+                                <vm.Icon size={12} />
+                                {vm.label}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Existing View sub-tabs — only visible in existing mode */}
+                {viewMode === 'existing' && (
+                    <div style={{ display: 'flex', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: 3, gap: 2 }}>
+                        {TABS.map(t => (
+                            <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
+                                {t.label}
+                                {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{pagination.total}</span>}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* New Task Button */}
+                <div style={{ marginLeft: 'auto' }}>
+                    <button
+                        onClick={() => navigate('/tasks/create')}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            height: 30, padding: '0 14px', fontSize: 11, fontWeight: 700,
+                            border: 'none', borderRadius: 6, cursor: 'pointer',
+                            background: '#0d9488', color: '#fff',
+                            boxShadow: '0 2px 6px rgba(13,148,136,0.3)',
+                        }}
+                    >
+                        <Plus size={13} /> New Task
+                    </button>
                 </div>
             </div>
 
-            {/* ── LINE 2: All Filters in one row ── */}
+            {/* ── LINE 2: Filters (shared for both views) ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                {/* Group */}
                 <select style={s.sel} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
                     <option value="">All Groups</option>
                     {options.taskGroups.map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
                 </select>
 
-                {/* Assigned To - Admin Only */}
                 {user?.role === 'admin' && (
                     <select style={s.sel} value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}>
                         <option value="">All Assignees</option>
@@ -183,7 +242,6 @@ const ManageTasksPage = () => {
                     </select>
                 )}
 
-                {/* Created By - Admin Only */}
                 {user?.role === 'admin' && (
                     <select style={s.sel} value={createdByFilter} onChange={e => setCreatedByFilter(e.target.value)}>
                         <option value="">All Creators</option>
@@ -191,7 +249,6 @@ const ManageTasksPage = () => {
                     </select>
                 )}
 
-                {/* Priority */}
                 <select style={s.sel} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
                     <option value="">All Priority</option>
                     <option value="LOW">Low</option>
@@ -201,12 +258,14 @@ const ManageTasksPage = () => {
                     <option value="CRITICAL">Critical</option>
                 </select>
 
-                {/* Date From */}
-                <input type="date" style={s.inp} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" />
-                <span style={{ fontSize: 10, color: '#9ca3af' }}>–</span>
-                <input type="date" style={s.inp} value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" />
+                {viewMode === 'existing' && (
+                    <>
+                        <input type="date" style={s.inp} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" />
+                        <span style={{ fontSize: 10, color: '#9ca3af' }}>–</span>
+                        <input type="date" style={s.inp} value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" />
+                    </>
+                )}
 
-                {/* Search */}
                 <div style={{ position: 'relative', flex: 1, minWidth: 110 }}>
                     <Search size={11} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
                     <input
@@ -217,65 +276,75 @@ const ManageTasksPage = () => {
                     />
                 </div>
 
-                {/* Reset */}
                 <button style={s.resetBtn} onClick={resetFilters} title="Reset all filters">
                     <RotateCcw size={11} /> Reset
                 </button>
 
-                {/* Rows per page */}
-                <select style={{ ...s.sel, marginLeft: 'auto' }} value={pagination.limit} onChange={e => setPagination(p => ({ ...p, limit: Number(e.target.value), page: 1 }))}>
-                    <option value={15}>15 / page</option>
-                    <option value={25}>25 / page</option>
-                    <option value={50}>50 / page</option>
-                </select>
+                {viewMode === 'existing' && (
+                    <select style={{ ...s.sel, marginLeft: 'auto' }} value={pagination.limit} onChange={e => setPagination(p => ({ ...p, limit: Number(e.target.value), page: 1 }))}>
+                        <option value={15}>15 / page</option>
+                        <option value={25}>25 / page</option>
+                        <option value={50}>50 / page</option>
+                    </select>
+                )}
             </div>
 
-            {/* ── TABLE ── */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, flex: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                <ManageTasksTable
-                    tasks={tasks}
-                    loading={loading}
-                    onExtend={task => { setSelectedTask(task); setIsExtendModalOpen(true); }}
-                    onCloseTask={handleCloseTask}
-                    onEdit={task => navigate(`/tasks/edit/${task._id}`)}
-                    onDelete={handleDeleteTask}
-                    onViewDetails={task => navigate(`/tasks/${task._id}`)}
+            {/* ── CONTENT AREA ── */}
+            {viewMode === 'priority' ? (
+                <PriorityTaskView
+                    searchTerm={searchTerm}
+                    priorityFilter={priorityFilter}
+                    groupFilter={groupFilter}
+                    assigneeFilter={assigneeFilter}
                 />
-            </div>
+            ) : (
+                <>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, flex: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                        <ManageTasksTable
+                            tasks={tasks}
+                            loading={loading}
+                            onExtend={task => { setSelectedTask(task); setIsExtendModalOpen(true); }}
+                            onCloseTask={handleCloseTask}
+                            onEdit={task => navigate(`/tasks/edit/${task._id}`)}
+                            onDelete={handleDeleteTask}
+                            onViewDetails={task => navigate(`/tasks/${task._id}`)}
+                        />
+                    </div>
 
-            {/* ── PAGINATION ── */}
-            {!loading && pagination.total > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#6b7280' }}>
-                        {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-                    </span>
-                    <button
-                        disabled={pagination.page <= 1}
-                        onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
-                    >
-                        <ChevronLeft size={13} />
-                    </button>
-                    {[...Array(Math.min(totalPages, 7))].map((_, i) => {
-                        const pg = i + 1;
-                        return (
+                    {!loading && pagination.total > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: '#6b7280' }}>
+                                {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+                            </span>
                             <button
-                                key={pg}
-                                onClick={() => setPagination(p => ({ ...p, page: pg }))}
-                                style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#0d9488' : '#fff', color: pagination.page === pg ? '#fff' : '#374151' }}
+                                disabled={pagination.page <= 1}
+                                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
+                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
                             >
-                                {pg}
+                                <ChevronLeft size={13} />
                             </button>
-                        );
-                    })}
-                    <button
-                        disabled={pagination.page >= totalPages}
-                        onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                        style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
-                    >
-                        <ChevronRight size={13} />
-                    </button>
-                </div>
+                            {[...Array(Math.min(totalPages, 7))].map((_, i) => {
+                                const pg = i + 1;
+                                return (
+                                    <button
+                                        key={pg}
+                                        onClick={() => setPagination(p => ({ ...p, page: pg }))}
+                                        style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#0d9488' : '#fff', color: pagination.page === pg ? '#fff' : '#374151' }}
+                                    >
+                                        {pg}
+                                    </button>
+                                );
+                            })}
+                            <button
+                                disabled={pagination.page >= totalPages}
+                                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
+                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
+                            >
+                                <ChevronRight size={13} />
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
 
             <ExtendTaskModal

@@ -64,6 +64,6 @@ Modal.propTypes = {
     onClose: PropTypes.func,
     title: PropTypes.string,
     footer: PropTypes.node,
-    size: PropTypes.oneOf(['sm', 'md', 'lg', 'xl']),
+    size: PropTypes.oneOf(['sm', 'md', 'lg', 'xl', 'full']),
     closeOnOverlayClick: PropTypes.bool
 };

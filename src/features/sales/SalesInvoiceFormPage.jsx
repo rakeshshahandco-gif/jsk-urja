@@ -283,11 +283,15 @@ export default function SalesInvoiceFormPage() {
     const totalItemGst = gstApplicable ? processedItems.reduce((s, i) => s + (isIGST ? i.igstAmt : i.cgstAmt * 2), 0) : 0;
 
     const freight = Number(form.freightAmount) || 0;
+    
+    // Add freight to taxable amount
+    const totalTaxable = totalItemTaxable + freight;
+
     const freightGstRate = gstApplicable ? (Number(form.freightGstRate) || (processedItems[0]?.gstRate || 18)) : 0;
     const freightGst = gstApplicable ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
 
-    const totalTaxable = totalItemTaxable + freight;
     const totalGst = totalItemGst + freightGst;
+    
     const grandTotal = totalTaxable + totalGst;
     const roundedTotal = Math.round(grandTotal);
 
@@ -481,7 +485,7 @@ export default function SalesInvoiceFormPage() {
                                 <span style={{ fontWeight: 600 }}>₹{totalItemTaxable.toFixed(2)}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#6b7280', padding: '4px 0' }}>
-                                <span>Freight / Shipping</span>
+                                <span>+ Freight / Shipping</span>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <input type="number" min="0" value={form.freightAmount} onChange={e => setF('freightAmount', e.target.value)} style={{ ...inp, width: 80, padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
                                     {gstApplicable && (
@@ -494,12 +498,12 @@ export default function SalesInvoiceFormPage() {
                                 </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#374151', fontWeight: 700, borderTop: '1px dashed #e5e7eb', paddingTop: 8, marginTop: 4 }}>
-                                <span>Total Taxable</span>
+                                <span>Total Taxable Amount</span>
                                 <span>₹{totalTaxable.toFixed(2)}</span>
                             </div>
                             {gstApplicable && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#2563eb', paddingTop: 4 }}>
-                                    <span>GST ({form.gstType})</span>
+                                    <span>+ GST ({form.gstType})</span>
                                     <span>₹{totalGst.toFixed(2)}</span>
                                 </div>
                             )}

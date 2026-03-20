@@ -81,7 +81,8 @@ export const Header = () => {
 
     if (!user) return null;
 
-    const roleConfig = ROLE_CONFIG[user.role] || {};
+    const userRoleIdent = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name);
+    const roleConfig = ROLE_CONFIG[userRoleIdent] || {};
 
     return (
         <header className={`${styles.header} no-print`}>

@@ -22,10 +22,7 @@ export default function SalesInvoiceDetailPage() {
     const [company, setCompany] = useState({});
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('invoice');
-    const [showPayModal, setShowPayModal] = useState(false);
     const [cancelling, setCancelling] = useState(false);
-    const [payForm, setPayForm] = useState({ amountPaid: '', paymentDate: new Date().toISOString().slice(0, 10), paymentMode: 'Cash', reference: '', remarks: '' });
-    const [payingSaving, setPayingSaving] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -58,18 +55,7 @@ export default function SalesInvoiceDetailPage() {
         finally { setCancelling(false); }
     };
 
-    const handleRecordPayment = async () => {
-        if (!payForm.amountPaid || Number(payForm.amountPaid) <= 0) return toast.error('Enter a valid amount');
-        setPayingSaving(true);
-        try {
-            await recordSalesPayment(id, { ...payForm, amountPaid: Number(payForm.amountPaid) });
-            toast.success('Payment recorded!');
-            setShowPayModal(false);
-            load();
-            setActiveTab('payments');
-        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
-        finally { setPayingSaving(false); }
-    };
+
 
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
     if (!inv) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Invoice not found.</div>;
@@ -224,29 +210,33 @@ export default function SalesInvoiceDetailPage() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
                                     <tbody>
                                         <tr>
-                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Taxable Value</td>
-                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Item Value</td>
+                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount - (inv.freightAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         {Number(inv.freightAmount || 0) > 0 && (
                                             <tr>
-                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Freight / Shipping</td>
+                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ Freight / Shipping</td>
                                                 <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {Number(inv.freightAmount).toFixed(2)}</td>
                                             </tr>
                                         )}
+                                        <tr>
+                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Taxable Value</td>
+                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        </tr>
                                         {gstApplicable && (
                                             isIGST ? (
                                                 <tr>
-                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>IGST @ {inv.items?.[0]?.taxRate || 18}%</td>
+                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ IGST @ {inv.items?.[0]?.taxRate || 18}%</td>
                                                     <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalIgst || inv.totalTaxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ) : (
                                                 <>
                                                     <tr>
-                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>CGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
+                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ CGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
                                                         <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalCgst || (inv.totalTaxAmount / 2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                     </tr>
                                                     <tr>
-                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>SGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
+                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ SGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
                                                         <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalSgst || (inv.totalTaxAmount / 2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                     </tr>
                                                 </>
@@ -310,10 +300,25 @@ export default function SalesInvoiceDetailPage() {
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             {/* Hide Payment Record Button as per user request */}
-                            <button onClick={() => window.print()} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
+                            {/* Navigate to standalone Receipt Entry form */}
                             {notCancelled && notFullyPaid && (
-                                <button onClick={handleCancel} disabled={cancelling} style={{ padding: '9px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✕ Cancel</button>
+                                <button
+                                    onClick={() => navigate('/accounts/receipt-entry', { 
+                                        state: { 
+                                            source: 'sales_invoice',
+                                            invoiceId: inv._id, 
+                                            invoiceNumber: inv.invoiceNumber, 
+                                            customerId: inv.customerId?._id || inv.customerId, 
+                                            customerName: inv.customerName,
+                                            amount: (inv.roundedTotal || inv.grandTotal) - inv.paidAmount 
+                                        } 
+                                    })}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
+                                >
+                                    💳 Receive Payment
+                                </button>
                             )}
+                            <button onClick={handleCancel} disabled={cancelling} style={{ padding: '9px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✕ Cancel</button>
                         </div>
                     </div>
                     {/* Payment Progress */}
@@ -419,35 +424,39 @@ export default function SalesInvoiceDetailPage() {
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                             <div style={{ width: '350px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
-                                    <span style={{ color: '#64748b' }}>Total Taxable</span>
+                                    <span style={{ color: '#64748b' }}>Total Item Value</span>
+                                    <span>₹ {(inv.totalTaxableAmount - (inv.freightAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                {Number(inv.freightAmount || 0) > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
+                                        <span style={{ color: '#64748b' }}>+ Freight / Shipping</span>
+                                        <span>₹ {Number(inv.freightAmount).toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14, fontWeight: 700 }}>
+                                    <span style={{ color: '#64748b' }}>Total Taxable Value</span>
                                     <span>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                 </div>
                                 {gstApplicable && (
                                     <>
                                         {isIGST ? (
                                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
-                                                <span style={{ color: '#64748b' }}>IGST @ {inv.items?.[0]?.taxRate || 18}%</span>
+                                                <span style={{ color: '#64748b' }}>+ IGST @ {inv.items?.[0]?.taxRate || 18}%</span>
                                                 <span>₹ {(inv.totalIgst || inv.totalTaxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                             </div>
                                         ) : (
                                             <>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
-                                                    <span style={{ color: '#64748b' }}>CGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</span>
+                                                    <span style={{ color: '#64748b' }}>+ CGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</span>
                                                     <span>₹ {(inv.totalCgst || (inv.totalTaxAmount/2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
-                                                    <span style={{ color: '#64748b' }}>SGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</span>
+                                                    <span style={{ color: '#64748b' }}>+ SGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</span>
                                                     <span>₹ {(inv.totalSgst || (inv.totalTaxAmount/2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                             </>
                                         )}
                                     </>
-                                )}
-                                {Number(inv.freightAmount || 0) > 0 && (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
-                                        <span style={{ color: '#64748b' }}>Freight</span>
-                                        <span>₹ {Number(inv.freightAmount).toFixed(2)}</span>
-                                    </div>
                                 )}
                                 {inv.roundOff !== 0 && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14 }}>
@@ -480,41 +489,7 @@ export default function SalesInvoiceDetailPage() {
                 </div>
             </div>
 
-            {/* Payment Modal */}
-            {
-                showPayModal && (
-                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-                        <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-                            <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700 }}>💳 Record Payment</h2>
-                            <p style={{ margin: '0 0 20px', color: '#9ca3af', fontSize: 13 }}>Invoice: {inv.invoiceNumber} · Remaining: {fmtCur((inv.roundedTotal || inv.grandTotal) - inv.paidAmount)}</p>
-                            <div style={{ display: 'grid', gap: 12 }}>
-                                {[['Amount Paid *', 'amountPaid', 'number'], ['Payment Date', 'paymentDate', 'date'], ['Reference / UTR', 'reference', 'text']].map(([label, key, type]) => (
-                                    <div key={key}>
-                                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>{label}</label>
-                                        <input type={type} value={payForm[key]} onChange={e => setPayForm(p => ({ ...p, [key]: e.target.value }))} style={inp} />
-                                    </div>
-                                ))}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Payment Mode</label>
-                                    <select value={payForm.paymentMode} onChange={e => setPayForm(p => ({ ...p, paymentMode: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
-                                        {['Cash', 'UPI', 'Cheque', 'Net Banking', 'NEFT/RTGS/IMPS', 'Card', 'Other'].map(m => <option key={m}>{m}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Remarks</label>
-                                    <input value={payForm.remarks} onChange={e => setPayForm(p => ({ ...p, remarks: e.target.value }))} style={inp} />
-                                </div>
-                            </div>
-                            <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                <button onClick={() => setShowPayModal(false)} style={{ padding: '8px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Cancel</button>
-                                <button onClick={handleRecordPayment} disabled={payingSaving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>
-                                    {payingSaving ? 'Saving...' : '✓ Record Payment'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+
 
             {/* Print Styles */}
             <style>{`

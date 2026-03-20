@@ -90,14 +90,21 @@ const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType
     });
 
     const freight = Number(freightAmount) || 0;
+    
+    // Add Freight to taxable amount before GST calculation
+    const taxableWithFreight = totalTaxableAmount + freight;
+
     const freightGstRateCount = effectiveGstApplicable ? (Number(freightGstRate) || 0) : 0;
     const freightGstAmt = effectiveGstApplicable && freight > 0 && freightGstRateCount > 0 ? Math.round(freight * freightGstRateCount / 100 * 100) / 100 : 0;
     const totalGst = totalCgst + totalSgst + totalIgst + freightGstAmt;
-    const grandTotal = totalTaxableAmount + totalGst + freight;
+    
+    // Grand Total is taxable + gst
+    const grandTotal = taxableWithFreight + totalGst;
+    
     const roundedTotal = Math.round(grandTotal);
     const roundOff = Math.round((roundedTotal - grandTotal) * 100) / 100;
 
-    return { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount: freightGstAmt };
+    return { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount: taxableWithFreight, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount: freightGstAmt };
 };
 
 // ------- CREATE INVOICE -------

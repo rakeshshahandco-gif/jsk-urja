@@ -8,16 +8,19 @@ import {
     getOutstandingBills, createVoucher
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const ReceiptEntryPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { openModal, closeModal } = useModal();
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [cashBankAccounts, setCashBankAccounts] = useState([]);
     const [ledgers, setLedgers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
         voucherTypeId: '',
@@ -44,14 +47,65 @@ const ReceiptEntryPage = () => {
                 setCashBankAccounts(cbAccs);
                 setLedgers(allLedgers);
 
-                if (vTypes.length > 0) setFormData(prev => ({ ...prev, voucherTypeId: vTypes[0]._id }));
-                if (cbAccs.length > 0) setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
+                if (vTypes.length > 0) {
+                    const defaultType = vTypes.find(v => v.name.toUpperCase() === 'RECEIPT VOUCHER' || v.name.toUpperCase() === 'RECEIPT') || vTypes[0];
+                    setFormData(prev => ({ ...prev, voucherTypeId: defaultType._id }));
+                }
+                if (cbAccs.length > 0) {
+                    setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
+                }
+
+                // If launched from Invoice Detail, pre-fill details
+                const defaultCustomerId = location.state?.customerId;
+                const defaultCustomerName = location.state?.customerName || 'Customer';
+                const defaultAmount = location.state?.amount || 0;
+                const defaultInvoiceId = location.state?.invoiceId;
+                const defaultInvoiceNo = location.state?.invoiceNumber;
+
+                if (defaultCustomerId) {
+                    const custLedger = allLedgers.find(l => 
+                        (l.referenceId?.toString() === defaultCustomerId?.toString() && l.referenceModel === 'Customer') || 
+                        l._id?.toString() === defaultCustomerId?.toString()
+                    );
+                    if (custLedger) {
+                        setFormData(prev => {
+                            const newItems = [...prev.items];
+                            newItems[0].ledgerId = custLedger._id;
+                            newItems[0].ledgerName = custLedger.name;
+                            newItems[0].ledgerType = custLedger.type;
+                            newItems[0].amount = defaultAmount;
+                            newItems[0].narration = `Against ${defaultInvoiceNo}`;
+
+                            if (defaultInvoiceId && defaultAmount) {
+                                newItems[0].adjustments = [{
+                                    refId: defaultInvoiceId,
+                                    refNumber: defaultInvoiceNo,
+                                    amount: defaultAmount,
+                                    adjustmentType: 'Against Bill',
+                                    refModel: 'SalesInvoice'
+                                }];
+                            }
+
+                            return { 
+                                ...prev, 
+                                items: newItems, 
+                                totalAmount: defaultAmount,
+                                narration: `Receipt against Sales Invoice ${defaultInvoiceNo}`
+                            };
+                        });
+                    } else {
+                        toast.error(`Customer ledger for "${defaultCustomerName}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
+                    }
+                }
+
             } catch (error) {
                 toast.error('Failed to load initial data');
+            } finally {
+                setLoading(false);
             }
         };
         fetchData();
-    }, []);
+    }, [location.state]);
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;
@@ -212,12 +266,23 @@ const ReceiptEntryPage = () => {
         const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
         if (invalidItem) return toast.error('All items must have a ledger and amount');
 
+        // Validation against original invoice amount if linked
+        if (location.state?.invoiceId && location.state?.amount) {
+            const linkedItem = formData.items[0];
+            if (linkedItem.amount > location.state.amount) {
+                return toast.error(`Amount exceeding outstanding balance (${location.state.amount}). Advance receipt logic not enabled.`);
+            }
+        }
+
+        setIsSubmitting(true);
         try {
-            await createVoucher(formData);
+            await createVoucher({ ...formData, nature: 'Receipt' });
             toast.success('Receipt saved successfully');
             navigate(PATHS.ACCOUNTS.VOUCHERS);
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save receipt');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -230,8 +295,8 @@ const ReceiptEntryPage = () => {
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}>Cancel</Button>
-                    <Button onClick={handleSave} className="flex items-center gap-2">
-                        <Save className="w-4 h-4" /> Save Receipt
+                    <Button onClick={handleSave} disabled={isSubmitting} className="flex items-center gap-2">
+                        <Save className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Save Receipt'}
                     </Button>
                 </div>
             </div>
@@ -240,21 +305,33 @@ const ReceiptEntryPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-gray-500">Voucher Type</label>
-                        <Select
-                            name="voucherTypeId"
-                            value={formData.voucherTypeId}
-                            onChange={handleHeaderChange}
-                            options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
-                        />
+                        {location.state?.invoiceId ? (
+                             <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
+                                {voucherTypes.find(v => v._id === formData.voucherTypeId)?.name || 'Receipt'}
+                             </div>
+                        ) : (
+                            <Select
+                                name="voucherTypeId"
+                                value={formData.voucherTypeId}
+                                onChange={handleHeaderChange}
+                                options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
+                            />
+                        )}
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-gray-500">Voucher Date</label>
-                        <Input
-                            type="date"
-                            name="date"
-                            value={formData.date}
-                            onChange={handleHeaderChange}
-                        />
+                        {location.state?.invoiceId ? (
+                             <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
+                                {formData.date}
+                             </div>
+                        ) : (
+                            <Input
+                                type="date"
+                                name="date"
+                                value={formData.date}
+                                onChange={handleHeaderChange}
+                            />
+                        )}
                     </div>
                     <div className="space-y-2 col-span-2">
                         <label className="text-xs font-bold uppercase text-gray-500">Deposit Into (Cash/Bank Account)</label>
@@ -294,19 +371,26 @@ const ReceiptEntryPage = () => {
                         {formData.items.map((item, index) => (
                             <tr key={item.id} className="group hover:bg-gray-50/30 transition-colors">
                                 <td className="px-6 py-4">
-                                    <SearchableSelect
-                                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
-                                        value={item.ledgerId}
-                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                        placeholder="Search ledger..."
-                                    />
+                                    {(location.state?.source === 'sales_invoice' || location.state?.customerId) && index === 0 ? (
+                                        <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-teal-200 cursor-not-allowed text-sm flex items-center justify-between">
+                                            <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
+                                            <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded uppercase tracking-tighter ml-2">Locked</span>
+                                        </div>
+                                    ) : (
+                                        <SearchableSelect
+                                            options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                                            value={item.ledgerId}
+                                            onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                            placeholder="Search ledger..."
+                                        />
+                                    )}
                                 </td>
                                 <td className="px-6 py-4">
                                     <Input
                                         type="number"
                                         placeholder="0.00"
-                                        value={item.amount}
-                                        onChange={(e) => handleItemChange(item.id, 'amount', e.target.value)}
+                                        value={item.amount || ''}
+                                        onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
                                         className="font-mono font-bold"
                                     />
                                 </td>
@@ -330,14 +414,16 @@ const ReceiptEntryPage = () => {
                                     />
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeItem(item.id)}
-                                        className="text-gray-300 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    {!(location.state?.customerId && index === 0) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeItem(item.id)}
+                                            className="text-gray-300 hover:text-red-500"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

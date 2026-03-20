@@ -1,0 +1,257 @@
+.pageContainer {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #111827; // gray-900
+        line-height: 1.25;
+    }
+
+    .subtitle {
+        color: #6b7280; // gray-500
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+}
+
+.addButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+
+    @media (min-width: 768px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (min-width: 1024px) {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.card {
+    background-color: #ffffff;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e5e7eb;
+    transition: box-shadow 0.2s;
+    border-left: 4px solid rgba(13, 148, 136, 0.1); // primary/10
+
+    &:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.iconWrapper {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+
+    &.cash {
+        background-color: #ffedd5; // orange-100
+        color: #ea580c; // orange-600
+    }
+
+    &.bank {
+        background-color: #dbeafe; // blue-100
+        color: #2563eb; // blue-600
+    }
+}
+
+.actionButtons {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.iconButton {
+    height: 2rem;
+    width: 2rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+
+    &:hover {
+        background-color: #f3f4f6;
+        color: #111827;
+    }
+
+    /* Small size specifics inline in original code handled here */
+    svg {
+        width: 0.875rem;
+        height: 0.875rem;
+    }
+}
+
+.cardBody {
+    margin-top: 1rem;
+
+    .accountName {
+        font-weight: 700;
+        font-size: 1.125rem;
+        color: #1f2937; // gray-800
+    }
+
+    .accountType {
+        font-size: 0.75rem;
+        color: #6b7280; // gray-500
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+    }
+}
+
+.cardFooter {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.balanceLabel {
+    font-size: 0.75rem;
+    color: #9ca3af; // gray-400
+}
+
+.balanceAmount {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #0d9488; // primary color (teal-600)
+}
+
+.statusBadge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+
+    &.active {
+        background-color: #dcfce7; // green-100
+        color: #15803d; // green-700
+    }
+
+    &.inactive {
+        background-color: #f3f4f6; // gray-100
+        color: #6b7280; // gray-500
+    }
+}
+
+// Emtpy state
+.emptyState {
+    text-align: center;
+    padding: 5rem 0;
+    background-color: #f9fafb; // gray-50
+    border-radius: 0.75rem;
+    border: 2px dashed #e5e7eb; // gray-200
+}
+
+.emptyIconWrapper {
+    background-color: #e5e7eb; // gray-200
+    width: 4rem;
+    height: 4rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+
+    svg {
+        color: #6b7280; // gray-500
+    }
+}
+
+.emptyTitle {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: #111827; // gray-900
+}
+
+.emptyText {
+    color: #6b7280; // gray-500
+    margin-top: 0.25rem;
+}
+
+.emptyButton {
+    margin-top: 1.5rem;
+}
+
+/* Modals Forms */
+
+.formContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-top: 1rem;
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    .formLabel {
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+}
+
+.bankDetailsBox {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    background-color: #f9fafb;
+    
+    .bankDetailsHeader {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        grid-column: span 2 / span 2;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+}
+
+.formActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 1rem;
+}

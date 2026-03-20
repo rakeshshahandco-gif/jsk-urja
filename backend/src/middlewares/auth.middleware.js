@@ -15,7 +15,10 @@ export const protect = asyncHandler(async (req, res, next) => {
 
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
 
-            req.user = await User.findById(decoded.id).select('-password');
+            req.user = await User.findById(decoded.id)
+                .populate('role')
+                .populate('department')
+                .select('-password');
 
             if (!req.user) {
                 throw new ApiError(401, 'Not authorized, user not found');
@@ -39,8 +42,9 @@ export const protect = asyncHandler(async (req, res, next) => {
 
 export const authorize = (...roles) => {
     return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            throw new ApiError(403, `User role ${req.user.role} is not authorized to access this route`);
+        const roleName = req.user.role?.name || req.user.roleName;
+        if (!roles.includes(roleName)) {
+            throw new ApiError(403, `User role ${roleName} is not authorized to access this route`);
         }
         next();
     };

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
@@ -76,13 +76,20 @@ import ScrapEntryFormPage from '@/features/service/ScrapEntryFormPage';
 import ReplacementDashboard from '@/features/service/ReplacementDashboard';
 
 // Accounts Module
-import ReceiptEntryPage from '@/features/accounts/ReceiptEntryPage';
-import PaymentEntryPage from '@/features/accounts/PaymentEntryPage';
-import VoucherListPage from '@/features/accounts/VoucherListPage';
-import CashBankMasterPage from '@/features/accounts/CashBankMasterPage';
-import VoucherTypeMasterPage from '@/features/accounts/VoucherTypeMasterPage';
-import LedgerReportPage from '@/features/accounts/LedgerReportPage';
-import OutstandingReportPage from '@/features/accounts/OutstandingReportPage';
+const ReceiptEntryPage = lazy(() => import('./features/accounts/ReceiptEntryPage'));
+const PaymentEntryPage = lazy(() => import('./features/accounts/PaymentEntryPage'));
+const ExpenseEntryPage = lazy(() => import('./features/accounts/ExpenseEntryPage'));
+const JournalEntryPage = lazy(() => import('./features/accounts/JournalEntryPage'));
+const VoucherListPage = lazy(() => import('./features/accounts/VoucherListPage'));
+const CashBankMasterPage = lazy(() => import('./features/accounts/CashBankMasterPage'));
+const GroupMasterPage = lazy(() => import('./features/accounts/GroupMasterPage'));
+const LedgerMasterPage = lazy(() => import('./features/accounts/LedgerMasterPage'));
+const VoucherTypeMasterPage = lazy(() => import('./features/accounts/VoucherTypeMasterPage'));
+const SalesRegisterPage = lazy(() => import('./features/accounts/SalesRegisterPage'));
+const PurchaseRegisterPage = lazy(() => import('./features/accounts/PurchaseRegisterPage'));
+const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
+const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
+const OutstandingReportPage = lazy(() => import('./features/accounts/OutstandingReportPage'));
 import AssetCategoryPage from '@/features/fixedAssets/AssetCategoryPage';
 import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
 import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
@@ -98,6 +105,14 @@ import ReworkMaterialIssueFormPage from '@/features/productionRework/ReworkMater
 import ReworkOutputFormPage from '@/features/productionRework/ReworkOutputFormPage';
 import RetestConfirmationFormPage from '@/features/productionRework/RetestConfirmationFormPage';
 import ProductionScrapFormPage from '@/features/productionRework/ProductionScrapFormPage';
+
+// Stock & Production Entry Module
+import RawMaterialStockReport from '@/features/inventory/RawMaterialStockReport';
+import FinishedGoodsStockReport from '@/features/inventory/FinishedGoodsStockReport';
+import StockMovementLedger from '@/features/inventory/StockMovementLedger';
+import ProductionOutputFormPage from '@/features/production/ProductionOutputFormPage';
+import ComponentReplacementFormPage from '@/features/production/ComponentReplacementFormPage';
+import ProductionRejectionFormPage from '@/features/production/ProductionRejectionFormPage';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
@@ -122,7 +137,8 @@ function App() {
                     <ToastProvider>
                         <Toaster position="top-right" />
                         <ModalProvider>
-                            <Routes>
+                            <Suspense fallback={<div className="flex items-center justify-center h-screen font-bold text-gray-400">Loading Module...</div>}>
+                                <Routes>
                                 {/* Public routes - Login, Forgot Password, Reset Password */}
                                 <Route path="/login" element={<LoginPage />} />
                                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -452,11 +468,18 @@ function App() {
                                                             {/* Accounts Module Routes */}
                                                             <Route path="/accounts/receipt-entry" element={<ProtectedRoute><ReceiptEntryPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/payment-entry" element={<ProtectedRoute><PaymentEntryPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/expense-entry" element={<ProtectedRoute><ExpenseEntryPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/journal-entry" element={<ProtectedRoute><JournalEntryPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/vouchers" element={<ProtectedRoute><VoucherListPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute><CashBankMasterPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/masters/groups" element={<ProtectedRoute><GroupMasterPage /></ProtectedRoute>} />
+                                                            <Route path="/accounts/masters/ledgers" element={<ProtectedRoute><LedgerMasterPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/masters/voucher-types" element={<ProtectedRoute><VoucherTypeMasterPage /></ProtectedRoute>} />
-                                                            <Route path="/accounts/reports/ledger" element={<ProtectedRoute><LedgerReportPage /></ProtectedRoute>} />
-                                                            <Route path="/accounts/reports/cash-book" element={<ProtectedRoute><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
+                                                             <Route path="/accounts/reports/ledger" element={<ProtectedRoute><LedgerReportPage /></ProtectedRoute>} />
+                                                             <Route path="/accounts/reports/sales-register" element={<ProtectedRoute><SalesRegisterPage /></ProtectedRoute>} />
+                                                             <Route path="/accounts/reports/purchase-register" element={<ProtectedRoute><PurchaseRegisterPage /></ProtectedRoute>} />
+                                                             <Route path="/accounts/reports/day-book" element={<ProtectedRoute><DayBookPage /></ProtectedRoute>} />
+                                                             <Route path="/accounts/reports/cash-book" element={<ProtectedRoute><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                                                             <Route path="/accounts/reports/bank-book" element={<ProtectedRoute><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                                                             <Route path="/accounts/reports/outstanding" element={<ProtectedRoute><OutstandingReportPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/fixed-assets" element={<ProtectedRoute><FixedAssetMasterPage /></ProtectedRoute>} />
@@ -464,6 +487,18 @@ function App() {
                                                             <Route path="/accounts/asset-categories" element={<ProtectedRoute><AssetCategoryPage /></ProtectedRoute>} />
                                                             <Route path="/accounts/asset-locations" element={<ProtectedRoute><AssetLocationPage /></ProtectedRoute>} />
 
+                                                            {/* ── Stock Reports ─────────────────────────────────── */}
+                                                            <Route path="/inventory/stock/raw-material" element={<ProtectedRoute><RawMaterialStockReport /></ProtectedRoute>} />
+                                                            <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute><FinishedGoodsStockReport /></ProtectedRoute>} />
+                                                            <Route path="/inventory/stock/ledger" element={<ProtectedRoute><StockMovementLedger /></ProtectedRoute>} />
+
+                                                            {/* ── Production Entry Forms ────────────────────────── */}
+                                                            <Route path="/production/outputs/new" element={<ProtectedRoute><ProductionOutputFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/outputs" element={<ProtectedRoute><ProductionOutputFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/component-replacements/new" element={<ProtectedRoute><ComponentReplacementFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/component-replacements" element={<ProtectedRoute><ComponentReplacementFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rejections/new" element={<ProtectedRoute><ProductionRejectionFormPage /></ProtectedRoute>} />
+                                                            <Route path="/production/rejections" element={<ProtectedRoute><ProductionRejectionFormPage /></ProtectedRoute>} />
                                                         </Routes>
                                                     </main>
                                                 </div>
@@ -472,13 +507,12 @@ function App() {
                                     </ProtectedRoute>
                                 } />
                             </Routes>
-                        </ModalProvider>
-                    </ToastProvider>
-                </NotificationProvider>
-            </AuthProvider>
-
-        </BrowserRouter>
-
+                        </Suspense>
+                    </ModalProvider>
+                </ToastProvider>
+            </NotificationProvider>
+        </AuthProvider>
+    </BrowserRouter>
     );
 }
 

@@ -1,31 +1,37 @@
 import express from 'express';
-import {
-    getUsers,
-    createUser,
-    updateUser,
-    deleteUser,
-    getUserById,
-    getAssignableUsers
-} from '../../controllers/user.controller.js';
+import * as userController from '../../controllers/user.controller.js';
+import { getPermissionMetadata } from '../../controllers/permission.controller.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
-import { validate } from '../../middlewares/validate.middleware.js';
-import userValidation from '../../validations/user.validation.js';
 
 const router = express.Router();
 
-// Protect all routes
 router.use(protect);
 
-router.get('/assignable', getAssignableUsers);
+// 1. SPECIFIC ROUTES (Must be BEFORE :id)
+router.get('/permissions/metadata', getPermissionMetadata);
+router.get('/roles', userController.getRoles);
+router.get('/departments', userController.getDepartments);
 
-// Only Admin can view all users and create new ones
+// 2. RESOURCE ROUTES
+router.route('/roles')
+    .post(authorize('superadmin', 'admin'), userController.createRole);
+
+router.route('/roles/:id')
+    .patch(authorize('superadmin', 'admin'), userController.updateRole);
+
+router.route('/departments')
+    .post(authorize('superadmin', 'admin'), userController.createDepartment);
+
+// 3. USER MANAGEMENT (Admin only)
+router.use(authorize('superadmin', 'admin'));
+
 router.route('/')
-    .get(authorize('admin'), validate(userValidation.getUsers), getUsers)
-    .post(authorize('admin'), validate(userValidation.createUser), createUser);
+    .post(userController.createUser)
+    .get(userController.getUsers);
 
 router.route('/:id')
-    .get(authorize('admin'), validate(userValidation.getUser), getUserById)
-    .put(authorize('admin'), validate(userValidation.updateUser), updateUser)
-    .delete(authorize('admin'), validate(userValidation.deleteUser), deleteUser);
+    .get(userController.getUser)
+    .patch(userController.updateUser)
+    .delete(userController.deleteUser);
 
 export default router;

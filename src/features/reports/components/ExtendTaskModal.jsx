@@ -8,7 +8,7 @@ export const ExtendTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
 
-    if (!task) return null;
+    if (!isOpen || !task) return null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();

@@ -1,5 +1,6 @@
 // User Roles
 export const ROLES = {
+    SUPERADMIN: 'superadmin',
     ADMIN: 'admin',
     MANAGER: 'manager',
     STAFF: 'staff',
@@ -82,6 +83,41 @@ export const APP_MODULES = [
             { key: 'VIEW_PURCHASE', value: 'view_purchase', label: 'View Purchase' },
             { key: 'MANAGE_PURCHASE', value: 'manage_purchase', label: 'Manage Purchase' }
         ]
+    },
+    {
+        name: 'Sales',
+        permissions: [
+            { key: 'VIEW_SALES', value: 'view_sales', label: 'View Sales' },
+            { key: 'MANAGE_SALES', value: 'manage_sales', label: 'Manage Sales' }
+        ]
+    },
+    {
+        name: 'Accounts',
+        permissions: [
+            { key: 'VIEW_ACCOUNTS', value: 'view_accounts', label: 'View Accounts' },
+            { key: 'MANAGE_ACCOUNTS', value: 'manage_accounts', label: 'Manage Accounts' }
+        ]
+    },
+    {
+        name: 'Service',
+        permissions: [
+            { key: 'VIEW_SERVICES', value: 'view_services', label: 'View Services' },
+            { key: 'MANAGE_SERVICES', value: 'manage_services', label: 'Manage Services' }
+        ]
+    },
+    {
+        name: 'Fixed Assets',
+        permissions: [
+            { key: 'VIEW_ASSETS', value: 'view_assets', label: 'View Assets' },
+            { key: 'MANAGE_ASSETS', value: 'manage_assets', label: 'Manage Assets' }
+        ]
+    },
+    {
+        name: 'Settings',
+        permissions: [
+            { key: 'VIEW_SETTINGS', value: 'view_settings', label: 'View Settings' },
+            { key: 'MANAGE_SETTINGS', value: 'manage_settings', label: 'Manage Settings' }
+        ]
     }
 ];
 
@@ -119,7 +155,15 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_PRODUCTION,
         PERMISSIONS.MANAGE_PRODUCTION,
         PERMISSIONS.VIEW_PURCHASE,
-        PERMISSIONS.MANAGE_PURCHASE
+        PERMISSIONS.MANAGE_PURCHASE,
+        PERMISSIONS.VIEW_SALES,
+        PERMISSIONS.MANAGE_SALES,
+        PERMISSIONS.VIEW_ACCOUNTS,
+        PERMISSIONS.MANAGE_ACCOUNTS,
+        PERMISSIONS.VIEW_SERVICES,
+        PERMISSIONS.MANAGE_SERVICES,
+        PERMISSIONS.VIEW_ASSETS,
+        PERMISSIONS.MANAGE_ASSETS
     ],
     [ROLES.STAFF]: [
         PERMISSIONS.VIEW_CUSTOMERS,
@@ -131,7 +175,10 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_GROUPS,
         PERMISSIONS.VIEW_INVENTORY,
         PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.VIEW_PURCHASE
+        PERMISSIONS.VIEW_PURCHASE,
+        PERMISSIONS.VIEW_SALES,
+        PERMISSIONS.VIEW_ACCOUNTS,
+        PERMISSIONS.VIEW_SERVICES
     ],
     [ROLES.VIEWER]: [
         PERMISSIONS.VIEW_CUSTOMERS,
@@ -140,12 +187,20 @@ export const ROLE_PERMISSIONS = {
         PERMISSIONS.VIEW_GROUPS,
         PERMISSIONS.VIEW_INVENTORY,
         PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.VIEW_PURCHASE
+        PERMISSIONS.VIEW_PURCHASE,
+        PERMISSIONS.VIEW_SALES,
+        PERMISSIONS.VIEW_ACCOUNTS
     ]
 };
 
 // Check if role has permission
 export const hasPermission = (userPermissions, requiredPermission, userRole = null) => {
+    // Extract role name if userRole is an object
+    const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
+
+    // Superadmin has all permissions
+    if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
+
     // 1. Check if userPermissions is explicitly set (even if empty)
     // If it's an array (including empty []), respect it strictly - this is Granular Mode
     if (Array.isArray(userPermissions)) {
@@ -168,10 +223,14 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
 
 // Check if user has role
 export const hasRole = (userRole, requiredRole) => {
+    // Extract role name if userRole is an object
+    const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
+
+    if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
     if (Array.isArray(requiredRole)) {
-        return requiredRole.includes(userRole);
+        return requiredRole.includes(actualRole);
     }
-    return userRole === requiredRole;
+    return actualRole === requiredRole;
 };
 
 // Get permissions for a role
@@ -183,6 +242,7 @@ export const getPermissionsForRole = (role) => {
 
 // Role labels and colors
 export const ROLE_CONFIG = {
+    [ROLES.SUPERADMIN]: { label: 'System Admin', color: '#7c3aed', badge: '🟣' },
     [ROLES.ADMIN]: { label: 'Admin', color: '#dc2626', badge: '🔴' },
     [ROLES.MANAGER]: { label: 'Manager', color: '#f59e0b', badge: '🟡' },
     [ROLES.STAFF]: { label: 'Staff', color: '#3b82f6', badge: '🔵' },

@@ -61,26 +61,48 @@ const postToLedger = async (data, session) => {
 /**
  * Update Invoice Payment Status
  */
-const adjustBill = async (adj, nature, session) => {
+const adjustBill = async (adj, nature, voucherNo, date, session) => {
     const { refId, amount, adjustmentType } = adj;
     if (!refId || adjustmentType !== 'Against Bill') return;
 
     if (nature === 'Receipt') {
         const invoice = await SalesInvoice.findById(refId).session(session);
-        if (invoice) {
-            invoice.paidAmount += amount;
-            if (invoice.paidAmount >= invoice.roundedTotal) invoice.paymentStatus = 'Paid';
-            else if (invoice.paidAmount > 0) invoice.paymentStatus = 'Partially Paid';
-            await invoice.save({ session });
-        }
+        if (!invoice) return;
+        if (invoice.paymentStatus === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, `Sales Invoice ${invoice.invoiceNumber} is cancelled. Cannot receive payment.`);
+
+        invoice.paidAmount += amount;
+        if (invoice.paidAmount >= (invoice.roundedTotal || invoice.grandTotal)) invoice.paymentStatus = 'Paid';
+        else if (invoice.paidAmount > 0) invoice.paymentStatus = 'Partially Paid';
+
+        // Add to history
+        invoice.payments.push({
+            paymentDate: date,
+            amountPaid: amount,
+            paymentMode: 'Voucher',
+            reference: voucherNo,
+            remarks: `Receipt Voucher ${voucherNo}`
+        });
+
+        await invoice.save({ session });
     } else if (nature === 'Payment') {
         const invoice = await PurchaseInvoice.findById(refId).session(session);
-        if (invoice) {
-            invoice.paidAmount += amount;
-            if (invoice.paidAmount >= invoice.grandTotal) invoice.paymentStatus = 'Paid';
-            else if (invoice.paidAmount > 0) invoice.paymentStatus = 'Partially Paid';
-            await invoice.save({ session });
-        }
+        if (!invoice) return;
+        if (invoice.paymentStatus === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, `Purchase Invoice ${invoice.invoiceNumber} is cancelled. Cannot record payment.`);
+
+        invoice.paidAmount += amount;
+        if (invoice.paidAmount >= invoice.grandTotal) invoice.paymentStatus = 'Paid';
+        else if (invoice.paidAmount > 0) invoice.paymentStatus = 'Partially Paid';
+
+        // Add to history
+        invoice.payments.push({
+            paymentDate: date,
+            amountPaid: amount,
+            paymentMode: 'Voucher',
+            reference: voucherNo,
+            remarks: `Payment Voucher ${voucherNo}`
+        });
+
+        await invoice.save({ session });
     }
 };
 
@@ -89,50 +111,84 @@ export const createVoucher = asyncHandler(async (req, res) => {
     session.startTransaction();
 
     try {
-        const { voucherTypeId, date, cashBankAccountId, partyId, totalAmount, items, narration, instrumentType, instrumentNo, nature } = req.body;
+        const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
 
         const vType = await VoucherType.findById(voucherTypeId).session(session);
         if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
 
         const voucherNo = await getNextVoucherNo(voucherTypeId);
+        const actualNature = vType.nature || nature;
 
         const voucher = new Voucher({
             ...req.body,
             voucherNo,
-            nature: vType.nature,
+            nature: actualNature,
             voucherTypeName: vType.name,
             createdBy: req.user.id
         });
 
         await voucher.save({ session });
 
-        // 1. Post Main Account (Cash/Bank)
-        // Receipt: Debit Bank/Cash, Credit Party
-        // Payment: Credit Bank/Cash, Debit Party
-        const mainLedger = await AccountLedger.findOne({ referenceId: cashBankAccountId }).session(session);
-        if (!mainLedger) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found');
+        // Journal Vouchers: Double Entry Mode (No header cashBankAccountId)
+        if (actualNature === 'Journal') {
+            let debitTotal = 0;
+            let creditTotal = 0;
 
-        await postToLedger({
-            voucherId: voucher._id, voucherNo, date,
-            ledgerId: mainLedger._id, amount: totalAmount,
-            type: vType.nature === 'Receipt' ? 'Debit' : 'Credit',
-            narration: narration || `Main entry for ${voucherNo}`,
-            cashBankAccountId
-        }, session);
+            for (const item of items) {
+                if (item.type === 'Debit') debitTotal += item.amount;
+                else creditTotal += item.amount;
 
-        // 2. Post Item Entries (Parties / Expenses / Incomes)
-        for (const item of items) {
+                await postToLedger({
+                    voucherId: voucher._id, voucherNo, date,
+                    ledgerId: item.ledgerId, amount: item.amount,
+                    type: item.type,
+                    narration: item.narration || narration
+                }, session);
+            }
+
+            if (Math.abs(debitTotal - creditTotal) > 0.01) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Journal entries must be balanced (Total Dr = Total Cr)');
+            }
+        } 
+        // Receipt / Payment / Expense / Contra: Single Entry Mode (With header cashBankAccountId)
+        else {
+            if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
+
+            const mainLedger = await AccountLedger.findOne({ referenceId: cashBankAccountId }).session(session);
+            if (!mainLedger) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found');
+
+            // Post Main Account (Header)
+            // Receipt: Debit Bank/Cash | Payment/Expense: Credit Bank/Cash | Contra: Depends on type
+            let mainEntryType = 'Debit';
+            if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
+            else if (actualNature === 'Contra') {
+                // In Contra, we explicitly set the main account type in the request or derive it
+                // For now, assume header is the destination (Debit) if not specified
+                mainEntryType = req.body.headerType || 'Debit'; 
+            }
+
             await postToLedger({
                 voucherId: voucher._id, voucherNo, date,
-                ledgerId: item.ledgerId, amount: item.amount,
-                type: item.type, // e.g., Credit for Receipt, Debit for Payment
-                narration: item.narration || narration
+                ledgerId: mainLedger._id, amount: totalAmount,
+                type: mainEntryType,
+                narration: narration || `Main entry for ${voucherNo}`,
+                cashBankAccountId
             }, session);
 
-            // 3. Handle Bill Adjustments
-            if (item.adjustments && item.adjustments.length > 0) {
-                for (const adj of item.adjustments) {
-                    await adjustBill(adj, vType.nature, session);
+            // Post Item Entries
+            for (const item of items) {
+                await postToLedger({
+                    voucherId: voucher._id, voucherNo, date,
+                    ledgerId: item.ledgerId, amount: item.amount,
+                    type: item.type, // e.g. Credit for Receipt, Debit for Payment
+                    narration: item.narration || narration
+                }, session);
+
+                // Handle Bill Adjustments
+                if (item.adjustments && item.adjustments.length > 0) {
+                    for (const adj of item.adjustments) {
+                        await adjustBill(adj, actualNature, voucherNo, date, session);
+                    }
                 }
             }
         }

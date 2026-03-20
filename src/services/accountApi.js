@@ -1,6 +1,23 @@
 import { apiClient } from '../lib/apiClient';
 
-// ── Masters ──────────────────────────────────────────────────────────────────
+// ── Tally-Style Masters ──────────────────────────────────────────────────
+
+export const getAccountGroups = (params = {}) =>
+    apiClient.get('/accounts/masters/groups', { params }).then(r => r.data.data);
+
+export const createAccountGroup = (data) =>
+    apiClient.post('/accounts/masters/groups', data).then(r => r.data.data);
+
+export const initializeAccounts = () =>
+    apiClient.post('/accounts/masters/initialize').then(r => r.data.data);
+
+export const getLedgers = (params = {}) =>
+    apiClient.get('/accounts/masters/ledgers', { params }).then(r => r.data.data);
+
+export const createLedger = (data) =>
+    apiClient.post('/accounts/masters/ledgers', data).then(r => r.data.data);
+
+// ── Masters (Legacy/Other) ──────────────────────────────────────────────────
 
 export const getCashBankAccounts = (params = {}) =>
     apiClient.get('/cash-bank-accounts', { params }).then(r => r.data.data);
@@ -33,9 +50,6 @@ export const cancelVoucher = (id) =>
 
 // ── Ledgers & Reports ────────────────────────────────────────────────────────
 
-export const getLedgers = (params = {}) =>
-    apiClient.get('/ledgers', { params }).then(r => r.data.data);
-
 export const getLedgerReport = (params = {}) =>
     apiClient.get('/ledgers/report', { params }).then(r => r.data.data);
 
@@ -51,10 +65,44 @@ export const getOutstandingBills = (ledgerId) =>
 export const getOutstandingSummary = (type) =>
     apiClient.get('/ledgers/outstanding-summary', { params: { type } }).then(r => r.data.data);
 
-export default {
-    getCashBankAccounts, createCashBankAccount, updateCashBankAccount,
-    getVoucherTypes, createVoucherType,
-    getVouchers, getVoucher, createVoucher, cancelVoucher,
-    getLedgers, getLedgerReport, getLedgerStatement, getCashBankBalances,
-    getOutstandingBills, getOutstandingSummary
+// ── Accounting Reports (Tally Style) ────────────────────────────────────────
+
+export const getSalesRegister = (params = {}) =>
+    apiClient.get('/accounts/reports/sales-register', { params }).then(r => r.data.data);
+
+export const getPurchaseRegister = (params = {}) =>
+    apiClient.get('/accounts/reports/purchase-register', { params }).then(r => r.data.data);
+
+export const getDayBook = (params = {}) =>
+    apiClient.get('/accounts/reports/day-book', { params }).then(r => r.data.data);
+
+export const getCashBankBook = (params = {}) =>
+    apiClient.get('/accounts/reports/cash-bank-book', { params }).then(r => r.data.data);
+
+const accountApi = {
+    getAccountGroups,
+    createAccountGroup,
+    initializeAccounts,
+    getLedgers,
+    createLedger,
+    getCashBankAccounts,
+    createCashBankAccount,
+    updateCashBankAccount,
+    getVoucherTypes,
+    createVoucherType,
+    getVouchers,
+    getVoucher,
+    createVoucher,
+    cancelVoucher,
+    getLedgerReport,
+    getLedgerStatement,
+    getCashBankBalances,
+    getOutstandingBills,
+    getOutstandingSummary,
+    getSalesRegister,
+    getPurchaseRegister,
+    getDayBook,
+    getCashBankBook
 };
+
+export default accountApi;

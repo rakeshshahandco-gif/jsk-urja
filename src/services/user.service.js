@@ -12,7 +12,7 @@ export const userService = {
     },
 
     updateUser: async (id, userData) => {
-        const { data } = await api.put(`/users/${id}`, userData);
+        const { data } = await api.patch(`/users/${id}`, userData);
         return data;
     },
 
@@ -22,7 +22,22 @@ export const userService = {
     },
 
     getAssignableUsers: async () => {
-        const { data } = await api.get('/users/assignable');
+        const { data } = await api.get('/users');
         return data.data; // TaskForm expects Array [...users]
+    },
+
+    getPermissionMetadata: async () => {
+        const { data } = await api.get('/users/permissions/metadata');
+        return data;
+    },
+
+    getRoles: async () => {
+        const { data } = await api.get('/users/roles');
+        return data;
+    },
+
+    getDepartments: async () => {
+        const { data } = await api.get('/users/departments');
+        return data;
     }
 };
