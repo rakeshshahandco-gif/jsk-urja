@@ -47,8 +47,15 @@ export const getUsers = asyncHandler(async (req, res) => {
 });
 
 export const createUser = asyncHandler(async (req, res) => {
+    const { role } = req.body;
+    if (role) {
+        const roleDoc = await Role.findById(role);
+        if (roleDoc) {
+            req.body.roleName = roleDoc.name;
+        }
+    }
     const user = await User.create(req.body);
-    const userResponse = await User.findById(user._id).select('-password');
+    const userResponse = await User.findById(user._id).select('-password').populate('role', 'name');
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, userResponse, 'User created successfully'));
 });
 
@@ -63,6 +70,13 @@ export const getUser = asyncHandler(async (req, res) => {
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
+    const { role } = req.body;
+    if (role) {
+        const roleDoc = await Role.findById(role);
+        if (roleDoc) {
+            req.body.roleName = roleDoc.name;
+        }
+    }
     const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true })
         .populate('role', 'name')
         .populate('department', 'name')

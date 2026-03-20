@@ -73,23 +73,33 @@ export const login = asyncHandler(async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     // Remove password from response
-    const userResponse = user.toObject();
-    delete userResponse.password;
+    const populatedUser = await User.findById(user._id).populate('role', 'name');
+    const finalUserData = populatedUser.toObject();
+    delete finalUserData.password;
+    
+    // Ensure roleName is present
+    if (!finalUserData.roleName && populatedUser.role?.name) {
+        finalUserData.roleName = populatedUser.role.name;
+    }
 
     res.status(200).json(
         new ApiResponse(200, {
-            ...userResponse,
+            ...finalUserData,
             token: generateToken(user._id)
         }, 'Login successful')
     );
 });
 
 export const getMe = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).populate('role', 'name');
 
     if (user) {
+        const userData = user.toObject();
+        // Ensure roleName is present in response
+        userData.roleName = userData.roleName || user.role?.name || '';
+        
         res.status(200).json(
-            new ApiResponse(200, user, 'User profile fetched successfully')
+            new ApiResponse(200, userData, 'User profile fetched successfully')
         );
     } else {
         throw new ApiError(404, 'User not found');
