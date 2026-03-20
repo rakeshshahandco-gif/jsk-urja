@@ -48,9 +48,9 @@ const SalesRegisterPage = () => {
             Monthly/Periodical summary of all sales invoices
           </p>
         </div>
-        {/*   <div className="flex gap-2">
+        {/* <div className="flex gap-2">
           <ExportButtons data={data} filename="sales_register" />
-        </div>*/}
+        </div> */}
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-end gap-4">
