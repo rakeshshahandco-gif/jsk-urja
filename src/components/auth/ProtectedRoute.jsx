@@ -31,6 +31,12 @@ export const ProtectedRoute = ({
         return <Navigate to="/login" replace />;
     }
 
+    // Superadmin Bypass
+    const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name);
+    if (userRole === 'superadmin') {
+        return children;
+    }
+
     // Check role requirement
     if (requireRole && !hasRole(requireRole)) {
         return <PermissionDenied requiredRole={requireRole} />;

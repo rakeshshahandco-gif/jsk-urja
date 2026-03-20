@@ -13,31 +13,27 @@ export const PERMISSION_REGISTRY = [
             { id: 'edit', label: 'Edit Customer', type: 'boolean' },
             { id: 'delete', label: 'Delete Customer', type: 'boolean' },
             { id: 'talk', label: 'Talk With Customer', type: 'boolean' },
+            { id: 'reminders', label: 'Manage Reminders', type: 'boolean' },
             { id: 'scope', label: 'Data Visibility', type: 'scope', options: ['Own', 'Department', 'All'] }
         ]
     },
     {
         id: 'tasks',
-        name: 'Tasks',
+        name: 'Task Management',
         actions: [
             { id: 'view', label: 'View Tasks', type: 'boolean' },
             { id: 'add', label: 'Add Task', type: 'boolean' },
             { id: 'edit', label: 'Edit Task', type: 'boolean' },
-            { id: 'delete', label: 'Delete Task', type: 'boolean' }
-        ]
-    },
-    {
-        id: 'reminders',
-        name: 'Reminders',
-        actions: [
-            { id: 'view', label: 'View Reminders', type: 'boolean' }
+            { id: 'delete', label: 'Delete Task', type: 'boolean' },
+            { id: 'groups', label: 'Manage Task Groups', type: 'boolean' }
         ]
     },
     {
         id: 'reports',
         name: 'Reports',
         actions: [
-            { id: 'view', label: 'View Reports', type: 'boolean' }
+            { id: 'view', label: 'View Reports', type: 'boolean' },
+            { id: 'export', label: 'Export Reports', type: 'boolean' }
         ]
     },
     {
