@@ -41,17 +41,32 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         const fetchData = async () => {
             try {
                 setIsLoading(true);
-                const [metaRes, rolesRes, deptsRes] = await Promise.all([
+                const results = await Promise.allSettled([
                     userService.getPermissionMetadata(),
                     userService.getRoles(),
                     userService.getDepartments()
                 ]);
 
+                const [metaRes, rolesRes, deptsRes] = results.map((r, i) => {
+                    if (r.status === 'fulfilled') return r.value;
+                    console.error(`API Call failed index ${i}:`, r.reason);
+                    return { success: false, data: [] };
+                });
+
                 if (metaRes.success) setMetadata(metaRes.data);
+                else console.warn("Permission metadata failed to load", metaRes);
+
                 if (rolesRes.success) setRoles(rolesRes.data);
+                else console.warn("Roles failed to load", rolesRes);
+
                 if (deptsRes.success) setDepartments(deptsRes.data);
+                else console.warn("Departments failed to load", deptsRes);
+
+                if (!metaRes.success || !rolesRes.success || !deptsRes.success) {
+                    toast.error("Partial data load: some features may be limited");
+                }
             } catch (error) {
-                console.error("Failed to fetch form metadata", error);
+                console.error("Critical form load failure:", error);
                 toast.error("Failed to load form data");
             } finally {
                 setIsLoading(false);

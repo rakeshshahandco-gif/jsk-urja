@@ -4,8 +4,7 @@ import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
-router.use(protect);
-
+// Publicly available as it only contains module/permission labels
 router.get('/metadata', getPermissionMetadata);
 
 // Also support the flat / permissions if needed
