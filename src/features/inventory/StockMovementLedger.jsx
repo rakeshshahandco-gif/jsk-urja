@@ -24,8 +24,8 @@ export default function StockMovementLedger() {
     const [search, setSearch] = useState('');
 
     useEffect(() => {
-        api.get('/items', { params: { limit: 500 } }).then(res => {
-            setItems((res.data?.data?.items || res.data?.data || []).filter(Boolean));
+        api.get('/items', { limit: 500 }).then(res => {
+            setItems((res.data?.items || res.data || []).filter(Boolean));
         });
     }, []);
 
@@ -38,8 +38,8 @@ export default function StockMovementLedger() {
             const params = {};
             if (filters.dateFrom) params.dateFrom = filters.dateFrom;
             if (filters.dateTo) params.dateTo = filters.dateTo;
-            const res = await api.get(`/stock/ledger/${itemId}`, { params });
-            const d = res.data?.data;
+            const res = await api.get(`/stock/ledger/${itemId}`, params);
+            const d = res.data;
             setRows(d?.rows || []);
             setSelectedItem(d?.item || null);
         } catch (e) { console.error(e); }

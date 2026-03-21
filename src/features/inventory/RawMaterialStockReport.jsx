@@ -17,8 +17,8 @@ export default function RawMaterialStockReport() {
             if (filters.dateFrom) params.dateFrom = filters.dateFrom;
             if (filters.dateTo) params.dateTo = filters.dateTo;
             if (filters.search) params.search = filters.search;
-            const res = await api.get('/stock/raw-material-report', { params });
-            const data = res.data?.data || [];
+            const res = await api.get('/stock/raw-material-report', params);
+            const data = res.data || [];
             setRows(data);
             setSummary({
                 totalItems: data.length,

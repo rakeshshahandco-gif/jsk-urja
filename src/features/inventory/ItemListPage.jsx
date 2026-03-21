@@ -334,6 +334,8 @@ const ItemListPage = () => {
                     <option value="itemName:asc">Sort: Item Name (A-Z)</option>
                     <option value="itemGroupName:asc">Sort: Group (A-Z)</option>
                     <option value="currentStock:desc">Sort: Stock (High-Low)</option>
+                    <option value="valuationRate:desc">Sort: Rate (High-Low)</option>
+                    <option value="valuationRate:asc">Sort: Rate (Low-High)</option>
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                     <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Show:</span>
@@ -383,7 +385,9 @@ const ItemListPage = () => {
                                     <th style={s.th}>UOM</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Stock</th>
                                     <th style={{ ...s.th, textAlign: 'right' }}>Faulty</th>
-                                    <th style={{ ...s.th, textAlign: 'right' }}>Rate ₹</th>
+                                    <th style={{ ...s.th, textAlign: 'right', cursor: 'pointer' }} onClick={() => toggleSort('valuationRate')}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>Rate ₹ <SortIndicator field="valuationRate" /></div>
+                                    </th>
                                     <th style={{ ...s.th, textAlign: 'center' }}>⚙</th>
                                 </tr>
                             </thead>
@@ -426,7 +430,7 @@ const ItemListPage = () => {
                                             <td style={{ ...s.td, textAlign: 'right', color: '#dc2626' }}>
                                                 {item.faultyStock ?? 0}
                                             </td>
-                                            <td style={{ ...s.td, textAlign: 'right' }}>₹{(item.sellingPrice || 0).toFixed(2)}</td>
+                                            <td style={{ ...s.td, textAlign: 'right' }}>₹{(item.valuationRate || 0).toFixed(2)}</td>
                                             <td style={{ ...s.td, textAlign: 'center' }}>
                                                 <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
                                                     <button onClick={() => navigate(`/inventory/items/${item._id}`)}

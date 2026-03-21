@@ -114,18 +114,32 @@ export const exportBOMTemplate = asyncHandler(async (req, res) => {
     const worksheet = workbook.addWorksheet('BOM Template');
 
     // Define columns
-    // Headers designed to be intuitive
+    // Headers designed to be intuitive and cover ALL details from the UI
     worksheet.columns = [
         { header: 'BOM Number (BOM-XXXX-XXX)', key: 'bomNumber', width: 30 },
         { header: 'Product Code*', key: 'productCode', width: 25 },
-        { header: 'BOM Type (Production/Sub-Assembly)', key: 'bomType', width: 25 },
+        { header: 'BOM Type (Production/Sub-Assembly/Service BOM)', key: 'bomType', width: 35 },
         { header: 'Version (V1, V2...)', key: 'version', width: 15 },
-        { header: 'Production Qty (Finished Product Output)', key: 'productionQuantity', width: 30 },
+        { header: 'Status (Draft/Approved/Inactive)', key: 'status', width: 20 },
+        { header: 'Production Qty (Finished Product Output)', key: 'productionQuantity', width: 35 },
+        { header: 'Revision Date (YYYY-MM-DD)', key: 'revisionDate', width: 25 },
         { header: 'Is Default? (TRUE/FALSE)', key: 'isDefault', width: 15 },
+        { header: 'Labour Rate Per Point (₹)', key: 'labourCostPerPoint', width: 25 },
+        { header: 'Process Cost (₹)', key: 'totalProcessCost', width: 20 },
+        { header: 'Overhead Cost (₹)', key: 'overheadCost', width: 20 },
+        { header: 'Other Labour Cost (₹)', key: 'labourCost', width: 20 },
+        { header: 'SMT Assembly? (TRUE/FALSE)', key: 'smtAssembly', width: 20 },
+        { header: 'Manual Assembly? (TRUE/FALSE)', key: 'manualAssembly', width: 22 },
+        { header: 'Testing Required? (TRUE/FALSE)', key: 'testingRequired', width: 20 },
+        { header: 'QC Required? (TRUE/FALSE)', key: 'qcRequired', width: 18 },
+        { header: 'Packing Required? (TRUE/FALSE)', key: 'packingRequired', width: 20 },
+        { header: 'Scrap Account', key: 'scrapAccount', width: 25 },
+        { header: 'Header Remarks', key: 'remarks', width: 30 },
         { header: 'Component Code*', key: 'componentCode', width: 25 },
         { header: 'Component Qty*', key: 'componentQty', width: 15 },
-        { header: 'Component Points (Labour)', key: 'points', width: 20 },
-        { header: 'Remarks', key: 'remarks', width: 30 }
+        { header: 'Component Rate (₹)', key: 'rate', width: 18 },
+        { header: 'Component Points (Labour)', key: 'points', width: 22 },
+        { header: 'Component Remark', key: 'componentRemarks', width: 30 }
     ];
 
     // Style header
@@ -135,15 +149,29 @@ export const exportBOMTemplate = asyncHandler(async (req, res) => {
     // Add a sample row
     worksheet.addRow({
         bomNumber: 'BOM-SAMPLE-001',
-        productCode: 'ITEM-CODE-1',
+        productCode: 'FINISHED-ITEM-001',
         bomType: 'Production',
         version: 'V1',
+        status: 'Draft',
         productionQuantity: 1,
-        isDefault: 'TRUE',
-        componentCode: 'RAW-MAT-1',
-        componentQty: 2.5,
+        revisionDate: new Date().toISOString().split('T')[0],
+        isDefault: 'FALSE',
+        labourCostPerPoint: 0.25,
+        totalProcessCost: 50,
+        overheadCost: 20,
+        labourCost: 10,
+        smtAssembly: 'TRUE',
+        manualAssembly: 'FALSE',
+        testingRequired: 'TRUE',
+        qcRequired: 'TRUE',
+        packingRequired: 'FALSE',
+        scrapAccount: 'Scrap Revenue',
+        remarks: 'Sample Header Remarks',
+        componentCode: 'RAW-MAT-001',
+        componentQty: 2,
+        rate: 100,
         points: 4,
-        remarks: 'Sample entry'
+        componentRemarks: 'R25, U1'
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -169,12 +197,26 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         else if (h.includes('product code')) colMap.productCode = colNumber;
         else if (h.includes('bom type')) colMap.bomType = colNumber;
         else if (h.includes('version')) colMap.version = colNumber;
+        else if (h.includes('status')) colMap.status = colNumber;
         else if (h.includes('production qty')) colMap.productionQuantity = colNumber;
+        else if (h.includes('revision date')) colMap.revisionDate = colNumber;
         else if (h.includes('default')) colMap.isDefault = colNumber;
+        else if (h.includes('labour rate per point')) colMap.labourCostPerPoint = colNumber;
+        else if (h.includes('process cost')) colMap.totalProcessCost = colNumber;
+        else if (h.includes('overhead cost')) colMap.overheadCost = colNumber;
+        else if (h.includes('other labour cost')) colMap.labourCost = colNumber;
+        else if (h.includes('smt assembly')) colMap.smtAssembly = colNumber;
+        else if (h.includes('manual assembly')) colMap.manualAssembly = colNumber;
+        else if (h.includes('testing required')) colMap.testingRequired = colNumber;
+        else if (h.includes('qc required')) colMap.qcRequired = colNumber;
+        else if (h.includes('packing required')) colMap.packingRequired = colNumber;
+        else if (h.includes('scrap account')) colMap.scrapAccount = colNumber;
+        else if (h.startsWith('header remarks') || h === 'remarks') colMap.remarks = colNumber;
         else if (h.includes('component code')) colMap.componentCode = colNumber;
         else if (h.includes('component qty')) colMap.componentQty = colNumber;
-        else if (h.includes('points')) colMap.points = colNumber;
-        else if (h.includes('remarks')) colMap.remarks = colNumber;
+        else if (h.includes('component rate')) colMap.rate = colNumber;
+        else if (h.includes('component points')) colMap.points = colNumber;
+        else if (h.includes('component remark')) colMap.componentRemarks = colNumber;
     });
 
     if (!colMap.productCode || !colMap.componentCode) {
@@ -197,13 +239,31 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         const groupKey = bomNumber || `${productCode}-${version}`;
 
         if (!bomGroups.has(groupKey)) {
+            const getVal = (col) => col ? row.getCell(col).value : undefined;
+            const parseBool = (val) => String(val).toLowerCase() === 'true';
+
             bomGroups.set(groupKey, {
                 bomNumber,
                 productCode,
                 version,
-                bomType: row.getCell(colMap.bomType).value?.toString().trim() || 'Production',
-                productionQuantity: Number(row.getCell(colMap.productionQuantity).value) || 1,
-                isDefault: String(row.getCell(colMap.isDefault).value).toLowerCase() === 'true',
+                status: getVal(colMap.status) || 'Draft',
+                bomType: getVal(colMap.bomType) || 'Production',
+                productionQuantity: Number(getVal(colMap.productionQuantity)) || 1,
+                revisionDate: getVal(colMap.revisionDate),
+                isDefault: parseBool(getVal(colMap.isDefault)),
+                labourCostPerPoint: Number(getVal(colMap.labourCostPerPoint)) || 0.25,
+                totalProcessCost: Number(getVal(colMap.totalProcessCost)) || 0,
+                overheadCost: Number(getVal(colMap.overheadCost)) || 0,
+                labourCost: Number(getVal(colMap.labourCost)) || 0,
+                scrapAccount: getVal(colMap.scrapAccount) || '',
+                remarks: getVal(colMap.remarks) || '',
+                processes: {
+                    smtAssembly: parseBool(getVal(colMap.smtAssembly)),
+                    manualAssembly: parseBool(getVal(colMap.manualAssembly)),
+                    testingRequired: parseBool(getVal(colMap.testingRequired)),
+                    qcRequired: parseBool(getVal(colMap.qcRequired)),
+                    packingRequired: parseBool(getVal(colMap.packingRequired))
+                },
                 components: []
             });
         }
@@ -211,8 +271,9 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         bomGroups.get(groupKey).components.push({
             itemCode: componentCode,
             quantity: Number(row.getCell(colMap.componentQty).value) || 0,
+            rate: Number(row.getCell(colMap.rate)?.value) || 0,
             points: Number(row.getCell(colMap.points).value) || 0,
-            remarks: row.getCell(colMap.remarks)?.value?.toString().trim() || ''
+            remarks: row.getCell(colMap.componentRemarks)?.value?.toString().trim() || ''
         });
     }
 
@@ -240,7 +301,7 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
                     continue;
                 }
 
-                const rate = cItem.purchaseRate || 0;
+                const rate = comp.rate || cItem.purchaseRate || cItem.valuationRate || 0;
                 const totalCost = comp.quantity * rate;
                 totalRawMaterialCost += totalCost;
                 totalPoints += comp.points;
@@ -264,18 +325,27 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
                 continue;
             }
 
-            // Calculate simple costs (logic often handled by frontend, but good to baseline here)
-            const labourCostPerPoint = 0.25; // Default from model
+            // Calculate costs
+            const labourCostPerPoint = bData.labourCostPerPoint || 0.25;
             const totalPointsLabourCost = totalPoints * labourCostPerPoint;
-            const finalProductionCostPerUnit = (totalRawMaterialCost + totalPointsLabourCost) / bData.productionQuantity;
+            const finalProductionCostPerUnit = (totalRawMaterialCost + totalPointsLabourCost + bData.totalProcessCost + bData.overheadCost + bData.labourCost) / bData.productionQuantity;
 
             const finalBData = {
                 bomNumber: bData.bomNumber,
                 finishedProductId: fProduct._id,
                 bomType: bData.bomType,
                 version: bData.version,
+                status: bData.status,
                 productionQuantity: bData.productionQuantity,
+                revisionDate: bData.revisionDate || new Date(),
                 isDefault: bData.isDefault,
+                labourCostPerPoint: labourCostPerPoint,
+                totalProcessCost: bData.totalProcessCost,
+                overheadCost: bData.overheadCost,
+                labourCost: bData.labourCost,
+                scrapAccount: bData.scrapAccount,
+                remarks: bData.remarks,
+                processes: bData.processes,
                 components: resolvedComponents,
                 totalRawMaterialCost,
                 totalPointsLabourCost,
