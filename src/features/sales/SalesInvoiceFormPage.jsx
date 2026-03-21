@@ -422,7 +422,7 @@ export default function SalesInvoiceFormPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Item Code', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['Sr', 'Item Code', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : 'auto' }}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -449,8 +449,8 @@ export default function SalesInvoiceFormPage() {
                                         <td style={{ ...td, width: 70 }}>
                                             <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} placeholder="UOM" autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, width: 80 }}>
-                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                        <td style={{ ...td, minWidth: '120px' }}>
+                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', fontSize: '12px', fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
                                         </td>
                                         <td style={{ ...td, width: 90 }}>
                                             <input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />

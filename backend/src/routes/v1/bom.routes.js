@@ -12,6 +12,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/export/template', bomController.exportBOMTemplate);
+router.get('/export/list', validate(bomValidation.getBOMs), bomController.exportBOMListToExcel);
 router.post('/import/excel', upload.single('file'), bomController.importBOMsExcel);
 
 router
@@ -24,5 +25,7 @@ router
     .get(validate(bomValidation.getBOM), bomController.getBOM)
     .put(validate(bomValidation.updateBOM), bomController.updateBOM)
     .delete(validate(bomValidation.deleteBOM), bomController.deleteBOM);
+
+router.get('/:id/export', validate(bomValidation.getBOM), bomController.exportBOMToExcel);
 
 export default router;

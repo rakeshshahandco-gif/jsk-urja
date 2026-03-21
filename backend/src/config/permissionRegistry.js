@@ -7,108 +7,295 @@ export const PERMISSION_REGISTRY = [
     {
         id: 'customers',
         name: 'Customers',
-        actions: [
-            { id: 'view', label: 'View Customers', type: 'boolean' },
-            { id: 'add', label: 'Add Customer', type: 'boolean' },
-            { id: 'edit', label: 'Edit Customer', type: 'boolean' },
-            { id: 'delete', label: 'Delete Customer', type: 'boolean' },
-            { id: 'talk', label: 'Talk With Customer', type: 'boolean' },
-            { id: 'reminders', label: 'Manage Reminders', type: 'boolean' },
-            { id: 'scope', label: 'Data Visibility', type: 'scope', options: ['Own', 'Department', 'All'] }
+        submodules: [
+            {
+                id: 'customer_master',
+                name: 'Customer Master',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'reminder_tasks',
+                name: 'Reminder Tasks',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'manage', label: 'Manage', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'follow_up',
+                name: 'Follow-up Dashboard',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'talk', label: 'Talk With Customer', type: 'boolean' }
+                ]
+            }
         ]
     },
     {
         id: 'tasks',
         name: 'Task Management',
-        actions: [
-            { id: 'view', label: 'View Tasks', type: 'boolean' },
-            { id: 'add', label: 'Add Task', type: 'boolean' },
-            { id: 'edit', label: 'Edit Task', type: 'boolean' },
-            { id: 'delete', label: 'Delete Task', type: 'boolean' },
-            { id: 'groups', label: 'Manage Task Groups', type: 'boolean' }
-        ]
-    },
-    {
-        id: 'reports',
-        name: 'Reports',
-        actions: [
-            { id: 'view', label: 'View Reports', type: 'boolean' },
-            { id: 'export', label: 'Export Reports', type: 'boolean' }
+        submodules: [
+            {
+                id: 'task_list',
+                name: 'Manage Tasks',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'task_groups',
+                name: 'Task Groups',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'manage', label: 'Manage', type: 'boolean' }
+                ]
+            }
         ]
     },
     {
         id: 'inventory',
         name: 'Inventory',
-        actions: [
-            { id: 'view', label: 'View Inventory', type: 'boolean' },
-            { id: 'adjust', label: 'Adjust Stock', type: 'boolean' },
-            { id: 'reports', label: 'Inventory Reports', type: 'boolean' }
+        submodules: [
+            {
+                id: 'item_master',
+                name: 'Item Master',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' },
+                    { id: 'import', label: 'Import', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'item_types',
+                name: 'Item Types',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
+            },
+            {
+                id: 'item_groups',
+                name: 'Item Groups',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
+            },
+            {
+                id: 'bom',
+                name: 'Bill of Materials (BOM)',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'raw_material_report',
+                name: 'Raw Material Stock Report',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }]
+            },
+            {
+                id: 'finished_goods_report',
+                name: 'Finished Goods Stock Report',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }]
+            },
+            {
+                id: 'stock_ledger',
+                name: 'Stock Movement Ledger',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }]
+            }
         ]
     },
     {
         id: 'production',
         name: 'Production',
-        actions: [
-            { id: 'view', label: 'View Production', type: 'boolean' },
-            { id: 'entry', label: 'Production Entry', type: 'boolean' },
-            { id: 'bom', label: 'Manage BOM', type: 'boolean' }
+        submodules: [
+            {
+                id: 'prod_dashboard',
+                name: 'Dashboard',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }]
+            },
+            {
+                id: 'prod_output',
+                name: 'Production Output Entry',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'comp_replacement',
+                name: 'Component Replacement',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'prod_rejection',
+                name: 'Production Rejection',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'prod_rework',
+                name: 'Failure & Rework',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'manage', label: 'Manage', type: 'boolean' }
+                ]
+            }
         ]
     },
     {
         id: 'purchase',
         name: 'Purchase',
-        actions: [
-            { id: 'view', label: 'View Purchase', type: 'boolean' },
-            { id: 'add', label: 'Add Purchase Order', type: 'boolean' },
-            { id: 'edit', label: 'Edit Purchase Order', type: 'boolean' },
-            { id: 'scope', label: 'Data Visibility', type: 'scope', options: ['Own', 'Department', 'All'] }
+        submodules: [
+            {
+                id: 'suppliers',
+                name: 'Suppliers',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'purchase_orders',
+                name: 'Purchase Orders',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' },
+                    { id: 'approve', label: 'Approve', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'grn',
+                name: 'Goods Receipt (GRN)',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'purchase_invoices',
+                name: 'Purchase Invoices',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' }
+                ]
+            }
         ]
     },
     {
         id: 'sales',
         name: 'Sales',
-        actions: [
-            { id: 'view', label: 'View Sales', type: 'boolean' },
-            { id: 'add', label: 'Add Sale Order', type: 'boolean' },
-            { id: 'edit', label: 'Edit Sale Order', type: 'boolean' },
-            { id: 'invoice', label: 'Generate Invoice', type: 'boolean' },
-            { id: 'scope', label: 'Data Visibility', type: 'scope', options: ['Own', 'Department', 'All'] }
+        submodules: [
+            {
+                id: 'sales_orders',
+                name: 'Sales Orders',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'sales_invoices',
+                name: 'Tax Invoices (GST)',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'invoice_series',
+                name: 'Invoice Series',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
+            }
         ]
     },
     {
         id: 'service',
         name: 'Service',
-        actions: [
-            { id: 'view', label: 'View Service', type: 'boolean' },
-            { id: 'tickets', label: 'Manage Tickets', type: 'boolean' }
+        submodules: [
+            {
+                id: 'complaints',
+                name: 'Customer Complaints',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'replacement_dashboard',
+                name: 'Replacement Dashboard',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }]
+            },
+            {
+                id: 'replacement_dispatches',
+                name: 'Replacement Dispatches',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            }
         ]
     },
     {
         id: 'accounts',
         name: 'Accounts',
-        actions: [
-            { id: 'view', label: 'View Accounts', type: 'boolean' },
-            { id: 'vouchers', label: 'Manage Vouchers', type: 'boolean' },
-            { id: 'ledgers', label: 'Manage Ledgers', type: 'boolean' },
-            { id: 'reports', label: 'Financial Reports', type: 'boolean' }
+        submodules: [
+            { id: 'receipt_entry', name: 'Receipt Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'payment_entry', name: 'Payment Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'journal_entry', name: 'Journal Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'ledger_master', name: 'Ledger Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
         ]
     },
     {
-        id: 'users',
-        name: 'Users',
-        actions: [
-            { id: 'manage', label: 'Manage Users & Permissions', type: 'boolean' },
-            { id: 'roles', label: 'Manage Roles', type: 'boolean' },
-            { id: 'audit', label: 'View Audit Logs', type: 'boolean' }
+        id: 'reports',
+        name: 'Reports',
+        submodules: [
+            { id: 'customer_master_report', name: 'Customer Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'followup_report', name: 'Follow-up Tracker Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'reminder_report', name: 'Open Reminders', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
         ]
     },
     {
-        id: 'settings',
-        name: 'Settings',
-        actions: [
-            { id: 'view', label: 'View Settings', type: 'boolean' },
-            { id: 'company', label: 'Company Profile', type: 'boolean' },
-            { id: 'whatsapp', label: 'WhatsApp Config', type: 'boolean' }
+        id: 'admin',
+        name: 'Admin',
+        submodules: [
+            { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
         ]
     }
 ];

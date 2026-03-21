@@ -12,6 +12,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const [departments, setDepartments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    const [expandedModules, setExpandedModules] = useState({});
     const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
         defaultValues: user ? {
             ...user,
@@ -70,16 +71,20 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         }
     }, [selectedRole, isEdit, setValue, roles]);
 
-    const handlePermissionToggle = (moduleId, actionId) => {
+    const handlePermissionToggle = (moduleId, submoduleId, actionId) => {
         setSelectedPermissions(prev => {
-            const modulePerms = prev[moduleId] || {};
-            const newVal = !modulePerms[actionId];
-            
+            const moduleData = prev[moduleId] || {};
+            const submoduleData = moduleData[submoduleId] || {};
+            const newVal = !submoduleData[actionId];
+
             const updated = {
                 ...prev,
                 [moduleId]: {
-                    ...modulePerms,
-                    [actionId]: newVal
+                    ...moduleData,
+                    [submoduleId]: {
+                        ...submoduleData,
+                        [actionId]: newVal
+                    }
                 }
             };
             setValue('additionalPermissions', updated);
@@ -87,14 +92,28 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         });
     };
 
-    const handleScopeChange = (moduleId, actionId, value) => {
+    const toggleModuleExpansion = (moduleId) => {
+        setExpandedModules(prev => ({
+            ...prev,
+            [moduleId]: !prev[moduleId]
+        }));
+    };
+
+    const handleSubmoduleSelection = (moduleId, submodule, isSelect) => {
         setSelectedPermissions(prev => {
-            const modulePerms = prev[moduleId] || {};
+            const moduleData = prev[moduleId] || {};
+            const submoduleData = { ...(moduleData[submodule.id] || {}) };
+
+            submodule.actions.forEach(action => {
+                const actionId = typeof action === 'string' ? action : action.id;
+                submoduleData[actionId] = isSelect;
+            });
+
             const updated = {
                 ...prev,
                 [moduleId]: {
-                    ...modulePerms,
-                    [actionId]: value
+                    ...moduleData,
+                    [submodule.id]: submoduleData
                 }
             };
             setValue('additionalPermissions', updated);
@@ -104,21 +123,20 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
 
     const handleModuleSelection = (module, isSelect) => {
         setSelectedPermissions(prev => {
-            const modulePerms = { ...(prev[module.id] || {}) };
-            
-            module.actions.forEach(action => {
-                if (action.type === 'boolean') {
-                    modulePerms[action.id] = isSelect;
-                } else if (action.type === 'scope' && isSelect) {
-                    modulePerms[action.id] = 'Own'; // Default scope on select all
-                } else if (action.type === 'scope' && !isSelect) {
-                    delete modulePerms[action.id];
-                }
+            const moduleData = { ...(prev[module.id] || {}) };
+
+            module.submodules.forEach(sub => {
+                const submoduleData = {};
+                sub.actions.forEach(action => {
+                    const actionId = typeof action === 'string' ? action : action.id;
+                    submoduleData[actionId] = isSelect;
+                });
+                moduleData[sub.id] = submoduleData;
             });
 
             const updated = {
                 ...prev,
-                [module.id]: modulePerms
+                [module.id]: moduleData
             };
             setValue('additionalPermissions', updated);
             return updated;
@@ -128,12 +146,16 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const handleSelectAll = () => {
         const all = {};
         metadata.forEach(module => {
-            const modulePerms = {};
-            module.actions.forEach(action => {
-                if (action.type === 'boolean') modulePerms[action.id] = true;
-                else if (action.type === 'scope') modulePerms[action.id] = 'Own';
+            const moduleData = {};
+            module.submodules.forEach(sub => {
+                const submoduleData = {};
+                sub.actions.forEach(action => {
+                    const actionId = typeof action === 'string' ? action : action.id;
+                    submoduleData[actionId] = true;
+                });
+                moduleData[sub.id] = submoduleData;
             });
-            all[module.id] = modulePerms;
+            all[module.id] = moduleData;
         });
         setSelectedPermissions(all);
         setValue('additionalPermissions', all);
@@ -256,54 +278,75 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                     <div className={styles.permissionHeader}>
                         <h3 className={styles.sectionTitle}>Module Permissions</h3>
                         <div className={styles.permissionActions}>
-                            <button type="button" onClick={handleSelectAll} className={styles.linkButton}>Select All</button>
-                            <button type="button" onClick={handleClearAll} className={styles.linkButton}>Clear All</button>
+                            <button type="button" onClick={handleSelectAll} className={styles.linkButton}>✅ Select All</button>
+                            <button type="button" onClick={handleClearAll} className={styles.linkButton}>❌ Clear All</button>
                         </div>
                     </div>
 
                     <div className={styles.modulesContainer}>
-                        {metadata.map((module) => (
-                            <div key={module.id} className={styles.moduleGroup}>
-                                <div className={styles.moduleHeader}>
-                                    <h4 className={styles.moduleTitle}>{module.name}</h4>
-                                    <div className={styles.groupActions}>
-                                        <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, true)}>SELECT ALL</button>
-                                        <span className={styles.divider}>|</span>
-                                        <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, false)}>CLEAR</button>
-                                    </div>
-                                </div>
-                                <div className={styles.permissionGrid}>
-                                    {module.actions.map((action) => (
-                                        <div key={action.id} className={styles.permissionItemWrapper}>
-                                            {action.type === 'boolean' ? (
-                                                <label className={styles.permissionItem}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!selectedPermissions[module.id]?.[action.id]}
-                                                        onChange={() => handlePermissionToggle(module.id, action.id)}
-                                                        className={styles.checkbox}
-                                                    />
-                                                    <span>{action.label}</span>
-                                                </label>
-                                            ) : (
-                                                <div className={styles.scopeControl}>
-                                                    <span className={styles.scopeLabel}>{action.label}:</span>
-                                                    <select
-                                                        value={selectedPermissions[module.id]?.[action.id] || 'Own'}
-                                                        onChange={(e) => handleScopeChange(module.id, action.id, e.target.value)}
-                                                        className={styles.scopeSelect}
-                                                    >
-                                                        {action.options.map(opt => (
-                                                            <option key={opt} value={opt}>{opt}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            )}
+                        {metadata?.map((module) => {
+                            const isExpanded = expandedModules[module.id];
+                            const modulePerms = selectedPermissions[module.id] || {};
+                            const hasAnyPermission = Object.values(modulePerms).some(sub => Object.values(sub).some(val => !!val));
+
+                            return (
+                                <div key={module.id} className={`${styles.moduleGroup} ${isExpanded ? styles.expanded : ''}`}>
+                                    <div className={styles.moduleHeader} onClick={() => toggleModuleExpansion(module.id)}>
+                                        <div className={styles.moduleTitleRow}>
+                                            <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+                                            <h4 className={`${styles.moduleTitle} ${hasAnyPermission ? styles.activeModule : ''}`}>
+                                                {module.name || module.label || module.title || (module.id?.charAt(0).toUpperCase() + module.id?.slice(1)) || 'Untitled Module'}
+                                            </h4>
                                         </div>
-                                    ))}
+                                        <div className={styles.groupActions} onClick={e => e.stopPropagation()}>
+                                            <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, true)}>ALLOW ALL</button>
+                                            <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, false)}>DENY ALL</button>
+                                        </div>
+                                    </div>
+
+                                    {isExpanded && (
+                                        <div className={styles.submodulesList}>
+                                            {module.submodules?.map((sub) => {
+                                                const subPerms = modulePerms[sub.id] || {};
+                                                const hasSubPermission = Object.values(subPerms).some(val => !!val);
+
+                                                return (
+                                                    <div key={sub.id} className={styles.submoduleItem}>
+                                                        <div className={styles.submoduleHeader}>
+                                                            <span className={`${styles.submoduleTitle} ${hasSubPermission ? styles.activeSubmodule : ''}`}>
+                                                                {sub.name || sub.label || sub.title || (sub.id?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')) || 'Untitled'}
+                                                            </span>
+                                                            <div className={styles.submoduleActions}>
+                                                                <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, true)}>All</button>
+                                                                <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, false)}>None</button>
+                                                            </div>
+                                                        </div>
+                                                        <div className={styles.actionGrid}>
+                                                            {sub.actions?.map((action) => {
+                                                                const actionId = typeof action === 'string' ? action : action.id;
+                                                                const actionLabel = typeof action === 'string' ? (action.charAt(0).toUpperCase() + action.slice(1)) : action.label;
+
+                                                                return (
+                                                                    <label key={actionId} className={styles.actionItem}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={!!subPerms[actionId]}
+                                                                            onChange={() => handlePermissionToggle(module.id, sub.id, actionId)}
+                                                                            className={styles.checkbox}
+                                                                        />
+                                                                        <span>{actionLabel}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </section>
 

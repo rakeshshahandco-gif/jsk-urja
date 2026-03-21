@@ -151,7 +151,9 @@ const TaskRow = ({ task, index, onExtend, onCloseTask, onEdit, onDelete, onViewD
                     <ActionBtn onClick={() => onEdit(task)} title="Edit" clr="#15803d" bg="#f0fdf4"><Pencil size={11} /></ActionBtn>
                     <ActionBtn onClick={() => onExtend(task)} title="Extend" clr="#2563eb" bg="#eff6ff"><Clock3 size={11} /></ActionBtn>
                     {task.status !== 'COMPLETED' && (
-                        <ActionBtn onClick={() => onCloseTask(task._id)} title="Complete" clr="#16a34a" bg="#f0fdf4"><CheckCircle2 size={11} /></ActionBtn>
+                        <ActionBtn onClick={() => onCloseTask(task._id)} title="Complete" clr="#16a34a" bg="#f0fdf4">
+                            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>✅</span>
+                        </ActionBtn>
                     )}
                     <ActionBtn onClick={() => onDelete(task._id)} title="Delete" clr="#be123c" bg="#fef2f2"><XCircle size={11} /></ActionBtn>
                 </div>

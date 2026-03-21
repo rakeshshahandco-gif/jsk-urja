@@ -50,16 +50,14 @@ export const authorize = (...roles) => {
     };
 };
 
+import { checkUserPermission } from '../utils/permissionUtils.js';
+
 export const checkPermission = (requiredPermission) => {
     return (req, res, next) => {
-        // Admin has all permissions (convention: '*' or just role check usually, but let's be explicit)
-        if (req.user.role === 'admin' || (req.user.permissions && req.user.permissions.includes('*'))) {
+        if (checkUserPermission(req.user, requiredPermission)) {
             return next();
         }
-
-        if (!req.user.permissions || !req.user.permissions.includes(requiredPermission)) {
-            throw new ApiError(403, `Permission denied: ${requiredPermission} required`);
-        }
-        next();
+        
+        throw new ApiError(403, `Permission denied: ${requiredPermission} required`);
     };
 };

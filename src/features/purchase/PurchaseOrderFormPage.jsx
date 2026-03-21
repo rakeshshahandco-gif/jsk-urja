@@ -311,7 +311,7 @@ export default function PurchaseOrderFormPage() {
                                     <thead>
                                         <tr style={{ background: '#f8fafc', color: '#64748b' }}>
                                             {['#', 'Item', 'Group', 'Additional Notes', 'HSN/SAC', 'UOM', 'Qty', 'Rate', 'Disc%', 'Amount', ''].map(h => (
-                                                <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                                                <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: h === 'Qty' ? '150px' : 'auto' }}>{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -341,8 +341,8 @@ export default function PurchaseOrderFormPage() {
                                                     <td style={{ padding: '8px 10px', width: '70px' }}>
                                                         <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', width: '80px' }}>
-                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
+                                                    <td style={{ padding: '8px 10px', minWidth: '120px' }}>
+                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} style={{ ...inp, fontSize: '12px', fontWeight: 'bold' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', width: '90px' }}>
                                                         <input type="number" min="0" step="0.01" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...inp, fontSize: '12px' }} />

@@ -228,7 +228,7 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
                                                 {!done ? (
                                                     <>
                                                         <IconBtn onClick={() => onCloseTask(task._id)} title="Close task" color="#16a34a" bg="#f0fdf4">
-                                                            <Check size={12} />
+                                                            <span style={{ fontSize: '16px', fontWeight: 'bold' }}>✅</span>
                                                         </IconBtn>
                                                         <IconBtn onClick={() => onExtend(task)} title="Extend due date" color="#2563eb" bg="#eff6ff">
                                                             <Clock3 size={12} />

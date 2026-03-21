@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, Plus, Trash2, Calculator, ChevronLeft, Settings, FileText, Activity, AlertCircle } from 'lucide-react';
-import { getBOM, createBOM, updateBOM } from '@/services/bomApi';
+import { Save, Plus, Trash2, Calculator, ChevronLeft, Settings, FileText, Activity, AlertCircle, Printer, FileDown } from 'lucide-react';
+import { getBOM, createBOM, updateBOM, exportBOM } from '@/services/bomApi';
 import { getItems } from '@/services/itemApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
@@ -273,6 +273,30 @@ const BOMFormPage = () => {
         }
     };
 
+    const handlePrint = () => {
+        window.print();
+    };
+
+    const handleExport = async () => {
+        if (!isEdit) {
+            addToast('Please save the BOM before exporting', 'warning');
+            return;
+        }
+        try {
+            const data = await exportBOM(id);
+            const url = window.URL.createObjectURL(new Blob([data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `BOM_${form.bomNumber || 'Detail'}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            addToast('BOM details exported successfully', 'success');
+        } catch (error) {
+            addToast('Failed to export BOM', 'error');
+        }
+    };
+
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontSize: 15 }}>Loading BOM...</div>;
 
     const fmt = (n) => (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -280,7 +304,59 @@ const BOMFormPage = () => {
     return (
         <div style={s.page}>
             <style>{`
-                /* Ensure numeric arrows are visible */
+                @media print {
+                    /* Hide sidebar and non-essential UI */
+                    aside, .sidebar, [style*="position: fixed"], button, select, input[type="file"], .no-print {
+                        display: none !important;
+                    }
+                    /* Headers should not be sticky when printing */
+                    [style*="position: sticky"] {
+                        position: relative !important;
+                        box-shadow: none !important;
+                        border-bottom: 2px solid #000 !important;
+                    }
+                    /* Ensure content fits the page */
+                    body, html, main, #root {
+                        height: auto !important;
+                        overflow: visible !important;
+                        background: #fff !important;
+                    }
+                    div[style*="background: #f1f5f9"] {
+                        background: #fff !important;
+                    }
+                    /* Table styling for print */
+                    table {
+                        border: 1px solid #eee !important;
+                    }
+                    th {
+                        background: #eee !important;
+                        color: #000 !important;
+                    }
+                    /* Inputs should look like text */
+                    input, select, textarea {
+                        border: none !important;
+                        background: transparent !important;
+                        padding: 0 !important;
+                        appearance: none !important;
+                    }
+                    /* Sticky arrows hide */
+                    [title*="Scroll"] {
+                        display: none !important;
+                    }
+                    /* Ensure totals stand out */
+                    div[style*="background: linear-gradient"] {
+                        background: #f8fafc !important;
+                        color: #000 !important;
+                        border: 1px solid #e2e8f0 !important;
+                        box-shadow: none !important;
+                    }
+                    div[style*="background: linear-gradient"] span, 
+                    div[style*="background: linear-gradient"] p {
+                        color: #000 !important;
+                        opacity: 1 !important;
+                        -webkit-text-fill-color: initial !important;
+                    }
+                }
             `}</style>
             {/* ── STICKY HEADER ── */}
             <div style={s.header}>
@@ -294,8 +370,18 @@ const BOMFormPage = () => {
                     </div>
                 </div>
                 <div style={s.headerBtns}>
-                    <button style={s.cancelBtn} onClick={() => navigate(PATHS.INVENTORY.BOM.ROOT)}>Cancel</button>
-                    <button style={s.saveBtn} onClick={onSubmit}>
+                    <button className="no-print" style={s.cancelBtn} onClick={() => navigate(PATHS.INVENTORY.BOM.ROOT)}>Cancel</button>
+                    {isEdit && (
+                        <>
+                            <button className="no-print" onClick={handlePrint} style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff' }}>
+                                <Printer size={16} /> Print
+                            </button>
+                            <button className="no-print" onClick={handleExport} style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff' }}>
+                                <FileDown size={16} /> Export Excel
+                            </button>
+                        </>
+                    )}
+                    <button className="no-print" style={s.saveBtn} onClick={onSubmit}>
                         <Save size={16} /> Save BOM
                     </button>
                 </div>

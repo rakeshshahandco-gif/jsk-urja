@@ -10,113 +10,104 @@ export const ROLES = {
 // Dynamic Modules and Permissions Configuration
 export const APP_MODULES = [
     {
+        id: 'customers',
         name: 'Customers',
-        permissions: [
-            { key: 'VIEW_CUSTOMERS', value: 'view_customers', label: 'View Customers' },
-            { key: 'ADD_CUSTOMER', value: 'add_customer', label: 'Add Customer' },
-            { key: 'EDIT_CUSTOMER', value: 'edit_customer', label: 'Edit Customer' },
-            { key: 'DELETE_CUSTOMER', value: 'delete_customer', label: 'Delete Customer' },
-            { key: 'TALK_WITH_CUSTOMER', value: 'talk_with_customer', label: 'Talk With Customer' }
+        submodules: [
+            { id: 'customer_master', name: 'Customer Master', actions: ['view', 'add', 'edit', 'delete', 'export'] },
+            { id: 'reminder_tasks', name: 'Reminder Tasks', actions: ['view', 'manage'] },
+            { id: 'follow_up', name: 'Follow-up Dashboard', actions: ['view', 'talk'] }
         ]
     },
     {
-        name: 'Conversations',
-        permissions: [
-            { key: 'EDIT_CONVERSATIONS', value: 'edit_conversations', label: 'Edit Conversations' },
-            { key: 'DELETE_CONVERSATIONS', value: 'delete_conversations', label: 'Delete Conversations' }
+        id: 'tasks',
+        name: 'Task Management',
+        submodules: [
+            { id: 'task_list', name: 'Manage Tasks', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'task_groups', name: 'Task Groups', actions: ['view', 'manage'] }
         ]
     },
     {
-        name: 'Reports',
-        permissions: [
-            { key: 'VIEW_REPORTS', value: 'view_reports', label: 'View Reports' },
-            { key: 'EXPORT_DATA', value: 'export_data', label: 'Export Data' }
-        ]
-    },
-    {
-        name: 'Users',
-        permissions: [
-            { key: 'MANAGE_USERS', value: 'manage_users', label: 'Manage Users' }
-        ]
-    },
-    {
-        name: 'Reminders',
-        permissions: [
-            { key: 'VIEW_REMINDERS', value: 'view_reminders', label: 'View Reminders' }
-        ]
-    },
-    {
-        name: 'Tasks',
-        permissions: [
-            { key: 'VIEW_TASKS', value: 'view_tasks', label: 'View Tasks' },
-            { key: 'ADD_TASK', value: 'add_task', label: 'Add Task' },
-            { key: 'EDIT_TASK', value: 'edit_task', label: 'Edit Task' },
-            { key: 'DELETE_TASK', value: 'delete_task', label: 'Delete Task' }
-        ]
-    },
-    {
-        name: 'Groups',
-        permissions: [
-            { key: 'VIEW_GROUPS', value: 'view_groups', label: 'View Groups' },
-            { key: 'ADD_GROUP', value: 'add_group', label: 'Add Group' },
-            { key: 'EDIT_GROUP', value: 'edit_group', label: 'Edit Group' },
-            { key: 'DELETE_GROUP', value: 'delete_group', label: 'Delete Group' }
-        ]
-    },
-    {
+        id: 'inventory',
         name: 'Inventory',
-        permissions: [
-            { key: 'VIEW_INVENTORY', value: 'view_inventory', label: 'View Inventory' },
-            { key: 'MANAGE_INVENTORY', value: 'manage_inventory', label: 'Manage Inventory' }
+        submodules: [
+            { id: 'item_master', name: 'Item Master', actions: ['view', 'add', 'edit', 'delete', 'export', 'import'] },
+            { id: 'item_types', name: 'Item Types', actions: ['view', 'manage'] },
+            { id: 'item_groups', name: 'Item Groups', actions: ['view', 'manage'] },
+            { id: 'bom', name: 'Bill of Materials (BOM)', actions: ['view', 'add', 'edit', 'delete', 'print', 'export'] },
+            { id: 'raw_material_report', name: 'Raw Material Stock Report', actions: ['view', 'export'] },
+            { id: 'finished_goods_report', name: 'Finished Goods Stock Report', actions: ['view', 'export'] },
+            { id: 'stock_ledger', name: 'Stock Movement Ledger', actions: ['view', 'export'] }
         ]
     },
     {
+        id: 'production',
         name: 'Production',
-        permissions: [
-            { key: 'VIEW_PRODUCTION', value: 'view_production', label: 'View Production' },
-            { key: 'MANAGE_PRODUCTION', value: 'manage_production', label: 'Manage Production' }
+        submodules: [
+            { id: 'prod_dashboard', name: 'Dashboard', actions: ['view'] },
+            { id: 'prod_output', name: 'Production Output Entry', actions: ['view', 'add'] },
+            { id: 'comp_replacement', name: 'Component Replacement', actions: ['view', 'add'] },
+            { id: 'prod_rejection', name: 'Production Rejection', actions: ['view', 'add'] },
+            { id: 'prod_rework', name: 'Failure & Rework', actions: ['view', 'manage'] }
         ]
     },
     {
+        id: 'purchase',
         name: 'Purchase',
-        permissions: [
-            { key: 'VIEW_PURCHASE', value: 'view_purchase', label: 'View Purchase' },
-            { key: 'MANAGE_PURCHASE', value: 'manage_purchase', label: 'Manage Purchase' }
+        submodules: [
+            { id: 'suppliers', name: 'Suppliers', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'purchase_orders', name: 'Purchase Orders', actions: ['view', 'add', 'edit', 'delete', 'print', 'approve'] },
+            { id: 'grn', name: 'Goods Receipt (GRN)', actions: ['view', 'add'] },
+            { id: 'purchase_invoices', name: 'Purchase Invoices', actions: ['view', 'add', 'edit', 'delete'] }
         ]
     },
     {
+        id: 'sales',
         name: 'Sales',
-        permissions: [
-            { key: 'VIEW_SALES', value: 'view_sales', label: 'View Sales' },
-            { key: 'MANAGE_SALES', value: 'manage_sales', label: 'Manage Sales' }
+        submodules: [
+            { id: 'sales_orders', name: 'Sales Orders', actions: ['view', 'add', 'edit', 'delete', 'print'] },
+            { id: 'sales_invoices', name: 'Tax Invoices (GST)', actions: ['view', 'add', 'edit', 'delete', 'print'] },
+            { id: 'invoice_series', name: 'Invoice Series', actions: ['view', 'manage'] }
         ]
     },
     {
-        name: 'Accounts',
-        permissions: [
-            { key: 'VIEW_ACCOUNTS', value: 'view_accounts', label: 'View Accounts' },
-            { key: 'MANAGE_ACCOUNTS', value: 'manage_accounts', label: 'Manage Accounts' }
-        ]
-    },
-    {
+        id: 'service',
         name: 'Service',
-        permissions: [
-            { key: 'VIEW_SERVICES', value: 'view_services', label: 'View Services' },
-            { key: 'MANAGE_SERVICES', value: 'manage_services', label: 'Manage Services' }
+        submodules: [
+            { id: 'complaints', name: 'Customer Complaints', actions: ['view', 'add', 'edit'] },
+            { id: 'replacement_dashboard', name: 'Replacement Dashboard', actions: ['view'] },
+            { id: 'replacement_dispatches', name: 'Replacement Dispatches', actions: ['view', 'add'] }
         ]
     },
     {
-        name: 'Fixed Assets',
-        permissions: [
-            { key: 'VIEW_ASSETS', value: 'view_assets', label: 'View Assets' },
-            { key: 'MANAGE_ASSETS', value: 'manage_assets', label: 'Manage Assets' }
+        id: 'accounts',
+        name: 'Accounts',
+        submodules: [
+            { id: 'receipt_entry', name: 'Receipt Entry', actions: ['view', 'add'] },
+            { id: 'payment_entry', name: 'Payment Entry', actions: ['view', 'add'] },
+            { id: 'expense_entry', name: 'Expense Voucher', actions: ['view', 'add'] },
+            { id: 'journal_entry', name: 'Journal Voucher', actions: ['view', 'add'] },
+            { id: 'vouchers', name: 'Voucher Register', actions: ['view', 'edit'] },
+            { id: 'ledger_master', name: 'Ledger Master', actions: ['view', 'manage'] },
+            { id: 'ledger_report', name: 'Ledger Report', actions: ['view', 'export'] },
+            { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] }
         ]
     },
     {
-        name: 'Settings',
-        permissions: [
-            { key: 'VIEW_SETTINGS', value: 'view_settings', label: 'View Settings' },
-            { key: 'MANAGE_SETTINGS', value: 'manage_settings', label: 'Manage Settings' }
+        id: 'reports',
+        name: 'Reports',
+        submodules: [
+            { id: 'customer_master_report', name: 'Customer Master', actions: ['view', 'export'] },
+            { id: 'followup_report', name: 'Follow-up Tracker Report', actions: ['view', 'export'] },
+            { id: 'reminder_report', name: 'Open Reminders', actions: ['view'] }
+        ]
+    },
+    {
+        id: 'admin',
+        name: 'Admin',
+        submodules: [
+            { id: 'company_profile', name: 'Company Profile', actions: ['view', 'edit'] },
+            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: ['view', 'edit'] },
+            { id: 'user_management', name: 'User Management', actions: ['view', 'manage'] }
         ]
     }
 ];
@@ -126,92 +117,84 @@ export const PERMISSIONS = {};
 export const PERMISSION_LABELS = {};
 
 APP_MODULES.forEach(module => {
-    module.permissions.forEach(perm => {
-        PERMISSIONS[perm.key] = perm.value;
-        PERMISSION_LABELS[perm.value] = perm.label;
+    module.submodules?.forEach(sub => {
+        sub.actions?.forEach(action => {
+            const key = `${module.id.toUpperCase()}_${sub.id.toUpperCase()}_${action.toUpperCase()}`;
+            const val = `${module.id}.${sub.id}.${action}`;
+            PERMISSIONS[key] = val;
+            PERMISSION_LABELS[val] = action.charAt(0).toUpperCase() + action.slice(1); // Capitalize first letter for label
+        });
     });
 });
 
-// Role-based permission mapping
+// Role-based default permissions (Standard defaults for new users)
 export const ROLE_PERMISSIONS = {
-    [ROLES.ADMIN]: ['*', 'view_reminders'], // All permissions
+    [ROLES.ADMIN]: ['*'],
     [ROLES.MANAGER]: [
-        PERMISSIONS.VIEW_CUSTOMERS,
-        PERMISSIONS.ADD_CUSTOMER,
-        PERMISSIONS.EDIT_CUSTOMER,
-        PERMISSIONS.TALK_WITH_CUSTOMER,
-        PERMISSIONS.EDIT_CONVERSATIONS,
-        PERMISSIONS.VIEW_REPORTS,
-        PERMISSIONS.EXPORT_DATA,
-        PERMISSIONS.VIEW_REMINDERS,
-        PERMISSIONS.VIEW_TASKS,
-        PERMISSIONS.ADD_TASK,
-        PERMISSIONS.EDIT_TASK,
-        PERMISSIONS.VIEW_GROUPS,
-        PERMISSIONS.ADD_GROUP,
-        PERMISSIONS.EDIT_GROUP,
-        PERMISSIONS.VIEW_INVENTORY,
-        PERMISSIONS.MANAGE_INVENTORY,
-        PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.MANAGE_PRODUCTION,
-        PERMISSIONS.VIEW_PURCHASE,
-        PERMISSIONS.MANAGE_PURCHASE,
-        PERMISSIONS.VIEW_SALES,
-        PERMISSIONS.MANAGE_SALES,
-        PERMISSIONS.VIEW_ACCOUNTS,
-        PERMISSIONS.MANAGE_ACCOUNTS,
-        PERMISSIONS.VIEW_SERVICES,
-        PERMISSIONS.MANAGE_SERVICES,
-        PERMISSIONS.VIEW_ASSETS,
-        PERMISSIONS.MANAGE_ASSETS
+        'customers',
+        'tasks',
+        'inventory',
+        'production',
+        'purchase',
+        'sales',
+        'service',
+        'accounts',
+        'reports'
     ],
     [ROLES.STAFF]: [
-        PERMISSIONS.VIEW_CUSTOMERS,
-        PERMISSIONS.ADD_CUSTOMER,
-        PERMISSIONS.TALK_WITH_CUSTOMER,
-        PERMISSIONS.VIEW_REMINDERS,
-        PERMISSIONS.VIEW_TASKS,
-        PERMISSIONS.ADD_TASK,
-        PERMISSIONS.VIEW_GROUPS,
-        PERMISSIONS.VIEW_INVENTORY,
-        PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.VIEW_PURCHASE,
-        PERMISSIONS.VIEW_SALES,
-        PERMISSIONS.VIEW_ACCOUNTS,
-        PERMISSIONS.VIEW_SERVICES
+        'customers.customer_master.view',
+        'customers.customer_master.add',
+        'customers.reminder_tasks.view',
+        'tasks.task_list.view',
+        'tasks.task_list.add',
+        'inventory.item_master.view',
+        'inventory.bom.view',
+        'production.prod_output.add',
+        'purchase.purchase_orders.view',
+        'sales.sales_orders.view',
+        'service.complaints.view'
     ],
     [ROLES.VIEWER]: [
-        PERMISSIONS.VIEW_CUSTOMERS,
-        PERMISSIONS.VIEW_REMINDERS,
-        PERMISSIONS.VIEW_TASKS,
-        PERMISSIONS.VIEW_GROUPS,
-        PERMISSIONS.VIEW_INVENTORY,
-        PERMISSIONS.VIEW_PRODUCTION,
-        PERMISSIONS.VIEW_PURCHASE,
-        PERMISSIONS.VIEW_SALES,
-        PERMISSIONS.VIEW_ACCOUNTS
+        'customers.customer_master.view',
+        'inventory.item_master.view',
+        'sales.sales_orders.view',
+        'accounts.ledger_report.view'
     ]
 };
 
 // Check if role has permission
-export const hasPermission = (userPermissions, requiredPermission, userRole = null) => {
+export const hasPermission = (userPermissions, requiredPermission, userRole = null, additionalPermissions = {}) => {
     // Extract role name if userRole is an object
     const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
 
     // Superadmin has all permissions
     if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
 
-    // 1. Check if userPermissions is explicitly set (even if empty)
-    // If it's an array (including empty []), respect it strictly - this is Granular Mode
-    if (Array.isArray(userPermissions)) {
-        // Admin has all permissions
-        if (userPermissions.includes('*')) return true;
-        // Strictly check the array - if permission not in array, deny
-        return userPermissions.includes(requiredPermission);
+    // 1. Check Granular Object (additionalPermissions)
+    // Format can be "module.submodule.action" or just "module"
+    if (typeof requiredPermission === 'string') {
+        if (requiredPermission.includes('.')) {
+            const [mod, sub, act] = requiredPermission.split('.');
+            if (additionalPermissions?.[mod]?.[sub]?.[act]) return true;
+        } else {
+            // If just module name is passed, check if any submodule/action is true
+            const moduleData = additionalPermissions?.[requiredPermission];
+            if (moduleData && typeof moduleData === 'object') {
+                const hasAny = Object.values(moduleData).some(sub => 
+                    Object.values(sub).some(val => !!val)
+                );
+                if (hasAny) return true;
+            }
+        }
     }
 
-    // 2. Fallback to Role Default Permissions (only if userPermissions is null/undefined)
-    // This handles legacy users who don't have the permissions field set
+    // 2. Check explicitly set Legacy Permissions Array (for backward compatibility)
+    if (Array.isArray(userPermissions)) {
+        if (userPermissions.includes('*')) return true;
+        if (userPermissions.includes(requiredPermission)) return true;
+    }
+
+    // 3. Fallback to Role Default Permissions (from constants)
     if (userRole && ROLE_PERMISSIONS[userRole]) {
         const rolePerms = ROLE_PERMISSIONS[userRole];
         if (rolePerms.includes('*')) return true;

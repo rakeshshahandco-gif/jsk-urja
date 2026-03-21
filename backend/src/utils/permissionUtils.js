@@ -7,10 +7,21 @@ export const getUserPermissions = (user) => {
     const rolePermissions = (user.role && user.role.permissions) || {};
     const overrides = user.additionalPermissions || {};
     
-    // Merge: overrides take precedence
+    // Merge logic for 2-level nesting (Module -> Submodule -> Actions)
     const merged = { ...rolePermissions };
-    for (const module in overrides) {
-        merged[module] = { ...(merged[module] || {}), ...overrides[module] };
+    
+    for (const moduleId in overrides) {
+        const moduleOverrides = overrides[moduleId] || {};
+        const moduleBase = merged[moduleId] || {};
+        
+        const moduleMerged = { ...moduleBase };
+        for (const subModuleId in moduleOverrides) {
+            moduleMerged[subModuleId] = {
+                ...(moduleBase[subModuleId] || {}),
+                ...moduleOverrides[subModuleId]
+            };
+        }
+        merged[moduleId] = moduleMerged;
     }
     return merged;
 };
@@ -18,26 +29,33 @@ export const getUserPermissions = (user) => {
 /**
  * Check if user has specific permission
  * @param {Object} user 
- * @param {string} module 
- * @param {string} action 
+ * @param {string} permissionKey (e.g. "inventory.item_master.view")
  */
-export const checkUserPermission = (user, module, action) => {
+export const checkUserPermission = (user, permissionKey) => {
     // Superadmin Bypass
-    if (user.roleName === 'superadmin') return true;
+    const roleName = user.roleName || user.role?.name;
+    if (roleName === 'superadmin') return true;
     
+    // Legacy support for fixed permission array if exists
+    if (Array.isArray(user.permissions)) {
+        if (user.permissions.includes('*')) return true;
+        if (user.permissions.includes(permissionKey)) return true;
+    }
+
     const permissions = getUserPermissions(user);
-    const modulePerms = permissions[module];
     
-    if (!modulePerms) return false;
-    
-    const actionVal = modulePerms[action];
-    
-    // For boolean actions: true/false
-    if (typeof actionVal === 'boolean') return actionVal;
-    
-    // For visibility actions: 'all', 'own', 'dept', 'assigned', or false
-    if (actionVal === false) return false;
-    if (actionVal) return true;
+    // Support "module.submodule.action"
+    if (typeof permissionKey === 'string' && permissionKey.includes('.')) {
+        const [mod, sub, act] = permissionKey.split('.');
+        return !!permissions[mod]?.[sub]?.[act];
+    }
+
+    // Support "module" check (true if any submodule has any action)
+    if (permissions[permissionKey]) {
+        return Object.values(permissions[permissionKey]).some(sub => 
+            Object.values(sub).some(val => !!val)
+        );
+    }
     
     return false;
 };

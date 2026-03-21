@@ -446,7 +446,7 @@ export default function SalesOrderFormPage() {
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
-                                {['Sr', 'Item Code *', 'Description', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={th}>{h}</th>)}
+                                {['Sr', 'Item Code *', 'Description', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : 'auto' }}>{h}</th>)}
                             </tr></thead>
                             <tbody>
                                 {form.items.map((item, i) => {
@@ -477,7 +477,7 @@ export default function SalesOrderFormPage() {
                                             <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} autoComplete="off" /></td>
                                             <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 80 }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
+                                            <td style={{ ...td, minWidth: '120px' }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', fontSize: 12, fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
                                             <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
                                             <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 90, whiteSpace: 'nowrap' }}>₹{amt.toLocaleString('en-IN')}</td>
                                             <td style={{ ...td, width: 36 }}>

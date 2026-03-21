@@ -38,3 +38,13 @@ export const importBOMsExcel = async (file) => {
     });
     return response.data;
 };
+
+export const exportBOMList = async (params) => {
+    const response = await api.get('/boms/export/list', { params, responseType: 'blob' });
+    return response.data;
+};
+
+export const exportBOM = async (id) => {
+    const response = await api.get(`/boms/${id}/export`, { responseType: 'blob' });
+    return response.data;
+};

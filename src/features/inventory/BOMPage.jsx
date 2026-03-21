@@ -17,9 +17,10 @@ import {
     Filter as FilterIcon,
     Upload,
     FileDown,
-    FileText
+    FileText,
+    Save
 } from 'lucide-react';
-import { getBOMs, deleteBOM, exportBOMTemplate, importBOMsExcel } from '@/services/bomApi';
+import { getBOMs, deleteBOM, exportBOMTemplate, importBOMsExcel, exportBOMList } from '@/services/bomApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
 
@@ -111,6 +112,22 @@ const BOMPage = () => {
         }
     };
 
+    const handleExportList = async () => {
+        try {
+            const data = await exportBOMList(filters);
+            const url = window.URL.createObjectURL(new Blob([data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'BOM_List.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            addToast('BOM list exported successfully', 'success');
+        } catch (error) {
+            addToast('Failed to export BOM list', 'error');
+        }
+    };
+
     const handleImport = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -167,6 +184,9 @@ const BOMPage = () => {
                     <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleImport} accept=".xlsx, .xls" />
                     <button onClick={handleExportTemplate} style={{ ...s.btn, ...s.whiteBtn }}>
                         <FileText size={16} /> Template
+                    </button>
+                    <button onClick={handleExportList} style={{ ...s.btn, ...s.whiteBtn }}>
+                        <Save size={16} /> Export List
                     </button>
                     <button onClick={() => fileInputRef.current?.click()} disabled={isImporting} style={{ ...s.btn, ...s.indigoBtn, opacity: isImporting ? 0.7 : 1 }}>
                         {isImporting ? <div style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> : <Upload size={16} />}

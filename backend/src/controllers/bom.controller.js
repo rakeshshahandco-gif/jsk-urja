@@ -412,3 +412,132 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         errors: errors.length > 0 ? errors : undefined
     });
 });
+
+// ── EXPORT LIST ───────────────────────────────────────────────────────────────
+export const exportBOMListToExcel = asyncHandler(async (req, res) => {
+    const filters = pick(req.query, ['finishedProductId', 'bomNumber', 'search', 'status', 'bomType']);
+    const query = {};
+    if (filters.finishedProductId) query.finishedProductId = filters.finishedProductId;
+    if (filters.status) query.status = filters.status;
+    if (filters.bomType) query.bomType = filters.bomType;
+    const searchTerm = filters.search || filters.bomNumber;
+    if (searchTerm) query.bomNumber = { $regex: searchTerm, $options: 'i' };
+
+    const boms = await BOM.find(query)
+        .populate('finishedProductId', 'itemName itemCode')
+        .sort('-createdAt');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('BOM List');
+
+    worksheet.columns = [
+        { header: 'BOM Number', key: 'bomNumber', width: 25 },
+        { header: 'Finished Product', key: 'product', width: 35 },
+        { header: 'Type', key: 'bomType', width: 15 },
+        { header: 'Version', key: 'version', width: 10 },
+        { header: 'Quantity', key: 'productionQuantity', width: 15 },
+        { header: 'Unit Cost (₹)', key: 'finalProductionCostPerUnit', width: 20 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Date', key: 'revisionDate', width: 15 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+    boms.forEach(bom => {
+        worksheet.addRow({
+            bomNumber: bom.bomNumber,
+            product: `${bom.finishedProductId?.itemName} (${bom.finishedProductId?.itemCode})`,
+            bomType: bom.bomType,
+            version: bom.version,
+            productionQuantity: bom.productionQuantity,
+            finalProductionCostPerUnit: bom.finalProductionCostPerUnit?.toFixed(2),
+            status: bom.status,
+            revisionDate: bom.revisionDate?.toISOString().split('T')[0]
+        });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=BOM_List.xlsx');
+    res.send(buffer);
+});
+
+// ── EXPORT SINGLE BOM ─────────────────────────────────────────────────────────
+export const exportBOMToExcel = asyncHandler(async (req, res) => {
+    const bom = await BOM.findById(req.params.id)
+        .populate('finishedProductId', 'itemName itemCode itemCategory uom itemType')
+        .populate('components.itemId', 'itemName itemCode uom itemCategory purchaseRate itemType');
+
+    if (!bom) throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('BOM Detail');
+
+    // ── HEADER SECTION ──────────────────────────────────────────────────────────
+    worksheet.mergeCells('A1:G1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = `BILL OF MATERIAL: ${bom.bomNumber}`;
+    titleCell.font = { size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center' };
+
+    worksheet.addRow(['Product:', `${bom.finishedProductId?.itemName} (${bom.finishedProductId?.itemCode})`, '', 'Version:', bom.version]);
+    worksheet.addRow(['BOM Type:', bom.bomType, '', 'Revision Date:', bom.revisionDate?.toISOString().split('T')[0]]);
+    worksheet.addRow(['Batch Size:', `${bom.productionQuantity} ${bom.finishedProductId?.uom || 'Unit'}`, '', 'Status:', bom.status]);
+    worksheet.addRow(['Unit Cost:', `₹ ${bom.finalProductionCostPerUnit?.toFixed(2)}`, '', 'Total Points:', bom.components.reduce((acc, c) => acc + (c.points || 0), 0)]);
+    worksheet.addRow([]); // Gap
+
+    // ── COMPONENTS TABLE ────────────────────────────────────────────────────────
+    const tableHeader = ['#', 'Item Code', 'Item Name', 'Type', 'Quantity', 'UOM', 'Rate (₹)', 'Total (₹)', 'Points', 'Remarks'];
+    const headerRow = worksheet.addRow(tableHeader);
+    headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
+        cell.alignment = { horizontal: 'center' };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    bom.components.forEach((c, idx) => {
+        const row = worksheet.addRow([
+            idx + 1,
+            c.itemCode || c.itemId?.itemCode,
+            c.itemName || c.itemId?.itemName,
+            c.componentType || '',
+            c.quantity,
+            c.uom || c.itemId?.uom,
+            c.rate?.toFixed(2),
+            c.totalCost?.toFixed(2),
+            c.points || 0,
+            c.remarks || ''
+        ]);
+        row.eachCell((cell) => {
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+    });
+
+    // ── SUMMARY SECTION ─────────────────────────────────────────────────────────
+    worksheet.addRow([]);
+    worksheet.addRow(['', '', '', '', '', 'Raw Material Cost:', `₹ ${bom.totalRawMaterialCost?.toFixed(2)}`]);
+    worksheet.addRow(['', '', '', '', '', 'Processing Cost:', `₹ ${bom.totalProcessCost?.toFixed(2)}`]);
+    worksheet.addRow(['', '', '', '', '', 'Labour Cost:', `₹ ${bom.totalPointsLabourCost?.toFixed(2)}`]);
+    worksheet.addRow(['', '', '', '', '', 'Overhead Cost:', `₹ ${bom.overheadCost?.toFixed(2)}`]);
+    worksheet.addRow(['', '', '', '', '', 'Other Labour:', `₹ ${bom.labourCost?.toFixed(2)}`]);
+    
+    const finalRow = worksheet.addRow(['', '', '', '', '', 'TOTAL COST:', `₹ ${(bom.finalProductionCostPerUnit * bom.productionQuantity)?.toFixed(2)}`]);
+    finalRow.getCell(6).font = { bold: true };
+    finalRow.getCell(7).font = { bold: true, color: { argb: 'FFC00000' } };
+
+    // Set widths
+    worksheet.getColumn(1).width = 5;
+    worksheet.getColumn(2).width = 20;
+    worksheet.getColumn(3).width = 35;
+    worksheet.getColumn(4).width = 10;
+    worksheet.getColumn(5).width = 12;
+    worksheet.getColumn(6).width = 20;
+    worksheet.getColumn(7).width = 20;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=BOM_${bom.bomNumber}.xlsx`);
+    res.send(buffer);
+});

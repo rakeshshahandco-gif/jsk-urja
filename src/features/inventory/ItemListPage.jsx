@@ -70,7 +70,17 @@ const ItemListPage = () => {
     const [sortBy, setSortBy] = useState('itemCode:asc');
     const [page, setPage] = useState(1);
     const [meta, setMeta] = useState({ total: 0, pages: 1 });
-    const [limit, setLimit] = useState(25);
+    const [limit, setLimit] = useState(() => {
+        const savedLimit = localStorage.getItem('itemMasterLimit');
+        return savedLimit ? parseInt(savedLimit, 10) : 25;
+    });
+
+    const handleLimitChange = (e) => {
+        const newLimit = parseInt(e.target.value);
+        setLimit(newLimit);
+        setPage(1);
+        localStorage.setItem('itemMasterLimit', newLimit);
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -339,7 +349,7 @@ const ItemListPage = () => {
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                     <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Show:</span>
-                    <select style={{ ...s.sel, width: 65, minWidth: 'auto', paddingRight: 20 }} value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}>
+                    <select style={{ ...s.sel, width: 65, minWidth: 'auto', paddingRight: 20 }} value={limit} onChange={handleLimitChange}>
                         <option value={25}>25</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>

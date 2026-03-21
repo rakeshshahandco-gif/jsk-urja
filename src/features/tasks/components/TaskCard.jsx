@@ -255,7 +255,7 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
                                 disabled={actionLoading}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-sm"
                             >
-                                <CheckCircle size={14} /> Close Task
+                                <span style={{ fontSize: '14px' }}>✅</span> Close Task
                             </button>
                             <button
                                 onClick={handleExtend}

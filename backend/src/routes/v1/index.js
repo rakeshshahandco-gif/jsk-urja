@@ -58,6 +58,7 @@ import productionOutputRoute from './productionOutput.routes.js';
 import componentReplacementRoute from './componentReplacement.routes.js';
 import productionRejectionRoute from './productionRejection.routes.js';
 import accountMasterRoute from './accountMaster.routes.js';
+import permissionRoute from './permission.routes.js';
 
 
 const router = express.Router();
@@ -308,6 +309,10 @@ const defaultRoutes = [
     {
         path: '/accounts/reports',
         route: accountReportRoutes,
+    },
+    {
+        path: '/permissions',
+        route: permissionRoute,
     },
 ];
 

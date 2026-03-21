@@ -573,7 +573,7 @@ export default function PurchaseInvoiceFormPage() {
                                         <thead>
                                             <tr style={{ background: '#f8f9fa', color: '#64748b' }}>
                                                 {['#', 'Item', 'Description', 'HSN', 'UOM', 'Qty', 'Max Qty', 'Rate', 'Total', ''].map((h, i) =>
-                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th> : null
+                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : 'auto' }}>{h}</th> : null
                                                 )}
                                             </tr>
                                         </thead>
@@ -607,8 +607,8 @@ export default function PurchaseInvoiceFormPage() {
                                                         </td>
                                                         <td style={{ padding: '6px 10px', width: '70px' }}><input value={row.hsnCode} onChange={e => setRow(i, 'hsnCode', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
                                                         <td style={{ padding: '6px 10px', width: '55px' }}><input value={row.uom} onChange={e => setRow(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} readOnly={isLocked} /></td>
-                                                        <td style={{ padding: '6px 10px', width: '100px' }}>
-                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
+                                                        <td style={{ padding: '6px 10px', minWidth: '120px' }}>
+                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} style={{ ...inp, fontSize: '12px', fontWeight: 'bold', minWidth: '100px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
                                                         </td>
                                                         <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{row.maxQty ?? '—'}</td>
                                                         <td style={{ padding: '6px 10px', width: '90px' }}><input type="number" min="0" step="0.01" value={row.rate} onChange={e => setRow(i, 'rate', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px' }} /></td>

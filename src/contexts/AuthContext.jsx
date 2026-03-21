@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }) => {
     const hasPermission = useCallback((permission) => {
         if (!user) return false;
         const userRoleIdent = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || 'viewer';
-        return checkPermission(user.permissions || [], permission, userRoleIdent);
+        return checkPermission(user.permissions || [], permission, userRoleIdent, user.additionalPermissions || {});
     }, [user]);
 
     // Check if user has role
