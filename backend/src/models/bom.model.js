@@ -15,6 +15,11 @@ const bomComponentSchema = new mongoose.Schema({
         required: true,
         default: 0
     },
+    componentType: {
+        type: String,
+        enum: ['SMD', 'TH', 'OTHER', ''],
+        default: ''
+    },
     rate: {
         type: Number,
         default: 0

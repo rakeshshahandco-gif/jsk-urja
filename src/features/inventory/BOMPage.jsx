@@ -117,10 +117,25 @@ const BOMPage = () => {
         setIsImporting(true);
         try {
             const res = await importBOMsExcel(file);
-            addToast(res.message, 'success');
+            
+            // Check for detailed errors even if success is true
+            if (res.errors && res.errors.length > 0) {
+                const errorText = res.errors.slice(0, 5).join('\n');
+                const summary = `${res.message}${res.errors.length > 5 ? '\n(Check browser console for full log)' : ''}`;
+                const fullMsg = `${summary}\n\nDetails:\n${errorText}`;
+                
+                if (res.successCount > 0) {
+                    addToast(fullMsg, 'warning', 10000);
+                } else {
+                    addToast(fullMsg, 'error', 15000);
+                }
+                console.error('BOM Import Errors:', res.errors);
+            } else {
+                addToast(res.message, 'success');
+            }
             fetchBoms();
         } catch (error) {
-            const msg = error.response?.data?.message || 'Import failed';
+            const msg = error.response?.data?.message || 'Import process failed';
             addToast(msg, 'error');
         } finally {
             setIsImporting(false);

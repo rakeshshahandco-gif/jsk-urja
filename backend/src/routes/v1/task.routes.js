@@ -6,6 +6,21 @@ import * as taskController from '../../controllers/task.controller.js';
 
 const router = express.Router();
 
+// ── TASK MASTER ROUTES ─────────────────────────────────────────────────────
+
+router
+    .route('/masters')
+    .post(protect, validate(taskValidation.createTaskMaster), taskController.createTaskMaster)
+    .get(protect, validate(taskValidation.getTaskMasters), taskController.getTaskMasters);
+
+router
+    .route('/masters/:id')
+    .get(protect, taskController.getTaskMaster)
+    .patch(protect, validate(taskValidation.updateTaskMaster), taskController.updateTaskMaster)
+    .delete(protect, taskController.deleteTaskMaster);
+
+// ── TASK INSTANCE ROUTES ────────────────────────────────────────────────────
+
 router
     .route('/')
     .post(protect, validate(taskValidation.createTask), taskController.createTask)

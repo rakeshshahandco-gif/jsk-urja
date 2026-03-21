@@ -9,15 +9,15 @@ const createTask = {
         status: Joi.string().valid('OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'OVERDUE').default('OPEN'),
         assignmentMode: Joi.string().valid('SELF', 'SINGLE', 'MULTI', 'ALL', 'GROUP').default('SELF'),
         assignedGroupId: Joi.string().allow(null, '').custom(objectId).optional(),
-        groupId: Joi.string().required().custom(objectId),
-        taskCategoryId: Joi.string().allow(null, '').custom(objectId),
+        groupId: Joi.string().allow(null, '').custom(objectId).optional(),
+        taskCategoryId: Joi.string().allow(null, '').custom(objectId).optional(),
         group: Joi.string().allow(null, '').optional(),
         assignToAll: Joi.boolean().default(false),
         assigneeIds: Joi.array().items(Joi.string().custom(objectId)).optional(),
         dueDate: Joi.date().required(),
         recurrence: Joi.object().keys({
             enabled: Joi.boolean().default(false),
-            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'),
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
             interval: Joi.number().integer().min(1).default(1),
             recurrenceSeriesId: Joi.string().allow(null, '').optional(),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT').default('NEVER'),
@@ -27,6 +27,11 @@ const createTask = {
         }).optional(),
         previousTaskId: Joi.string().allow(null, '').custom(objectId).optional(),
         customerId: Joi.string().allow(null, '').custom(objectId).optional(),
+        taskMasterId: Joi.string().allow(null, '').custom(objectId).optional(),
+        amount: Joi.number().min(0).optional(),
+        billNumber: Joi.string().allow('').optional(),
+        referenceNumber: Joi.string().allow('').optional(),
+        remarks: Joi.string().allow('').optional(),
     })
 };
 
@@ -44,6 +49,7 @@ const getTasks = {
         page: Joi.number().integer(),
         search: Joi.string().allow('').optional(),
         customerId: Joi.string().allow(null, '').custom(objectId).optional(),
+        taskMasterId: Joi.string().allow(null, '').custom(objectId).optional(),
     })
 };
 
@@ -71,7 +77,7 @@ const updateTask = {
         group: Joi.string().allow(null, ''),
         recurrence: Joi.object().keys({
             enabled: Joi.boolean(),
-            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'),
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
             interval: Joi.number().integer().min(1),
             recurrenceSeriesId: Joi.string().allow(null, ''),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT'),
@@ -84,6 +90,66 @@ const updateTask = {
         closedBy: Joi.string().allow(null, ''),
         closedAt: Joi.date().allow(null),
         updatedBy: Joi.string().allow(null, ''),
+        amount: Joi.number().min(0),
+        billNumber: Joi.string().allow(''),
+        referenceNumber: Joi.string().allow(''),
+        remarks: Joi.string().allow(''),
+        isPaid: Joi.boolean(),
+    }).min(1)
+};
+
+const createTaskMaster = {
+    body: Joi.object().keys({
+        title: Joi.string().required().trim(),
+        description: Joi.string().allow('').trim(),
+        category: Joi.string().allow(null, '').custom(objectId),
+        priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT').default('MEDIUM'),
+        assignedTo: Joi.string().allow(null, '').custom(objectId),
+        group: Joi.string().allow(null, '').custom(objectId),
+        recurrence: Joi.object().keys({
+            frequency: Joi.string().required().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            interval: Joi.number().integer().min(1).default(1),
+            startDate: Joi.date().default(Date.now),
+            endType: Joi.string().valid('NEVER', 'AFTER_COUNT', 'ON_DATE').default('NEVER'),
+            occurrenceCount: Joi.number().integer().min(1),
+            endDate: Joi.date(),
+        }).required(),
+        defaultAmount: Joi.number().min(0).default(0),
+        isActive: Joi.boolean().default(true),
+    })
+};
+
+const getTaskMasters = {
+    query: Joi.object().keys({
+        category: Joi.string().custom(objectId),
+        assignedTo: Joi.string().custom(objectId),
+        group: Joi.string().custom(objectId),
+        isActive: Joi.boolean(),
+    })
+};
+
+const updateTaskMaster = {
+    params: Joi.object().keys({
+        id: Joi.string().required().custom(objectId)
+    }),
+    body: Joi.object().keys({
+        title: Joi.string().trim(),
+        description: Joi.string().allow('').trim(),
+        category: Joi.string().allow(null, '').custom(objectId),
+        priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT'),
+        assignedTo: Joi.string().allow(null, '').custom(objectId),
+        group: Joi.string().allow(null, '').custom(objectId),
+        recurrence: Joi.object().keys({
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            interval: Joi.number().integer().min(1),
+            startDate: Joi.date(),
+            endType: Joi.string().valid('NEVER', 'AFTER_COUNT', 'ON_DATE'),
+            occurrenceCount: Joi.number().integer().min(1),
+            endDate: Joi.date(),
+        }),
+        defaultAmount: Joi.number().min(0),
+        isActive: Joi.boolean(),
+        nextRunDate: Joi.date(),
     }).min(1)
 };
 
@@ -102,7 +168,6 @@ const updateTaskStatus = {
     })
 };
 
-// No body required — just needs a valid taskId param
 const closeTask = {
     params: Joi.object().keys({
         taskId: Joi.string().required()
@@ -144,5 +209,8 @@ export default {
     closeTask,
     extendTask,
     createCategory,
-    getCategories
+    getCategories,
+    createTaskMaster,
+    getTaskMasters,
+    updateTaskMaster
 };

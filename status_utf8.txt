@@ -1,0 +1,18 @@
+﻿ M backend/backend_restart.log
+ M backend/src/controllers/bom.controller.js
+ M backend/src/controllers/task.controller.js
+ M backend/src/cron/taskCron.js
+ M backend/src/models/bom.model.js
+ M backend/src/models/task.model.js
+ M backend/src/routes/v1/task.routes.js
+ M backend/src/utils/recurrence.js
+ M backend/src/validations/task.validation.js
+ M src/features/inventory/BOMFormPage.jsx
+ M src/features/inventory/BOMPage.jsx
+ M src/features/tasks/components/TaskCard.jsx
+ M src/features/tasks/components/TaskForm.jsx
+ M src/features/tasks/components/TaskForm.module.scss
+ M src/services/taskApi.js
+?? backend/src/models/taskMaster.model.js
+?? status.txt
+?? status_utf8.txt

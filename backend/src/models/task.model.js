@@ -53,6 +53,31 @@ const taskSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    taskMasterId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaskMaster',
+        description: 'New field linking to the task template'
+    },
+    amount: {
+        type: Number,
+        default: 0
+    },
+    billNumber: {
+        type: String,
+        trim: true
+    },
+    referenceNumber: {
+        type: String,
+        trim: true
+    },
+    remarks: {
+        type: String,
+        trim: true
+    },
+    isPaid: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -101,7 +126,7 @@ const taskSchema = new mongoose.Schema({
         },
         frequency: {
             type: String,
-            enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'],
+            enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
             default: 'MONTHLY'
         },
         interval: {

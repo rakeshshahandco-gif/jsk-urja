@@ -33,11 +33,16 @@ export const calculateNextDueDate = (task) => {
             break;
 
         case 'MONTHLY':
-            nextDate.setMonth(nextDate.getMonth() + interval);
+            nextDate.setMonth(nextDate.getMonth() + 1 * interval);
             break;
-
+        case 'EVERY_2_MONTHS':
+            nextDate.setMonth(nextDate.getMonth() + 2 * interval);
+            break;
+        case 'EVERY_6_MONTHS':
+            nextDate.setMonth(nextDate.getMonth() + 6 * interval);
+            break;
         case 'QUARTERLY':
-            nextDate.setMonth(nextDate.getMonth() + (interval * 3));
+            nextDate.setMonth(nextDate.getMonth() + 3 * interval);
             break;
 
         case 'YEARLY':

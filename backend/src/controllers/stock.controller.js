@@ -45,7 +45,7 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
         ];
     }
 
-    const items = await Item.find(itemQuery).select('_id itemCode itemName uom openingStock currentStock valuationRate minStockLevel').lean();
+    const items = await Item.find(itemQuery).select('_id itemCode itemName itemType uom openingStock currentStock valuationRate minStockLevel').lean();
 
     const results = await Promise.all(items.map(async (item) => {
         const ledgerMatch = {
@@ -69,6 +69,7 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
             itemId: item._id,
             itemCode: item.itemCode,
             itemName: item.itemName,
+            itemType: item.itemType || '',
             uom: item.uom,
             openingQty,
             purchaseQty: Math.round(purchaseQty * 100) / 100,
@@ -115,7 +116,7 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
         ];
     }
 
-    const items = await Item.find(itemQuery).select('_id itemCode itemName uom openingStock currentStock valuationRate minStockLevel').lean();
+    const items = await Item.find(itemQuery).select('_id itemCode itemName itemType uom openingStock currentStock valuationRate minStockLevel').lean();
 
     const results = await Promise.all(items.map(async (item) => {
         const ledgerMatch = {
@@ -138,6 +139,7 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
             itemId: item._id,
             itemCode: item.itemCode,
             itemName: item.itemName,
+            itemType: item.itemType || '',
             uom: item.uom,
             openingQty,
             productionQty: Math.round(productionQty * 100) / 100,

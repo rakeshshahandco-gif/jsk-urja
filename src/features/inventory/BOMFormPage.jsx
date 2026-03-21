@@ -51,7 +51,7 @@ const s = {
 
 const BLANK_COMPONENT = {
     itemId: '', itemCode: '', itemName: '', category: '', uom: '',
-    quantity: '', rate: '', totalCost: 0, points: '', pointsLabourCost: 0, remarks: ''
+    quantity: '', componentType: '', rate: '', totalCost: 0, points: '', pointsLabourCost: 0, remarks: ''
 };
 
 // ── FIELD WRAPPER ─────────────────────────────────────────────────────────────
@@ -162,6 +162,7 @@ const BOMFormPage = () => {
                     points: pts,
                     rate: rate,
                     totalCost: qty * rate,
+                    componentType: comp.componentType || (masterItem.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (masterItem.itemType?.toUpperCase().includes('TH') ? 'TH' : '')),
                     pointsLabourCost: qty * pts * labourRate
                 };
             });
@@ -181,6 +182,7 @@ const BOMFormPage = () => {
                 comp.itemId = value; comp.itemCode = item.itemCode;
                 comp.itemName = item.itemName; comp.category = item.itemCategory;
                 comp.uom = item.uom;
+                comp.componentType = item.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (item.itemType?.toUpperCase().includes('TH') ? 'TH' : '');
                 comp.rate = item.purchaseRate || item.valuationRate || 0;
                 comp.points = parseInt(item.points) || 0;
                 comp.remarks = item.remarks || '';
@@ -376,8 +378,8 @@ const BOMFormPage = () => {
                             <table style={s.table}>
                                 <thead>
                                     <tr>
-                                        {['#', 'Item / Code', 'Category', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', ''].map((h, i) => (
-                                            <th key={i} style={{ ...s.th, ...(i === 0 || i === 3 ? s.thCenter : {}) }}>{h}</th>
+                                        {['#', 'Item Code', 'Item Name', 'Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', ''].map((h, i) => (
+                                            <th key={i} style={{ ...s.th, ...(i === 0 || i === 4 ? s.thCenter : {}) }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -385,25 +387,35 @@ const BOMFormPage = () => {
                                     {form.components.map((comp, idx) => (
                                         <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={{ ...s.td, textAlign: 'center', color: '#94a3b8', fontWeight: 700, fontSize: 11 }}>{idx + 1}</td>
-                                            <td style={{ ...s.td, minWidth: 200 }}>
+                                            <td style={{ ...s.td, minWidth: 140 }}>
                                                 <SearchableSelect
-                                                    options={items.map(i => ({ value: i._id, label: i.itemName, meta: i.itemCode }))}
+                                                    options={items.map(i => ({ value: i._id, label: i.itemCode, meta: i.itemName }))}
                                                     value={comp.itemId}
                                                     onChange={val => handleComponentChange(idx, 'itemId', val)}
-                                                    placeholder="Search and Select Item..."
-                                                    style={{ width: '100%', minWidth: 200 }}
+                                                    placeholder="Search Code..."
+                                                    style={{ width: '100%' }}
                                                     onCreateNew={handleCreateNewItem}
                                                 />
-                                                {comp.itemName && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, paddingLeft: 2 }}>{comp.itemName}</div>}
                                             </td>
-                                            <td style={s.td}>
-                                                <span style={{ fontSize: 10, background: '#f1f5f9', padding: '3px 8px', borderRadius: 20, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{comp.category || '—'}</span>
+                                            <td style={{ ...s.td, minWidth: 160 }}>
+                                                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={comp.itemName}>
+                                                    {comp.itemName || '—'}
+                                                </div>
                                             </td>
-                                            <td style={{ ...s.td, width: 80 }}>
-                                                <input type="number" style={{ ...s.tdInput, textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: 6, width: 70, background: '#fff', fontWeight: 700 }}
+                                            <td style={{ ...s.td, width: 85 }}>
+                                                <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, background: '#fff', padding: '4px 6px', height: 28, fontWeight: 600 }}
+                                                    value={comp.componentType || ''} onChange={e => handleComponentChange(idx, 'componentType', e.target.value)}>
+                                                    <option value="">— Type —</option>
+                                                    <option value="SMD" style={{ fontWeight: 700 }}>SMD</option>
+                                                    <option value="TH" style={{ fontWeight: 700 }}>TH (Through-Hole)</option>
+                                                    <option value="OTHER">Other</option>
+                                                </select>
+                                            </td>
+                                            <td style={{ ...s.td, width: 70 }}>
+                                                <input type="number" style={{ ...s.tdInput, textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: 6, width: 60, background: '#fff', fontWeight: 700 }}
                                                     value={comp.quantity === 0 ? '' : comp.quantity} onChange={e => handleComponentChange(idx, 'quantity', e.target.value)} />
                                             </td>
-                                            <td style={{ ...s.td, color: '#64748b', fontFamily: 'monospace', fontSize: 11, fontWeight: 700 }}>{comp.uom || '—'}</td>
+                                            <td style={{ ...s.td, color: '#64748b', fontSize: 11, fontWeight: 700 }}>{comp.uom || '—'}</td>
                                             <td style={{ ...s.td, width: 90 }}>
                                                 <input type="number" style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, width: 80, background: '#fff' }}
                                                     value={comp.rate === 0 ? '' : comp.rate} onChange={e => handleComponentChange(idx, 'rate', e.target.value)} />
@@ -444,7 +456,7 @@ const BOMFormPage = () => {
                                     <tr onClick={addComponent} style={{ cursor: 'pointer', borderTop: '2px dashed #e2e8f0' }}
                                         onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'}
                                         onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                        <td colSpan={11} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
+                                        <td colSpan={12} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
                                             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                                 <Plus size={14} /> Click to add new component row
                                             </span>

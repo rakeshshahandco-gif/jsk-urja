@@ -3,12 +3,12 @@ import { useForm } from 'react-hook-form';
 import { MultiSelect } from '@/components/ui';
 import { userService } from '@/services/user.service';
 import { getAssignableGroups } from '@/services/groupApi';
-import { createTask, updateTask, getTaskGroups } from '@/services/taskApi';
+import { createTask, updateTask, getTaskGroups, createTaskMaster, updateTaskMaster } from '@/services/taskApi';
 import { getTaskCategories } from '@/services/taskCategoryApi';
 import toast from 'react-hot-toast';
 import { GroupForm } from './GroupForm';
 import { useModal } from '@/components/ui';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Landmark, CreditCard, Receipt } from 'lucide-react';
 
 import styles from './TaskForm.module.scss';
 import clsx from 'clsx';
@@ -25,16 +25,23 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             assigneeIds: task.assigneeIds ? task.assigneeIds.map(u => u._id || u.id || u) : [],
             dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : null,
             recurrence: {
-                enabled: task.recurrence?.enabled || false,
-                frequency: task.recurrence?.frequency || 'MONTHLY',
-                interval: task.recurrence?.interval || 1,
-            }
+                enabled: task.recurrence?.enabled || !!task.taskMasterId || false,
+                frequency: task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency || 'MONTHLY',
+                interval: task.recurrence?.interval || task.taskMasterId?.recurrence?.interval || 1,
+            },
+            amount: task.amount || 0,
+            billNumber: task.billNumber || '',
+            referenceNumber: task.referenceNumber || '',
+            remarks: task.remarks || '',
+            isPaid: task.isPaid || false
         } : {
             priority: 'MEDIUM',
             status: 'OPEN',
             assignmentMode: 'SELF',
             assigneeIds: [],
-            recurrence: { enabled: false, frequency: 'MONTHLY', interval: 1 }
+            recurrence: { enabled: false, frequency: 'MONTHLY', interval: 1 },
+            amount: 0,
+            isPaid: false
         }
     });
 
@@ -102,36 +109,53 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
 
         try {
             setSubmitting(true);
-            const payload = {
-                ...data,
-                dueDate: new Date(data.dueDate).toISOString(),
-                assignmentMode: hasFixedUsers ? 'GROUP' : data.assignmentMode,
-                assignedGroupId: hasFixedUsers ? data.groupId : (data.assignmentMode === 'GROUP' ? data.assignedGroupId : null),
-                groupId: data.groupId || null,
-                taskCategoryId: data.taskCategoryId || null,
-                assigneeIds: hasFixedUsers ? selectedGroup.userIds.map(u => u._id || u.id || u) : ((data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : []),
-                recurrence: data.recurrence.enabled ? {
-                    ...data.recurrence,
-                    recurrenceEndDate: data.recurrence.recurrenceEndType === 'DATE' ? new Date(data.recurrence.recurrenceEndDate).toISOString() : null,
-                    recurrenceEndCount: data.recurrence.recurrenceEndType === 'ON_COUNT' ? parseInt(data.recurrence.recurrenceEndCount) : null,
-                    interval: parseInt(data.recurrence.interval)
-                } : { enabled: false }
-            };
-            if (task?._id) {
-                // Sanitize payload: Remove fields not allowed by backend validation during update
-                const {
-                    _id, id, groupId,
-                    createdAt, updatedAt,
-                    createdBy, __v,
-                    extensionHistory,
-                    ...sanitizedPayload
-                } = payload;
-
-                await updateTask(task._id, sanitizedPayload);
-                toast.success('Task updated');
+            
+            // If RECURRING is enabled for a NEW task, we create a TaskMaster
+            if (data.recurrence.enabled && !task) {
+                const masterPayload = {
+                    title: data.title,
+                    description: data.description,
+                    category: data.taskCategoryId || null,
+                    priority: data.priority,
+                    assignedTo: (data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds[0] : null,
+                    group: data.groupId || null,
+                    defaultAmount: data.amount || 0,
+                    recurrence: {
+                        frequency: data.recurrence.frequency,
+                        interval: parseInt(data.recurrence.interval),
+                        startDate: new Date(data.dueDate),
+                        endType: data.recurrence.recurrenceEndType || 'NEVER',
+                        occurrenceCount: data.recurrence.recurrenceEndCount ? parseInt(data.recurrence.recurrenceEndCount) : null,
+                        endDate: data.recurrence.recurrenceEndDate ? new Date(data.recurrence.recurrenceEndDate) : null
+                    }
+                };
+                await createTaskMaster(masterPayload);
+                toast.success('Recurring Task Template Created');
             } else {
-                await createTask(payload);
-                toast.success('Task created');
+                const payload = {
+                    ...data,
+                    dueDate: new Date(data.dueDate).toISOString(),
+                    assignmentMode: hasFixedUsers ? 'GROUP' : data.assignmentMode,
+                    assignedGroupId: hasFixedUsers ? data.groupId : (data.assignmentMode === 'GROUP' ? data.assignedGroupId : null),
+                    groupId: data.groupId || null,
+                    taskCategoryId: data.taskCategoryId || null,
+                    assigneeIds: hasFixedUsers ? selectedGroup.userIds.map(u => u._id || u.id || u) : ((data.assignmentMode === 'SINGLE' || data.assignmentMode === 'MULTI') ? data.assigneeIds : []),
+                    recurrence: data.recurrence.enabled ? {
+                        ...data.recurrence,
+                        recurrenceEndDate: data.recurrence.recurrenceEndType === 'DATE' ? new Date(data.recurrence.recurrenceEndDate).toISOString() : null,
+                        recurrenceEndCount: data.recurrence.recurrenceEndType === 'ON_COUNT' ? parseInt(data.recurrence.recurrenceEndCount) : null,
+                        interval: parseInt(data.recurrence.interval)
+                    } : { enabled: false }
+                };
+
+                if (task?._id) {
+                    const { _id, id, groupId, createdAt, updatedAt, createdBy, __v, extensionHistory, ...sanitizedPayload } = payload;
+                    await updateTask(task._id, sanitizedPayload);
+                    toast.success('Task updated');
+                } else {
+                    await createTask(payload);
+                    toast.success('Task created');
+                }
             }
             onSuccess();
         } catch (error) {
@@ -271,6 +295,8 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                                 <option value="DAILY">Daily</option>
                                 <option value="WEEKLY">Weekly</option>
                                 <option value="MONTHLY">Monthly</option>
+                                <option value="EVERY_2_MONTHS">Every 2 Months</option>
+                                <option value="EVERY_6_MONTHS">Every 6 Months</option>
                                 <option value="QUARTERLY">Quarterly</option>
                                 <option value="YEARLY">Yearly</option>
                             </select>
@@ -309,9 +335,51 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                 </div>
             )}
 
+            {/* ── Billing & Payment Details ── */}
+            <div className={styles.sectionHeader}>
+                <Receipt size={16} /> <span>Billing & Payment Details</span>
+            </div>
+            <div className={clsx(styles.row, styles.fourCols)}>
+                <div className={styles.field}>
+                    <label className={styles.label}>Amount (₹)</label>
+                    <div className={styles.inputWithIcon}>
+                        <span className={styles.prefix}>₹</span>
+                        <input type="number" step="0.01" className={styles.input} {...register('amount')} placeholder="0.00" />
+                    </div>
+                </div>
+                <div className={styles.field}>
+                    <label className={styles.label}>Bill Number</label>
+                    <div className={styles.inputWithIcon}>
+                        <Receipt size={14} className={styles.icon} />
+                        <input className={styles.input} {...register('billNumber')} placeholder="Invoice #" />
+                    </div>
+                </div>
+                <div className={styles.field}>
+                    <label className={styles.label}>Reference / Ref #</label>
+                    <div className={styles.inputWithIcon}>
+                        <Landmark size={14} className={styles.icon} />
+                        <input className={styles.input} {...register('referenceNumber')} placeholder="UTR / Ref" />
+                    </div>
+                </div>
+                <div className={styles.field}>
+                    <label className={styles.label}>Payment Status</label>
+                    <div className={styles.paymentToggle}>
+                        <input type="checkbox" id="isPaid" {...register('isPaid')} />
+                        <label htmlFor="isPaid" className={clsx(styles.paidLabel, { [styles.paid]: watch('isPaid') })}>
+                            <CreditCard size={14} /> {watch('isPaid') ? 'PAID' : 'UNPAID'}
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div className={styles.field}>
+                <label className={styles.label}>Billing Remarks</label>
+                <input className={styles.input} {...register('remarks')} placeholder="Payment method, date, etc." />
+            </div>
+
             {/* ── ROW 4: Description ── */}
             <div className={styles.field}>
-                <label className={styles.label}>Description</label>
+                <label className={styles.label}>Additional Description</label>
                 <textarea
                     className={styles.textarea}
                     {...register('description')}

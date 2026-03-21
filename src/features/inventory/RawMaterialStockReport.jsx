@@ -75,19 +75,22 @@ export default function RawMaterialStockReport() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f1f5f9' }}>
-                                {['#', 'Item Code', 'Item Name', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
+                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
                                     <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {rows.length === 0 ? (
-                                <tr><td colSpan={13} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No items found</td></tr>
+                                <tr><td colSpan={14} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No items found</td></tr>
                             ) : rows.map((r, i) => (
                                 <tr key={r.itemId} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                     <td style={{ padding: '7px 12px', textAlign: 'center', color: '#94a3b8' }}>{i + 1}</td>
                                     <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#3b82f6' }}>{r.itemCode}</td>
                                     <td style={{ padding: '7px 12px', fontWeight: 500 }}>{r.itemName}</td>
+                                    <td style={{ padding: '7px 12px' }}>
+                                        <span style={{ fontSize: 10, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, color: '#64748b', fontWeight: 600 }}>{r.itemType || '—'}</span>
+                                    </td>
                                     <td style={{ padding: '7px 12px', color: '#64748b' }}>{r.uom}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.openingQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>+{fmt(r.purchaseQty)}</td>

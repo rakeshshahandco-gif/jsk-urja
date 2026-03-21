@@ -1,0 +1,92 @@
+﻿diff --git a/backend/src/models/bom.model.js b/backend/src/models/bom.model.js
+index 11d623c..0e2a189 100644
+--- a/backend/src/models/bom.model.js
++++ b/backend/src/models/bom.model.js
+@@ -1,6 +1,6 @@
+ import mongoose from 'mongoose';
+ 
+-const bomComponentSchema = new mongoose.Schema({
++const bomItemSchema = new mongoose.Schema({
+     itemId: {
+         type: mongoose.Schema.Types.ObjectId,
+         ref: 'Item',
+@@ -8,33 +8,14 @@ const bomComponentSchema = new mongoose.Schema({
+     },
+     itemCode: String,
+     itemName: String,
++    itemGroup: String,
++    itemType: String,
+     category: String,
+     uom: String,
+     quantity: {
+         type: Number,
+         required: true,
+         default: 0
+-    },
+-    rate: {
+-        type: Number,
+-        default: 0
+-    },
+-    totalCost: {
+-        type: Number,
+-        default: 0
+-    },
+-    points: {
+-        type: Number,
+-        default: 0
+-    },
+-    pointsLabourCost: {
+-        type: Number,
+-        default: 0
+-    },
+-    remarks: {
+-        type: String,
+-        trim: true,
+-        default: ''
+     }
+ });
+ 
+@@ -65,42 +46,7 @@ const bomSchema = new mongoose.Schema({
+         enum: ['Draft', 'Approved', 'Inactive'],
+         default: 'Draft'
+     },
+-    productionQuantity: {
+-        type: Number,
+-        required: true,
+-        default: 1
+-    },
+-    bomType: {
+-        type: String,
+-        enum: ['Production', 'Sub-Assembly', 'Service BOM'],
+-        default: 'Production'
+-    },
+-    components: [bomComponentSchema],
+-
+-    // Cost Summary
+-    totalRawMaterialCost: { type: Number, default: 0 },
+-    totalProcessCost: { type: Number, default: 0 },
+-    overheadCost: { type: Number, default: 0 },
+-    labourCost: { type: Number, default: 0 },
+-    labourCostPerPoint: { type: Number, default: 0.25 },
+-    totalPointsLabourCost: { type: Number, default: 0 },
+-    finalProductionCostPerUnit: { type: Number, default: 0 },
+-
+-    // Process Details
+-    processes: {
+-        smtAssembly: { type: Boolean, default: false },
+-        manualAssembly: { type: Boolean, default: false },
+-        testingRequired: { type: Boolean, default: false },
+-        qcRequired: { type: Boolean, default: false },
+-        packingRequired: { type: Boolean, default: false }
+-    },
+-
+-    // Controls
+-    isDefault: { type: Boolean, default: false },
+-
+-    scrapAccount: { type: String, trim: true },
+-    remarks: { type: String, trim: true },
+-
++    items: [bomItemSchema],
+     createdBy: {
+         type: mongoose.Schema.Types.ObjectId,
+         ref: 'User'

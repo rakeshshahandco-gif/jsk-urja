@@ -116,30 +116,33 @@ export const exportBOMTemplate = asyncHandler(async (req, res) => {
     // Define columns
     // Headers designed to be intuitive and cover ALL details from the UI
     worksheet.columns = [
-        { header: 'BOM Number (BOM-XXXX-XXX)', key: 'bomNumber', width: 30 },
-        { header: 'Product Code*', key: 'productCode', width: 25 },
-        { header: 'BOM Type (Production/Sub-Assembly/Service BOM)', key: 'bomType', width: 35 },
-        { header: 'Version (V1, V2...)', key: 'version', width: 15 },
-        { header: 'Status (Draft/Approved/Inactive)', key: 'status', width: 20 },
-        { header: 'Production Qty (Finished Product Output)', key: 'productionQuantity', width: 35 },
-        { header: 'Revision Date (YYYY-MM-DD)', key: 'revisionDate', width: 25 },
-        { header: 'Is Default? (TRUE/FALSE)', key: 'isDefault', width: 15 },
-        { header: 'Labour Rate Per Point (₹)', key: 'labourCostPerPoint', width: 25 },
-        { header: 'Process Cost (₹)', key: 'totalProcessCost', width: 20 },
-        { header: 'Overhead Cost (₹)', key: 'overheadCost', width: 20 },
-        { header: 'Other Labour Cost (₹)', key: 'labourCost', width: 20 },
-        { header: 'SMT Assembly? (TRUE/FALSE)', key: 'smtAssembly', width: 20 },
-        { header: 'Manual Assembly? (TRUE/FALSE)', key: 'manualAssembly', width: 22 },
-        { header: 'Testing Required? (TRUE/FALSE)', key: 'testingRequired', width: 20 },
+        { header: 'BOM Number (BOM-XXXX-XXX)', key: 'bomNumber', width: 25 },
+        { header: 'Finished Product Code*', key: 'productCode', width: 22 },
+        { header: 'BOM Type (Production/Sub-Assembly/Service BOM)', key: 'bomType', width: 30 },
+        { header: 'Version (V1, V2...)', key: 'version', width: 12 },
+        { header: 'Status (Draft/Approved/Inactive)', key: 'status', width: 18 },
+        { header: 'Production Qty (Finished Product Output)', key: 'productionQuantity', width: 30 },
+        { header: 'Revision Date (YYYY-MM-DD)', key: 'revisionDate', width: 20 },
+        { header: 'Is Default BOM? (TRUE/FALSE)', key: 'isDefault', width: 15 },
+        { header: 'Labour Rate Per Point (₹)', key: 'labourCostPerPoint', width: 22 },
+        { header: 'Process Cost (₹)', key: 'totalProcessCost', width: 18 },
+        { header: 'Overhead Cost (₹)', key: 'overheadCost', width: 18 },
+        { header: 'Other Labour Cost (₹)', key: 'labourCost', width: 18 },
+        { header: 'SMT Assembly? (TRUE/FALSE)', key: 'smtAssembly', width: 18 },
+        { header: 'Manual Assembly? (TRUE/FALSE)', key: 'manualAssembly', width: 18 },
+        { header: 'Testing Required? (TRUE/FALSE)', key: 'testingRequired', width: 18 },
         { header: 'QC Required? (TRUE/FALSE)', key: 'qcRequired', width: 18 },
-        { header: 'Packing Required? (TRUE/FALSE)', key: 'packingRequired', width: 20 },
-        { header: 'Scrap Account', key: 'scrapAccount', width: 25 },
-        { header: 'Header Remarks', key: 'remarks', width: 30 },
-        { header: 'Component Code*', key: 'componentCode', width: 25 },
+        { header: 'Packing Required? (TRUE/FALSE)', key: 'packingRequired', width: 18 },
+        { header: 'Scrap Account', key: 'scrapAccount', width: 20 },
+        { header: 'Header Remarks', key: 'remarks', width: 25 },
+        { header: 'Component Code*', key: 'componentCode', width: 20 },
+        { header: 'Component Name (Reference)', key: 'componentName', width: 25 },
+        { header: 'Component Type (SMD/TH)', key: 'componentType', width: 22 },
         { header: 'Component Qty*', key: 'componentQty', width: 15 },
+        { header: 'UOM (Reference)', key: 'uom', width: 12 },
         { header: 'Component Rate (₹)', key: 'rate', width: 18 },
         { header: 'Component Points (Labour)', key: 'points', width: 22 },
-        { header: 'Component Remark', key: 'componentRemarks', width: 30 }
+        { header: 'Component Remark', key: 'componentRemarks', width: 25 }
     ];
 
     // Style header
@@ -168,7 +171,10 @@ export const exportBOMTemplate = asyncHandler(async (req, res) => {
         scrapAccount: 'Scrap Revenue',
         remarks: 'Sample Header Remarks',
         componentCode: 'RAW-MAT-001',
+        componentName: 'Resistor 10K 0603',
+        componentType: 'SMD',
         componentQty: 2,
+        uom: 'NOS',
         rate: 100,
         points: 4,
         componentRemarks: 'R25, U1'
@@ -200,6 +206,7 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         else if (h.includes('status')) colMap.status = colNumber;
         else if (h.includes('production qty')) colMap.productionQuantity = colNumber;
         else if (h.includes('revision date')) colMap.revisionDate = colNumber;
+        else if (h.includes('default bom')) colMap.isDefault = colNumber;
         else if (h.includes('default')) colMap.isDefault = colNumber;
         else if (h.includes('labour rate per point')) colMap.labourCostPerPoint = colNumber;
         else if (h.includes('process cost')) colMap.totalProcessCost = colNumber;
@@ -214,6 +221,7 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         else if (h.startsWith('header remarks') || h === 'remarks') colMap.remarks = colNumber;
         else if (h.includes('component code')) colMap.componentCode = colNumber;
         else if (h.includes('component qty')) colMap.componentQty = colNumber;
+        else if (h.includes('component type')) colMap.componentType = colNumber;
         else if (h.includes('component rate')) colMap.rate = colNumber;
         else if (h.includes('component points')) colMap.points = colNumber;
         else if (h.includes('component remark')) colMap.componentRemarks = colNumber;
@@ -271,6 +279,7 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
         bomGroups.get(groupKey).components.push({
             itemCode: componentCode,
             quantity: Number(row.getCell(colMap.componentQty).value) || 0,
+            componentType: row.getCell(colMap.componentType)?.value?.toString().trim().toUpperCase() || '',
             rate: Number(row.getCell(colMap.rate)?.value) || 0,
             points: Number(row.getCell(colMap.points).value) || 0,
             remarks: row.getCell(colMap.componentRemarks)?.value?.toString().trim() || ''
@@ -278,15 +287,25 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
     }
 
     let successCount = 0;
+    let autoCreatedCount = 0;
     const errors = [];
 
     for (const [key, bData] of bomGroups) {
         try {
             // Find finished product
-            const fProduct = await Item.findOne({ itemCode: bData.productCode.toUpperCase() });
+            let fProduct = await Item.findOne({ itemCode: bData.productCode.toUpperCase() });
             if (!fProduct) {
-                errors.push(`BOM ${key}: Product ${bData.productCode} not found`);
-                continue;
+                // Auto-create missing Finished Product as requested by user
+                fProduct = await Item.create({
+                    itemCode: bData.productCode.toUpperCase(),
+                    itemName: bData.productCode, // Default name to code
+                    itemCategory: 'FINISHED_GOOD',
+                    isManufacturable: true,
+                    status: 'Active',
+                    uom: 'NOS'
+                });
+                autoCreatedCount++;
+                console.log(`[Import] Auto-created missing Finished Product: ${bData.productCode}`);
             }
 
             // Resolve components
@@ -295,10 +314,18 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
             let totalPoints = 0;
 
             for (const comp of bData.components) {
-                const cItem = await Item.findOne({ itemCode: comp.itemCode.toUpperCase() });
+                let cItem = await Item.findOne({ itemCode: comp.itemCode.toUpperCase() });
                 if (!cItem) {
-                    errors.push(`BOM ${key}: Component ${comp.itemCode} not found`);
-                    continue;
+                    // Auto-create missing Component as RAW_MATERIAL
+                    cItem = await Item.create({
+                        itemCode: comp.itemCode.toUpperCase(),
+                        itemName: comp.itemCode,
+                        itemCategory: 'RAW_MATERIAL', // Default to RM for components
+                        uom: 'NOS',
+                        status: 'Active'
+                    });
+                    autoCreatedCount++;
+                    console.log(`[Import] Auto-created missing Component: ${comp.itemCode}`);
                 }
 
                 const rate = comp.rate || cItem.purchaseRate || cItem.valuationRate || 0;
@@ -310,6 +337,7 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
                     itemId: cItem._id,
                     itemCode: cItem.itemCode,
                     itemName: cItem.itemName,
+                    componentType: comp.componentType || (cItem.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (cItem.itemType?.toUpperCase().includes('TH') ? 'TH' : '')),
                     category: cItem.itemCategory,
                     uom: cItem.uom,
                     quantity: comp.quantity,
@@ -378,8 +406,9 @@ export const importBOMsExcel = asyncHandler(async (req, res) => {
 
     res.send({
         success: true,
-        message: `Imported ${successCount} BOMs. ${errors.length} errors.`,
+        message: `Imported ${successCount} BOMs. ${errors.length} errors. ${autoCreatedCount > 0 ? `(${autoCreatedCount} new items registered in Master)` : ''}`,
         successCount,
+        autoCreatedCount,
         errors: errors.length > 0 ? errors : undefined
     });
 });

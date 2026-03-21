@@ -40,6 +40,34 @@ export const deleteTask = async (id) => {
 };
 
 // ---------------------------
+// TASK MASTERS (RECURRING TEMPLATES)
+// ---------------------------
+export const getTaskMasters = async (params = {}) => {
+  const response = await api.get("/tasks/masters", { params });
+  return response.data.data;
+};
+
+export const getTaskMaster = async (id) => {
+  const response = await api.get(`/tasks/masters/${id}`);
+  return response.data.data;
+};
+
+export const createTaskMaster = async (data) => {
+  const response = await api.post("/tasks/masters", data);
+  return response.data;
+};
+
+export const updateTaskMaster = async (id, data) => {
+  const response = await api.patch(`/tasks/masters/${id}`, data);
+  return response.data;
+};
+
+export const deleteTaskMaster = async (id) => {
+  const response = await api.delete(`/tasks/masters/${id}`);
+  return response.data;
+};
+
+// ---------------------------
 // GROUPS
 // ---------------------------
 export const getTaskGroups = async (params = {}) => {
