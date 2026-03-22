@@ -50,13 +50,15 @@ export const Sidebar = () => {
                 return true;
             }
 
-            // Check Role
-            if (item.roles && !item.roles.includes(userRole)) {
+            // 1. Check Permission (Primary Gate)
+            if (item.permission) {
+                if (hasPermission(item.permission)) return true;
+                // If permission is required but not granted, hide it unless user is superadmin
                 return false;
             }
 
-            // Check Permission
-            if (item.permission && !hasPermission(item.permission)) {
+            // 2. Check Role (Fallback for items without explicit permission string)
+            if (item.roles && !item.roles.includes(userRole)) {
                 return false;
             }
 

@@ -172,18 +172,40 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
 
     // 1. Check Granular Object (additionalPermissions)
     // Format can be "module.submodule.action" or just "module"
-    if (typeof requiredPermission === 'string') {
+    if (typeof requiredPermission === 'string' && additionalPermissions) {
         if (requiredPermission.includes('.')) {
-            const [mod, sub, act] = requiredPermission.split('.');
-            if (additionalPermissions?.[mod]?.[sub]?.[act]) return true;
+            const parts = requiredPermission.split('.');
+            if (parts.length === 3) {
+                const [mod, sub, act] = parts;
+                if (additionalPermissions[mod]?.[sub]?.[act]) return true;
+                
+                // Fallback for flat structure under module: module.action
+                if (additionalPermissions[mod]?.[act]) return true;
+                // Fallback for extreme flat: module.submodule_action
+                if (additionalPermissions[mod]?.[`${sub}_${act}`]) return true;
+            } else if (parts.length === 2) {
+                const [mod, act] = parts;
+                if (additionalPermissions[mod]?.[act]) return true;
+                
+                // Also check if any submodule has this action
+                const moduleData = additionalPermissions[mod];
+                if (moduleData && typeof moduleData === 'object') {
+                    return Object.values(moduleData).some(sub => 
+                        typeof sub === 'object' && sub !== null && sub[act] === true
+                    );
+                }
+            }
         } else {
-            // If just module name is passed, check if any submodule/action is true
-            const moduleData = additionalPermissions?.[requiredPermission];
+            // If just module name is passed, check if any boolean is true at any depth
+            const moduleData = additionalPermissions[requiredPermission];
+            if (moduleData === true) return true;
             if (moduleData && typeof moduleData === 'object') {
-                const hasAny = Object.values(moduleData).some(sub => 
-                    Object.values(sub).some(val => !!val)
+                // Check direct actions
+                if (Object.values(moduleData).some(val => val === true)) return true;
+                // Check submodules
+                return Object.values(moduleData).some(sub => 
+                    typeof sub === 'object' && sub !== null && Object.values(sub).some(val => val === true)
                 );
-                if (hasAny) return true;
             }
         }
     }
