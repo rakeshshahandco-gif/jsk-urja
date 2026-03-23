@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries } from '@/services/salesApi';
+import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries, previewNextInvoiceNo } from '@/services/salesApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
@@ -110,12 +110,13 @@ export default function SalesInvoiceFormPage() {
     const [seriesList, setSeriesList] = useState([]);
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
 
-    // Compute next invoice number from series object (mirrors backend nextInvoiceNumber())
-    const computeNextNo = (series) => {
-        if (!series) return '';
-        const next = Math.max((series.currentNumber || 0) + 1, series.startNumber || 1);
-        const padded = String(next).padStart(series.padLength || 5, '0');
-        return `${series.prefix || ''}${padded}`;
+    // Fetch accurate next invoice number from backend (self-healing sync)
+    const fetchPreviewNo = async (seriesId) => {
+        if (!seriesId) { setPreviewInvoiceNo(''); return; }
+        try {
+            const res = await previewNextInvoiceNo(seriesId);
+            setPreviewInvoiceNo(res.nextInvoiceNo || '');
+        } catch { setPreviewInvoiceNo(''); }
     };
     const [showAddSeries, setShowAddSeries] = useState(false);
     const [form, setForm] = useState({
@@ -185,13 +186,12 @@ export default function SalesInvoiceFormPage() {
     }, [form.billingState, form.billingStateCode]);
 
     const loadSeries = useCallback(() => {
-        getInvoiceSeries({ active: true }).then(s => {
+        getInvoiceSeries({ active: true }).then(async s => {
             setSeriesList(s || []);
             if (!form.seriesId && s && s.length > 0) {
-                // Pick the default series, or fall back to the first one
                 const autoSelect = s.find(x => x.isDefault) || s[0];
                 setForm(p => ({ ...p, seriesId: autoSelect._id, gstApplicable: autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true }));
-                setPreviewInvoiceNo(computeNextNo(autoSelect));
+                await fetchPreviewNo(autoSelect._id);
             }
         }).catch(() => { });
     }, [form.seriesId]);
@@ -358,11 +358,11 @@ export default function SalesInvoiceFormPage() {
                     <Grid cols={3}>
                         <Field label="Invoice Series & Invoice No">
                             <div style={{ display: 'flex', gap: 6 }}>
-                                <select value={form.seriesId} onChange={e => {
+                                <select value={form.seriesId} onChange={async e => {
                                     const val = e.target.value;
                                     const selected = seriesList.find(s => s._id === val);
                                     const isGst = selected ? (selected.gstApplicable !== false) : true;
-                                    setPreviewInvoiceNo(selected ? computeNextNo(selected) : '');
+                                    await fetchPreviewNo(val);
                                     setForm(p => ({
                                         ...p,
                                         seriesId: val,

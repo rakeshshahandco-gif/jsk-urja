@@ -313,7 +313,7 @@ export default function SalesOrderDetailPage() {
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '8px' }}>
                                 <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>{user?.name || 'Authorized User'}</div>
-                                {user?.phone && <div style={{ fontSize: '9px', color: '#333' }}>Mob: {user.phone}</div>}
+                                {user?.mobile && <div style={{ fontSize: '9px', color: '#333' }}>Mob: {user.mobile}</div>}
                                 <div style={{ width: '160px', borderTop: '1px solid #000', marginTop: '4px', paddingTop: '2px', fontSize: '9px', fontWeight: 800, textAlign: 'center' }}>AUTHORIZED SIGNATORY</div>
                             </div>
                         </div>
@@ -481,6 +481,9 @@ export default function SalesOrderDetailPage() {
                     email: so.customerEmail,
                     phone: so.customerPhone,
                     number: so.soNumber,
+                    id: id,
+                    items: so.items,
+                    total: so.roundedTotal || so.grandTotal
                 }}
             />
         </div>

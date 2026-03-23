@@ -25,3 +25,13 @@ export const disconnectWhatsApp = async () => {
     return response.data;
 };
 
+export const getWhatsAppGroups = async () => {
+    const response = await api.get('/whatsapp-settings/groups');
+    return response.data;
+};
+
+export const sendWhatsAppMessage = async (data) => {
+    const response = await api.post('/whatsapp-settings/send-message', data);
+    return response.data;
+};
+

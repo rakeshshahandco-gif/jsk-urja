@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, MessageSquare, Send, X, Users, User, Loader2 } from 'lucide-react';
+import { Mail, MessageSquare, Send, X, Users, User, Loader2, ExternalLink } from 'lucide-react';
+import api from '@/services/api';
 
 export default function CommunicationModal({ isOpen, onClose, onSend, data, type }) {
     const [sendMode, setSendMode] = useState('Number'); // 'Number' or 'Group'
@@ -8,23 +9,34 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
     const [phone, setPhone] = useState(data.phone || '');
     const [groupName, setGroupName] = useState('');
     const [subject, setSubject] = useState(data.subject || `${type} from JSK URJA`);
-    const [message, setMessage] = useState(data.message || `Dear ${data.recipientName},\n\nPlease find attached the ${type} ${data.number}.\n\nRegards,\nJSK URJA`);
     const [sending, setSending] = useState(false);
     const [status, setStatus] = useState('');
+
+    const generateDetailedMsg = () => {
+        let msg = `*${type.toUpperCase()} - ${data.number}*\n`;
+        msg += `Date: ${new Date().toLocaleDateString('en-IN')}\n`;
+        msg += `Party: ${data.recipientName}\n`;
+        if (data.total) msg += `Total Amount: ₹${data.total.toLocaleString('en-IN')}\n`;
+        
+        if (data.items && data.items.length > 0) {
+            msg += `\n*Item Summary:*\n`;
+            data.items.forEach((it, i) => {
+                msg += `${i+1}. ${it.itemName || it.description} (${it.qty} ${it.uom})\n`;
+            });
+        }
+        
+        msg += `\nKindly review and confirm.\n\nRegards,\nJSK URJA`;
+        return msg;
+    };
+
+    const [message, setMessage] = useState('');
 
     useEffect(() => {
         if (data.recipientName) setRecipientName(data.recipientName);
         if (data.email) setEmail(data.email);
         if (data.phone) setPhone(data.phone);
         if (data.number) {
-             const defaultMsg = `Dear Sir/Madam,
-
-Please find attached our ${type} ${data.number} dated ${new Date().toLocaleDateString('en-IN')}.
-Kindly review and confirm.
-
-Regards,
-JSK URJA`;
-             setMessage(defaultMsg);
+             setMessage(generateDetailedMsg());
         }
     }, [data, type]);
 
@@ -34,16 +46,21 @@ JSK URJA`;
         setSending(true);
         setStatus('Preparing PDF...');
         try {
-            await onSend({ 
-                channel, 
-                recipientName, 
-                email, 
-                phone, 
-                sendMode, 
-                groupName, 
-                subject, 
-                message 
-            });
+            const channelToBackend = (channel === 'Both') ? 'Email' : channel;
+            
+            // Only call backend for Email (WhatsApp is handled by frontend to reuse browser session)
+            if (channelToBackend === 'Email') {
+                await onSend({ 
+                    channel: channelToBackend, 
+                    recipientName, 
+                    email, 
+                    phone, 
+                    sendMode, 
+                    groupName, 
+                    subject, 
+                    message 
+                });
+            }
             setStatus('Sent successfully!');
         } catch (e) {
             console.error(e);
@@ -116,9 +133,14 @@ JSK URJA`;
                     {sendMode === 'Group' && (
                         <div style={{ marginBottom: 16 }}>
                             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>WhatsApp Group Name</label>
-                            <input value={groupName} onChange={e => setGroupName(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none' }} placeholder="Type group name exactly..." />
+                            <input 
+                                value={groupName} 
+                                onChange={e => setGroupName(e.target.value)} 
+                                style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none' }} 
+                                placeholder="Type group name exactly..." 
+                            />
                             <p style={{ marginTop: 6, fontSize: 11, color: '#94a3b8' }}>
-                                Tip: Leave empty to select group manually in the WhatsApp window.
+                                Automation will search for this group name in WhatsApp Web.
                             </p>
                         </div>
                     )}
@@ -140,32 +162,78 @@ JSK URJA`;
                         </div>
                     )}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <button 
                             disabled={sending}
                             onClick={() => handleSend('Email')}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '14px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}
                         >
-                            <Mail size={18} /> Send Email
-                        </button>
-                        <button 
-                            disabled={sending}
-                            onClick={() => handleSend('WhatsApp')}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#25d366', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,211,102,0.3)' }}
-                        >
-                            <MessageSquare size={18} /> Send WhatsApp
+                            <Mail size={20} /> 1. Send Email (Backend)
                         </button>
                     </div>
                 </div>
 
-                <div style={{ padding: '0 24px 24px' }}>
+                <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ height: '1px', background: '#f1f5f9', width: '100%', marginBottom: 4 }}></div>
+                    
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: 13, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Manual WhatsApp Flow (Recommended)
+                    </h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <button 
+                            onClick={async () => {
+                                try {
+                                    setStatus('Generating PDF...');
+                                    const response = await api.get('/communication/download-pdf', {
+                                        params: { type, id: data.id || data._id },
+                                        responseType: 'blob'
+                                    });
+                                    const url = window.URL.createObjectURL(new Blob([response.data]));
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.setAttribute('download', `${type === 'Sales Order' ? 'SO' : 'PO'}-${data.number}.pdf`);
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    link.remove();
+                                    setStatus('PDF Downloaded');
+                                } catch (e) {
+                                    console.error(e);
+                                    setStatus('PDF Failed');
+                                }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#f8fafc', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                        >
+                            <ExternalLink size={16} /> A. Download PDF
+                        </button>
+
+                        <button 
+                            onClick={() => {
+                                try {
+                                    navigator.clipboard.writeText(message);
+                                    setStatus('Message Copied!');
+                                } catch (e) {
+                                    setStatus('Copy Failed');
+                                }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', background: '#f8fafc', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}
+                        >
+                            <MessageSquare size={16} /> B. Copy Message
+                        </button>
+                    </div>
+
                     <button 
-                        disabled={sending}
-                        onClick={() => handleSend('Both')}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}
+                        onClick={() => {
+                            window.open('https://web.whatsapp.com/', '_blank');
+                        }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '16px', background: '#25d366', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 20px rgba(37,211,102,0.25)', fontSize: 16 }}
                     >
-                        Send on Both
+                        <MessageSquare size={24} /> Step 2: Open Logged-in WhatsApp
                     </button>
+
+                    <p style={{ margin: 0, fontSize: 11, color: '#94a3b8', textAlign: 'center', fontStyle: 'italic' }}>
+                        Note: Search contact manual & paste the message. This uses your existing browser login.
+                    </p>
                 </div>
             </div>
             <style>{`

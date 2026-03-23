@@ -299,8 +299,28 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {/* Hide Payment Record Button as per user request */}
-                            {/* Navigate to standalone Receipt Entry form */}
+                            {/* Print Button */}
+                            <button
+                                onClick={() => window.print()}
+                                style={{ padding: '9px 18px', borderRadius: 8, background: '#1e293b', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                title="Print Invoice"
+                            >
+                                🖨️ Print
+                            </button>
+                            {/* Export PDF Button */}
+                            <button
+                                onClick={() => {
+                                    const origTitle = document.title;
+                                    document.title = `Invoice-${inv.invoiceNumber}`;
+                                    window.print();
+                                    setTimeout(() => { document.title = origTitle; }, 2000);
+                                }}
+                                style={{ padding: '9px 18px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                title="Export as PDF (Save as PDF in print dialog)"
+                            >
+                                📄 Export PDF
+                            </button>
+                            {/* Receive Payment */}
                             {notCancelled && notFullyPaid && (
                                 <button
                                     onClick={() => navigate('/accounts/receipt-entry', { 
@@ -318,7 +338,7 @@ export default function SalesInvoiceDetailPage() {
                                     💳 Receive Payment
                                 </button>
                             )}
-                            <button onClick={handleCancel} disabled={cancelling} style={{ padding: '9px 14px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✕ Cancel</button>
+
                         </div>
                     </div>
                     {/* Payment Progress */}

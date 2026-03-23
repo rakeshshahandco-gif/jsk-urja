@@ -7,5 +7,6 @@ router.use(protect);
 
 router.route('/').get(isCtrl.getSeries).post(isCtrl.createSeries);
 router.route('/:id').get(isCtrl.getSeriesById).put(isCtrl.updateSeries).delete(isCtrl.deleteSeries);
+router.get('/:id/preview-next', isCtrl.previewNextNumber);
 
 export default router;

@@ -8,5 +8,6 @@ router.use(protect);
 
 router.post('/send', communicationController.sendOrder);
 router.get('/logs', communicationController.getLogs);
+router.get('/download-pdf', communicationController.downloadOrderPDF);
 
 export default router;

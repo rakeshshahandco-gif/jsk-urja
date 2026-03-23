@@ -89,6 +89,11 @@ export const APP_MODULES = [
             { id: 'vouchers', name: 'Voucher Register', actions: ['view', 'edit'] },
             { id: 'ledger_master', name: 'Ledger Master', actions: ['view', 'manage'] },
             { id: 'ledger_report', name: 'Ledger Report', actions: ['view', 'export'] },
+            { id: 'sales_register', name: 'Sales Register', actions: ['view', 'export'] },
+            { id: 'purchase_register', name: 'Purchase Register', actions: ['view', 'export'] },
+            { id: 'day_book', name: 'Day Book', actions: ['view', 'export'] },
+            { id: 'cash_book', name: 'Cash Book', actions: ['view', 'export'] },
+            { id: 'bank_book', name: 'Bank Book', actions: ['view', 'export'] },
             { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] }
         ]
     },

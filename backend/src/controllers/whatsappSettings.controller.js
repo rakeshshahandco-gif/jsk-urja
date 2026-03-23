@@ -54,11 +54,23 @@ const disconnectWhatsApp = catchAsync(async (req, res) => {
     }
 });
 
+const getGroups = catchAsync(async (req, res) => {
+    const groups = await WhatsAppAutomationService.getChats();
+    res.json(groups);
+});
+
+const sendMessage = catchAsync(async (req, res) => {
+    const result = await WhatsAppAutomationService.sendMessage(req.body);
+    res.json(result);
+});
+
 export {
     getSettings,
     updateSettings,
     getSessionStatus,
     connectWhatsApp,
-    disconnectWhatsApp
+    disconnectWhatsApp,
+    getGroups,
+    sendMessage
 };
 

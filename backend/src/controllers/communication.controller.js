@@ -193,7 +193,7 @@ const sendOrder = catchAsync(async (req, res) => {
         const results = [];
 
         if (channel === 'Email' || channel === 'Both') {
-            log.status = 'Sending';
+            log.status = 'Sending Email';
             await log.save();
 
             if (!company.emailSettings?.emailId) throw new Error('Email settings missing. Please configure Email in Settings.');
@@ -204,25 +204,6 @@ const sendOrder = catchAsync(async (req, res) => {
                 attachments: [{ filename: fileName, content: pdfBuffer }]
             });
             results.push('Email sent');
-        }
-
-        if (channel === 'WhatsApp' || channel === 'Both') {
-            await WhatsAppAutomationService.sendDocument({
-                phone: sendMode === 'Number' ? phone : null,
-                groupName: sendMode === 'Group' ? groupName : null,
-                filePath: tempFilePath,
-                caption: message,
-                delays: {
-                    searchDelay: settings.searchDelay,
-                    attachDelay: settings.attachDelay,
-                    sendDelay: settings.sendDelay
-                },
-                onStatusUpdate: async (status) => {
-                    log.status = status;
-                    await log.save();
-                }
-            });
-            results.push('WhatsApp sent');
         }
 
         log.status = 'Sent';
@@ -246,7 +227,35 @@ const getLogs = catchAsync(async (req, res) => {
     res.send(logs);
 });
 
+const downloadOrderPDF = catchAsync(async (req, res) => {
+    const { type, id } = req.query;
+
+    const companyRes = await CompanyProfile.findOne();
+    const company = companyRes || {};
+
+    let order;
+    if (type === 'Sales Order') {
+        order = await SalesOrder.findById(id);
+    } else {
+        order = await PurchaseOrder.findById(id);
+    }
+
+    if (!order) {
+        return res.status(httpStatus.NOT_FOUND).send({ message: 'Order not found' });
+    }
+
+    const pdfBuffer = await generateOrderPDF(order, company, type);
+    const docNumber = type === 'Sales Order' ? order.soNumber : order.poNumber;
+    const safeDocNumber = docNumber.replace(/[\/\\?%*:|"<>]/g, '-');
+    const fileName = `${type === 'Sales Order' ? 'SO' : 'PO'}-${safeDocNumber}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.send(pdfBuffer);
+});
+
 export {
     sendOrder,
-    getLogs
+    getLogs,
+    downloadOrderPDF
 };

@@ -192,6 +192,11 @@ export const menuConfig = [
             { id: 'vouchers', title: 'Voucher Register', path: PATHS.ACCOUNTS.VOUCHER_LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.vouchers.view' },
             { id: 'ledger-master', title: 'Ledger Master', path: PATHS.ACCOUNTS.LEDGER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.ledger_master.view' },
             { id: 'ledger-report', title: 'Ledger Report', path: PATHS.ACCOUNTS.LEDGER_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'accounts.ledger_report.view' },
+            { id: 'sales-register', title: 'Sales Register', path: PATHS.ACCOUNTS.SALES_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.sales_register.view' },
+            { id: 'purchase-register', title: 'Purchase Register', path: PATHS.ACCOUNTS.PURCHASE_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.purchase_register.view' },
+            { id: 'day-book', title: 'Day Book', path: PATHS.ACCOUNTS.DAY_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.day_book.view' },
+            { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.cash_book.view' },
+            { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.bank_book.view' },
             { id: 'outstanding', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'accounts.outstanding.view' },
         ]
     },

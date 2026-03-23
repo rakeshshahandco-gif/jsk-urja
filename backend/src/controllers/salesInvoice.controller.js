@@ -118,10 +118,27 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     let invoiceNumber, gstApplicable = true;
     const series = await InvoiceSeries.findById(body.seriesId);
     if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive invoice series');
+
+    // ── SELF-HEALING SYNC ─────────────────────────────────────────────────────
+    // If the counter got ahead of reality (e.g. due to a failed previous save),
+    // sync currentNumber with the ACTUAL last invoice in the DB so there are no gaps.
+    const lastActualInvoice = await SalesInvoice.findOne({
+        invoiceNumber: { $regex: `^${series.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` }
+    }).sort({ invoiceNumber: -1 });
+    if (lastActualInvoice) {
+        const lastActualNum = parseInt(lastActualInvoice.invoiceNumber.replace(series.prefix, ''), 10);
+        if (!isNaN(lastActualNum) && lastActualNum < series.currentNumber) {
+            // Counter is ahead of reality — correct it
+            series.currentNumber = lastActualNum;
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     invoiceNumber = series.nextInvoiceNumber();
     gstApplicable = series.gstApplicable === false ? false : true;
     series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
     await series.save();
+
 
     const { items: _items, ...otherData } = body;
 

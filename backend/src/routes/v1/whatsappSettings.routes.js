@@ -11,5 +11,7 @@ router.post('/', whatsappSettingsController.updateSettings);
 router.get('/session-status', whatsappSettingsController.getSessionStatus);
 router.post('/connect', whatsappSettingsController.connectWhatsApp);
 router.post('/disconnect', whatsappSettingsController.disconnectWhatsApp);
+router.get('/groups', whatsappSettingsController.getGroups);
+router.post('/send-message', whatsappSettingsController.sendMessage);
 
 export default router;

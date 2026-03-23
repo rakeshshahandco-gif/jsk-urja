@@ -5,6 +5,7 @@ import fs from 'fs';
 class WhatsAppAutomationService {
     constructor() {
         this.browser = null;
+        this.page = null;
         this.userDataDir = path.join(process.cwd(), '.whatsapp-session');
     }
 
@@ -17,7 +18,13 @@ class WhatsAppAutomationService {
                 defaultViewport: null,
             });
         }
-        return this.browser;
+        
+        if (!this.page || this.page.isClosed()) {
+            const pages = await this.browser.pages();
+            this.page = pages[0] || await this.browser.newPage();
+        }
+        
+        return { browser: this.browser, page: this.page };
     }
 
     async wait(ms) {
@@ -67,10 +74,10 @@ class WhatsAppAutomationService {
 
     async sendDocument(options) {
         const { phone, groupName, filePath, caption, onStatusUpdate, delays = {} } = options;
-        const browser = await this.init();
-        const page = await browser.newPage();
+        const { page } = await this.init();
 
         try {
+            await page.bringToFront();
             const update = (status) => onStatusUpdate && onStatusUpdate(status);
 
             // 1. Navigate
@@ -184,7 +191,131 @@ class WhatsAppAutomationService {
             console.error('WhatsApp Automation Error:', error.message);
             throw error;
         } finally {
-            await page.close();
+            // DO NOT CLOSE - Keep session alive as requested
+        }
+    }
+
+    async getChats() {
+        const { page } = await this.init();
+        try {
+            await page.bringToFront();
+            if (page.url() !== 'https://web.whatsapp.com/') {
+                await page.goto('https://web.whatsapp.com', { waitUntil: 'networkidle2' });
+            }
+            // Wait for main interface
+            try {
+                await page.waitForSelector('#pane-side', { timeout: 30000 });
+            } catch (e) {
+                throw new Error('WhatsApp is not logged in. Please go to Settings → WhatsApp → Connect WhatsApp and scan the QR code first.');
+            }
+
+            // Scroll a bit to load more chats
+            await page.evaluate(() => {
+                const pane = document.querySelector('#pane-side');
+                if (pane) pane.scrollTop += 500;
+            });
+            await this.wait(1000);
+
+            // Extract chat titles
+            const chatTitles = await page.evaluate(() => {
+                const results = [];
+                const spanTitles = document.querySelectorAll('#pane-side span[title]');
+                spanTitles.forEach(s => {
+                    const title = s.getAttribute('title');
+                    if (title && !results.includes(title)) {
+                        results.push(title);
+                    }
+                });
+                return results;
+            });
+
+            return chatTitles;
+        } finally {
+            // Keep open
+        }
+    }
+
+    async sendMessage(options) {
+        const { phone, groupName, message, onStatusUpdate, delays = {} } = options;
+        const { page } = await this.init();
+
+        try {
+            await page.bringToFront();
+            const update = (status) => onStatusUpdate && onStatusUpdate(status);
+
+            // 1. Navigate
+            update('Opening WhatsApp Web...');
+            if (phone && !groupName) {
+                const cleanPhone = phone.replace(/\D/g, '');
+                const fullPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+                await page.goto(`https://web.whatsapp.com/send?phone=${fullPhone}`, { waitUntil: 'networkidle2' });
+            } else {
+                await page.goto('https://web.whatsapp.com', { waitUntil: 'networkidle2' });
+            }
+
+            // 2. Wait for main interface
+            try {
+                await page.waitForSelector('#pane-side', { timeout: 30000 });
+            } catch (e) {
+                throw new Error('WhatsApp is not logged in.');
+            }
+
+            // 3. Select Target
+            if (groupName) {
+                update(`Searching for "${groupName}"...`);
+                const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"]';
+                await page.waitForSelector(searchBoxSelector, { timeout: 10000 });
+                await page.click(searchBoxSelector);
+                // Clear existing text if any (triple click + backspace)
+                await page.click(searchBoxSelector, { clickCount: 3 });
+                await page.keyboard.press('Backspace');
+                await page.type(searchBoxSelector, groupName);
+                await this.wait(delays.searchDelay || 2500);
+
+                let found = false;
+                const selectors = [
+                    `span[title="${groupName}"]`,
+                    `[data-testid="cell-frame-title"] span[title="${groupName}"]`,
+                ];
+                for (const sel of selectors) {
+                    try {
+                        await page.waitForSelector(sel, { timeout: 8000 });
+                        await page.click(sel);
+                        found = true;
+                        update('Selected!');
+                        break;
+                    } catch (_) { }
+                }
+                if (!found) throw new Error(`Group/Chat "${groupName}" not found.`);
+            } else if (phone) {
+                update('Opening chat...');
+                await page.waitForSelector('footer div[contenteditable="true"]', { timeout: 20000 });
+            }
+
+            // 4. Send Message
+            update('Sending message...');
+            const inputSelector = 'footer div[contenteditable="true"]';
+            await page.waitForSelector(inputSelector, { timeout: 10000 });
+            await page.focus(inputSelector);
+            
+            // Type message - handle newlines
+            const lines = message.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                await page.type(inputSelector, lines[i]);
+                if (i < lines.length - 1) {
+                    await page.keyboard.down('Shift');
+                    await page.keyboard.press('Enter');
+                    await page.keyboard.up('Shift');
+                }
+            }
+            await this.wait(500);
+            await page.keyboard.press('Enter');
+            await this.wait(delays.sendDelay || 2000);
+            update('Sent successfully!');
+
+            return { success: true };
+        } finally {
+            // Keep open
         }
     }
 }

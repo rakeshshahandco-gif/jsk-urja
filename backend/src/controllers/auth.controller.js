@@ -23,6 +23,7 @@ export const register = asyncHandler(async (req, res) => {
         name,
         username,
         email,
+        mobile: req.body.mobile,
         password,
         role: role || 'viewer',
         permissions: permissions || []

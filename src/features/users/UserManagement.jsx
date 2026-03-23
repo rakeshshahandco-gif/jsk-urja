@@ -177,6 +177,7 @@ export const UserManagement = () => {
                             <th>Full Name</th>
                             <th>Username</th>
                             <th>Role</th>
+                            <th>Mobile</th>
                             <th>Status</th>
                             <th>Permissions</th>
                             <th>Last Login</th>
@@ -210,6 +211,7 @@ export const UserManagement = () => {
                                             {roleConfig.badge} {roleConfig.label}
                                         </span>
                                     </td>
+                                    <td>{user.mobile || '—'}</td>
                                     <td>
                                         <span className={`${styles.statusBadge} ${user.isActive ? styles.active : styles.inactive}`}>
                                             {user.isActive ? '✓ Active' : '✕ Inactive'}

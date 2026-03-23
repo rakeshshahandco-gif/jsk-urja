@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSalesInvoices } from '@/services/salesApi';
+import { getSalesInvoices, cancelSalesInvoice } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ export default function SalesInvoiceListPage() {
     const [search, setSearch] = useState('');
     const [paymentStatus, setPaymentStatus] = useState('');
     const [paymentType, setPaymentType] = useState('');
+    const [cancellingId, setCancellingId] = useState(null);
 
     const load = async () => {
         setLoading(true);
@@ -36,6 +37,21 @@ export default function SalesInvoiceListPage() {
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
+
+    const handleCancel = async (e, invId) => {
+        e.stopPropagation();
+        if (!window.confirm('Cancel this invoice? This action cannot be undone.')) return;
+        setCancellingId(invId);
+        try {
+            await cancelSalesInvoice(invId);
+            toast.success('Invoice cancelled');
+            load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to cancel invoice');
+        } finally {
+            setCancellingId(null);
+        }
+    };
 
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -115,10 +131,21 @@ export default function SalesInvoiceListPage() {
                                                 <span style={{ padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, background: pc.bg, color: pc.color, border: `1px solid ${pc.border}` }}>{inv.paymentStatus}</span>
                                             </td>
                                             <td style={{ ...td, textAlign: 'right' }}>
-                                                <button onClick={e => { e.stopPropagation(); navigate(PATHS.SALES.INVOICE_DETAIL(inv._id)); }}
-                                                    style={{ padding: '5px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontSize: 12, fontWeight: 600 }}>
-                                                    View →
-                                                </button>
+                                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                                    <button onClick={e => { e.stopPropagation(); navigate(PATHS.SALES.INVOICE_DETAIL(inv._id)); }}
+                                                        style={{ padding: '5px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontSize: 12, fontWeight: 600 }}>
+                                                        View →
+                                                    </button>
+                                                    {inv.status !== 'Cancelled' && (
+                                                        <button
+                                                            onClick={e => handleCancel(e, inv._id)}
+                                                            disabled={cancellingId === inv._id}
+                                                            style={{ padding: '5px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', color: '#dc2626', fontSize: 12, fontWeight: 600 }}
+                                                        >
+                                                            {cancellingId === inv._id ? '...' : '✕ Cancel'}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );

@@ -52,21 +52,6 @@ const communicationLogSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: [
-                'Pending', 
-                'Preparing PDF', 
-                'Opening WhatsApp', 
-                'Searching Target', 
-                'Opening Chat', 
-                'Chat Detected',
-                'Attaching PDF', 
-                'Typing Message', 
-                'Ready to Send',
-                'Sending', 
-                'Sent', 
-                'WhatsApp opened, but message not sent',
-                'Failed'
-            ],
             default: 'Pending',
         },
         errorMessage: {

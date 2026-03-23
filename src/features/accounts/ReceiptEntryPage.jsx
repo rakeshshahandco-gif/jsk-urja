@@ -35,6 +35,9 @@ const ReceiptEntryPage = () => {
         ]
     });
 
+    // Detect if launched from a Sales Invoice
+    const fromInvoice = !!(location.state?.source === 'sales_invoice' || location.state?.invoiceId);
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -63,8 +66,8 @@ const ReceiptEntryPage = () => {
                 const defaultInvoiceNo = location.state?.invoiceNumber;
 
                 if (defaultCustomerId) {
-                    const custLedger = allLedgers.find(l => 
-                        (l.referenceId?.toString() === defaultCustomerId?.toString() && l.referenceModel === 'Customer') || 
+                    const custLedger = allLedgers.find(l =>
+                        (l.referenceId?.toString() === defaultCustomerId?.toString() && l.referenceModel === 'Customer') ||
                         l._id?.toString() === defaultCustomerId?.toString()
                     );
                     if (custLedger) {
@@ -86,9 +89,9 @@ const ReceiptEntryPage = () => {
                                 }];
                             }
 
-                            return { 
-                                ...prev, 
-                                items: newItems, 
+                            return {
+                                ...prev,
+                                items: newItems,
                                 totalAmount: defaultAmount,
                                 narration: `Receipt against Sales Invoice ${defaultInvoiceNo}`
                             };
@@ -135,7 +138,7 @@ const ReceiptEntryPage = () => {
     const addItem = () => {
         setFormData(prev => ({
             ...prev,
-            items: [...prev, { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '', adjustments: [] }]
+            items: [...prev.items, { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '', adjustments: [] }]
         }));
     };
 
@@ -263,8 +266,10 @@ const ReceiptEntryPage = () => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
         if (formData.totalAmount <= 0) return toast.error('Entry amount must be greater than zero');
 
-        const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
-        if (invalidItem) return toast.error('All items must have a ledger and amount');
+        if (!fromInvoice) {
+            const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
+            if (invalidItem) return toast.error('All items must have a ledger and amount');
+        }
 
         // Validation against original invoice amount if linked
         if (location.state?.invoiceId && location.state?.amount) {
@@ -286,6 +291,107 @@ const ReceiptEntryPage = () => {
         }
     };
 
+    // ── SIMPLIFIED VIEW when opened from Sales Invoice ──────────────────────
+    if (fromInvoice) {
+        const invNo = location.state?.invoiceNumber || '—';
+        const custName = location.state?.customerName || formData.items[0]?.ledgerName || '—';
+        const amount = formData.totalAmount || location.state?.amount || 0;
+        const selectedAccount = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+
+        return (
+            <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', padding: '32px 24px', color: '#1e293b' }}>
+                <div style={{ maxWidth: 560, margin: '0 auto' }}>
+                    {/* Header */}
+                    <div style={{ marginBottom: 24 }}>
+                        <button
+                            onClick={() => navigate(-1)}
+                            style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}
+                        >← Back to Invoice</button>
+                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Record Payment</h1>
+                        <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Confirm payment details and select account</p>
+                    </div>
+
+                    {/* Invoice Summary Card */}
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 4px 16px rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 20 }}>
+                        <div style={{ background: 'linear-gradient(135deg,#0d9488,#0891b2)', padding: '18px 24px' }}>
+                            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Invoice Payment</div>
+                            <div style={{ color: '#fff', fontSize: 26, fontWeight: 900 }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        </div>
+
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            {/* Bill No */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Invoice No.</span>
+                                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '2px 12px' }}>{invNo}</span>
+                            </div>
+                            {/* Customer */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Customer</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{custName}</span>
+                            </div>
+                            {/* Amount */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Amount to Receive</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: '#0d9488' }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            {/* Date */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Date</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{formData.date}</span>
+                            </div>
+                            {/* Narration */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Narration</span>
+                                <span style={{ fontSize: 12, color: '#6b7280', textAlign: 'right', maxWidth: 260 }}>{formData.narration}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Only user-fillable field: Cash/Bank Account */}
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: '24px', marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>
+                            Deposit Into — Select Account *
+                        </label>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>Choose how the payment was received (Cash, Bank, or Other)</p>
+                        <select
+                            name="cashBankAccountId"
+                            value={formData.cashBankAccountId}
+                            onChange={handleHeaderChange}
+                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #0d9488', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f0fdfa', color: '#0d9488', outline: 'none', cursor: 'pointer' }}
+                        >
+                            {cashBankAccounts.map(a => (
+                                <option key={a._id} value={a._id}>
+                                    {a.accountName}  (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
+                                </option>
+                            ))}
+                        </select>
+                        {selectedAccount && (
+                            <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
+                                Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <button
+                            onClick={() => navigate(-1)}
+                            style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                        >Cancel</button>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSubmitting || loading}
+                            style={{ flex: 2, padding: '13px', border: 'none', borderRadius: 9, background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#0d9488,#0891b2)', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 12px rgba(13,148,136,0.35)' }}
+                        >
+                            {isSubmitting ? 'Saving...' : `💳  Save Receipt  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ── FULL FORM for normal (non-invoice) entry ────────────────────────────
     return (
         <div className="p-6 space-y-6 max-w-6xl mx-auto">
             <div className="flex justify-between items-center">

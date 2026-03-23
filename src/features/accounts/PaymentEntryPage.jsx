@@ -35,6 +35,9 @@ const PaymentEntryPage = () => {
         ]
     });
 
+    // Detect if launched from a Purchase Invoice
+    const fromInvoice = !!(location.state?.source === 'purchase_invoice' || location.state?.invoiceId);
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -135,7 +138,7 @@ const PaymentEntryPage = () => {
     const addItem = () => {
         setFormData(prev => ({
             ...prev,
-            items: [...prev, { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }]
+            items: [...prev.items, { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }]
         }));
     };
 
@@ -266,8 +269,10 @@ const PaymentEntryPage = () => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account to pay from');
         if (formData.totalAmount <= 0) return toast.error('Payment amount must be greater than zero');
 
-        const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
-        if (invalidItem) return toast.error('All payment lines must have a ledger and amount');
+        if (!fromInvoice) {
+            const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
+            if (invalidItem) return toast.error('All payment lines must have a ledger and amount');
+        }
 
         // Validation against original invoice amount if linked
         if (location.state?.invoiceId && location.state?.amount) {
@@ -289,6 +294,96 @@ const PaymentEntryPage = () => {
         }
     };
 
+    // ── SIMPLIFIED VIEW when opened from Purchase Invoice ───────────────────
+    if (fromInvoice) {
+        const invNo = location.state?.invoiceNumber || '—';
+        const supplierName = location.state?.supplierName || formData.items[0]?.ledgerName || '—';
+        const amount = formData.totalAmount || location.state?.amount || 0;
+        const selectedAccount = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+
+        return (
+            <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', padding: '32px 24px', color: '#1e293b' }}>
+                <div style={{ maxWidth: 560, margin: '0 auto' }}>
+                    <div style={{ marginBottom: 24 }}>
+                        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Back to Invoice</button>
+                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Make Payment</h1>
+                        <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Confirm payment details and select account to pay from</p>
+                    </div>
+
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 4px 16px rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 20 }}>
+                        <div style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', padding: '18px 24px' }}>
+                            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Purchase Invoice Payment</div>
+                            <div style={{ color: '#fff', fontSize: 26, fontWeight: 900 }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        </div>
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Invoice No.</span>
+                                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: 6, padding: '2px 12px' }}>{invNo}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Supplier</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{supplierName}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Amount to Pay</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: '#4f46e5' }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Payment Date</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{formData.date}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Narration</span>
+                                <span style={{ fontSize: 12, color: '#6b7280', textAlign: 'right', maxWidth: 260 }}>{formData.narration}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: '24px', marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>Pay From — Select Account *</label>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>Choose the bank or cash account to pay from</p>
+                        <select name="cashBankAccountId" value={formData.cashBankAccountId} onChange={handleHeaderChange}
+                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #4f46e5', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f5f3ff', color: '#4f46e5', outline: 'none', cursor: 'pointer', marginBottom: 16 }}>
+                            {cashBankAccounts.map(a => (
+                                <option key={a._id} value={a._id}>{a.accountName}  (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})</option>
+                            ))}
+                        </select>
+                        {selectedAccount && <div style={{ marginBottom: 16, fontSize: 12, color: '#6b7280' }}>Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></div>}
+
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>Payment Mode</label>
+                        <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
+                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #e5e7eb', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f9fafb', color: '#374151', outline: 'none', cursor: 'pointer', marginBottom: 16 }}>
+                            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="UPI">UPI</option>
+                        </select>
+
+                        {(formData.instrumentType === 'Cheque' || formData.instrumentType === 'Bank Transfer') && (
+                            <>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 8 }}>
+                                    {formData.instrumentType === 'Cheque' ? 'Cheque No.' : 'UTR / Reference No.'}
+                                </label>
+                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
+                                    placeholder={formData.instrumentType === 'Cheque' ? 'Enter cheque number' : 'Enter UTR / ref number'}
+                                    style={{ width: '100%', padding: '11px 14px', border: '2px solid #e5e7eb', borderRadius: 9, fontSize: 14, background: '#f9fafb', color: '#374151', outline: 'none', boxSizing: 'border-box' }} />
+                            </>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <button onClick={() => navigate(-1)} style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Cancel</button>
+                        <button onClick={handleSave} disabled={isSubmitting || loading}
+                            style={{ flex: 2, padding: '13px', border: 'none', borderRadius: 9, background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 12px rgba(79,70,229,0.35)' }}>
+                            {isSubmitting ? 'Saving...' : `💸  Save Payment  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ── FULL FORM for normal (non-invoice) payment entry ────────────────────
     return (
         <div className="p-6 space-y-6 max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-2">
@@ -400,19 +495,12 @@ const PaymentEntryPage = () => {
                         {formData.items.map((item, index) => (
                             <tr key={item.id} className="group hover:bg-gray-50 transition-colors not-italic">
                                 <td className="px-6 py-4">
-                                    {(location.state?.source === 'purchase_invoice' || location.state?.supplierId) && index === 0 ? (
-                                        <div className="font-bold text-gray-800 bg-gray-200/50 px-3 py-3 rounded-xl border border-primary/30 cursor-not-allowed text-sm flex items-center justify-between">
-                                            <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
-                                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded uppercase tracking-tighter ml-2 italic">Locked Vendor</span>
-                                        </div>
-                                    ) : (
-                                        <SearchableSelect
-                                            options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
-                                            value={item.ledgerId}
-                                            onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                            placeholder="Select supplier or expense..."
-                                        />
-                                    )}
+                                    <SearchableSelect
+                                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                                        value={item.ledgerId}
+                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                        placeholder="Select supplier or expense..."
+                                    />
                                 </td>
                                 <td className="px-6 py-4">
                                     <Input
@@ -443,7 +531,7 @@ const PaymentEntryPage = () => {
                                     />
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    {!(location.state?.supplierId && index === 0) && (
+                                    {formData.items.length > 1 && (
                                         <Button
                                             variant="ghost"
                                             size="sm"
