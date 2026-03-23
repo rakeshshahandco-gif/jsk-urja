@@ -302,7 +302,17 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                         {metadata?.map((module) => {
                             const isExpanded = expandedModules[module.id];
                             const modulePerms = selectedPermissions[module.id] || {};
-                            const hasAnyPermission = Object.values(modulePerms).some(sub => Object.values(sub).some(val => !!val));
+                            
+                            // Safe check for hasAnyPermission
+                            let hasAnyPermission = false;
+                            try {
+                                hasAnyPermission = typeof modulePerms === 'object' && modulePerms !== null && 
+                                    Object.values(modulePerms).some(sub => 
+                                        typeof sub === 'object' && sub !== null && Object.values(sub).some(val => !!val)
+                                    );
+                            } catch (e) {
+                                console.warn(`Error checking permissions for module ${module.id}:`, e);
+                            }
 
                             return (
                                 <div key={module.id} className={`${styles.moduleGroup} ${isExpanded ? styles.expanded : ''}`}>
@@ -323,7 +333,15 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                                         <div className={styles.submodulesList}>
                                             {module.submodules?.map((sub) => {
                                                 const subPerms = modulePerms[sub.id] || {};
-                                                const hasSubPermission = Object.values(subPerms).some(val => !!val);
+                                                
+                                                let hasSubPermission = false;
+                                                try {
+                                                    hasSubPermission = typeof subPerms === 'object' && subPerms !== null && 
+                                                        Object.values(subPerms).some(val => !!val);
+                                                } catch (e) {
+                                                    // subPerms might be a boolean in legacy data
+                                                    hasSubPermission = !!subPerms;
+                                                }
 
                                                 return (
                                                     <div key={sub.id} className={styles.submoduleItem}>

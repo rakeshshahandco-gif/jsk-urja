@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { getCustomers, getConversationHistory } from '@/services/customerApi';
-import { Input, Button, Select } from '@/components/ui';
-import { Search, Filter, Phone, MessageSquare, Calendar, User, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, Phone, MessageSquare, User, Loader2, MessageCircle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import styles from './CustomerMasterReport.module.scss';
 
-// Local debounce utility to avoid external dependency issues
+// Local debounce utility
 function debounce(func, wait) {
     let timeout;
     return function (...args) {
@@ -40,14 +40,8 @@ const ConversationHistoryReport = () => {
     const fetchCustomers = useCallback(async (search = '') => {
         setLoadingCustomers(true);
         try {
-            // Using existing getCustomers API
-            const params = {
-                limit: 20,
-                page: 1,
-                sortBy: 'customerName:asc'
-            };
+            const params = { limit: 50, page: 1, sortBy: 'customerName:asc' };
             if (search) params.search = search;
-
             const response = await getCustomers(params);
             setCustomers(response.results || []);
         } catch (error) {
@@ -58,13 +52,10 @@ const ConversationHistoryReport = () => {
         }
     }, [addToast]);
 
-    // Initial Load & Debounced Search
-    useEffect(() => {
-        fetchCustomers(customerSearch);
-    }, []); // Only mount
+    useEffect(() => { fetchCustomers(); }, []);
 
     const debouncedCustomerSearch = useCallback(
-        debounce((val) => fetchCustomers(val), 500),
+        debounce((val) => fetchCustomers(val), 400),
         [fetchCustomers]
     );
 
@@ -76,45 +67,18 @@ const ConversationHistoryReport = () => {
 
     // 2. Fetch History when Customer or Filters change
     useEffect(() => {
-        if (!selectedCustomer) {
-            setHistory([]);
-            return;
-        }
+        if (!selectedCustomer) { setHistory([]); return; }
 
         const fetchHistory = async () => {
             setLoadingHistory(true);
             try {
-                // Manually construct params for our updated controller
                 const params = {};
                 if (filters.fromDate) params.fromDate = filters.fromDate;
-                if (filters.toDate) params.toDate = filters.toDate;
+                if (filters.toDate)   params.toDate   = filters.toDate;
                 if (filters.mode && filters.mode !== 'All') params.mode = filters.mode;
-                if (filters.search) params.search = filters.search;
-
-                // getConversationHistory from customerApi usually just takes Id. 
-                // We might need to update customerApi.js to accept params if not supported yet.
-                // Assuming we updated customerApi.js or pass params as second arg (axios style).
-
-                // Let's check how we updated customerApi.js earlier.
-                // We updated getConversationHistory(customerId) to return response.data.data
-                // It does NOT currently accept params. We need to fix that or use getCustomerConversations?
-                // The task instruction was to add a new endpoint. 
-                // Wait, getConversationHistory in customer.controller.js reads req.query. Use that.
-
-                // Since I can't edit customerApi.js inside this file creation, I will assume 
-                // I need to patch customerApi.js too. For now I'll try to pass it, 
-                // if it fails I'll fix the service in next step.
-
-                // Actually, I should use the `api` instance directly or update the service.
-                // I'll update the service in the next step.
-
-                // Temporary workaround/assumption: getConversationHistory accepts params or we patch it.
-                // I'll use a direct invocation pattern if needed or just assume I update the service next.
-
-                // Let's proceed assuming I will update `getConversationHistory(customerId, params)` next.
+                if (filters.search)   params.search   = filters.search;
                 const data = await getConversationHistory(selectedCustomer._id, params);
                 setHistory(data || []);
-
             } catch (error) {
                 console.error(error);
                 addToast('Failed to load history', 'error');
@@ -122,163 +86,248 @@ const ConversationHistoryReport = () => {
                 setLoadingHistory(false);
             }
         };
-
         fetchHistory();
     }, [selectedCustomer, filters, addToast]);
 
+    const handleReset = () => setFilters({ fromDate: '', toDate: '', mode: 'All', search: '' });
+
+    // ── INLINE PANEL STYLES (two-panel layout inside container) ──────────────
+    const panelWrap  = { display: 'flex', gap: 16, height: 'calc(100vh - 160px)' };
+    const leftPanel  = { width: 280, minWidth: 240, background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
+    const rightPanel = { flex: 1, background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', overflow: 'hidden' };
 
     return (
-        <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-gray-50">
-            {/* --- Left Panel: Sidebar --- */}
-            <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-                <div className="p-4 border-b border-gray-100">
-                    <h2 className="font-semibold text-gray-800 mb-2">Customers</h2>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                        <Input
-                            placeholder="Search customer..."
-                            value={customerSearch}
-                            onChange={handleCustomerSearchChange}
-                            className="pl-9"
-                        />
-                    </div>
-                </div>
+        <div className={styles.container}>
 
-                <div className="flex-1 overflow-y-auto">
-                    {loadingCustomers ? (
-                        <div className="flex justify-center p-4"><Loader2 className="animate-spin text-blue-500" /></div>
-                    ) : (
-                        <div className="divide-y divide-gray-100">
-                            {customers.map(c => (
-                                <div
-                                    key={c._id}
-                                    onClick={() => setSelectedCustomer(c)}
-                                    className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${selectedCustomer?._id === c._id ? 'bg-blue-50 border-r-2 border-blue-500' : ''}`}
-                                >
-                                    <div className="font-medium text-gray-900">{c.company || c.customerName}</div>
-                                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                        <User size={12} /> {c.customerName}
-                                    </div>
-                                </div>
-                            ))}
-                            {customers.length === 0 && <div className="p-4 text-center text-gray-400 text-sm">No customers found</div>}
-                        </div>
-                    )}
-                </div>
+            {/* ── Page Header ─────────────────────────────────── */}
+            <div className={styles.header}>
+                <h1 className={styles.title}>
+                    Conversation History
+                    <span className={styles.subtitle}> — View complete interaction history for any customer</span>
+                </h1>
             </div>
 
-            {/* --- Right Panel: Content --- */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {/* Header / Filters */}
-                <div className="bg-white border-b border-gray-200 p-4 shadow-sm z-10">
-                    <div className="flex justify-between items-center mb-4">
-                        <h1 className="text-xl font-bold text-gray-800">
-                            {selectedCustomer ? `History: ${selectedCustomer.company || selectedCustomer.customerName}` : 'Conversation History'}
-                        </h1>
-                        {/* Selected Customer badge or clear button could go here */}
+            {/* ── Compact Filter Bar ──────────────────────────── */}
+            <div className={styles.filterBar}>
+                {/* From Date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', whiteSpace: 'nowrap' }}>From:</label>
+                    <input
+                        type="date"
+                        className={styles.select}
+                        value={filters.fromDate}
+                        onChange={e => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
+                    />
+                </div>
+
+                {/* To Date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', whiteSpace: 'nowrap' }}>To:</label>
+                    <input
+                        type="date"
+                        className={styles.select}
+                        value={filters.toDate}
+                        onChange={e => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
+                    />
+                </div>
+
+                {/* Mode */}
+                <select
+                    className={styles.select}
+                    value={filters.mode}
+                    onChange={e => setFilters(prev => ({ ...prev, mode: e.target.value }))}
+                >
+                    <option value="All">All Modes</option>
+                    <option value="call">Call</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="visit">Visit</option>
+                </select>
+
+                {/* Search in content */}
+                <div className={styles.searchWrap} style={{ flex: 1, minWidth: 180 }}>
+                    <Search className={styles.searchIcon} size={14} />
+                    <input
+                        className={styles.searchInput}
+                        placeholder="Search discussions..."
+                        value={filters.search}
+                        onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                    />
+                </div>
+
+                {/* Reset */}
+                <button
+                    onClick={handleReset}
+                    title="Reset filters"
+                    style={{ height: 32, padding: '0 12px', fontSize: '0.8125rem', fontWeight: 500, color: '#6b7280', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                >
+                    <RefreshCw size={13} /> Reset
+                </button>
+            </div>
+
+            {/* ── Two-panel layout ────────────────────────────── */}
+            <div style={panelWrap}>
+
+                {/* LEFT: Customer List */}
+                <div style={leftPanel}>
+                    <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb', flexShrink: 0 }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Customers</div>
+                        <div style={{ position: 'relative' }}>
+                            <Search size={13} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
+                            <input
+                                placeholder="Search customer..."
+                                value={customerSearch}
+                                onChange={handleCustomerSearchChange}
+                                style={{ width: '100%', height: 30, paddingLeft: 26, paddingRight: 8, border: '1px solid #d1d5db', borderRadius: 6, fontSize: '0.8rem', outline: 'none', color: '#374151', background: '#fff', boxSizing: 'border-box' }}
+                            />
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 items-end">
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">From</label>
-                            <Input
-                                type="date"
-                                value={filters.fromDate}
-                                onChange={e => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
-                            />
-                        </div>
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">To</label>
-                            <Input
-                                type="date"
-                                value={filters.toDate}
-                                onChange={e => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
-                            />
-                        </div>
-                        <div className="w-40">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Mode</label>
-                            <Select
-                                options={[
-                                    { value: 'All', label: 'All Modes' },
-                                    { value: 'call', label: 'Call' },
-                                    { value: 'whatsapp', label: 'WhatsApp' },
-                                ]}
-                                value={filters.mode}
-                                onChange={e => setFilters(prev => ({ ...prev, mode: e.target.value }))}
-                            />
-                        </div>
-                        <div className="flex-1 min-w-[200px]">
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Search Content</label>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                                <Input
-                                    placeholder="Search in discussions..."
-                                    value={filters.search}
-                                    onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                                    className="pl-9"
-                                />
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {loadingCustomers ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
                             </div>
-                        </div>
-                        <Button
-                            variant="outline"
-                            onClick={() => setFilters({ fromDate: '', toDate: '', mode: 'All', search: '' })}
-                            className="mb-[2px]"
-                        >
-                            Reset
-                        </Button>
+                        ) : (
+                            <>
+                                {customers.map(c => {
+                                    const isSelected = selectedCustomer?._id === c._id;
+                                    return (
+                                        <div
+                                            key={c._id}
+                                            onClick={() => setSelectedCustomer(c)}
+                                            style={{
+                                                padding: '10px 14px',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #f3f4f6',
+                                                borderRight: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
+                                                background: isSelected ? '#eff6ff' : 'transparent',
+                                                transition: 'background 0.15s',
+                                            }}
+                                            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb'; }}
+                                            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                                        >
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#111827', lineHeight: 1.3 }}>{c.company || c.customerName}</div>
+                                            {c.company && c.customerName && c.company !== c.customerName && (
+                                                <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                                    <User size={10} />{c.customerName}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {customers.length === 0 && (
+                                    <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: '0.8rem' }}>No customers found</div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
 
-                {/* History List */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                {/* RIGHT: History Detail */}
+                <div style={rightPanel}>
                     {!selectedCustomer ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                            <ArrowRight size={48} className="mb-4 opacity-20" />
-                            <p className="text-lg">Select a customer to view history</p>
-                        </div>
-                    ) : loadingHistory ? (
-                        <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-500" size={32} /></div>
-                    ) : history.length === 0 ? (
-                        <div className="text-center p-10 text-gray-500 bg-white rounded-lg shadow-sm border border-gray-100">
-                            <p>No conversation history found for this filters.</p>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
+                            <MessageCircle size={52} style={{ opacity: 0.15, marginBottom: 14 }} />
+                            <p style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 4px' }}>Select a customer</p>
+                            <p style={{ fontSize: '0.8rem', margin: 0 }}>Pick a customer from the list to view conversation history</p>
                         </div>
                     ) : (
-                        <div className="space-y-4 max-w-4xl mx-auto">
-                            {history.map((item) => (
-                                <div key={item._id} className="bg-white rounded-lg p-5 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-full ${item.mode === 'whatsapp' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                {item.mode === 'whatsapp' ? <MessageSquare size={18} /> : <Phone size={18} />}
-                                            </div>
-                                            <div>
-                                                <div className="font-semibold text-gray-900">
-                                                    {format(new Date(item.conversationDate), 'dd MMMM yyyy')}
-                                                </div>
-                                                <div className="text-xs text-gray-500 capitalize flex items-center gap-1">
-                                                    {item.mode}
-                                                    {item.isFollowup && <span className="bg-orange-100 text-orange-700 px-1.5 rounded text-[10px] ml-2">From Follow-up</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <span className="text-xs text-gray-400">{format(new Date(item.createdAt), 'hh:mm a')}</span>
-                                    </div>
-
-                                    <div className="pl-[52px]">
-                                        <div className="text-gray-800 text-sm whitespace-pre-wrap mb-3 leading-relaxed">
-                                            {item.discussionDetails}
-                                        </div>
-
-                                        {item.outcome && (
-                                            <div className="bg-gray-50 rounded p-3 text-xs text-gray-600 border border-gray-100">
-                                                <span className="font-semibold text-gray-700 block mb-1">Outcome / Next Steps:</span>
-                                                {item.outcome}
-                                            </div>
-                                        )}
-                                    </div>
+                        <>
+                            {/* Detail Header */}
+                            <div style={{ padding: '14px 20px', borderBottom: '1px solid #e5e7eb', background: '#fff', flexShrink: 0 }}>
+                                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>
+                                    {selectedCustomer.company || selectedCustomer.customerName}
                                 </div>
-                            ))}
-                        </div>
+                                {selectedCustomer.company && selectedCustomer.customerName && selectedCustomer.company !== selectedCustomer.customerName && (
+                                    <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: 2 }}>
+                                        {selectedCustomer.customerName}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* History List */}
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#f9fafb' }}>
+                                {loadingHistory ? (
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                                        <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+                                    </div>
+                                ) : history.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                                        <MessageCircle size={32} style={{ opacity: 0.2, marginBottom: 10, display: 'block', margin: '0 auto 10px' }} />
+                                        <p style={{ margin: 0, fontSize: '0.875rem' }}>No conversation history found for the selected filters.</p>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {history.map((item) => {
+                                            const isWhatsApp = item.mode === 'whatsapp';
+                                            return (
+                                                <div
+                                                    key={item._id}
+                                                    style={{ background: '#fff', borderRadius: 8, padding: 16, border: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+                                                >
+                                                    {/* Card Header */}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                            <div style={{
+                                                                width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                background: isWhatsApp ? '#dcfce7' : '#dbeafe',
+                                                                color: isWhatsApp ? '#16a34a' : '#2563eb',
+                                                                flexShrink: 0
+                                                            }}>
+                                                                {isWhatsApp ? <MessageSquare size={16} /> : <Phone size={16} />}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#111827' }}>
+                                                                    {format(new Date(item.conversationDate), 'dd MMMM yyyy')}
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                                                    <span style={{
+                                                                        fontSize: '0.7rem', fontWeight: 700, padding: '1px 7px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
+                                                                        background: isWhatsApp ? '#dcfce7' : '#dbeafe',
+                                                                        color: isWhatsApp ? '#15803d' : '#1d4ed8',
+                                                                        border: isWhatsApp ? '1px solid #bbf7d0' : '1px solid #bfdbfe',
+                                                                    }}>
+                                                                        {item.mode}
+                                                                    </span>
+                                                                    {item.isFollowup && (
+                                                                        <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '1px 6px', background: '#fef3c7', color: '#d97706', borderRadius: 4, border: '1px solid #fde68a' }}>
+                                                                            From Follow-up
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                                                            {format(new Date(item.createdAt || item.conversationDate), 'hh:mm a')}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Discussion */}
+                                                    <div style={{ fontSize: '0.8rem', color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: item.outcome ? 10 : 0, paddingLeft: 44 }}>
+                                                        {item.discussionDetails}
+                                                    </div>
+
+                                                    {/* Outcome */}
+                                                    {item.outcome && (
+                                                        <div style={{ marginLeft: 44, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px' }}>
+                                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Outcome / Next Steps</div>
+                                                            <div style={{ fontSize: '0.8rem', color: '#374151' }}>{item.outcome}</div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer count */}
+                            {!loadingHistory && history.length > 0 && (
+                                <div style={{ padding: '8px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '0.75rem', color: '#9ca3af', textAlign: 'right' }}>
+                                    {history.length} conversation{history.length !== 1 ? 's' : ''}
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

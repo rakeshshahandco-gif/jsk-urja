@@ -20,6 +20,8 @@ export const authService = {
     // Get current user profile
     getMe: async () => {
         const { data } = await api.get('/auth/me');
+        // data = { success: true, data: { ...user }, message: '...' }
+        // Return the inner data (actual user) so callers don't have to unwrap
         return data;
     },
 

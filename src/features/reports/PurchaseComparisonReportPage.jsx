@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPurchaseComparisonReport, getSuppliers } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
+import styles from './CustomerMasterReport.module.scss';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
@@ -68,14 +69,14 @@ export default function PurchaseComparisonReportPage() {
     ] : [];
 
     return (
-        <div style={{ padding: '24px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+        <div className={styles.container}>
+            <div className={styles.header}>
+                <h1 className={styles.title}>
+                    Purchase Comparison Report
+                    <span className={styles.subtitle}> — PO vs GRN vs Invoice: ordered, received, invoiced quantities &amp; rate differences</span>
+                </h1>
+            </div>
             <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-
-                {/* Title */}
-                <div style={{ marginBottom: 20 }}>
-                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Purchase Comparison Report</h1>
-                    <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 13 }}>PO vs GRN vs Invoice — ordered, received, invoiced quantities &amp; rate differences</p>
-                </div>
 
                 {/* Filters */}
                 <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>

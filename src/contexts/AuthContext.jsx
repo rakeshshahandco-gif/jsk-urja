@@ -15,18 +15,20 @@ export const AuthProvider = ({ children }) => {
         const initAuth = async () => {
             const authData = getAuthData();
             if (authData) {
-                // Determine if we need to validate token with backend?
-                // For now, trust hydration but maybe fetch fresh profile
                 setUser(authData.user);
                 setToken(authData.token);
 
                 try {
-                    // POC: Validate token validity by fetching profile
-                    const { data } = await authService.getMe();
-                    console.log('🔄 Fresh profile loaded:', data);
-                    setUser(data);
-                    // Update storage with fresh data
-                    saveAuthData(data, authData.token);
+                    // Validate token and get fresh profile data
+                    const response = await authService.getMe();
+                    // getMe() returns the ApiResponse wrapper: { success, data: user, message }
+                    // We need response.data (the actual user object), not response itself
+                    const freshUser = response?.data || response;
+                    console.log('🔄 Fresh profile loaded:', freshUser);
+                    if (freshUser && freshUser._id) {
+                        setUser(freshUser);
+                        saveAuthData(freshUser, authData.token);
+                    }
                 } catch (e) {
                     console.error("Token invalid or expired", e);
                     logout();
@@ -41,12 +43,17 @@ export const AuthProvider = ({ children }) => {
     const login = useCallback(async (username, password) => {
         try {
             const response = await authService.login(username, password);
-            const { token: newToken, ...userData } = response.data;
+            // authService.login returns the ApiResponse wrapper: { success, data: { ...user, token }, message }
+            // The actual user+token is in response.data
+            const payload = response?.data || response;
+            const { token: newToken, ...userData } = payload;
+
+            if (!newToken) {
+                return { success: false, error: 'Login failed: No token received' };
+            }
 
             setUser(userData);
             setToken(newToken);
-            // saveAuthData is handled in service or we do it here? 
-            // Service does it, but let's be safe. Service saveAuthData might be enough.
 
             return { success: true };
         } catch (error) {

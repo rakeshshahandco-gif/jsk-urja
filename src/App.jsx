@@ -222,10 +222,10 @@ function App() {
                                                                     </ProtectedRoute>
                                                                 }
                                                             />
-                                                            <Route
+                                                             <Route
                                                                 path="/company-profile"
                                                                 element={
-                                                                    <ProtectedRoute requireRole="admin">
+                                                                    <ProtectedRoute requirePermission="admin.company_profile.view">
                                                                         <CompanyProfilePage />
                                                                     </ProtectedRoute>
                                                                 }
@@ -233,16 +233,16 @@ function App() {
                                                             <Route
                                                                 path="/settings/whatsapp"
                                                                 element={
-                                                                    <ProtectedRoute requireRole="admin">
+                                                                    <ProtectedRoute requirePermission="admin.whatsapp_settings.view">
                                                                         <WhatsAppSettingsPage />
                                                                     </ProtectedRoute>
                                                                 }
                                                             />
 
-                                                            <Route
+                                                             <Route
                                                                 path="/reports/customer-master"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                    <ProtectedRoute requirePermission="reports.customer_master_report.view">
                                                                         <CustomerMasterReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -251,7 +251,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/followups"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                    <ProtectedRoute requirePermission="reports.followup_report.view">
                                                                         <FollowUpTrackerReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -260,7 +260,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/reminders"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                    <ProtectedRoute requirePermission="reports">
                                                                         <ReminderReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -269,7 +269,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/open-reminders"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                    <ProtectedRoute requirePermission="reports.reminder_report.view">
                                                                         <OpenRemindersReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -278,7 +278,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/conversation-history"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff', 'viewer']}>
+                                                                    <ProtectedRoute requirePermission="reports">
                                                                         <ConversationHistoryReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -287,7 +287,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/followup-dashboard"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                    <ProtectedRoute requirePermission="reports.followup_report.view">
                                                                         <FollowupDashboardReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -296,7 +296,7 @@ function App() {
                                                             <Route
                                                                 path="/reports/followup-task-report"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager']}>
+                                                                    <ProtectedRoute requirePermission="reports.followup_report.view">
                                                                         <FollowupTaskReport />
                                                                     </ProtectedRoute>
                                                                 }
@@ -311,10 +311,10 @@ function App() {
                                                                 }
                                                             />
 
-                                                            <Route
+                                                             <Route
                                                                 path="/task-chats"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <ProtectedRoute requirePermission="tasks">
                                                                         <TaskChatDashboard />
                                                                     </ProtectedRoute>
                                                                 }
@@ -322,7 +322,7 @@ function App() {
                                                             <Route
                                                                 path="/task-chats/:taskId"
                                                                 element={
-                                                                    <ProtectedRoute requireRole={['admin', 'manager', 'staff']}>
+                                                                    <ProtectedRoute requirePermission="tasks">
                                                                         <TaskChatDashboard />
                                                                     </ProtectedRoute>
                                                                 }
@@ -432,7 +432,7 @@ function App() {
                                                              <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                                                              <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
                                                              <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
-                                                            <Route path="/sales/invoice-series" element={<ProtectedRoute requireRole={['admin']}><InvoiceSeriesPage /></ProtectedRoute>} />
+                                                            <Route path="/sales/invoice-series" element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
 
                                                             {/* Service / Replacement Module */}
                                                              <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />

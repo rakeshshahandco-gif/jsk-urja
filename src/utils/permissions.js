@@ -98,7 +98,12 @@ export const APP_MODULES = [
         submodules: [
             { id: 'customer_master_report', name: 'Customer Master', actions: ['view', 'export'] },
             { id: 'followup_report', name: 'Follow-up Tracker Report', actions: ['view', 'export'] },
-            { id: 'reminder_report', name: 'Open Reminders', actions: ['view'] }
+            { id: 'followup_dashboard_report', name: 'Follow-up Dashboard Report', actions: ['view', 'export'] },
+            { id: 'followup_task_report', name: 'Follow-up Task Report', actions: ['view', 'export'] },
+            { id: 'conversation_history_report', name: 'Conversation History', actions: ['view', 'export'] },
+            { id: 'reminder_report', name: 'Open Reminders', actions: ['view'] },
+            { id: 'task_reminder_report', name: 'Task Reminder Report', actions: ['view', 'export'] },
+            { id: 'purchase_comparison_report', name: 'Purchase Comparison Report', actions: ['view', 'export'] }
         ]
     },
     {
@@ -167,8 +172,9 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
     // Extract role name if userRole is an object
     const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
 
-    // Superadmin has all permissions
+    // Superadmin and Admin have all permissions (bypass all checks)
     if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
+    if (actualRole === ROLES.ADMIN || actualRole === 'admin') return true;
 
     // 1. Check Granular Object (additionalPermissions)
     // Format can be "module.submodule.action" or just "module"
@@ -196,16 +202,23 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
                 }
             }
         } else {
-            // If just module name is passed, check if any boolean is true at any depth
+            // Handle module-level string (e.g., 'customers', 'tasks')
             const moduleData = additionalPermissions[requiredPermission];
+            
+            // 1. Direct match (legacy flat structure or explicit module-level grant)
             if (moduleData === true) return true;
+            
+            // 2. Objects check (Nested structure: module -> submodule -> action)
             if (moduleData && typeof moduleData === 'object') {
-                // Check direct actions
-                if (Object.values(moduleData).some(val => val === true)) return true;
-                // Check submodules
-                return Object.values(moduleData).some(sub => 
-                    typeof sub === 'object' && sub !== null && Object.values(sub).some(val => val === true)
-                );
+                const hasAnyTrueValue = (obj) => {
+                    if (!obj || typeof obj !== 'object') return obj === true;
+                    return Object.values(obj).some(val => {
+                        if (val === true) return true;
+                        if (val && typeof val === 'object') return hasAnyTrueValue(val);
+                        return false;
+                    });
+                };
+                return hasAnyTrueValue(moduleData);
             }
         }
     }
