@@ -20,7 +20,7 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 })); // Disabled CSP and allowed cross-origin resources
 app.use(cors({
-    origin: ['http://localhost:4000', 'http://localhost:5173', "https://jsk-urja.onrender.com"],
+    origin: ['http://localhost:4000', 'http://localhost:4001', 'http://localhost:5173', "https://jsk-urja.onrender.com"],
     credentials: true,
 }));
 app.use(express.json());
