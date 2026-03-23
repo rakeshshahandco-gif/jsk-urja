@@ -27,10 +27,12 @@ const numWords = (n) => {
     return result + ' Only';
 };
 
+const SO_START_NUMBER = parseInt(process.env.SO_START_NUMBER || '1', 10);
+
 const genSONumber = async () => {
     const year = new Date().getFullYear();
     const last = await SalesOrder.findOne({ soNumber: { $regex: `^SO-${year}-` } }).sort({ soNumber: -1 });
-    if (!last) return `SO-${year}-00001`;
+    if (!last) return `SO-${year}-${String(SO_START_NUMBER).padStart(5, '0')}`;
     const parts = last.soNumber.split('-');
     const next = parseInt(parts[parts.length - 1], 10) + 1;
     return `SO-${year}-${String(next).padStart(5, '0')}`;
@@ -292,3 +294,13 @@ export const cancelSO = asyncHandler(async (req, res) => {
     await so.save();
     res.json({ success: true, data: so });
 });
+
+// ------- DELETE SO -------
+export const deleteSO = asyncHandler(async (req, res) => {
+    const so = await SalesOrder.findById(req.params.id);
+    if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+    if (so.status === 'Invoiced') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete a Sales Order that has been invoiced. Cancel or delete the linked invoice first.');
+    await SalesOrder.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Sales Order deleted successfully' });
+});
+

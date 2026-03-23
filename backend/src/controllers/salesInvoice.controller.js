@@ -113,27 +113,15 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     if (!body.customerName) throw new ApiError(httpStatus.BAD_REQUEST, 'Customer name is required');
     if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
 
-    // Get invoice number from series
+    // Get invoice number from series (REQUIRED - no fallback auto-numbering)
+    if (!body.seriesId) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice Series is required. Please select a series to generate the invoice number.');
     let invoiceNumber, gstApplicable = true;
-    if (body.seriesId) {
-        const series = await InvoiceSeries.findById(body.seriesId);
-        if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive invoice series');
-        invoiceNumber = series.nextInvoiceNumber();
-        gstApplicable = series.gstApplicable === false ? false : true;
-        series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
-        await series.save();
-    } else {
-        // Fallback: auto number
-        const year = new Date().getFullYear(); const yr2 = String(year).slice(-2);
-        const fy = `${yr2}-${String(Number(yr2) + 1)}`;
-        const last = await SalesInvoice.findOne({ invoiceNumber: { $regex: `^${fy}/` } }).sort({ invoiceNumber: -1 });
-        if (!last) {
-            invoiceNumber = `${fy}/00001`;
-        } else {
-            const parts = last.invoiceNumber.split('/');
-            invoiceNumber = `${fy}/${String(parseInt(parts[1]) + 1).padStart(5, '0')}`;
-        }
-    }
+    const series = await InvoiceSeries.findById(body.seriesId);
+    if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive invoice series');
+    invoiceNumber = series.nextInvoiceNumber();
+    gstApplicable = series.gstApplicable === false ? false : true;
+    series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
+    await series.save();
 
     const { items: _items, ...otherData } = body;
 

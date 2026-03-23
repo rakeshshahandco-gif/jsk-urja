@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSalesOrders } from '@/services/salesApi';
+import { getSalesOrders, deleteSalesOrder } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -47,6 +47,18 @@ export default function SalesOrderListPage() {
     useEffect(() => { load(); }, [search, status]);
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
+
+    const handleDelete = async (e, soId, soNumber) => {
+        e.stopPropagation();
+        if (!window.confirm(`Delete Sales Order "${soNumber}"? This cannot be undone.`)) return;
+        try {
+            await deleteSalesOrder(soId);
+            toast.success(`Sales Order ${soNumber} deleted.`);
+            load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to delete sales order');
+        }
+    };
 
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -129,10 +141,17 @@ export default function SalesOrderListPage() {
                                             </td>
                                             <td style={td}>{fmt(so.deliveryDate)}</td>
                                             <td style={{ ...td, textAlign: 'right' }}>
-                                                <button onClick={e => { e.stopPropagation(); navigate(PATHS.SALES.ORDER_DETAIL(so._id)); }}
-                                                    style={{ padding: '5px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontSize: 12, fontWeight: 600 }}>
-                                                    View →
-                                                </button>
+                                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                                    <button onClick={e => { e.stopPropagation(); navigate(PATHS.SALES.ORDER_DETAIL(so._id)); }}
+                                                        style={{ padding: '5px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', color: '#374151', fontSize: 12, fontWeight: 600 }}>
+                                                        View →
+                                                    </button>
+                                                    <button onClick={e => handleDelete(e, so._id, so.soNumber)}
+                                                        style={{ padding: '5px 10px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', color: '#dc2626', fontSize: 13 }}
+                                                        title="Delete Sales Order">
+                                                        🗑
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );

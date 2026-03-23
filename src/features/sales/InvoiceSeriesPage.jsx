@@ -108,10 +108,29 @@ export default function InvoiceSeriesPage() {
             {/* Modal */}
             {showModal && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-                    <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-                        <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#1e293b' }}>{editing ? 'Edit' : 'New'} Invoice Series</h2>
+                    <div style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#1e293b' }}>{editing ? 'Edit' : 'New'} Invoice Series</h2>
+                        {/* Current position info — shown at top when editing */}
+                        {editing && (
+                            <div style={{ background: '#f0fdfa', border: '2px solid #0d9488', borderRadius: 10, padding: '14px 16px', marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 4 }}>📌 Last Used No.</div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#374151', fontFamily: 'monospace' }}>
+                                        {editing.currentNumber > 0
+                                            ? `${editing.prefix}${String(editing.currentNumber).padStart(editing.padLength, '0')}`
+                                            : <span style={{ color: '#9ca3af', fontWeight: 400, fontSize: 12 }}>None yet</span>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 4 }}>🔜 Next Invoice Will Be</div>
+                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#0d9488', fontFamily: 'monospace' }}>
+                                        {`${editing.prefix}${String(Math.max((editing.currentNumber || 0) + 1, editing.startNumber || 1)).padStart(editing.padLength, '0')}`}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div style={{ display: 'grid', gap: 14 }}>
-                            {[['Series Name', 'seriesName', 'text', 'e.g. Main 2025-26'], ['Financial Year', 'financialYear', 'text', 'e.g. 25-26'], ['Prefix', 'prefix', 'text', 'e.g. 25-26/'], ['Start Number', 'startNumber', 'number', '1'], ['Pad Length', 'padLength', 'number', '5']].map(([label, key, type, placeholder]) => (
+                            {[['Series Name', 'seriesName', 'text', 'e.g. Main 2025-26'], ['Financial Year', 'financialYear', 'text', 'e.g. 25-26'], ['Prefix', 'prefix', 'text', 'e.g. 25-26/'], ['Start Number (original)', 'startNumber', 'number', '1'], ['Pad Length', 'padLength', 'number', '5']].map(([label, key, type, placeholder]) => (
                                 <div key={key}>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>{label}</label>
                                     <input type={type} value={form[key]} onChange={e => f(key, type === 'number' ? Number(e.target.value) : e.target.value)} placeholder={placeholder} style={inp} />

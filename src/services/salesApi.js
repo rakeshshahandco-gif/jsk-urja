@@ -17,6 +17,10 @@ export const updateSalesOrder = (id, data) =>
 export const cancelSalesOrder = (id) =>
     apiClient.post(`/sales-orders/${id}/cancel`).then(r => r.data);
 
+export const deleteSalesOrder = (id) =>
+    apiClient.delete(`/sales-orders/${id}`).then(r => r.data);
+
+
 export const generateProductionSheet = (soId) =>
     apiClient.post(`/sales-orders/${soId}/generate-production-sheet`).then(r => r.data);
 

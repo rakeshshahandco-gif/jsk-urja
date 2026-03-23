@@ -108,6 +108,15 @@ export default function SalesInvoiceFormPage() {
     const soId = searchParams.get('soId');
     const [saving, setSaving] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
+    const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
+
+    // Compute next invoice number from series object (mirrors backend nextInvoiceNumber())
+    const computeNextNo = (series) => {
+        if (!series) return '';
+        const next = Math.max((series.currentNumber || 0) + 1, series.startNumber || 1);
+        const padded = String(next).padStart(series.padLength || 5, '0');
+        return `${series.prefix || ''}${padded}`;
+    };
     const [showAddSeries, setShowAddSeries] = useState(false);
     const [form, setForm] = useState({
         invoiceDate: new Date().toISOString().slice(0, 10),
@@ -178,9 +187,11 @@ export default function SalesInvoiceFormPage() {
     const loadSeries = useCallback(() => {
         getInvoiceSeries({ active: true }).then(s => {
             setSeriesList(s || []);
-            const def = (s || []).find(x => x.isDefault);
-            if (def && !form.seriesId) {
-                setForm(p => ({ ...p, seriesId: def._id, gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true }));
+            if (!form.seriesId && s && s.length > 0) {
+                // Pick the default series, or fall back to the first one
+                const autoSelect = s.find(x => x.isDefault) || s[0];
+                setForm(p => ({ ...p, seriesId: autoSelect._id, gstApplicable: autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true }));
+                setPreviewInvoiceNo(computeNextNo(autoSelect));
             }
         }).catch(() => { });
     }, [form.seriesId]);
@@ -296,6 +307,7 @@ export default function SalesInvoiceFormPage() {
     const roundedTotal = Math.round(grandTotal);
 
     const handleSubmit = async () => {
+        if (!form.seriesId) return toast.error('⚠️ Please select an Invoice Series. The invoice number is generated from the selected series.');
         if (!form.customerName) return toast.error('Customer name is required');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
@@ -344,12 +356,13 @@ export default function SalesInvoiceFormPage() {
                 {/* Invoice Details */}
                 <Section title="Invoice Details">
                     <Grid cols={3}>
-                        <Field label="Invoice Series">
+                        <Field label="Invoice Series & Invoice No">
                             <div style={{ display: 'flex', gap: 6 }}>
                                 <select value={form.seriesId} onChange={e => {
                                     const val = e.target.value;
                                     const selected = seriesList.find(s => s._id === val);
                                     const isGst = selected ? (selected.gstApplicable !== false) : true;
+                                    setPreviewInvoiceNo(selected ? computeNextNo(selected) : '');
                                     setForm(p => ({
                                         ...p,
                                         seriesId: val,
@@ -368,6 +381,23 @@ export default function SalesInvoiceFormPage() {
                                 </select>
                                 <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 32, background: '#f8fafc', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }} title="Add Series">＋</button>
                             </div>
+                            {previewInvoiceNo && (
+                                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Invoice No:</span>
+                                    <span style={{
+                                        fontSize: 15,
+                                        fontWeight: 800,
+                                        color: '#0d9488',
+                                        background: '#f0fdfa',
+                                        border: '1.5px solid #99f6e4',
+                                        borderRadius: 6,
+                                        padding: '3px 12px',
+                                        letterSpacing: '0.04em',
+                                        fontFamily: 'monospace'
+                                    }}>{previewInvoiceNo}</span>
+                                    <span style={{ fontSize: 10, color: '#94a3b8' }}>(will be assigned on save)</span>
+                                </div>
+                            )}
                             {form.seriesId && !form.gstApplicable && (
                                 <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <span>⚠️</span> This series is non-GST. Tax will not be applied.
