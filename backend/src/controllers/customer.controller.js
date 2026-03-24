@@ -330,7 +330,10 @@ const downloadTemplate = catchAsync(async (req, res) => {
         { header: 'Pincode', key: 'pincode', width: 10 },
         { header: 'Status', key: 'status', width: 15 },
         { header: 'Business Type', key: 'customerType', width: 30 },
-        { header: 'Interested Products', key: 'interestedProducts', width: 50 }
+        { header: 'Interested Products', key: 'interestedProducts', width: 50 },
+        { header: 'GST NO', key: 'gstNumber', width: 20 },
+        { header: 'GST REGISTRATION TYPE', key: 'gstRegistrationType', width: 25 },
+        { header: 'GST TYPE', key: 'gstType', width: 20 }
     ];
 
     // Style header row
@@ -496,6 +499,9 @@ const importCustomers = catchAsync(async (req, res) => {
             const status = getCellText(row.getCell(14)) || 'lead';
             const customerType = getCellText(row.getCell(15)) || '';
             const interestedProductsStr = getCellText(row.getCell(16)) || '';
+            let gstNumber = getCellText(row.getCell(17)) || '';
+            let gstRegistrationType = getCellText(row.getCell(18)) || '';
+            let gstType = getCellText(row.getCell(19)) || '';
 
             // Skip completely empty rows
             if (!customerName && !company && !contactName && !mobile && !email && !address && !city) {
@@ -586,7 +592,10 @@ const importCustomers = catchAsync(async (req, res) => {
                     address,
                     pincode,
                     status,
-                    interestedProducts
+                    interestedProducts,
+                    gstNumber: (gstNumber || '').trim().toUpperCase(),
+                    gstRegistrationType: gstRegistrationType || (gstNumber ? 'Registered' : 'Unregistered'),
+                    gstType: gstType || (state ? (state.trim().toLowerCase() === 'maharashtra' ? 'CGST / SGST' : 'IGST') : '')
                 });
             }
         } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getSalesInvoiceById, cancelSalesInvoice, recordSalesPayment } from '@/services/salesApi';
+import { getSalesInvoiceById, cancelSalesInvoice, restoreSalesInvoice, recordSalesPayment } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -48,11 +48,19 @@ export default function SalesInvoiceDetailPage() {
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
     const handleCancel = async () => {
-        if (!window.confirm('Cancel this invoice?')) return;
+        if (!window.confirm('Cancel this invoice? This will restore item stocks.')) return;
         setCancelling(true);
         try { await cancelSalesInvoice(id); toast.success('Invoice cancelled'); load(); }
         catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
         finally { setCancelling(false); }
+    };
+
+    const handleRestore = async () => {
+        if (!window.confirm('Restore this invoice? This will deduct item stocks again.')) return;
+        setLoading(true);
+        try { await restoreSalesInvoice(id); toast.success('Invoice restored'); load(); }
+        catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        finally { setLoading(false); }
     };
 
 
@@ -92,7 +100,7 @@ export default function SalesInvoiceDetailPage() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '16pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '2px 10px', display: 'inline-block', marginBottom: '5px' }}>
-                                {gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE'}
+                                {inv.seriesId?.isEstimate ? 'ESTIMATE' : (gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE')}
                             </div>
                             <div style={{ fontSize: '10pt', fontWeight: 700 }}>Invoice No: {inv.invoiceNumber}</div>
                             <div style={{ fontSize: '10pt', fontWeight: 600 }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
@@ -319,7 +327,30 @@ export default function SalesInvoiceDetailPage() {
                                 title="Export as PDF (Save as PDF in print dialog)"
                             >
                                 📄 Export PDF
-                            </button>
+                             </button>
+
+                             {/* Restore Invoice */}
+                             {!notCancelled && (
+                                 <button
+                                     onClick={handleRestore}
+                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#0891b2', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     title="Restore this invoice to Active"
+                                 >
+                                     🔄 Restore Invoice
+                                 </button>
+                             )}
+
+                             {/* Cancel Invoice */}
+                             {notCancelled && (
+                                 <button
+                                     onClick={handleCancel}
+                                     disabled={cancelling}
+                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     title="Cancel this invoice"
+                                 >
+                                     {cancelling ? 'Cancelling...' : '🚫 Cancel'}
+                                 </button>
+                             )}
                             {/* Receive Payment */}
                             {notCancelled && notFullyPaid && (
                                 <button
@@ -330,6 +361,8 @@ export default function SalesInvoiceDetailPage() {
                                             invoiceNumber: inv.invoiceNumber, 
                                             customerId: inv.customerId?._id || inv.customerId, 
                                             customerName: inv.customerName,
+                                            ledgerId: inv.customerLedgerId,
+                                            ledgerName: inv.customerLedgerName,
                                             amount: (inv.roundedTotal || inv.grandTotal) - inv.paidAmount 
                                         } 
                                     })}
@@ -502,7 +535,9 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                             <div style={{ fontSize: 12, textAlign: 'right', color: '#475569' }}>
                                 <div style={{ fontWeight: 800, textTransform: 'uppercase', marginBottom: 5 }}>For {company.companyName}</div>
-                                <div style={{ marginTop: 40, fontWeight: 700 }}>Authorized Signatory</div>
+                                <div style={{ fontWeight: 700, marginTop: 4 }}>{inv.createdBy?.name || 'Authorized User'}</div>
+                                {inv.createdBy?.mobile && <div>Mob: {inv.createdBy.mobile}</div>}
+                                <div style={{ marginTop: 24, fontWeight: 700 }}>Authorized Signatory</div>
                             </div>
                         </div>
                     </div>

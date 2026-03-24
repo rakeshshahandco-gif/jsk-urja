@@ -6,6 +6,7 @@ import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { Item } from '../models/item.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
+import { AccountLedger } from '../models/accountLedger.model.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -212,7 +213,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const [invoices, total] = await Promise.all([
-        SalesInvoice.find(filter).sort({ invoiceDate: -1 }).skip(skip).limit(Number(limit)),
+        SalesInvoice.find(filter).populate('createdBy', 'name mobile').sort({ invoiceDate: -1 }).skip(skip).limit(Number(limit)),
         SalesInvoice.countDocuments(filter),
     ]);
     res.json({ success: true, invoices, total });
@@ -220,9 +221,31 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
 
 // ------- GET SINGLE INVOICE -------
 export const getSalesInvoiceById = asyncHandler(async (req, res) => {
-    const inv = await SalesInvoice.findById(req.params.id);
+    const inv = await SalesInvoice.findById(req.params.id)
+        .populate('seriesId')
+        .populate('createdBy', 'name mobile');
+        
     if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Invoice not found');
-    res.json({ success: true, data: inv });
+    
+    // Find customer ledger (Primary: ID link, Secondary: Name match)
+    let ledger = await AccountLedger.findOne({ 
+        referenceId: inv.customerId, 
+        referenceModel: 'Customer' 
+    });
+
+    if (!ledger && inv.customerName) {
+        ledger = await AccountLedger.findOne({
+            name: { $regex: new RegExp(`^${inv.customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        });
+    }
+
+    const data = inv.toObject();
+    if (ledger) {
+        data.customerLedgerId = ledger._id;
+        data.customerLedgerName = ledger.name;
+    }
+
+    res.json({ success: true, data });
 });
 
 // ------- RECORD PAYMENT -------
@@ -242,6 +265,47 @@ export const recordPayment = asyncHandler(async (req, res) => {
     else if (inv.paidAmount > 0) inv.paymentStatus = 'Partially Paid';
 
     inv.updatedBy = req.user.id;
+    await inv.save();
+    res.json({ success: true, data: inv });
+});
+
+// ------- RESTORE CANCELLED INVOICE -------
+export const restoreSalesInvoice = asyncHandler(async (req, res) => {
+    const inv = await SalesInvoice.findById(req.params.id);
+    if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+    if (inv.status !== 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is not cancelled');
+
+    // Restore Status
+    inv.status = 'Confirmed';
+    inv.paymentStatus = 'Unpaid'; // Default back to unpaid
+    inv.updatedBy = req.user.id;
+    
+    // Reverse Stock (Deduct again)
+    if (inv.items && inv.items.length > 0) {
+        for (const iItem of inv.items) {
+            if (!iItem.itemId) continue;
+            const itemDoc = await Item.findById(iItem.itemId);
+            if (itemDoc) {
+                // We deduct stock because cancelling it added it back
+                itemDoc.currentStock = (itemDoc.currentStock || 0) - iItem.qty;
+                await itemDoc.save();
+
+                await StockLedger.create({
+                    date: new Date(),
+                    itemId: itemDoc._id,
+                    itemCode: itemDoc.itemCode,
+                    itemName: itemDoc.itemName,
+                    transactionType: 'SALES_INVOICE_RESTORE',
+                    stockBucket: 'SALEABLE',
+                    referenceNo: inv.invoiceNumber,
+                    referenceId: inv._id,
+                    outQty: iItem.qty,
+                    remarks: 'Invoice Restored from Cancelled'
+                });
+            }
+        }
+    }
+
     await inv.save();
     res.json({ success: true, data: inv });
 });

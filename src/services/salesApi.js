@@ -38,6 +38,9 @@ export const createSalesInvoice = (data) =>
 export const cancelSalesInvoice = (id) =>
     apiClient.post(`/sales-invoices/${id}/cancel`).then(r => r.data);
 
+export const restoreSalesInvoice = (id) =>
+    apiClient.post(`/sales-invoices/${id}/restore`).then(r => r.data);
+
 export const recordSalesPayment = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/record-payment`, data).then(r => r.data);
 

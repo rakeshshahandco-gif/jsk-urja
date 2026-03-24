@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getInvoiceSeries, createInvoiceSeries, updateInvoiceSeries, deleteInvoiceSeries } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -12,7 +12,17 @@ export default function InvoiceSeriesPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ seriesName: '', financialYear: '', prefix: '', startNumber: 1, padLength: 5, gstApplicable: true, isDefault: false, description: '' });
+    const [form, setForm] = useState({ 
+        seriesName: '', 
+        financialYear: '', 
+        prefix: '', 
+        startNumber: 1, 
+        padLength: 5, 
+        gstApplicable: true, 
+        isDefault: false, 
+        isEstimate: false, 
+        description: '' 
+    });
     const [saving, setSaving] = useState(false);
 
     const load = async () => {
@@ -24,7 +34,21 @@ export default function InvoiceSeriesPage() {
 
     useEffect(() => { load(); }, []);
 
-    const openNew = () => { setEditing(null); setForm({ seriesName: '', financialYear: '25-26', prefix: '25-26/', startNumber: 1, padLength: 5, gstApplicable: true, isDefault: false, description: '' }); setShowModal(true); };
+    const openNew = () => { 
+        setEditing(null); 
+        setForm({ 
+            seriesName: '', 
+            financialYear: '25-26', 
+            prefix: '25-26/', 
+            startNumber: 1, 
+            padLength: 5, 
+            gstApplicable: true, 
+            isDefault: false, 
+            isEstimate: false,
+            description: '' 
+        }); 
+        setShowModal(true); 
+    };
     const openEdit = (s) => {
         setEditing(s);
         setForm({
@@ -35,6 +59,7 @@ export default function InvoiceSeriesPage() {
             padLength: s.padLength,
             gstApplicable: s.gstApplicable === false ? false : true,
             isDefault: !!s.isDefault,
+            isEstimate: !!s.isEstimate,
             description: s.description || ''
         });
         setShowModal(true);
@@ -88,6 +113,7 @@ export default function InvoiceSeriesPage() {
                         {series.map(s => (
                             <div key={s._id} style={{ background: '#fff', border: `1px solid ${s.isDefault ? '#0d9488' : '#e5e7eb'}`, borderRadius: 12, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', position: 'relative' }}>
                                 {s.isDefault && <span style={{ position: 'absolute', top: 14, right: 14, fontSize: 11, fontWeight: 700, color: '#0d9488', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10, padding: '2px 8px' }}>DEFAULT</span>}
+                                {s.isEstimate && <span style={{ position: 'absolute', top: 14, right: s.isDefault ? 85 : 14, fontSize: 11, fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '2px 8px' }}>ESTIMATE</span>}
                                 <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b', marginBottom: 6 }}>{s.seriesName}</div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>FY: <strong style={{ color: '#374151' }}>{s.financialYear}</strong></div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Prefix: <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, color: '#0d9488', fontWeight: 700 }}>{s.prefix}</code></div>
@@ -140,21 +166,25 @@ export default function InvoiceSeriesPage() {
                                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Description</label>
                                 <textarea value={form.description} onChange={e => f('description', e.target.value)} style={{ ...inp, height: 60, resize: 'vertical' }} />
                             </div>
-                            <div style={{ display: 'flex', gap: 16 }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 20px' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
                                     <input type="checkbox" checked={form.gstApplicable} onChange={e => f('gstApplicable', e.target.checked)} style={{ width: 16, height: 16 }} />
-                                    <span style={{ fontWeight: 600 }}>GST Applicable</span>
+                                    <span style={{ fontWeight: 600, color: '#374151' }}>GST Applicable</span>
                                 </label>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
                                     <input type="checkbox" checked={form.isDefault} onChange={e => f('isDefault', e.target.checked)} style={{ width: 16, height: 16 }} />
-                                    <span style={{ fontWeight: 600 }}>Set as Default Series</span>
+                                    <span style={{ fontWeight: 600, color: '#374151' }}>Set as Default</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                                    <input type="checkbox" checked={form.isEstimate} onChange={e => f('isEstimate', e.target.checked)} style={{ width: 16, height: 16 }} />
+                                    <span style={{ fontWeight: 600, color: '#7c3aed' }}>Is Estimate Series?</span>
                                 </label>
                             </div>
                         </div>
-                        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button onClick={() => setShowModal(false)} style={{ padding: '8px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Cancel</button>
-                            <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>
-                                {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                        <div style={{ marginTop: 24, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setShowModal(false)} style={{ padding: '9px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
+                            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
+                                {saving ? 'Saving...' : editing ? 'Update Series' : 'Create Series'}
                             </button>
                         </div>
                     </div>

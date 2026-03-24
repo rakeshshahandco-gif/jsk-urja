@@ -11,6 +11,8 @@ import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
+const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
+
 const ReceiptEntryPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -26,12 +28,26 @@ const ReceiptEntryPage = () => {
         voucherTypeId: '',
         date: new Date().toISOString().split('T')[0],
         cashBankAccountId: '',
-        totalAmount: 0,
-        narration: '',
+        totalAmount: location.state?.amount || 0,
+        narration: location.state?.invoiceNumber ? `Receipt against Sales Invoice ${location.state.invoiceNumber}` : '',
         instrumentType: 'Cash',
         instrumentNo: '',
         items: [
-            { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '', adjustments: [] }
+            { 
+                id: Date.now(), 
+                ledgerId: location.state?.ledgerId || '', 
+                ledgerName: location.state?.ledgerName || '', 
+                amount: location.state?.amount || 0, 
+                type: 'Credit', 
+                narration: location.state?.invoiceNumber ? `Against ${location.state.invoiceNumber}` : '', 
+                adjustments: location.state?.invoiceId ? [{
+                    refId: location.state.invoiceId,
+                    refNumber: location.state.invoiceNumber,
+                    amount: location.state.amount,
+                    adjustmentType: 'Against Bill',
+                    refModel: 'SalesInvoice'
+                }] : []
+            }
         ]
     });
 
@@ -59,47 +75,57 @@ const ReceiptEntryPage = () => {
                 }
 
                 // If launched from Invoice Detail, pre-fill details
-                const defaultCustomerId = location.state?.customerId;
-                const defaultCustomerName = location.state?.customerName || 'Customer';
+                const defaultCustomerId = location.state?.customerId || location.state?.ledgerId;
+                const defaultCustomerName = location.state?.customerName || location.state?.ledgerName || 'Customer';
                 const defaultAmount = location.state?.amount || 0;
                 const defaultInvoiceId = location.state?.invoiceId;
                 const defaultInvoiceNo = location.state?.invoiceNumber;
 
-                if (defaultCustomerId) {
-                    const custLedger = allLedgers.find(l =>
-                        (l.referenceId?.toString() === defaultCustomerId?.toString() && l.referenceModel === 'Customer') ||
-                        l._id?.toString() === defaultCustomerId?.toString()
-                    );
-                    if (custLedger) {
-                        setFormData(prev => {
-                            const newItems = [...prev.items];
-                            newItems[0].ledgerId = custLedger._id;
-                            newItems[0].ledgerName = custLedger.name;
-                            newItems[0].ledgerType = custLedger.type;
-                            newItems[0].amount = defaultAmount;
-                            newItems[0].narration = `Against ${defaultInvoiceNo}`;
+                    if (defaultCustomerId || defaultCustomerName) {
+                        const custLedger = allLedgers.find(l => 
+                            (defaultCustomerId && (
+                                l.referenceId?.toString() === defaultCustomerId?.toString() ||
+                                l._id?.toString() === defaultCustomerId?.toString()
+                            )) || 
+                            (defaultCustomerName && (
+                                l.name?.toLowerCase() === defaultCustomerName.toLowerCase() ||
+                                l.printName?.toLowerCase() === defaultCustomerName.toLowerCase() ||
+                                l.alias?.toLowerCase() === defaultCustomerName.toLowerCase()
+                            ))
+                        );
 
-                            if (defaultInvoiceId && defaultAmount) {
-                                newItems[0].adjustments = [{
-                                    refId: defaultInvoiceId,
-                                    refNumber: defaultInvoiceNo,
-                                    amount: defaultAmount,
-                                    adjustmentType: 'Against Bill',
-                                    refModel: 'SalesInvoice'
-                                }];
-                            }
+                        if (custLedger) {
+                            setFormData(prev => {
+                                const newItems = [...prev.items];
+                                if (newItems.length > 0) {
+                                    newItems[0].ledgerId = custLedger._id;
+                                    newItems[0].ledgerName = custLedger.name;
+                                    newItems[0].amount = defaultAmount;
+                                    newItems[0].narration = `Against ${defaultInvoiceNo}`;
 
-                            return {
-                                ...prev,
-                                items: newItems,
-                                totalAmount: defaultAmount,
-                                narration: `Receipt against Sales Invoice ${defaultInvoiceNo}`
-                            };
-                        });
-                    } else {
-                        toast.error(`Customer ledger for "${defaultCustomerName}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
+                                    if (defaultInvoiceId && defaultAmount) {
+                                        newItems[0].adjustments = [{
+                                            refId: defaultInvoiceId,
+                                            refNumber: defaultInvoiceNo,
+                                            amount: defaultAmount,
+                                            adjustmentType: 'Against Bill',
+                                            refModel: 'SalesInvoice'
+                                        }];
+                                    }
+                                }
+                                return {
+                                    ...prev,
+                                    items: newItems,
+                                    totalAmount: defaultAmount,
+                                    narration: `Receipt against Sales Invoice ${defaultInvoiceNo}`
+                                };
+                            });
+                        } else {
+                            // If automatic mapping fails, we DON'T show a blocking error yet, 
+                            // but we'll show it on Save if they haven't fixed it.
+                            console.warn(`Could not auto-map ledger for ${defaultCustomerName}`);
+                        }
                     }
-                }
 
             } catch (error) {
                 toast.error('Failed to load initial data');
@@ -279,9 +305,17 @@ const ReceiptEntryPage = () => {
             }
         }
 
+        const firstItem = formData.items[0];
+        if (!firstItem?.ledgerId) return toast.error('Customer ledger mapping failed. Please select ledger manually or contact admin.');
+
         setIsSubmitting(true);
         try {
-            await createVoucher({ ...formData, nature: 'Receipt' });
+            // nature: 'Receipt' is added to ensure it's always set correctly for this page
+            await createVoucher({ 
+                ...formData, 
+                nature: 'Receipt',
+                voucherType: formData.voucherTypeId // Ensure model compatibility
+            });
             toast.success('Receipt saved successfully');
             navigate(PATHS.ACCOUNTS.VOUCHERS);
         } catch (error) {
@@ -324,25 +358,76 @@ const ReceiptEntryPage = () => {
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Invoice No.</span>
                                 <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '2px 12px' }}>{invNo}</span>
                             </div>
+
                             {/* Customer */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Customer</span>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{custName}</span>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Customer / Party</span>
+                                <div style={{ width: 240 }}>
+                                    <SearchableSelect
+                                        options={ledgers.map(l => ({ value: l._id, label: l.name }))}
+                                        value={formData.items[0]?.ledgerId || ''}
+                                        onChange={(val) => {
+                                            const selected = ledgers.find(l => l._id === val);
+                                            setFormData(prev => {
+                                                const newItems = [...prev.items];
+                                                if (newItems.length > 0) {
+                                                    newItems[0].ledgerId = val;
+                                                    newItems[0].ledgerName = selected?.name || '';
+                                                }
+                                                return { ...prev, items: newItems };
+                                            });
+                                        }}
+                                        placeholder="Select Customer Ledger"
+                                    />
+                                </div>
                             </div>
                             {/* Amount */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Amount to Receive</span>
-                                <span style={{ fontSize: 15, fontWeight: 800, color: '#0d9488' }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                    <span style={{ position: 'absolute', left: 10, fontWeight: 700, color: '#0d9488' }}>₹</span>
+                                    <input
+                                        type="number"
+                                        value={formData.totalAmount || ''}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value) || 0;
+                                            setFormData(prev => {
+                                                const newItems = [...prev.items];
+                                                if (newItems.length > 0) {
+                                                    newItems[0].amount = val;
+                                                    // Also update adjustment if it was automated
+                                                    if (newItems[0].adjustments?.length === 1 && newItems[0].adjustments[0].adjustmentType === 'Against Bill') {
+                                                        newItems[0].adjustments[0].amount = val;
+                                                    }
+                                                }
+                                                return { ...prev, totalAmount: val, items: newItems };
+                                            });
+                                        }}
+                                        style={{ ...inp, width: 140, padding: '6px 10px 6px 22px', fontSize: 15, fontWeight: 800, color: '#0d9488', textAlign: 'right', border: '2px solid #0d9488', background: '#f0fdfa' }}
+                                    />
+                                </div>
                             </div>
                             {/* Date */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Date</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{formData.date}</span>
+                                <input
+                                    type="date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 13, fontWeight: 600, color: '#374151', textAlign: 'right' }}
+                                />
                             </div>
                             {/* Narration */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Narration</span>
-                                <span style={{ fontSize: 12, color: '#6b7280', textAlign: 'right', maxWidth: 260 }}>{formData.narration}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, paddingTop: 6 }}>Narration</span>
+                                <textarea
+                                    name="narration"
+                                    value={formData.narration}
+                                    onChange={handleHeaderChange}
+                                    placeholder="Enter narration..."
+                                    style={{ ...inp, width: '100%', maxWidth: 260, height: 60, padding: '8px 10px', fontSize: 12, color: '#4b5563', resize: 'vertical', textAlign: 'left' }}
+                                />
                             </div>
                         </div>
                     </div>

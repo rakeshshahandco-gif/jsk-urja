@@ -132,7 +132,7 @@ export const getPOs = asyncHandler(async (req, res) => {
     const pos = await PurchaseOrder.find(query)
         .sort({ createdAt: -1 }).skip(skip).limit(Number(limit))
         .populate('supplierId', 'supplierName supplierCode')
-        .populate('createdBy', 'name');
+        .populate('createdBy', 'name mobile');
 
     res.json(new ApiResponse(200, { purchaseOrders: pos, total, page: Number(page), pages: Math.ceil(total / Number(limit)) }, 'POs fetched'));
 });
@@ -140,7 +140,7 @@ export const getPOs = asyncHandler(async (req, res) => {
 export const getPOById = asyncHandler(async (req, res) => {
     const po = await PurchaseOrder.findById(req.params.id)
         .populate('supplierId', 'supplierName supplierCode gstNumber address city state pincode gstType paymentTerms phone email')
-        .populate('createdBy', 'name');
+        .populate('createdBy', 'name mobile');
     if (!po) throw new ApiError(404, 'Purchase Order not found');
     res.json(new ApiResponse(200, po, 'PO fetched'));
 });

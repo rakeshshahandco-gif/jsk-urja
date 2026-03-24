@@ -1,5 +1,7 @@
 import Customer from '../models/customer.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { AccountGroup } from '../models/accountGroup.model.js';
+import { getSundryDebtorsGroupId } from '../utils/accountInitializer.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 
@@ -32,12 +34,15 @@ const createCustomer = async (body) => {
 
     const customer = await Customer.create(body);
 
-    // Create Ledger in Chart of Accounts
+    // Create Ledger in Chart of Accounts under Sundry Debtors
     try {
+        const groupId = await getSundryDebtorsGroupId();
         await AccountLedger.create({
             name: customer.company || customer.customerName,
-            group: 'Current Assets',
+            underGroup: groupId,
+            groupName: 'Sundry Debtors',
             type: 'Customer',
+            isCustomer: true,
             referenceId: customer._id,
             referenceModel: 'Customer',
             openingBalance: customer.openingBalance || 0,

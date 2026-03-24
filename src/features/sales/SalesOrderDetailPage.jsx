@@ -118,7 +118,7 @@ export default function SalesOrderDetailPage() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <h1 style={{ margin: '0 0 2px 0', fontSize: '16pt', fontWeight: 900, textTransform: 'uppercase', color: '#64748b' }}>
-                                {gstApplicable ? 'SALES ORDER' : 'SALES ORDER'}
+                                {so.seriesId?.isEstimate ? 'ESTIMATE' : 'SALES ORDER'}
                             </h1>
                             {!gstApplicable && <div style={{ fontSize: '10pt', fontWeight: 700, marginBottom: '4px' }}>(NON-GST)</div>}
                             <div style={{ fontSize: '14pt', fontWeight: 700, color: '#334155' }}>{so.soNumber}</div>
@@ -139,11 +139,19 @@ export default function SalesOrderDetailPage() {
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style={{ fontSize: '10pt', fontWeight: 800, padding: '12px 0 4px 0', verticalAlign: 'top' }}>Address:</td>
-                                        <td style={{ fontSize: '10pt', padding: '12px 0 4px 0', lineHeight: 1.4, color: '#333' }}>
+                                        <td style={{ fontSize: '10pt', fontWeight: 800, padding: '8px 0 4px 0', verticalAlign: 'top' }}>Address:</td>
+                                        <td style={{ fontSize: '10pt', padding: '8px 0 4px 0', lineHeight: 1.4, color: '#333' }}>
                                             {so.billingAddress || so.shippingAddress || '—'}
                                         </td>
                                     </tr>
+                                    {(so.customerState || so.customerStateCode) && (
+                                        <tr>
+                                            <td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>State:</td>
+                                            <td style={{ fontSize: '10pt', padding: '4px 0', color: '#333' }}>
+                                                {so.customerState || ''} {so.customerStateCode ? `(${so.customerStateCode})` : ''}
+                                            </td>
+                                        </tr>
+                                    )}
                                     {so.customerPhone && (
                                         <tr>
                                             <td style={{ fontSize: '10pt', fontWeight: 800, padding: '4px 0', verticalAlign: 'top' }}>Contact No:</td>
@@ -312,8 +320,8 @@ export default function SalesOrderDetailPage() {
                                 For {company.companyName || 'JSK URJA'}
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: '8px' }}>
-                                <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>{user?.name || 'Authorized User'}</div>
-                                {user?.mobile && <div style={{ fontSize: '9px', color: '#333' }}>Mob: {user.mobile}</div>}
+                                <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>{so.createdBy?.name || user?.name || 'Authorized User'}</div>
+                                {(so.createdBy?.mobile || user?.mobile) && <div style={{ fontSize: '9px', color: '#333' }}>Mob: {so.createdBy?.mobile || user?.mobile}</div>}
                                 <div style={{ width: '160px', borderTop: '1px solid #000', marginTop: '4px', paddingTop: '2px', fontSize: '9px', fontWeight: 800, textAlign: 'center' }}>AUTHORIZED SIGNATORY</div>
                             </div>
                         </div>
@@ -329,7 +337,7 @@ export default function SalesOrderDetailPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{so.soNumber}</h1>
+                                <h2 style={{ margin: 0, fontSize: '20pt', fontWeight: 900 }}>{so.seriesId?.isEstimate ? 'ESTIMATE' : 'SALES ORDER'}</h2>
                                 <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>{so.status}</span>
                                 <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: so.paymentType === 'Cash' ? '#f0fdf4' : '#fffbeb', color: so.paymentType === 'Cash' ? '#16a34a' : '#d97706', border: `1px solid ${so.paymentType === 'Cash' ? '#86efac' : '#fcd34d'}` }}>{so.paymentType}</span>
                             </div>

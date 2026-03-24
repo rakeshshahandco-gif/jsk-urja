@@ -100,8 +100,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             notes: customerData.notes || '',
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
-            gstType: customerData.gstType || '',
-            gstRegistrationType: customerData.gstRegistrationType || '',
+            gstType: customerData.gstType || (customerData.state ? (String(customerData.state).trim().toLowerCase() === 'maharashtra' ? 'CGST / SGST' : 'IGST') : ''),
+            gstRegistrationType: customerData.gstRegistrationType || (customerData.gstNumber ? 'Registered' : 'Unregistered'),
             customerCode: customerData.customerCode || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
@@ -155,19 +155,29 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     }, [customer, reset]);
 
     const stateValue = watch('state');
+    const gstNumberValue = watch('gstNumber');
 
     // Automate GST Type based on state
     useEffect(() => {
         if (!stateValue) {
-            setValue('gstType', '');
+            setValue('gstType', '', { shouldDirty: true });
             return;
         }
         if (stateValue.toLowerCase() === 'maharashtra') {
-            setValue('gstType', 'CGST / SGST');
+            setValue('gstType', 'CGST / SGST', { shouldDirty: true });
         } else {
-            setValue('gstType', 'IGST');
+            setValue('gstType', 'IGST', { shouldDirty: true });
         }
     }, [stateValue, setValue]);
+
+    // Automate GST Registration Type based on GST Number
+    useEffect(() => {
+        if (gstNumberValue && gstNumberValue.trim().length > 0) {
+            setValue('gstRegistrationType', 'Registered', { shouldDirty: true });
+        } else {
+            setValue('gstRegistrationType', 'Unregistered', { shouldDirty: true });
+        }
+    }, [gstNumberValue, setValue]);
 
     // Fetch dynamic customer types
     useEffect(() => {
@@ -612,14 +622,19 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                     return {
                                         ...rest,
                                         onChange: (e) => {
-                                            e.target.value = e.target.value.toUpperCase();
+                                            e.target.value = e.target.value.replace(/\s/g, '').toUpperCase();
                                             onChange(e);
                                         }
                                     };
                                 })()}
                                 placeholder="22AAAAA0000A1Z5"
                                 maxLength={15}
-                                style={{ textTransform: 'uppercase' }}
+                                style={{ 
+                                    textTransform: 'uppercase', 
+                                    color: '#000', 
+                                    fontWeight: '700',
+                                    fontSize: '0.95rem' 
+                                }}
                             />
                             {errors.gstNumber && <span className={styles.error}>{errors.gstNumber.message}</span>}
                             <small className={styles['help-text']}>15 characters GST number</small>

@@ -107,7 +107,7 @@ export default function SalesOrderListPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['SO Number', 'Date', 'Code', 'Customer', 'Items', 'Grand Total', 'Payment', 'Status', 'Delivery Date', ''].map(h => (
+                                    {['SO Number', 'Date', 'Code', 'Customer', 'State', 'Items', 'Grand Total', 'Payment', 'Status', 'Delivery Date', ''].map(h => (
                                         <th key={h} style={th}>{h}</th>
                                     ))}
                                 </tr>
@@ -124,6 +124,7 @@ export default function SalesOrderListPage() {
                                             <td style={td}>{fmt(so.soDate)}</td>
                                             <td style={{ ...td, fontWeight: 600, color: '#475569' }}>{so.customerCode || '—'}</td>
                                             <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{so.customerName}</td>
+                                            <td style={{ ...td, color: '#6b7280' }}>{so.customerState || '—'}</td>
                                             <td style={{ ...td, color: '#6b7280' }}>{so.items?.length || 0} items</td>
                                             <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>₹{(so.roundedTotal || so.grandTotal || 0).toLocaleString('en-IN')}</td>
                                             <td style={td}>

@@ -38,10 +38,63 @@ const createLedger = catchAsync(async (req, res) => {
     res.status(201).send(new ApiResponse(201, ledger, 'Ledger created successfully'));
 });
 
+const getGroupById = catchAsync(async (req, res) => {
+    const group = await AccountGroup.findById(req.params.id).populate('parentGroup', 'name');
+    if (!group) {
+        return res.status(404).send(new ApiResponse(404, null, 'Group not found'));
+    }
+    res.status(200).send(new ApiResponse(200, group));
+});
+
+const updateGroup = catchAsync(async (req, res) => {
+    const group = await AccountGroup.findByIdAndUpdate(
+        req.params.id,
+        { ...req.body },
+        { new: true, runValidators: true }
+    ).populate('parentGroup', 'name');
+    if (!group) {
+        return res.status(404).send(new ApiResponse(404, null, 'Group not found'));
+    }
+    res.status(200).send(new ApiResponse(200, group, 'Group updated successfully'));
+});
+
+const deleteGroup = catchAsync(async (req, res) => {
+    // Prevent deletion if ledgers or subgroups exist under this group
+    const childCount = await AccountGroup.countDocuments({ parentGroup: req.params.id });
+    const ledgerCount = await AccountLedger.countDocuments({ underGroup: req.params.id });
+    if (childCount > 0 || ledgerCount > 0) {
+        return res.status(400).send(
+            new ApiResponse(400, null, `Cannot delete: ${childCount} sub-group(s) and ${ledgerCount} ledger(s) exist under this group.`)
+        );
+    }
+    await AccountGroup.findByIdAndDelete(req.params.id);
+    res.status(200).send(new ApiResponse(200, null, 'Group deleted successfully'));
+});
+
+const updateLedger = catchAsync(async (req, res) => {
+    const ledger = await AccountLedger.findByIdAndUpdate(
+        req.params.id,
+        { ...req.body },
+        { new: true, runValidators: true }
+    ).populate('underGroup', 'name');
+    if (!ledger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
+    res.status(200).send(new ApiResponse(200, ledger, 'Ledger updated successfully'));
+});
+
+const deleteLedger = catchAsync(async (req, res) => {
+    await AccountLedger.findByIdAndDelete(req.params.id);
+    res.status(200).send(new ApiResponse(200, null, 'Ledger deleted successfully'));
+});
+
 export default {
     initializeMasters,
     getGroups,
     createGroup,
+    getGroupById,
+    updateGroup,
+    deleteGroup,
     getLedgers,
-    createLedger
+    createLedger,
+    updateLedger,
+    deleteLedger
 };

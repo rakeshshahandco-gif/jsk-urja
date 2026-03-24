@@ -316,8 +316,8 @@ export default function PurchaseOrderDetailPage() {
                                 For {company.companyName || 'JSK URJA'}
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12px' }}>
-                                <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>{user?.name || 'Authorized User'}</div>
-                                {user?.mobile && <div style={{ fontSize: '10px', color: '#333' }}>Mob: {user.mobile}</div>}
+                                <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>{po.createdBy?.name || user?.name || 'Authorized User'}</div>
+                                {(po.createdBy?.mobile || user?.mobile) && <div style={{ fontSize: '10px', color: '#333' }}>Mob: {po.createdBy?.mobile || user?.mobile}</div>}
                                 <div style={{ width: '160px', borderTop: '1px solid #000', margin: '4px auto 0', paddingTop: '4px', fontSize: '11px', fontWeight: 800, textAlign: 'center' }}>AUTHORIZED SIGNATORY</div>
                             </div>
                         </div>

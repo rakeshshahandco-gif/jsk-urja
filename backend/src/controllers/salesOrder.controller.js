@@ -162,7 +162,7 @@ export const getSOs = asyncHandler(async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const [salesOrders, total] = await Promise.all([
-        SalesOrder.find(filter).sort({ soDate: -1 }).skip(skip).limit(Number(limit)),
+        SalesOrder.find(filter).populate('createdBy', 'name mobile').sort({ soDate: -1 }).skip(skip).limit(Number(limit)),
         SalesOrder.countDocuments(filter),
     ]);
 
@@ -171,7 +171,9 @@ export const getSOs = asyncHandler(async (req, res) => {
 
 // ------- GET SINGLE SO -------
 export const getSOById = asyncHandler(async (req, res) => {
-    const so = await SalesOrder.findById(req.params.id);
+    const so = await SalesOrder.findById(req.params.id)
+        .populate('seriesId')
+        .populate('createdBy', 'name mobile');
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
     res.json({ success: true, data: so });
 });

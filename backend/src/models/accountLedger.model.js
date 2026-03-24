@@ -9,7 +9,7 @@ const accountLedgerSchema = new mongoose.Schema({
     underGroup: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'AccountGroup',
-        required: [true, 'Group is mandatory']
+        default: null
     },
     groupName: { type: String }, // Denormalized for quick reports
 

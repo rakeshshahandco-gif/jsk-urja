@@ -122,6 +122,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
         const voucher = new Voucher({
             ...req.body,
             voucherNo,
+            voucherType: vType._id,
             nature: actualNature,
             voucherTypeName: vType.name,
             createdBy: req.user.id

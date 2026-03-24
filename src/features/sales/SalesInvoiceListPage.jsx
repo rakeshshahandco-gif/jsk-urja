@@ -101,7 +101,7 @@ export default function SalesInvoiceListPage() {
                     ) : (
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                                <tr>{['Invoice No.', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Paid', 'Type', 'Payment Status', ''].map(h => <th key={h} style={th}>{h}</th>)}</tr>
+                                <tr>{['Invoice No.', 'Date', 'Customer', 'State', 'SO Ref', 'Grand Total', 'Paid', 'Type', 'Payment Status', ''].map(h => <th key={h} style={th}>{h}</th>)}</tr>
                             </thead>
                             <tbody>
                                 {invoices.map(inv => {
@@ -114,6 +114,7 @@ export default function SalesInvoiceListPage() {
                                             <td style={{ ...td, color: '#2563eb', fontWeight: 700 }}>{inv.invoiceNumber}</td>
                                             <td style={td}>{fmt(inv.invoiceDate)}</td>
                                             <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{inv.customerName}</td>
+                                            <td style={{ ...td, color: '#6b7280' }}>{inv.billingState || '—'}</td>
                                             <td style={{ ...td, color: '#6b7280', fontSize: 12 }}>{inv.soNumber || '—'}</td>
                                             <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>{fmtCur(inv.roundedTotal || inv.grandTotal)}</td>
                                             <td style={{ ...td, color: inv.paidAmount > 0 ? '#16a34a' : '#9ca3af' }}>{fmtCur(inv.paidAmount)}</td>

@@ -2,10 +2,17 @@ import httpStatus from 'http-status';
 import ExcelJS from 'exceljs';
 import { Supplier } from '../models/supplier.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { AccountGroup } from '../models/accountGroup.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
+
+// Helper — resolves Sundry Creditors group _id
+const getSundryCreditorGroupId = async () => {
+    const g = await AccountGroup.findOne({ name: 'Sundry Creditors' }).select('_id').lean();
+    return g?._id || null;
+};
 
 // @desc    Export Supplier Template
 // @route   GET /api/v1/suppliers/export/template
@@ -195,10 +202,11 @@ export const importSuppliersExcel = asyncHandler(async (req, res) => {
                 }
                 supplier = await Supplier.create(item.data);
 
-                // Create Ledger
+                // Create Ledger under Sundry Creditors
+                const scGroupId = await getSundryCreditorGroupId();
                 await AccountLedger.create({
                     name: supplier.supplierName,
-                    group: 'Current Liabilities',
+                    underGroup: scGroupId,
                     type: 'Supplier',
                     referenceId: supplier._id,
                     referenceModel: 'Supplier',
@@ -249,11 +257,12 @@ export const createSupplier = asyncHandler(async (req, res) => {
     const supplierCode = await generateSupplierCode();
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
 
-    // Create Ledger in Chart of Accounts
+    // Create Ledger under Sundry Creditors
     try {
+        const scGroupId = await getSundryCreditorGroupId();
         await AccountLedger.create({
             name: supplier.supplierName,
-            group: 'Current Liabilities',
+            underGroup: scGroupId,
             type: 'Supplier',
             referenceId: supplier._id,
             referenceModel: 'Supplier',

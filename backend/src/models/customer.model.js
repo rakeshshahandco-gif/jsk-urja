@@ -163,6 +163,32 @@ const customerSchema = mongoose.Schema(
     }
 );
 
+// Pre-save hook for GST Automation
+customerSchema.pre('save', function (next) {
+    // 1. Handle GST Registration Type based on GST Number
+    if (this.gstNumber && this.gstNumber.trim().length > 0) {
+        if (!this.gstRegistrationType) {
+            this.gstRegistrationType = 'Registered';
+        }
+    } else {
+        if (!this.gstRegistrationType) {
+            this.gstRegistrationType = 'Unregistered';
+        }
+    }
+
+    // 2. Handle GST Type based on State
+    if (this.state && !this.gstType) {
+        const stateStr = String(this.state).trim().toLowerCase();
+        if (stateStr === 'maharashtra') {
+            this.gstType = 'CGST / SGST';
+        } else {
+            this.gstType = 'IGST';
+        }
+    }
+
+    next();
+});
+
 // Validation: Ensure at least one contact person exists
 customerSchema.path('contactPersons').validate(function (value) {
     return value && value.length > 0;

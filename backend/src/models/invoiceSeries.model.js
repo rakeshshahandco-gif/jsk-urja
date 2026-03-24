@@ -10,6 +10,7 @@ const invoiceSeriesSchema = new mongoose.Schema({
     gstApplicable: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
+    isEstimate: { type: Boolean, default: false },
     description: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });

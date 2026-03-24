@@ -5,8 +5,17 @@ import { apiClient } from '../lib/apiClient';
 export const getAccountGroups = (params = {}) =>
     apiClient.get('/accounts/masters/groups', { params }).then(r => r.data.data);
 
+export const getAccountGroupById = (id) =>
+    apiClient.get(`/accounts/masters/groups/${id}`).then(r => r.data.data);
+
 export const createAccountGroup = (data) =>
     apiClient.post('/accounts/masters/groups', data).then(r => r.data.data);
+
+export const updateAccountGroup = (id, data) =>
+    apiClient.patch(`/accounts/masters/groups/${id}`, data).then(r => r.data.data);
+
+export const deleteAccountGroup = (id) =>
+    apiClient.delete(`/accounts/masters/groups/${id}`).then(r => r.data);
 
 export const initializeAccounts = () =>
     apiClient.post('/accounts/masters/initialize').then(r => r.data.data);
@@ -16,6 +25,12 @@ export const getLedgers = (params = {}) =>
 
 export const createLedger = (data) =>
     apiClient.post('/accounts/masters/ledgers', data).then(r => r.data.data);
+
+export const updateLedger = (id, data) =>
+    apiClient.patch(`/accounts/masters/ledgers/${id}`, data).then(r => r.data.data);
+
+export const deleteLedger = (id) =>
+    apiClient.delete(`/accounts/masters/ledgers/${id}`).then(r => r.data);
 
 // ── Masters (Legacy/Other) ──────────────────────────────────────────────────
 
