@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Button, Input } from "@/components/ui";
-import { BookOpen, Filter, Eye, ArrowRight } from "lucide-react";
-import { getDayBook, cancelVoucher } from "@/services/accountApi";
-import { toast } from "react-hot-toast";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { PATHS } from "@/routes/paths";
+import { Button, Input } from "@/components/ui";
+import { BookOpen, Filter, ArrowRight } from "lucide-react";
+import { getDayBook } from "@/services/accountApi";
+import { toast } from "react-hot-toast";
+import s from "./DayBookPage.module.scss";
 
 const DayBookPage = () => {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ const DayBookPage = () => {
     setLoading(true);
     try {
       const res = await getDayBook(filters);
-      setData(res);
+      setData(Array.isArray(res) ? res : (res?.data || []));
     } catch (error) {
       toast.error("Failed to fetch day book");
     } finally {
@@ -31,144 +31,121 @@ const DayBookPage = () => {
     fetchData();
   }, []);
 
-  const getNatureColor = (nature) => {
+  const getVchClass = (nature) => {
     switch (nature) {
-      case "Receipt":
-        return "bg-green-100 text-green-700 border-green-200";
-      case "Payment":
-        return "bg-red-100 text-red-700 border-red-200";
-      case "Expense":
-        return "bg-orange-100 text-orange-700 border-orange-200";
-      case "Journal":
-        return "bg-blue-100 text-blue-700 border-blue-200";
-      case "Contra":
-        return "bg-purple-100 text-purple-700 border-purple-200";
-      default:
-        return "bg-gray-100 text-gray-700 border-gray-200";
+      case "Receipt": return s.receipt;
+      case "Payment": return s.payment;
+      case "Expense": return s.expense;
+      case "Journal": return s.journal;
+      case "Contra": return s.contra;
+      default: return s.default;
     }
   };
 
+  const fmtCur = (n) => (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center">
+    <div className={s.pageContainer}>
+      <div className={s.headerSection}>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <BookOpen className="w-8 h-8 text-primary" /> Day Book
+          <h1 className={s.title}>
+            <BookOpen /> Day Book
           </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Daily transaction overview across all voucher types
+          <p className={s.subtitle}>
+            Comprehensive daily transaction log across all financial activities
           </p>
         </div>
-        {/* <div className="flex gap-2">
-                    <ExportButtons data={data} filename="day_book" />
-                </div> */}
       </div>
 
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-wrap items-end gap-4">
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold uppercase text-gray-400">
-            Date Range
-          </label>
-          <div className="flex items-center gap-2">
+      <div className={s.filterPanel}>
+        <div className={s.filterGroup}>
+          <label>Audit Period</label>
+          <div className={s.dateRange}>
             <Input
               type="date"
+              className={s.dateInput}
               value={filters.from}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, from: e.target.value }))
-              }
-              className="h-9 text-sm w-40"
+              onChange={(e) => setFilters((prev) => ({ ...prev, from: e.target.value }))}
             />
-            <ArrowRight className="w-4 h-4 text-gray-300" />
+            <ArrowRight className="w-4 h-4 text-slate-300 font-bold" />
             <Input
               type="date"
+              className={s.dateInput}
               value={filters.to}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, to: e.target.value }))
-              }
-              className="h-9 text-sm w-40"
+              onChange={(e) => setFilters((prev) => ({ ...prev, to: e.target.value }))}
             />
           </div>
         </div>
-        <Button onClick={fetchData} className="h-9">
-          <Filter className="w-4 h-4 mr-2" /> Refresh
+        <Button onClick={fetchData} className="h-10 px-6 font-bold uppercase tracking-wider text-xs">
+          <Filter className="w-4 h-4 mr-2" /> Refresh Log
         </Button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className={s.tableContainer}>
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-gray-50 border-b">
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                Date
-              </th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                Vch Type
-              </th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                Vch No.
-              </th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">
-                Particulars
-              </th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">
-                Debit (₹)
-              </th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">
-                Credit (₹)
-              </th>
+            <tr>
+              <th>Date</th>
+              <th>Voucher Type</th>
+              <th>Serial No.</th>
+              <th>Particulars / Ledger</th>
+              <th className="text-right">Debit (₹)</th>
+              <th className="text-right">Credit (₹)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {data.map((vch) => (
-              <React.Fragment key={vch._id}>
-                <tr className="hover:bg-gray-50/50 font-medium group">
-                  <td className="px-6 py-4 text-sm">
-                    {new Date(vch.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-tighter ${getNatureColor(vch.nature)}`}
-                    >
-                      {vch.voucherTypeName || vch.nature}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-mono text-primary font-bold">
-                    {vch.voucherNo}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
+          <tbody>
+            {!loading && data.map((vch) => (
+              <tr key={vch._id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="font-bold text-slate-500 tabular-nums">
+                  {new Date(vch.date).toLocaleDateString('en-GB')}
+                </td>
+                <td>
+                  <span className={`${s.vchBadge} ${getVchClass(vch.nature)}`}>
+                    {vch.voucherTypeName || vch.nature}
+                  </span>
+                </td>
+                <td className={s.voucherNo}>
+                  #{vch.voucherNo}
+                </td>
+                <td>
+                  <div className={s.particulars}>
+                    <div className={s.partyName}>
                       {vch.partyName || vch.items[0]?.ledgerName}
                     </div>
-                    <div className="text-[10px] text-gray-400 italic mt-0.5 max-w-xs truncate">
-                      {vch.narration}
+                    <div className={s.narration}>
+                      {vch.narration || 'No Narration Provided'}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">
-                    {vch.nature === "Receipt"
-                      ? vch.totalAmount.toLocaleString()
-                      : "-"}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">
-                    {vch.nature === "Payment" || vch.nature === "Expense"
-                      ? vch.totalAmount.toLocaleString()
-                      : "-"}
-                  </td>
-                </tr>
-                {/* Optional: Sub-rows for Journal/Contra multi-line display could be added here */}
-              </React.Fragment>
+                  </div>
+                </td>
+                <td className="text-right">
+                  <span className={s.amount}>
+                    {vch.nature === "Receipt" ? fmtCur(vch.totalAmount) : "—"}
+                  </span>
+                </td>
+                <td className="text-right">
+                  <span className={s.amount}>
+                    {vch.nature === "Payment" || vch.nature === "Expense" ? fmtCur(vch.totalAmount) : "—"}
+                  </span>
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
-        {data.length === 0 && !loading && (
-          <div className="py-24 text-center bg-gray-50/50">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white shadow-sm mb-4 border border-gray-100 text-gray-200">
-              <FileText className="w-8 h-8" />
+        
+        {!loading && data.length === 0 && (
+          <div className={s.emptyState}>
+            <div className={s.emptyIcon}>
+              <BookOpen className="w-8 h-8" />
             </div>
-            <p className="text-gray-400 font-medium">Empty Day Book</p>
-            <p className="text-gray-300 text-xs mt-1">
-              No transactions recorded on this date
-            </p>
+            <h3>Journal Empty</h3>
+            <p className="text-sm">No transactions matched your current filters.</p>
           </div>
+        )}
+        
+        {loading && (
+           <div className="p-20 text-center text-slate-400 font-bold animate-pulse">
+             SYNCHRONIZING DAY BOOK...
+           </div>
         )}
       </div>
     </div>

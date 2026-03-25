@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import {
-    Button, Input, Select, SearchableSelect
-} from '@/components/ui';
-import { Search, Printer, FileText, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
-import { getLedgers, getLedgerStatement } from '@/services/accountApi';
+import { Button, Input, SearchableSelect } from '@/components/ui';
+import { Printer, FileText, ArrowDownLeft, ArrowUpRight, Trash2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { getLedgers, getLedgerStatement, cancelVoucher } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
+import s from './LedgerReportPage.module.scss';
 
 const LedgerReportPage = ({ defaultType = null }) => {
+    const navigate = useNavigate();
     const [ledgers, setLedgers] = useState([]);
     const [selectedLedgerId, setSelectedLedgerId] = useState('');
     const [filters, setFilters] = useState({
@@ -41,110 +42,181 @@ const LedgerReportPage = ({ defaultType = null }) => {
         }
     };
 
+    const handleCancelVoucher = async (id, voucherNo) => {
+        if (!id) return;
+        if (!window.confirm(`Are you sure you want to delete transaction ${voucherNo}? This will reverse all ledger impacts.`)) return;
+        
+        try {
+            await cancelVoucher(id);
+            toast.success(`Transaction ${voucherNo} has been deleted successfully`);
+            handleFetchStatement(); // Refresh the report to reflect changes
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to delete transaction');
+        }
+    };
+
+    const cur = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+    const filteredLedgers = ledgers.filter(l => {
+        if (defaultType === 'Bank') return l.type === 'Bank' || l.isBank;
+        if (defaultType === 'Cash') return l.type === 'Cash' || l.isCashLedger;
+        return true;
+    });
+
     return (
-        <div className="p-6 space-y-6 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center">
+        <div className={s.pageContainer}>
+            <div className={s.headerSection}>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+                    <h1 className={s.title}>
                         {defaultType === 'Cash' ? 'Cash Book' : defaultType === 'Bank' ? 'Bank Book' : 'Account Ledger Report'}
                     </h1>
-                    <p className="text-gray-500 text-sm mt-1">Detailed transaction history and balance summary</p>
+                    <p className={s.subtitle}>Comprehensive transaction history and financial summary</p>
                 </div>
-                <Button variant="outline" className="flex items-center gap-2" disabled={!data}>
-                    <Printer className="w-4 h-4" /> Export PDF
-                </Button>
+                <div className="flex items-center gap-3">
+                    {(defaultType === 'Bank' || defaultType === 'Cash') && (
+                        <>
+                            <Button 
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 font-bold px-4 py-2"
+                                onClick={() => navigate('/accounts/receipt-entry')}
+                            >
+                                <ArrowDownCircle size={16} /> Receive Payment
+                            </Button>
+                            <Button 
+                                className="bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-2 font-bold px-4 py-2"
+                                onClick={() => navigate('/accounts/payment-entry')}
+                            >
+                                <ArrowUpCircle size={16} /> Make Payment
+                            </Button>
+                        </>
+                    )}
+                    <Button variant="outline" className="flex items-center gap-2 font-bold " disabled={!data}>
+                        <Printer className="w-4 h-4" /> Export
+                    </Button>
+                </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div className="space-y-1 col-span-2">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Select Account / Ledger</label>
+            <div className={s.filterPanel}>
+                <div className={s.filterGroup}>
+                    <label>Account / Ledger</label>
                     <SearchableSelect
-                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                        options={filteredLedgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
                         value={selectedLedgerId}
                         onChange={setSelectedLedgerId}
-                        placeholder="Type to search..."
+                        placeholder="Search accounts..."
                     />
                 </div>
-                <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase">Period</label>
-                    <div className="flex gap-2">
-                        <Input type="date" value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} />
-                        <Input type="date" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
+                <div className={s.filterGroup}>
+                    <label>Period Range</label>
+                    <div className={s.dateRange}>
+                        <Input type="date" className={s.dateInput} value={filters.startDate} onChange={e => setFilters({ ...filters, startDate: e.target.value })} />
+                        <span className="text-gray-300 font-bold">→</span>
+                        <Input type="date" className={s.dateInput} value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
                     </div>
                 </div>
-                <Button onClick={handleFetchStatement} disabled={loading} className="w-full font-bold">
-                    {loading ? 'Processing...' : 'View Report'}
+                <Button onClick={handleFetchStatement} disabled={loading} className="w-full h-11 font-black text-sm uppercase tracking-wide">
+                    {loading ? 'Fetching...' : 'View Statement'}
                 </Button>
             </div>
 
             {data && (
-                <div className="space-y-6">
-                    <div className="grid grid-cols-3 gap-6">
-                        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                            <p className="text-[10px] font-black uppercase text-blue-400 mb-1">Opening Balance</p>
-                            <p className="text-2xl font-black text-blue-900">₹{data.openingBalance.toLocaleString()}</p>
+                <div className="space-y-8">
+                    <div className={s.summaryCards}>
+                        <div className={`${s.card} ${s.opening}`}>
+                            <p className={s.cardLabel}>Opening Balance</p>
+                            <p className={s.cardValue}>₹{cur(data.openingBalance)}</p>
                         </div>
-                        <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100">
-                            <p className="text-[10px] font-black uppercase text-indigo-400 mb-1">Total Period Activity</p>
-                            <div className="flex gap-4">
-                                <div><span className="text-[10px] text-green-600 font-bold">DEBIT (+):</span> <span className="font-bold">₹{data.periodDebit.toLocaleString()}</span></div>
-                                <div><span className="text-[10px] text-red-600 font-bold">CREDIT (-):</span> <span className="font-bold">₹{data.periodCredit.toLocaleString()}</span></div>
+                        <div className={`${s.card} ${s.activity}`}>
+                            <p className={s.cardLabel}>Period Activity</p>
+                            <div className={s.activityMetrics}>
+                                <div className={`${s.metric} ${s.debit}`}>
+                                    <span>Debit (+)</span>
+                                    <span>₹{cur(data.periodDebit)}</span>
+                                </div>
+                                <div className={`${s.metric} ${s.credit}`}>
+                                    <span>Credit (-)</span>
+                                    <span>₹{cur(data.periodCredit)}</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="bg-gray-900 p-6 rounded-xl shadow-lg">
-                            <p className="text-[10px] font-black uppercase text-gray-500 mb-1">Closing Balance</p>
-                            <p className="text-2xl font-black text-white">₹{data.closingBalance.toLocaleString()}</p>
+                        <div className={`${s.card} ${s.closing}`}>
+                            <p className={s.cardLabel}>Closing Balance</p>
+                            <p className={s.cardValue}>₹{cur(data.closingBalance)}</p>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <table className="w-full text-left border-collapse">
+                    <div className={s.tableContainer}>
+                        <table>
                             <thead>
-                                <tr className="bg-gray-50 border-b">
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Date</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">Voucher / Ref</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-center">Type</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Debit (₹)</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Credit (₹)</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">Balance (₹)</th>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Voucher Details</th>
+                                    <th className="text-center">Type</th>
+                                    <th className="text-right">Debit (₹)</th>
+                                    <th className="text-right">Credit (₹)</th>
+                                    <th className="text-right">Balance (₹)</th>
+                                    <th className="text-center">Manage</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50 font-medium">
-                                <tr className="bg-gray-50/30 italic">
-                                    <td className="px-6 py-3 text-sm" colSpan={3}>Brought Forward (Opening)</td>
-                                    <td className="px-6 py-3 text-right">-</td>
-                                    <td className="px-6 py-3 text-right">-</td>
-                                    <td className="px-6 py-3 text-right font-bold tabular-nums">₹{data.openingBalance.toLocaleString()}</td>
+                            <tbody>
+                                <tr className={s.broughtForward}>
+                                    <td colSpan={3}>BALANCE BROUGHT FORWARD (OPENING)</td>
+                                    <td className="text-right">--</td>
+                                    <td className="text-right">--</td>
+                                    <td className="text-right">
+                                        <span className={s.amount}>₹{cur(data.openingBalance)}</span>
+                                    </td>
+                                    <td></td>
                                 </tr>
                                 {data.entries.map((entry, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="px-6 py-4 text-sm text-gray-500">{new Date(entry.date).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-bold text-gray-900">{entry.voucherNumber}</div>
-                                            <div className="text-[10px] text-gray-400 uppercase truncate max-w-[250px]">{entry.narration || '-'}</div>
+                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="text-slate-500 font-bold tabular-nums">
+                                            {new Date(entry.date).toLocaleDateString('en-GB')}
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td>
+                                            <div className={s.voucherInfo}>
+                                                <div className="font-bold text-slate-800 tracking-wide mb-1 text-[13px]">
+                                                    {entry.oppositeName || 'Various Accounts'}
+                                                </div>
+                                                <div className={s.voucherNo}>{entry.voucherNumber || entry.voucherNo}</div>
+                                                <div className={s.narration}>{entry.narration || '-'}</div>
+                                            </div>
+                                        </td>
+                                        <td className="text-center">
                                             {entry.type === 'Debit' ?
-                                                <ArrowUpRight className="w-4 h-4 text-green-500 mx-auto" /> :
-                                                <ArrowDownLeft className="w-4 h-4 text-red-500 mx-auto" />
+                                                <ArrowUpRight className="w-5 h-5 text-emerald-500 mx-auto" /> :
+                                                <ArrowDownLeft className="w-5 h-5 text-rose-500 mx-auto" />
                                             }
                                         </td>
-                                        <td className="px-6 py-4 text-right font-bold text-green-600">
-                                            {entry.type === 'Debit' ? `₹${entry.amount.toLocaleString()}` : '-'}
+                                        <td className="text-right font-black">
+                                            {entry.type === 'Debit' ? 
+                                                <span className={`${s.amount} ${s.debit}`}>₹{cur(entry.amount)}</span> : '--'}
                                         </td>
-                                        <td className="px-6 py-4 text-right font-bold text-red-600">
-                                            {entry.type === 'Credit' ? `₹${entry.amount.toLocaleString()}` : '-'}
+                                        <td className="text-right font-black">
+                                            {entry.type === 'Credit' ? 
+                                                <span className={`${s.amount} ${s.credit}`}>₹{cur(entry.amount)}</span> : '--'}
                                         </td>
-                                        <td className="px-6 py-4 text-right text-gray-900 tabular-nums">
-                                            ₹{entry.runningBalance.toLocaleString()}
+                                        <td className="text-right">
+                                            <span className={`${s.amount} ${s.neutral}`}>₹{cur(entry.runningBalance)}</span>
+                                        </td>
+                                        <td className="text-center">
+                                            {entry.voucherId && entry.type !== 'Opening' && (
+                                                <button
+                                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-md"
+                                                    onClick={() => handleCancelVoucher(entry.voucherId, entry.voucherNumber || entry.voucherNo)}
+                                                    title="Delete Transaction"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
-                                <tr className="bg-primary/5 font-black border-t-2 border-primary/20">
-                                    <td className="px-6 py-4 text-sm uppercase" colSpan={3}>Closing Balance</td>
-                                    <td className="px-6 py-4 text-right text-green-700">₹{data.periodDebit.toLocaleString()}</td>
-                                    <td className="px-6 py-4 text-right text-red-700">₹{data.periodCredit.toLocaleString()}</td>
-                                    <td className="px-6 py-4 text-right text-primary text-lg">₹{data.closingBalance.toLocaleString()}</td>
+                                <tr className={s.closingRow}>
+                                    <td colSpan={3} className="uppercase tracking-widest text-xs opacity-60">Closing Statement Balance</td>
+                                    <td className="text-right text-emerald-700">₹{cur(data.periodDebit)}</td>
+                                    <td className="text-right text-rose-700">₹{cur(data.periodCredit)}</td>
+                                    <td className="text-right text-teal-600 text-xl font-black">₹{cur(data.closingBalance)}</td>
+                                    <td></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -153,12 +225,12 @@ const LedgerReportPage = ({ defaultType = null }) => {
             )}
 
             {!data && !loading && (
-                <div className="py-32 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
-                    <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                        <FileText className="w-10 h-10 text-gray-300" />
+                <div className={s.emptyState}>
+                    <div className={s.emptyIcon}>
+                        <FileText className="w-10 h-10" />
                     </div>
-                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Generate Ledger Statement</h3>
-                    <p className="text-gray-400 mt-2 max-w-xs mx-auto text-sm font-medium">Select an account and date range above to view the transaction history.</p>
+                    <h3>Analyze Account Activity</h3>
+                    <p>Select a ledger and a date range above to generate your detailed financial report.</p>
                 </div>
             )}
         </div>

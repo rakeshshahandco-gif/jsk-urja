@@ -4,7 +4,7 @@ const voucherTypeSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true, unique: true }, // e.g., RCPT, PMT, CASHRCPT
     nature: {
         type: String,
-        enum: ['Receipt', 'Payment', 'Contra', 'Journal'],
+        enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Sales', 'Purchase'],
         required: true
     },
     prefix: { type: String, default: '' },

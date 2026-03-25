@@ -1,0 +1,56 @@
+{
+  "ledgerId": "69c238d04630f0dab9b5499c",
+  "voucherIds": [
+    "69c38eb27f9a4f24e8ffc8e3",
+    "69c36ffbb9eac74d0bde6287"
+  ],
+  "relatedEntriesCount": 7,
+  "relatedEntries": [
+    {
+      "vId": "69c36ffbb9eac74d0bde6287",
+      "lId": "69b43e3f73caad9b89392659",
+      "lName": "BANK OF BARODA"
+    },
+    {
+      "vId": "69c36ffbb9eac74d0bde6287",
+      "lId": "69c238d04630f0dab9b5499c",
+      "lName": "AMISON ENTERPRISE"
+    },
+    {
+      "vId": "69c38eb27f9a4f24e8ffc8e3",
+      "lId": "69c238d04630f0dab9b5499c",
+      "lName": "AMISON ENTERPRISE"
+    },
+    {
+      "vId": "69c38eb27f9a4f24e8ffc8e3",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69c38eb27f9a4f24e8ffc8e3",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69c38eb27f9a4f24e8ffc8e3",
+      "lId": "69bcb30f32c5fc43f54059cc",
+      "lName": "CGST Output"
+    },
+    {
+      "vId": "69c38eb27f9a4f24e8ffc8e3",
+      "lId": "69bcb30f32c5fc43f54059cf",
+      "lName": "SGST Output"
+    }
+  ],
+  "oppositeNamesByVoucher": {
+    "69c36ffbb9eac74d0bde6287": [
+      "BANK OF BARODA"
+    ],
+    "69c38eb27f9a4f24e8ffc8e3": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "CGST Output",
+      "SGST Output"
+    ]
+  }
+}

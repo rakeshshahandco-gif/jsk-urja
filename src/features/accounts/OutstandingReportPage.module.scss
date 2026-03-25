@@ -1,0 +1,218 @@
+.pageContainer {
+    padding: 2.5rem;
+    max-width: 1300px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    font-family: 'Inter', sans-serif;
+    color: #1e293b;
+    background: #f8fafc;
+    min-height: 100vh;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    
+    .titleSection {
+        h1 {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #0f172a;
+            letter-spacing: -0.04em;
+            margin: 0;
+        }
+    }
+}
+
+.typeSwitcher {
+    margin-top: 1.5rem;
+    padding: 0.35rem;
+    background: #f1f5f9;
+    border-radius: 0.75rem;
+    display: inline-flex;
+    gap: 0.25rem;
+
+    button {
+        padding: 0.6rem 1.5rem;
+        border-radius: 0.6rem;
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        color: #64748b;
+        background: transparent;
+
+        &.receivable.active {
+            background: #fff;
+            color: #059669;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        &.payable.active {
+            background: #fff;
+            color: #dc2626;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        &:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    }
+}
+
+.summaryCard {
+    background: #fff;
+    border-radius: 1.5rem;
+    padding: 2.5rem;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+    transition: transform 0.3s;
+
+    &:hover { transform: translateY(-5px); }
+
+    .iconContainer {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.25rem;
+        
+        &.receivable { background: #ecfdf5; color: #059669; }
+        &.payable { background: #fef2f2; color: #dc2626; }
+    }
+
+    .label {
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #94a3b8;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+    }
+
+    .value {
+        font-size: 3rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        font-family: 'JetBrains Mono', monospace;
+        
+        &.receivable { color: #065f46; }
+        &.payable { color: #991b1b; }
+    }
+
+    .count {
+        margin-top: 1rem;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #64748b;
+        background: #f1f5f9;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+    }
+}
+
+.contentGrid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+
+    @media (max-width: 1024px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tableContainer {
+    background: #fff;
+    border-radius: 1.5rem;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+
+    .searchBar {
+        padding: 1.5rem;
+        border-bottom: 1px solid #f1f5f9;
+        background: #f8fafc;
+        display: flex;
+        gap: 1rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+
+        th {
+            padding: 1rem 1.5rem;
+            background: #fff;
+            text-align: left;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        td {
+            padding: 1.25rem 1.5rem;
+            font-size: 0.875rem;
+            color: #334155;
+            border-bottom: 1px solid #f8fafc;
+        }
+
+        .partyName {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+
+            .icon {
+                width: 2rem;
+                height: 2rem;
+                background: #f1f5f9;
+                border-radius: 0.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #94a3b8;
+            }
+        }
+
+        .billBadge {
+            font-size: 0.6rem;
+            font-weight: 800;
+            background: #f1f5f9;
+            color: #64748b;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.4rem;
+        }
+
+        .amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            text-align: right;
+
+            &.receivable { color: #059669; }
+            &.payable { color: #dc2626; }
+        }
+
+        tr:hover td {
+            background: #fbfcfe;
+        }
+    }
+}

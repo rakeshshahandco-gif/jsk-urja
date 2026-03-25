@@ -206,8 +206,14 @@ export const createVoucher = asyncHandler(async (req, res) => {
 });
 
 export const getVouchers = asyncHandler(async (req, res) => {
-    const { from, to, nature, natureType, partyId, page = 1, limit = 50 } = req.query;
+    const { from, to, nature, natureType, partyId, page = 1, limit = 50, showSystemGenerated } = req.query;
     const filter = {};
+    
+    // Hide system-generated vouchers by default unless explicitly requested
+    if (showSystemGenerated !== 'true') {
+        filter.isSystemGenerated = { $ne: true };
+    }
+
     if (from || to) {
         filter.date = {};
         if (from) filter.date.$gte = new Date(from);
@@ -260,6 +266,9 @@ export const cancelVoucher = asyncHandler(async (req, res) => {
                 }
             }
         }
+
+        // Delete Ledger Entries so they do not show up in the Ledger Report
+        await LedgerEntry.deleteMany({ voucherId: voucher._id }).session(session);
 
         // Reverse Bill DNA (Adjustments)
         for (const item of voucher.items) {

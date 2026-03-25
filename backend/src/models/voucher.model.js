@@ -25,7 +25,7 @@ const voucherSchema = new mongoose.Schema({
     voucherNo: { type: String, required: true, unique: true },
     voucherType: { type: mongoose.Schema.Types.ObjectId, ref: 'VoucherType', required: true },
     voucherTypeName: { type: String, default: '' },
-    nature: { type: String, enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Expense', 'Debit Note', 'Credit Note'], required: true },
+    nature: { type: String, enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Expense', 'Debit Note', 'Credit Note', 'Sales', 'Purchase'], required: true },
     date: { type: Date, required: true, default: Date.now },
 
     // Header Cash/Bank selection
@@ -52,6 +52,8 @@ const voucherSchema = new mongoose.Schema({
     status: { type: String, enum: ['Draft', 'Confirmed', 'Cancelled'], default: 'Confirmed' },
 
     items: [voucherItemSchema],
+
+    isSystemGenerated: { type: Boolean, default: false },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

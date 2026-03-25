@@ -1,0 +1,202 @@
+.pageContainer {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    font-family: 'Inter', sans-serif;
+    color: #1e293b;
+}
+
+.headerSection {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    .title {
+        font-size: 1.875rem;
+        font-weight: 900;
+        color: #0f172a;
+        letter-spacing: -0.025em;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        
+        svg {
+            color: #0d9488;
+            width: 2rem;
+            height: 2rem;
+        }
+    }
+
+    .subtitle {
+        color: #64748b;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+        font-weight: 500;
+    }
+}
+
+.filterPanel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    padding: 1.25rem 1.5rem;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+
+    .filterGroup {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+
+        label {
+            font-size: 0.65rem;
+            font-weight: 800;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+    }
+
+    .dateRange {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+
+        .dateInput {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            
+            &:focus {
+                border-color: #0d9488;
+                box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1);
+            }
+        }
+    }
+}
+
+.tableContainer {
+    background: #fff;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        
+        th {
+            background: #f8fafc;
+            padding: 1rem 1.5rem;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        td {
+            padding: 1.25rem 1.5rem;
+            font-size: 0.875rem;
+            color: #334155;
+            border-bottom: 1px solid #f1f5f9;
+        }
+    }
+}
+
+.vchBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid transparent;
+
+    &.receipt { background: #ecfdf5; color: #059669; border-color: #d1fae5; }
+    &.payment { background: #fef2f2; color: #dc2626; border-color: #fee2e2; }
+    &.expense { background: #fffbeb; color: #d97706; border-color: #fef3c7; }
+    &.journal { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+    &.contra { background: #f5f3ff; color: #7c3aed; border-color: #ede9fe; }
+    &.default { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+}
+
+.voucherNo {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    color: #0d9488;
+    font-size: 0.8rem;
+}
+
+.particulars {
+    .partyName {
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+    }
+    .narration {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        font-weight: 600;
+        text-transform: uppercase;
+        max-width: 250px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.9rem;
+}
+
+.emptyState {
+    padding: 6rem 0;
+    text-align: center;
+    background: #f8fafc;
+    border-radius: 1.5rem;
+    border: 2px dashed #e2e8f0;
+
+    .emptyIcon {
+        width: 4rem;
+        height: 4rem;
+        background: #fff;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        color: #cbd5e1;
+    }
+
+    h3 {
+        font-size: 1.25rem;
+        font-weight: 900;
+        color: #0f172a;
+        letter-spacing: -0.025em;
+    }
+
+    p {
+        color: #94a3b8;
+        margin-top: 0.5rem;
+        font-weight: 500;
+    }
+}

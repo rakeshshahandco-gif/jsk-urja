@@ -1,4 +1,5 @@
 import httpStatus from 'http-status';
+import fs from 'fs';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
@@ -18,29 +19,96 @@ export const getLedgers = asyncHandler(async (req, res) => {
 });
 
 export const getLedgerReport = asyncHandler(async (req, res) => {
-    const { ledgerId, from, to } = req.query;
+    const { ledgerId, startDate, endDate } = req.query; // Page uses startDate/endDate in filters
     const filter = { ledgerId };
-    if (from || to) {
+    if (startDate || endDate) {
         filter.date = {};
-        if (from) filter.date.$gte = new Date(from);
-        if (to) filter.date.$lte = new Date(to);
+        if (startDate) filter.date.$gte = new Date(startDate);
+        if (endDate) filter.date.$lte = new Date(endDate);
     }
+
+    const ledger = await AccountLedger.findById(ledgerId);
+    if (!ledger) throw new ApiError(httpStatus.NOT_FOUND, 'Ledger not found');
+
+    // Calculate opening balance for the period
+    const preEntries = await LedgerEntry.find({
+        ledgerId,
+        date: { $lt: startDate ? new Date(startDate) : new Date(0) }
+    }).lean();
+
+    let openingBalance = ledger.openingBalance || 0;
+    preEntries.forEach(e => {
+        openingBalance += e.type === 'Debit' ? e.amount : -e.amount;
+    });
 
     const entries = await LedgerEntry.find(filter).sort({ date: 1, _id: 1 }).lean();
 
-    // Calculate opening balance for the period
-    const ledger = await AccountLedger.findById(ledgerId);
-    const preEntries = await LedgerEntry.find({
-        ledgerId,
-        date: { $lt: from ? new Date(from) : new Date(0) }
+    let periodDebit = 0;
+    let periodCredit = 0;
+    let runningBalance = openingBalance;
+
+    // Fetch all related entries to find the opposite ledger name
+    const voucherIds = entries.map(e => e.voucherId);
+    const relatedEntries = await LedgerEntry.find({ 
+        voucherId: { $in: voucherIds }
     }).lean();
 
-    let opening = ledger.openingBalance;
-    preEntries.forEach(e => {
-        opening += e.type === 'Debit' ? e.amount : -e.amount;
+    const oppositeNamesByVoucher = {};
+    relatedEntries.forEach(re => {
+        if (re.ledgerId.toString() !== ledgerId.toString()) {
+            const vId = re.voucherId.toString();
+            if (!oppositeNamesByVoucher[vId]) oppositeNamesByVoucher[vId] = [];
+            oppositeNamesByVoucher[vId].push(re.ledgerName);
+        }
     });
 
-    res.send(new ApiResponse(httpStatus.OK, { entries, opening }));
+    try {
+        import('fs').then(fs => {
+            fs.writeFileSync('debug_ledger.json', JSON.stringify({
+                ledgerId,
+                voucherIds: voucherIds.map(id => id?.toString()),
+                relatedEntriesCount: relatedEntries.length,
+                relatedEntries: relatedEntries.map(re => ({ vId: re.voucherId?.toString(), lId: re.ledgerId?.toString(), lName: re.ledgerName })),
+                oppositeNamesByVoucher
+            }, null, 2));
+        });
+    } catch(e) {}
+
+    const processedEntries = entries.map(entry => {
+        if (entry.type === 'Debit') {
+            periodDebit += entry.amount;
+            runningBalance += entry.amount;
+        } else {
+            periodCredit += entry.amount;
+            runningBalance -= entry.amount;
+        }
+        
+        const vId = entry.voucherId.toString();
+        const oppositeName = oppositeNamesByVoucher[vId]?.join(', ') || 'Various Accounts';
+        
+        return {
+            ...entry,
+            oppositeName,
+            runningBalance
+        };
+    });
+
+    try {
+        fs.writeFileSync('debug_ledger.json', JSON.stringify({
+            receivedLedgerId: ledgerId,
+            oppositeNamesByVoucher,
+            sampleProcessedEntry: processedEntries[0]
+        }, null, 2));
+    } catch(e) {}
+
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        entries: processedEntries,
+        openingBalance,
+        periodDebit,
+        periodCredit,
+        closingBalance: runningBalance
+    }));
 });
 
 /**
