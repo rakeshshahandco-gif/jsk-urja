@@ -63,7 +63,7 @@ const generatePoNumber = async () => {
     return `PO-${year}-${String(lastNumber + 1).padStart(5, '0')}`;
 };
 
-const calculateTotals = (items, gstType) => {
+const calculateTotals = (items, gstType, freightAmount = 0, freightGstRate = 0) => {
     let subTotal = 0, discountTotal = 0, taxTotal = 0;
     items.forEach(item => {
         const grossAmount = item.orderedQty * item.rate;
@@ -79,11 +79,16 @@ const calculateTotals = (items, gstType) => {
         discountTotal += discAmt;
         taxTotal += taxAmt;
     });
+
+    // Handle Freight GST
+    const freightTax = (Number(freightAmount || 0) * Number(freightGstRate || 0)) / 100;
+    taxTotal += freightTax;
+
     return {
         subTotal: Math.round(subTotal * 100) / 100,
         discountTotal: Math.round(discountTotal * 100) / 100,
         taxTotal: Math.round(taxTotal * 100) / 100,
-        grandTotal: Math.round((subTotal - discountTotal + taxTotal) * 100) / 100,
+        grandTotal: Math.round((subTotal - discountTotal + taxTotal + Number(freightAmount || 0)) * 100) / 100,
     };
 };
 
@@ -96,7 +101,7 @@ export const createPO = asyncHandler(async (req, res) => {
     if (!supplier) throw new ApiError(404, 'Supplier not found');
 
     const poNumber = await generatePoNumber();
-    const totals = calculateTotals(value.items, value.gstType);
+    const totals = calculateTotals(value.items, value.gstType, value.freightAmount, value.freightGstRate);
 
     const po = await PurchaseOrder.create({
         poNumber,
@@ -163,7 +168,12 @@ export const updatePO = asyncHandler(async (req, res) => {
     }
 
     if (value.items) {
-        const totals = calculateTotals(value.items, value.gstType || po.gstType);
+        const totals = calculateTotals(
+            value.items, 
+            value.gstType || po.gstType,
+            value.freightAmount !== undefined ? value.freightAmount : po.freightAmount,
+            value.freightGstRate !== undefined ? value.freightGstRate : po.freightGstRate
+        );
         Object.assign(po, value, totals);
     } else {
         Object.assign(po, value);

@@ -126,8 +126,10 @@ export default function PurchaseOrderDetailPage() {
     const freightGstRate = po.freightGstRate || ((po.items && po.items.length > 0) ? po.items[0].taxPercent : 18);
     const freightTax = fnum(freight * freightGstRate / 100);
 
+    const itemTax = (po.items || []).reduce((s, i) => fnum(s + (i.orderedQty * i.rate * i.taxPercent / 100)), 0);
     const totalTaxable = fnum(itemTaxable + freight);
-    const totalTax = po.taxTotal ? po.taxTotal : fnum((po.items || []).reduce((s, i) => s + (i.orderedQty * i.rate * i.taxPercent / 100), 0) + freightTax);
+    const totalTax = fnum(itemTax + freightTax);
+    const grandTotal = fnum(totalTaxable + totalTax);
     const isIGST = po.gstType === 'IGST';
 
     return (
@@ -248,7 +250,7 @@ export default function PurchaseOrderDetailPage() {
                             <tr>
                                 <td colSpan={4} rowSpan={6} style={{ borderRight: '1px solid #000', padding: '15px', verticalAlign: 'top' }}>
                                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>AMOUNT IN WORDS:</div>
-                                    <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{numberToWords(po.grandTotal)}</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase' }}>{numberToWords(grandTotal)}</div>
                                     {po.remarks && (
                                         <div style={{ marginTop: '15px' }}>
                                             <div style={{ fontSize: '11px', fontWeight: 800, color: '#666', marginBottom: '5px' }}>REMARKS / SPECIAL INSTRUCTIONS:</div>
@@ -292,7 +294,7 @@ export default function PurchaseOrderDetailPage() {
                             )}
                             <tr style={{ background: '#f5f5f5', color: '#000' }}>
                                 <td colSpan={2} style={{ borderRight: '1px solid #000', padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>GRAND TOTAL</td>
-                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>₹{po.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, fontSize: '16px', color: '#000' }}>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                 <td style={{ borderLeft: '1px solid #000' }}></td>
                             </tr>
                         </tfoot>

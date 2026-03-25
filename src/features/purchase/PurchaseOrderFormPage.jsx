@@ -187,7 +187,7 @@ export default function PurchaseOrderFormPage() {
                 ...header,
                 status: isEdit ? header.status : 'Ordered',
                 freightAmount: Number(header.freightAmount) || 0,
-                freightGstRate: Number(header.freightGstRate) || 0,
+                freightGstRate: Number(header.freightGstRate) || (lineItems[0]?.taxPercent || 18),
                 stickerType: header.stickerType || '',
                 items: lineItems.map(i => ({
                     itemId: i.itemId, itemCode: i.itemCode, itemName: i.itemName,
@@ -371,7 +371,12 @@ export default function PurchaseOrderFormPage() {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '13px', color: '#64748b', padding: '4px 0' }}>
                                         <span>Freight / Shipping</span>
                                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                            <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={{ ...inp, width: '80px', padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
+                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                <input type="number" min="0" step="0.01" value={header.freightAmount} onChange={e => setH('freightAmount', e.target.value)} style={{ ...inp, width: '70px', padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
+                                                <span style={{ fontSize: '10px', color: '#94a3b8' }}>@</span>
+                                                <input type="number" min="0" max="100" value={header.freightGstRate || (lineItems[0]?.taxPercent || 18)} onChange={e => setH('freightGstRate', e.target.value)} style={{ ...inp, width: '45px', padding: '4px 4px', textAlign: 'center' }} placeholder="%" title="Freight GST %" />
+                                                <span style={{ fontSize: '10px', color: '#94a3b8' }}>%</span>
+                                            </div>
                                             <span style={{ color: '#1e293b', fontWeight: 600, minWidth: '70px', textAlign: 'right' }}>₹{freight.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                         </div>
                                     </div>
