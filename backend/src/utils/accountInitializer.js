@@ -223,7 +223,8 @@ const initializeAccountingMasters = async (userId) => {
             { name: 'SGST Input', group: 'Input Tax', type: 'Tax', isTaxLedger: true },
             { name: 'IGST Input', group: 'Input Tax', type: 'Tax', isTaxLedger: true },
             { name: 'Round Off', group: 'Indirect Expenses', type: 'Expense' },
-            { name: 'Freight', group: 'Direct Expenses', type: 'Expense' },
+            { name: 'Freight Inward', group: 'Direct Expenses', type: 'Expense' },
+            { name: 'Freight & Forwarding Charges', group: 'Direct Income', type: 'Income' },
             { name: 'Salary', group: 'Indirect Expenses', type: 'Expense' },
             { name: 'Electricity', group: 'Indirect Expenses', type: 'Expense' },
         ];

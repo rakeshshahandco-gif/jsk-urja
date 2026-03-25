@@ -354,7 +354,9 @@ export default function PurchaseInvoiceFormPage() {
     const freightIgst = isIGST ? r2(freightAmt * freightGst / 100) : 0;
     const freightGstTotal = r2(freightCgst + freightSgst + freightIgst);
     const totalTaxableWithFreight = r2(totals.taxable + freightAmt);
-    const grandWithFreight = r2(totalTaxableWithFreight + totals.cgst + totals.sgst + totals.igst + freightGstTotal);
+    const rawTotal = r2(totalTaxableWithFreight + totals.cgst + totals.sgst + totals.igst + freightGstTotal);
+    const roundOff = r2(Math.round(rawTotal) - rawTotal);
+    const grandWithFreight = r2(rawTotal + roundOff);
 
     const needPO = flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice';
     const needGRN = flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice';
@@ -643,6 +645,10 @@ export default function PurchaseInvoiceFormPage() {
                                             </div>
                                         </div>
 
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                                            <span>Round Off</span><span>₹{roundOff >= 0 ? '+' : ''}{roundOff.toFixed(2)}</span>
+                                        </div>
+ 
                                         <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '18px', color: '#059669' }}>
                                             <span>Grand Total</span><span>₹{grandWithFreight.toLocaleString()}</span>
                                         </div>
