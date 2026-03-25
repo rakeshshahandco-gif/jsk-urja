@@ -8,10 +8,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
-import { Printer, FileText, ChevronLeft, Package, Trash2, Edit } from 'lucide-react';
+import { Printer, FileText, ChevronLeft, Package, Trash2, Edit, Send, MessageSquare, Mail } from 'lucide-react';
 import { Button } from '@/components/ui';
 import CommunicationModal from '@/components/communication/CommunicationModal';
-import { Send } from 'lucide-react';
 
 const STATUS_COLORS = {
     'Draft': { color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1' },

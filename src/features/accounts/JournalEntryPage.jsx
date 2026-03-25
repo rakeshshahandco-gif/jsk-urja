@@ -10,8 +10,9 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
+const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
+
 const JournalEntryPage = () => {
-    const navigate = useNavigate();
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [ledgers, setLedgers] = useState([]);
@@ -115,162 +116,194 @@ const JournalEntryPage = () => {
     };
 
     return (
-        <div className="p-6 space-y-6 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Journal Voucher</h1>
-                    <p className="text-gray-500 text-sm mt-1">Double-entry adjustments (Total Dr must equal Total Cr)</p>
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    ← Back to Voucher Register
+                </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <div>
+                        <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                            ⚖️ Journal Voucher
+                        </h1>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Double-entry adjustments (Total Dr must equal Total Cr)</p>
+                    </div>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSubmitting || !isBalanced} className="flex items-center gap-2">
-                        <Save className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Save Journal'}
-                    </Button>
-                </div>
-            </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-blue-500">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Type</label>
-                        <Select
-                            name="voucherTypeId"
-                            value={formData.voucherTypeId}
-                            onChange={handleHeaderChange}
-                            options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Date</label>
-                        <Input type="date" name="date" value={formData.date} onChange={handleHeaderChange} />
-                    </div>
-                    <div className="col-span-2 flex items-center justify-end px-4">
-                        {!isBalanced && totals.debit > 0 && (
-                            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg border border-amber-200 animate-pulse">
-                                <AlertCircle className="w-4 h-4" />
-                                <span className="text-sm font-bold tracking-tight uppercase">Out of Balance: ₹{difference.toLocaleString()}</span>
+                <div style={{ pointerEvents: isSubmitting ? 'none' : 'auto', opacity: isSubmitting ? 0.7 : 1 }}>
+                    {/* Header Info */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>VOUCHER DETAILS</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Type *</span>
+                                <select
+                                    name="voucherTypeId"
+                                    value={formData.voucherTypeId}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, cursor: 'pointer' }}
+                                >
+                                    {voucherTypes.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
+                                </select>
                             </div>
-                        )}
-                        {isBalanced && (
-                            <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-lg border border-green-200">
-                                <span className="text-sm font-bold tracking-tight uppercase">Entry is Balanced</span>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Date *</span>
+                                <input
+                                    type="date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleHeaderChange}
+                                    style={inp}
+                                />
                             </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
-                    <h3 className="text-sm font-bold uppercase text-gray-600 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-primary" /> Entry Lines
-                    </h3>
-                    <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => addItem('Debit')} className="text-blue-600 hover:bg-blue-50">
-                            <Plus className="w-4 h-4 mr-1" /> Add Dr
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => addItem('Credit')} className="text-red-600 hover:bg-red-50">
-                            <Plus className="w-4 h-4 mr-1" /> Add Cr
-                        </Button>
-                    </div>
-                </div>
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50/50">
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-24">Dr / Cr</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Account / Ledger</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-48 text-right">Amount (₹)</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Narration</th>
-                            <th className="px-6 py-3 text-center w-20"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {formData.items.map((item) => (
-                            <tr key={item.id} className={`group hover:bg-gray-50/30 transition-colors ${item.type === 'Debit' ? 'border-l-4 border-l-blue-400' : 'border-l-4 border-l-red-400'}`}>
-                                <td className="px-6 py-4">
-                                    <select
-                                        className={`w-full bg-transparent font-bold text-sm outline-none ${item.type === 'Debit' ? 'text-blue-700' : 'text-red-700'}`}
-                                        value={item.type}
-                                        onChange={(e) => handleItemChange(item.id, 'type', e.target.value)}
-                                    >
-                                        <option value="Debit">Dr</option>
-                                        <option value="Credit">Cr</option>
-                                    </select>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <SearchableSelect
-                                        options={ledgers.map(l => ({ label: l.name, value: l._id }))}
-                                        value={item.ledgerId}
-                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                        placeholder="Search ledger..."
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Input
-                                        type="number"
-                                        placeholder="0.00"
-                                        value={item.amount || ''}
-                                        onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
-                                        className="font-mono font-bold text-right"
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Input
-                                        placeholder="Line remarks"
-                                        value={item.narration}
-                                        onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
-                                        className="text-xs"
-                                    />
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeItem(item.id)}
-                                        className="text-gray-300 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                    <tfoot>
-                        <tr className="bg-gray-900 text-white font-bold">
-                            <td colSpan={2} className="px-6 py-4 text-right uppercase text-xs tracking-widest text-gray-400">Totals</td>
-                            <td className="px-6 py-4 text-right">
-                                <div className="flex flex-col">
-                                    <div className="flex justify-between text-blue-400">
-                                        <span>Dr:</span>
-                                        <span>₹{totals.debit.toLocaleString()}</span>
+                            <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                                {!isBalanced && totals.debit > 0 && (
+                                    <div style={{ padding: '10px 16px', background: '#fffbeb', border: '1px solid #fde68a', color: '#d97706', borderRadius: '8px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <AlertCircle size={16} />
+                                        OUT OF BALANCE: ₹{difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </div>
-                                    <div className="flex justify-between text-red-400">
-                                        <span>Cr:</span>
-                                        <span>₹{totals.credit.toLocaleString()}</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td colSpan={2} className="px-6 py-4">
-                                {isBalanced ? (
-                                    <div className="text-green-400 text-center text-xs">BALANCED</div>
-                                ) : (
-                                    <div className="text-amber-400 text-center text-xs uppercase animate-pulse">Difference: ₹{difference.toLocaleString()}</div>
                                 )}
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                                {isBalanced && totals.debit > 0 && (
+                                    <div style={{ padding: '10px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', borderRadius: '8px', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        ENTRY IS BALANCED
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-            <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-gray-500">Main Narration</label>
-                <Input
-                    placeholder="Overall transaction reference..."
-                    name="narration"
-                    value={formData.narration}
-                    onChange={handleHeaderChange}
-                    className="bg-white"
-                />
+                    {/* Entry Details */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <BookOpen size={16} color="#0891b2" /> ENTRY LINES
+                            </h2>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button type="button" onClick={() => addItem('Debit')} style={{ padding: '6px 14px', background: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Dr</button>
+                                <button type="button" onClick={() => addItem('Credit')} style={{ padding: '6px 14px', background: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Cr</button>
+                            </div>
+                        </div>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', color: '#64748b' }}>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '80px' }}>Dr / Cr</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '250px' }}>Account / Ledger</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '150px' }}>Amount (₹)</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Narration</th>
+                                        <th style={{ padding: '12px 10px', borderBottom: '2px solid #e2e8f0', width: '50px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.items.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', borderLeft: item.type === 'Debit' ? '4px solid #60a5fa' : '4px solid #f87171' }}>
+                                            <td style={{ padding: '10px' }}>
+                                                <select
+                                                    value={item.type}
+                                                    onChange={(e) => handleItemChange(item.id, 'type', e.target.value)}
+                                                    style={{ ...inp, border: 'none', background: 'transparent', padding: 0, fontWeight: 800, color: item.type === 'Debit' ? '#1d4ed8' : '#b91c1c', cursor: 'pointer' }}
+                                                >
+                                                    <option value="Debit">Dr</option>
+                                                    <option value="Credit">Cr</option>
+                                                </select>
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <SearchableSelect
+                                                    options={ledgers.map(l => ({ label: l.name, value: l._id }))}
+                                                    value={item.ledgerId}
+                                                    onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                                    placeholder="Search ledger..."
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0.01" step="0.01"
+                                                    placeholder="0.00"
+                                                    value={item.amount || ''}
+                                                    onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
+                                                    style={{ ...inp, fontWeight: 800, color: '#0f172a', textAlign: 'right' }}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    placeholder="Line remarks"
+                                                    value={item.narration}
+                                                    onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
+                                                    style={inp}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                                                {formData.items.length > 2 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeItem(item.id)}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr style={{ background: '#0f172a', color: '#fff' }}>
+                                        <td colSpan={2} style={{ padding: '12px 14px', textAlign: 'right', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8' }}>Totals</td>
+                                        <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa', fontWeight: 700, fontSize: '13px' }}>
+                                                    <span>Dr:</span>
+                                                    <span>₹{totals.debit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#f87171', fontWeight: 700, fontSize: '13px' }}>
+                                                    <span>Cr:</span>
+                                                    <span>₹{totals.credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td colSpan={2} style={{ padding: '12px 14px' }}>
+                                            {isBalanced ? (
+                                                <div style={{ color: '#4ade80', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>BALANCED</div>
+                                            ) : (
+                                                <div style={{ color: '#fbbf24', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' }}>
+                                                    Diff: ₹{difference.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '20px', alignItems: 'end' }}>
+                        <div>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Main Narration</span>
+                            <input
+                                placeholder="Overall transaction reference..."
+                                name="narration"
+                                value={formData.narration}
+                                onChange={handleHeaderChange}
+                                style={inp}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
+                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                            Cancel
+                        </button>
+                        <button type="button" onClick={handleSave} disabled={isSubmitting || !isBalanced}
+                            style={{ padding: '10px 28px', borderRadius: '8px', background: (isSubmitting || !isBalanced) ? '#9ca3af' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff', border: 'none', cursor: (isSubmitting || !isBalanced) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Save size={18} />
+                            {isSubmitting ? 'Saving...' : 'Save Journal'}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );

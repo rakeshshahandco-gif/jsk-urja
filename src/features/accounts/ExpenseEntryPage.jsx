@@ -11,6 +11,8 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
+const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
+
 const ExpenseEntryPage = () => {
     const navigate = useNavigate();
     const { openModal, closeModal } = useModal();
@@ -118,125 +120,159 @@ const ExpenseEntryPage = () => {
     };
 
     return (
-        <div className="p-6 space-y-6 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Expense Voucher</h1>
-                    <p className="text-gray-500 text-sm mt-1">Record business expenses (Multi-line supported)</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSubmitting} className="flex items-center gap-2">
-                        <Save className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Save Expense'}
-                    </Button>
-                </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-red-500">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Type</label>
-                        <Select
-                            name="voucherTypeId"
-                            value={formData.voucherTypeId}
-                            onChange={handleHeaderChange}
-                            options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Date</label>
-                        <Input type="date" name="date" value={formData.date} onChange={handleHeaderChange} />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Paid from (Cash/Bank Account)</label>
-                        <Select
-                            name="cashBankAccountId"
-                            value={formData.cashBankAccountId}
-                            onChange={handleHeaderChange}
-                            options={cashBankAccounts.map(a => ({
-                                label: `${a.accountName} (Bal: ₹${a.currentBalance})`,
-                                value: a._id
-                            }))}
-                        />
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    ← Back to Voucher Register
+                </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <div>
+                        <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                            💸 Expense Voucher
+                        </h1>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record business expenses (Multi-line supported)</p>
                     </div>
                 </div>
-            </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
-                    <h3 className="text-sm font-bold uppercase text-gray-600 flex items-center gap-2">
-                        <Receipt className="w-4 h-4 text-primary" /> Expense Details
-                    </h3>
-                    <Button variant="ghost" size="sm" onClick={addItem} className="text-primary hover:bg-primary/5">
-                        <Plus className="w-4 h-4 mr-1" /> Add Expense Line
-                    </Button>
-                </div>
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50/50">
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Expense / Ledger</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-48">Amount (₹)</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Line Narration</th>
-                            <th className="px-6 py-3 text-center w-20"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {formData.items.map((item) => (
-                            <tr key={item.id} className="group hover:bg-gray-50/30 transition-colors">
-                                <td className="px-6 py-4">
-                                    <SearchableSelect
-                                        options={ledgers.map(l => ({ label: l.name, value: l._id }))}
-                                        value={item.ledgerId}
-                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                        placeholder="Search expense head..."
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Input
-                                        type="number"
-                                        placeholder="0.00"
-                                        value={item.amount || ''}
-                                        onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
-                                        className="font-mono font-bold"
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Input
-                                        placeholder="Bill No / Remarks"
-                                        value={item.narration}
-                                        onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
-                                        className="text-xs"
-                                    />
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => removeItem(item.id)}
-                                        className="text-gray-300 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                <div style={{ pointerEvents: isSubmitting ? 'none' : 'auto', opacity: isSubmitting ? 0.7 : 1 }}>
+                    {/* Header Info */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>VOUCHER DETAILS</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Type *</span>
+                                <select
+                                    name="voucherTypeId"
+                                    value={formData.voucherTypeId}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, cursor: 'pointer' }}
+                                >
+                                    {voucherTypes.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Date *</span>
+                                <input
+                                    type="date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleHeaderChange}
+                                    style={inp}
+                                />
+                            </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Paid from (Cash/Bank Account) *</span>
+                                <select
+                                    name="cashBankAccountId"
+                                    value={formData.cashBankAccountId}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, cursor: 'pointer', fontWeight: 700, color: '#e11d48', background: '#fff1f2', borderColor: '#e11d48' }}
+                                >
+                                    {cashBankAccounts.map(a => (
+                                        <option key={a._id} value={a._id}>
+                                            {a.accountName} (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="md:col-span-2 space-y-2">
-                    <label className="text-xs font-bold uppercase text-gray-500">Main Narration</label>
-                    <Input
-                        placeholder="Overall transaction reference..."
-                        name="narration"
-                        value={formData.narration}
-                        onChange={handleHeaderChange}
-                    />
-                </div>
-                <div className="bg-gray-900 text-white p-6 rounded-xl shadow-lg flex justify-between items-center">
-                    <span className="text-sm text-gray-400 font-semibold uppercase">Total Expense</span>
-                    <span className="text-3xl font-bold">₹{formData.totalAmount.toLocaleString()}</span>
+                    {/* Entry Details */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Receipt size={16} color="#e11d48" /> EXPENSE DETAILS
+                            </h2>
+                            <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Expense Line</button>
+                        </div>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', color: '#64748b' }}>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '300px' }}>Expense / Ledger</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '200px' }}>Amount (₹)</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Narration</th>
+                                        <th style={{ padding: '12px 10px', borderBottom: '2px solid #e2e8f0', width: '50px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.items.map((item) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '10px' }}>
+                                                <SearchableSelect
+                                                    options={ledgers.map(l => ({ label: l.name, value: l._id }))}
+                                                    value={item.ledgerId}
+                                                    onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                                    placeholder="Search expense head..."
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0.01" step="0.01"
+                                                    placeholder="0.00"
+                                                    value={item.amount || ''}
+                                                    onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
+                                                    style={{ ...inp, fontWeight: 800, color: '#0f172a', textAlign: 'right' }}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    placeholder="Bill No / Remarks"
+                                                    value={item.narration}
+                                                    onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
+                                                    style={inp}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                                                {formData.items.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeItem(item.id)}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'end' }}>
+                        <div style={{ gridColumn: 'span 2' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Main Narration</span>
+                            <input
+                                placeholder="Overall transaction reference..."
+                                name="narration"
+                                value={formData.narration}
+                                onChange={handleHeaderChange}
+                                style={inp}
+                            />
+                        </div>
+                        <div style={{ background: '#0f172a', color: '#fff', padding: '20px 24px', borderRadius: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Expense</span>
+                            <span style={{ fontSize: '28px', fontWeight: 800, color: '#fda4af' }}>₹{formData.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
+                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                            Cancel
+                        </button>
+                        <button type="button" onClick={handleSave} disabled={isSubmitting}
+                            style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#e11d48,#be123c)', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Save size={18} />
+                            {isSubmitting ? 'Saving...' : 'Save Expense'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

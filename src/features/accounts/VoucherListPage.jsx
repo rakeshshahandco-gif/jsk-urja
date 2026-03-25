@@ -20,7 +20,9 @@ const VoucherListPage = () => {
     const fetchVouchers = async () => {
         setLoading(true);
         try {
-        const result = await getVouchers(filters);
+            // Keep the system-generated entries hidden by default as requested
+            const apiFilters = { ...filters, showSystemGenerated: 'false' };
+            const result = await getVouchers(apiFilters);
             setVouchers(Array.isArray(result) ? result : (result?.data || []));
         } catch (error) {
             toast.error('Failed to fetch vouchers');
@@ -46,7 +48,7 @@ const VoucherListPage = () => {
 
     const StatusBadge = ({ status }) => {
         const styles = {
-            'Generated': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+            'Confirmed': 'bg-emerald-50 text-emerald-700 border-emerald-100',
             'Cancelled': 'bg-red-50 text-red-700 border-red-100',
             'Draft': 'bg-slate-50 text-slate-700 border-slate-100'
         };
@@ -61,7 +63,7 @@ const VoucherListPage = () => {
                     <p className={s.subtitle}>Comprehensive audit trail of all financial transactions</p>
                 </div>
                 <div className="flex gap-3">
-                    <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-md">
+                    <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-md" onClick={() => window.print()}>
                         <Printer size={14} /> Print Register
                     </button>
                 </div>
@@ -106,15 +108,15 @@ const VoucherListPage = () => {
                             {vouchers.map(v => (
                                 <tr key={v._id} className={v.status === 'Cancelled' ? s.cancelled : ''}>
                                     <td>
-                                        <div className={s.voucherId}>{v.voucherNumber}</div>
+                                        <div className={s.voucherId}>{v.voucherNo}</div>
                                         <div className={s.meta}>
                                             <Calendar size={12} /> {new Date(v.date).toLocaleDateString('en-IN')}
                                             <span className="opacity-20">/</span>
-                                            {v.voucherType?.name}
+                                            {v.voucherTypeName || v.nature}
                                         </div>
                                     </td>
                                     <td>
-                                        <div className={s.accountName}>{v.cashBankAccount?.accountName}</div>
+                                        <div className={s.accountName}>{v.cashBankAccountName || v.partyName || '—'}</div>
                                         <div className={s.narration} title={v.narration}>{v.narration}</div>
                                     </td>
                                     <td><StatusBadge status={v.status} /></td>

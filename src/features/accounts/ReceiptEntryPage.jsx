@@ -478,163 +478,189 @@ const ReceiptEntryPage = () => {
 
     // ── FULL FORM for normal (non-invoice) entry ────────────────────────────
     return (
-        <div className="p-6 space-y-6 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Receipt Entry</h1>
-                    <p className="text-gray-500 text-sm mt-1">Record money received from customers or other sources</p>
+        <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
+            <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                    style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    ← Back to Voucher Register
+                </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <div>
+                        <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                            🧾 Receipt Entry
+                        </h1>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record money received from customers or other sources</p>
+                    </div>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSubmitting} className="flex items-center gap-2">
-                        <Save className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Save Receipt'}
-                    </Button>
-                </div>
-            </div>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm border-t-4 border-t-green-500">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Type</label>
-                        {location.state?.invoiceId ? (
-                             <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
-                                {voucherTypes.find(v => v._id === formData.voucherTypeId)?.name || 'Receipt'}
-                             </div>
-                        ) : (
-                            <Select
-                                name="voucherTypeId"
-                                value={formData.voucherTypeId}
-                                onChange={handleHeaderChange}
-                                options={voucherTypes.map(v => ({ label: v.name, value: v._id }))}
-                            />
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Voucher Date</label>
-                        {location.state?.invoiceId ? (
-                             <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 cursor-not-allowed text-sm h-10 flex items-center">
-                                {formData.date}
-                             </div>
-                        ) : (
-                            <Input
-                                type="date"
-                                name="date"
-                                value={formData.date}
-                                onChange={handleHeaderChange}
-                            />
-                        )}
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                        <label className="text-xs font-bold uppercase text-gray-500">Deposit Into (Cash/Bank Account)</label>
-                        <Select
-                            name="cashBankAccountId"
-                            value={formData.cashBankAccountId}
-                            onChange={handleHeaderChange}
-                            options={cashBankAccounts.map(a => ({
-                                label: `${a.accountName} (Bal: ₹${a.currentBalance})`,
-                                value: a._id
-                            }))}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="bg-gray-50 border-b p-4 flex justify-between items-center">
-                    <h3 className="text-sm font-bold uppercase text-gray-600 flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-primary" /> Entry Details
-                    </h3>
-                    <Button variant="ghost" size="sm" onClick={addItem} className="text-primary hover:bg-primary/5">
-                        <Plus className="w-4 h-4 mr-1" /> Add Multi-line
-                    </Button>
-                </div>
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50/50">
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Received From (Ledger)</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-48">Amount (₹)</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase w-40">Adjustment</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Line Narration</th>
-                            <th className="px-6 py-3 text-center w-20"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {formData.items.map((item, index) => (
-                            <tr key={item.id} className="group hover:bg-gray-50/30 transition-colors">
-                                <td className="px-6 py-4">
-                                    {(location.state?.source === 'sales_invoice' || location.state?.customerId) && index === 0 ? (
-                                        <div className="font-bold text-gray-800 bg-gray-50 px-3 py-2 rounded-lg border border-teal-200 cursor-not-allowed text-sm flex items-center justify-between">
-                                            <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
-                                            <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded uppercase tracking-tighter ml-2">Locked</span>
-                                        </div>
-                                    ) : (
-                                        <SearchableSelect
-                                            options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
-                                            value={item.ledgerId}
-                                            onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
-                                            placeholder="Search ledger..."
-                                        />
-                                    )}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Input
-                                        type="number"
-                                        placeholder="0.00"
-                                        value={item.amount || ''}
-                                        onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
-                                        className="font-mono font-bold"
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <Button
-                                        variant={item.adjustments.length > 0 ? 'primary' : 'outline'}
-                                        size="sm"
-                                        className="w-full text-xs"
-                                        onClick={() => handleOpenAdjustment(item)}
-                                        disabled={!item.ledgerId || !item.amount}
+                <div style={{ pointerEvents: isSubmitting ? 'none' : 'auto', opacity: isSubmitting ? 0.7 : 1 }}>
+                    {/* Header Info */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <h2 style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>RECEIPT DETAILS</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Type *</span>
+                                {location.state?.invoiceId ? (
+                                    <div style={{ ...inp, background: '#f1f5f9', fontWeight: 700, borderColor: '#cbd5e1', color: '#475569' }}>
+                                       {voucherTypes.find(v => v._id === formData.voucherTypeId)?.name || 'Receipt'}
+                                    </div>
+                                ) : (
+                                    <select
+                                        name="voucherTypeId"
+                                        value={formData.voucherTypeId}
+                                        onChange={handleHeaderChange}
+                                        style={{ ...inp, cursor: 'pointer' }}
                                     >
-                                        {item.adjustments.length > 0 ? `Adjusted (${item.adjustments.length})` : 'Auto / Bill'}
-                                    </Button>
-                                </td>
-                                <td className="px-6 py-4 uppercase">
-                                    <Input
-                                        placeholder="Cheque No / Remarks"
-                                        value={item.narration}
-                                        onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
-                                        className="text-xs"
+                                        {voucherTypes.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
+                                    </select>
+                                )}
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Date *</span>
+                                {location.state?.invoiceId ? (
+                                    <div style={{ ...inp, background: '#f1f5f9', fontWeight: 700, borderColor: '#cbd5e1', color: '#475569' }}>
+                                       {formData.date}
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="date"
+                                        name="date"
+                                        value={formData.date}
+                                        onChange={handleHeaderChange}
+                                        style={inp}
                                     />
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    {!(location.state?.customerId && index === 0) && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => removeItem(item.id)}
-                                            className="text-gray-300 hover:text-red-500"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                                )}
+                            </div>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Deposit Into (Cash/Bank Account) *</span>
+                                <select
+                                    name="cashBankAccountId"
+                                    value={formData.cashBankAccountId}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, cursor: 'pointer', fontWeight: 700, color: '#0d9488', background: '#f0fdfa', borderColor: '#0d9488' }}
+                                >
+                                    {cashBankAccounts.map(a => (
+                                        <option key={a._id} value={a._id}>
+                                            {a.accountName} (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="md:col-span-2 space-y-2">
-                    <label className="text-xs font-bold uppercase text-gray-500">Main Narration</label>
-                    <Input
-                        placeholder="Overall transaction reference..."
-                        name="narration"
-                        value={formData.narration}
-                        onChange={handleHeaderChange}
-                    />
-                </div>
-                <div className="bg-gray-900 text-white p-6 rounded-xl shadow-lg flex justify-between items-center">
-                    <span className="text-sm text-gray-400 font-semibold uppercase">Total Receipt</span>
-                    <span className="text-3xl font-bold">₹{formData.totalAmount.toLocaleString()}</span>
+                    {/* Entry Details */}
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '24px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Layers size={16} color="#2563eb" /> ENTRY DETAILS
+                            </h2>
+                            <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Multi-line</button>
+                        </div>
+                        
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', color: '#64748b' }}>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '300px' }}>Received From (Ledger)</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '150px' }}>Amount (₹)</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: '160px' }}>Adjustment</th>
+                                        <th style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Line Narration</th>
+                                        <th style={{ padding: '12px 10px', borderBottom: '2px solid #e2e8f0', width: '50px' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.items.map((item, index) => (
+                                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '10px' }}>
+                                                {(location.state?.source === 'sales_invoice' || location.state?.customerId) && index === 0 ? (
+                                                    <div style={{ ...inp, background: '#f0fdf4', borderColor: '#86efac', color: '#166534', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
+                                                        <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Locked</span>
+                                                    </div>
+                                                ) : (
+                                                    <SearchableSelect
+                                                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                                                        value={item.ledgerId}
+                                                        onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
+                                                        placeholder="Search ledger..."
+                                                    />
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0.01" step="0.01"
+                                                    placeholder="0.00"
+                                                    value={item.amount || ''}
+                                                    onChange={(e) => handleItemChange(item.id, 'amount', Number(e.target.value))}
+                                                    style={{ ...inp, fontWeight: 800, color: '#0f172a', textAlign: 'right' }}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenAdjustment(item)}
+                                                    disabled={!item.ledgerId || !item.amount}
+                                                    style={{ width: '100%', padding: '9px', borderRadius: '7px', fontSize: '12px', fontWeight: 600, cursor: (!item.ledgerId || !item.amount) ? 'not-allowed' : 'pointer', border: item.adjustments.length > 0 ? 'none' : '1px solid #cbd5e1', background: item.adjustments.length > 0 ? '#3b82f6' : '#fff', color: item.adjustments.length > 0 ? '#fff' : '#475569', transition: 'all 0.2s' }}
+                                                >
+                                                    {item.adjustments.length > 0 ? `Adjusted (${item.adjustments.length})` : 'Auto / Bill'}
+                                                </button>
+                                            </td>
+                                            <td style={{ padding: '10px' }}>
+                                                <input
+                                                    placeholder="Cheque No / Remarks"
+                                                    value={item.narration}
+                                                    onChange={(e) => handleItemChange(item.id, 'narration', e.target.value)}
+                                                    style={inp}
+                                                />
+                                            </td>
+                                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                                                {!(location.state?.customerId && index === 0) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeItem(item.id)}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'end' }}>
+                        <div style={{ gridColumn: 'span 2' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Main Narration</span>
+                            <input
+                                placeholder="Overall transaction reference..."
+                                name="narration"
+                                value={formData.narration}
+                                onChange={handleHeaderChange}
+                                style={inp}
+                            />
+                        </div>
+                        <div style={{ background: '#0f172a', color: '#fff', padding: '20px 24px', borderRadius: '14px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Receipt</span>
+                            <span style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>₹{formData.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
+                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                            Cancel
+                        </button>
+                        <button type="button" onClick={handleSave} disabled={isSubmitting}
+                            style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : '#2563eb', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Save size={18} />
+                            {isSubmitting ? 'Saving...' : 'Save Receipt'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

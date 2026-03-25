@@ -306,7 +306,11 @@ const BOMFormPage = () => {
             <style>{`
                 @media print {
                     /* Hide sidebar and non-essential UI */
-                    aside, .sidebar, [style*="position: fixed"], button, select, input[type="file"], .no-print {
+                    aside, .sidebar, [style*="position: fixed"], button, select, input[type="file"], .no-print, [title*="Scroll"] {
+                        display: none !important;
+                    }
+                    /* Hide Action columns (last column in table) */
+                    th:last-child, td:last-child {
                         display: none !important;
                     }
                     /* Headers should not be sticky when printing */
@@ -320,28 +324,50 @@ const BOMFormPage = () => {
                         height: auto !important;
                         overflow: visible !important;
                         background: #fff !important;
+                        font-size: 13pt !important;
                     }
                     div[style*="background: #f1f5f9"] {
                         background: #fff !important;
                     }
-                    /* Table styling for print */
+                    /* Table styling for print - COLUMN LINES ONLY */
                     table {
-                        border: 1px solid #eee !important;
+                        width: 100% !important;
+                        border-top: 2px solid #000 !important;
+                        border-bottom: 2px solid #000 !important;
+                        border-left: none !important;
+                        border-right: none !important;
+                        border-collapse: collapse !important;
+                        font-size: 10pt !important;
+                        table-layout: auto !important;
+                        margin-bottom: 20px !important;
                     }
                     th {
                         background: #eee !important;
                         color: #000 !important;
+                        font-size: 10pt !important;
+                        border-left: 1px solid #000 !important;
+                        border-right: 1px solid #000 !important;
+                        border-top: none !important;
+                        border-bottom: 1.5px solid #000 !important; /* Keep header separator */
+                        padding: 6px 4px !important;
                     }
-                    /* Inputs should look like text */
+                    td {
+                        font-size: 10pt !important;
+                        border-left: 1px solid #000 !important;
+                        border-right: 1px solid #000 !important;
+                        border-top: none !important;
+                        border-bottom: none !important;
+                        padding: 6px 4px !important;
+                        word-break: break-word !important;
+                    }
+                    /* Inputs/Textarea should look like text */
                     input, select, textarea {
                         border: none !important;
                         background: transparent !important;
                         padding: 0 !important;
                         appearance: none !important;
-                    }
-                    /* Sticky arrows hide */
-                    [title*="Scroll"] {
-                        display: none !important;
+                        font-size: 10pt !important;
+                        color: #000 !important;
                     }
                     /* Ensure totals stand out */
                     div[style*="background: linear-gradient"] {
@@ -355,6 +381,11 @@ const BOMFormPage = () => {
                         color: #000 !important;
                         opacity: 1 !important;
                         -webkit-text-fill-color: initial !important;
+                    }
+                    /* Extra large PRODUCTION COST */
+                    div[style*="font-size: 34px"] {
+                        font-size: 38pt !important;
+                        -webkit-text-fill-color: #000 !important;
                     }
                 }
             `}</style>
