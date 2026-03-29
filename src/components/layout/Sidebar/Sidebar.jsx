@@ -88,9 +88,10 @@ export const Sidebar = () => {
     };
 
     const visibleMenuItems = filterItems(menuConfig);
+    const isMessenger = location.pathname.startsWith('/messenger');
 
     return (
-        <aside className={`${styles.sidebar} no-print`}>
+        <aside className={`${styles.sidebar} ${isMessenger ? styles.collapsed : ''} no-print`}>
 
             <div className={styles.header}>
                 <div className={styles.brand}>

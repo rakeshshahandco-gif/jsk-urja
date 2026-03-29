@@ -167,22 +167,29 @@ const customerSchema = mongoose.Schema(
 customerSchema.pre('save', function (next) {
     // 1. Handle GST Registration Type based on GST Number
     if (this.gstNumber && this.gstNumber.trim().length > 0) {
-        if (!this.gstRegistrationType) {
+        if (!this.gstRegistrationType || this.gstRegistrationType === 'Unregistered' || this.gstRegistrationType === 'Consumer') {
             this.gstRegistrationType = 'Registered';
         }
     } else {
-        if (!this.gstRegistrationType) {
-            this.gstRegistrationType = 'Unregistered';
+        if (!this.gstRegistrationType || this.gstRegistrationType === 'Registered' || this.gstRegistrationType === 'Unregistered') {
+            this.gstRegistrationType = 'Consumer';
         }
     }
 
-    // 2. Handle GST Type based on State
-    if (this.state && !this.gstType) {
-        const stateStr = String(this.state).trim().toLowerCase();
+    // 2. Handle GST Type based on State or GST Number Prefix
+    if (!this.gstType) {
+        const stateStr = this.state ? String(this.state).trim().toLowerCase() : '';
+        const gstPrefix = this.gstNumber ? String(this.gstNumber).trim().substring(0, 2) : '';
+        
+        let isMaharashtra = false;
         if (stateStr === 'maharashtra') {
-            this.gstType = 'CGST / SGST';
-        } else {
-            this.gstType = 'IGST';
+            isMaharashtra = true;
+        } else if (gstPrefix === '27') {
+            isMaharashtra = true;
+        }
+
+        if (stateStr || gstPrefix) {
+            this.gstType = isMaharashtra ? 'CGST / SGST' : 'IGST';
         }
     }
 

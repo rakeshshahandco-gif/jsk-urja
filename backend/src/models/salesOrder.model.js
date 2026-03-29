@@ -85,11 +85,18 @@ const salesOrderSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Soft Delete
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deleteReason: { type: String, default: '' },
 }, { timestamps: true });
 
 salesOrderSchema.index({ soNumber: 1 });
 salesOrderSchema.index({ customerId: 1, soDate: -1 });
 salesOrderSchema.index({ status: 1 });
+salesOrderSchema.index({ isDeleted: 1 });
 
 const SalesOrder = mongoose.model('SalesOrder', salesOrderSchema);
 export { SalesOrder };

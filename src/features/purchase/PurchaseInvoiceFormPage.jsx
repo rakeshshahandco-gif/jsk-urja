@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import {
     createPurchaseInvoice, getSuppliers,
@@ -42,10 +42,11 @@ export default function PurchaseInvoiceFormPage() {
     const [saving, setSaving] = useState(false);
     const [loadingRef, setLoadingRef] = useState(false);
     const [loading, setLoading] = useState(isEdit);
+    const prefillProcessed = useRef(false);
 
     const [header, setHeader] = useState({
         supplierId: '', invoiceDate: new Date().toISOString().split('T')[0],
-        supplierInvoiceNo: '', selectedPoId: prefillPoId, selectedGrnId: prefillGrnId,
+        supplierInvoiceNo: '', selectedPoId: '', selectedGrnId: '',
         supplierGstin: '', supplierAddress: '', supplierState: '', supplierStateCode: '',
         buyerName: 'JSK URJA', buyerGstin: '', buyerAddress: '', buyerState: 'Maharashtra', buyerStateCode: '27',
         gstType: 'CGST / SGST', placeOfSupply: 'Maharashtra', paymentTerms: '30 Days', remarks: '',
@@ -55,6 +56,183 @@ export default function PurchaseInvoiceFormPage() {
 
     const [rows, setRows] = useState([{ ...EMPTY_ROW }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
+
+    const onSupplierChange = (supplierId) => {
+        const s = suppliers.find(s => s._id === supplierId);
+        if (s) {
+            const addr = [s.address, s.area, s.city, s.state, s.pincode].filter(Boolean).join(', ');
+            const stateCode = s.gstNumber ? s.gstNumber.substring(0, 2) : '';
+            const buyerStateCode = header.buyerStateCode || '27';
+            const autoGstType = stateCode && buyerStateCode && stateCode !== buyerStateCode ? 'IGST' : 'CGST / SGST';
+
+            setHeader(h => ({
+                ...h,
+                supplierId,
+                selectedPoId: '',
+                selectedGrnId: '',
+                supplierGstin: s.gstNumber || '',
+                supplierAddress: addr,
+                supplierState: s.state || '',
+                supplierStateCode: stateCode,
+                gstType: autoGstType
+            }));
+        } else {
+            setHeader(h => ({
+                ...h,
+                supplierId: '',
+                selectedPoId: '',
+                selectedGrnId: '',
+                supplierGstin: '',
+                supplierAddress: '',
+                supplierState: '',
+                supplierStateCode: '',
+                gstType: 'CGST / SGST'
+            }));
+        }
+        setRows([{ ...EMPTY_ROW }]);
+        setPoList([]); setGrnList([]);
+    };
+
+    const onPoChange = useCallback(async (poId) => {
+        setH('selectedPoId', poId);
+        setRows([{ ...EMPTY_ROW }]);
+        if (!poId) return;
+        if (flowType === 'PO→Direct Invoice') {
+            setLoadingRef(true);
+            try {
+                const po = await getPurchaseOrderById(poId);
+                const poData = po.data || po;
+
+                // Sync header from PO
+                setHeader(h => ({
+                    ...h,
+                    supplierId: poData.supplierId?._id || poData.supplierId,
+                    gstType: poData.gstType || h.gstType,
+                    paymentTerms: poData.paymentTerms || h.paymentTerms,
+                    transporterName: poData.transporterName || h.transporterName,
+                    vehicleNo: poData.vehicleNo || h.vehicleNo,
+                    lrNumber: poData.lrNumber || h.lrNumber,
+                    freightAmount: poData.freightAmount || h.freightAmount,
+                    freightGstRate: poData.freightGstRate || h.freightGstRate,
+                    remarks: poData.remarks || h.remarks,
+                    warehouse: poData.warehouse || h.warehouse,
+                    supplierGstin: poData.supplierGstNumber || h.supplierGstin,
+                    supplierAddress: poData.supplierAddress || h.supplierAddress,
+                    supplierState: poData.supplierState || h.supplierState,
+                    supplierStateCode: poData.supplierStateCode || h.supplierStateCode,
+                    poNumber: poData.poNumber || '',
+                    poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
+                }));
+
+
+                const newRows = (poData.items || [])
+                    .map(pi => {
+                        const avail = r2(pi.orderedQty - (pi.invoicedQty || 0));
+                        return {
+                            itemId: pi.itemId?._id || pi.itemId,
+                            itemName: pi.itemName,
+                            itemCode: pi.itemCode,
+                            hsnCode: pi.hsnCode || '',
+                            uom: pi.uom,
+                            qty: avail,
+                            rate: pi.rate,
+                            discountPercent: pi.discountPercent || 0,
+                            gstRate: pi.taxPercent || 18,
+                            description: pi.description || '',
+                            maxQty: avail,
+                            poItemId: pi._id,
+                            grnItemId: null,
+                        };
+                    })
+                    .filter(pi => pi.qty > 0);
+                if (newRows.length) setRows(newRows); else toast.error('Selected Purchase Order is already fully billed.');
+            } catch { toast.error('Failed to load PO items'); }
+            finally { setLoadingRef(false); }
+        } else if (flowType === 'PO→GRN→Invoice') {
+            // Load GRNs for this PO
+            setLoadingRef(true);
+            try {
+                const po = await getPurchaseOrderById(poId);
+                const poData = po.data || po;
+                setHeader(h => ({
+                    ...h,
+                    supplierId: poData.supplierId?._id || poData.supplierId,
+                    gstType: poData.gstType || h.gstType,
+                    paymentTerms: poData.paymentTerms || h.paymentTerms,
+                    transporterName: poData.transporterName || h.transporterName,
+                    vehicleNo: poData.vehicleNo || h.vehicleNo,
+                    lrNumber: poData.lrNumber || h.lrNumber,
+                    freightAmount: poData.freightAmount || h.freightAmount,
+                    freightGstRate: poData.freightGstRate || h.freightGstRate,
+                    remarks: poData.remarks || h.remarks,
+                    warehouse: poData.warehouse || h.warehouse,
+                    supplierGstin: poData.supplierGstNumber || h.supplierGstin,
+                    supplierAddress: poData.supplierAddress || h.supplierAddress,
+                    supplierState: poData.supplierState || h.supplierState,
+                    supplierStateCode: poData.supplierStateCode || h.supplierStateCode,
+                    poNumber: poData.poNumber || '',
+                    poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
+                }));
+
+
+                const grns = await getGRNsByPO(poId);
+                setGrnList(Array.isArray(grns) ? grns.filter(g => g.invoiceStatus !== 'Fully Invoiced') : []);
+            } catch { toast.error('Failed to load GRNs'); }
+            finally { setLoadingRef(false); }
+        }
+    }, [flowType]);
+
+    const onGrnChange = useCallback(async (grnId) => {
+        setH('selectedGrnId', grnId);
+        setRows([{ ...EMPTY_ROW }]);
+        if (!grnId) return;
+        setLoadingRef(true);
+        try {
+            const grn = await getGRNById(grnId);
+            const grnData = grn.data || grn;
+            const newRows = (grnData.items || [])
+                .map(gi => {
+                    const avail = r2(gi.receivedQty - (gi.invoicedQty || 0));
+                    return {
+                        itemId: gi.itemId?._id || gi.itemId,
+                        itemName: gi.itemName,
+                        itemCode: gi.itemCode,
+                        hsnCode: gi.hsnCode || '',
+                        uom: gi.uom,
+                        qty: avail,
+                        rate: gi.rate,
+                        discountPercent: gi.discountPercent || 0,
+                        gstRate: gi.taxPercent || 18,
+                        description: gi.description || '',
+                        maxQty: avail,
+                        grnItemId: gi._id,
+                        poItemId: gi.poItemId || null,
+                    };
+                }).filter(r => r.maxQty > 0);
+            if (newRows.length) setRows(newRows); else toast.error('Selected GRN is already fully billed.');
+
+            // Sync header from GRN
+            setHeader(h => ({
+                ...h,
+                supplierId: grnData.supplierId?._id || grnData.supplierId,
+                gstType: grnData.gstType || h.gstType,
+                transporterName: grnData.transporterName || h.transporterName,
+                vehicleNo: grnData.vehicleNo || h.vehicleNo,
+                lrNumber: grnData.lrNumber || h.lrNumber,
+                freightAmount: grnData.freightAmount || h.freightAmount,
+                freightGstRate: grnData.freightGstRate || h.freightGstRate,
+                supplierGstin: grnData.supplierGstNumber || h.supplierGstin,
+                supplierAddress: grnData.supplierAddress || h.supplierAddress,
+                supplierState: grnData.supplierState || h.supplierState,
+                supplierStateCode: grnData.supplierStateCode || h.supplierStateCode,
+                warehouse: grnData.warehouse || h.warehouse,
+                poNumber: grnData.poNumber || h.poNumber,
+                poDate: grnData.poDate ? grnData.poDate.split('T')[0] : h.poDate,
+            }));
+
+        } catch { toast.error('Failed to load GRN items'); }
+        finally { setLoadingRef(false); }
+    }, []);
 
     useEffect(() => {
         const init = async () => {
@@ -130,6 +308,41 @@ export default function PurchaseInvoiceFormPage() {
         init();
     }, [id, isEdit]);
 
+    // Auto-prefill if poId or grnId is present in search params
+    useEffect(() => {
+        if (!isEdit && !loading) {
+            if (prefillPoId) {
+                setFlowType('PO→Direct Invoice');
+                // We'll let the onPoChange trigger after setFlowType
+            } else if (prefillGrnId) {
+                setFlowType('PO→GRN→Invoice');
+            }
+        }
+    }, [prefillPoId, prefillGrnId, isEdit, loading]);
+
+    // Handle flowType and prefill trigger
+    useEffect(() => {
+        if (!isEdit && !loading && !prefillProcessed.current) {
+            if (prefillPoId && flowType === 'PO→Direct Invoice') {
+                onPoChange(prefillPoId);
+                prefillProcessed.current = true;
+            } else if (prefillGrnId && flowType === 'PO→GRN→Invoice') {
+                // If we have GRN, we need to set the PO first (if it belongs to one)
+                getGRNById(prefillGrnId).then(grn => {
+                    const g = grn.data || grn;
+                    if (g.poId) {
+                       setH('selectedPoId', g.poId?._id || g.poId);
+                       onGrnChange(prefillGrnId);
+                    } else {
+                       setFlowType('Direct GRN→Invoice');
+                       onGrnChange(prefillGrnId);
+                    }
+                });
+                prefillProcessed.current = true;
+            }
+        }
+    }, [flowType, prefillPoId, prefillGrnId, isEdit, loading, onPoChange, onGrnChange]);
+
     // Load PO list when supplier + flow changes
     useEffect(() => {
         if (!header.supplierId) return;
@@ -146,174 +359,6 @@ export default function PurchaseInvoiceFormPage() {
     }, [header.supplierId, flowType]);
 
     // Auto-fill supplier GST info
-    const onSupplierChange = (supplierId) => {
-        const s = suppliers.find(s => s._id === supplierId);
-        if (s) {
-            const addr = [s.address, s.area, s.city, s.state, s.pincode].filter(Boolean).join(', ');
-            const stateCode = s.gstNumber ? s.gstNumber.substring(0, 2) : '';
-            const buyerStateCode = header.buyerStateCode || '27';
-            const autoGstType = stateCode && buyerStateCode && stateCode !== buyerStateCode ? 'IGST' : 'CGST / SGST';
-
-            setHeader(h => ({
-                ...h,
-                supplierId,
-                selectedPoId: '',
-                selectedGrnId: '',
-                supplierGstin: s.gstNumber || '',
-                supplierAddress: addr,
-                supplierState: s.state || '',
-                supplierStateCode: stateCode,
-                gstType: autoGstType
-            }));
-        } else {
-            setHeader(h => ({
-                ...h,
-                supplierId: '',
-                selectedPoId: '',
-                selectedGrnId: '',
-                supplierGstin: '',
-                supplierAddress: '',
-                supplierState: '',
-                supplierStateCode: '',
-                gstType: 'CGST / SGST'
-            }));
-        }
-        setRows([{ ...EMPTY_ROW }]);
-        setPoList([]); setGrnList([]);
-    };
-
-    // Load rows from selected PO (Flow B) or GRN (Flow A & C)
-    const onPoChange = useCallback(async (poId) => {
-        setH('selectedPoId', poId);
-        setRows([{ ...EMPTY_ROW }]);
-        if (!poId) return;
-        if (flowType === 'PO→Direct Invoice') {
-            setLoadingRef(true);
-            try {
-                const po = await getPurchaseOrderById(poId);
-                const poData = po.data || po;
-
-                // Sync header from PO
-                setHeader(h => ({
-                    ...h,
-                    gstType: poData.gstType || h.gstType,
-                    paymentTerms: poData.paymentTerms || h.paymentTerms,
-                    transporterName: poData.transporterName || h.transporterName,
-                    vehicleNo: poData.vehicleNo || h.vehicleNo,
-                    lrNumber: poData.lrNumber || h.lrNumber,
-                    freightAmount: poData.freightAmount || h.freightAmount,
-                    freightGstRate: poData.freightGstRate || h.freightGstRate,
-                    remarks: poData.remarks || h.remarks,
-                    warehouse: poData.warehouse || h.warehouse,
-                    supplierGstin: poData.supplierGstNumber || h.supplierGstin,
-                    supplierAddress: poData.supplierAddress || h.supplierAddress,
-                    poNumber: poData.poNumber || '',
-                    poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
-                }));
-
-
-                const newRows = (poData.items || [])
-                    .map(pi => {
-                        const avail = r2(pi.orderedQty - (pi.invoicedQty || 0));
-                        return {
-                            itemId: pi.itemId?._id || pi.itemId,
-                            itemName: pi.itemName,
-                            itemCode: pi.itemCode,
-                            hsnCode: pi.hsnCode || '',
-                            uom: pi.uom,
-                            qty: avail,
-                            rate: pi.rate,
-                            discountPercent: pi.discountPercent || 0,
-                            gstRate: pi.taxPercent || 18,
-                            description: pi.description || '',
-                            maxQty: avail,
-                            poItemId: pi._id,
-                            grnItemId: null,
-                        };
-                    })
-                    .filter(pi => pi.qty > 0);
-                if (newRows.length) setRows(newRows); else toast.error('Selected Purchase Order is already fully billed.');
-            } catch { toast.error('Failed to load PO items'); }
-            finally { setLoadingRef(false); }
-        } else if (flowType === 'PO→GRN→Invoice') {
-            // Load GRNs for this PO
-            setLoadingRef(true);
-            try {
-                const po = await getPurchaseOrderById(poId);
-                const poData = po.data || po;
-                setHeader(h => ({
-                    ...h,
-                    gstType: poData.gstType || h.gstType,
-                    paymentTerms: poData.paymentTerms || h.paymentTerms,
-                    transporterName: poData.transporterName || h.transporterName,
-                    vehicleNo: poData.vehicleNo || h.vehicleNo,
-                    lrNumber: poData.lrNumber || h.lrNumber,
-                    freightAmount: poData.freightAmount || h.freightAmount,
-                    freightGstRate: poData.freightGstRate || h.freightGstRate,
-                    remarks: poData.remarks || h.remarks,
-                    warehouse: poData.warehouse || h.warehouse,
-                    supplierGstin: poData.supplierGstNumber || h.supplierGstin,
-                    supplierAddress: poData.supplierAddress || h.supplierAddress,
-                    poNumber: poData.poNumber || '',
-                    poDate: poData.poDate ? poData.poDate.split('T')[0] : h.poDate,
-                }));
-
-
-                const grns = await getGRNsByPO(poId);
-                setGrnList(Array.isArray(grns) ? grns.filter(g => g.invoiceStatus !== 'Fully Invoiced') : []);
-            } catch { toast.error('Failed to load GRNs'); }
-            finally { setLoadingRef(false); }
-        }
-    }, [flowType]);
-
-    const onGrnChange = useCallback(async (grnId) => {
-        setH('selectedGrnId', grnId);
-        setRows([{ ...EMPTY_ROW }]);
-        if (!grnId) return;
-        setLoadingRef(true);
-        try {
-            const grn = await getGRNById(grnId);
-            const grnData = grn.data || grn;
-            const newRows = (grnData.items || [])
-                .map(gi => {
-                    const avail = r2(gi.receivedQty - (gi.invoicedQty || 0));
-                    return {
-                        itemId: gi.itemId?._id || gi.itemId,
-                        itemName: gi.itemName,
-                        itemCode: gi.itemCode,
-                        hsnCode: gi.hsnCode || '',
-                        uom: gi.uom,
-                        qty: avail,
-                        rate: gi.rate,
-                        discountPercent: gi.discountPercent || 0,
-                        gstRate: gi.taxPercent || 18,
-                        description: gi.description || '',
-                        maxQty: avail,
-                        grnItemId: gi._id,
-                        poItemId: gi.poItemId || null,
-                    };
-                }).filter(r => r.maxQty > 0);
-            if (newRows.length) setRows(newRows); else toast.error('Selected GRN is already fully billed.');
-
-            // Sync header from GRN
-            setHeader(h => ({
-                ...h,
-                gstType: grnData.gstType || h.gstType,
-                transporterName: grnData.transporterName || h.transporterName,
-                vehicleNo: grnData.vehicleNo || h.vehicleNo,
-                lrNumber: grnData.lrNumber || h.lrNumber,
-                freightAmount: grnData.freightAmount || h.freightAmount,
-                freightGstRate: grnData.freightGstRate || h.freightGstRate,
-                supplierGstin: grnData.supplierGstNumber || h.supplierGstin,
-                supplierAddress: grnData.supplierAddress || h.supplierAddress,
-                warehouse: grnData.warehouse || h.warehouse,
-                poNumber: grnData.poNumber || h.poNumber,
-                poDate: grnData.poDate ? grnData.poDate.split('T')[0] : h.poDate,
-            }));
-
-        } catch { toast.error('Failed to load GRN items'); }
-        finally { setLoadingRef(false); }
-    }, []);
 
     // Row helpers
     const addRow = () => setRows(r => [...r, { ...EMPTY_ROW }]);
@@ -433,7 +478,7 @@ export default function PurchaseInvoiceFormPage() {
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
 
             <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                <button onClick={() => navigate(PATHS.PURCHASE.INVOICES)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px' }}>← Purchase Invoices</button>
+                <button onClick={() => { if (window.confirm('Discard changes?')) navigate(PATHS.PURCHASE.INVOICES); }} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px' }}>← Purchase Invoices</button>
                 <h1 style={{ margin: '0 0 20px', fontSize: '22px', fontWeight: 700 }}>
                     {isEdit ? '✎ Edit Purchase Invoice' : '🧾 New Purchase Invoice'}
                 </h1>
@@ -658,7 +703,7 @@ export default function PurchaseInvoiceFormPage() {
 
 
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={() => navigate(-1)} style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                                <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(-1); }} style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                                 <button type="submit" disabled={saving} style={{ padding: '10px 24px', borderRadius: '8px', background: saving ? '#e2e8f0' : 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(37,99,235,0.2)' }}>
                                     {saving ? (isEdit ? 'Updating...' : 'Posting...') : (isEdit ? '💾 Update Invoice' : '🧾 Post Invoice')}
                                 </button>

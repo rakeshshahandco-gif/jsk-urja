@@ -401,7 +401,7 @@ const BOMFormPage = () => {
                     </div>
                 </div>
                 <div style={s.headerBtns}>
-                    <button className="no-print" style={s.cancelBtn} onClick={() => navigate(PATHS.INVENTORY.BOM.ROOT)}>Cancel</button>
+                    <button className="no-print" style={s.cancelBtn} onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.INVENTORY.BOM.ROOT); }}>Cancel</button>
                     {isEdit && (
                         <>
                             <button className="no-print" onClick={handlePrint} style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff' }}>

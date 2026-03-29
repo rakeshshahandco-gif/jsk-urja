@@ -385,7 +385,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
 
                 {/* Actions */}
                 <div className={styles.actions}>
-                    <Button type="button" variant="outline" onClick={closeModal}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => { if (window.confirm('Discard changes?')) closeModal(); }}>Cancel</Button>
                     <Button type="submit" isLoading={isSubmitting}>{isEdit ? 'Update User' : 'Create User'}</Button>
                 </div>
             </form>

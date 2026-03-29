@@ -85,7 +85,7 @@ export default function ProductionOutputFormPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => navigate(-1)} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                    <button type="button" onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
                     <button type="submit" disabled={saving} style={{ padding: '8px 24px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                         {saving ? 'Saving...' : '✓ Save Production Output'}
                     </button>

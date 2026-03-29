@@ -35,9 +35,14 @@ router
     .post(validate(customerValidation.createCustomer), customerController.createCustomer)
     .get(validate(customerValidation.getCustomers), customerController.getCustomers);
 
-// Import routes
+// Import/Export routes
 router.get('/template/download', customerController.downloadTemplate);
 router.post('/import', upload.single('file'), customerController.importCustomers);
+router.get('/export', customerController.exportCustomers);
+
+// GST specific bulk update routes
+router.post('/import-gst/preview', upload.single('file'), customerController.previewGSTImport);
+router.post('/import-gst/confirm', customerController.confirmGSTImport);
 
 router.get('/search', customerController.searchCustomers);
 router.get('/types', customerController.getCustomerTypes);
@@ -55,3 +60,5 @@ router.route('/:customerId/conversation-history').get(customerController.getConv
 router.route('/:customerId/reminder').put(reminderController.upsertReminder);
 
 export default router;
+
+// Force restart

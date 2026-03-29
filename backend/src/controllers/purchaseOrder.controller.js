@@ -3,6 +3,9 @@ import { Supplier } from '../models/supplier.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { AuditLog } from '../models/auditLog.model.js';
+import mongoose from 'mongoose';
+import httpStatus from 'http-status';
 import Joi from 'joi';
 
 // ── Joi Schemas ────────────────────────────────────────────────────────────────
@@ -123,8 +126,15 @@ export const createPO = asyncHandler(async (req, res) => {
 });
 
 export const getPOs = asyncHandler(async (req, res) => {
-    const { status, supplierId, search, page = 1, limit = 20 } = req.query;
-    const query = {};
+    const { status, supplierId, search, page = 1, limit = 20, includeDeleted, view } = req.query;
+    const query = { isDeleted: { $ne: true } };
+    
+    if (view === 'archived') {
+        query.isDeleted = true;
+    } else if (view === 'all' || includeDeleted === 'true') {
+        delete query.isDeleted;
+    }
+
     if (status) query.status = status;
     if (supplierId) query.supplierId = supplierId;
     if (search) query.$or = [
@@ -132,12 +142,14 @@ export const getPOs = asyncHandler(async (req, res) => {
         { supplierName: { $regex: search, $options: 'i' } },
     ];
 
+
     const skip = (Number(page) - 1) * Number(limit);
     const total = await PurchaseOrder.countDocuments(query);
     const pos = await PurchaseOrder.find(query)
         .sort({ createdAt: -1 }).skip(skip).limit(Number(limit))
         .populate('supplierId', 'supplierName supplierCode')
         .populate('createdBy', 'name mobile');
+
 
     res.json(new ApiResponse(200, { purchaseOrders: pos, total, page: Number(page), pages: Math.ceil(total / Number(limit)) }, 'POs fetched'));
 });
@@ -151,37 +163,56 @@ export const getPOById = asyncHandler(async (req, res) => {
 });
 
 export const updatePO = asyncHandler(async (req, res) => {
-    const { error, value } = updatePOSchema.validate(req.body, { allowUnknown: true });
-    if (error) throw new ApiError(400, error.details[0].message);
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const po = await PurchaseOrder.findById(req.params.id).session(session);
+        if (!po) throw new ApiError(404, 'Purchase Order not found');
 
-    const po = await PurchaseOrder.findById(req.params.id);
-    if (!po) throw new ApiError(404, 'Purchase Order not found');
-    if (['Completed', 'Cancelled'].includes(po.status))
-        throw new ApiError(400, `Cannot edit a ${po.status} Purchase Order`);
+        const { error, value } = updatePOSchema.validate(req.body, { allowUnknown: true });
+        if (error) throw new ApiError(400, error.details[0].message);
 
-    // Cannot edit if GRN exists (rate lock)
-    const { GRN } = await import('../models/grn.model.js');
-    const hasGRN = await GRN.exists({ poId: po._id });
-    if (hasGRN && value.items) {
-        // Allow status/header updates, but block item modifications
-        delete value.items;
+        const auditTrail = {};
+        const allowedFields = Object.keys(updatePOSchema.describe().keys);
+        
+        // Strict Partial Merge
+        allowedFields.forEach(key => {
+            if (value[key] !== undefined && JSON.stringify(value[key]) !== JSON.stringify(po[key])) {
+                auditTrail[key] = { old: po[key], new: value[key] };
+                po[key] = value[key];
+            }
+        });
+
+        if (Object.keys(auditTrail).length > 0) {
+            // Recalculate if items or freight changed
+            if (auditTrail.items || auditTrail.freightAmount || auditTrail.freightGstRate || auditTrail.gstType) {
+                const totals = calculateTotals(po.items, po.gstType, po.freightAmount, po.freightGstRate);
+                Object.assign(po, totals);
+            }
+
+            po.updatedBy = req.user._id;
+            await po.save({ session });
+
+            await AuditLog.create([{
+                user: req.user._id,
+                action: 'UPDATE',
+                module: 'PurchaseOrder',
+                resourceId: po._id,
+                description: `Updated Purchase Order ${po.poNumber}`,
+                details: auditTrail,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
+            }], { session });
+        }
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, po, 'Purchase Order updated'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
     }
-
-    if (value.items) {
-        const totals = calculateTotals(
-            value.items, 
-            value.gstType || po.gstType,
-            value.freightAmount !== undefined ? value.freightAmount : po.freightAmount,
-            value.freightGstRate !== undefined ? value.freightGstRate : po.freightGstRate
-        );
-        Object.assign(po, value, totals);
-    } else {
-        Object.assign(po, value);
-    }
-
-    po.updatedBy = req.user._id;
-    await po.save();
-    res.json(new ApiResponse(200, po, 'Purchase Order updated'));
 });
 
 export const updatePOStatus = asyncHandler(async (req, res) => {
@@ -200,14 +231,83 @@ export const updatePOStatus = asyncHandler(async (req, res) => {
 });
 
 export const deletePO = asyncHandler(async (req, res) => {
-    const po = await PurchaseOrder.findById(req.params.id);
-    if (!po) throw new ApiError(404, 'PO not found');
-    // Allow deletion of any PO as long as no GRN exists
+    const { reason } = req.body;
+    if (!reason) throw new ApiError(400, 'Deletion reason is required');
 
-    const { GRN } = await import('../models/grn.model.js');
-    const hasGRN = await GRN.exists({ poId: po._id });
-    if (hasGRN) throw new ApiError(400, 'Cannot delete PO – GRN already created against this order');
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const po = await PurchaseOrder.findById(req.params.id).session(session);
+        if (!po) throw new ApiError(404, 'PO not found');
 
-    await PurchaseOrder.findByIdAndDelete(req.params.id);
-    res.json(new ApiResponse(200, null, 'Purchase Order deleted'));
+        const { GRN } = await import('../models/grn.model.js');
+        const { PurchaseInvoice } = await import('../models/purchaseInvoice.model.js');
+        
+        const [hasActiveGRN, hasActivePI] = await Promise.all([
+            GRN.exists({ poId: po._id, isDeleted: { $ne: true } }),
+            PurchaseInvoice.exists({ poId: po._id, isDeleted: { $ne: true } })
+        ]);
+
+        if (hasActiveGRN) throw new ApiError(400, 'Cannot archive Purchase Order – An active GRN is linked to this order.');
+        if (hasActivePI) throw new ApiError(400, 'Cannot archive Purchase Order – An active Purchase Invoice is linked to this order.');
+
+        po.isDeleted = true;
+        po.deletedAt = new Date();
+        po.deletedBy = req.user._id;
+        po.deleteReason = reason;
+        await po.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'DELETE',
+            module: 'PurchaseOrder',
+            resourceId: po._id,
+            description: `Soft deleted Purchase Order ${po.poNumber}`,
+            details: { reason },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, null, 'Purchase Order soft-deleted'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+export const restorePO = asyncHandler(async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const po = await PurchaseOrder.findById(req.params.id).session(session);
+        if (!po) throw new ApiError(404, 'PO not found');
+        if (!po.isDeleted) throw new ApiError(400, 'Purchase Order is not deleted');
+
+        po.isDeleted = false;
+        po.deletedAt = null;
+        po.deletedBy = null;
+        await po.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'RESTORE',
+            module: 'PurchaseOrder',
+            resourceId: po._id,
+            description: `Restored Purchase Order ${po.poNumber}`,
+            details: { previousReason: po.deleteReason },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, po, 'Purchase Order restored'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });

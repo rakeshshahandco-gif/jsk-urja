@@ -70,6 +70,14 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'messenger',
+        title: 'Messenger',
+        icon: '💬',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
+        path: PATHS.MESSENGER.ROOT,
+        permission: 'messenger',
+    },
+    {
         id: 'inventory',
         title: 'Inventory',
         icon: 'InventoryIcon',
@@ -179,6 +187,18 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'prd',
+        title: 'Product R&D',
+        icon: 'ScienceIcon', // We'll use ScienceIcon or similar mapped in SidebarItem
+        roles: [ROLES.ADMIN, 'rd_manager', 'hardware_dev', 'firmware_dev', 'testing_eng', 'qa_head', 'production', 'management_viewer'],
+        permission: 'prd',
+        children: [
+            { id: 'prd-dashboard', title: 'R&D Dashboard', path: PATHS.PRD.DASHBOARD, roles: [ROLES.ADMIN, 'rd_manager', 'hardware_dev', 'firmware_dev', 'testing_eng', 'qa_head', 'production', 'management_viewer'], permission: 'prd.dashboard.view' },
+            { id: 'prd-projects', title: 'Product Development Master', path: PATHS.PRD.PROJECTS, roles: [ROLES.ADMIN, 'rd_manager', 'hardware_dev', 'firmware_dev', 'testing_eng', 'qa_head', 'production', 'management_viewer'], permission: 'prd.projects.view' },
+            { id: 'prd-parameters', title: 'Test Parameter Master', path: PATHS.PRD.TEST_PARAMETERS, roles: [ROLES.ADMIN, 'rd_manager', 'qa_head'], permission: 'prd.test_parameters.view' },
+        ],
+    },
+    {
         id: 'accounts',
         title: 'Accounts',
         icon: 'AccountBalanceWalletIcon',
@@ -199,6 +219,18 @@ export const menuConfig = [
             { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.cash_book.view' },
             { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.bank_book.view' },
             { id: 'outstanding', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'accounts.outstanding.view' },
+        ]
+    },
+    {
+        id: 'fixed-assets-parent',
+        title: 'Fixed Assets',
+        icon: 'AccountBalanceIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: 'accounts',
+        children: [
+            { id: 'fixed-assets-list', title: '🧾 Asset Register', path: PATHS.ACCOUNTS.FIXED_ASSETS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.fixed_assets.view' },
+            { id: 'asset-categories', title: '📂 Asset Categories', path: PATHS.ACCOUNTS.ASSET_CATEGORIES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_categories.view' },
+            { id: 'asset-locations', title: '📍 Asset Locations', path: PATHS.ACCOUNTS.ASSET_LOCATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_locations.view' },
         ]
     },
     {

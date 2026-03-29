@@ -229,7 +229,7 @@ const LedgerMasterPage = () => {
                         initial={panel?.ledger || EMPTY}
                         groups={groups}
                         onSave={handleSave}
-                        onCancel={() => setPanel(null)}
+                        onCancel={() => { if (window.confirm('Discard changes?')) setPanel(null); }}
                         loading={saving}
                     />
                 </div>

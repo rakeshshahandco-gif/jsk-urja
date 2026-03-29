@@ -35,6 +35,16 @@ app.use(express.static(buildPath));
 const uploadPath = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadPath));
 
+app.get('/api/debug-sales', async (req, res) => {
+    try {
+        const { SalesOrder } = await import('./models/salesOrder.model.js');
+        const orders = await SalesOrder.find({});
+        res.json({ count: orders.length, orders });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // API Routes
 app.use('/api/v1', routes);
 

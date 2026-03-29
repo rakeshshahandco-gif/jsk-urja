@@ -183,7 +183,25 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     if (!purchaseLedger) throw new ApiError(400, "System ledger 'Purchase Account' missing. Please run accounting initialization.");
     if (invoice.freightAmount && invoice.freightAmount > 0 && !freightLedger) throw new ApiError(400, "System ledger 'Freight Inward' missing. Please run accounting initialization.");
 
-    // 3. Create Voucher
+    // 3. Resolve amounts — use stored totals on the invoice (source of truth)
+    const grandTotal   = Math.round(invoice.grandTotal || 0);
+    const freightAmt   = Math.round((invoice.freightAmount || 0) * 100) / 100;
+    const igstAmt      = Math.round((invoice.totalIgst   || 0) * 100) / 100;
+    const cgstAmt      = Math.round((invoice.totalCgst   || 0) * 100) / 100;
+    const sgstAmt      = Math.round((invoice.totalSgst   || 0) * 100) / 100;
+    const roundOffAmt  = invoice.roundOff || 0;
+
+    // Positive roundOff is a debit, negative roundOff is a credit
+    const roundOffDebit  = roundOffAmt > 0 ? Math.round(roundOffAmt * 100) / 100 : 0;
+    const roundOffCredit = roundOffAmt < 0 ? Math.round(Math.abs(roundOffAmt) * 100) / 100 : 0;
+
+    // Purchase Account = grandTotal − GST debits − freight − net roundOff debit
+    // This guarantees Debits == Credits (grandTotal = Credit to Supplier) always.
+    const purchaseDebit = Math.round(
+        (grandTotal - igstAmt - cgstAmt - sgstAmt - freightAmt - roundOffDebit + roundOffCredit) * 100
+    ) / 100;
+
+    // 4. Create Voucher
     const voucher = await Voucher.create([{
         voucherNo,
         voucherType: vType._id,
@@ -191,7 +209,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         date,
         partyId: supplierLedger._id,
         partyName: supplierLedger.name,
-        totalAmount: invoice.grandTotal,
+        totalAmount: grandTotal,
         narration: `Auto-generated from Purchase Invoice ${invoice.invoiceNumber} from ${invoice.supplierName}`,
         isSystemGenerated: true,
         createdBy: userId,
@@ -200,60 +218,68 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
 
     const vId = voucher[0]._id;
 
-    // 4. Post Entries
-    // Debit Purchase Account (Taxable)
-    await postEntry({
-        voucherId: vId, voucherNo, date,
-        ledgerId: purchaseLedger._id, amount: invoice.totalTaxableAmount,
-        type: 'Debit', narration: `Direct Purchase`
-    }, session);
-
-    // Debit Freight Inward Account
-    if (invoice.freightAmount && invoice.freightAmount > 0 && freightLedger) {
+    // 5. Post Debit Entries
+    // Debit Purchase Account (taxable value derived from grandTotal to ensure balance)
+    if (purchaseDebit > 0) {
         await postEntry({
             voucherId: vId, voucherNo, date,
-            ledgerId: freightLedger._id, amount: invoice.freightAmount,
+            ledgerId: purchaseLedger._id, amount: purchaseDebit,
+            type: 'Debit', narration: `Direct Purchase`
+        }, session);
+    }
+
+    // Debit Freight Inward Account
+    if (freightAmt > 0 && freightLedger) {
+        await postEntry({
+            voucherId: vId, voucherNo, date,
+            ledgerId: freightLedger._id, amount: freightAmt,
             type: 'Debit', narration: `Freight Inward Expense`
         }, session);
     }
 
     // Debit GST Input
-    if (invoice.totalCgst > 0 && cgstInputLedger) {
+    if (cgstAmt > 0 && cgstInputLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
-            ledgerId: cgstInputLedger._id, amount: invoice.totalCgst,
+            ledgerId: cgstInputLedger._id, amount: cgstAmt,
             type: 'Debit', narration: 'Input CGST'
         }, session);
     }
-    if (invoice.totalSgst > 0 && sgstInputLedger) {
+    if (sgstAmt > 0 && sgstInputLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
-            ledgerId: sgstInputLedger._id, amount: invoice.totalSgst,
+            ledgerId: sgstInputLedger._id, amount: sgstAmt,
             type: 'Debit', narration: 'Input SGST'
         }, session);
     }
-    if (invoice.totalIgst > 0 && igstInputLedger) {
+    if (igstAmt > 0 && igstInputLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
-            ledgerId: igstInputLedger._id, amount: invoice.totalIgst,
+            ledgerId: igstInputLedger._id, amount: igstAmt,
             type: 'Debit', narration: 'Input IGST'
         }, session);
     }
 
     // Round Off
-    if (invoice.roundOff && roundOffLedger) {
-        const type = invoice.roundOff > 0 ? 'Debit' : 'Credit';
+    if (roundOffDebit > 0 && roundOffLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
-            ledgerId: roundOffLedger._id, amount: Math.abs(invoice.roundOff),
-            type, narration: 'Invoice Round Off'
+            ledgerId: roundOffLedger._id, amount: roundOffDebit,
+            type: 'Debit', narration: 'Invoice Round Off'
+        }, session);
+    }
+    if (roundOffCredit > 0 && roundOffLedger) {
+        await postEntry({
+            voucherId: vId, voucherNo, date,
+            ledgerId: roundOffLedger._id, amount: roundOffCredit,
+            type: 'Credit', narration: 'Invoice Round Off'
         }, session);
     }
 
-    // Credit Supplier (Total)
+    // Credit Supplier (always equals grandTotal — Debit side is guaranteed to match)
     await postEntry({
         voucherId: vId, voucherNo, date,
-        ledgerId: supplierLedger._id, amount: invoice.grandTotal,
+        ledgerId: supplierLedger._id, amount: grandTotal,
         type: 'Credit', narration: `Purchased from ${invoice.supplierName}`
     }, session);
 

@@ -220,8 +220,15 @@ function ItemDetailPage({ item, accentColor, onBack }) {
 function RawMaterialSection({ onSelectItem }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', search: '' });
+    const [filters, setFilters] = useState(() => {
+        const saved = localStorage.getItem('inv_raw_filters');
+        return saved ? JSON.parse(saved) : { dateFrom: '', dateTo: '', search: '' };
+    });
     const [summary, setSummary] = useState({ totalValue: 0, belowReorder: 0, totalItems: 0 });
+ 
+    useEffect(() => {
+        localStorage.setItem('inv_raw_filters', JSON.stringify(filters));
+    }, [filters]);
 
     const fetchReport = useCallback(async () => {
         setLoading(true);
@@ -327,8 +334,15 @@ function RawMaterialSection({ onSelectItem }) {
 function FinishedGoodsSection({ onSelectItem }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', search: '' });
+    const [filters, setFilters] = useState(() => {
+        const saved = localStorage.getItem('inv_fg_filters');
+        return saved ? JSON.parse(saved) : { dateFrom: '', dateTo: '', search: '' };
+    });
     const [summary, setSummary] = useState({ totalItems: 0, totalValue: 0, belowReorder: 0 });
+ 
+    useEffect(() => {
+        localStorage.setItem('inv_fg_filters', JSON.stringify(filters));
+    }, [filters]);
 
     const fetchReport = useCallback(async () => {
         setLoading(true);
@@ -431,12 +445,25 @@ function FinishedGoodsSection({ onSelectItem }) {
 // ─── MOVEMENT LEDGER SECTION ─────────────────────────────────────────────────
 function LedgerSection() {
     const [items, setItems] = useState([]);
-    const [selectedItemId, setSelectedItemId] = useState('');
+    const [selectedItemId, setSelectedItemId] = useState(() => localStorage.getItem('inv_ledger_itemId') || '');
     const [rows, setRows] = useState([]);
     const [selectedItem, setSelectedItem] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [filters, setFilters] = useState({ dateFrom: '', dateTo: '' });
-    const [search, setSearch] = useState('');
+    const [filters, setFilters] = useState(() => {
+        const saved = localStorage.getItem('inv_ledger_filters');
+        return saved ? JSON.parse(saved) : { dateFrom: '', dateTo: '' };
+    });
+    const [search, setSearch] = useState(() => localStorage.getItem('inv_ledger_search') || '');
+ 
+    useEffect(() => {
+        localStorage.setItem('inv_ledger_itemId', selectedItemId);
+        localStorage.setItem('inv_ledger_filters', JSON.stringify(filters));
+        localStorage.setItem('inv_ledger_search', search);
+    }, [selectedItemId, filters, search]);
+ 
+    useEffect(() => {
+        if (selectedItemId) fetchLedger(selectedItemId);
+    }, []);
 
     useEffect(() => {
         api.get('/items', { limit: 500 }).then(res => setItems((res.data?.items || res.data || []).filter(Boolean)));
@@ -549,8 +576,12 @@ function LedgerSection() {
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function StockMovementLedger() {
-    const [tab, setTab] = useState('raw');
+    const [tab, setTab] = useState(() => localStorage.getItem('inv_active_tab') || 'raw');
     const [detailItem, setDetailItem] = useState(null);     // { item, accentColor }
+ 
+    useEffect(() => {
+        localStorage.setItem('inv_active_tab', tab);
+    }, [tab]);
 
     const handleSelectItem = (item, accentColor) => setDetailItem({ item, accentColor });
     const handleBack = () => setDetailItem(null);

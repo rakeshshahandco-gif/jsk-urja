@@ -129,7 +129,7 @@ const ReworkMaterialIssueFormPage = () => {
         <div style={{ padding: '24px 28px', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                 <button
-                    onClick={() => navigate(-1)}
+                    onClick={() => window.confirm('Discard changes?') && navigate(-1)}
                     style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, cursor: 'pointer', display: 'flex' }}
                 >
                     <ArrowLeft size={18} color="#64748b" />

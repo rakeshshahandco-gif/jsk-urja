@@ -39,7 +39,10 @@ export default function PurchaseInvoiceDetailPage() {
             setInv(invData);
             setPayments(Array.isArray(payData) ? payData : []);
             setCompany(companyRes?.data || {});
-        }).catch(() => toast.error('Failed to load invoice'))
+        }).catch((err) => {
+            console.error('[PurchaseInvoiceDetail] Error loading detail:', err);
+            toast.error('Failed to load invoice');
+        })
             .finally(() => setLoading(false));
     }, [id]);
 

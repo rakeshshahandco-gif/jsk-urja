@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { Voucher } from '../models/voucher.model.js';
+import { StockLedger } from '../models/stockLedger.model.js';
+import { rollbackStockLedger } from '../utils/stockUtils.js';
 import { PurchaseOrder } from '../models/purchaseOrder.model.js';
 import { GRN } from '../models/grn.model.js';
 import { Supplier } from '../models/supplier.model.js';
@@ -7,9 +10,11 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { updateStockForItems } from './grn.controller.js';
+import { AuditLog } from '../models/auditLog.model.js';
 import Joi from 'joi';
 import { syncPurchaseRatesToBOMs } from '../services/bomPriceSync.service.js';
 import { postPurchaseInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
+import logger from '../utils/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -39,16 +44,26 @@ const generateInvoiceNumber = async () => {
     const year = new Date().getFullYear();
     const month = String(new Date().getMonth() + 1).padStart(2, '0');
     const prefix = `PI-${year}${month}-`;
-    const lastInv = await PurchaseInvoice.findOne({ invoiceNumber: new RegExp(`^${prefix}`) }).sort({ invoiceNumber: -1 });
-    if (!lastInv) {
-        return `${prefix}0001`;
+    
+    // Check both PurchaseInvoice and Voucher collections for the last used number
+    const [lastInv, lastVoucher] = await Promise.all([
+        PurchaseInvoice.findOne({ invoiceNumber: new RegExp(`^${prefix}`) }).sort({ invoiceNumber: -1 }),
+        Voucher.findOne({ voucherNo: new RegExp(`^${prefix}`) }).sort({ voucherNo: -1 })
+    ]);
+
+    let lastNumber = 0;
+    if (lastInv) {
+        lastNumber = Math.max(lastNumber, parseInt(lastInv.invoiceNumber.replace(prefix, ''), 10) || 0);
     }
-    const lastNumber = parseInt(lastInv.invoiceNumber.replace(prefix, ''), 10) || 0;
+    if (lastVoucher) {
+        lastNumber = Math.max(lastNumber, parseInt(lastVoucher.voucherNo.replace(prefix, ''), 10) || 0);
+    }
+
     return `${prefix}${String(lastNumber + 1).padStart(4, '0')}`;
 };
 
 const rollbackSideEffects = async (inv, userId, session) => {
-    const { flowType, items, isDirectPurchase } = inv;
+    const { flowType, items } = inv;
 
     // 1) Rollback GRN side effects
     if (inv.grnId) {
@@ -92,22 +107,12 @@ const rollbackSideEffects = async (inv, userId, session) => {
         }
     }
 
-    // 3) Rollback Stock if Direct Purchase
-    if (isDirectPurchase) {
-        const stockItems = items.map(i => ({
-            itemId: i.itemId,
-            itemCode: i.itemCode || '',
-            itemName: i.itemName,
-            receivedQty: -(i.qty || 0),
-            rate: i.rate || 0,
-            warehouse: '',
-        }));
-        await updateStockForItems(stockItems, inv.invoiceNumber, inv._id, 'PURCHASE_INVOICE_DELETE', userId, session);
-    }
+    // 3) Rollback Stock Ledger (Hard delete and recalculate)
+    await rollbackStockLedger(inv._id, session);
 
     // 4) Reverse financial impacts
     await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
-}
+};
 
 const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRate = 0) => {
     let subTotal = 0, totalDiscount = 0, totalTaxable = 0;
@@ -115,70 +120,43 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
     const isIGST = gstType === 'IGST';
 
     items.forEach(item => {
-        const gross = r2(item.qty * item.rate);
-        const discAmt = r2(gross * (item.discountPercent || 0) / 100);
-        const taxable = r2(gross - discAmt);
-        const gstRate = item.gstRate || 0;
+        const lineTaxable = r2(item.qty * item.rate - item.discountAmount);
+        subTotal += r2(item.qty * item.rate);
+        totalDiscount += r2(item.discountAmount);
+        totalTaxable += lineTaxable;
 
-        let cgstRate = 0, sgstRate = 0, igstRate = 0;
-        let cgstAmt = 0, sgstAmt = 0, igstAmt = 0;
         if (isIGST) {
-            igstRate = gstRate;
-            igstAmt = r2(taxable * igstRate / 100);
+            totalIgst += r2(lineTaxable * item.gstRate / 100);
         } else {
-            cgstRate = gstRate / 2;
-            sgstRate = gstRate / 2;
-            cgstAmt = r2(taxable * cgstRate / 100);
-            sgstAmt = r2(taxable * sgstRate / 100);
+            totalCgst += r2(lineTaxable * (item.gstRate / 2) / 100);
+            totalSgst += r2(lineTaxable * (item.gstRate / 2) / 100);
         }
-        const lineTotal = r2(taxable + cgstAmt + sgstAmt + igstAmt);
-
-        item.taxableAmount = taxable;
-        item.discountAmount = discAmt;
-        item.cgstRate = cgstRate; item.cgstAmount = cgstAmt;
-        item.sgstRate = sgstRate; item.sgstAmount = sgstAmt;
-        item.igstRate = igstRate; item.igstAmount = igstAmt;
-        item.totalAmount = lineTotal;
-
-        subTotal += gross;
-        totalDiscount += discAmt;
-        totalTaxable += taxable;
-        totalCgst += cgstAmt;
-        totalSgst += sgstAmt;
-        totalIgst += igstAmt;
     });
 
-    let freightCgstRate = 0, freightSgstRate = 0, freightIgstRate = 0;
-    let freightCgstAmt = 0, freightSgstAmt = 0, freightIgstAmt = 0;
-    if (freightAmount > 0 && freightGstRate > 0) {
-        if (isIGST) {
-            freightIgstRate = freightGstRate;
-            freightIgstAmt = r2(freightAmount * freightGstRate / 100);
-            totalIgst += freightIgstAmt;
-        } else {
-            freightCgstRate = freightGstRate / 2;
-            freightSgstRate = freightGstRate / 2;
-            freightCgstAmt = r2(freightAmount * freightCgstRate / 100);
-            freightSgstAmt = r2(freightAmount * freightSgstRate / 100);
-            totalCgst += freightCgstAmt;
-            totalSgst += freightSgstAmt;
-        }
-    }
-    const freightTotalGst = r2(freightCgstAmt + freightSgstAmt + freightIgstAmt);
+    // Freight GST
+    const freightIgstAmt = isIGST ? r2(freightAmount * freightGstRate / 100) : 0;
+    const freightCgstAmt = isIGST ? 0 : r2(freightAmount * (freightGstRate / 2) / 100);
+    const freightSgstAmt = isIGST ? 0 : r2(freightAmount * (freightGstRate / 2) / 100);
 
-    const grossTax = r2(totalCgst + totalSgst + totalIgst);
-    const rawTotal = r2(totalTaxable + grossTax + freightAmount);
-    const roundOff = r2(Math.round(rawTotal) - rawTotal);
-    const grandTotal = r2(rawTotal + roundOff);
+    totalIgst += freightIgstAmt;
+    totalCgst += freightCgstAmt;
+    totalSgst += freightSgstAmt;
+
+    const totalTax = r2(totalIgst + totalCgst + totalSgst);
+    const rawGrandTotal = r2(totalTaxable + totalTax + freightAmount);
+    const grandTotal = Math.round(rawGrandTotal);
+    const roundOff = r2(grandTotal - rawGrandTotal);
 
     return {
-        subTotal: r2(subTotal), totalDiscount: r2(totalDiscount),
-        totalTaxableAmount: r2(totalTaxable), totalCgst: r2(totalCgst),
-        totalSgst: r2(totalSgst), totalIgst: r2(totalIgst), totalTax: grossTax,
-        freightCgstRate, freightCgstAmount: freightCgstAmt,
-        freightSgstRate, freightSgstAmount: freightSgstAmt,
-        freightIgstRate, freightIgstAmount: freightIgstAmt,
-        freightTotalGst,
+        subTotal: r2(subTotal),
+        totalDiscount: r2(totalDiscount),
+        totalTaxableAmount: r2(totalTaxable),
+        totalIgst: r2(totalIgst),
+        totalCgst: r2(totalCgst),
+        totalSgst: r2(totalSgst),
+        totalTax: r2(totalTax),
+        freightGstRate, freightIgstAmount: freightIgstAmt,
+        freightTotalGst: r2(freightIgstAmt + freightCgstAmt + freightSgstAmt),
         roundOff, grandTotal, amountInWords: amountInWords(grandTotal),
     };
 };
@@ -265,7 +243,6 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             if (!value.grnId) throw new ApiError(400, 'GRN reference is required');
             grn = await GRN.findById(value.grnId).session(session);
             if (!grn) throw new ApiError(404, 'GRN not found');
-            grnNumber = grn.grnNumber;
         }
 
         const invoiceNumber = await generateInvoiceNumber();
@@ -343,8 +320,15 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 });
 
 export const getPurchaseInvoices = asyncHandler(async (req, res) => {
-    const { supplierId, paymentStatus, status, flowType, search, page = 1, limit = 20 } = req.query;
-    const query = {};
+    const { supplierId, paymentStatus, status, flowType, search, page = 1, limit = 20, includeDeleted, view } = req.query;
+    const query = { isDeleted: { $ne: true } };
+    
+    if (view === 'archived') {
+        query.isDeleted = true;
+    } else if (view === 'all' || includeDeleted === 'true') {
+        delete query.isDeleted;
+    }
+
     if (supplierId) query.supplierId = supplierId;
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (status) query.status = status;
@@ -354,9 +338,71 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
         { supplierName: { $regex: search, $options: 'i' } },
     ];
     const skip = (Number(page) - 1) * Number(limit);
-    const total = await PurchaseInvoice.countDocuments(query);
-    const invoices = await PurchaseInvoice.find(query).sort({ invoiceDate: -1 }).skip(skip).limit(Number(limit)).populate('supplierId', 'supplierName supplierCode').populate('createdBy', 'name');
+
+    logger.info(`[PurchaseInvoice] Fetching list: search="${search || ''}", status="${status || ''}", includeDeleted=${includeDeleted}`);
+
+    const [total, invoices] = await Promise.all([
+        PurchaseInvoice.countDocuments(query),
+        PurchaseInvoice.find(query)
+            .sort({ invoiceDate: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .populate('supplierId', 'supplierName supplierCode')
+            .populate('createdBy', 'name')
+    ]);
+
     res.json(new ApiResponse(200, { invoices, total, page: Number(page), pages: Math.ceil(total / Number(limit)) }, 'Invoices fetched'));
+});
+
+export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await PurchaseInvoice.findById(req.params.id).session(session);
+        if (!inv) throw new ApiError(404, 'Invoice not found');
+        if (inv.isDeleted) throw new ApiError(400, 'Cannot edit a deleted invoice');
+
+        const auditTrail = {};
+        const updateData = req.body;
+
+        // Implementation of standard PATCH logic
+        Object.keys(updateData).forEach(key => {
+            if (updateData[key] !== undefined && JSON.stringify(inv[key]) !== JSON.stringify(updateData[key])) {
+                auditTrail[key] = { old: inv[key], new: updateData[key] };
+                inv[key] = updateData[key];
+            }
+        });
+
+        if (Object.keys(auditTrail).length > 0) {
+            // Recalculate if items or freight changed
+            if (auditTrail.items || auditTrail.freightAmount || auditTrail.freightGstRate || auditTrail.gstType) {
+                const totals = calculateInvoiceTotals(inv.items, inv.gstType, inv.freightAmount, inv.freightGstRate);
+                Object.assign(inv, totals);
+            }
+
+            inv.updatedBy = req.user._id;
+            await inv.save({ session });
+
+            await AuditLog.create([{
+                user: req.user._id,
+                action: 'UPDATE',
+                module: 'PurchaseInvoice',
+                resourceId: inv._id,
+                description: `Updated Purchase Invoice ${inv.invoiceNumber}`,
+                details: auditTrail,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
+            }], { session });
+        }
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, inv, 'Purchase Invoice updated'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });
 
 export const getPurchaseInvoiceById = asyncHandler(async (req, res) => {
@@ -391,6 +437,9 @@ export const cancelPurchaseInvoice = asyncHandler(async (req, res) => {
 });
 
 export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
+    const { reason } = req.body;
+    if (!reason) throw new ApiError(400, 'Deletion reason is required');
+
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
@@ -398,11 +447,66 @@ export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
         if (!inv) throw new ApiError(404, 'Invoice not found');
         if (inv.paymentStatus === 'Paid' || inv.paymentStatus === 'Partially Paid') throw new ApiError(400, 'Cannot delete an invoice with payments.');
         
+        // Soft delete logic
+        inv.isDeleted = true;
+        inv.deletedAt = new Date();
+        inv.deletedBy = req.user._id;
+        inv.deleteReason = reason;
+        inv.status = 'Cancelled'; // Standard practice for soft-deleted financial documents
+
         await rollbackSideEffects(inv, req.user._id, session);
-        await PurchaseInvoice.findByIdAndDelete(req.params.id).session(session);
+        await inv.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'DELETE',
+            module: 'PurchaseInvoice',
+            resourceId: inv._id,
+            description: `Soft deleted Purchase Invoice ${inv.invoiceNumber}`,
+            details: { reason },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
         
         await session.commitTransaction();
-        res.json(new ApiResponse(200, null, 'Purchase Invoice deleted'));
+        res.json(new ApiResponse(200, null, 'Purchase Invoice archived'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+export const restorePurchaseInvoice = asyncHandler(async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await PurchaseInvoice.findById(req.params.id).session(session);
+        if (!inv) throw new ApiError(404, 'Invoice not found');
+        if (!inv.isDeleted) throw new ApiError(400, 'Invoice is not deleted');
+
+        inv.isDeleted = false;
+        inv.deletedAt = null;
+        inv.deletedBy = null;
+        // inv.status = 'Draft'; // Revert to draft or previous status? Keeping as cancelled is safer unless manually moved back.
+        // Actually, we don't automatically recalculate side effects on restore usually, user must manually fix.
+
+        await inv.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'RESTORE',
+            module: 'PurchaseInvoice',
+            resourceId: inv._id,
+            description: `Restored Purchase Invoice ${inv.invoiceNumber}`,
+            details: { previousReason: inv.deleteReason },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, inv, 'Purchase Invoice restored'));
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -412,11 +516,40 @@ export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
 });
 
 export const updatePaymentStatus = asyncHandler(async (req, res) => {
-    const { paymentStatus, paidAmount } = req.body;
-    const inv = await PurchaseInvoice.findById(req.params.id);
-    if (!inv) throw new ApiError(404, 'Invoice not found');
-    inv.paymentStatus = paymentStatus;
-    if (paidAmount !== undefined) inv.paidAmount = paidAmount;
-    await inv.save();
-    res.json(new ApiResponse(200, inv, 'Payment updated'));
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { paymentStatus, paidAmount } = req.body;
+        const inv = await PurchaseInvoice.findById(req.params.id).session(session);
+        if (!inv) throw new ApiError(404, 'Invoice not found');
+
+        const auditTrail = { 
+            paymentStatus: { old: inv.paymentStatus, new: paymentStatus },
+            paidAmount: { old: inv.paidAmount, new: paidAmount }
+        };
+
+        inv.paymentStatus = paymentStatus;
+        if (paidAmount !== undefined) inv.paidAmount = paidAmount;
+        
+        await inv.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'UPDATE',
+            module: 'PurchaseInvoice',
+            resourceId: inv._id,
+            description: `Updated Payment Status for Invoice ${inv.invoiceNumber}`,
+            details: auditTrail,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, inv, 'Payment updated'));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });

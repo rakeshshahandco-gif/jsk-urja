@@ -89,10 +89,13 @@ export default function SalesOrderFormPage() {
     useEffect(() => {
         const state = (form.customerState || '').trim().toLowerCase();
         const code = (form.customerStateCode || '').trim();
-        const isMH = state === 'maharashtra' || code === '27';
-        const newGst = isMH ? 'CGST / SGST' : ((state || code) ? 'IGST' : form.gstType);
-        if (newGst !== form.gstType) setF('gstType', newGst);
-    }, [form.customerState, form.customerStateCode]);
+        const gstPrefix = (form.customerGstin || '').trim().substring(0, 2);
+        
+        const isMH = state === 'maharashtra' || code === '27' || gstPrefix === '27';
+        const newGst = isMH ? 'CGST / SGST' : ((state || code || gstPrefix) ? 'IGST' : form.gstType);
+        
+        if (newGst && newGst !== form.gstType) setF('gstType', newGst);
+    }, [form.customerState, form.customerStateCode, form.customerGstin]);
 
     const handleCustomerSearch = (val) => {
         setF('customerName', val);
@@ -274,7 +277,7 @@ export default function SalesOrderFormPage() {
                 `}
             </style>
             <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
+                <button onClick={() => { if (window.confirm('Discard changes?')) navigate(PATHS.SALES.ORDERS); }} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{isEdit ? 'Edit Sales Order' : '📋 New Sales Order'}</h1>
                     <div></div>
@@ -414,7 +417,7 @@ export default function SalesOrderFormPage() {
                             <input value={form.customerEmail} onChange={e => setF('customerEmail', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="email@domain.com" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
                         </Field>
                         <Field label="GSTIN">
-                            <input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="27XXXXX..." readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
+                            <input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="e.g. 27XXXXX..." readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
                         </Field>
                         <Field label="State">
                             <input value={form.customerState} onChange={e => setF('customerState', e.target.value)} style={{ ...inp, background: form.customerId ? '#f9fafb' : '#fff' }} placeholder="Maharashtra" readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
@@ -550,7 +553,7 @@ export default function SalesOrderFormPage() {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24, padding: '20px 0', borderTop: '1px solid #e5e7eb' }}>
-                    <button onClick={() => navigate(PATHS.SALES.ORDERS)} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 14 }}>Cancel</button>
+                    <button onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.SALES.ORDERS); }} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 14 }}>Cancel</button>
                     {(!form.status || form.status === 'Draft') && (
                         <button onClick={() => handleSubmit('Draft')} disabled={saving} style={{ padding: '10px 24px', background: '#fff', color: '#0d9488', border: '1px solid #0d9488', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
                             {saving ? 'Saving...' : isEdit ? 'Save Draft' : 'Save as Draft'}

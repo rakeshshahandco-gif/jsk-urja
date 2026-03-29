@@ -374,7 +374,7 @@ const PaymentEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: 12 }}>
-                        <button onClick={() => navigate(-1)} style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Cancel</button>
+                        <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Cancel</button>
                         <button onClick={handleSave} disabled={isSubmitting || loading}
                             style={{ flex: 2, padding: '13px', border: 'none', borderRadius: 9, background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 12px rgba(79,70,229,0.35)' }}>
                             {isSubmitting ? 'Saving...' : `💸  Save Payment  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
@@ -578,7 +578,7 @@ const PaymentEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
-                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
                             style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                         </button>

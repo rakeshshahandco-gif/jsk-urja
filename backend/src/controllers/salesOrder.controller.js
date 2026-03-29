@@ -5,6 +5,8 @@ import { SalesOrder } from '../models/salesOrder.model.js';
 import { ProductionSheet } from '../models/productionSheet.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import Customer from '../models/customer.model.js';
+import { AuditLog } from '../models/auditLog.model.js';
+import mongoose from 'mongoose';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -142,13 +144,31 @@ export const createSO = asyncHandler(async (req, res) => {
         createdBy: req.user.id,
     });
 
+    await AuditLog.create({
+        user: req.user.id,
+        action: 'CREATE',
+        module: 'SalesOrder',
+        resourceId: so._id,
+        description: `Created Sales Order ${so.soNumber}`,
+        details: { new: body },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+
     res.status(httpStatus.CREATED).json({ success: true, data: so });
 });
 
 // ------- LIST SALES ORDERS -------
 export const getSOs = asyncHandler(async (req, res) => {
-    const { search, status, dateFrom, dateTo, limit = 50, page = 1 } = req.query;
-    const filter = {};
+    const { search, status, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
+    const filter = { isDeleted: { $ne: true } };
+    
+    if (view === 'archived') {
+        filter.isDeleted = true;
+    } else if (view === 'all' || includeDeleted === 'true') {
+        delete filter.isDeleted;
+    }
+
     if (status) filter.status = status;
     if (search) filter.$or = [
         { soNumber: { $regex: search, $options: 'i' } },
@@ -180,42 +200,72 @@ export const getSOById = asyncHandler(async (req, res) => {
 
 // ------- UPDATE SO -------
 export const updateSO = asyncHandler(async (req, res) => {
-    const so = await SalesOrder.findById(req.params.id);
-    if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
-    if (so.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update a cancelled SO');
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const so = await SalesOrder.findById(req.params.id).session(session);
+        if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+        if (so.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update a cancelled SO');
 
-    const body = req.body;
-    if (body.items) {
-        const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
-            body.items, body.freightAmount ?? so.freightAmount, body.freightGstRate ?? so.freightGstRate, body.gstType ?? so.gstType, so.gstApplicable
-        );
-        body.items = processedItems;
-        body.totalQty = totalQty;
-        body.totalAmount = totalAmount;
-        body.totalCgst = totalCgst; body.totalSgst = totalSgst; body.totalIgst = totalIgst;
-        body.totalGst = totalGst;
-        body.grandTotal = grandTotal;
-        body.roundedTotal = roundedTotal;
-        body.roundOff = roundOff;
-        body.amountInWords = numWords(roundedTotal);
-    }
+        const body = req.body;
+        const changes = {};
 
-    // Update stickerType if customer changed or it's missing
-    if (body.customerId && (body.customerId !== String(so.customerId) || !so.stickerType)) {
-        try {
-            const customer = await Customer.findById(body.customerId).populate('stickers');
-            if (customer && customer.stickers && customer.stickers.length > 0) {
-                body.stickerType = customer.stickers[0].name;
+        for (const [key, newValue] of Object.entries(body)) {
+            if (['items', '_id', 'soNumber', 'createdBy', 'createdAt', 'updatedAt', '__v'].includes(key)) continue;
+            
+            if (JSON.stringify(so[key]) !== JSON.stringify(newValue)) {
+                changes[key] = { old: so[key], new: newValue };
+                so[key] = newValue;
             }
-        } catch (e) {
-            console.error('Error updating customer stickers for SO:', e);
         }
-    }
 
-    Object.assign(so, body);
-    so.updatedBy = req.user.id;
-    await so.save();
-    res.json({ success: true, data: so });
+        if (body.items && JSON.stringify(so.items) !== JSON.stringify(body.items)) {
+            changes['items'] = { old: 'Previous Items', new: 'Updated Items' };
+            const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
+                body.items, so.freightAmount, so.freightGstRate, so.gstType, so.gstApplicable
+            );
+            so.items = processedItems;
+            so.totalQty = totalQty;
+            so.totalAmount = totalAmount;
+            so.totalCgst = totalCgst; so.totalSgst = totalSgst; so.totalIgst = totalIgst;
+            so.totalGst = totalGst;
+            so.grandTotal = grandTotal;
+            so.roundedTotal = roundedTotal;
+            so.roundOff = roundOff;
+            so.amountInWords = numWords(roundedTotal);
+        }
+
+        if (body.customerId && (body.customerId !== String(so.customerId) || !so.stickerType)) {
+            const customer = await Customer.findById(body.customerId).populate('stickers').session(session);
+            if (customer && customer.stickers && customer.stickers.length > 0) {
+                so.stickerType = customer.stickers[0].name;
+            }
+        }
+
+        if (Object.keys(changes).length > 0) {
+            so.updatedBy = req.user.id;
+            await so.save({ session });
+            
+            await AuditLog.create([{
+                user: req.user.id,
+                action: 'UPDATE',
+                module: 'SalesOrder',
+                resourceId: so._id,
+                description: `Updated Sales Order ${so.soNumber}`,
+                details: changes,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent']
+            }], { session });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+        res.json({ success: true, data: so });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        throw error;
+    }
 });
 
 // ------- GENERATE PRODUCTION SHEET -------
@@ -301,8 +351,56 @@ export const cancelSO = asyncHandler(async (req, res) => {
 export const deleteSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.findById(req.params.id);
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
-    if (so.status === 'Invoiced') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete a Sales Order that has been invoiced. Cancel or delete the linked invoice first.');
-    await SalesOrder.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: 'Sales Order deleted successfully' });
+    
+    // Restriction: Cannot delete if invoiced or closed
+    if (so.status === 'Invoiced' || so.status === 'Closed' || so.status === 'Completed') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Cannot archive Sales Order ${so.soNumber} because it is already ${so.status}. Please cancel or archive the linked transactions first.`);
+    }
+    
+    so.isDeleted = true;
+    so.deletedAt = new Date();
+    so.deletedBy = req.user.id;
+    so.deleteReason = req.body.reason || 'Soft deleted';
+    await so.save();
+
+    await AuditLog.create({
+        user: req.user.id,
+        action: 'DELETE',
+        module: 'SalesOrder',
+        resourceId: so._id,
+        description: `Soft Deleted Sales Order ${so.soNumber}`,
+        details: { reason: so.deleteReason },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+
+    res.json({ success: true, message: 'Sales Order soft-deleted successfully', data: so });
+});
+
+// ------- RESTORE SO -------
+export const restoreSO = asyncHandler(async (req, res) => {
+    const so = await SalesOrder.findById(req.params.id);
+    if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+    if (!so.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is not deleted');
+
+    so.isDeleted = false;
+    so.deletedAt = null;
+    so.deletedBy = null;
+    so.deleteReason = '';
+    so.updatedBy = req.user.id;
+    await so.save();
+
+    await AuditLog.create({
+        user: req.user.id,
+        action: 'REOPEN',
+        module: 'SalesOrder',
+        resourceId: so._id,
+        description: `Restored Sales Order ${so.soNumber}`,
+        details: { reason: req.body.reason || 'Restored by user' },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+
+    res.json({ success: true, message: 'Sales Order restored successfully', data: so });
 });
 

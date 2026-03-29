@@ -148,7 +148,7 @@ export default function WorkOrderFormPage() {
                         {/* Actions */}
                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                             <button
-                                type="button" onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS)}
+                                type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.PRODUCTION.WORK_ORDERS); }}
                                 style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}
                             >Cancel</button>
                             <button

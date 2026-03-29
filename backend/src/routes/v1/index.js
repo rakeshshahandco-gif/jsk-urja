@@ -59,6 +59,18 @@ import componentReplacementRoute from './componentReplacement.routes.js';
 import productionRejectionRoute from './productionRejection.routes.js';
 import accountMasterRoute from './accountMaster.routes.js';
 import permissionRoute from './permission.routes.js';
+import debugRoute from './debug.routes.js';
+import prdProjectRoute from './prdProject.routes.js';
+import prdTestParameterRoute from './prdTestParameter.routes.js';
+import prdComponentRoute from './prdComponent.routes.js';
+import prdDesignRoute from './prdDesign.routes.js';
+import prdPrototypeRoute from './prdPrototype.routes.js';
+import prdTestReportRoute from './prdTestReport.routes.js';
+import prdIssueRoute from './prdIssue.routes.js';
+import prdChangeLogRoute from './prdChangeLog.routes.js';
+import prdApprovalRoute from './prdApproval.routes.js';
+import prdAuditRoute from './prdAudit.routes.js';
+import messengerRoute from './messenger.routes.js';
 
 
 const router = express.Router();
@@ -314,9 +326,59 @@ const defaultRoutes = [
         path: '/permissions',
         route: permissionRoute,
     },
+    {
+        path: '/debug',
+        route: debugRoute,
+    },
+    {
+        path: '/prd/projects',
+        route: prdProjectRoute,
+    },
+    {
+        path: '/prd/test-parameters',
+        route: prdTestParameterRoute,
+    },
+    {
+        path: '/prd/components',
+        route: prdComponentRoute,
+    },
+    {
+        path: '/prd/designs',
+        route: prdDesignRoute,
+    },
+    {
+        path: '/prd/prototypes',
+        route: prdPrototypeRoute,
+    },
+    {
+        path: '/prd/test-reports',
+        route: prdTestReportRoute,
+    },
+    {
+        path: '/prd/issues',
+        route: prdIssueRoute,
+    },
+    {
+        path: '/prd/changelogs',
+        route: prdChangeLogRoute,
+    },
+    {
+        path: '/prd/approvals',
+        route: prdApprovalRoute,
+    },
+    {
+        path: '/prd/audits',
+        route: prdAuditRoute,
+    },
+    // ── Internal Messenger ────────────────────────────────────────────────────
+    {
+        path: '/messenger',
+        route: messengerRoute,
+    },
 ];
 
 defaultRoutes.forEach((route) => {
+    console.log(`Registering route: ${route.path}`);
     router.use(route.path, route.route);
 });
 

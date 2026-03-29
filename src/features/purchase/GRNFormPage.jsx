@@ -396,7 +396,7 @@ export default function GRNFormPage() {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => navigate(PATHS.PURCHASE.GRN)}
+                        <button type="button" onClick={() => { if (window.confirm('Discard changes?')) navigate(PATHS.PURCHASE.GRN); }}
                             style={{ padding: '10px 20px', borderRadius: '8px', background: '#334155', color: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                         </button>

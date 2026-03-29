@@ -247,7 +247,7 @@ const GroupMasterPage = () => {
                         initial={panel?.group || {}}
                         groups={groups}
                         onSave={handleSave}
-                        onCancel={() => setPanel(null)}
+                        onCancel={() => { if (window.confirm('Discard changes?')) setPanel(null); }}
                     />
                 </div>
             )}

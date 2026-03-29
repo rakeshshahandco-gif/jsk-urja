@@ -101,7 +101,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             tags: Array.isArray(customerData.tags) ? customerData.tags.join(', ') : '',
             gstNumber: customerData.gstNumber || '',
             gstType: customerData.gstType || (customerData.state ? (String(customerData.state).trim().toLowerCase() === 'maharashtra' ? 'CGST / SGST' : 'IGST') : ''),
-            gstRegistrationType: customerData.gstRegistrationType || (customerData.gstNumber ? 'Registered' : 'Unregistered'),
+            gstRegistrationType: customerData.gstRegistrationType || (customerData.gstNumber ? 'Registered' : 'Consumer'),
             customerCode: customerData.customerCode || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
@@ -157,25 +157,36 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const stateValue = watch('state');
     const gstNumberValue = watch('gstNumber');
 
-    // Automate GST Type based on state
+    // Automate GST Type based on state OR GST Number (State Code 27 = Maharashtra)
     useEffect(() => {
-        if (!stateValue) {
-            setValue('gstType', '', { shouldDirty: true });
-            return;
+        let isMaharashtra = false;
+        
+        // Priority 1: State string
+        if (stateValue && stateValue.trim().toLowerCase() === 'maharashtra') {
+            isMaharashtra = true;
+        } 
+        // Priority 2: GST Number State Code
+        else if (gstNumberValue && gstNumberValue.trim().startsWith('27')) {
+            isMaharashtra = true;
         }
-        if (stateValue.toLowerCase() === 'maharashtra') {
-            setValue('gstType', 'CGST / SGST', { shouldDirty: true });
+        
+        if (stateValue || (gstNumberValue && gstNumberValue.trim().length >= 2)) {
+            if (isMaharashtra) {
+                setValue('gstType', 'CGST / SGST', { shouldValidate: true, shouldDirty: true });
+            } else {
+                setValue('gstType', 'IGST', { shouldValidate: true, shouldDirty: true });
+            }
         } else {
-            setValue('gstType', 'IGST', { shouldDirty: true });
+            setValue('gstType', '', { shouldValidate: true, shouldDirty: true });
         }
-    }, [stateValue, setValue]);
+    }, [stateValue, gstNumberValue, setValue]);
 
     // Automate GST Registration Type based on GST Number
     useEffect(() => {
         if (gstNumberValue && gstNumberValue.trim().length > 0) {
-            setValue('gstRegistrationType', 'Registered', { shouldDirty: true });
+            setValue('gstRegistrationType', 'Registered', { shouldValidate: true, shouldDirty: true });
         } else {
-            setValue('gstRegistrationType', 'Unregistered', { shouldDirty: true });
+            setValue('gstRegistrationType', 'Consumer', { shouldValidate: true, shouldDirty: true });
         }
     }, [gstNumberValue, setValue]);
 
@@ -263,9 +274,33 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     return (
         <>
             <form onSubmit={handleSubmit(onSubmit)} className={styles['customer-form']}>
-                {/* Basic Information */}
-                <div className={styles['form-section']}>
-                    <h3>Basic Information</h3>
+
+                {/* Two-column layout */}
+                <div className={styles['form-body']}>
+
+                    {/* Left Sidebar Navigation */}
+                    <nav className={styles['form-sidebar']}>
+                        <span className={styles['sidebar-label']}>Sections</span>
+                        <a className={styles['sidebar-item']} href="#sec-basic" onClick={e => { e.preventDefault(); document.getElementById('sec-basic')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>👤</span> Basic Info
+                        </a>
+                        <a className={styles['sidebar-item']} href="#sec-contacts" onClick={e => { e.preventDefault(); document.getElementById('sec-contacts')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>📞</span> Contact Persons
+                        </a>
+                        <a className={styles['sidebar-item']} href="#sec-business" onClick={e => { e.preventDefault(); document.getElementById('sec-business')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>💼</span> Business Details
+                        </a>
+                        <a className={styles['sidebar-item']} href="#sec-additional" onClick={e => { e.preventDefault(); document.getElementById('sec-additional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>📝</span> Additional Info
+                        </a>
+                    </nav>
+
+                    {/* Right Form Content */}
+                    <div className={styles['form-content']}>
+
+                        {/* Basic Information */}
+                        <div id="sec-basic" className={styles['form-section']}>
+                            <h3>Basic Information</h3>
 
                     <div className={styles.grid4}>
                         {customer?.customerCode && (
@@ -435,11 +470,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option value="inactive">Inactive</option>
                             </select>
                         </div>
-                    </div>
-                </div>
+                    </div>{/* end grid4 */}
+                        </div>{/* end sec-basic */}
 
-                {/* Contact Persons */}
-                <div className={styles['form-section']}>
+
+                        {/* Contact Persons */}
+                        <div id="sec-contacts" className={styles['form-section']}>
                     <div className={styles['section-header']}>
                         <h3>Contact Persons</h3>
                         <Button type="button" onClick={handleAddContact} size="sm" variant="outline">
@@ -559,12 +595,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 </div>
                             </div>
                         </div>
-                    ))
-                    }
-                </div>
+                    ))}
+                        </div>{/* end sec-contacts */}
+
 
                 {/* Business Details */}
-                <div className={styles['form-section']}>
+                        <div id="sec-business" className={styles['form-section']}>
                     <h3>Business Details</h3>
 
                     {/* Customer Type */}
@@ -612,22 +648,16 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             <label htmlFor="gstNumber">GST NUMBER</label>
                             <Input
                                 id="gstNumber"
-                                {...(function() {
-                                    const { onChange, ...rest } = register('gstNumber', {
-                                        pattern: {
-                                            value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-                                            message: 'Invalid GST format'
-                                        }
-                                    });
-                                    return {
-                                        ...rest,
-                                        onChange: (e) => {
-                                            e.target.value = e.target.value.replace(/\s/g, '').toUpperCase();
-                                            onChange(e);
-                                        }
-                                    };
-                                })()}
-                                placeholder="22AAAAA0000A1Z5"
+                                {...register('gstNumber', {
+                                    pattern: {
+                                        value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                                        message: 'Invalid GST format'
+                                    },
+                                    onChange: (e) => {
+                                        e.target.value = e.target.value.replace(/\s/g, '').toUpperCase();
+                                    }
+                                })}
+                                placeholder="e.g. 22AAAAA0000A1Z5"
                                 maxLength={15}
                                 style={{ 
                                     textTransform: 'uppercase', 
@@ -694,13 +724,11 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option value="Cash">Cash</option>
                             </select>
                         </div>
-                    </div>
+                    </div>{/* end grid (paymentType) */}
+                        </div>{/* end sec-business */}
 
-
-                </div>
-
-                {/* Additional Information */}
-                <div className={styles['form-section']}>
+                        {/* Additional Information */}
+                        <div id="sec-additional" className={styles['form-section']}>
                     <h3>Additional Information</h3>
 
                     <div className={styles['form-group']}>
@@ -724,12 +752,14 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             onChange={handleUppercaseChange('tags')}
                         />
                         <small className={styles['help-text']}>Separate tags with commas</small>
-                    </div>
-                </div>
+                     </div>{/* end form-group tags */}
+                        </div>{/* end sec-additional */}
+                    </div>{/* end form-content */}
+                </div>{/* end form-body */}
 
-                {/* Form Actions */}
+                {/* Sticky Footer Actions */}
                 <div className={styles['form-actions']}>
-                    <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
+                    <Button type="button" variant="outline" onClick={() => window.confirm('Discard changes?') && onCancel()} disabled={isSubmitting}>
                         CANCEL
                     </Button>
                     <Button type="submit" disabled={isSubmitting}>

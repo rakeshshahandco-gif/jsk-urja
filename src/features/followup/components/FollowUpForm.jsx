@@ -198,7 +198,7 @@ export const FollowUpForm = () => {
             {/* Header with customer info */}
             <div className={styles.header}>
                 <button
-                    onClick={() => navigate('/customers/list')}
+                    onClick={() => window.confirm('Discard changes?') && navigate('/customers/list')}
                     aria-label="Back to customer list"
                 >
                     <ArrowLeft size={24} />

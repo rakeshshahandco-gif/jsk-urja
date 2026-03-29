@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema({
     },
     roleName: { // Denormalized for quick access
         type: String,
-        enum: ['superadmin', 'admin', 'manager', 'staff', 'viewer', 'accounts', 'sales', 'purchase', 'inventory', 'production', 'service'],
+        enum: ['superadmin', 'admin', 'manager', 'staff', 'viewer', 'accounts', 'sales', 'purchase', 'inventory', 'production', 'service', 'rd_manager', 'hardware_dev', 'firmware_dev', 'testing_eng', 'qa_head', 'management_viewer'],
         default: 'viewer'
     },
     department: {

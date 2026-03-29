@@ -263,6 +263,67 @@ export const PERMISSION_REGISTRY = [
                     { id: 'view', label: 'View', type: 'boolean' },
                     { id: 'add', label: 'Add', type: 'boolean' }
                 ]
+            },
+            {
+                id: 'repair_job_cards',
+                name: 'Repair Job Cards',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'repaired_stock_inwards',
+                name: 'Repaired Stock Inward',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            },
+            {
+                id: 'scrap_entries',
+                name: 'Scrap Entries (Service)',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' }
+                ]
+            }
+        ]
+    },
+    {
+        id: 'production_rework',
+        name: 'Failure & Rework',
+        submodules: [
+            {
+                id: 'failure_entries',
+                name: 'Production Failure Entries',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            },
+            {
+                id: 'rework_job_cards',
+                name: 'Rework Job Cards',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }]
+            },
+            {
+                id: 'material_issues',
+                name: 'Rework Material Issues',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            },
+            {
+                id: 'rework_outputs',
+                name: 'Rework Output Entry',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            },
+            {
+                id: 'retest_confirmations',
+                name: 'Retest Confirmations',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
+            },
+            {
+                id: 'production_scrap',
+                name: 'Production Scrap',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
             }
         ]
     },
@@ -296,6 +357,36 @@ export const PERMISSION_REGISTRY = [
             { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'prd',
+        name: 'Product R&D',
+        submodules: [
+            { id: 'dashboard', name: 'R&D Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'projects', name: 'Product Development Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
+            { id: 'test_parameters', name: 'Test Parameter Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'fixed_assets',
+        name: 'Fixed Assets',
+        submodules: [
+            { id: 'asset_register', name: 'Asset Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
+            { id: 'asset_categories', name: 'Asset Categories', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'asset_locations', name: 'Asset Locations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'asset_transfers', name: 'Asset Transfers', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'asset_maintenance', name: 'Asset Maintenance', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'asset_disposals', name: 'Asset Disposals', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'messenger',
+        name: 'Messenger',
+        submodules: [
+            { id: 'chat', name: 'Direct Messaging', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Messages', type: 'boolean' }] },
+            { id: 'groups', name: 'Group Conversations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage Groups', type: 'boolean' }] },
+            { id: 'broadcast', name: 'Broadcast Lists', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Broadcast', type: 'boolean' }] }
         ]
     }
 ];

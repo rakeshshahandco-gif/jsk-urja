@@ -244,7 +244,7 @@ export default function SupplierListPage() {
                             <textarea rows={2} value={modal.data.remarks || ''} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} />
                         </div>
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button onClick={() => setModal(null)} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                            <button onClick={() => { if (window.confirm('Discard changes?')) setModal(null); }} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                             <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>{saving ? 'Saving...' : 'Save Supplier'}</button>
                         </div>
                     </div>

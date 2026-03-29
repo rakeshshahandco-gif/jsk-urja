@@ -66,12 +66,18 @@ const grnSchema = new mongoose.Schema({
     remarks: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Soft Delete Fields
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deleteReason: { type: String, default: '' },
 }, { timestamps: true });
 
 grnSchema.index({ poId: 1 });
 grnSchema.index({ supplierId: 1 });
-grnSchema.index({ grnNumber: 1 });
 grnSchema.index({ invoiceStatus: 1 });
+grnSchema.index({ isDeleted: 1 });
 
 const GRN = mongoose.model('GRN', grnSchema);
 export { GRN };

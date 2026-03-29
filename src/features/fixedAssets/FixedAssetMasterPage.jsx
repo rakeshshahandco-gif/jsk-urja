@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getFixedAssets, createFixedAsset, updateFixedAsset, getAssetCategories, getAssetLocations } from '@/services/fixedAssetApi';
+import { getFixedAssets, createFixedAsset, updateFixedAsset, getAssetCategories, getAssetLocations, exportFixedAssetTemplate, importFixedAssetsExcel } from '@/services/fixedAssetApi';
 import { getSuppliers } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
 import { SearchableSelect } from '@/components/ui';
@@ -22,6 +22,7 @@ export default function FixedAssetMasterPage() {
     const [loading, setLoading] = useState(true);
     const [modal, setModal] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
 
     // Dropdown Data
     const [categories, setCategories] = useState([]);
@@ -52,6 +53,44 @@ export default function FixedAssetMasterPage() {
             toast.success('Saved!'); setModal(null); loadData();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setSaving(false); }
+    };
+    
+    const handleTemplateDownload = async () => {
+        try {
+            const blob = await exportFixedAssetTemplate();
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'Fixed_Assets_Template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success('Template downloaded!');
+        } catch (e) { 
+            console.error('Template Download Error:', e);
+            const msg = e.response?.data?.message || e.message;
+            toast.error(`Failed to download template: ${msg}`); 
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setImporting(true);
+        try {
+            const res = await importFixedAssetsExcel(file);
+            toast.success(res.message || 'Import successful!');
+            loadData();
+        } catch (e) {
+            const msg = e.response?.data?.message || e.message;
+            toast.error(`Import failed: ${msg}`);
+            if (e.response?.data?.data?.errors) {
+                console.error('Import Errors:', e.response.data.data.errors);
+            }
+        } finally {
+            setImporting(false);
+            e.target.value = ''; // Reset input
+        }
     };
 
     const set = (k, v) => setModal(m => {
@@ -84,10 +123,20 @@ export default function FixedAssetMasterPage() {
                     <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>🧾 Fixed Asset Register</h1>
                     <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Maintain your complete asset inventory</p>
                 </div>
-                <button onClick={() => setModal({ mode: 'create', data: { ...EMPTY } })}
-                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
-                    + Register Asset
-                </button>
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <button onClick={handleTemplateDownload}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                        📥 Template
+                    </button>
+                    <label style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'inline-block' }}>
+                        {importing ? '⏳ Importing...' : '📤 Import Excel'}
+                        <input type="file" accept=".xlsx, .xls" onChange={handleImport} style={{ display: 'none' }} disabled={importing} />
+                    </label>
+                    <button onClick={() => setModal({ mode: 'create', data: { ...EMPTY } })}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                        + Register Asset
+                    </button>
+                </div>
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb' }}>

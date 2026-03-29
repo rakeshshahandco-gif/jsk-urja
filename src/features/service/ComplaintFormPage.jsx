@@ -130,7 +130,7 @@ const ComplaintFormPage = () => {
                     <span style={{ fontSize: 14, fontWeight: 800 }}>{isEdit ? 'Edit Complaint' : 'New Customer Complaint'}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => navigate('/service/complaints')} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate('/service/complaints'); }} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                     <button onClick={handleSave} disabled={saving} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 6, background: saving ? '#fca5a5' : '#dc2626', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
                         <Save size={13} />{saving ? 'Saving…' : (isEdit ? 'Update' : 'Save Complaint')}
                     </button>

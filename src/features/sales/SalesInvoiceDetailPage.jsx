@@ -71,6 +71,7 @@ export default function SalesInvoiceDetailPage() {
     const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS.Unpaid;
     const isIGST = inv.gstType === 'IGST';
     const gstApplicable = inv.gstApplicable !== false;
+    const isEstimate = inv.seriesId?.isEstimate;
     const notCancelled = inv.status !== 'Cancelled';
     const notFullyPaid = inv.paymentStatus !== 'Paid';
 
@@ -83,20 +84,24 @@ export default function SalesInvoiceDetailPage() {
                     {/* Header: Logo & Company Full Details */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
                         <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                            {company.logoUrl && (
-                                <img src={company.logoUrl} alt="Logo" style={{ maxHeight: `${company.logoHeight || 60}px`, maxWidth: '150px', objectFit: 'contain' }} />
+                            {!isEstimate && (
+                                <>
+                                    {company.logoUrl && (
+                                        <img src={company.logoUrl} alt="Logo" style={{ maxHeight: `${company.logoHeight || 60}px`, maxWidth: '150px', objectFit: 'contain' }} />
+                                    )}
+                                    <div>
+                                        <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px' }}>{company.companyName}</div>
+                                        <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '400px' }}>
+                                            {company.address}, {company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})<br />
+                                            {company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}<br />
+                                            {gstApplicable && company.gstNumber && <span><strong>GSTIN: {company.gstNumber}</strong> | </span>}
+                                            {company.panNumber && <span>PAN: {company.panNumber}</span>}<br />
+                                            {company.cin && <span>CIN: {company.cin} | </span>}
+                                            {company.urn && <span>MSME/URN: {company.urn}</span>}
+                                        </div>
+                                    </div>
+                                </>
                             )}
-                            <div>
-                                <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px' }}>{company.companyName}</div>
-                                <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '400px' }}>
-                                    {company.address}, {company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})<br />
-                                    {company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}<br />
-                                    {gstApplicable && company.gstNumber && <span><strong>GSTIN: {company.gstNumber}</strong> | </span>}
-                                    {company.panNumber && <span>PAN: {company.panNumber}</span>}<br />
-                                    {company.cin && <span>CIN: {company.cin} | </span>}
-                                    {company.urn && <span>MSME/URN: {company.urn}</span>}
-                                </div>
-                            </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '16pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '2px 10px', display: 'inline-block', marginBottom: '5px' }}>
@@ -132,25 +137,29 @@ export default function SalesInvoiceDetailPage() {
                     {/* Buyer & Ship To Side-by-Side */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderBottom: 'none' }}>
                         <div style={{ borderRight: '1px solid #000', padding: '8px' }}>
-                            <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Bill To (Buyer):</div>
+                            {!isEstimate && <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Bill To (Buyer):</div>}
                             <div style={{ fontSize: '10pt', fontWeight: 900 }}>{inv.customerName}</div>
                             <div style={{ fontSize: '9pt', whiteSpace: 'pre-wrap', marginBottom: '4px' }}>{inv.billingAddress}</div>
-                            <div style={{ fontSize: '8.5pt' }}>
-                                {inv.customerGstin && <div><strong>GSTIN:</strong> {inv.customerGstin}</div>}
-                                {inv.customerPhone && <div><strong>Mobile:</strong> {inv.customerPhone}</div>}
-                                {inv.customerEmail && <div><strong>Email:</strong> {inv.customerEmail}</div>}
-                                <div><strong>State:</strong> {inv.billingState} ({inv.billingStateCode})</div>
-                            </div>
+                            {!isEstimate && (
+                                <div style={{ fontSize: '8.5pt' }}>
+                                    {inv.customerGstin && <div><strong>GSTIN:</strong> {inv.customerGstin}</div>}
+                                    {inv.customerPhone && <div><strong>Mobile:</strong> {inv.customerPhone}</div>}
+                                    {inv.customerEmail && <div><strong>Email:</strong> {inv.customerEmail}</div>}
+                                    <div><strong>State:</strong> {inv.billingState} ({inv.billingStateCode})</div>
+                                </div>
+                            )}
                         </div>
                         <div style={{ padding: '8px' }}>
-                            <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Ship To (Consignee):</div>
+                            {!isEstimate && <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Ship To (Consignee):</div>}
                             <div style={{ fontSize: '10pt', fontWeight: 900 }}>{inv.customerName}</div>
                             <div style={{ fontSize: '9pt', whiteSpace: 'pre-wrap', marginBottom: '4px' }}>{inv.shippingAddress || inv.billingAddress}</div>
-                            <div style={{ fontSize: '8.5pt' }}>
-                                {inv.shippingGstin || inv.customerGstin ? <div><strong>GSTIN:</strong> {inv.shippingGstin || inv.customerGstin}</div> : null}
-                                {inv.shippingPhone || inv.customerPhone ? <div><strong>Mobile:</strong> {inv.shippingPhone || inv.customerPhone}</div> : null}
-                                <div><strong>State:</strong> {inv.shippingState || inv.billingState} ({inv.shippingStateCode || inv.billingStateCode})</div>
-                            </div>
+                            {!isEstimate && (
+                                <div style={{ fontSize: '8.5pt' }}>
+                                    {inv.shippingGstin || inv.customerGstin ? <div><strong>GSTIN:</strong> {inv.shippingGstin || inv.customerGstin}</div> : null}
+                                    {inv.shippingPhone || inv.customerPhone ? <div><strong>Mobile:</strong> {inv.shippingPhone || inv.customerPhone}</div> : null}
+                                    <div><strong>State:</strong> {inv.shippingState || inv.billingState} ({inv.shippingStateCode || inv.billingStateCode})</div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -189,24 +198,25 @@ export default function SalesInvoiceDetailPage() {
                         </table>
                     </div>
 
-                    {/* Footer Section */}
                     <div style={{ marginTop: '15px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', border: '1px solid #000' }}>
                             {/* Left: Bank & Notes */}
                             <div style={{ borderRight: '1px solid #000', padding: '8px' }}>
-                                <div style={{ marginBottom: '10px' }}>
-                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Bank Details:</div>
-                                    <div style={{ fontSize: '8.5pt', lineHeight: '1.3' }}>
-                                        <strong>{company.bankName || 'BANK OF BARODA'}</strong><br />
-                                        Account Name: {company.companyName}<br />
-                                        Account No: {company.accountNo || '—'}<br />
-                                        IFSC Code: {company.ifscCode || '—'} | Branch: {company.branchName || '—'}
+                                {!isEstimate && (
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Bank Details:</div>
+                                        <div style={{ fontSize: '8.5pt', lineHeight: '1.3' }}>
+                                            <strong>{company.bankName || 'BANK OF BARODA'}</strong><br />
+                                            Account Name: {company.companyName}<br />
+                                            Account No: {company.accountNo || '—'}<br />
+                                            IFSC Code: {company.ifscCode || '—'} | Branch: {company.branchName || '—'}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                                 <div>
                                     <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Terms & Declaration:</div>
                                     <div style={{ fontSize: '7.5pt', color: '#333', lineHeight: '1.2' }}>
-                                        1. Goods once sold will not be taken back.<br />
+                                        {!isEstimate && <>1. Goods once sold will not be taken back.<br /></>}
                                         2. Subject to MUMBAI Jurisdiction.<br />
                                         3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
                                     </div>
@@ -228,7 +238,7 @@ export default function SalesInvoiceDetailPage() {
                                             </tr>
                                         )}
                                         <tr>
-                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Taxable Value</td>
+                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>{isEstimate ? 'Total Estimate' : 'Total Taxable Value'}</td>
                                             <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                         {gstApplicable && (
@@ -487,7 +497,7 @@ export default function SalesInvoiceDetailPage() {
                                     </div>
                                 )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: 14, fontWeight: 700 }}>
-                                    <span style={{ color: '#64748b' }}>Total Taxable Value</span>
+                                    <span style={{ color: '#64748b' }}>{isEstimate ? 'Total Estimate' : 'Total Taxable Value'}</span>
                                     <span>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                 </div>
                                 {gstApplicable && (

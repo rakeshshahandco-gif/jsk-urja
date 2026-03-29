@@ -8,6 +8,7 @@ router.use(protect);
 router.route('/').get(soCtrl.getSOs).post(soCtrl.createSO);
 router.route('/:id').get(soCtrl.getSOById).put(soCtrl.updateSO).delete(soCtrl.deleteSO);
 router.post('/:id/cancel', soCtrl.cancelSO);
+router.post('/:id/restore', soCtrl.restoreSO);
 router.post('/:id/generate-production-sheet', soCtrl.generateProductionSheet);
 
 export default router;

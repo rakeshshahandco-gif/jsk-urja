@@ -1,0 +1,60 @@
+.tabWrapper {
+    .tabTitle { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0; }
+    .tabDesc { margin: 0; color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .tabHeader { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+
+    .badgeWrapper { display: flex; align-items: center; gap: 8px; background: #dcfce7; color: #16a34a; padding: 6px 12px; border-radius: 9999px; font-weight: 600; font-size: 13px; .ico { animation: pulse 2s infinite; } }
+}
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+.loader { text-align: center; padding: 40px; color: #64748b; }
+.emptyState { text-align: center; padding: 48px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-style: italic; }
+
+.timeline {
+    position: relative; padding-left: 20px; margin-top: 24px; display: flex; flex-direction: column; gap: 24px;
+    
+    .timelineItem {
+        position: relative;
+        .tLine { position: absolute; left: -14px; top: 24px; bottom: -30px; width: 2px; background: #e2e8f0; z-index: 0; }
+        &:last-child .tLine { display: none; }
+        
+        .tDot { position: absolute; left: -19px; top: 4px; width: 12px; height: 12px; border-radius: 50%; z-index: 1; border: 2px solid white; box-shadow: 0 0 0 1px #cbd5e1;
+            &.dot_Create { background: #10b981; }
+            &.dot_Update { background: #3b82f6; }
+            &.dot_Delete { background: #ef4444; }
+            &.dot_StatusChange { background: #f59e0b; }
+        }
+
+        .tContent {
+            background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-left: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            
+            .tHeader { display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+                .actionBadge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+                    &.act_Create { background: #dcfce7; color: #16a34a; }
+                    &.act_Update { background: #eff6ff; color: #2563eb; }
+                    &.act_Delete { background: #fee2e2; color: #dc2626; }
+                    &.act_StatusChange { background: #fefce8; color: #ca8a04; }
+                }
+                .entityTxt { color: #0f172a; font-size: 14px; }
+                .tDate { color: #64748b; font-size: 12px; margin-left: auto; }
+            }
+
+            .tBody { font-size: 13px; color: #475569; display: flex; justify-content: space-between; align-items: center;
+                .userTxt { font-weight: 600; color: #334155; }
+                .ipTxt { font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #94a3b8; }
+            }
+
+            .changesBox {
+                margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;
+                .diffTable {
+                    width: 100%; border-collapse: collapse; font-size: 12px; font-family: monospace;
+                    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+                    th { background: #f8fafc; color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+                    .fld { color: #0f172a; font-weight: 600; width: 150px; }
+                    .old { color: #dc2626; text-decoration: line-through; width: 40%; word-break: break-all; }
+                    .new { color: #16a34a; font-weight: 700; width: 40%; word-break: break-all; }
+                }
+            }
+        }
+    }
+}

@@ -9,12 +9,13 @@ router.route('/')
     .get(piController.getPurchaseInvoices)
     .post(piController.createPurchaseInvoice);
 
-router.get('/:id', piController.getPurchaseInvoiceById);
-router.patch('/:id/payment', piController.updatePaymentStatus);
-router.patch('/:id/cancel', piController.cancelPurchaseInvoice);
-
 router.route('/:id')
+    .get(piController.getPurchaseInvoiceById)
+    .put(piController.updatePurchaseInvoice)
     .delete(piController.deletePurchaseInvoice);
 
+router.post('/:id/restore', piController.restorePurchaseInvoice);
+router.patch('/:id/payment', piController.updatePaymentStatus);
+router.patch('/:id/cancel', piController.cancelPurchaseInvoice);
 
 export default router;

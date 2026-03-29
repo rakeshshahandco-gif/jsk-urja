@@ -389,7 +389,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
 
             {/* ── Buttons ── */}
             <div className={styles.footer}>
-                <button type="button" onClick={onCancel} className={clsx(styles.btn, styles.secondary)}>Cancel</button>
+                <button type="button" onClick={() => { if (window.confirm('Discard changes?')) onCancel(); }} className={clsx(styles.btn, styles.secondary)}>Cancel</button>
                 <button type="submit" disabled={submitting} className={clsx(styles.btn, styles.primary)}>
                     {submitting ? 'Saving...' : (task ? '✓ Update Task' : '🚀 Create Task')}
                 </button>

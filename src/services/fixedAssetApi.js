@@ -24,6 +24,18 @@ export const getFixedAssets = async (params) => { const r = await api.get(AST, {
 export const getFixedAssetById = async (id) => { const r = await api.get(`${AST}/${id}`); return r.data.data; };
 export const createFixedAsset = async (data) => { const r = await api.post(AST, data); return r.data.data; };
 export const updateFixedAsset = async (id, data) => { const r = await api.put(`${AST}/${id}`, data); return r.data.data; };
+export const exportFixedAssetTemplate = async () => {
+    const r = await api.get(`${AST}/export-template`, { responseType: 'blob' });
+    return r.data;
+};
+export const importFixedAssetsExcel = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const r = await api.post(`${AST}/import-excel`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return r.data;
+};
 
 // Lifecycle
 export const createAssetTransfer = async (data) => { const r = await api.post(TRA, data); return r.data.data; };

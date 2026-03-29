@@ -61,7 +61,7 @@ const RepairJobCardFormPage = () => {
                     <span style={{ fontSize: 14, fontWeight: 800 }}>Repair / QC Job Card</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => navigate(-1)} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                     <button onClick={handleSave} disabled={saving} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 6, background: saving ? '#c4b5fd' : '#7c3aed', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
                         <Save size={13} />{saving ? 'Saving…' : 'Save Job Card'}
                     </button>

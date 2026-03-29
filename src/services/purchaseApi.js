@@ -17,7 +17,8 @@ export const getPurchaseOrderById = async (id) => { const r = await api.get(`${P
 export const createPurchaseOrder = async (data) => { const r = await api.post(PO, data); return r.data.data; };
 export const updatePurchaseOrder = async (id, data) => { const r = await api.put(`${PO}/${id}`, data); return r.data.data; };
 export const updatePOStatus = async (id, status) => { const r = await api.patch(`${PO}/${id}/status`, { status }); return r.data.data; };
-export const deletePurchaseOrder = async (id) => { const r = await api.delete(`${PO}/${id}`); return r.data; };
+export const deletePurchaseOrder = async (id, reason) => { const r = await api.delete(`${PO}/${id}`, { data: { reason } }); return r.data; };
+export const restorePurchaseOrder = async (id) => { const r = await api.post(`${PO}/${id}/restore`); return r.data; };
 
 // ── GRN ───────────────────────────────────────────────────────────────────────
 const GRN = '/grns';
@@ -26,6 +27,9 @@ export const getGRNById = async (id) => { const r = await api.get(`${GRN}/${id}`
 export const getGRNsByPO = async (poId) => { const r = await api.get(`${GRN}/by-po/${poId}`); return r.data.data; };
 export const getGRNsBySupplier = async (supplierId) => { const r = await api.get(`${GRN}/by-supplier/${supplierId}`); return r.data.data; };
 export const createGRN = async (data) => { const r = await api.post(GRN, data); return r.data; };
+export const updateGRN = async (id, data) => { const r = await api.put(`${GRN}/${id}`, data); return r.data.data; };
+export const deleteGRN = async (id, reason) => { const r = await api.delete(`${GRN}/${id}`, { data: { reason } }); return r.data; };
+export const restoreGRN = async (id) => { const r = await api.post(`${GRN}/${id}/restore`); return r.data; };
 
 // ── Purchase Invoices ─────────────────────────────────────────────────────────
 const PI = '/purchase-invoices';
@@ -38,7 +42,8 @@ export const updateInvoicePayment = async (id, data) => { const r = await api.pa
 export const confirmPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/confirm`); return r.data.data; };
 export const cancelPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/cancel`); return r.data.data; };
 export const updatePurchaseInvoice = async (id, data) => { const r = await api.put(`${PI}/${id}`, data); return r.data.data; };
-export const deletePurchaseInvoice = async (id) => { const r = await api.delete(`${PI}/${id}`); return r.data; };
+export const deletePurchaseInvoice = async (id, reason) => { const r = await api.delete(`${PI}/${id}`, { data: { reason } }); return r.data; };
+export const restorePurchaseInvoice = async (id) => { const r = await api.post(`${PI}/${id}/restore`); return r.data; };
 
 // ── Payment Entries ───────────────────────────────────────────────────────────
 const PE = '/payment-entries';

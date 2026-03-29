@@ -293,7 +293,7 @@ const JournalEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
-                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
                             style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                         </button>

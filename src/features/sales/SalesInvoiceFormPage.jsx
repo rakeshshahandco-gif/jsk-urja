@@ -92,7 +92,7 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
                     </label>
                 </div>
                 <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                    <button onClick={onClose} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                    <button onClick={() => { if (window.confirm('Discard changes?')) onClose(); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                     <button onClick={handleSave} disabled={submitting} style={{ padding: '8px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>
                         {submitting ? 'Creating...' : 'ADD & CONTINUE'}
                     </button>
@@ -298,6 +298,7 @@ export default function SalesInvoiceFormPage() {
     // Add freight to taxable amount
     const totalTaxable = totalItemTaxable + freight;
 
+    // Use first item's GST rate if available, else default to 18
     const freightGstRate = gstApplicable ? (Number(form.freightGstRate) || (processedItems[0]?.gstRate || 18)) : 0;
     const freightGst = gstApplicable ? Math.round(freight * freightGstRate / 100 * 100) / 100 : 0;
 
@@ -344,7 +345,7 @@ export default function SalesInvoiceFormPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>🧾 New GST Tax Invoice</h1>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => navigate(-1)} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
+                        <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
                         <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                             {saving ? 'Creating...' : '✓ Create Invoice'}
                         </button>
@@ -421,7 +422,7 @@ export default function SalesInvoiceFormPage() {
                 <Section title="Buyer Details">
                     <Grid cols={3}>
                         <Field label="Customer Name *"><input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, borderColor: !form.customerName ? '#fca5a5' : '#d1d5db' }} placeholder="Customer / Company Name" /></Field>
-                        <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="27XXXXX..." /></Field>
+                        <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="e.g. 27XXXXX..." /></Field>
                         <Field label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} /></Field>
                         <Field label="Billing State"><input value={form.billingState} onChange={e => setF('billingState', e.target.value)} style={inp} placeholder="Maharashtra" /></Field>
                         <Field label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={inp} placeholder="27" /></Field>
@@ -518,12 +519,6 @@ export default function SalesInvoiceFormPage() {
                                 <span>+ Freight / Shipping</span>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <input type="number" min="0" value={form.freightAmount} onChange={e => setF('freightAmount', e.target.value)} style={{ ...inp, width: 80, padding: '4px 8px' }} placeholder="Amt" title="Freight Amount" />
-                                    {gstApplicable && (
-                                        <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <span>GST%</span>
-                                            <input type="number" min="0" max="28" value={form.freightGstRate} onChange={e => setF('freightGstRate', e.target.value)} style={{ ...inp, width: 45, padding: '4px 4px', fontSize: 10 }} placeholder="%" title="Freight GST %" />
-                                        </div>
-                                    )}
                                     <span style={{ fontWeight: 600, color: '#4b5563', minWidth: 60, textAlign: 'right' }}>₹{freight.toFixed(2)}</span>
                                 </div>
                             </div>

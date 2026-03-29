@@ -90,6 +90,12 @@ export const PATHS = {
         COMPLAINTS: '/service/complaints',
         REPLACEMENT_DASHBOARD: '/service/replacement-dashboard',
     },
+    PRD: {
+        ROOT: '/prd',
+        PROJECTS: '/prd/projects',
+        DASHBOARD: '/prd/dashboard',
+        TEST_PARAMETERS: '/prd/test-parameters',
+    },
     ACCOUNTS: {
         ROOT: '/accounts',
         RECEIPT_ENTRY: '/accounts/receipt-entry',
@@ -111,5 +117,9 @@ export const PATHS = {
         FIXED_ASSETS: '/accounts/fixed-assets',
         ASSET_CATEGORIES: '/accounts/asset-categories',
         ASSET_LOCATIONS: '/accounts/asset-locations',
+    },
+    MESSENGER: {
+        ROOT: '/messenger',
+        THREAD: (id) => `/messenger/${id}`,
     }
 };

@@ -474,7 +474,7 @@ export const AddCustomerForm = ({ closeModal }) => {
 
                 {/* Footer Actions */}
                 <div className={styles.actions}>
-                    <Button variant="outline" type="button" onClick={closeModal} disabled={isSubmitting}>
+                    <Button variant="outline" type="button" onClick={() => window.confirm('Discard changes?') && closeModal()} disabled={isSubmitting}>
                         Cancel
                     </Button>
                     <Button type="submit" isLoading={isSubmitting}>

@@ -1,0 +1,142 @@
+.formContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.sectionTitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+    margin-top: 12px;
+    margin-bottom: 4px;
+}
+
+.grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.fullWidth {
+    grid-column: 1 / -1;
+
+    .label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: #475569;
+        margin-bottom: 6px;
+    }
+
+    .textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #334155;
+        resize: vertical;
+        outline: none;
+
+        &:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+    }
+}
+
+.fileUploadBox {
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 16px;
+    background: #f8fafc;
+    
+    .fileInputHidden {
+        display: none;
+    }
+
+    .fileDropZone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        color: #64748b;
+        font-size: 14px;
+        font-weight: 500;
+        padding: 24px 0;
+
+        &:hover {
+            color: #3b82f6;
+            svg { color: #3b82f6; }
+        }
+    }
+
+    .selectedFiles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e2e8f0;
+
+        .fileBadge {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    }
+
+    .existingFiles {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+
+        .subLabel {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 8px;
+        }
+
+        .attachmentLink {
+            display: inline-block;
+            margin-right: 12px;
+            margin-bottom: 8px;
+            color: #2563eb;
+            text-decoration: none;
+            font-size: 13px;
+            background: #eff6ff;
+            padding: 4px 8px;
+            border-radius: 4px;
+
+            &:hover {
+                text-decoration: underline;
+                background: #dbeafe;
+            }
+        }
+    }
+}
+
+.footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+}

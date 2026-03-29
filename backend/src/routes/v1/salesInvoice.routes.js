@@ -6,7 +6,9 @@ const router = express.Router();
 router.use(protect);
 
 router.route('/').get(siCtrl.getSalesInvoices).post(siCtrl.createSalesInvoice);
-router.route('/:id').get(siCtrl.getSalesInvoiceById);
+router.route('/:id')
+    .get(siCtrl.getSalesInvoiceById)
+    .delete(siCtrl.deleteSalesInvoice);
 router.post('/:id/cancel', siCtrl.cancelSalesInvoice);
 router.post('/:id/restore', siCtrl.restoreSalesInvoice);
 router.post('/:id/record-payment', siCtrl.recordPayment);

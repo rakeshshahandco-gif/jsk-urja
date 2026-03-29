@@ -2,6 +2,7 @@ import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { syncPermissionsWithRegistry } from '../utils/permission.utils.js';
 import jwt from 'jsonwebtoken';
 
 const generateToken = (id) => {
@@ -78,10 +79,22 @@ export const login = asyncHandler(async (req, res) => {
     const finalUserData = populatedUser.toObject();
     delete finalUserData.password;
     
-    // Ensure roleName is present
-    if (!finalUserData.roleName && populatedUser.role?.name) {
-        finalUserData.roleName = populatedUser.role.name;
+    // Sync permissions for the user
+    const isFullAccess = finalUserData.roleName?.toLowerCase().includes('admin') || 
+                        (populatedUser.role && populatedUser.role.isSystemRole);
+                        
+    if (finalUserData.role) {
+        finalUserData.role.permissions = syncPermissionsWithRegistry(
+            finalUserData.role.permissions || {}, 
+            isFullAccess
+        );
     }
+    
+    // Also sync user-level additionalPermissions
+    finalUserData.additionalPermissions = syncPermissionsWithRegistry(
+        finalUserData.additionalPermissions || {},
+        false // Individual overrides shouldn't default to true even for admins
+    );
 
     res.status(200).json(
         new ApiResponse(200, {
@@ -99,6 +112,22 @@ export const getMe = asyncHandler(async (req, res) => {
         // Ensure roleName is present in response
         userData.roleName = userData.roleName || user.role?.name || '';
         
+        // Sync permissions
+        const isFullAccess = userData.roleName?.toLowerCase().includes('admin') || 
+                            (user.role && user.role.isSystemRole);
+                            
+        if (userData.role) {
+            userData.role.permissions = syncPermissionsWithRegistry(
+                userData.role.permissions || {}, 
+                isFullAccess
+            );
+        }
+        
+        userData.additionalPermissions = syncPermissionsWithRegistry(
+            userData.additionalPermissions || {},
+            false
+        );
+
         res.status(200).json(
             new ApiResponse(200, userData, 'User profile fetched successfully')
         );

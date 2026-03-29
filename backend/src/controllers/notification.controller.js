@@ -46,13 +46,15 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
     res.json(new ApiResponse(200, null, 'All notifications marked as read'));
 });
 
+import { getIO } from '../config/socket.js';
+
 // Helper for other controllers to create notifications
 export const createNotification = async ({ recipient, actor, task, type, title, message, metadata = {} }) => {
     try {
         // Don't notify the actor themselves
         if (recipient.toString() === actor.toString()) return null;
 
-        return await Notification.create({
+        const notification = await Notification.create({
             recipient,
             actor,
             task,
@@ -61,6 +63,17 @@ export const createNotification = async ({ recipient, actor, task, type, title, 
             message,
             metadata
         });
+
+        // Populate actor info for the client-side toast UI
+        const populatedNotification = await Notification.findById(notification._id)
+            .populate('actor', 'name avatar username')
+            .populate('task', 'title');
+
+        // Emit real-time notification via socket
+        const io = getIO();
+        io.to(`user_${recipient}`).emit('notification:new', populatedNotification);
+
+        return populatedNotification;
     } catch (error) {
         console.error('Error creating notification:', error);
         return null;

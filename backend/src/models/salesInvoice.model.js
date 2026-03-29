@@ -114,12 +114,19 @@ const salesInvoiceSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    
+    // Soft Delete Fields
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deleteReason: { type: String, default: '' },
 }, { timestamps: true });
 
 salesInvoiceSchema.index({ invoiceNumber: 1 });
 salesInvoiceSchema.index({ customerId: 1, invoiceDate: -1 });
 salesInvoiceSchema.index({ paymentStatus: 1 });
 salesInvoiceSchema.index({ soId: 1 });
+salesInvoiceSchema.index({ isDeleted: 1 });
 
 const SalesInvoice = mongoose.model('SalesInvoice', salesInvoiceSchema);
 export { SalesInvoice };

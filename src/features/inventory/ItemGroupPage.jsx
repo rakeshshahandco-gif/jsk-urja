@@ -39,7 +39,7 @@ const ItemGroupPage = () => {
 
     const openAdd = () => { setForm({ ...BLANK }); setEditId(null); setShowForm(true); };
     const openEdit = (g) => { setForm({ name: g.name, code: g.code, description: g.description || '' }); setEditId(g._id); setShowForm(true); };
-    const cancelForm = () => { setShowForm(false); setEditId(null); setForm({ ...BLANK }); };
+    const cancelForm = () => { if (window.confirm('Discard changes?')) { setShowForm(false); setEditId(null); setForm({ ...BLANK }); } };
 
     const handleNameChange = (val) => {
         setForm(f => ({

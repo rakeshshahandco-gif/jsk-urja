@@ -1,197 +1,62 @@
-import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { ApiError } from '../utils/ApiError.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
-import { InvoiceSeries } from '../models/invoiceSeries.model.js';
-import { SalesOrder } from '../models/salesOrder.model.js';
-import { Item } from '../models/item.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
+import { rollbackStockLedger, recalculateStockLedger } from '../utils/stockUtils.js';
+import { Item } from '../models/item.model.js';
+import { SalesOrder } from '../models/salesOrder.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { postSalesInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
+import httpStatus from 'http-status';
 
-// --- helpers ---
-const numWords = (n) => {
-    const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
-        'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-    if (n === 0) return 'Zero';
-    const toWords = (num) => {
-        if (num < 20) return a[num];
-        if (num < 100) return b[Math.floor(num / 10)] + (num % 10 ? ' ' + a[num % 10] : '');
-        if (num < 1000) return a[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + toWords(num % 100) : '');
-        if (num < 100000) return toWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + toWords(num % 1000) : '');
-        if (num < 10000000) return toWords(Math.floor(num / 100000)) + ' Lakh' + (num % 100000 ? ' ' + toWords(num % 100000) : '');
-        return toWords(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 ? ' ' + toWords(num % 10000000) : '');
-    };
-    const rupees = Math.floor(n);
-    const paise = Math.round((n - rupees) * 100);
-    let result = toWords(rupees) + ' Rupees';
-    if (paise > 0) result += ' and ' + toWords(paise) + ' Paise';
-    return result + ' Only';
-};
-
-const calcInvoiceTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = 'CGST / SGST', gstApplicable = true) => {
-    const isIGST = gstType === 'IGST';
-    let totalQty = 0, subTotal = 0, totalDiscount = 0, totalTaxableAmount = 0;
-    let totalCgst = 0, totalSgst = 0, totalIgst = 0;
-
-    // Force GST to 0 if not applicable
-    const effectiveGstApplicable = gstApplicable === true || gstApplicable === 'true';
-
-    const processedItems = items.map(item => {
-        const qty = Number(item.qty) || 0;
-        const rate = Number(item.rate) || 0;
-        const discPct = Number(item.discountPercent) || 0;
-        const gstRate = effectiveGstApplicable ? (Number(item.gstRate) || 18) : 0;
-        const gross = qty * rate;
-        const discAmt = Math.round(gross * discPct / 100 * 100) / 100;
-        const taxableAmount = gross - discAmt;
-
-        let cgstRate = 0, cgstAmount = 0, sgstRate = 0, sgstAmount = 0, igstRate = 0, igstAmount = 0;
-        if (effectiveGstApplicable) {
-            if (isIGST) {
-                igstRate = gstRate;
-                igstAmount = Math.round(taxableAmount * igstRate / 100 * 100) / 100;
-            } else {
-                cgstRate = gstRate / 2; sgstRate = gstRate / 2;
-                cgstAmount = Math.round(taxableAmount * cgstRate / 100 * 100) / 100;
-                sgstAmount = Math.round(taxableAmount * sgstRate / 100 * 100) / 100;
-            }
-        }
-        const totalAmount = taxableAmount + cgstAmount + sgstAmount + igstAmount;
-
-        totalQty += qty;
-        subTotal += gross;
-        totalDiscount += discAmt;
-        totalTaxableAmount += taxableAmount;
-        totalCgst += cgstAmount; totalSgst += sgstAmount; totalIgst += igstAmount;
-
-        return {
-            itemId: item.itemId,
-            itemCode: item.itemCode || '',
-            itemName: item.itemName || '',
-            modelNo: item.modelNo || '',
-            description: item.description || '',
-            additionalNotes: item.additionalNotes || '',
-            hsnCode: item.hsnCode || '',
-            uom: item.uom || 'NOS',
-            qty,
-            rate,
-            discountPercent: discPct,
-            discountAmount: discAmt,
-            taxableAmount,
-            gstRate,
-            cgstRate,
-            cgstAmount,
-            sgstRate,
-            sgstAmount,
-            igstRate,
-            igstAmount,
-            totalAmount
-        };
-    });
-
-    const freight = Number(freightAmount) || 0;
-    
-    // Add Freight to taxable amount before GST calculation
-    const taxableWithFreight = totalTaxableAmount + freight;
-
-    const freightGstRateCount = effectiveGstApplicable ? (Number(freightGstRate) || 0) : 0;
-    const freightGstAmt = effectiveGstApplicable && freight > 0 && freightGstRateCount > 0 ? Math.round(freight * freightGstRateCount / 100 * 100) / 100 : 0;
-    const totalGst = totalCgst + totalSgst + totalIgst + freightGstAmt;
-    
-    // Grand Total is taxable + gst
-    const grandTotal = taxableWithFreight + totalGst;
-    
-    const roundedTotal = Math.round(grandTotal);
-    const roundOff = Math.round((roundedTotal - grandTotal) * 100) / 100;
-
-    return { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount: taxableWithFreight, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount: freightGstAmt };
-};
-
-// ------- CREATE INVOICE -------
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-
     try {
         const body = req.body;
-        if (!body.customerName) throw new ApiError(httpStatus.BAD_REQUEST, 'Customer name is required');
-        if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
-
-        // Get invoice number from series
-        if (!body.seriesId) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice Series is required.');
+        const invoiceNumber = body.invoiceNumber || `SI-${Date.now()}`;
         
-        const series = await InvoiceSeries.findById(body.seriesId).session(session);
-        if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive invoice series');
-
-        // Self-healing sync
-        const lastActualInvoice = await SalesInvoice.findOne({
-            invoiceNumber: { $regex: `^${series.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` }
-        }).sort({ invoiceNumber: -1 }).session(session);
-        
-        if (lastActualInvoice) {
-            const lastActualNum = parseInt(lastActualInvoice.invoiceNumber.replace(series.prefix, ''), 10);
-            if (!isNaN(lastActualNum) && lastActualNum < series.currentNumber) {
-                series.currentNumber = lastActualNum;
-            }
-        }
-
-        const invoiceNumber = series.nextInvoiceNumber();
-        const gstApplicable = series.gstApplicable === false ? false : true;
-        series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
-        await series.save({ session });
-
-        const { items: _items, ...otherData } = body;
-
-        const { processedItems, totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff, freightGstAmount } = calcInvoiceTotals(
-            _items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
-        );
-
-        const inv = await SalesInvoice.create([{
-            ...otherData,
+        const invData = {
+            ...body,
             invoiceNumber,
-            gstApplicable,
-            items: processedItems,
-            totalQty, subTotal, totalDiscount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst,
-            grandTotal, roundedTotal, roundOff, freightGstAmount,
-            amountInWords: numWords(roundedTotal),
-            paymentStatus: body.paymentType === 'Cash' ? 'Paid' : 'Unpaid',
-            paidAmount: body.paymentType === 'Cash' ? roundedTotal : 0,
-            status: 'Confirmed',
             createdBy: req.user.id,
-        }], { session });
+            status: 'Confirmed',
+            paymentStatus: 'Unpaid'
+        };
 
-        const invoice = inv[0];
+        const [invoice] = await SalesInvoice.create([invData], { session });
 
-        // Stock Deduction
-        for (const pItem of processedItems) {
-            if (!pItem.itemId) continue;
-            const itemDoc = await Item.findById(pItem.itemId).session(session);
-            if (itemDoc) {
-                itemDoc.currentStock = (itemDoc.currentStock || 0) - pItem.qty;
-                await itemDoc.save({ session });
+        // Stock and Ledger Logic
+        if (invoice.items && invoice.items.length > 0) {
+            for (const iItem of invoice.items) {
+                if (!iItem.itemId) continue;
+                const itemDoc = await Item.findById(iItem.itemId).session(session);
+                if (itemDoc) {
+                    itemDoc.currentStock = (itemDoc.currentStock || 0) - iItem.qty;
+                    await itemDoc.save({ session });
 
-                await StockLedger.create([{
-                    date: new Date(),
-                    itemId: itemDoc._id,
-                    itemCode: itemDoc.itemCode,
-                    itemName: itemDoc.itemName,
-                    transactionType: 'SALES_INVOICE',
-                    stockBucket: 'SALEABLE',
-                    referenceNo: invoice.invoiceNumber,
-                    referenceId: invoice._id,
-                    outQty: pItem.qty,
-                    rate: pItem.rate,
-                    amount: pItem.qty * pItem.rate,
-                    runningStock: itemDoc.currentStock,
-                    createdBy: req.user.id
-                }], { session });
+                    await StockLedger.create([{
+                        date: invoice.invoiceDate || new Date(),
+                        itemId: itemDoc._id,
+                        itemCode: itemDoc.itemCode,
+                        itemName: itemDoc.itemName,
+                        transactionType: 'SALES_INVOICE',
+                        stockBucket: 'SALEABLE',
+                        referenceNo: invoice.invoiceNumber,
+                        referenceId: invoice._id,
+                        outQty: iItem.qty,
+                        rate: iItem.rate,
+                        amount: iItem.qty * iItem.rate,
+                        runningStock: itemDoc.currentStock,
+                        createdBy: req.user.id
+                    }], { session });
+                }
             }
         }
 
-        // Financial Ledger Posting (non-fatal — invoice saves even if ledger posting fails)
+        // Financial Ledger Posting
         try {
             await postSalesInvoiceToLedger(invoice, req.user.id, session);
         } catch (ledgerErr) {
@@ -213,10 +78,15 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     }
 });
 
-// ------- LIST INVOICES -------
 export const getSalesInvoices = asyncHandler(async (req, res) => {
-    const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1 } = req.query;
-    const filter = {};
+    const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
+    const filter = { isDeleted: { $ne: true } };
+
+    if (view === 'archived') {
+        filter.isDeleted = true;
+    } else if (view === 'all' || includeDeleted === 'true') {
+        delete filter.isDeleted;
+    }
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
     if (search) filter.$or = [
@@ -237,7 +107,6 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     res.json({ success: true, invoices, total });
 });
 
-// ------- GET SINGLE INVOICE -------
 export const getSalesInvoiceById = asyncHandler(async (req, res) => {
     const inv = await SalesInvoice.findById(req.params.id)
         .populate('seriesId')
@@ -250,12 +119,6 @@ export const getSalesInvoiceById = asyncHandler(async (req, res) => {
         referenceModel: 'Customer' 
     });
 
-    if (!ledger && inv.customerName) {
-        ledger = await AccountLedger.findOne({
-            name: { $regex: new RegExp(`^${inv.customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-        });
-    }
-
     const data = inv.toObject();
     if (ledger) {
         data.customerLedgerId = ledger._id;
@@ -265,7 +128,6 @@ export const getSalesInvoiceById = asyncHandler(async (req, res) => {
     res.json({ success: true, data });
 });
 
-// ------- RECORD PAYMENT -------
 export const recordPayment = asyncHandler(async (req, res) => {
     const inv = await SalesInvoice.findById(req.params.id);
     if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
@@ -286,11 +148,9 @@ export const recordPayment = asyncHandler(async (req, res) => {
     res.json({ success: true, data: inv });
 });
 
-// ------- RESTORE CANCELLED INVOICE -------
 export const restoreSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
@@ -300,6 +160,7 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
         inv.paymentStatus = 'Unpaid';
         inv.updatedBy = req.user.id;
         
+        // Re-create stock ledger entries
         if (inv.items && inv.items.length > 0) {
             for (const iItem of inv.items) {
                 if (!iItem.itemId) continue;
@@ -309,28 +170,29 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
                     await itemDoc.save({ session });
 
                     await StockLedger.create([{
-                        date: new Date(),
+                        date: inv.invoiceDate || new Date(),
                         itemId: itemDoc._id,
                         itemCode: itemDoc.itemCode,
                         itemName: itemDoc.itemName,
-                        transactionType: 'SALES_INVOICE_RESTORE',
+                        transactionType: 'SALES_INVOICE',
                         stockBucket: 'SALEABLE',
                         referenceNo: inv.invoiceNumber,
                         referenceId: inv._id,
                         outQty: iItem.qty,
-                        remarks: 'Invoice Restored from Cancelled'
+                        rate: iItem.rate,
+                        amount: iItem.qty * iItem.rate,
+                        createdBy: req.user.id
                     }], { session });
+
+                    await recalculateStockLedger(itemDoc._id, session);
                 }
             }
         }
 
-        // Re-post financial matches
         await postSalesInvoiceToLedger(inv, req.user.id, session);
-
         await inv.save({ session });
         await session.commitTransaction();
         res.json({ success: true, data: inv });
-
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -339,55 +201,75 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
     }
 });
 
-// ------- CANCEL INVOICE -------
 export const cancelSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
-        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel an invoice with payments. Reverse payments first.');
+        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments');
         
         inv.status = 'Cancelled';
         inv.paymentStatus = 'Cancelled';
         inv.updatedBy = req.user.id;
         await inv.save({ session });
 
-        // Restore Stock
-        if (inv.items && inv.items.length > 0) {
-            for (const iItem of inv.items) {
-                if (!iItem.itemId) continue;
-                const itemDoc = await Item.findById(iItem.itemId).session(session);
-                if (itemDoc) {
-                    itemDoc.currentStock = (itemDoc.currentStock || 0) + iItem.qty;
-                    await itemDoc.save({ session });
-
-                    await StockLedger.create([{
-                        date: new Date(),
-                        itemId: itemDoc._id,
-                        itemCode: itemDoc.itemCode,
-                        itemName: itemDoc.itemName,
-                        transactionType: 'SALES_INVOICE_CANCEL',
-                        stockBucket: 'SALEABLE',
-                        referenceNo: inv.invoiceNumber,
-                        referenceId: inv._id,
-                        inQty: iItem.qty,
-                        rate: iItem.rate,
-                        amount: iItem.qty * iItem.rate,
-                        runningStock: itemDoc.currentStock,
-                        createdBy: req.user.id
-                    }], { session });
-                }
-            }
-        }
+        // Hard rollback stock ledger (hides entry from movement history)
+        await rollbackStockLedger(inv._id, session);
 
         // Reverse Financial Impact
         await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
 
         await session.commitTransaction();
         res.json({ success: true, data: inv });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
 
+export const deleteSalesInvoice = asyncHandler(async (req, res) => {
+    const { reason } = req.body;
+    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required');
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await SalesInvoice.findById(req.params.id).session(session);
+        if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+        
+        // Restriction: Cannot delete if payments exist
+        if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
+            throw new ApiError(httpStatus.BAD_REQUEST, `Cannot archive Sales Invoice ${inv.invoiceNumber} because payments have already been recorded against it. Please delete the payments first if you must archive this invoice.`);
+        }
+
+        inv.isDeleted = true;
+        inv.deletedAt = new Date();
+        inv.deletedBy = req.user.id;
+        inv.deleteReason = reason;
+        inv.status = 'Cancelled'; // Standard archival state
+
+        // Rollback stock and ledger impact
+        await rollbackStockLedger(inv._id, session);
+        await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
+
+        await inv.save({ session });
+        
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'DELETE',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Soft Deleted Sales Invoice ${inv.invoiceNumber}`,
+            details: { reason },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: 'Sales Invoice archived successfully' });
     } catch (error) {
         await session.abortTransaction();
         throw error;

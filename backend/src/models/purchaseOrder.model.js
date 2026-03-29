@@ -34,7 +34,7 @@ const purchaseOrderSchema = new mongoose.Schema({
     warehouse: { type: String, default: '' },
     status: {
         type: String,
-        enum: ['Draft', 'Ordered', 'Partially Received', 'Fully Received', 'Closed', 'Cancelled'],
+        enum: ['Draft', 'Ordered', 'Partially Received', 'Fully Received', 'Completed', 'Cancelled'],
         default: 'Draft',
     },
     remarks: { type: String, default: '' },
@@ -44,7 +44,6 @@ const purchaseOrderSchema = new mongoose.Schema({
     supplierStateCode: { type: String, default: '' },
     supplierContact: { type: String, default: '' },
     stickerType: { type: String, default: '' },
-    deliveryAddress: { type: String, default: '' },
     deliveryAddress: { type: String, default: '' },
     deliveryFacility: { type: String, default: '' },
     items: [poItemSchema],
@@ -66,11 +65,17 @@ const purchaseOrderSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Soft Delete Fields
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deleteReason: { type: String, default: '' },
 }, { timestamps: true });
 
-purchaseOrderSchema.index({ poNumber: 1 });
 purchaseOrderSchema.index({ status: 1 });
 purchaseOrderSchema.index({ supplierId: 1 });
+purchaseOrderSchema.index({ isDeleted: 1 });
 
 const PurchaseOrder = mongoose.model('PurchaseOrder', purchaseOrderSchema);
 export { PurchaseOrder };

@@ -8,6 +8,7 @@ import Followup from '../models/followup.model.js';
 import Conversation from '../models/conversation.model.js';
 import Reminder from '../models/reminder.model.js';
 import Customer from '../models/customer.model.js';
+import { GSTImportLog } from '../models/gstImportLog.model.js';
 
 const catchAsync = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch((err) => next(err));
@@ -571,6 +572,10 @@ const importCustomers = catchAsync(async (req, res) => {
                 results.failed++;
             } else {
                 // Build customer object
+                const finalGstNumber = (gstNumber || '').trim().toUpperCase();
+                const isMaharashtra = (state && state.trim().toLowerCase() === 'maharashtra') || finalGstNumber.startsWith('27');
+                const calculatedGstType = (state || finalGstNumber.length >= 2) ? (isMaharashtra ? 'CGST / SGST' : 'IGST') : '';
+                
                 customersToInsert.push({
                     customerName,
                     contactPersons: [
@@ -593,9 +598,9 @@ const importCustomers = catchAsync(async (req, res) => {
                     pincode,
                     status,
                     interestedProducts,
-                    gstNumber: (gstNumber || '').trim().toUpperCase(),
-                    gstRegistrationType: gstRegistrationType || (gstNumber ? 'Registered' : 'Unregistered'),
-                    gstType: gstType || (state ? (state.trim().toLowerCase() === 'maharashtra' ? 'CGST / SGST' : 'IGST') : '')
+                    gstNumber: finalGstNumber,
+                    gstRegistrationType: gstRegistrationType || (finalGstNumber ? 'Registered' : 'Consumer'),
+                    gstType: gstType || calculatedGstType
                 });
             }
         } catch (err) {
@@ -607,45 +612,349 @@ const importCustomers = catchAsync(async (req, res) => {
         }
     });
 
-    // Check for existing customers by mobile
+    // Upsert Customers by Mobile or Company Name
     if (customersToInsert.length > 0) {
-        // Only check for mobiles that are provided
-        const mobiles = customersToInsert
-            .map(c => c.contactPersons[0].mobile)
-            .filter(m => m !== '');
+        // Query existing customers by mobile OR company
+        const mobiles = customersToInsert.map(c => (c.contactPersons[0].mobile || '').trim()).filter(m => !!m);
+        const companies = customersToInsert.map(c => (c.company || '').trim()).filter(m => !!m);
+        
+        // Relax strict start/end boundaries to handle existing spaces in DB
+        const companyRegexes = companies.map(c => {
+            const escaped = c.replace(/[-[\]{}()*+?.,\\\\^$|#\\s]/g, '\\\\$&');
+            return new RegExp('^\\\\s*' + escaped + '\\\\s*$', 'i');
+        });
 
-        let existingMobiles = new Set();
-        if (mobiles.length > 0) {
-            const existingCustomers = await customerService.findByMobiles(mobiles);
-            existingMobiles = new Set(
-                existingCustomers.flatMap(c => c.contactPersons.map(cp => cp.mobile))
-            );
-        }
+        // Fetch all potential matches
+        const existingCustomers = await Customer.find({
+            $or: [
+                { 'contactPersons.mobile': { $in: mobiles } },
+                { company: { $in: companyRegexes } }
+            ]
+        });
 
         const finalInserts = [];
-        customersToInsert.forEach(customer => {
-            const primaryMobile = customer.contactPersons[0].mobile;
-            if (primaryMobile && existingMobiles.has(primaryMobile)) {
-                results.errors.push({
-                    mobile: primaryMobile,
-                    contactName: customer.contactPersons[0].name,
-                    errors: ['Customer with this mobile already exists']
-                });
-                results.failed++;
-                results.duplicates++;
+        const finalUpdates = [];
+
+        customersToInsert.forEach(excelCustomer => {
+            const primaryMobile = (excelCustomer.contactPersons[0].mobile || '').trim();
+            const excelCompany = excelCustomer.company ? excelCustomer.company.trim().toLowerCase() : '';
+
+            // Find match
+            let matchedCustomer = null;
+            if (excelCompany) {
+                matchedCustomer = existingCustomers.find(c => c.company && c.company.trim().toLowerCase() === excelCompany);
+            }
+            if (!matchedCustomer && primaryMobile) {
+                matchedCustomer = existingCustomers.find(c => c.contactPersons.some(cp => (cp.mobile || '').trim() === primaryMobile));
+            }
+
+            if (matchedCustomer) {
+                // UPDATE RECORD
+                const fieldsToSync = ['customerName', 'company', 'address', 'city', 'state', 'pincode', 'gstNumber', 'gstRegistrationType', 'gstType', 'customerType', 'status'];
+                
+                let isUpdated = false;
+                for (const field of fieldsToSync) {
+                    if (excelCustomer[field] && String(excelCustomer[field]).trim() !== '') {
+                        matchedCustomer[field] = excelCustomer[field];
+                        isUpdated = true;
+                    }
+                }
+
+                if (excelCustomer.interestedProducts && excelCustomer.interestedProducts.length > 0) {
+                    matchedCustomer.interestedProducts = excelCustomer.interestedProducts;
+                    isUpdated = true;
+                }
+
+                if (excelCustomer.contactPersons && excelCustomer.contactPersons[0]) {
+                    const excelContact = excelCustomer.contactPersons[0];
+                    if (matchedCustomer.contactPersons && matchedCustomer.contactPersons.length > 0) {
+                        const dbPrimary = matchedCustomer.contactPersons.find(c => c.isPrimary) || matchedCustomer.contactPersons[0];
+                        if (excelContact.mobile && !dbPrimary.mobile) dbPrimary.mobile = excelContact.mobile;
+                        if (excelContact.email && !dbPrimary.email) dbPrimary.email = excelContact.email;
+                        if (excelContact.name && !dbPrimary.name) dbPrimary.name = excelContact.name;
+                        isUpdated = true;
+                    }
+                }
+
+                if (isUpdated) {
+                    finalUpdates.push(matchedCustomer);
+                }
             } else {
-                finalInserts.push(customer);
+                // NEW INSERT
+                finalInserts.push(excelCustomer);
             }
         });
 
-        // Insert valid customers
+        // Insert valid ones
         if (finalInserts.length > 0) {
             await customerService.bulkCreateCustomers(finalInserts);
-            results.success = finalInserts.length;
+        }
+
+        // Save updated ones
+        if (finalUpdates.length > 0) {
+            const uniqueUpdates = [...new Set(finalUpdates)];
+            await Promise.all(uniqueUpdates.map(customer => customer.save()));
+        }
+
+        results.success = finalInserts.length + finalUpdates.length;
+        // Optional: inform frontend exactly how many were inserted vs updated by attaching to results
+        results.inserted = finalInserts.length;
+        results.updated = finalUpdates.length;
+    }
+
+
+    res.send(new ApiResponse(200, results, 'Import completed'));
+});
+
+// Export Customers
+const exportCustomers = catchAsync(async (req, res) => {
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Customer Master');
+
+    worksheet.columns = [
+        { header: 'Customer Code', key: 'customerCode', width: 15 },
+        { header: 'Customer Name', key: 'customerName', width: 25 },
+        { header: 'Company', key: 'company', width: 25 },
+        { header: 'Business Type', key: 'customerType', width: 25 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Primary Contact', key: 'primaryName', width: 20 },
+        { header: 'Mobile', key: 'mobile', width: 15 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Address', key: 'address', width: 40 },
+        { header: 'Area/City', key: 'city', width: 20 },
+        { header: 'District', key: 'district', width: 20 },
+        { header: 'Taluka', key: 'taluka', width: 20 },
+        { header: 'State', key: 'state', width: 20 },
+        { header: 'Pincode', key: 'pincode', width: 15 },
+        { header: 'Country', key: 'country', width: 15 },
+        { header: 'GST NO', key: 'gstNumber', width: 20 },
+        { header: 'GST Registration', key: 'gstRegistrationType', width: 20 },
+        { header: 'GST Type', key: 'gstType', width: 15 },
+        { header: 'Payment Type', key: 'paymentType', width: 15 },
+        { header: 'Credit Period', key: 'creditPeriod', width: 15 },
+        { header: 'Tags', key: 'tags', width: 25 },
+        { header: 'Notes', key: 'notes', width: 40 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const customers = await Customer.find({ isDeleted: { $ne: true } })
+        .sort({ customerCode: 1, company: 1, customerName: 1 })
+        .lean();
+
+    customers.forEach((c) => {
+        const primary = c.contactPersons?.find(cp => cp.isPrimary) || c.contactPersons?.[0] || {};
+        worksheet.addRow({
+            customerCode: c.customerCode || '',
+            customerName: c.customerName || '',
+            company: c.company || '',
+            customerType: c.customerType || '',
+            status: c.status ? c.status.replace('_', ' ').toUpperCase() : '',
+            primaryName: primary.name || '',
+            mobile: primary.mobile || '',
+            email: c.companyEmail || primary.email || '',
+            address: c.address || '',
+            city: c.city || '',
+            district: c.district || '',
+            taluka: c.taluka || '',
+            state: c.state || '',
+            pincode: c.pincode || '',
+            country: c.country || '',
+            gstNumber: c.gstNumber || '',
+            gstRegistrationType: c.gstRegistrationType || '',
+            gstType: c.gstType || '',
+            paymentType: c.paymentType || '',
+            creditPeriod: c.creditPeriod || 0,
+            tags: Array.isArray(c.tags) ? c.tags.join(', ') : '',
+            notes: c.notes || ''
+        });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=Customer_Master.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+});
+// --- GST Bulk Update Feature ---
+
+const previewGSTImport = catchAsync(async (req, res) => {
+    if (!req.file) throw new ApiError(400, 'No file uploaded');
+
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new ApiError(400, 'Excel file is empty');
+
+    const headerRow = worksheet.getRow(1);
+    let companyColMap = -1;
+    let gstColMap = -1;
+
+    headerRow.eachCell((cell, colNumber) => {
+        const header = String(cell.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (header.includes('company')) companyColMap = colNumber;
+        if (header.includes('gst')) gstColMap = colNumber;
+    });
+
+    if (companyColMap === -1 || gstColMap === -1) {
+        throw new ApiError(400, 'Could not find "Company" and "GST" columns in header row. Please ensure your Excel file has these headers.');
+    }
+
+    const excelRows = [];
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header
+        const getCellText = (cell) => {
+            if (!cell || cell.value === null || cell.value === undefined) return '';
+            if (typeof cell.value === 'object' && cell.value.text) return String(cell.value.text).trim();
+            if (typeof cell.value === 'object' && cell.value.richText) return cell.value.richText.map(rt => rt.text).join('').trim();
+            return String(cell.value).trim();
+        };
+
+        const company = getCellText(row.getCell(companyColMap)).replace(/\\s+/g, ' ').trim();
+        let gstNumber = getCellText(row.getCell(gstColMap)).replace(/\\s+/g, '').toUpperCase();
+        
+        if (company) {
+            excelRows.push({ rowNumber, company, gstNumber });
+        }
+    });
+
+    const companies = excelRows.map(r => r.company);
+    
+    // Strict but practical regex to ignore case and multiple spaces
+    const companyRegexes = companies.map(c => {
+        const escaped = c.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+        return new RegExp('^\\\\s*' + escaped.replace(/\\\\ /g, '\\\\s+') + '\\\\s*$', 'i');
+    });
+
+    const existingCustomers = await Customer.find({ company: { $in: companyRegexes } }).select('company gstNumber gstType gstRegistrationType status');
+
+    // Create normalized dict for existing customers to detect Multiple mappings
+    const normalizedCompanyMap = {};
+    existingCustomers.forEach(c => {
+        if (!c.company) return;
+        const norm = c.company.replace(/\\s+/g, ' ').trim().toLowerCase();
+        if (!normalizedCompanyMap[norm]) normalizedCompanyMap[norm] = [];
+        normalizedCompanyMap[norm].push(c);
+    });
+
+    const previews = [];
+    const gstFormatRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+    excelRows.forEach(row => {
+        const normExcel = row.company.toLowerCase();
+        const matches = normalizedCompanyMap[normExcel];
+
+        const previewItem = {
+            id: 'row_' + row.rowNumber,
+            excelCompany: row.company,
+            excelGst: row.gstNumber,
+            matchedCustomerId: null,
+            matchedCompany: null,
+            existingGst: null,
+            status: '',
+            action: '',
+            calculatedGstType: '',
+            calculatedRegistration: ''
+        };
+
+        if (!matches || matches.length === 0) {
+            previewItem.status = 'Skip - Customer Not Found';
+            previewItem.action = 'Skip';
+        } else if (matches.length > 1) {
+            previewItem.status = 'Skip - Duplicate Match Found';
+            previewItem.action = 'Skip';
+        } else {
+            const dbCustomer = matches[0];
+            previewItem.matchedCustomerId = dbCustomer._id;
+            previewItem.matchedCompany = dbCustomer.company;
+            previewItem.existingGst = dbCustomer.gstNumber || '';
+
+            if (row.gstNumber === '') {
+                previewItem.status = 'Skip - Excel GST Empty';
+                previewItem.action = 'Skip';
+            } else if (!gstFormatRegex.test(row.gstNumber)) {
+                previewItem.status = 'Skip - Invalid GST Format';
+                previewItem.action = 'Skip';
+            } else if (dbCustomer.gstNumber && dbCustomer.gstNumber.trim().length > 0) {
+                previewItem.status = 'Skip - GST Already Exists in CRM';
+                previewItem.action = 'Skip';
+            } else {
+                previewItem.status = 'Ready to Update';
+                previewItem.action = 'Update';
+                
+                // Calculate resulting GST fields for preview
+                previewItem.calculatedRegistration = 'Registered';
+                const isMH = row.gstNumber.startsWith('27');
+                previewItem.calculatedGstType = isMH ? 'CGST / SGST' : 'IGST';
+            }
+        }
+        previews.push(previewItem);
+    });
+
+    res.send(new ApiResponse(200, { totalRows: excelRows.length, previews }, 'Preview generated successfully'));
+});
+
+const confirmGSTImport = catchAsync(async (req, res) => {
+    const { previews, fileName } = req.body;
+    
+    if (!previews || !Array.isArray(previews)) {
+        throw new ApiError(400, 'Invalid payload: No preview data');
+    }
+
+    const updates = [];
+    const skipped = [];
+    let updatedCount = 0;
+
+    for (const item of previews) {
+        if (item.action === 'Update' && item.matchedCustomerId) {
+            const customer = await Customer.findById(item.matchedCustomerId);
+            if (!customer) {
+                skipped.push({ companyName: item.excelCompany, excelGst: item.excelGst, reason: 'Customer disappeared during confirm' });
+                continue;
+            }
+            if (customer.gstNumber && customer.gstNumber.trim().length > 0) {
+                skipped.push({ companyName: item.excelCompany, excelGst: item.excelGst, reason: 'GST was added to CRM by someone else before confirm' });
+                continue;
+            }
+
+            const oldGst = customer.gstNumber || '';
+            customer.gstNumber = item.excelGst;
+            customer.gstRegistrationType = item.calculatedRegistration || 'Registered';
+            customer.gstType = item.calculatedGstType || (item.excelGst.startsWith('27') ? 'CGST / SGST' : 'IGST');
+
+            await customer.save();
+
+            updates.push({
+                customerId: customer._id,
+                companyName: customer.company,
+                oldGst: oldGst,
+                newGst: item.excelGst
+            });
+            updatedCount++;
+        } else {
+            skipped.push({
+                companyName: item.excelCompany,
+                excelGst: item.excelGst,
+                reason: item.status
+            });
         }
     }
 
-    res.send(new ApiResponse(200, results, 'Import completed'));
+    // Save Audit Log
+    const log = await GSTImportLog.create({
+        fileName: fileName || 'Unknown File',
+        importedBy: req.user._id,
+        totalProcessed: previews.length,
+        totalUpdated: updatedCount,
+        updates: updates,
+        skipped: skipped
+    });
+
+    res.send(new ApiResponse(200, { updatedCount, skippedCount: skipped.length, logId: log._id }, 'GST Numbers updated successfully'));
 });
 
 export default {
@@ -658,7 +967,10 @@ export default {
     deleteCustomer,
     downloadTemplate,
     importCustomers,
+    exportCustomers,
     getCustomerTypes,
     getCustomerStickers,
     searchCustomers,
+    previewGSTImport,
+    confirmGSTImport
 };

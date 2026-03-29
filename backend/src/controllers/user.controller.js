@@ -5,20 +5,44 @@ import { Department } from '../models/department.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { syncPermissionsWithRegistry } from '../utils/permission.utils.js';
 
 // --- ROLE CONTROLLERS ---
 
 export const createRole = asyncHandler(async (req, res) => {
-    const role = await Role.create({ ...req.body, createdBy: req.user.id });
+    // Sync permissions with registry to ensure all modules are present even if not sent by UI
+    const isFullAccess = req.body.name?.toLowerCase().includes('admin') || req.body.isSystemRole;
+    const syncedPermissions = syncPermissionsWithRegistry(req.body.permissions || {}, isFullAccess);
+    
+    const role = await Role.create({ 
+        ...req.body, 
+        permissions: syncedPermissions,
+        createdBy: req.user.id 
+    });
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, role, 'Role created successfully'));
 });
 
 export const getRoles = asyncHandler(async (req, res) => {
     const roles = await Role.find({ isActive: true });
-    res.send(new ApiResponse(httpStatus.OK, roles));
+    
+    // Sync each role's permissions with the current registry
+    const syncedRoles = roles.map(role => {
+        const roleObj = role.toObject();
+        const isFullAccess = roleObj.name?.toLowerCase().includes('admin') || roleObj.isSystemRole;
+        roleObj.permissions = syncPermissionsWithRegistry(roleObj.permissions || {}, isFullAccess);
+        return roleObj;
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, syncedRoles));
 });
 
 export const updateRole = asyncHandler(async (req, res) => {
+    // Sync permissions before update to ensure data consistency
+    if (req.body.permissions) {
+        const isFullAccess = req.body.name?.toLowerCase().includes('admin') || req.body.isSystemRole;
+        req.body.permissions = syncPermissionsWithRegistry(req.body.permissions, isFullAccess);
+    }
+
     const role = await Role.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!role) throw new ApiError(httpStatus.NOT_FOUND, 'Role not found');
     res.send(new ApiResponse(httpStatus.OK, role, 'Role updated successfully'));
@@ -40,10 +64,23 @@ export const getDepartments = asyncHandler(async (req, res) => {
 
 export const getUsers = asyncHandler(async (req, res) => {
     const users = await User.find()
-        .populate('role', 'name')
+        .populate('role')
         .populate('department', 'name')
         .select('-password');
-    res.send(new ApiResponse(httpStatus.OK, users));
+    
+    // Sync permissions for each user's role and additionalPermissions
+    const syncedUsers = users.map(user => {
+        const userObj = user.toObject();
+        if (userObj.role) {
+            const isFullAccess = userObj.role.name?.toLowerCase().includes('admin') || userObj.role.isSystemRole;
+            userObj.role.permissions = syncPermissionsWithRegistry(userObj.role.permissions || {}, isFullAccess);
+        }
+        // Also sync user-level additionalPermissions if any
+        userObj.additionalPermissions = syncPermissionsWithRegistry(userObj.additionalPermissions || {}, false);
+        return userObj;
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, syncedUsers));
 });
 
 export const createUser = asyncHandler(async (req, res) => {

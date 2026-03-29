@@ -92,7 +92,7 @@ export const GroupForm = ({ onSuccess, onCancel }) => {
             </div>
 
             <div className="flex justify-end gap-2 pt-6 border-t mt-4">
-                <Button type="button" variant="outline" onClick={onCancel} className="font-bold">Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => { if (window.confirm('Discard changes?')) onCancel(); }} className="font-bold">Cancel</Button>
                 <Button type="submit" disabled={isSubmitting} className="font-bold px-8">
                     {isSubmitting ? 'Creating...' : 'Create Group'}
                 </Button>

@@ -140,7 +140,7 @@ const ItemFormPage = () => {
                     {form.itemCode && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#2563eb', background: '#eff6ff', padding: '1px 8px', borderRadius: 4, fontWeight: 700 }}>{form.itemCode}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => navigate('/inventory/items')} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                    <button onClick={() => { if (window.confirm('Discard changes?')) navigate('/inventory/items'); }} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
                         Cancel
                     </button>
                     <button onClick={handleSave} disabled={saving} style={{ height: 30, padding: '0 14px', border: 'none', borderRadius: 6, background: saving ? '#93c5fd' : '#2563eb', color: '#fff', fontSize: 11, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>

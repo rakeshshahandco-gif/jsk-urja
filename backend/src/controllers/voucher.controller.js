@@ -94,6 +94,7 @@ const adjustBill = async (adj, nature, voucherNo, date, session) => {
         else if (invoice.paidAmount > 0) invoice.paymentStatus = 'Partially Paid';
 
         // Add to history
+        if (!invoice.payments) invoice.payments = [];
         invoice.payments.push({
             paymentDate: date,
             amountPaid: amount,

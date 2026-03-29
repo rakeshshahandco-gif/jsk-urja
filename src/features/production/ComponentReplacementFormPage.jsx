@@ -52,7 +52,7 @@ export default function ComponentReplacementFormPage() {
     return (
         <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 900 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                <button onClick={() => navigate(-1)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Back</button>
+                <button onClick={() => window.confirm('Discard changes?') && navigate(-1)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Back</button>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Component Replacement Entry</h2>
             </div>
 
@@ -124,7 +124,7 @@ export default function ComponentReplacementFormPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => navigate(-1)} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                    <button type="button" onClick={() => window.confirm('Discard changes?') && navigate(-1)} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
                     <button type="submit" disabled={saving} style={{ padding: '8px 24px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                         {saving ? 'Saving...' : '✓ Save Component Replacement'}
                     </button>

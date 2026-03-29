@@ -41,7 +41,7 @@ const voucherSchema = new mongoose.Schema({
     // Instrument details
     instrumentType: {
         type: String,
-        enum: ['Cash', 'Cheque', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Card', 'Other'],
+        enum: ['Cash', 'Cheque', 'Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Card', 'Other'],
         default: 'Cash'
     },
     instrumentNo: { type: String, default: '' },

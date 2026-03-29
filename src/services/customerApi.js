@@ -145,6 +145,22 @@ export const downloadCustomerTemplate = async () => {
 };
 
 /**
+ * Export all customer master data to Excel
+ * @returns {Promise<Blob>} - Excel file blob
+ */
+export const exportCustomers = async () => {
+    try {
+        const response = await apiClient.get('/customers/export', {
+            responseType: 'blob',
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error exporting customers:', error);
+        throw error;
+    }
+};
+
+/**
  * Import customers from Excel file
  * @param {FormData} formData - Form data containing the file
  * @returns {Promise<Object>} - Import results
@@ -173,6 +189,28 @@ export const searchCustomers = async (q) => {
     }
 };
 
+export const previewGSTImport = async (formData) => {
+    try {
+        const response = await apiClient.post('/customers/import-gst/preview', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data.data;
+    } catch (error) {
+        console.error('Error previewing GST import:', error);
+        throw error;
+    }
+};
+
+export const confirmGSTImport = async (payload) => {
+    try {
+        const response = await apiClient.post('/customers/import-gst/confirm', payload);
+        return response.data;
+    } catch (error) {
+        console.error('Error confirming GST import:', error);
+        throw error;
+    }
+};
+
 export default {
     getCustomers,
     getCustomer,
@@ -185,5 +223,8 @@ export default {
     getConversationHistory,
     downloadCustomerTemplate,
     importCustomers,
+    exportCustomers,
     searchCustomers,
+    previewGSTImport,
+    confirmGSTImport,
 };

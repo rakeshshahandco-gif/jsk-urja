@@ -8,6 +8,11 @@ router.use(protect);
 router.route('/').get(grnController.getGRNs).post(grnController.createGRN);
 router.get('/by-supplier/:supplierId', grnController.getGRNsBySupplier);
 router.get('/by-po/:poId', grnController.getGRNsByPO);
-router.get('/:id', grnController.getGRNById);
+router.route('/:id')
+    .get(grnController.getGRNById)
+    .put(grnController.updateGRN)
+    .delete(grnController.deleteGRN);
+
+router.post('/:id/restore', grnController.restoreGRN);
 
 export default router;

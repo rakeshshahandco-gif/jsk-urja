@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
+import logger from '../utils/logger.js';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -92,6 +93,7 @@ export const createPaymentEntry = asyncHandler(async (req, res) => {
 
 // ── GET /payment-entries/by-invoice/:invoiceId ────────────────────────────────
 export const getPaymentsByInvoice = asyncHandler(async (req, res) => {
+    logger.info(`[PaymentEntry] Fetching payments for invoice: ${req.params.invoiceId}`);
     const entries = await PaymentEntry.find({ invoiceId: req.params.invoiceId })
         .sort({ paymentDate: -1 })
         .populate('createdBy', 'name');

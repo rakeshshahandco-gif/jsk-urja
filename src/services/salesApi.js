@@ -17,8 +17,11 @@ export const updateSalesOrder = (id, data) =>
 export const cancelSalesOrder = (id) =>
     apiClient.post(`/sales-orders/${id}/cancel`).then(r => r.data);
 
-export const deleteSalesOrder = (id) =>
-    apiClient.delete(`/sales-orders/${id}`).then(r => r.data);
+export const deleteSalesOrder = (id, data) =>
+    apiClient.delete(`/sales-orders/${id}`, { data }).then(r => r.data);
+
+export const restoreSalesOrder = (id, data) =>
+    apiClient.post(`/sales-orders/${id}/restore`, data).then(r => r.data);
 
 
 export const generateProductionSheet = (soId) =>
@@ -38,8 +41,11 @@ export const createSalesInvoice = (data) =>
 export const cancelSalesInvoice = (id) =>
     apiClient.post(`/sales-invoices/${id}/cancel`).then(r => r.data);
 
-export const restoreSalesInvoice = (id) =>
-    apiClient.post(`/sales-invoices/${id}/restore`).then(r => r.data);
+export const deleteSalesInvoice = (id, data) =>
+    apiClient.delete(`/sales-invoices/${id}`, { data }).then(r => r.data);
+
+export const restoreSalesInvoice = (id, data) =>
+    apiClient.post(`/sales-invoices/${id}/restore`, data).then(r => r.data);
 
 export const recordSalesPayment = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/record-payment`, data).then(r => r.data);

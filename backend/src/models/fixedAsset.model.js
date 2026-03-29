@@ -13,6 +13,7 @@ const fixedAssetSchema = new mongoose.Schema({
     identificationNo: { type: String, trim: true, default: '' },
     barcodeNo: { type: String, trim: true, default: '' },
     manufacturerName: { type: String, trim: true, default: '' },
+    subcategory: { type: String, trim: true, default: '' },
 
     // Tracking & Quantity
     trackingType: {
@@ -29,8 +30,10 @@ const fixedAssetSchema = new mongoose.Schema({
     purchaseDate: { type: Date, required: true },
     installationDate: { type: Date },
     putToUseDate: { type: Date },
+    poNo: { type: String, trim: true, default: '' },
 
     purchaseValue: { type: Number, default: 0 },
+    currency: { type: String, default: 'INR' },
     gstAmount: { type: Number, default: 0 },
     freightCharges: { type: Number, default: 0 },
     installationCharges: { type: Number, default: 0 },
@@ -56,6 +59,10 @@ const fixedAssetSchema = new mongoose.Schema({
     department: { type: String, trim: true, default: '' },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     custodian: { type: String, trim: true, default: '' },
+    glAccount: { type: String, trim: true, default: '' },
+    costCenter: { type: String, trim: true, default: '' },
+    projectCode: { type: String, trim: true, default: '' },
+    lastPhysicalVerificationDate: { type: Date },
 
     // Condition & Status
     status: {

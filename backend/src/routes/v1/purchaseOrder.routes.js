@@ -10,6 +10,7 @@ router.route('/:id')
     .get(poController.getPOById)
     .put(poController.updatePO)
     .delete(poController.deletePO);
+router.post('/:id/restore', poController.restorePO);
 router.patch('/:id/status', poController.updatePOStatus);
 
 export default router;

@@ -104,16 +104,32 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     },
     paidAmount: { type: Number, default: 0 },
 
+    // Payments log
+    payments: [{
+        paymentDate: { type: Date },
+        amountPaid: { type: Number, default: 0 },
+        paymentMode: { type: String, default: 'Voucher' },
+        reference: { type: String, default: '' },
+        remarks: { type: String, default: '' },
+        recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    }],
+
     status: { type: String, enum: ['Draft', 'Confirmed', 'Posted', 'Cancelled'], default: 'Draft' },
     remarks: { type: String, default: '' },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Soft Delete Fields
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deleteReason: { type: String, default: '' },
 }, { timestamps: true });
 
-purchaseInvoiceSchema.index({ invoiceNumber: 1 });
 purchaseInvoiceSchema.index({ supplierId: 1, invoiceDate: -1 });
 purchaseInvoiceSchema.index({ paymentStatus: 1 });
+purchaseInvoiceSchema.index({ isDeleted: 1 });
 
 const PurchaseInvoice = mongoose.model('PurchaseInvoice', purchaseInvoiceSchema);
 export { PurchaseInvoice };

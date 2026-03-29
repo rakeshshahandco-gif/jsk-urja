@@ -418,6 +418,17 @@ const ReceiptEntryPage = () => {
                                     style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 13, fontWeight: 600, color: '#374151', textAlign: 'right' }}
                                 />
                             </div>
+                            {/* Instrument Mode */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Mode</span>
+                                <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
+                                    style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Cheque">Cheque</option>
+                                    <option value="UPI">UPI/QR</option>
+                                </select>
+                            </div>
                             {/* Narration */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, paddingTop: 6 }}>Narration</span>
@@ -442,7 +453,7 @@ const ReceiptEntryPage = () => {
                             name="cashBankAccountId"
                             value={formData.cashBankAccountId}
                             onChange={handleHeaderChange}
-                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #0d9488', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f0fdfa', color: '#0d9488', outline: 'none', cursor: 'pointer' }}
+                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #0d9488', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f0fdfa', color: '#0d9488', outline: 'none', cursor: 'pointer', marginBottom: (formData.instrumentType !== 'Cash') ? 16 : 0 }}
                         >
                             {cashBankAccounts.map(a => (
                                 <option key={a._id} value={a._id}>
@@ -450,6 +461,16 @@ const ReceiptEntryPage = () => {
                                 </option>
                             ))}
                         </select>
+                        {(formData.instrumentType !== 'Cash') && (
+                            <>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 8 }}>
+                                    {formData.instrumentType} Ref / No.
+                                </label>
+                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
+                                    placeholder={`Enter ${formData.instrumentType} number`}
+                                    style={{ ...inp, borderRadius: 9, padding: '11px 14px' }} />
+                            </>
+                        )}
                         {selectedAccount && (
                             <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
                                 Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
@@ -460,7 +481,7 @@ const ReceiptEntryPage = () => {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: 12 }}>
                         <button
-                            onClick={() => navigate(-1)}
+                            onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }}
                             style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
                         >Cancel</button>
                         <button
@@ -545,6 +566,24 @@ const ReceiptEntryPage = () => {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument Type</span>
+                                <select
+                                    name="instrumentType"
+                                    value={formData.instrumentType}
+                                    onChange={handleHeaderChange}
+                                    style={{ ...inp, cursor: 'pointer' }}
+                                >
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Cheque">Cheque</option>
+                                    <option value="UPI">UPI/QR</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument / Ref No.</span>
+                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange} placeholder="UTR / Cheque No" style={inp} />
                             </div>
                         </div>
                     </div>
@@ -651,7 +690,7 @@ const ReceiptEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
-                        <button type="button" onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
                             style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                         </button>

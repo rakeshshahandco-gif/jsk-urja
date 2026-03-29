@@ -1,96 +1,56 @@
 {
-  "ledgerId": "69c238cc4630f0dab9b54761",
+  "ledgerId": "69c238ca4630f0dab9b546a5",
   "voucherIds": [
-    "69c38eb17f9a4f24e8ffc88f",
-    "69c38eb27f9a4f24e8ffc93b",
-    "69c28b9c77a231652013550b",
-    "69c372f8b9eac74d0bde6749"
+    "69c37ce5b9eac74d0bde7802",
+    "69c38eb57f9a4f24e8ffca4e"
   ],
-  "relatedEntriesCount": 13,
+  "relatedEntriesCount": 7,
   "relatedEntries": [
     {
-      "vId": "69c28b9c77a231652013550b",
+      "vId": "69c37ce5b9eac74d0bde7802",
       "lId": "69b43e3f73caad9b89392659",
       "lName": "BANK OF BARODA"
     },
     {
-      "vId": "69c28b9c77a231652013550b",
-      "lId": "69c238cc4630f0dab9b54761",
-      "lName": "RG VENTURES"
+      "vId": "69c37ce5b9eac74d0bde7802",
+      "lId": "69c238ca4630f0dab9b546a5",
+      "lName": "SOLACE ILLUMINATE"
     },
     {
-      "vId": "69c372f8b9eac74d0bde6749",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
+      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "lId": "69c238ca4630f0dab9b546a5",
+      "lName": "SOLACE ILLUMINATE"
     },
     {
-      "vId": "69c372f8b9eac74d0bde6749",
-      "lId": "69c238cc4630f0dab9b54761",
-      "lName": "RG VENTURES"
-    },
-    {
-      "vId": "69c38eb17f9a4f24e8ffc88f",
-      "lId": "69c238cc4630f0dab9b54761",
-      "lName": "RG VENTURES"
-    },
-    {
-      "vId": "69c38eb17f9a4f24e8ffc88f",
+      "vId": "69c38eb57f9a4f24e8ffca4e",
       "lId": "69bcb30f32c5fc43f54059c9",
       "lName": "Sales Account"
     },
     {
-      "vId": "69c38eb17f9a4f24e8ffc88f",
+      "vId": "69c38eb57f9a4f24e8ffca4e",
       "lId": "69c38d1cd5bc45b4c6511c9d",
       "lName": "Freight & Forwarding Charges"
     },
     {
-      "vId": "69c38eb17f9a4f24e8ffc88f",
-      "lId": "69bcb30f32c5fc43f54059d2",
-      "lName": "IGST Output"
+      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "lId": "69bcb30f32c5fc43f54059cc",
+      "lName": "CGST Output"
     },
     {
-      "vId": "69c38eb17f9a4f24e8ffc88f",
-      "lId": "69bcb30f32c5fc43f54059de",
-      "lName": "Round Off"
-    },
-    {
-      "vId": "69c38eb27f9a4f24e8ffc93b",
-      "lId": "69c238cc4630f0dab9b54761",
-      "lName": "RG VENTURES"
-    },
-    {
-      "vId": "69c38eb27f9a4f24e8ffc93b",
-      "lId": "69bcb30f32c5fc43f54059c9",
-      "lName": "Sales Account"
-    },
-    {
-      "vId": "69c38eb27f9a4f24e8ffc93b",
-      "lId": "69c38d1cd5bc45b4c6511c9d",
-      "lName": "Freight & Forwarding Charges"
-    },
-    {
-      "vId": "69c38eb27f9a4f24e8ffc93b",
-      "lId": "69bcb30f32c5fc43f54059d2",
-      "lName": "IGST Output"
+      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "lId": "69bcb30f32c5fc43f54059cf",
+      "lName": "SGST Output"
     }
   ],
   "oppositeNamesByVoucher": {
-    "69c28b9c77a231652013550b": [
+    "69c37ce5b9eac74d0bde7802": [
       "BANK OF BARODA"
     ],
-    "69c372f8b9eac74d0bde6749": [
-      "BANK OF BARODA"
-    ],
-    "69c38eb17f9a4f24e8ffc88f": [
+    "69c38eb57f9a4f24e8ffca4e": [
       "Sales Account",
       "Freight & Forwarding Charges",
-      "IGST Output",
-      "Round Off"
-    ],
-    "69c38eb27f9a4f24e8ffc93b": [
-      "Sales Account",
-      "Freight & Forwarding Charges",
-      "IGST Output"
+      "CGST Output",
+      "SGST Output"
     ]
   }
 }

@@ -6,8 +6,9 @@ import { CustomerForm } from './CustomerForm';
 import { TalkWithCustomerForm } from '@/features/conversations/components/TalkWithCustomerForm';
 import { FollowUpForm } from '@/features/followup/components/FollowUpForm';
 import { ImportCustomerModal } from './ImportCustomerModal';
-import { getCustomers, getCustomer, deleteCustomer, updateCustomer } from '@/services/customerApi';
-import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { ImportGSTModal } from './ImportGSTModal';
+import { getCustomers, getCustomer, deleteCustomer, updateCustomer, exportCustomers } from '@/services/customerApi';
+import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload, Download } from 'lucide-react';
 import styles from './CustomerList.module.scss';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -26,6 +27,7 @@ export const CustomerList = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalResults, setTotalResults] = useState(0);
     const [showImportModal, setShowImportModal] = useState(false);
+    const [showGSTModal, setShowGSTModal] = useState(false);
     const limit = 10;
 
     // Fetch customers from API
@@ -98,7 +100,7 @@ export const CustomerList = () => {
                 CustomerForm,
                 {
                     title: 'Edit Customer',
-                    size: 'xl',
+                    size: 'full',
                     customer: freshCustomerData,
                     onSubmit: async (data) => {
                         try {
@@ -150,6 +152,24 @@ export const CustomerList = () => {
         navigate(`/talk/${customer._id}`);
     };
 
+    const handleExportCustomers = async () => {
+        try {
+            const blob = await exportCustomers();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Customer_Master_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            toast.success('Customers exported successfully!');
+        } catch (error) {
+            console.error('Export failed:', error);
+            toast.error('Failed to export customers');
+        }
+    };
+
     const handleFollowUp = (customer) => {
         navigate(`/followup/${customer._id}`);
     };
@@ -194,8 +214,14 @@ export const CustomerList = () => {
                     )}
                 </div>
                 <div className={styles.actions}>
+                    <Button variant="outline" size="sm" startIcon={<Download size={15} />} onClick={handleExportCustomers}>
+                        Export
+                    </Button>
                     <Button variant="outline" size="sm" startIcon={<Upload size={15} />} onClick={handleImportCustomers}>
                         Import
+                    </Button>
+                    <Button variant="outline" size="sm" startIcon={<Upload size={15} />} onClick={() => setShowGSTModal(true)}>
+                        Update GST (Excel)
                     </Button>
                     <Button variant="outline" size="sm" startIcon={<Plus size={15} />} onClick={() => navigate('/tasks/create')}>
                         Create Task
@@ -393,7 +419,15 @@ export const CustomerList = () => {
                 <ImportCustomerModal
                     isOpen={showImportModal}
                     onClose={() => setShowImportModal(false)}
-                    onSuccess={handleImportSuccess}
+                    onSuccess={fetchCustomers}
+                />
+            )}
+
+            {showGSTModal && (
+                <ImportGSTModal
+                    isOpen={showGSTModal}
+                    onClose={() => setShowGSTModal(false)}
+                    onSuccess={fetchCustomers}
                 />
             )}
         </div>

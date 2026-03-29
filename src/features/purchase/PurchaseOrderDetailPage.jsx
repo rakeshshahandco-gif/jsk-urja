@@ -391,6 +391,11 @@ export default function PurchaseOrderDetailPage() {
                                     </Button>
                                 </>
                             )}
+                            {['Ordered', 'Partially Received'].includes(po.status) && po.invoiceStatus !== 'Fully Invoiced' && (
+                                <Button onClick={() => navigate(`${PATHS.PURCHASE.NEW_INVOICE}?poId=${id}`)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, background: '#0d9488', color: '#fff', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}>
+                                    <FileText size={18} /> Create Invoice
+                                </Button>
+                            )}
                             {canReceive && (
                                 <Button onClick={() => setShowGRN(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, background: '#0fa968', color: '#fff', boxShadow: '0 4px 12px rgba(15,169,104,0.3)' }}>
                                     <Package size={18} /> Receive Material
@@ -425,7 +430,7 @@ export default function PurchaseOrderDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr>
-                                {['Item', 'HSN/SAC', 'UOM', 'Ordered Qty', 'Received Qty', 'Pending Qty', 'Rate', 'Tax%', 'Total Amount'].map(h => (
+                                {['Item', 'HSN/SAC', 'UOM', 'Qty', 'Received Qty', 'Pending Qty', 'Rate', 'Tax%', 'Total Amount'].map(h => (
                                     <th key={h} style={th}>{h}</th>
                                 ))}
                             </tr>

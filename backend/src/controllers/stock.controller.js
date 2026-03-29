@@ -50,20 +50,35 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
     const results = await Promise.all(items.map(async (item) => {
         const ledgerMatch = {
             itemId: item._id,
-            ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {})
         };
+        
+        let ledger = await StockLedger.find(ledgerMatch).lean();
+        
+        let beforeRange = [];
+        let inRange = ledger;
+        
+        if (dateFrom) {
+            const from = new Date(dateFrom);
+            beforeRange = ledger.filter(l => new Date(l.date) < from);
+            inRange = ledger.filter(l => new Date(l.date) >= from);
+        }
+        if (dateTo) {
+            const to = new Date(dateTo);
+            to.setHours(23, 59, 59, 999);
+            inRange = inRange.filter(l => new Date(l.date) <= to);
+        }
 
-        const ledger = await StockLedger.find(ledgerMatch).lean();
+        const openingQty = (item.openingStock || 0) + beforeRange.reduce((s, l) => s + (l.inQty || 0) - (l.outQty || 0), 0);
 
-        const purchaseQty = ledger.filter(l => l.transactionType === 'GRN').reduce((s, l) => s + (l.inQty || 0), 0);
-        const consumedQty = ledger.filter(l => l.transactionType === 'WO_CONSUMPTION').reduce((s, l) => s + (l.outQty || 0), 0);
-        const replacementQty = ledger.filter(l => l.transactionType === 'COMPONENT_REPLACEMENT').reduce((s, l) => s + (l.outQty || 0), 0);
-        const rejectionQty = ledger.filter(l => ['SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes(l.transactionType)).reduce((s, l) => s + (l.outQty || 0), 0);
-        const adjustmentIn = ledger.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.inQty || 0), 0);
-        const adjustmentOut = ledger.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.outQty || 0), 0);
+        const purchaseQty = inRange.filter(l => ['GRN', 'PURCHASE_INVOICE'].includes(l.transactionType)).reduce((s, l) => s + (l.inQty || 0), 0);
+        const consumedQty = inRange.filter(l => l.transactionType === 'WO_CONSUMPTION').reduce((s, l) => s + (l.outQty || 0), 0);
+        const replacementQty = inRange.filter(l => l.transactionType === 'COMPONENT_REPLACEMENT').reduce((s, l) => s + (l.outQty || 0), 0);
+        const rejectionQty = inRange.filter(l => ['SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes(l.transactionType)).reduce((s, l) => s + (l.outQty || 0), 0);
+        
+        const otherIn = inRange.filter(l => !['GRN', 'PURCHASE_INVOICE'].includes(l.transactionType) && l.inQty > 0).reduce((s, l) => s + (l.inQty || 0), 0);
+        const otherOut = inRange.filter(l => !['WO_CONSUMPTION', 'COMPONENT_REPLACEMENT', 'SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes(l.transactionType) && l.outQty > 0).reduce((s, l) => s + (l.outQty || 0), 0);
 
-        const openingQty = item.openingStock || 0;
-        const closingQty = openingQty + purchaseQty + adjustmentIn - consumedQty - replacementQty - rejectionQty - adjustmentOut;
+        const closingQty = openingQty + purchaseQty + otherIn - consumedQty - replacementQty - rejectionQty - otherOut;
 
         return {
             itemId: item._id,
@@ -71,13 +86,13 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
             itemName: item.itemName,
             itemType: item.itemType || '',
             uom: item.uom,
-            openingQty,
+            openingQty: Math.round(openingQty * 100) / 100,
             purchaseQty: Math.round(purchaseQty * 100) / 100,
             consumedQty: Math.round(consumedQty * 100) / 100,
             replacementQty: Math.round(replacementQty * 100) / 100,
             rejectionQty: Math.round(rejectionQty * 100) / 100,
-            adjustmentIn: Math.round(adjustmentIn * 100) / 100,
-            adjustmentOut: Math.round(adjustmentOut * 100) / 100,
+            adjustmentIn: Math.round(otherIn * 100) / 100,
+            adjustmentOut: Math.round(otherOut * 100) / 100,
             closingQty: Math.round(closingQty * 100) / 100,
             currentStock: item.currentStock || 0,
             valuationRate: item.valuationRate || 0,
@@ -188,7 +203,7 @@ export const getStockLedger = asyncHandler(async (req, res) => {
         .lean();
 
     const typeLabels = {
-        GRN: 'Purchase (GRN)', WO_CONSUMPTION: 'Production Consumption', WO_OUTPUT: 'Production Output',
+        GRN: 'Purchase (GRN)', PURCHASE_INVOICE: 'Direct Purchase', PURCHASE_INVOICE_DELETE: 'Purchase Correction', WO_CONSUMPTION: 'Production Consumption', WO_OUTPUT: 'Production Output',
         COMPONENT_REPLACEMENT: 'Component Replacement', PROD_REJECTION: 'Production Rejection',
         OPENING: 'Opening Balance', ADJUSTMENT: 'Adjustment', RETURN: 'Return',
         SALES_INVOICE: 'Sales Invoice', SALES_INVOICE_CANCEL: 'Sales Return',

@@ -39,7 +39,7 @@ const ItemTypePage = () => {
 
     const openAdd = () => { setForm({ ...BLANK }); setEditId(null); setShowForm(true); };
     const openEdit = (t) => { setForm({ name: t.name, code: t.code, description: t.description || '', isElectrical: t.isElectrical || false }); setEditId(t._id); setShowForm(true); };
-    const cancelForm = () => { setShowForm(false); setEditId(null); setForm({ ...BLANK }); };
+    const cancelForm = () => { if (window.confirm('Discard changes?')) { setShowForm(false); setEditId(null); setForm({ ...BLANK }); } };
 
     // Auto-generate code from name
     const handleNameChange = (val) => {

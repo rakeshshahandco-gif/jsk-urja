@@ -15,9 +15,22 @@
     font-family: 'Outfit', sans-serif;
 
     &.collapsed {
-        width: 80px;
-        min-width: 80px;
-        max-width: 80px;
+        width: 60px;
+        min-width: 60px;
+        max-width: 60px;
+
+        .brandText, .logoImage {
+            display: none !important;
+        }
+
+        .header {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .collapsedLogo {
+            display: flex;
+        }
     }
 }
 

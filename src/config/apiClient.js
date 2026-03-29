@@ -49,10 +49,10 @@ api.interceptors.response.use(
             config._isRetry = true;
 
             // Step 1: Try stripping /v1
-            if (currentBaseUrl.endsWith('/api/v1')) {
+            if (config.baseURL.endsWith('/api/v1')) {
                 console.warn('[API Client] Retrying without /v1...');
-                currentBaseUrl = currentBaseUrl.replace('/api/v1', '/api');
-                config.baseURL = currentBaseUrl;
+                const fallbackUrl = config.baseURL.replace('/api/v1', '/api');
+                config.baseURL = fallbackUrl;
                 return api(config);
             }
 
@@ -60,10 +60,10 @@ api.interceptors.response.use(
             if (import.meta.env.DEV) {
                 const alternativePorts = [5001, 5002];
                 for (const port of alternativePorts) {
-                    if (!currentBaseUrl.includes(`:${port}`)) {
+                    if (!config.baseURL.includes(`:${port}`)) {
                         console.warn(`[API Client] Trying port ${port}...`);
-                        currentBaseUrl = `http://localhost:${port}/api`;
-                        config.baseURL = currentBaseUrl;
+                        const fallbackUrl = `http://localhost:${port}/api`;
+                        config.baseURL = fallbackUrl;
                         try {
                             return await api(config);
                         } catch (e) {

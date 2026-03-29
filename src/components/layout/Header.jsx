@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
-import { LogOut, KeyRound, ChevronDown, Bell } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare } from 'lucide-react';
 import { useNotification } from '@/contexts/NotificationContext';
+import { useMessenger } from '@/contexts/MessengerContext';
 import { NotificationPanel } from './NotificationPanel';
 
 import { ROLE_CONFIG } from '@/utils/permissions';
@@ -17,6 +18,7 @@ export const Header = () => {
     const { user, logout } = useAuth();
     const { openModal } = useModal();
     const { unreadCount } = useNotification();
+    const { unreadTotal } = useMessenger();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const menuRef = useRef(null);
@@ -106,6 +108,21 @@ export const Header = () => {
                         {showNotifications && (
                             <NotificationPanel onClose={() => setShowNotifications(false)} />
                         )}
+                    </div>
+
+                    <div className={styles.notificationWrapper}>
+                        <button
+                            className={styles.bellButton}
+                            onClick={() => navigate('/messenger')}
+                            title="Messenger"
+                        >
+                            <MessageSquare size={20} />
+                            {unreadTotal > 0 && (
+                                <span className={styles.badge} style={{ backgroundColor: '#25D366' }}>
+                                    {unreadTotal}
+                                </span>
+                            )}
+                        </button>
                     </div>
 
                     <div className={styles.userMenu} ref={menuRef}>
