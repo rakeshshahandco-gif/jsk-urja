@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './useAuth'; // Assumes useAuth is available here
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || (window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com' : 'http://localhost:5000');
+import { env } from '../config/env';
+const SOCKET_URL = env.SOCKET_URL;
 
 let socketInstance = null;
 

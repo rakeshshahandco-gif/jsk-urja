@@ -1,12 +1,10 @@
 import axios from 'axios';
 import { getAuthData, clearAuthData } from '../utils/auth';
 
-const currentLocation = import.meta.env.VITE_API_URL || (window.location.hostname === 'jsk-urja.onrender.com' 
-    ? 'https://jsk-urja-backend.onrender.com/api/v1' 
-    : 'http://localhost:5000/api/v1');
+import { env } from '../config/env';
 
 export const apiClient = axios.create({
-    baseURL: currentLocation,
+    baseURL: env.API_URL,
     headers: {
         'Content-Type': 'application/json',
     },

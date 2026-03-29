@@ -1,6 +1,5 @@
-const currentLocation = import.meta.env.VITE_API_URL || (window.location.hostname === 'jsk-urja.onrender.com' 
-    ? 'https://jsk-urja-backend.onrender.com/api/v1' 
-    : 'http://localhost:5000/api/v1');
+import { env } from './env';
+const currentLocation = env.API_URL;
 import { getAuthData } from '../utils/auth';
 
 // API Configuration

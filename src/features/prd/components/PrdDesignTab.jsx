@@ -8,6 +8,7 @@ import clsx from 'clsx';
 import { useForm } from 'react-hook-form';
 import moment from 'moment';
 import { getUsers } from '@/services/userApi';
+import { env } from '@/config/env';
 
 const DESIGN_TYPES = [
     { value: 'Schematic', label: 'Schematic Diagram' },
@@ -132,7 +133,7 @@ const DesignForm = ({ isOpen, onClose, design, projectId, onSuccess }) => {
                             <div className={styles.existingFiles}>
                                 <div className={styles.subLabel}>Current Files:</div>
                                 {design.attachments.map((f, idx) => (
-                                    <a key={idx} href={`${import.meta.env.VITE_API_URL || ''}${f.url}`} target="_blank" rel="noreferrer" className={styles.attachmentLink}>
+                                    <a key={idx} href={`${env.SOCKET_URL}/${f.url}`} target="_blank" rel="noreferrer" className={styles.attachmentLink}>
                                         {f.filename}
                                     </a>
                                 ))}

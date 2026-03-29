@@ -1,4 +1,5 @@
 import api from '../config/api';
+import { env } from '@/config/env';
 
 /**
  * Report API Service
@@ -45,7 +46,7 @@ export const exportCustomerReport = (params = {}) => {
         }
     });
 
-    const url = `${import.meta.env.VITE_API_URL}/v1/reports/customers/export?${queryParams.toString()}`;
+    const url = `${env.API_URL}/reports/customers/export?${queryParams.toString()}`;
     window.open(url, '_blank');
 };
 

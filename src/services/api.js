@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { getAuthData, clearAuthData } from '@/utils/auth';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || (window.location.hostname === 'jsk-urja.onrender.com' ? 'https://jsk-urja-backend.onrender.com' : 'http://localhost:5000');
-const currentLocation = import.meta.env.VITE_API_URL || (window.location.hostname === 'jsk-urja.onrender.com' 
-    ? 'https://jsk-urja-backend.onrender.com/api/v1' 
-    : 'http://localhost:5000/api/v1');
+import { env } from '@/config/env';
+
+export const prodBackend = 'https://jsk-urja-backend.onrender.com';
+export const SOCKET_URL = env.SOCKET_URL;
+export const currentLocation = env.API_URL;
 
 // Create axios instance
 const api = axios.create({

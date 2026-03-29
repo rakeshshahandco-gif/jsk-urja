@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import styles from './PrdProjectDetailPage.module.scss';
 import clsx from 'clsx';
 import moment from 'moment';
+import { env } from '@/config/env';
 
 import PrdComponentTab from './components/PrdComponentTab';
 import PrdDesignTab from './components/PrdDesignTab';

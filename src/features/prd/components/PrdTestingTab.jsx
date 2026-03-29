@@ -7,6 +7,7 @@ import styles from './PrdTestingTab.module.scss';
 import clsx from 'clsx';
 import { useForm, useFieldArray } from 'react-hook-form';
 import moment from 'moment';
+import { env } from '@/config/env';
 
 const TEST_TYPES = [
     { value: 'Initial Prototype Test', label: 'Initial Prototype Test' },
@@ -345,11 +346,11 @@ const TestDetailModal = ({ isOpen, onClose, report }) => {
                     <div className={styles.attBox}>
                         <h4>Evidences ({report.attachments.length})</h4>
                         <div className={styles.attGrid}>
-                            {report.attachments.map((f, i) => (
-                                <a key={i} href={`${import.meta.env.VITE_API_URL || ''}${f.url}`} target="_blank" rel="noreferrer" className={styles.attLink}>
-                                    <Download size={14}/> {f.filename}
-                                </a>
-                            ))}
+                                {report.attachments.map((f, i) => (
+                                    <a key={i} href={`${env.SOCKET_URL}/${f.url}`} target="_blank" rel="noreferrer" className={styles.attLink}>
+                                        <Download size={14}/> {f.filename}
+                                    </a>
+                                ))}
                         </div>
                     </div>
                 )}

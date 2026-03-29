@@ -3,10 +3,12 @@ import { useForm } from 'react-hook-form';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { createProject, updateProject } from '@/services/prdApi';
 import { getUsers } from '@/services/userApi';
+import { env } from '@/config/env';
 import toast from 'react-hot-toast';
 import styles from './PrdProjectForm.module.scss';
 import clsx from 'clsx';
 import { Upload, X } from 'lucide-react';
+import { env } from '@/config/env';
 
 const CATEGORY_OPTIONS = [
     { value: 'Dimmable Driver', label: 'Dimmable Driver' },
@@ -256,7 +258,7 @@ const PrdProjectForm = ({ isOpen, onClose, project, onSuccess }) => {
                             <div className={styles.existingFiles}>
                                 <div className={styles.subLabel}>Existing Documents:</div>
                                 {project.attachments.map((f, idx) => (
-                                    <a key={idx} href={`${import.meta.env.VITE_API_URL || ''}/${f.url}`} target="_blank" rel="noreferrer" className={styles.attachmentLink}>
+                                    <a key={idx} href={`${env.SOCKET_URL}/${f.url}`} target="_blank" rel="noreferrer" className={styles.attachmentLink}>
                                         {f.filename}
                                     </a>
                                 ))}

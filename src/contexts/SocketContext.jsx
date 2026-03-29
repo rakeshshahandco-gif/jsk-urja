@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '@/hooks/useAuth';
+import { env } from '@/config/env';
 
 const SocketContext = createContext();
 
@@ -13,9 +14,7 @@ export const SocketProvider = ({ children }) => {
 
     useEffect(() => {
         if (user && token) {
-            const socketUrl = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
-            
-            socketRef.current = io(socketUrl, {
+            socketRef.current = io(env.SOCKET_URL, {
                 auth: { token },
                 transports: ['websocket', 'polling'],
             });

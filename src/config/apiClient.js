@@ -8,10 +8,10 @@ import { getAuthData, clearAuthData } from '../utils/auth';
  * 3. In dev mode, if still fails, tries common ports (5001, 5002)
  */
 
+import { env } from './env';
+
 const getInitialBaseUrl = () => {
-    const envUrl = import.meta.env.VITE_API_URL;
-    if (envUrl && envUrl.startsWith('http')) return envUrl;
-    return 'http://localhost:5000/api/v1';
+    return env.API_URL;
 };
 
 let currentBaseUrl = getInitialBaseUrl();
