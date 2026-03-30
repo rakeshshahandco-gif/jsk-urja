@@ -8,7 +8,6 @@ import toast from 'react-hot-toast';
 import styles from './PrdProjectForm.module.scss';
 import clsx from 'clsx';
 import { Upload, X } from 'lucide-react';
-import { env } from '@/config/env';
 
 const CATEGORY_OPTIONS = [
     { value: 'Dimmable Driver', label: 'Dimmable Driver' },

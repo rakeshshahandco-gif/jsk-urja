@@ -3,8 +3,7 @@ const currentLocation = env.API_URL;
 import { getAuthData } from '../utils/auth';
 
 // API Configuration
-// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-const API_BASE_URL = currentLocation;
+const API_BASE_URL = env.API_URL;
 
 /**
  * Makes an HTTP request using fetch API
