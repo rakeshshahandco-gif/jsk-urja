@@ -147,6 +147,7 @@ export const menuConfig = [
             { id: 'comp-replacement', title: 'Component Replacement', path: '/production/component-replacements/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.comp_replacement.add' },
             { id: 'prod-rejection', title: 'Production Rejection', path: '/production/rejections/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rejection.add' },
             { id: 'prod-rework', title: 'Failure & Rework', path: PATHS.PRODUCTION.REWORK.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rework.view' },
+            { id: 'prod-planning', title: 'Production Planning / MRP', path: PATHS.PRODUCTION.PLANNING.ROOT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.production_planning.view' },
         ],
     },
     {
@@ -199,6 +200,23 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'hr',
+        title: 'HR Management',
+        icon: 'BadgeIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER],
+        permission: 'hr',
+        children: [
+            { id: 'hr-dashboard', title: 'HR Dashboard', path: '/hr/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_dashboard.view' },
+            { id: 'employee-master', title: 'Employee Master', path: '/hr/employees', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.employee_master.view' },
+            { id: 'shift-master', title: 'Shift Master', path: '/hr/shifts', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.shift_master.view' },
+            { id: 'attendance', title: 'Attendance', path: '/hr/attendance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.attendance.view' },
+            { id: 'attendance-import', title: 'Attendance Import', path: '/hr/attendance/import', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.attendance.import' },
+            { id: 'leave-management', title: 'Leave Management', path: '/hr/leaves', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.leave_management.view' },
+            { id: 'payroll', title: 'Payroll / Salary Working', path: '/hr/payroll', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.payroll.view' },
+            { id: 'hr-reports', title: 'HR Reports', path: '/hr/reports', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
+        ],
+    },
+    {
         id: 'accounts',
         title: 'Accounts',
         icon: 'AccountBalanceWalletIcon',
@@ -207,6 +225,7 @@ export const menuConfig = [
         children: [
             { id: 'group-master', title: '🗂 Group Master', path: PATHS.ACCOUNTS.GROUP_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.group_master.view' },
             { id: 'ledger-master', title: 'Ledger Master', path: PATHS.ACCOUNTS.LEDGER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.ledger_master.view' },
+            { id: 'financial-year-master', title: '📅 Financial Year Master', path: PATHS.ACCOUNTS.FINANCIAL_YEAR, roles: [ROLES.ADMIN], permission: 'accounts.financial_year.view' },
             { id: 'receipt-entry', title: 'Receipt Entry', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.receipt_entry.view' },
             { id: 'payment-entry', title: 'Payment Entry', path: PATHS.ACCOUNTS.PAYMENT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.payment_entry.view' },
             { id: 'expense-entry', title: 'Expense Voucher', path: PATHS.ACCOUNTS.EXPENSE_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.expense_entry.view' },

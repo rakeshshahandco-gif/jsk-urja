@@ -1,97 +1,79 @@
 import PrdIssue from '../models/prdIssue.model.js';
 import { logPrdAudit } from '../utils/prdAuditLogger.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { ApiError } from '../utils/ApiError.js';
 
-export const createIssue = async (req, res) => {
-    try {
-        req.body.foundBy = req.user.id;
+export const createIssue = asyncHandler(async (req, res) => {
+    req.body.foundBy = req.user.id;
 
-        if (req.files && req.files.length > 0) {
-            req.body.attachments = req.files.map(file => ({
-                filename: file.originalname,
-                url: `/uploads/prd/${file.filename}`,
-                mimetype: file.mimetype,
-                size: file.size
-            }));
-        }
-
-        const issue = await PrdIssue.create(req.body);
-        
-        await logPrdAudit(issue._id, 'PrdIssue', 'Create', req.user.id, null, req.body, req.ip);
-        
-        await issue.populate('foundBy assignedTo', 'name');
-        res.status(201).json(issue);
-    } catch (error) {
-        console.error('Error in createIssue:', error);
-        res.status(400).json({ message: error.message });
+    if (req.files && req.files.length > 0) {
+        req.body.attachments = req.files.map(file => ({
+            filename: file.originalname,
+            url: `/uploads/prd/${file.filename}`,
+            mimetype: file.mimetype,
+            size: file.size
+        }));
     }
-};
 
-export const getIssues = async (req, res) => {
-    try {
-        const { projectId } = req.query;
-        let query = {};
-        if (projectId) query.projectId = projectId;
+    const issue = await PrdIssue.create(req.body);
+    
+    await logPrdAudit(issue._id, 'PrdIssue', 'Create', req.user.id, null, req.body, req.ip);
+    
+    await issue.populate('foundBy assignedTo', 'name');
+    res.status(201).json(new ApiResponse(201, issue, 'Issue logged successfully'));
+});
 
-        const issues = await PrdIssue.find(query)
-            .populate('foundBy assignedTo', 'name')
-            .sort({ date: -1, createdAt: -1 });
+export const getIssues = asyncHandler(async (req, res) => {
+    const { projectId } = req.query;
+    let query = {};
+    if (projectId) query.projectId = projectId;
 
-        res.status(200).json(issues);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
+    const issues = await PrdIssue.find(query)
+        .populate('foundBy assignedTo', 'name')
+        .sort({ date: -1, createdAt: -1 });
+
+    res.status(200).json(new ApiResponse(200, issues, 'Issues fetched successfully'));
+});
+
+export const getIssue = asyncHandler(async (req, res) => {
+    const issue = await PrdIssue.findById(req.params.id)
+        .populate('foundBy assignedTo', 'name');
+    if (!issue) throw new ApiError(404, 'Issue not found');
+    res.status(200).json(new ApiResponse(200, issue, 'Issue fetched successfully'));
+});
+
+export const updateIssue = asyncHandler(async (req, res) => {
+    const issue = await PrdIssue.findById(req.params.id);
+    if (!issue) throw new ApiError(404, 'Issue not found');
+
+    const oldData = issue.toObject();
+
+    if (req.files && req.files.length > 0) {
+        const newAttachments = req.files.map(file => ({
+            filename: file.originalname,
+            url: `/uploads/prd/${file.filename}`,
+            mimetype: file.mimetype,
+            size: file.size
+        }));
+        req.body.attachments = [...(issue.attachments || []), ...newAttachments];
     }
-};
 
-export const getIssue = async (req, res) => {
-    try {
-        const issue = await PrdIssue.findById(req.params.id)
-            .populate('foundBy assignedTo', 'name');
-        if (!issue) return res.status(404).json({ message: 'Not found' });
-        res.status(200).json(issue);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
+    Object.assign(issue, req.body);
+    await issue.save();
 
-export const updateIssue = async (req, res) => {
-    try {
-        const issue = await PrdIssue.findById(req.params.id);
-        if (!issue) return res.status(404).json({ message: 'Not found' });
+    await logPrdAudit(issue._id, 'PrdIssue', 'Update', req.user.id, oldData, req.body, req.ip);
 
-        const oldData = issue.toObject();
+    await issue.populate('foundBy assignedTo', 'name');
+    res.status(200).json(new ApiResponse(200, issue, 'Issue updated successfully'));
+});
 
-        if (req.files && req.files.length > 0) {
-            const newAttachments = req.files.map(file => ({
-                filename: file.originalname,
-                url: `/uploads/prd/${file.filename}`,
-                mimetype: file.mimetype,
-                size: file.size
-            }));
-            req.body.attachments = [...(issue.attachments || []), ...newAttachments];
-        }
+export const deleteIssue = asyncHandler(async (req, res) => {
+    const issue = await PrdIssue.findById(req.params.id);
+    if (!issue) throw new ApiError(404, 'Issue not found');
 
-        Object.assign(issue, req.body);
-        await issue.save();
-
-        await logPrdAudit(issue._id, 'PrdIssue', 'Update', req.user.id, oldData, req.body, req.ip);
-
-        await issue.populate('foundBy assignedTo', 'name');
-        res.status(200).json(issue);
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
-
-export const deleteIssue = async (req, res) => {
-    try {
-        const issue = await PrdIssue.findById(req.params.id);
-        if (!issue) return res.status(404).json({ message: 'Not found' });
-
-        await logPrdAudit(issue._id, 'PrdIssue', 'Delete', req.user.id, issue.toObject(), null, req.ip);
-        
-        await issue.deleteOne();
-        res.status(200).json({ message: 'Issue deleted' });
-    } catch (error) {
-        res.status(400).json({ message: error.message });
-    }
-};
+    await logPrdAudit(issue._id, 'PrdIssue', 'Delete', req.user.id, issue.toObject(), null, req.ip);
+    
+    await issue.deleteOne();
+    res.status(200).json(new ApiResponse(200, null, 'Issue deleted successfully'));
+});

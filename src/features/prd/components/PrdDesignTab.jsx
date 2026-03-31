@@ -233,8 +233,8 @@ const PrdDesignTab = ({ projectId }) => {
                                         ) : '-'}
                                     </td>
                                     <td>
-                                        <span className={clsx(styles.statusBadge, styles[`status_${d.status.replace(/\s+/g, '')}`])}>
-                                            {d.status}
+                                        <span className={clsx(styles.statusBadge, styles[`status_${(d.status || 'Draft').replace(/\s+/g, '')}`])}>
+                                            {d.status || 'Draft'}
                                         </span>
                                     </td>
                                     <td>

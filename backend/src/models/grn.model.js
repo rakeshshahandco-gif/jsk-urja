@@ -66,6 +66,7 @@ const grnSchema = new mongoose.Schema({
     remarks: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
     // Soft Delete Fields
     isDeleted: { type: Boolean, default: false },
@@ -78,6 +79,7 @@ grnSchema.index({ poId: 1 });
 grnSchema.index({ supplierId: 1 });
 grnSchema.index({ invoiceStatus: 1 });
 grnSchema.index({ isDeleted: 1 });
+grnSchema.index({ financialYear: 1 });
 
 const GRN = mongoose.model('GRN', grnSchema);
 export { GRN };

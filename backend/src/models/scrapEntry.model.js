@@ -27,10 +27,12 @@ const scrapEntrySchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 scrapEntrySchema.index({ scrapNo: 1 });
 scrapEntrySchema.index({ jobCardId: 1 });
+scrapEntrySchema.index({ financialYear: 1 });
 
 const ScrapEntry = mongoose.model('ScrapEntry', scrapEntrySchema);
 export { ScrapEntry };

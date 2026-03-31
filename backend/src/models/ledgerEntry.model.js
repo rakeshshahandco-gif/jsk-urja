@@ -15,12 +15,14 @@ const ledgerEntrySchema = new mongoose.Schema({
 
     // Links to balance source
     cashBankAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'CashBankAccount' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
 }, { timestamps: true });
 
 ledgerEntrySchema.index({ ledgerId: 1, date: -1 });
 ledgerEntrySchema.index({ voucherId: 1 });
 ledgerEntrySchema.index({ date: 1 });
+ledgerEntrySchema.index({ financialYear: 1 });
 
 const LedgerEntry = mongoose.model('LedgerEntry', ledgerEntrySchema);
 export { LedgerEntry };

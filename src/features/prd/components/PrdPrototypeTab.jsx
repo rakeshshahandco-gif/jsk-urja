@@ -176,8 +176,8 @@ const PrdPrototypeTab = ({ projectId }) => {
                                         <div className={styles.smText}>FW: {p.firmwareVersion || '-'}</div>
                                     </td>
                                     <td>
-                                        <span className={clsx(styles.statusBadge, styles[`status_${p.status.replace(/\W/g, '')}`])}>
-                                            {p.status}
+                                        <span className={clsx(styles.statusBadge, styles[`status_${(p.status || 'Built').replace(/\W/g, '')}`])}>
+                                            {p.status || 'Built'}
                                         </span>
                                     </td>
                                     <td>{p.assembledBy?.name || '-'}</td>

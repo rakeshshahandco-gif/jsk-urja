@@ -98,8 +98,8 @@ const PrdProjectDetailPage = () => {
                     </div>
                     <div className={styles.statusBlock}>
                         <div className={styles.sLabel}>Overall Status</div>
-                        <div className={clsx(styles.statusValue, styles[`status_${project.status.replace(/\s+/g, '')}`])}>
-                            {project.status}
+                        <div className={clsx(styles.statusValue, styles[`status_${(project.status || 'Open').replace(/\s+/g, '')}`])}>
+                            {project.status || 'Open'}
                         </div>
                     </div>
                 </div>
@@ -190,11 +190,11 @@ const PrdProjectDetailPage = () => {
                     {activeTab === 'prototypes' && <PrdPrototypeTab projectId={project._id} />}
                     {activeTab === 'testing' && <PrdTestingTab projectId={project._id} projectCategory={project.category} />}
                     {activeTab === 'issues' && <PrdIssueTab projectId={project._id} />}
-                    {activeTab === 'changes' && <PrdChangeLogTab projectId={project._id} />}
+                    {activeTab === 'ecn' && <PrdChangeLogTab projectId={project._id} />}
                     {activeTab === 'approvals' && <PrdApprovalTab projectId={project._id} />}
-                    {activeTab === 'audits' && <PrdAuditTab projectId={project._id} />}
+                    {activeTab === 'audit' && <PrdAuditTab projectId={project._id} />}
 
-                    {!['basic', 'components', 'designs', 'prototypes', 'testing', 'issues', 'changes', 'approvals', 'audits'].includes(activeTab) && (
+                    {!['basic', 'components', 'designs', 'prototypes', 'testing', 'issues', 'ecn', 'approvals', 'audit'].includes(activeTab) && (
                         <div className={styles.tabContent}>
                             <div className={styles.wipState}>
                                 <div className={styles.wipIcon}>🚧</div>

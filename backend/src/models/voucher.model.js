@@ -57,12 +57,14 @@ const voucherSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 voucherSchema.index({ voucherNo: 1 });
 voucherSchema.index({ date: -1 });
 voucherSchema.index({ partyId: 1 });
 voucherSchema.index({ status: 1 });
+voucherSchema.index({ financialYear: 1 });
 
 const Voucher = mongoose.model('Voucher', voucherSchema);
 export { Voucher };

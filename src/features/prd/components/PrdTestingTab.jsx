@@ -293,9 +293,9 @@ const TestDetailModal = ({ isOpen, onClose, report }) => {
                         <div className={styles.lbl}>Tested By</div>
                         <div className={styles.val}>{report.testedBy?.name || 'Unknown'}</div>
                     </div>
-                    <div className={clsx(styles.infoCard, styles[`bg_${report.testStatus.replace(/\W/g, '')}`])}>
+                    <div className={clsx(styles.infoCard, styles[`bg_${(report.testStatus || 'Pass').replace(/\W/g, '')}`])}>
                         <div className={styles.lbl}>Final Status</div>
-                        <div className={styles.valResult}>{report.testStatus}</div>
+                        <div className={styles.valResult}>{report.testStatus || 'Pass'}</div>
                     </div>
                 </div>
 
@@ -432,8 +432,8 @@ const PrdTestingTab = ({ projectId, projectCategory }) => {
                                 </div>
                                 <div className={styles.row}>
                                     <span className={styles.lbl}>Result:</span>
-                                    <span className={clsx(styles.resTxt, styles[`txt_${rep.testStatus.replace(/\W/g, '')}`])}>
-                                        {rep.testStatus}
+                                    <span className={clsx(styles.resTxt, styles[`txt_${(rep.testStatus || 'Pass').replace(/\W/g, '')}`])}>
+                                        {rep.testStatus || 'Pass'}
                                     </span>
                                 </div>
                             </div>

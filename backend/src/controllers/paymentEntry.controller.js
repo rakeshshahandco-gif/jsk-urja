@@ -5,6 +5,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
 import logger from '../utils/logger.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -56,10 +57,11 @@ export const createPaymentEntry = asyncHandler(async (req, res) => {
     let entryStatus = value.paymentStatus || 'Completed';
     if (value.paymentMode === 'Cheque' && value.chequeStatus === 'Pending') {
         entryStatus = 'Pending';
-    }
-    if (value.paymentMode === 'Cheque' && value.chequeStatus === 'Bounced') {
+    } else if (value.paymentMode === 'Cheque' && value.chequeStatus === 'Bounced') {
         entryStatus = 'Failed';
     }
+
+    const fy = value.financialYear || getFYFromDate(value.paymentDate || new Date());
 
     const entry = await PaymentEntry.create({
         invoiceId: invoice._id,
@@ -81,6 +83,7 @@ export const createPaymentEntry = asyncHandler(async (req, res) => {
         chequeStatus: value.chequeStatus || 'Cleared',
         paymentStatus: entryStatus,
         notes: value.notes || '',
+        financialYear: fy,
         createdBy: req.user._id,
     });
 

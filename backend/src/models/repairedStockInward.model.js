@@ -28,10 +28,12 @@ const repairedStockInwardSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 repairedStockInwardSchema.index({ inwardNo: 1 });
 repairedStockInwardSchema.index({ jobCardId: 1 });
+repairedStockInwardSchema.index({ financialYear: 1 });
 
 const RepairedStockInward = mongoose.model('RepairedStockInward', repairedStockInwardSchema);
 export { RepairedStockInward };

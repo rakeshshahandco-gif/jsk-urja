@@ -75,10 +75,12 @@ const productionSheetSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 productionSheetSchema.index({ soId: 1 });
 productionSheetSchema.index({ psNumber: 1 });
+productionSheetSchema.index({ financialYear: 1 });
 
 const ProductionSheet = mongoose.model('ProductionSheet', productionSheetSchema);
 export { ProductionSheet };

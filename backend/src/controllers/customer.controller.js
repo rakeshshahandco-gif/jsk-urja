@@ -240,7 +240,6 @@ const searchCustomers = catchAsync(async (req, res) => {
 
     const filter = {
         ...baseFilter,
-        status: { $ne: 'inactive' },
     };
 
     const customers = await Customer.find(filter)
@@ -650,6 +649,8 @@ const importCustomers = catchAsync(async (req, res) => {
 
             if (matchedCustomer) {
                 // UPDATE RECORD
+                // ⚠️ SAFETY: 'isDeleted' is intentionally excluded from fieldsToSync.
+                // Customers must NEVER be soft-deleted via import.
                 const fieldsToSync = ['customerName', 'company', 'address', 'city', 'state', 'pincode', 'gstNumber', 'gstRegistrationType', 'gstType', 'customerType', 'status'];
                 
                 let isUpdated = false;
@@ -773,11 +774,12 @@ const exportCustomers = catchAsync(async (req, res) => {
         });
     });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=Customer_Master.xlsx');
     await workbook.xlsx.write(res);
     res.end();
 });
+
 // --- GST Bulk Update Feature ---
 
 const previewGSTImport = catchAsync(async (req, res) => {
@@ -792,65 +794,142 @@ const previewGSTImport = catchAsync(async (req, res) => {
 
     const headerRow = worksheet.getRow(1);
     let companyColMap = -1;
+    let customerColMap = -1;
+    let mobileColMap = -1;
     let gstColMap = -1;
 
-    headerRow.eachCell((cell, colNumber) => {
-        const header = String(cell.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (header.includes('company')) companyColMap = colNumber;
-        if (header.includes('gst')) gstColMap = colNumber;
-    });
+    const findHeaders = (row) => {
+        row.eachCell((cell, colNumber) => {
+            const header = String(cell.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (header.includes('company')) companyColMap = colNumber;
+            else if ((header.includes('customer') || header === 'name' || header === 'customername') && customerColMap === -1) customerColMap = colNumber;
+            else if ((header.includes('mobile') || header.includes('phone') || header.includes('contact')) && mobileColMap === -1) mobileColMap = colNumber;
+            
+            if (header.includes('gst')) gstColMap = colNumber;
+        });
+    };
 
-    if (companyColMap === -1 || gstColMap === -1) {
-        throw new ApiError(400, 'Could not find "Company" and "GST" columns in header row. Please ensure your Excel file has these headers.');
+    findHeaders(headerRow);
+
+    const gstFormatRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+    // Smart Detection if headers are missing or incomplete
+    if (gstColMap === -1 || (companyColMap === -1 && customerColMap === -1 && mobileColMap === -1)) {
+        const colStats = {}; // { colNumber: { gstCount: 0, textCount: 0 } }
+
+        // Scan first 20 rows to detect columns by content
+        for (let r = 1; r <= 20; r++) {
+            const row = worksheet.getRow(r);
+            if (!row) continue;
+            row.eachCell((cell, colNumber) => {
+                if (!colStats[colNumber]) colStats[colNumber] = { gstCount: 0, textCount: 0 };
+                const rawVal = String(cell.value || '').trim();
+                const cleanVal = rawVal.toUpperCase().replace(/\s+/g, '');
+                
+                if (gstFormatRegex.test(cleanVal)) {
+                    colStats[colNumber].gstCount++;
+                } else if (rawVal.length > 2) {
+                    colStats[colNumber].textCount++;
+                }
+            });
+        }
+
+        // Pick column with most GSTs
+        let maxGst = 0;
+        for (const [col, stats] of Object.entries(colStats)) {
+            if (stats.gstCount > maxGst) {
+                maxGst = stats.gstCount;
+                gstColMap = parseInt(col);
+            }
+        }
+
+        // Pick identifier column (most non-GST text) if none found by header
+        if (companyColMap === -1 && customerColMap === -1 && mobileColMap === -1) {
+            let maxText = 0;
+            for (const [col, stats] of Object.entries(colStats)) {
+                const colNum = parseInt(col);
+                if (colNum === gstColMap) continue;
+                if (stats.textCount > maxText) {
+                    maxText = stats.textCount;
+                    companyColMap = colNum;
+                }
+            }
+        }
+    }
+
+    console.log(`[GST Import] Detected Columns - Identifier: ${companyColMap}, GST: ${gstColMap}`);
+
+    if (gstColMap === -1) {
+        throw new ApiError(400, 'Could not detect the "GST" column. Please ensure your Excel has a column with valid GST numbers.');
+    }
+    if (companyColMap === -1 && customerColMap === -1 && mobileColMap === -1) {
+        throw new ApiError(400, 'Could not detect the "Company" or "Name" column.');
     }
 
     const excelRows = [];
-    worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header
-        const getCellText = (cell) => {
-            if (!cell || cell.value === null || cell.value === undefined) return '';
-            if (typeof cell.value === 'object' && cell.value.text) return String(cell.value.text).trim();
-            if (typeof cell.value === 'object' && cell.value.richText) return cell.value.richText.map(rt => rt.text).join('').trim();
-            return String(cell.value).trim();
-        };
+    const getCellText = (cell) => {
+        if (!cell || cell.value === null || cell.value === undefined) return '';
+        if (typeof cell.value === 'object' && cell.value.text) return String(cell.value.text).trim();
+        if (typeof cell.value === 'object' && cell.value.richText) return cell.value.richText.map(rt => rt.text).join('').trim();
+        // Clean non-printable characters
+        return String(cell.value).trim().replace(/[^\x20-\x7E\s]/g, '');
+    };
 
-        const company = getCellText(row.getCell(companyColMap)).replace(/\\s+/g, ' ').trim();
-        let gstNumber = getCellText(row.getCell(gstColMap)).replace(/\\s+/g, '').toUpperCase();
+    worksheet.eachRow((row, rowNumber) => {
+        // Evaluate if row 1 is data or header
+        if (rowNumber === 1) {
+            const firstCell = getCellText(row.getCell(gstColMap)).toUpperCase().replace(/\s+/g, '');
+            if (!gstFormatRegex.test(firstCell)) return; // It's probably a header row
+        }
+
+        const company = companyColMap !== -1 ? getCellText(row.getCell(companyColMap)).replace(/\s+/g, ' ').trim() : '';
+        const customerName = customerColMap !== -1 ? getCellText(row.getCell(customerColMap)).replace(/\s+/g, ' ').trim() : '';
+        const mobile = mobileColMap !== -1 ? getCellText(row.getCell(mobileColMap)).replace(/\s+/g, '').replace(/[^0-9]/g, '') : '';
+        const gstNumber = getCellText(row.getCell(gstColMap)).replace(/\s+/g, '').toUpperCase();
         
-        if (company) {
-            excelRows.push({ rowNumber, company, gstNumber });
+        if (company || customerName || mobile) {
+            excelRows.push({ rowNumber, company, customerName, mobile, gstNumber });
         }
     });
 
-    const companies = excelRows.map(r => r.company);
-    
-    // Strict but practical regex to ignore case and multiple spaces
-    const companyRegexes = companies.map(c => {
-        const escaped = c.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-        return new RegExp('^\\\\s*' + escaped.replace(/\\\\ /g, '\\\\s+') + '\\\\s*$', 'i');
-    });
+    // 1. Collect all terms for a single bulk query
+    const searchCompanies = excelRows.map(r => r.company).filter(Boolean);
+    const searchNames = excelRows.map(r => r.customerName).filter(Boolean);
+    const searchMobiles = excelRows.map(r => r.mobile).filter(Boolean);
 
-    const existingCustomers = await Customer.find({ company: { $in: companyRegexes } }).select('company gstNumber gstType gstRegistrationType status');
+    const query = {
+        isDeleted: { $ne: true },
+        $or: []
+    };
 
-    // Create normalized dict for existing customers to detect Multiple mappings
-    const normalizedCompanyMap = {};
-    existingCustomers.forEach(c => {
-        if (!c.company) return;
-        const norm = c.company.replace(/\\s+/g, ' ').trim().toLowerCase();
-        if (!normalizedCompanyMap[norm]) normalizedCompanyMap[norm] = [];
-        normalizedCompanyMap[norm].push(c);
-    });
+    if (searchCompanies.length > 0) {
+        const companyRegexes = searchCompanies.map(c => {
+            const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp('^\\s*' + escaped.replace(/ /g, '\\s+') + '\\s*$', 'i');
+        });
+        query.$or.push({ company: { $in: companyRegexes } });
+    }
+
+    if (searchNames.length > 0) {
+        const nameRegexes = searchNames.map(c => {
+            const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp('^\\s*' + escaped.replace(/ /g, '\\s+') + '\\s*$', 'i');
+        });
+        query.$or.push({ customerName: { $in: nameRegexes } });
+    }
+
+    if (searchMobiles.length > 0) {
+        query.$or.push({ 'contactPersons.mobile': { $in: searchMobiles } });
+    }
+
+    const existingCustomers = await Customer.find(query).select('company customerName contactPersons gstNumber gstType gstRegistrationType status');
 
     const previews = [];
-    const gstFormatRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
     excelRows.forEach(row => {
-        const normExcel = row.company.toLowerCase();
-        const matches = normalizedCompanyMap[normExcel];
-
         const previewItem = {
             id: 'row_' + row.rowNumber,
-            excelCompany: row.company,
+            excelCompany: row.company || row.customerName || `Mobile: ${row.mobile}`,
             excelGst: row.gstNumber,
             matchedCustomerId: null,
             matchedCompany: null,
@@ -861,16 +940,37 @@ const previewGSTImport = catchAsync(async (req, res) => {
             calculatedRegistration: ''
         };
 
-        if (!matches || matches.length === 0) {
+        // Attempt to find match
+        let matches = [];
+        
+        const excelIdentifier = (row.company || row.customerName).toLowerCase().replace(/\s+/g, ' ');
+
+        if (excelIdentifier) {
+            // Check both company and customerName for the identifier
+            matches = existingCustomers.filter(c => {
+                const dbCompany = (c.company || '').toLowerCase().replace(/\s+/g, ' ');
+                const dbName = (c.customerName || '').toLowerCase().replace(/\s+/g, ' ');
+                return (dbCompany && dbCompany === excelIdentifier) || (dbName && dbName === excelIdentifier);
+            });
+        }
+
+        // Match by Mobile if still no match
+        if (matches.length === 0 && row.mobile) {
+            matches = existingCustomers.filter(c => 
+                c.contactPersons && c.contactPersons.some(cp => cp.mobile && cp.mobile.replace(/[^0-9]/g, '') === row.mobile)
+            );
+        }
+
+        if (matches.length === 0) {
             previewItem.status = 'Skip - Customer Not Found';
             previewItem.action = 'Skip';
         } else if (matches.length > 1) {
-            previewItem.status = 'Skip - Duplicate Match Found';
+            previewItem.status = 'Skip - Multiple Matches in CRM';
             previewItem.action = 'Skip';
         } else {
             const dbCustomer = matches[0];
             previewItem.matchedCustomerId = dbCustomer._id;
-            previewItem.matchedCompany = dbCustomer.company;
+            previewItem.matchedCompany = dbCustomer.company || dbCustomer.customerName;
             previewItem.existingGst = dbCustomer.gstNumber || '';
 
             if (row.gstNumber === '') {
@@ -926,6 +1026,9 @@ const confirmGSTImport = catchAsync(async (req, res) => {
             customer.gstRegistrationType = item.calculatedRegistration || 'Registered';
             customer.gstType = item.calculatedGstType || (item.excelGst.startsWith('27') ? 'CGST / SGST' : 'IGST');
 
+            // 🛡️  Safety guard: never allow a GST import to change the isDeleted flag
+            customer.isDeleted = false; // force-keep as active
+
             await customer.save();
 
             updates.push({
@@ -957,6 +1060,14 @@ const confirmGSTImport = catchAsync(async (req, res) => {
     res.send(new ApiResponse(200, { updatedCount, skippedCount: skipped.length, logId: log._id }, 'GST Numbers updated successfully'));
 });
 
+const restoreAllCustomers = catchAsync(async (req, res) => {
+    const result = await Customer.updateMany(
+        { isDeleted: true },
+        { $set: { isDeleted: false, status: 'running_high' } }
+    );
+    res.send(new ApiResponse(200, result, `${result.modifiedCount} customers restored successfully`));
+});
+
 export default {
     createCustomer,
     getCustomers,
@@ -972,5 +1083,6 @@ export default {
     getCustomerStickers,
     searchCustomers,
     previewGSTImport,
-    confirmGSTImport
+    confirmGSTImport,
+    restoreAllCustomers
 };

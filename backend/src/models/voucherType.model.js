@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 const voucherTypeSchema = new mongoose.Schema({
-    name: { type: String, required: true, trim: true, unique: true }, // e.g., RCPT, PMT, CASHRCPT
+    name: { type: String, required: true, trim: true }, // e.g., RCPT, PMT, CASHRCPT
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
     nature: {
         type: String,
         enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Sales', 'Purchase'],
@@ -17,6 +18,8 @@ const voucherTypeSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
+
+voucherTypeSchema.index({ name: 1, financialYear: 1 }, { unique: true });
 
 const VoucherType = mongoose.model('VoucherType', voucherTypeSchema);
 export { VoucherType };

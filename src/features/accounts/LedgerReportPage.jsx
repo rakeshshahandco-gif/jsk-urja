@@ -4,18 +4,30 @@ import { Printer, FileText, ArrowDownLeft, ArrowUpRight, Trash2, ArrowUpCircle, 
 import { useNavigate } from 'react-router-dom';
 import { getLedgers, getLedgerStatement, cancelVoucher } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
+import { useFYDateRange } from '@/contexts/FinancialYearContext';
+import FYBadge from '@/components/ui/FYBadge';
 import s from './LedgerReportPage.module.scss';
 
 const LedgerReportPage = ({ defaultType = null }) => {
     const navigate = useNavigate();
+    const fyDateRange = useFYDateRange();
     const [ledgers, setLedgers] = useState([]);
     const [selectedLedgerId, setSelectedLedgerId] = useState('');
     const [filters, setFilters] = useState({
-        startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0]
+        startDate: fyDateRange.startDate,
+        endDate: fyDateRange.endDate
     });
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    // Auto-reset date filter whenever financial year changes
+    useEffect(() => {
+        setFilters({
+            startDate: fyDateRange.startDate,
+            endDate: fyDateRange.endDate,
+        });
+        setData(null);
+    }, [fyDateRange.startDate, fyDateRange.endDate]);
 
     useEffect(() => {
         const fetchLedgers = async () => {
@@ -73,6 +85,7 @@ const LedgerReportPage = ({ defaultType = null }) => {
                     <p className={s.subtitle}>Comprehensive transaction history and financial summary</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <FYBadge />
                     {(defaultType === 'Bank' || defaultType === 'Cash') && (
                         <>
                             <Button 

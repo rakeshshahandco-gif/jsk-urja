@@ -87,6 +87,7 @@ const LedgerMasterPage = lazy(() => import('./features/accounts/LedgerMasterPage
 const VoucherTypeMasterPage = lazy(() => import('./features/accounts/VoucherTypeMasterPage'));
 const SalesRegisterPage = lazy(() => import('./features/accounts/SalesRegisterPage'));
 const PurchaseRegisterPage = lazy(() => import('./features/accounts/PurchaseRegisterPage'));
+const FinancialYearMasterPage = lazy(() => import('./features/accounts/FinancialYearMasterPage.jsx'));
 const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
 const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
 const OutstandingReportPage = lazy(() => import('./features/accounts/OutstandingReportPage'));
@@ -113,6 +114,8 @@ import StockMovementLedger from '@/features/inventory/StockMovementLedger';
 import ProductionOutputFormPage from '@/features/production/ProductionOutputFormPage';
 import ComponentReplacementFormPage from '@/features/production/ComponentReplacementFormPage';
 import ProductionRejectionFormPage from '@/features/production/ProductionRejectionFormPage';
+import ProductionPlanningListPage from '@/features/production/planning/ProductionPlanningListPage';
+import ProductionPlanningFormPage from '@/features/production/planning/ProductionPlanningFormPage';
 
 // PRD Module
 import PrdProjectListPage from '@/features/prd/PrdProjectListPage';
@@ -122,10 +125,22 @@ import PrdDashboard from './features/prd/PrdDashboard';
 
 import MessengerPage from '@/features/messenger/MessengerPage';
 
+// HR Module
+import ShiftList from '@/features/hr/components/ShiftMaster/ShiftList';
+import EmployeeList from '@/features/hr/components/EmployeeMaster/EmployeeList';
+import EmployeeForm from '@/features/hr/components/EmployeeMaster/EmployeeForm';
+import HRDashboard from '@/features/hr/components/HRDashboard';
+import AttendancePage from '@/features/hr/components/AttendancePage';
+import AttendanceImportPage from '@/features/hr/components/AttendanceImportPage';
+import LeaveManagementPage from '@/features/hr/components/LeaveManagementPage';
+import PayrollPage from '@/features/hr/components/PayrollPage';
+import HRReportsPage from '@/features/hr/components/HRReportsPage';
+
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { MessengerProvider } from '@/contexts/MessengerContext';
+import { FinancialYearProvider } from '@/contexts/FinancialYearContext';
 
 
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -144,7 +159,8 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <SocketProvider>
+                <FinancialYearProvider>
+                    <SocketProvider>
                     <NotificationProvider>
                         <MessengerProvider>
                             <ToastProvider>
@@ -433,6 +449,9 @@ function App() {
                                                                         <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="production"><WorkOrderListPage /></ProtectedRoute>} />
                                                                         <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="production"><WorkOrderFormPage /></ProtectedRoute>} />
                                                                         <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="production"><WorkOrderDetailPage /></ProtectedRoute>} />
+                                                                         <Route path="/production/planning" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningListPage /></ProtectedRoute>} />
+                                                                         <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
+                                                                         <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
 
                                                                         {/* Purchase Module */}
                                                                         <Route path="/purchase/suppliers" element={<ProtectedRoute requirePermission="purchase"><SupplierListPage /></ProtectedRoute>} />
@@ -511,6 +530,7 @@ function App() {
                                                                         <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                                                                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                                                                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
+                                                                        <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
                                                                         <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
                                                                         <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
                                                                         <Route path="/accounts/asset-categories" element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />
@@ -525,6 +545,18 @@ function App() {
                                                                         <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
                                                                         <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />
                                                                         <Route path="/prd/test-parameters" element={<ProtectedRoute requirePermission="prd"><PrdTestParameterMasterPage /></ProtectedRoute>} />
+
+                                                                        {/* HR Module Routes */}
+                                                                        <Route path="/hr/dashboard" element={<ProtectedRoute requirePermission="hr"><HRDashboard /></ProtectedRoute>} />
+                                                                        <Route path="/hr/employees" element={<ProtectedRoute requirePermission="hr"><EmployeeList /></ProtectedRoute>} />
+                                                                        <Route path="/hr/employees/new" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
+                                                                        <Route path="/hr/employees/:id" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
+                                                                        <Route path="/hr/shifts" element={<ProtectedRoute requirePermission="hr"><ShiftList /></ProtectedRoute>} />
+                                                                        <Route path="/hr/attendance" element={<ProtectedRoute requirePermission="hr"><AttendancePage /></ProtectedRoute>} />
+                                                                        <Route path="/hr/attendance/import" element={<ProtectedRoute requirePermission="hr"><AttendanceImportPage /></ProtectedRoute>} />
+                                                                        <Route path="/hr/leaves" element={<ProtectedRoute requirePermission="hr"><LeaveManagementPage /></ProtectedRoute>} />
+                                                                        <Route path="/hr/payroll" element={<ProtectedRoute requirePermission="hr"><PayrollPage /></ProtectedRoute>} />
+                                                                        <Route path="/hr/reports" element={<ProtectedRoute requirePermission="hr"><HRReportsPage /></ProtectedRoute>} />
 
                                                                         {/* ── Stock Reports ─────────────────────────────────── */}
                                                                         <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
@@ -552,6 +584,7 @@ function App() {
                         </MessengerProvider>
                     </NotificationProvider>
                 </SocketProvider>
+                </FinancialYearProvider>
             </AuthProvider>
         </BrowserRouter>
     );

@@ -118,9 +118,9 @@ export default function SearchableSelect({
     }, [wrapperRef, listRef, value, options]);
 
     const handleSelect = (val) => {
-        onChange(val);
-        setIsOpen(false);
         const opt = options.find(o => o.value === val);
+        onChange(val, opt);
+        setIsOpen(false);
         setSearchTerm(opt ? opt.label : '');
     };
 

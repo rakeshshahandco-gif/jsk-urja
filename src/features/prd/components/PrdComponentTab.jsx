@@ -174,8 +174,8 @@ const PrdComponentTab = ({ projectId }) => {
                                     </td>
                                     <td>{c.manufacturer || '-'}</td>
                                     <td>
-                                        <span className={clsx(styles.statusBadge, styles[`status_${c.trialStatus.replace(/\s+/g, '')}`])}>
-                                            {c.trialStatus}
+                                        <span className={clsx(styles.statusBadge, styles[`status_${(c.trialStatus || 'Pending').replace(/\s+/g, '')}`])}>
+                                            {c.trialStatus || 'Pending'}
                                         </span>
                                     </td>
                                     <td>{c.enteredBy?.name || '-'}</td>

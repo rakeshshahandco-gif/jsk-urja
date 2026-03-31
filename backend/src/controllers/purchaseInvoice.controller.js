@@ -15,6 +15,9 @@ import Joi from 'joi';
 import { syncPurchaseRatesToBOMs } from '../services/bomPriceSync.service.js';
 import { postPurchaseInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
 import logger from '../utils/logger.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -238,14 +241,23 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             if (!po) throw new ApiError(404, 'PO not found');
             poNumber = po.poNumber;
         }
-
         if (flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice') {
             if (!value.grnId) throw new ApiError(400, 'GRN reference is required');
             grn = await GRN.findById(value.grnId).session(session);
             if (!grn) throw new ApiError(404, 'GRN not found');
         }
 
-        const invoiceNumber = await generateInvoiceNumber();
+        const fy = value.financialYear || getFYFromDate(value.invoiceDate || new Date());
+
+        let invoiceNumber = value.invoiceNumber;
+        if (!invoiceNumber && value.seriesId) {
+            invoiceNumber = await getNextNumberFromSeries(value.seriesId, session);
+        }
+        
+        if (!invoiceNumber) {
+            invoiceNumber = await generateInvoiceNumber();
+        }
+
         const totals = calculateInvoiceTotals(value.items, value.gstType, value.freightAmount || 0, value.freightGstRate || 0);
 
         const isDirectStock = flowType === 'PO→Direct Invoice' || flowType === 'Direct Invoice';
@@ -261,6 +273,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             buyerName: value.buyerName || 'JSK URJA',
             poDate: parseDate(value.poDate) || (po ? po.poDate : null),
             ...totals,
+            financialYear: fy,
             status: 'Confirmed', paymentStatus: 'Unpaid',
             createdBy: req.user._id,
         }], { session });
@@ -300,7 +313,9 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
                 itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
                 receivedQty: i.qty, rate: i.rate, warehouse: '',
             }));
-            await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session);
+            // Update updateStockForItems to handle FY tagging (internally or by passing fy)
+            // For now, let's assume it gets it from the referenceId or we pass it
+            await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy);
         }
 
         // Financial Ledger Posting
@@ -333,6 +348,7 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (status) query.status = status;
     if (flowType) query.flowType = flowType;
+    if (req.query.financialYear) query.financialYear = req.query.financialYear;
     if (search) query.$or = [
         { invoiceNumber: { $regex: search, $options: 'i' } },
         { supplierName: { $regex: search, $options: 'i' } },

@@ -28,10 +28,12 @@ const stockLedgerSchema = new mongoose.Schema({
     warehouse: { type: String, default: '' },
     remarks: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 stockLedgerSchema.index({ itemId: 1, date: -1 });
 stockLedgerSchema.index({ transactionType: 1 });
+stockLedgerSchema.index({ financialYear: 1 });
 
 const StockLedger = mongoose.model('StockLedger', stockLedgerSchema);
 export { StockLedger };

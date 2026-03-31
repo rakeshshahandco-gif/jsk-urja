@@ -47,12 +47,12 @@ const PrdAuditTab = ({ projectId }) => {
                     {audits.map((audit) => (
                         <div key={audit._id} className={styles.timelineItem}>
                             <div className={styles.tLine}></div>
-                            <div className={clsx(styles.tDot, styles[`dot_${audit.action}`])}></div>
+                            <div className={clsx(styles.tDot, styles[`dot_${audit.action || 'Default'}`])}></div>
                             
                             <div className={styles.tContent}>
                                 <div className={styles.tHeader}>
-                                    <span className={clsx(styles.actionBadge, styles[`act_${audit.action}`])}>{audit.action}</span>
-                                    <strong className={styles.entityTxt}>{audit.entityType.replace('Prd', '')} Record</strong>
+                                    <span className={clsx(styles.actionBadge, styles[`act_${audit.action || 'Default'}`])}>{audit.action || 'Activity'}</span>
+                                    <strong className={styles.entityTxt}>{(audit.entityType || 'Prd').replace('Prd', '')} Record</strong>
                                     <span className={styles.tDate}>{moment(audit.date).format('DD MMM YYYY, HH:mm')}</span>
                                 </div>
                                 
@@ -75,8 +75,8 @@ const PrdAuditTab = ({ projectId }) => {
                                                 {audit.changes.map((ch, idx) => (
                                                     <tr key={idx}>
                                                         <td className={styles.fld}>{ch.field}</td>
-                                                        <td className={styles.old}>{JSON.stringify(ch.oldValue).substring(0, 100)}</td>
-                                                        <td className={styles.new}>{JSON.stringify(ch.newValue).substring(0, 100)}</td>
+                                                        <td className={styles.old}>{JSON.stringify(ch.oldValue || '').substring(0, 100)}</td>
+                                                        <td className={styles.new}>{JSON.stringify(ch.newValue || '').substring(0, 100)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

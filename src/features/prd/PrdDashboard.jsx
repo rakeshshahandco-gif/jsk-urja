@@ -39,7 +39,7 @@ const PrdDashboard = () => {
                 // Basic Stats
                 const activeProjs = projs.filter(p => !['Mass Production', 'Cancelled'].includes(p.status)).length;
                 const openIss = isss.filter(i => ['Open', 'In Progress'].includes(i.status)).length;
-                const pendApp = apps.filter(a => a.finalStatus === 'Pending Signatures').length;
+                const pendApp = apps.filter(a => (a.finalStatus || 'Pending').includes('Pending')).length;
 
                 setStats({
                     totalProjects: projs.length,
@@ -170,7 +170,7 @@ const PrdDashboard = () => {
                             <div className={styles.issList}>
                                 {issues.map((iss, idx) => (
                                     <div key={idx} className={styles.issRow} onClick={() => navigate(`/prd/projects/${iss.projectId}`)}>
-                                        <div className={clsx(styles.barIndic, styles[`bar_${iss.severity.toLowerCase()}`])}></div>
+                                        <div className={clsx(styles.barIndic, styles[`bar_${(iss.severity || 'Minor').toLowerCase()}`])}></div>
                                         <div className={styles.issLeft}>
                                             <div className={styles.ititle}>{iss.title}</div>
                                             <div className={styles.imeta}>{moment(iss.date).format('DD MMM')} • {iss.category}</div>

@@ -10,6 +10,7 @@ import { AccountLedger } from '../models/accountLedger.model.js';
 import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
 
 /**
  * Generate Next Voucher Number
@@ -30,7 +31,7 @@ const getNextVoucherNo = async (typeId) => {
  * Post to Ledger and update balances
  */
 const postToLedger = async (data, session) => {
-    const { voucherId, voucherNo, date, ledgerId, amount, type, narration, cashBankAccountId } = data;
+    const { voucherId, voucherNo, date, ledgerId, amount, type, narration, cashBankAccountId, financialYear } = data;
 
     const ledger = await AccountLedger.findById(ledgerId).session(session);
     if (!ledger) throw new ApiError(httpStatus.NOT_FOUND, `Ledger ${ledgerId} not found`);
@@ -38,7 +39,7 @@ const postToLedger = async (data, session) => {
     // Create Ledger Entry
     await LedgerEntry.create([{
         voucherId, voucherNo, date, ledgerId, ledgerName: ledger.name,
-        amount, type, narration, cashBankAccountId
+        amount, type, narration, cashBankAccountId, financialYear
     }], { session });
 
     // Update Ledger Balance
@@ -117,12 +118,14 @@ export const createVoucher = asyncHandler(async (req, res) => {
         const vType = await VoucherType.findById(voucherTypeId).session(session);
         if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
 
+        const fy = req.body.financialYear || getFYFromDate(date || new Date());
         const voucherNo = await getNextVoucherNo(voucherTypeId);
         const actualNature = vType.nature || nature;
 
         const voucher = new Voucher({
             ...req.body,
             voucherNo,
+            financialYear: fy,
             voucherType: vType._id,
             nature: actualNature,
             voucherTypeName: vType.name,
@@ -144,7 +147,8 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     voucherId: voucher._id, voucherNo, date,
                     ledgerId: item.ledgerId, amount: item.amount,
                     type: item.type,
-                    narration: item.narration || narration
+                    narration: item.narration || narration,
+                    financialYear: fy
                 }, session);
             }
 
@@ -174,7 +178,8 @@ export const createVoucher = asyncHandler(async (req, res) => {
                 ledgerId: mainLedger._id, amount: totalAmount,
                 type: mainEntryType,
                 narration: narration || `Main entry for ${voucherNo}`,
-                cashBankAccountId
+                cashBankAccountId,
+                financialYear: fy
             }, session);
 
             // Post Item Entries
@@ -183,7 +188,8 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     voucherId: voucher._id, voucherNo, date,
                     ledgerId: item.ledgerId, amount: item.amount,
                     type: item.type, // e.g. Credit for Receipt, Debit for Payment
-                    narration: item.narration || narration
+                    narration: item.narration || narration,
+                    financialYear: fy
                 }, session);
 
                 // Handle Bill Adjustments
@@ -222,6 +228,7 @@ export const getVouchers = asyncHandler(async (req, res) => {
     }
     if (nature) filter.nature = nature;
     if (partyId) filter.partyId = partyId;
+    if (req.query.financialYear) filter.financialYear = req.query.financialYear;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [data, total] = await Promise.all([

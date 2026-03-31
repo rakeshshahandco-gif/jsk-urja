@@ -308,7 +308,11 @@ export const updateSupplier = asyncHandler(async (req, res) => {
 });
 
 export const deleteSupplier = asyncHandler(async (req, res) => {
-    const supplier = await Supplier.findByIdAndDelete(req.params.id);
-    if (!supplier) throw new ApiError(404, 'Supplier not found');
-    res.json(new ApiResponse(200, null, 'Supplier deleted'));
+    // 🛡️ SOFT-DELETE ONLY: Suppliers are never hard-deleted from the database.
+    const result = await Supplier.updateOne(
+        { _id: req.params.id, isDeleted: { $ne: true } },
+        { $set: { isDeleted: true, deletedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) throw new ApiError(404, 'Supplier not found');
+    res.json(new ApiResponse(200, null, 'Supplier deactivated (soft-deleted)'));
 });

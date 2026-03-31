@@ -58,3 +58,12 @@ export const deleteUser = async (id) => {
     const response = await apiClient.delete(`/users/${id}`);
     return response.data.data;
 };
+
+/**
+ * Fetches all departments for dropdowns.
+ * @returns {Promise<Object>} - { success: true, data: [...] }
+ */
+export const getDepartments = async () => {
+    const response = await apiClient.get('/users/departments');
+    return response.data;
+};

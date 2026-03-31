@@ -37,8 +37,14 @@ const reworkJobCardSchema = new mongoose.Schema({
         type: String,
         enum: ['Pending', 'In Progress', 'Awaiting Material', 'Repaired', 'Closed'],
         default: 'Pending'
-    }
+    },
+
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
 }, { timestamps: true });
+
+reworkJobCardSchema.index({ jobCardNo: 1 });
+reworkJobCardSchema.index({ status: 1 });
+reworkJobCardSchema.index({ financialYear: 1 });
 
 export const ReworkJobCard = mongoose.model('ReworkJobCard', reworkJobCardSchema);

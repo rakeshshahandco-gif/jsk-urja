@@ -134,7 +134,7 @@ export const ImportGSTModal = ({ isOpen, onClose, onSuccess }) => {
                         <span className={styles.browseButtonText}>Browse Excel File</span>
                     </label>
                     <input id="gst-file-input" type="file" accept=".xlsx,.xls" onChange={handleFileSelect} className={styles.fileInput} />
-                    <p className={styles.hint}>Ensure headers include &quot;Company&quot; and &quot;GST No.&quot;</p>
+                    <p className={styles.hint}>Headers: "Company", "Customer Name", or "Mobile" & "GST No."</p>
                 </>
             )}
         </div>

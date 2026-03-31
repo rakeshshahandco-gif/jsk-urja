@@ -4,15 +4,18 @@ import { Button, Input } from "@/components/ui";
 import { BookOpen, Filter, ArrowRight } from "lucide-react";
 import { getDayBook } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
+import { useFYDateRange } from "@/contexts/FinancialYearContext";
+import FYBadge from "@/components/ui/FYBadge";
 import s from "./DayBookPage.module.scss";
 
 const DayBookPage = () => {
   const navigate = useNavigate();
+  const fyDateRange = useFYDateRange();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    from: new Date().toISOString().split("T")[0],
-    to: new Date().toISOString().split("T")[0],
+    from: fyDateRange.startDate,
+    to: fyDateRange.endDate,
   });
 
   const fetchData = async () => {
@@ -27,9 +30,14 @@ const DayBookPage = () => {
     }
   };
 
+  // Auto-reset when FY changes
+  useEffect(() => {
+    setFilters({ from: fyDateRange.startDate, to: fyDateRange.endDate });
+  }, [fyDateRange.startDate, fyDateRange.endDate]);
+
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [filters.from, filters.to]);
 
   const getVchClass = (nature) => {
     switch (nature) {
@@ -55,6 +63,7 @@ const DayBookPage = () => {
             Comprehensive daily transaction log across all financial activities
           </p>
         </div>
+        <FYBadge />
       </div>
 
       <div className={s.filterPanel}>

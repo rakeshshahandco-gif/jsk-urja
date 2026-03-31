@@ -120,6 +120,8 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
+
     // Soft Delete Fields
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -130,6 +132,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
 purchaseInvoiceSchema.index({ supplierId: 1, invoiceDate: -1 });
 purchaseInvoiceSchema.index({ paymentStatus: 1 });
 purchaseInvoiceSchema.index({ isDeleted: 1 });
+purchaseInvoiceSchema.index({ financialYear: 1 });
 
 const PurchaseInvoice = mongoose.model('PurchaseInvoice', purchaseInvoiceSchema);
 export { PurchaseInvoice };

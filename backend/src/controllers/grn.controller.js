@@ -9,6 +9,9 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import mongoose from 'mongoose';
 import Joi from 'joi';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 
 // ── Auto-generate GRN Number ──────────────────────────────────────────────────
 const generateGrnNumber = async () => {
@@ -18,7 +21,7 @@ const generateGrnNumber = async () => {
 };
 
 // ── Stock helper ──────────────────────────────────────────────────────────────
-export const updateStockForItems = async (items, refNo, refId, refType, userId, session) => {
+export const updateStockForItems = async (items, refNo, refId, refType, userId, session, financialYear) => {
     const ledgerEntries = [];
     for (const item of items) {
         const inventoryItem = await Item.findById(item.itemId).session(session);
@@ -54,6 +57,7 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
             runningStock: inventoryItem.currentStock,
             warehouse: item.warehouse || '',
             remarks: `${refType}: ${refNo}`,
+            financialYear: financialYear || getFYFromDate(new Date()),
             createdBy: userId,
         });
     }
@@ -155,7 +159,16 @@ const createGRNAgainstPO = async (req, res) => {
             });
         }
 
-        const grnNumber = await generateGrnNumber();
+        const fy = value.financialYear || getFYFromDate(value.grnDate || new Date());
+        let grnNumber = value.grnNumber;
+        if (!grnNumber && value.seriesId) {
+            grnNumber = await getNextNumberFromSeries(value.seriesId, session);
+        }
+
+        if (!grnNumber) {
+            grnNumber = await generateGrnNumber();
+        }
+
         const grn = await GRN.create([{
             grnNumber,
             grnDate: value.grnDate || new Date(),
@@ -179,6 +192,7 @@ const createGRNAgainstPO = async (req, res) => {
             remarks: value.remarks || '',
             complaintId: value.complaintId || po.complaintId || null,
             complaintNo: value.complaintNo || po.complaintNo || '',
+            financialYear: fy,
             createdBy: req.user._id,
         }], { session });
 
@@ -198,7 +212,7 @@ const createGRNAgainstPO = async (req, res) => {
         await po.save({ session });
 
         // Update stock
-        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session);
+        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy);
 
         await AuditLog.create([{
             user: req.user._id,
@@ -251,7 +265,16 @@ const createDirectGRN = async (req, res) => {
             remarks: item.remarks || '',
         }));
 
-        const grnNumber = await generateGrnNumber();
+        const fy = value.financialYear || getFYFromDate(value.grnDate || new Date());
+        let grnNumber = value.grnNumber;
+        if (!grnNumber && value.seriesId) {
+            grnNumber = await getNextNumberFromSeries(value.seriesId, session);
+        }
+
+        if (!grnNumber) {
+            grnNumber = await generateGrnNumber();
+        }
+
         const grn = await GRN.create([{
             grnNumber,
             grnDate: value.grnDate || new Date(),
@@ -267,13 +290,14 @@ const createDirectGRN = async (req, res) => {
             remarks: value.remarks || '',
             complaintId: value.complaintId || null,
             complaintNo: value.complaintNo || '',
+            financialYear: fy,
             createdBy: req.user._id,
         }], { session });
 
         const createdGrn = grn[0];
 
         // Update stock immediately on Direct GRN
-        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session);
+        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy);
 
         await AuditLog.create([{
             user: req.user._id,
@@ -315,6 +339,7 @@ export const getGRNs = asyncHandler(async (req, res) => {
         { supplierName: { $regex: search, $options: 'i' } },
         { poNumber: { $regex: search, $options: 'i' } },
     ];
+    if (req.query.financialYear) query.financialYear = req.query.financialYear;
 
     const skip = (Number(page) - 1) * Number(limit);
     const total = await GRN.countDocuments(query);

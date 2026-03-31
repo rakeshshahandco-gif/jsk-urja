@@ -5,17 +5,29 @@ import {
 import { Search, Calendar, XCircle, Eye, Printer } from "lucide-react";
 import { getVouchers, cancelVoucher } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
+import { useFYDateRange } from "@/contexts/FinancialYearContext";
+import FYBadge from "@/components/ui/FYBadge";
 import s from "./VoucherListPage.module.scss";
 
 const VoucherListPage = () => {
+    const fyDateRange = useFYDateRange();
     const [vouchers, setVouchers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({
-        startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        startDate: fyDateRange.startDate,
+        endDate: fyDateRange.endDate,
         voucherType: '',
         search: ''
     });
+
+    // Auto-reset when FY changes
+    useEffect(() => {
+        setFilters(prev => ({
+            ...prev,
+            startDate: fyDateRange.startDate,
+            endDate: fyDateRange.endDate,
+        }));
+    }, [fyDateRange.startDate, fyDateRange.endDate]);
 
     const fetchVouchers = async () => {
         setLoading(true);
@@ -62,7 +74,8 @@ const VoucherListPage = () => {
                     <h1 className={s.title}>📔 Voucher Register</h1>
                     <p className={s.subtitle}>Comprehensive audit trail of all financial transactions</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3" style={{ alignItems: 'center' }}>
+                    <FYBadge />
                     <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-md" onClick={() => window.print()}>
                         <Printer size={14} /> Print Register
                     </button>

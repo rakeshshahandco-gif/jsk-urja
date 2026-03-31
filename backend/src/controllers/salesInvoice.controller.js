@@ -10,17 +10,31 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { postSalesInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
 import httpStatus from 'http-status';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
 
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const body = req.body;
-        const invoiceNumber = body.invoiceNumber || `SI-${Date.now()}`;
+        
+        // Financial Year Tagging
+        const fy = body.financialYear || getFYFromDate(body.invoiceDate || new Date());
+        
+        let invoiceNumber = body.invoiceNumber;
+        if (!invoiceNumber && body.seriesId) {
+            invoiceNumber = await getNextNumberFromSeries(body.seriesId, session);
+        }
+        
+        if (!invoiceNumber) {
+            invoiceNumber = `SI-${Date.now()}`;
+        }
         
         const invData = {
             ...body,
             invoiceNumber,
+            financialYear: fy,
             createdBy: req.user.id,
             status: 'Confirmed',
             paymentStatus: 'Unpaid'
@@ -50,6 +64,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                         rate: iItem.rate,
                         amount: iItem.qty * iItem.rate,
                         runningStock: itemDoc.currentStock,
+                        financialYear: fy,
                         createdBy: req.user.id
                     }], { session });
                 }
@@ -89,6 +104,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     }
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
+    if (req.query.financialYear) filter.financialYear = req.query.financialYear;
     if (search) filter.$or = [
         { invoiceNumber: { $regex: search, $options: 'i' } },
         { customerName: { $regex: search, $options: 'i' } },

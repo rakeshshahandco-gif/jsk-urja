@@ -46,6 +46,7 @@ const paymentEntrySchema = new mongoose.Schema({
     },
 
     notes: { type: String, default: '' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
@@ -53,6 +54,7 @@ paymentEntrySchema.index({ invoiceId: 1 });
 paymentEntrySchema.index({ paymentDate: -1 });
 paymentEntrySchema.index({ paymentMode: 1 });
 paymentEntrySchema.index({ supplierId: 1 });
+paymentEntrySchema.index({ financialYear: 1 });
 
 const PaymentEntry = mongoose.model('PaymentEntry', paymentEntrySchema);
 export { PaymentEntry };

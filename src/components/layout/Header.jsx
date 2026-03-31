@@ -10,6 +10,9 @@ import { NotificationPanel } from './NotificationPanel';
 import { ROLE_CONFIG } from '@/utils/permissions';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
 import { menuConfig } from '@/config/menu.config';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { Calendar, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
+import { getNotificationPermission, requestNotificationPermission, isNotificationSupported } from '@/utils/browserNotification';
 import styles from './Header.module.scss';
 
 export const Header = () => {
@@ -19,10 +22,23 @@ export const Header = () => {
     const { openModal } = useModal();
     const { unreadCount } = useNotification();
     const { unreadTotal } = useMessenger();
+    const { financialYears, selectedFY, setSelectedFY } = useFinancialYear();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
     const menuRef = useRef(null);
     const bellRef = useRef(null);
+
+    useEffect(() => {
+        if (isNotificationSupported()) {
+            setNotificationPermission(getNotificationPermission());
+        }
+    }, []);
+
+    const handleEnableNotifications = async () => {
+        const permission = await requestNotificationPermission();
+        setNotificationPermission(permission);
+    };
 
 
     // Dynamic page title logic
@@ -95,6 +111,55 @@ export const Header = () => {
                 </div>
 
                 <div className={styles.userSection}>
+                    <div className={styles.fySelectorContainer}>
+                        <Calendar size={14} className={styles.fyIcon} />
+                        <div className={styles.fyLabelGroup}>
+                            <span className={styles.fyLabel}>F.Y.</span>
+                            <select 
+                                className={styles.fySelect}
+                                value={selectedFY}
+                                onChange={(e) => setSelectedFY(e.target.value)}
+                                title="Switch Financial Year — affects accounting entries only (Sales, Purchase, Ledger). Does not affect Customers, Tasks, or Follow-ups."
+                            >
+                                {financialYears && financialYears.map(fy => (
+                                    <option key={fy._id} value={fy.name}>
+                                        {fy.name}{fy.isCurrent ? ' ✓' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        {financialYears.find(f => f.name === selectedFY)?.isCurrent && (
+                            <span className={styles.fyActiveDot} title="Current Active Year" />
+                        )}
+                    </div>
+
+                    {isNotificationSupported() && (
+                        <div className={styles.browserNotifyContainer}>
+                            {notificationPermission === 'default' && (
+                                <button 
+                                    className={styles.enableNotifyBtn} 
+                                    onClick={handleEnableNotifications}
+                                    title="Click to enable desktop notifications for messages and tasks"
+                                >
+                                    <Monitor size={14} />
+                                    Enable Notifications
+                                </button>
+                            )}
+                            {notificationPermission === 'granted' && (
+                                <div className={styles.notifyStatusActive} title="Desktop Notifications are Enabled">
+                                    <CheckCircle size={14} />
+                                    <span className={styles.statusText}>Live Alerts</span>
+                                </div>
+                            )}
+                            {notificationPermission === 'denied' && (
+                                <div className={styles.notifyStatusDenied} title="Notifications are blocked. Please enable them in your browser settings (click the lock icon in the URL bar).">
+                                    <AlertCircle size={14} />
+                                    <span className={styles.statusText}>Alerts Blocked</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className={styles.notificationWrapper} ref={bellRef}>
                         <button
                             className={styles.bellButton}

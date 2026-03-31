@@ -1,8 +1,10 @@
 import express from 'express';
 const router = express.Router();
+import { protect } from '../../middlewares/auth.middleware.js';
 import * as prdPrototypeController  from '../../controllers/prdPrototype.controller.js';
 import { requirePrdRole }  from '../../middlewares/prdAuth.middleware.js';
 
+router.use(protect);
 router.use(requirePrdRole(['super_admin', 'admin', 'rd_manager', 'hardware_dev', 'firmware_dev', 'production_user']));
 
 router.post('/', prdPrototypeController.createPrdPrototype);

@@ -4,6 +4,7 @@ import { Item } from '../models/item.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
 import {
     createWorkOrderSchema,
     updateWorkOrderSchema,
@@ -14,8 +15,8 @@ import {
 
 // ── Auto-generate WO Number ──────────────────────────────────────────────────
 const generateWoNumber = async () => {
-    const year = new Date().getFullYear();
-    const prefix = `WO-${year}-`;
+    const fy = getFYFromDate(new Date());
+    const prefix = `WO-${fy}-`;
 
     // Find the latest WO for this year by sorting numerically on the suffix
     const lastWo = await WorkOrder.findOne({
@@ -130,6 +131,7 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         remarks: value.remarks,
         stages,
         materialStatus,
+        financialYear: value.financialYear || getFYFromDate(value.plannedStart || new Date()),
         createdBy: req.user._id,
     });
 
@@ -152,6 +154,7 @@ export const getWorkOrders = asyncHandler(async (req, res) => {
             { supervisor: { $regex: search, $options: 'i' } },
         ];
     }
+    if (req.query.financialYear) query.financialYear = req.query.financialYear;
 
     const skip = (Number(page) - 1) * Number(limit);
     const total = await WorkOrder.countDocuments(query);

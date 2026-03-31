@@ -78,6 +78,7 @@ export const getItems = asyncHandler(async (req, res) => {
     if (itemType) filter.itemType = itemType;
     if (itemGroupName) filter.itemGroupName = itemGroupName;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
+    if (req.query.isManufacturable !== undefined) filter.isManufacturable = req.query.isManufacturable === 'true';
 
     if (search) {
         // Handle concatenated string formats like "Code — Name" or "Code - Name"

@@ -7,6 +7,8 @@ import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import Customer from '../models/customer.model.js';
 import { AuditLog } from '../models/auditLog.model.js';
 import mongoose from 'mongoose';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -96,13 +98,13 @@ export const createSO = asyncHandler(async (req, res) => {
 
     // Get SO number from series if provided
     let soNumber, gstApplicable = true;
+    const fy = body.financialYear || getFYFromDate(body.soDate || new Date());
+
     if (body.seriesId) {
+        soNumber = await getNextNumberFromSeries(body.seriesId);
+        if (!soNumber) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
         const series = await InvoiceSeries.findById(body.seriesId);
-        if (!series || !series.isActive) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
-        soNumber = series.nextInvoiceNumber();
         gstApplicable = series.gstApplicable === false ? false : true;
-        series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
-        await series.save();
     } else {
         soNumber = await genSONumber();
     }
@@ -141,6 +143,7 @@ export const createSO = asyncHandler(async (req, res) => {
         roundedTotal,
         roundOff,
         amountInWords: numWords(roundedTotal),
+        financialYear: fy,
         createdBy: req.user.id,
     });
 
@@ -170,6 +173,7 @@ export const getSOs = asyncHandler(async (req, res) => {
     }
 
     if (status) filter.status = status;
+    if (req.query.financialYear) filter.financialYear = req.query.financialYear;
     if (search) filter.$or = [
         { soNumber: { $regex: search, $options: 'i' } },
         { customerName: { $regex: search, $options: 'i' } },
@@ -301,6 +305,8 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         psNumber = `PS-${year}-${String(parseInt(parts[parts.length - 1]) + 1).padStart(5, '0')}`;
     }
 
+    const fy = getFYFromDate(new Date());
+
     const psItems = so.items.map((item, i) => ({
         srNo: i + 1,
         itemCode: item.itemCode || '',
@@ -328,6 +334,7 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         modelNo: so.items.map(i => [i.itemCode, i.modelNo || i.itemName].filter(Boolean).join(' - ')).join(', ') || '',
         items: psItems,
         status: 'Pending',
+        financialYear: fy,
         createdBy: req.user.id,
     });
 

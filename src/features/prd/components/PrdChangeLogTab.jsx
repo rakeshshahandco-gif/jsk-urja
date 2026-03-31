@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPrdChangeLogs, createPrdChangeLog, updatePrdChangeLog, deletePrdChangeLog, getPrdTestReports } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
-import { Plus, Edit, Trash2, Download, Shuffle } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, Shuffle, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import styles from './PrdChangeLogTab.module.scss';
 import clsx from 'clsx';
@@ -281,8 +281,8 @@ const PrdChangeLogTab = ({ projectId }) => {
                                         )}
                                     </td>
                                     <td>
-                                        <span className={clsx(styles.statusBadge, styles[`status_${log.finalStatus.replace(/\s+/g, '').replace(/[\/\-]/g, '')}`])}>
-                                            {log.finalStatus}
+                                        <span className={clsx(styles.statusBadge, styles[`status_${(log.finalStatus || 'Requested').replace(/\s+/g, '').replace(/[/\-/]/g, '')}`])}>
+                                            {log.finalStatus || 'Requested'}
                                         </span>
                                     </td>
                                     <td>

@@ -51,11 +51,13 @@ const repairJobCardSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 repairJobCardSchema.index({ jobCardNo: 1 });
 repairJobCardSchema.index({ complaintId: 1 });
 repairJobCardSchema.index({ status: 1 });
+repairJobCardSchema.index({ financialYear: 1 });
 
 const RepairJobCard = mongoose.model('RepairJobCard', repairJobCardSchema);
 export { RepairJobCard };

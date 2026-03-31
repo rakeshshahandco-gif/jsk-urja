@@ -119,8 +119,8 @@ const PrdApprovalTab = ({ projectId }) => {
                                     <h4 className={styles.cardTitle}>Release Approval</h4>
                                     {app.locked && <Lock size={14} className={styles.lockIcon} />}
                                 </div>
-                                <div className={clsx(styles.finalStatusBadge, styles[`fs_${app.finalStatus.replace(/\s+/g, '').replace(/[\/\-]/g, '')}`])}>
-                                    {app.finalStatus}
+                                <div className={clsx(styles.finalStatusBadge, styles[`fs_${(app.finalStatus || 'Pending').replace(/\s+/g, '').replace(/[/\-/]/g, '')}`])}>
+                                    {app.finalStatus || 'Pending'}
                                 </div>
                             </div>
                             
@@ -208,7 +208,7 @@ const ApprovalNode = ({ title, data, role, approvalId, onSign, locked }) => {
                 </div>
             )}
             {data?.remarks && (
-                <div className={styles.nodeRemarks}>"{data.remarks}"</div>
+                <div className={styles.nodeRemarks}>&quot;{data.remarks}&quot;</div>
             )}
         </div>
     );

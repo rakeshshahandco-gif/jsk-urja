@@ -156,6 +156,19 @@ export const PERMISSION_REGISTRY = [
                     { id: 'view', label: 'View', type: 'boolean' },
                     { id: 'manage', label: 'Manage', type: 'boolean' }
                 ]
+            },
+            {
+                id: 'production_planning',
+                name: 'Production Planning / MRP',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                    { id: 'calculate', label: 'Calculate', type: 'boolean' },
+                    { id: 'approve', label: 'Approve', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' }
+                ]
             }
         ]
     },
@@ -356,6 +369,7 @@ export const PERMISSION_REGISTRY = [
         submodules: [
             { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
         ]
     },
@@ -387,6 +401,66 @@ export const PERMISSION_REGISTRY = [
             { id: 'chat', name: 'Direct Messaging', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Messages', type: 'boolean' }] },
             { id: 'groups', name: 'Group Conversations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage Groups', type: 'boolean' }] },
             { id: 'broadcast', name: 'Broadcast Lists', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Broadcast', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'hr',
+        name: 'HR Management',
+        submodules: [
+            { id: 'hr_dashboard', name: 'HR Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { 
+                id: 'employee_master', 
+                name: 'Employee Master', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'add', label: 'Add', type: 'boolean' }, 
+                    { id: 'edit', label: 'Edit', type: 'boolean' }, 
+                    { id: 'delete', label: 'Delete', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'shift_master', 
+                name: 'Shift Master', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'manage', label: 'Manage', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'attendance', 
+                name: 'Attendance Management', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'add', label: 'Manual Entry', type: 'boolean' }, 
+                    { id: 'import', label: 'Machine Import', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'leave_management', 
+                name: 'Leave Management', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'apply', label: 'Apply Leave', type: 'boolean' }, 
+                    { id: 'approve', label: 'Approve Leave', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'payroll', 
+                name: 'Payroll & Salary', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'process', label: 'Process Payroll', type: 'boolean' }, 
+                    { id: 'finalize', label: 'Finalize & Lock', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'hr_reports', 
+                name: 'HR Reports', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'export', label: 'Export', type: 'boolean' }
+                ] 
+            }
         ]
     }
 ];

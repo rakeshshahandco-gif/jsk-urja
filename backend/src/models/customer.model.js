@@ -143,6 +143,18 @@ const customerSchema = mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        deletedAt: {
+            type: Date,
+            default: null,
+        },
+        restoredAt: {
+            type: Date,
+            default: null,
+        },
+        restoredReason: {
+            type: String,
+            default: null,
+        },
         customerCode: {
             type: String,
             unique: true,
@@ -195,6 +207,36 @@ customerSchema.pre('save', function (next) {
 
     next();
 });
+
+/**
+ * 🛡️  SAFETY HOOK: Block isDeleted from being set via findOneAndUpdate / updateMany etc.
+ * Any update operation that tries to set isDeleted=true must go through the
+ * explicit deleteCustomerById service function only.
+ * This prevents accidental deletion via bulk imports or API payload injection.
+ */
+const _stripIsDeletedFromUpdate = function (next) {
+    const update = this.getUpdate();
+    if (!update) return next();
+
+    // Remove from $set
+    if (update.$set && update.$set.isDeleted !== undefined) {
+        console.warn('[CustomerModel] 🚨 Blocked attempt to set isDeleted via update operation!');
+        delete update.$set.isDeleted;
+    }
+
+    // Remove from top-level
+    if (update.isDeleted !== undefined) {
+        console.warn('[CustomerModel] 🚨 Blocked attempt to set isDeleted via top-level update!');
+        delete update.isDeleted;
+    }
+
+    next();
+};
+
+customerSchema.pre('findOneAndUpdate', _stripIsDeletedFromUpdate);
+customerSchema.pre('updateOne', _stripIsDeletedFromUpdate);
+customerSchema.pre('updateMany', _stripIsDeletedFromUpdate);
+customerSchema.pre('findByIdAndUpdate', _stripIsDeletedFromUpdate);
 
 // Validation: Ensure at least one contact person exists
 customerSchema.path('contactPersons').validate(function (value) {

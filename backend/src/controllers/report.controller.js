@@ -11,7 +11,7 @@ const catchAsync = (fn) => (req, res, next) => {
 };
 
 const getCustomerReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType']);
+    const filters = pick(req.query, ['q', 'status', 'city', 'state', 'interestedProduct', 'customerType', 'financialYear']);
     const options = pick(req.query, ['sortBy', 'sortOrder', 'page', 'limit']);
 
     const result = await reportService.queryCustomerReport(filters, options);
@@ -56,7 +56,7 @@ const exportPDFReport = catchAsync(async (req, res) => {
 });
 
 const getFollowUpReport = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo']);
+    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo', 'financialYear']);
     filters.search = req.query.search || req.query.q;
     const options = pick(req.query, ['sortBy', 'sortOrder', 'page', 'limit']);
     const result = await reportService.queryFollowUpReport(filters, options);
@@ -104,7 +104,7 @@ const getReminderReport = catchAsync(async (req, res) => {
     // Wait, I can't use reminderService if not imported.
     // I'll add the methods that use reportService first (exports).
 
-    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo', 'customerId', 'search']);
+    const filters = pick(req.query, ['status', 'priority', 'followUpType', 'dateFrom', 'dateTo', 'customerId', 'search', 'financialYear']);
     const options = pick(req.query, ['sortBy', 'sortOrder', 'limit', 'page']);
     // We need to call reminderService.queryReminders.
     // I will add the import in the next step.
@@ -331,10 +331,11 @@ const getTaskReminderReport = catchAsync(async (req, res) => {
 
 // ── Purchase Comparison Report ─────────────────────────────────────────
 const getPurchaseComparisonReport = catchAsync(async (req, res) => {
-    const { supplierId, dateFrom, dateTo } = req.query;
+    const { supplierId, dateFrom, dateTo, financialYear } = req.query;
 
     // Build PO query
     const poQuery = { status: { $ne: 'Cancelled' } };
+    if (financialYear) poQuery.financialYear = financialYear;
     if (supplierId) poQuery.supplierId = supplierId;
     if (dateFrom || dateTo) {
         poQuery.poDate = {};
@@ -411,6 +412,7 @@ const getPurchaseComparisonReport = catchAsync(async (req, res) => {
 
     // Direct GRN rows (no PO)
     const grnQuery = { sourceType: 'Direct GRN' };
+    if (financialYear) grnQuery.financialYear = financialYear;
     if (supplierId) grnQuery.supplierId = supplierId;
     if (dateFrom || dateTo) {
         grnQuery.grnDate = {};

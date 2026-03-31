@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPrdIssues, createPrdIssue, updatePrdIssue, deletePrdIssue, getPrdTestReports, getPrdChangeLogs } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
-import { Plus, Edit, Trash2, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, AlertTriangle, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import styles from './PrdIssueTab.module.scss';
 import clsx from 'clsx';
@@ -282,13 +282,13 @@ const PrdIssueTab = ({ projectId }) => {
                                     </td>
                                     <td><span className={styles.catBadge}>{iss.category}</span></td>
                                     <td>
-                                        <span className={clsx(styles.sevBadge, styles[`sev_${iss.severity.toLowerCase()}`])}>
-                                            {iss.severity}
+                                        <span className={clsx(styles.sevBadge, styles[`sev_${(iss.severity || 'Medium').toLowerCase()}`])}>
+                                            {iss.severity || 'Medium'}
                                         </span>
                                     </td>
                                     <td>
-                                        <span className={clsx(styles.statusBadge, styles[`status_${iss.status.replace(/\s+/g, '')}`])}>
-                                            {iss.status}
+                                        <span className={clsx(styles.statusBadge, styles[`status_${(iss.status || 'Open').replace(/\s+/g, '')}`])}>
+                                            {iss.status || 'Open'}
                                         </span>
                                     </td>
                                     <td>{iss.assignedTo?.name || '-'}</td>

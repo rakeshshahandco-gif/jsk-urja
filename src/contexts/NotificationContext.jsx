@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from './SocketContext';
 import toast from 'react-hot-toast';
 import { Bell, X, ExternalLink } from 'lucide-react';
+import { showBrowserNotification } from '@/utils/browserNotification';
 
 const NotificationContext = createContext();
 
@@ -115,6 +116,14 @@ export const NotificationProvider = ({ children }) => {
                     setNotifications(prev => [notification, ...prev]);
                     setUnreadCount(prev => prev + 1);
                     showNotificationToast(notification);
+
+                    // Browser Notification
+                    showBrowserNotification({
+                        title: notification.title || 'CRM Alert',
+                        body: notification.message,
+                        url: notification.task ? '/tasks/list' : (notification.link || '/'),
+                        tag: notification._id
+                    });
                 };
 
                 socket.on('notification:new', handleNewNotification);

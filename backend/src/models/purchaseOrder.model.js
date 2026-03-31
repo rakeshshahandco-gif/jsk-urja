@@ -66,6 +66,8 @@ const purchaseOrderSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
+
     // Soft Delete Fields
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -76,6 +78,7 @@ const purchaseOrderSchema = new mongoose.Schema({
 purchaseOrderSchema.index({ status: 1 });
 purchaseOrderSchema.index({ supplierId: 1 });
 purchaseOrderSchema.index({ isDeleted: 1 });
+purchaseOrderSchema.index({ financialYear: 1 });
 
 const PurchaseOrder = mongoose.model('PurchaseOrder', purchaseOrderSchema);
 export { PurchaseOrder };

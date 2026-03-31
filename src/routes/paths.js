@@ -58,6 +58,11 @@ export const PATHS = {
             OUTPUTS: '/production/rework/outputs',
             RETESTS: '/production/rework/retests',
             SCRAPS: '/production/rework/scraps',
+        },
+        PLANNING: {
+            ROOT: '/production/planning',
+            NEW: '/production/planning/new',
+            DETAILS: (id) => `/production/planning/${id}`,
         }
     },
     PURCHASE: {
@@ -107,6 +112,7 @@ export const PATHS = {
         GROUP_MASTER: '/accounts/masters/groups',
         LEDGER_MASTER: '/accounts/masters/ledgers',
         VOUCHER_TYPE_MASTER: '/accounts/masters/voucher-types',
+        FINANCIAL_YEAR: '/accounts/masters/financial-years',
         LEDGER_REPORT: '/accounts/reports/ledger',
         SALES_REGISTER: '/accounts/reports/sales-register',
         PURCHASE_REGISTER: '/accounts/reports/purchase-register',
@@ -117,6 +123,17 @@ export const PATHS = {
         FIXED_ASSETS: '/accounts/fixed-assets',
         ASSET_CATEGORIES: '/accounts/asset-categories',
         ASSET_LOCATIONS: '/accounts/asset-locations',
+    },
+    HR: {
+        ROOT: '/hr',
+        DASHBOARD: '/hr/dashboard',
+        EMPLOYEES: '/hr/employees',
+        SHIFTS: '/hr/shifts',
+        ATTENDANCE: '/hr/attendance',
+        ATTENDANCE_IMPORT: '/hr/attendance/import',
+        LEAVES: '/hr/leaves',
+        PAYROLL: '/hr/payroll',
+        REPORTS: '/hr/reports',
     },
     MESSENGER: {
         ROOT: '/messenger',

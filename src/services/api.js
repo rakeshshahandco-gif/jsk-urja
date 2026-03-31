@@ -22,6 +22,22 @@ api.interceptors.request.use(
         if (authData && authData.token) {
             config.headers.Authorization = `Bearer ${authData.token}`;
         }
+
+        // Add Financial Year filter to GET requests
+        const selectedFY = localStorage.getItem('selectedFY');
+        if (selectedFY && config.method === 'get') {
+            // Skip for specific global routes
+            const skipRoutes = ['/financial-years', '/company-profile', '/auth'];
+            const shouldSkip = skipRoutes.some(route => config.url.includes(route));
+            
+            if (!shouldSkip) {
+                config.params = config.params || {};
+                if (!config.params.financialYear) {
+                    config.params.financialYear = selectedFY;
+                }
+            }
+        }
+
         return config;
     },
     (error) => {

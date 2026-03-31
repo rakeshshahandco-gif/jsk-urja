@@ -22,6 +22,7 @@ export const getPSList = asyncHandler(async (req, res) => {
     const { status, limit = 50, page = 1 } = req.query;
     const filter = {};
     if (status) filter.status = status;
+    if (req.query.financialYear) filter.financialYear = req.query.financialYear;
     const skip = (Number(page) - 1) * Number(limit);
     const [sheets, total] = await Promise.all([
         ProductionSheet.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),

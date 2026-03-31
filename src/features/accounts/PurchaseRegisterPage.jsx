@@ -5,6 +5,8 @@ import { getPurchaseRegister } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { PATHS } from "@/routes/paths";
+import { useFYDateRange } from "@/contexts/FinancialYearContext";
+import FYBadge from "@/components/ui/FYBadge";
 import s from "./PurchaseRegisterPage.module.scss";
 
 const TABS = [
@@ -27,12 +29,13 @@ const getGstSlab = (rate) => {
 
 export default function PurchaseRegisterPage() {
   const navigate = useNavigate();
+  const fyDateRange = useFYDateRange();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("register_inv");
   const [filters, setFilters] = useState({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0],
-    to: new Date().toISOString().split("T")[0],
+    from: fyDateRange.startDate,
+    to: fyDateRange.endDate,
   });
 
   const fetchData = async () => {
@@ -47,7 +50,12 @@ export default function PurchaseRegisterPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  // Auto-reset when FY changes
+  useEffect(() => {
+    setFilters({ from: fyDateRange.startDate, to: fyDateRange.endDate });
+  }, [fyDateRange.startDate, fyDateRange.endDate]);
+
+  useEffect(() => { fetchData(); }, [filters.from, filters.to]);
 
   const totals = data.reduce((acc, inv) => {
     acc.taxable += inv.totalTaxableAmount || inv.totalBeforeTax || 0;
@@ -132,9 +140,12 @@ export default function PurchaseRegisterPage() {
           <h1 className={s.title}>📥 Purchase Register</h1>
           <p className={s.subtitle}>Periodical summary of all purchase invoices and ITC details</p>
         </div>
-        <button onClick={exportCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all shadow-md">
-          <Download size={14} /> Export CSV
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <FYBadge />
+          <button onClick={exportCSV} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all shadow-md">
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

@@ -1,4 +1,5 @@
 import express from 'express';
+import productionPlanningRoute from './productionPlanning.routes.js';
 import authRoute from './auth.routes.js';
 import userRoute from './user.routes.js';
 import customerRoute from './customer.routes.js';
@@ -70,7 +71,9 @@ import prdIssueRoute from './prdIssue.routes.js';
 import prdChangeLogRoute from './prdChangeLog.routes.js';
 import prdApprovalRoute from './prdApproval.routes.js';
 import prdAuditRoute from './prdAudit.routes.js';
+import hrRoute from './hr.routes.js';
 import messengerRoute from './messenger.routes.js';
+import fyRoute from './fy.routes.js';
 
 
 const router = express.Router();
@@ -82,6 +85,10 @@ router.get('/health', (req, res) => {
 });
 
 const defaultRoutes = [
+    {
+        path: '/production-planning',
+        route: productionPlanningRoute,
+    },
     {
         path: '/communication',
         route: communicationRoute,
@@ -370,10 +377,19 @@ const defaultRoutes = [
         path: '/prd/audits',
         route: prdAuditRoute,
     },
+    // ── HR Module ─────────────────────────────────────────────────────────────
+    {
+        path: '/hr',
+        route: hrRoute,
+    },
     // ── Internal Messenger ────────────────────────────────────────────────────
     {
         path: '/messenger',
         route: messengerRoute,
+    },
+    {
+        path: '/financial-years',
+        route: fyRoute,
     },
 ];
 

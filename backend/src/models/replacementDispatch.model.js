@@ -41,10 +41,12 @@ const replacementDispatchSchema = new mongoose.Schema({
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 }, { timestamps: true });
 
 replacementDispatchSchema.index({ doNo: 1 });
 replacementDispatchSchema.index({ complaintId: 1 });
+replacementDispatchSchema.index({ financialYear: 1 });
 
 const ReplacementDispatch = mongoose.model('ReplacementDispatch', replacementDispatchSchema);
 export { ReplacementDispatch };

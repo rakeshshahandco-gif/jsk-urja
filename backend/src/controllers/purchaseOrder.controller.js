@@ -7,6 +7,9 @@ import { AuditLog } from '../models/auditLog.model.js';
 import mongoose from 'mongoose';
 import httpStatus from 'http-status';
 import Joi from 'joi';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 
 // ── Joi Schemas ────────────────────────────────────────────────────────────────
 const poItemSchema = Joi.object({
@@ -103,7 +106,17 @@ export const createPO = asyncHandler(async (req, res) => {
     const supplier = await Supplier.findById(value.supplierId);
     if (!supplier) throw new ApiError(404, 'Supplier not found');
 
-    const poNumber = await generatePoNumber();
+    const fy = value.financialYear || getFYFromDate(value.poDate || new Date());
+
+    let poNumber = value.poNumber;
+    if (!poNumber && value.seriesId) {
+        poNumber = await getNextNumberFromSeries(value.seriesId);
+    }
+    
+    if (!poNumber) {
+        poNumber = await generatePoNumber();
+    }
+
     const totals = calculateTotals(value.items, value.gstType, value.freightAmount, value.freightGstRate);
 
     const po = await PurchaseOrder.create({
@@ -116,6 +129,7 @@ export const createPO = asyncHandler(async (req, res) => {
         supplierStateCode: value.supplierStateCode || '',
         supplierContact: value.supplierContact || supplier.phone,
         status: 'Ordered',
+        financialYear: fy,
         ...totals,
         complaintId: value.complaintId || null,
         complaintNo: value.complaintNo || '',
@@ -141,6 +155,7 @@ export const getPOs = asyncHandler(async (req, res) => {
         { poNumber: { $regex: search, $options: 'i' } },
         { supplierName: { $regex: search, $options: 'i' } },
     ];
+    if (req.query.financialYear) query.financialYear = req.query.financialYear;
 
 
     const skip = (Number(page) - 1) * Number(limit);

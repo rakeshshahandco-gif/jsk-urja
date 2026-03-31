@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
-// Force restart to apply validation changes (version 4)
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { errorHandler } from './middlewares/error.middleware.js';
 import { ApiError } from './utils/ApiError.js';
+import { deletionGuardMiddleware } from './middlewares/deletionGuard.middleware.js';
 import routes from './routes/v1/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +18,7 @@ const app = express();
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" }
-})); // Disabled CSP and allowed cross-origin resources
+}));
 app.use(cors({
     origin: ['http://localhost:4000', 'http://localhost:4001', 'http://localhost:5173', "https://jsk-urja.onrender.com"],
     credentials: true,
@@ -35,17 +35,8 @@ app.use(express.static(buildPath));
 const uploadPath = path.join(__dirname, '../uploads');
 app.use('/uploads', express.static(uploadPath));
 
-app.get('/api/debug-sales', async (req, res) => {
-    try {
-        const { SalesOrder } = await import('./models/salesOrder.model.js');
-        const orders = await SalesOrder.find({});
-        res.json({ count: orders.length, orders });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// API Routes
+// API Routes — Global deletion guard runs before all route handlers
+app.use('/api/v1', deletionGuardMiddleware);
 app.use('/api/v1', routes);
 
 // 404 Handler for API routes

@@ -4,6 +4,7 @@ import { useSocket } from './SocketContext';
 import * as messengerApi from '../services/messengerApi';
 import toast from 'react-hot-toast';
 import { MessageSquare, X, ExternalLink } from 'lucide-react';
+import { showBrowserNotification } from '@/utils/browserNotification';
 
 const MessengerContext = createContext();
 
@@ -135,6 +136,15 @@ export const MessengerProvider = ({ children }) => {
                         
                         if (document.hidden || !currentActive || currentActive._id !== threadId) {
                             showMessageToast(message);
+                            
+                            // Browser Notification
+                            showBrowserNotification({
+                                title: `New message from ${message.sender?.name || 'User'}`,
+                                body: message.content,
+                                icon: message.sender?.avatar || '/vite.svg',
+                                url: '/messenger',
+                                tag: threadId
+                            });
                         }
                     }
                     
@@ -154,6 +164,15 @@ export const MessengerProvider = ({ children }) => {
                 if (message.sender._id !== user._id) {
                     setUnreadTotal(t => t + 1);
                     showMessageToast(message, 'New Chat Started');
+
+                    // Browser Notification
+                    showBrowserNotification({
+                        title: 'New Chat Started',
+                        body: `${message.sender?.name || 'User'} started a new chat: ${message.content}`,
+                        icon: message.sender?.avatar || '/vite.svg',
+                        url: '/messenger',
+                        tag: thread._id
+                    });
                 }
             });
 
