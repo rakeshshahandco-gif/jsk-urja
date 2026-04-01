@@ -6,12 +6,13 @@ const notificationSchema = new mongoose.Schema({
     task: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
     type: {
         type: String,
-        enum: ['ASSIGNED', 'REASSIGNED', 'COMMENT', 'STATUS_CHANGE', 'PRIORITY_CHANGE', 'DUE_DATE_CHANGE', 'COMPLETED', 'REOPENED'],
+        enum: ['ASSIGNED', 'REASSIGNED', 'COMMENT', 'STATUS_CHANGE', 'PRIORITY_CHANGE', 'DUE_DATE_CHANGE', 'COMPLETED', 'REOPENED', 'MESSENGER', 'REMINDER'],
         required: true
     },
     title: { type: String, required: true },
     message: { type: String, required: true },
     isRead: { type: Boolean, default: false },
+    link: { type: String, default: null },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 

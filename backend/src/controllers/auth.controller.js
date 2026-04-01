@@ -135,3 +135,21 @@ export const getMe = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'User not found');
     }
 });
+
+export const updateNotificationSettings = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    user.notificationPreferences = {
+        ...user.notificationPreferences,
+        ...req.body
+    };
+
+    await user.save({ validateBeforeSave: false });
+
+    res.status(200).json(
+        new ApiResponse(200, user.notificationPreferences, 'Notification preferences updated')
+    );
+});

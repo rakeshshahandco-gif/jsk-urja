@@ -6,6 +6,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getIO } from '../config/socket.js';
+import { createNotification } from './notification.controller.js';
 
 // ─────────────────────────────────────────────────────────────
 // Helper: emit real-time event to all participants of a thread
@@ -108,6 +109,22 @@ export const createThread = asyncHandler(async (req, res) => {
                 message: populated,
             });
 
+            // Global Notification
+            const senderName = req.user.name || 'User';
+            const threadName = existing.name || 'New Message';
+            const others = existing.participants.filter(p => p.toString() !== myId.toString());
+            others.forEach(recipientId => {
+                createNotification({
+                    recipient: recipientId,
+                    actor: myId,
+                    type: 'MESSENGER',
+                    title: `New Message from ${senderName}`,
+                    message: firstMessage.trim(),
+                    link: '/messenger',
+                    metadata: { threadId: existing._id, threadName }
+                }).catch(err => console.error('Notification error in createThread (existing):', err));
+            });
+
             return res.json(new ApiResponse(200, { thread: existing, message: populated }, 'Message sent'));
         }
     }
@@ -140,6 +157,21 @@ export const createThread = asyncHandler(async (req, res) => {
     emitToParticipants(participantSet, 'messenger:thread_created', {
         thread: populatedThread,
         message: populatedMsg,
+    });
+
+    // Global Notification
+    const senderName = req.user.name || 'User';
+    const others = participantSet.filter(p => p.toString() !== myId.toString());
+    others.forEach(recipientId => {
+        createNotification({
+            recipient: recipientId,
+            actor: myId,
+            type: 'MESSENGER',
+            title: `New Message from ${senderName}`,
+            message: firstMessage.trim(),
+            link: '/messenger',
+            metadata: { threadId: thread._id, threadName: thread.name || 'New Chat' }
+        }).catch(err => console.error('Notification error in createThread:', err));
     });
 
     res.status(201).json(new ApiResponse(201, { thread: populatedThread, message: populatedMsg }, 'Thread created'));
@@ -291,6 +323,22 @@ export const sendMessage = asyncHandler(async (req, res) => {
     emitToParticipants(thread.participants, 'messenger:new_message', {
         threadId: thread._id.toString(),
         message: populated,
+    });
+
+    // Global Notification for Messenger
+    const senderName = req.user.name || 'User';
+    const threadName = thread.name || 'New Message';
+    const othersForNotify = thread.participants.filter(p => p.toString() !== myId.toString());
+    othersForNotify.forEach(recipientId => {
+        createNotification({
+            recipient: recipientId,
+            actor: myId,
+            type: 'MESSENGER',
+            title: `New Message from ${senderName}`,
+            message: content.trim(),
+            link: '/messenger',
+            metadata: { threadId: thread._id.toString(), threadName }
+        }).catch(err => console.error('Notification error in sendMessage:', err));
     });
 
     // Emit updated unread total to each participant who is NOT the sender

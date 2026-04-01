@@ -9,9 +9,10 @@ import { NotificationPanel } from './NotificationPanel';
 
 import { ROLE_CONFIG } from '@/utils/permissions';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
+import { NotificationSettingsForm } from './NotificationSettingsForm';
 import { menuConfig } from '@/config/menu.config';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
-import { Calendar, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Monitor, CheckCircle, AlertCircle, Settings } from 'lucide-react';
 import { getNotificationPermission, requestNotificationPermission, isNotificationSupported } from '@/utils/browserNotification';
 import styles from './Header.module.scss';
 
@@ -77,6 +78,14 @@ export const Header = () => {
         setShowUserMenu(false);
         openModal(ChangePasswordForm, {
             title: 'Change Password',
+            size: 'md'
+        });
+    };
+
+    const handleNotificationSettings = () => {
+        setShowUserMenu(false);
+        openModal(NotificationSettingsForm, {
+            title: 'Notification Settings',
             size: 'md'
         });
     };
@@ -219,6 +228,13 @@ export const Header = () => {
                                 >
                                     <KeyRound size={16} />
                                     <span>Change Password</span>
+                                </button>
+                                <button
+                                    className={styles.menuItem}
+                                    onClick={handleNotificationSettings}
+                                >
+                                    <Settings size={16} />
+                                    <span>Notification Settings</span>
                                 </button>
                                 <div className={styles.menuDivider} />
                                 <button

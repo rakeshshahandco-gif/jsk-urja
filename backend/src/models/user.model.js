@@ -96,6 +96,14 @@ const userSchema = new mongoose.Schema({
     lastLogin: {
         type: Date,
         default: null
+    },
+    notificationPreferences: {
+        inApp: { type: Boolean, default: true },
+        desktop: { type: Boolean, default: true },
+        sound: { type: Boolean, default: true },
+        taskAlerts: { type: Boolean, default: true },
+        messageAlerts: { type: Boolean, default: true },
+        reminderAlerts: { type: Boolean, default: true }
     }
 }, {
     timestamps: true

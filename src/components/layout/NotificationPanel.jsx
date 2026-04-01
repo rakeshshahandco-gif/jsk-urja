@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNotification } from '@/contexts/NotificationContext';
 import { Bell, Check, X, MessageSquare, UserPlus, ToggleLeft, CheckCircle } from 'lucide-react';
 import styles from './NotificationPanel.module.scss';
@@ -9,6 +9,7 @@ export const NotificationPanel = ({ onClose }) => {
     const { notifications, markAsRead, markAllRead, unreadCount } = useNotification();
     const panelRef = useRef(null);
     const navigate = useNavigate();
+    const [filter, setFilter] = useState('all'); // all, unread, tasks, messages, reminders
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -25,12 +26,24 @@ export const NotificationPanel = ({ onClose }) => {
             markAsRead(notification._id);
         }
 
-        // Navigate based on task type or specific logic
-        if (notification.task) {
-            navigate(`/tasks/list`); // Or a specific task detail page if available
+        // Navigate based on deep link or generic type rules
+        if (notification.link) {
+            navigate(notification.link);
+        } else if (notification.task) {
+            const taskId = typeof notification.task === 'object' ? notification.task._id : notification.task;
+            navigate(`/tasks/edit/${taskId}`);
         }
+        
         onClose();
     };
+
+    const filteredNotifications = notifications.filter(n => {
+        if (filter === 'unread') return !n.isRead;
+        if (filter === 'tasks') return n.task || n.type === 'TASK';
+        if (filter === 'messages') return n.type === 'MESSENGER';
+        if (filter === 'reminders') return n.type === 'REMINDER';
+        return true;
+    });
 
     const getIcon = (type) => {
         switch (type) {
@@ -58,11 +71,27 @@ export const NotificationPanel = ({ onClose }) => {
                 </div>
             </div>
 
+            <div className={`flex gap-2 px-4 py-2 border-b border-gray-100 overflow-x-auto ${styles.filters}`}>
+                {['all', 'unread', 'tasks', 'messages', 'reminders'].map(f => (
+                    <button
+                        key={f}
+                        onClick={() => setFilter(f)}
+                        className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap transition-colors ${
+                            filter === f 
+                                ? 'bg-primary-100 text-primary-700' 
+                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                        }`}
+                    >
+                        {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                ))}
+            </div>
+
             <div className={styles.list}>
-                {notifications.length === 0 ? (
-                    <div className={styles.empty}>No notifications</div>
+                {filteredNotifications.length === 0 ? (
+                    <div className={styles.empty}>No {filter !== 'all' ? filter : ''} notifications</div>
                 ) : (
-                    notifications.map((n) => (
+                    filteredNotifications.map((n) => (
                         <div
                             key={n._id}
                             className={`${styles.item} ${!n.isRead ? styles.unread : ''}`}

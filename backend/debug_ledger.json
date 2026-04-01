@@ -1,54 +1,34 @@
 {
-  "ledgerId": "69c238ca4630f0dab9b546a5",
+  "ledgerId": "69c238cb4630f0dab9b546f5",
   "voucherIds": [
-    "69c37ce5b9eac74d0bde7802",
-    "69c38eb57f9a4f24e8ffca4e"
+    "69c38eb37f9a4f24e8ffc962"
   ],
-  "relatedEntriesCount": 7,
+  "relatedEntriesCount": 4,
   "relatedEntries": [
     {
-      "vId": "69c37ce5b9eac74d0bde7802",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
+      "vId": "69c38eb37f9a4f24e8ffc962",
+      "lId": "69c238cb4630f0dab9b546f5",
+      "lName": "OPTOL TECHNOLOGIES PVT. LTD."
     },
     {
-      "vId": "69c37ce5b9eac74d0bde7802",
-      "lId": "69c238ca4630f0dab9b546a5",
-      "lName": "SOLACE ILLUMINATE"
-    },
-    {
-      "vId": "69c38eb57f9a4f24e8ffca4e",
-      "lId": "69c238ca4630f0dab9b546a5",
-      "lName": "SOLACE ILLUMINATE"
-    },
-    {
-      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "vId": "69c38eb37f9a4f24e8ffc962",
       "lId": "69bcb30f32c5fc43f54059c9",
       "lName": "Sales Account"
     },
     {
-      "vId": "69c38eb57f9a4f24e8ffca4e",
-      "lId": "69c38d1cd5bc45b4c6511c9d",
-      "lName": "Freight & Forwarding Charges"
-    },
-    {
-      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "vId": "69c38eb37f9a4f24e8ffc962",
       "lId": "69bcb30f32c5fc43f54059cc",
       "lName": "CGST Output"
     },
     {
-      "vId": "69c38eb57f9a4f24e8ffca4e",
+      "vId": "69c38eb37f9a4f24e8ffc962",
       "lId": "69bcb30f32c5fc43f54059cf",
       "lName": "SGST Output"
     }
   ],
   "oppositeNamesByVoucher": {
-    "69c37ce5b9eac74d0bde7802": [
-      "BANK OF BARODA"
-    ],
-    "69c38eb57f9a4f24e8ffca4e": [
+    "69c38eb37f9a4f24e8ffc962": [
       "Sales Account",
-      "Freight & Forwarding Charges",
       "CGST Output",
       "SGST Output"
     ]

@@ -29,5 +29,11 @@ export const authService = {
     logout: async () => {
         clearAuthData();
         // Optional: Call backend logout if you implement a blacklist
+    },
+
+    // Update Notification Settings
+    updateNotificationSettings: async (settings) => {
+        const { data } = await api.put('/auth/notification-settings', settings);
+        return data;
     }
 };

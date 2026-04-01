@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { realtimeSyncPlugin } from '../plugins/realtimeSync.plugin.js';
 
 const taskSchema = new mongoose.Schema({
     title: {
@@ -173,6 +174,8 @@ const taskSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+taskSchema.plugin(realtimeSyncPlugin);
 
 const Task = mongoose.model('Task', taskSchema);
 

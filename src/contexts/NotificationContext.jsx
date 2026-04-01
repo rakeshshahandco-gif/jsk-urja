@@ -1,10 +1,37 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '../services/notificationApi';
+import { authService } from '../services/auth.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from './SocketContext';
 import toast from 'react-hot-toast';
 import { Bell, X, ExternalLink } from 'lucide-react';
 import { showBrowserNotification } from '@/utils/browserNotification';
+
+// Generate a WhatsApp-style "ting" without external assets
+const playTingSound = () => {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+        
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+        console.warn('Audio play failed', e);
+    }
+};
 
 const NotificationContext = createContext();
 
@@ -16,6 +43,33 @@ export const NotificationProvider = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    
+    const [preferences, setPreferences] = useState({
+        inApp: true,
+        desktop: true,
+        sound: true,
+        taskAlerts: true,
+        messageAlerts: true,
+        reminderAlerts: true
+    });
+    
+    useEffect(() => {
+        if (user?.notificationPreferences) {
+            setPreferences(prev => ({ ...prev, ...user.notificationPreferences }));
+        }
+    }, [user]);
+
+    const updatePreferences = async (newPrefs) => {
+        try {
+            const updated = await authService.updateNotificationSettings(newPrefs);
+            if (updated.success) {
+                setPreferences(prev => ({ ...prev, ...updated.data }));
+            }
+        } catch (error) {
+            console.error('Failed to update preferences', error);
+        }
+    };
+
     const pollingInterval = useRef(null);
 
     const fetchNotifications = useCallback(async () => {
@@ -99,12 +153,9 @@ export const NotificationProvider = ({ children }) => {
                     <button
                         onClick={() => {
                             toast.dismiss(t.id);
-                            if (notification.task) {
-                                window.location.href = `/tasks/edit/${notification.task._id || notification.task}`;
-                            } else if (notification.link) {
-                                window.location.href = notification.link;
-                            } else if (notification.threadId) {
-                                window.location.href = `/messenger`;
+                            const dest = notification.link || (notification.task ? `/tasks/edit/${notification.task._id || notification.task}` : null);
+                            if (dest) {
+                                window.location.href = dest;
                             }
                         }}
                         className={`w-full border border-transparent rounded-none flex items-center justify-center text-sm font-semibold h-1/2 px-4 hover:bg-gray-50 focus:outline-none ${iconColor}`}
@@ -123,7 +174,7 @@ export const NotificationProvider = ({ children }) => {
             </div>
         ), {
             duration: 6000,
-            position: 'top-right',
+            position: 'bottom-right',
         });
     }, []);
 
@@ -136,6 +187,12 @@ export const NotificationProvider = ({ children }) => {
                 const handleNewNotification = (notification) => {
                     console.log('📬 Real-time Notification Received:', notification);
                     
+                    // Filter based on user preferences
+                    if (!preferences.taskAlerts && (notification.task || notification.type === 'TASK')) return;
+                    if (!preferences.messageAlerts && notification.type === 'MESSENGER') return;
+                    if (!preferences.reminderAlerts && notification.type === 'REMINDER') return;
+                    if (!preferences.taskAlerts && notification.type === 'APPROVAL') return;
+
                     // Update notifications list
                     setNotifications(prev => {
                         if (prev.some(n => n._id === notification._id)) return prev;
@@ -149,15 +206,22 @@ export const NotificationProvider = ({ children }) => {
                         setUnreadCount(prev => prev + 1);
                     }
                     
-                    showNotificationToast(notification);
+                    if (preferences.inApp) {
+                        showNotificationToast(notification);
+                        if (preferences.sound) {
+                            playTingSound();
+                        }
+                    }
 
-                    // Browser Notification
-                    showBrowserNotification({
-                        title: notification.title || 'CRM Alert',
-                        body: notification.message,
-                        url: notification.task ? `/tasks/edit/${notification.task._id}` : (notification.link || '/'),
-                        tag: notification._id
-                    });
+                    if (preferences.desktop) {
+                        // Browser Notification
+                        showBrowserNotification({
+                            title: notification.title || 'CRM Alert',
+                            body: notification.message,
+                            url: notification.link || (notification.task ? `/tasks/edit/${notification.task._id || notification.task}` : '/'),
+                            tag: notification._id
+                        });
+                    }
                 };
 
                 // Sync count across tabs
@@ -165,16 +229,23 @@ export const NotificationProvider = ({ children }) => {
                     if (count !== undefined) setUnreadCount(count);
                 };
 
+                // Fetch missed notifications on offline/reconnect
+                const handleConnect = () => {
+                    fetchNotifications();
+                };
+
                 socket.on('notification:new', handleNewNotification);
                 socket.on('notification:sync', handleNotificationSync);
+                socket.on('connect', handleConnect);
 
                 return () => {
                     socket.off('notification:new', handleNewNotification);
                     socket.off('notification:sync', handleNotificationSync);
+                    socket.off('connect', handleConnect);
                 };
             }
         }
-    }, [user, socket, fetchNotifications, showNotificationToast]);
+    }, [user, socket, fetchNotifications, showNotificationToast, preferences]);
 
     // Background refresh (polling) - reduced frequency since we have sockets
     useEffect(() => {
@@ -212,8 +283,10 @@ export const NotificationProvider = ({ children }) => {
         fetchNotifications,
         markAsRead,
         markAllRead,
-        loading
-    }), [notifications, unreadCount, fetchNotifications, loading]);
+        loading,
+        preferences,
+        updatePreferences
+    }), [notifications, unreadCount, fetchNotifications, loading, preferences]);
 
     return (
         <NotificationContext.Provider value={value}>

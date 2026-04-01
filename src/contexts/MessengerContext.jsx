@@ -133,19 +133,6 @@ export const MessengerProvider = ({ children }) => {
                     if (!currentActive || currentActive._id !== threadId) {
                         thread.unreadCount = (thread.unreadCount || 0) + 1;
                         setUnreadTotal(t => t + 1);
-                        
-                        if (document.hidden || !currentActive || currentActive._id !== threadId) {
-                            showMessageToast(message);
-                            
-                            // Browser Notification
-                            showBrowserNotification({
-                                title: `New message from ${message.sender?.name || 'User'}`,
-                                body: message.content,
-                                icon: message.sender?.avatar || '/vite.svg',
-                                url: '/messenger',
-                                tag: threadId
-                            });
-                        }
                     }
                     
                     updatedThreads.splice(index, 1);
@@ -163,16 +150,6 @@ export const MessengerProvider = ({ children }) => {
                 setThreads(prev => [thread, ...prev]);
                 if (message.sender._id !== user._id) {
                     setUnreadTotal(t => t + 1);
-                    showMessageToast(message, 'New Chat Started');
-
-                    // Browser Notification
-                    showBrowserNotification({
-                        title: 'New Chat Started',
-                        body: `${message.sender?.name || 'User'} started a new chat: ${message.content}`,
-                        icon: message.sender?.avatar || '/vite.svg',
-                        url: '/messenger',
-                        tag: thread._id
-                    });
                 }
             });
 
