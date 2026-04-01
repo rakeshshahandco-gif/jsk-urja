@@ -199,6 +199,7 @@ export const CustomerList = () => {
             lead: styles.status_lead,
             running_high: styles.status_running_high,
             running_low: styles.status_running_low,
+            running_medium: styles.status_running_medium,
         };
         return statusMap[status] || styles.status_inactive;
     };
@@ -430,6 +431,8 @@ export const CustomerList = () => {
                     onSuccess={fetchCustomers}
                 />
             )}
+
+
         </div>
     );
 };

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { getSalesOrders, deleteSalesOrder, restoreSalesOrder } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const STATUS_COLORS = {
     Draft: { color: '#64748b', bg: '#f1f5f9', border: '#e2e8f0' },
@@ -209,6 +211,9 @@ export default function SalesOrderListPage() {
                     </tbody>
                 </table>
             </div>
+
+
         </div>
     );
 }
+

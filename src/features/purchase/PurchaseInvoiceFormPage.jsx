@@ -11,6 +11,8 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
 const lbl = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600 };
@@ -403,7 +405,48 @@ export default function PurchaseInvoiceFormPage() {
     const roundOff = r2(Math.round(rawTotal) - rawTotal);
     const grandWithFreight = r2(rawTotal + roundOff);
 
+    // ── Keyboard Navigation ───────────────────────────────────────────────
+    const handleRowKeyDown = (e, rowIdx, colIdx) => {
+        if (e.key === 'ArrowDown') {
+            const next = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`);
+            if (next) {
+                e.preventDefault();
+                next.focus();
+            } else if (rowIdx === rows.length - 1 && rows[rowIdx].itemId && isManual) {
+                addRow();
+            }
+        } else if (e.key === 'ArrowUp') {
+            const prev = document.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`);
+            if (prev) {
+                e.preventDefault();
+                prev.focus();
+            }
+        } else if (e.key === 'Enter') {
+            const nextColTargets = [1, 2, 3, 4, 5, 6];
+            const currentTargetIdx = nextColTargets.indexOf(colIdx);
+            
+            if (currentTargetIdx < nextColTargets.length - 1) {
+                const nextCol = document.querySelector(`[data-row="${rowIdx}"][data-col="${nextColTargets[currentTargetIdx + 1]}"]`);
+                if (nextCol) {
+                    e.preventDefault();
+                    nextCol.focus();
+                }
+            } else {
+                if (rowIdx < rows.length - 1) {
+                    const nextRowCol1 = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="1"]`);
+                    if (nextRowCol1) {
+                        e.preventDefault();
+                        nextRowCol1.focus();
+                    }
+                } else if (isManual) {
+                    addRow();
+                }
+            }
+        }
+    };
+
     const needPO = flowType === 'PO→GRN→Invoice' || flowType === 'PO→Direct Invoice';
+
     const needGRN = flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice';
     const isManual = flowType === 'Direct Invoice';
 
@@ -637,6 +680,9 @@ export default function PurchaseInvoiceFormPage() {
                                                                     options={items.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
                                                                     value={row.itemId}
                                                                     onChange={v => setRow(i, 'itemId', v)}
+                                                                    onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
+                                                                    data-row={i}
+                                                                    data-col={1}
                                                                     placeholder="— Search Item —"
                                                                     dark={false}
                                                                 />
@@ -648,17 +694,21 @@ export default function PurchaseInvoiceFormPage() {
                                                             <textarea
                                                                 value={row.description}
                                                                 onChange={e => setRow(i, 'description', e.target.value)}
+                                                                onKeyDown={(e) => handleRowKeyDown(e, i, 2)}
+                                                                data-row={i}
+                                                                data-col={2}
                                                                 style={{ ...inp, fontSize: '12px', height: '36px', resize: 'none', padding: '6px' }}
                                                                 placeholder="Item description (optional)..."
                                                             />
                                                         </td>
-                                                        <td style={{ padding: '6px 10px', width: '70px' }}><input value={row.hsnCode} onChange={e => setRow(i, 'hsnCode', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
-                                                        <td style={{ padding: '6px 10px', width: '55px' }}><input value={row.uom} onChange={e => setRow(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} readOnly={isLocked} /></td>
+                                                        <td style={{ padding: '6px 10px', width: '70px' }}><input value={row.hsnCode} onChange={e => setRow(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
+                                                        <td style={{ padding: '6px 10px', width: '55px' }}><input value={row.uom} onChange={e => setRow(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} style={{ ...inp, fontSize: '12px' }} readOnly={isLocked} /></td>
                                                         <td style={{ padding: '6px 10px', minWidth: '120px' }}>
-                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} style={{ ...inp, fontSize: '12px', fontWeight: 'bold', minWidth: '100px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
+                                                            <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={{ ...inp, fontSize: '12px', fontWeight: 'bold', minWidth: '100px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
                                                         </td>
                                                         <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{row.maxQty ?? '—'}</td>
-                                                        <td style={{ padding: '6px 10px', width: '90px' }}><input type="number" min="0" step="0.01" value={row.rate} onChange={e => setRow(i, 'rate', e.target.value)} style={{ ...inp, fontSize: '12px', minWidth: '70px' }} /></td>
+                                                        <td style={{ padding: '6px 10px', width: '90px' }}><input type="number" min="0" step="0.01" value={row.rate} onChange={e => setRow(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...inp, fontSize: '12px', minWidth: '70px' }} /></td>
+
                                                         <td style={{ padding: '6px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total}</td>
                                                         <td style={{ padding: '6px 10px' }}>{isManual && rows.length > 1 && <button type="button" onClick={() => removeRow(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>}</td>
                                                     </tr>
@@ -713,6 +763,9 @@ export default function PurchaseInvoiceFormPage() {
                     </>
                 )}
             </div>
+
+
         </div>
     );
 }
+

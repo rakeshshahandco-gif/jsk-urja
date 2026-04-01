@@ -5,6 +5,8 @@ import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -307,7 +309,48 @@ export default function SalesInvoiceFormPage() {
     const grandTotal = totalTaxable + totalGst;
     const roundedTotal = Math.round(grandTotal);
 
+    // ── Keyboard Navigation ───────────────────────────────────────────────
+    const handleRowKeyDown = (e, rowIdx, colIdx) => {
+        if (e.key === 'ArrowDown') {
+            const next = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`);
+            if (next) {
+                e.preventDefault();
+                next.focus();
+            } else if (rowIdx === form.items.length - 1 && form.items[rowIdx].itemId) {
+                addItem();
+            }
+        } else if (e.key === 'ArrowUp') {
+            const prev = document.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`);
+            if (prev) {
+                e.preventDefault();
+                prev.focus();
+            }
+        } else if (e.key === 'Enter') {
+            const nextColTargets = [1, 3, 4, 5, 6, 7, 8];
+            const currentTargetIdx = nextColTargets.indexOf(colIdx);
+            
+            if (currentTargetIdx < nextColTargets.length - 1) {
+                const nextCol = document.querySelector(`[data-row="${rowIdx}"][data-col="${nextColTargets[currentTargetIdx + 1]}"]`);
+                if (nextCol) {
+                    e.preventDefault();
+                    nextCol.focus();
+                }
+            } else {
+                if (rowIdx < form.items.length - 1) {
+                    const nextRowCol1 = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="1"]`);
+                    if (nextRowCol1) {
+                        e.preventDefault();
+                        nextRowCol1.focus();
+                    }
+                } else {
+                    addItem();
+                }
+            }
+        }
+    };
+
     const handleSubmit = async () => {
+
         if (!form.seriesId) return toast.error('⚠️ Please select an Invoice Series. The invoice number is generated from the selected series.');
         if (!form.customerName) return toast.error('Customer name is required');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
@@ -465,30 +508,34 @@ export default function SalesInvoiceFormPage() {
                                                 options={allItems.map(it => ({ value: it._id, label: it.itemCode, meta: it.itemName }))}
                                                 value={item.itemId}
                                                 onChange={v => handleItemSelect(v, i)}
+                                                onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
+                                                data-row={i}
+                                                data-col={1}
                                                 placeholder="Item Code..."
                                             />
                                         </td>
                                         <td style={{ ...td, minWidth: 160 }}>
-                                            <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" />
+                                            <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" tabIndex="-1" />
                                         </td>
                                         <td style={{ ...td, minWidth: 120 }}>
-                                            <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} placeholder="Additional Notes" autoComplete="off" />
+                                            <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} style={inp} placeholder="Additional Notes" autoComplete="off" />
                                         </td>
                                         <td style={{ ...td, width: 90 }}>
-                                            <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} placeholder="HSN" autoComplete="off" />
+                                            <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} style={inp} placeholder="HSN" autoComplete="off" />
                                         </td>
                                         <td style={{ ...td, width: 70 }}>
-                                            <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} placeholder="UOM" autoComplete="off" />
+                                            <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={inp} placeholder="UOM" autoComplete="off" />
                                         </td>
                                         <td style={{ ...td, minWidth: '120px' }}>
-                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', fontSize: '12px', fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...tableInp, textAlign: 'center', fontSize: '12px', fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
                                         </td>
                                         <td style={{ ...td, width: 90 }}>
-                                            <input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                            <input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
                                         </td>
                                         <td style={{ ...td, width: 60 }}>
-                                            <input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} style={{ ...tableInp, textAlign: 'center' }} autoComplete="off" className="no-spin" />
+                                            <input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} style={{ ...tableInp, textAlign: 'center' }} autoComplete="off" className="no-spin" />
                                         </td>
+
                                         <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 100, textAlign: 'right', whiteSpace: 'nowrap' }}>
                                             ₹{item.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </td>
@@ -546,7 +593,11 @@ export default function SalesInvoiceFormPage() {
                     </Section>
                 </div>
             </div>
+
+
+
             <AddSeriesModal
+
                 isOpen={showAddSeries}
                 onClose={() => setShowAddSeries(false)}
                 onSave={(newSeries) => {

@@ -151,11 +151,21 @@ export default function SearchableSelect({
     };
 
     const handleKeyDown = (e) => {
+        // If the dropdown is NOT open, let the parent (row handler) take precedence for Excel-style navigation
         if (!isOpen) {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') setIsOpen(true);
-            return;
+            if (parentOnKeyDown) {
+                parentOnKeyDown(e);
+            }
+            if (e.defaultPrevented) return;
+
+            // If not handled by parent, and it's an arrow key, open the dropdown
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                setIsOpen(true);
+                return;
+            }
         }
 
+        // If dropdown is open, handle internal results navigation
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             setActiveIndex(prev => (prev < filteredOptions.length - 1 ? prev + 1 : prev));
@@ -170,13 +180,16 @@ export default function SearchableSelect({
                 // Default to first if none highlighted
                 handleSelect(filteredOptions[0].value);
             }
+            
+            // AFTER selecting, we can optionally move focus to next row/col
+            if (parentOnKeyDown) {
+                // We create a fake event or just call it to trigger focus move
+                // but usually row handlers for Enter move to next column.
+                // We want this for Enter.
+                parentOnKeyDown(e);
+            }
         } else if (e.key === 'Escape') {
             setIsOpen(false);
-        }
-
-        // Pass to parent if not consumed
-        if (parentOnKeyDown) {
-            parentOnKeyDown(e);
         }
     };
 

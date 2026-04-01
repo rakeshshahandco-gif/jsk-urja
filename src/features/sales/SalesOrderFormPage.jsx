@@ -8,6 +8,8 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -246,7 +248,50 @@ export default function SalesOrderFormPage() {
     const grandTotal = totalTaxable + totalGst;
     const roundedTotal = Math.round(grandTotal);
 
+    // ── Keyboard Navigation ───────────────────────────────────────────────
+    const handleRowKeyDown = (e, rowIdx, colIdx) => {
+        if (e.key === 'ArrowDown') {
+            const next = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`);
+            if (next) {
+                e.preventDefault();
+                next.focus();
+            } else if (rowIdx === form.items.length - 1 && form.items[rowIdx].itemId) {
+                // Auto add row on down arrow at last row
+                addItem();
+            }
+        } else if (e.key === 'ArrowUp') {
+            const prev = document.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`);
+            if (prev) {
+                e.preventDefault();
+                prev.focus();
+            }
+        } else if (e.key === 'Enter') {
+            const nextColTargets = [1, 3, 4, 5, 6, 7]; // Columns that are inputs (skipping readonly 2)
+            const currentTargetIdx = nextColTargets.indexOf(colIdx);
+            
+            if (currentTargetIdx < nextColTargets.length - 1) {
+                const nextCol = document.querySelector(`[data-row="${rowIdx}"][data-col="${nextColTargets[currentTargetIdx + 1]}"]`);
+                if (nextCol) {
+                    e.preventDefault();
+                    nextCol.focus();
+                }
+            } else {
+                // Enter on last column
+                if (rowIdx < form.items.length - 1) {
+                    const nextRowCol1 = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="1"]`);
+                    if (nextRowCol1) {
+                        e.preventDefault();
+                        nextRowCol1.focus();
+                    }
+                } else {
+                    addItem();
+                }
+            }
+        }
+    };
+
     const handleSubmit = async (nextStatus) => {
+
         if (!form.customerName) return toast.error('Customer name is required');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
@@ -462,6 +507,9 @@ export default function SalesOrderFormPage() {
                                                     options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
                                                     value={item.itemId}
                                                     onChange={v => handleItemSelect(v, i)}
+                                                    onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
+                                                    data-row={i}
+                                                    data-col={1}
                                                     placeholder="Item Code..."
                                                     noOptionsMessage={
                                                         <div style={{ padding: '8px', color: '#64748b' }}>
@@ -475,13 +523,14 @@ export default function SalesOrderFormPage() {
                                                 />
                                             </td>
                                             <td style={{ ...td, minWidth: 160 }}>
-                                                <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" />
+                                                <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" tabIndex="-1" />
                                             </td>
-                                            <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, minWidth: '120px' }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} style={{ ...tableInp, textAlign: 'center', fontSize: 12, fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
-                                            <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
+                                            <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} style={inp} autoComplete="off" /></td>
+                                            <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} style={inp} autoComplete="off" /></td>
+                                            <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={inp} autoComplete="off" /></td>
+                                            <td style={{ ...td, minWidth: '120px' }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...tableInp, textAlign: 'center', fontSize: 12, fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
+                                            <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
+
                                             <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 90, whiteSpace: 'nowrap' }}>₹{amt.toLocaleString('en-IN')}</td>
                                             <td style={{ ...td, width: 36 }}>
                                                 {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }}>✕</button>}
@@ -566,6 +615,9 @@ export default function SalesOrderFormPage() {
                     )}
                 </div>
             </div>
+
+
         </div>
     );
 }
+

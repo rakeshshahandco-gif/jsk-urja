@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload } from 'lucide-react';
+import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload, ArrowUp, ArrowDown, FileDown, FileText } from 'lucide-react';
 import { getItems, deleteItem, exportItemsExcel, exportItemsPDF, importItemsExcel, exportItemTemplate } from '@/services/itemApi';
-import { FileDown, FileText } from 'lucide-react';
 import { getItemTypes } from '@/services/itemTypeApi';
 import { getItemGroups } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
@@ -363,7 +362,7 @@ const ItemListPage = () => {
             </div>
 
             {/* Table */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 {loading ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, gap: 8, color: '#6b7280', fontSize: 12 }}>
                         <div style={{ width: 16, height: 16, border: '2px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
@@ -464,22 +463,126 @@ const ItemListPage = () => {
 
             {/* Pagination */}
             {meta.total > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#6b7280' }}>{((page - 1) * limit) + 1}–{Math.min(page * limit, meta.total)} of {meta.total}</span>
-                    <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                        style={{ height: 26, width: 26, border: '1px solid #e5e7eb', borderRadius: 5, background: '#fff', cursor: page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page <= 1 ? 0.4 : 1 }}>
-                        <ChevronLeft size={13} />
-                    </button>
-                    {[...Array(Math.min(meta.pages, 7))].map((_, i) => (
-                        <button key={i} onClick={() => setPage(i + 1)}
-                            style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #e5e7eb', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: page === i + 1 ? '#2563eb' : '#fff', color: page === i + 1 ? '#fff' : '#374151' }}>
-                            {i + 1}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    marginTop: 'auto'
+                }}>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                        Showing <b>{Math.min(((page - 1) * limit) + 1, meta.total)}</b> to <b>{Math.min(page * limit, meta.total)}</b> of <b>{meta.total}</b> items
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {/* First Page */}
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => setPage(1)}
+                            style={{
+                                height: 32, padding: '0 10px', fontSize: 12, fontWeight: 600,
+                                border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff',
+                                color: page <= 1 ? '#cbd5e1' : '#475569', cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                        >
+                            First
                         </button>
-                    ))}
-                    <button disabled={page >= meta.pages} onClick={() => setPage(p => p + 1)}
-                        style={{ height: 26, width: 26, border: '1px solid #e5e7eb', borderRadius: 5, background: '#fff', cursor: page >= meta.pages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page >= meta.pages ? 0.4 : 1 }}>
-                        <ChevronRight size={13} />
-                    </button>
+
+                        {/* Previous Page */}
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => setPage(p => p - 1)}
+                            style={{
+                                height: 32, padding: '0 10px', fontSize: 12, fontWeight: 600,
+                                border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff',
+                                color: page <= 1 ? '#cbd5e1' : '#475569', cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                        >
+                            <ChevronLeft size={14} /> Previous
+                        </button>
+
+                        {/* Page Numbers with Windowing */}
+                        <div style={{ display: 'flex', gap: 4, margin: '0 8px' }}>
+                            {(() => {
+                                const pages = [];
+                                const total = meta.pages;
+                                const current = page;
+                                const delta = 1; // Show current +/- delta
+
+                                let start = Math.max(1, current - delta);
+                                let end = Math.min(total, current + delta);
+
+                                if (start > 1) {
+                                    pages.push(1);
+                                    if (start > 2) pages.push('...');
+                                }
+
+                                for (let i = start; i <= end; i++) {
+                                    pages.push(i);
+                                }
+
+                                if (end < total) {
+                                    if (end < total - 1) pages.push('...');
+                                    pages.push(total);
+                                }
+
+                                return pages.map((p, i) => (
+                                    p === '...' ? (
+                                        <span key={`dots-${i}`} style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
+                                    ) : (
+                                        <button
+                                            key={`page-${p}`}
+                                            onClick={() => setPage(p)}
+                                            style={{
+                                                height: 32, minWidth: 32, padding: '0 6px', fontSize: 12, fontWeight: 700,
+                                                borderRadius: 6, border: '1px solid',
+                                                borderColor: page === p ? '#2563eb' : '#e2e8f0',
+                                                background: page === p ? '#eff6ff' : '#fff',
+                                                color: page === p ? '#2563eb' : '#475569',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {p}
+                                        </button>
+                                    )
+                                ));
+                            })()}
+                        </div>
+
+                        {/* Next Page */}
+                        <button
+                            disabled={page >= meta.pages}
+                            onClick={() => setPage(p => p + 1)}
+                            style={{
+                                height: 32, padding: '0 10px', fontSize: 12, fontWeight: 600,
+                                border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff',
+                                color: page >= meta.pages ? '#cbd5e1' : '#475569', cursor: page >= meta.pages ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                        >
+                            Next <ChevronRight size={14} />
+                        </button>
+
+                        {/* Last Page */}
+                        <button
+                            disabled={page >= meta.pages}
+                            onClick={() => setPage(meta.pages)}
+                            style={{
+                                height: 32, padding: '0 10px', fontSize: 12, fontWeight: 600,
+                                border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff',
+                                color: page >= meta.pages ? '#cbd5e1' : '#475569', cursor: page >= meta.pages ? 'not-allowed' : 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 4
+                            }}
+                        >
+                            Last
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

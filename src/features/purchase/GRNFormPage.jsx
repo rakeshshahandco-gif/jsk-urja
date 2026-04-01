@@ -6,6 +6,8 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { getComplaints } from '@/services/serviceApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const inp = { padding: '9px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '7px', color: '#f1f5f9', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const lbl = { fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: 600 };
@@ -122,7 +124,48 @@ export default function GRNFormPage() {
         return updated;
     }));
 
+    // ── Keyboard Navigation ───────────────────────────────────────────────
+    const handleRowKeyDown = (e, rowIdx, colIdx, items, isDirect = false) => {
+        if (e.key === 'ArrowDown') {
+            const next = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`);
+            if (next) {
+                e.preventDefault();
+                next.focus();
+            } else if (isDirect && rowIdx === items.length - 1 && items[rowIdx].itemId) {
+                addDirectItem();
+            }
+        } else if (e.key === 'ArrowUp') {
+            const prev = document.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`);
+            if (prev) {
+                e.preventDefault();
+                prev.focus();
+            }
+        } else if (e.key === 'Enter') {
+            const nextColTargets = isDirect ? [1, 2, 3, 4, 5, 7, 8] : [5, 6, 7, 8];
+            const currentTargetIdx = nextColTargets.indexOf(colIdx);
+            
+            if (currentTargetIdx < nextColTargets.length - 1) {
+                const nextCol = document.querySelector(`[data-row="${rowIdx}"][data-col="${nextColTargets[currentTargetIdx + 1]}"]`);
+                if (nextCol) {
+                    e.preventDefault();
+                    nextCol.focus();
+                }
+            } else {
+                if (rowIdx < items.length - 1) {
+                    const nextRowCol1 = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${nextColTargets[0]}"]`);
+                    if (nextRowCol1) {
+                        e.preventDefault();
+                        nextRowCol1.focus();
+                    }
+                } else if (isDirect) {
+                    addDirectItem();
+                }
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
+
         e.preventDefault();
         if (!header.supplierId && sourceType === 'Direct GRN') return toast.error('Select a supplier');
 
@@ -291,19 +334,23 @@ export default function GRNFormPage() {
                                                     <input type="number" min="0" max={item.pendingQty} step="0.01"
                                                         value={item.receivedQty}
                                                         onChange={e => setPoItem(idx, 'receivedQty', e.target.value)}
+                                                        onKeyDown={(e) => handleRowKeyDown(e, idx, 5, poItems)}
+                                                        data-row={idx}
+                                                        data-col={5}
                                                         style={{ ...inp, fontSize: '12px', borderColor: Number(item.receivedQty) > item.pendingQty ? '#ef4444' : '#10b981' }} />
                                                 </td>
                                                 <td style={{ padding: '10px 12px', width: '130px' }}>
-                                                    <select value={item.qcStatus} onChange={e => setPoItem(idx, 'qcStatus', e.target.value)} style={{ ...inp, fontSize: '12px', cursor: 'pointer' }}>
+                                                    <select value={item.qcStatus} onChange={e => setPoItem(idx, 'qcStatus', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 6, poItems)} data-row={idx} data-col={6} style={{ ...inp, fontSize: '12px', cursor: 'pointer' }}>
                                                         <option>Accepted</option><option>Pending</option><option>Rejected</option><option>Hold</option>
                                                     </select>
                                                 </td>
                                                 <td style={{ padding: '10px 12px', width: '100px' }}>
-                                                    <input value={item.batchNo} onChange={e => setPoItem(idx, 'batchNo', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="Batch #" />
+                                                    <input value={item.batchNo} onChange={e => setPoItem(idx, 'batchNo', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 7, poItems)} data-row={idx} data-col={7} style={{ ...inp, fontSize: '12px' }} placeholder="Batch #" />
                                                 </td>
                                                 <td style={{ padding: '10px 12px', width: '100px' }}>
-                                                    <input value={item.serialNo} onChange={e => setPoItem(idx, 'serialNo', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="Serial #" />
+                                                    <input value={item.serialNo} onChange={e => setPoItem(idx, 'serialNo', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 8, poItems)} data-row={idx} data-col={8} style={{ ...inp, fontSize: '12px' }} placeholder="Serial #" />
                                                 </td>
+
                                             </tr>
                                         ))}
                                     </tbody>
@@ -349,21 +396,25 @@ export default function GRNFormPage() {
                                                             options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
                                                             value={item.itemId}
                                                             onChange={v => setDirectItem(idx, 'itemId', v)}
+                                                            onKeyDown={(e) => handleRowKeyDown(e, idx, 1, directItems, true)}
+                                                            data-row={idx}
+                                                            data-col={1}
                                                             placeholder="— Search —"
                                                             dark={true}
                                                         />
                                                     </td>
-                                                    <td style={{ padding: '8px 12px', width: '80px' }}><input value={item.hsnCode} onChange={e => setDirectItem(idx, 'hsnCode', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
-                                                    <td style={{ padding: '8px 12px', width: '60px' }}><input value={item.uom} onChange={e => setDirectItem(idx, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} /></td>
-                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input type="number" min="0.01" step="0.01" value={item.receivedQty} onChange={e => setDirectItem(idx, 'receivedQty', e.target.value)} style={{ ...inp, fontSize: '12px', borderColor: '#10b981' }} /></td>
-                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input type="number" min="0" step="0.01" value={item.rate} onChange={e => setDirectItem(idx, 'rate', e.target.value)} style={{ ...inp, fontSize: '12px' }} /></td>
+                                                    <td style={{ padding: '8px 12px', width: '80px' }}><input value={item.hsnCode} onChange={e => setDirectItem(idx, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 2, directItems, true)} data-row={idx} data-col={2} style={{ ...inp, fontSize: '12px' }} placeholder="HSN" /></td>
+                                                    <td style={{ padding: '8px 12px', width: '60px' }}><input value={item.uom} onChange={e => setDirectItem(idx, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 3, directItems, true)} data-row={idx} data-col={3} style={{ ...inp, fontSize: '12px' }} /></td>
+                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input type="number" min="0.01" step="0.01" value={item.receivedQty} onChange={e => setDirectItem(idx, 'receivedQty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 4, directItems, true)} data-row={idx} data-col={4} style={{ ...inp, fontSize: '12px', borderColor: '#10b981' }} /></td>
+                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input type="number" min="0" step="0.01" value={item.rate} onChange={e => setDirectItem(idx, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 5, directItems, true)} data-row={idx} data-col={5} style={{ ...inp, fontSize: '12px' }} /></td>
                                                     <td style={{ padding: '8px 12px', color: '#10b981', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{amount.toLocaleString('en-IN')}</td>
                                                     <td style={{ padding: '8px 12px', width: '130px' }}>
-                                                        <select value={item.qcStatus} onChange={e => setDirectItem(idx, 'qcStatus', e.target.value)} style={{ ...inp, fontSize: '12px', cursor: 'pointer' }}>
+                                                        <select value={item.qcStatus} onChange={e => setDirectItem(idx, 'qcStatus', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 7, directItems, true)} data-row={idx} data-col={7} style={{ ...inp, fontSize: '12px', cursor: 'pointer' }}>
                                                             <option>Accepted</option><option>Pending</option><option>Rejected</option><option>Hold</option>
                                                         </select>
                                                     </td>
-                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input value={item.batchNo} onChange={e => setDirectItem(idx, 'batchNo', e.target.value)} style={{ ...inp, fontSize: '12px' }} placeholder="Batch #" /></td>
+                                                    <td style={{ padding: '8px 12px', width: '100px' }}><input value={item.batchNo} onChange={e => setDirectItem(idx, 'batchNo', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, idx, 8, directItems, true)} data-row={idx} data-col={8} style={{ ...inp, fontSize: '12px' }} placeholder="Batch #" /></td>
+
                                                     <td style={{ padding: '8px 12px' }}>
                                                         {directItems.length > 1 && <button type="button" onClick={() => removeDirectItem(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px', padding: '0 4px' }}>✕</button>}
                                                     </td>
@@ -407,6 +458,9 @@ export default function GRNFormPage() {
                     </div>
                 </form>
             </div>
+
+
         </div>
     );
 }
+

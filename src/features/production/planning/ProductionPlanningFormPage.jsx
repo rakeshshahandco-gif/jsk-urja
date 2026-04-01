@@ -7,7 +7,7 @@ import { Button, Badge, Card } from '@/components/ui';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { ChevronLeft, Info, ArrowUp, ArrowDown, Search as SearchIcon, Maximize2, Minimize2, Edit2 } from 'lucide-react';
+import { ChevronLeft, Info, Search as SearchIcon, Maximize2, Minimize2, Edit2 } from 'lucide-react';
 
 // ── Utility: Export to Excel (uses SheetJS if available, fallback to CSV) ─────
 const exportToExcel = (data, filename) => {
@@ -791,36 +791,7 @@ export default function ProductionPlanningFormPage() {
                         )}
                     </div>
 
-                    {/* Floating Navigation Buttons */}
-                    <div style={{
-                        position: 'fixed', bottom: 30, right: 30,
-                        display: 'flex', flexDirection: 'column', gap: 10, zIndex: 100
-                    }}>
-                        <button
-                            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                            title="Go to Top"
-                            style={{
-                                width: 44, height: 44, borderRadius: '50%', background: '#0284c7',
-                                color: '#fff', border: 'none', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                            }}
-                        >
-                            <ArrowUp size={20} />
-                        </button>
-                        <button
-                            onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-                            title="Go to Bottom"
-                            style={{
-                                width: 44, height: 44, borderRadius: '50%', background: '#1e293b',
-                                color: '#fff', border: 'none', cursor: 'pointer',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                            }}
-                        >
-                            <ArrowDown size={20} />
-                        </button>
-                    </div>
+
                 </>
             )}
 

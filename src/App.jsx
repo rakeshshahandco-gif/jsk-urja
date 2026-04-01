@@ -191,7 +191,7 @@ function App() {
                                                             <Sidebar />
                                                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                                                                 <Header />
-                                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "92vh", overflow: "hidden" }}>
+                                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "92vh", overflow: "auto" }}>
                                                                     <Routes>
                                                                         <Route path="/" element={<Navigate to="/tasks/list" replace />} />
                                                                         <Route

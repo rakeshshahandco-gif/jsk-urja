@@ -7,6 +7,8 @@ import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { ArrowUp, ArrowDown } from 'lucide-react';
+
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 const label = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em' };
@@ -173,7 +175,48 @@ export default function PurchaseOrderFormPage() {
     const totalTax = fmt(totals.itemTax + freightTax);
     const grandTotal = fmt(totalTaxable + totalTax);
 
+    // ── Keyboard Navigation ───────────────────────────────────────────────
+    const handleRowKeyDown = (e, rowIdx, colIdx) => {
+        if (e.key === 'ArrowDown') {
+            const next = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`);
+            if (next) {
+                e.preventDefault();
+                next.focus();
+            } else if (rowIdx === lineItems.length - 1 && lineItems[rowIdx].itemId) {
+                addItem();
+            }
+        } else if (e.key === 'ArrowUp') {
+            const prev = document.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`);
+            if (prev) {
+                e.preventDefault();
+                prev.focus();
+            }
+        } else if (e.key === 'Enter') {
+            const nextColTargets = [1, 2, 3, 4, 5, 6, 7];
+            const currentTargetIdx = nextColTargets.indexOf(colIdx);
+            
+            if (currentTargetIdx < nextColTargets.length - 1) {
+                const nextCol = document.querySelector(`[data-row="${rowIdx}"][data-col="${nextColTargets[currentTargetIdx + 1]}"]`);
+                if (nextCol) {
+                    e.preventDefault();
+                    nextCol.focus();
+                }
+            } else {
+                if (rowIdx < lineItems.length - 1) {
+                    const nextRowCol1 = document.querySelector(`[data-row="${rowIdx + 1}"][data-col="1"]`);
+                    if (nextRowCol1) {
+                        e.preventDefault();
+                        nextRowCol1.focus();
+                    }
+                } else {
+                    addItem();
+                }
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
+
         e.preventDefault();
         if (saving || globalIsSubmitting) return;
         
@@ -326,27 +369,31 @@ export default function PurchaseOrderFormPage() {
                                                             options={items.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
                                                             value={item.itemId}
                                                             onChange={v => setItem(i, 'itemId', v)}
+                                                            onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
+                                                            data-row={i}
+                                                            data-col={1}
                                                             placeholder="— Search Item —"
                                                         />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '120px' }}>
-                                                        <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />
+                                                        <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 2)} data-row={i} data-col={2} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '150px' }}>
-                                                        <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} placeholder="Additional Notes" style={{ ...inp, fontSize: '12px' }} />
+                                                        <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} placeholder="Additional Notes" style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', width: '100px' }}>
-                                                        <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} placeholder="HSN/SAC" style={{ ...inp, fontSize: '12px' }} />
+                                                        <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} placeholder="HSN/SAC" style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', width: '100px' }}>
-                                                        <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} style={{ ...inp, fontSize: '12px' }} />
+                                                        <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={{ ...inp, fontSize: '12px' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '80px' }}>
-                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} style={{ ...inp, fontSize: '12px', fontWeight: 'bold' }} />
+                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...inp, fontSize: '12px', fontWeight: 'bold' }} />
                                                     </td>
                                                     <td style={{ padding: '8px 10px', minWidth: '140px' }}>
-                                                        <input type="number" min="0" step="0.01" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} style={{ ...inp, fontSize: '13px', fontWeight: 'bold' }} />
+                                                        <input type="number" min="0" step="0.01" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...inp, fontSize: '13px', fontWeight: 'bold' }} />
                                                     </td>
+
 
                                                     <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total.toLocaleString()}</td>
                                                     <td style={{ padding: '8px 10px' }}>
@@ -428,6 +475,9 @@ export default function PurchaseOrderFormPage() {
                     </form>
                 )}
             </div>
+
+
         </div>
     );
 }
+
