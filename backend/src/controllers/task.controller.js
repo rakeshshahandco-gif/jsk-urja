@@ -381,23 +381,29 @@ export const updateTask = asyncHandler(async (req, res) => {
 });
 
 export const closeTask = asyncHandler(async (req, res) => {
-  const task = await Task.findById(req.params.taskId);
+  const task = await Task.findByIdAndUpdate(
+    req.params.taskId,
+    {
+      status: 'COMPLETED',
+      completedAt: new Date(),
+      closedAt: new Date(),
+      closedBy: req.user.id
+    },
+    { new: true }
+  );
+
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
 
-  task.status = 'COMPLETED';
-  task.completedAt = new Date();
-  task.closedAt = new Date();
-  task.closedBy = req.user.id;
-  await task.save();
-
-  await createNotification({
-    recipient: task.createdBy,
-    actor: req.user.id,
-    task: task._id,
-    type: 'COMPLETED',
-    title: 'Task Completed',
-    message: `Task "${task.title}" has been marked as completed`
-  });
+  if (task.createdBy) {
+    await createNotification({
+      recipient: task.createdBy,
+      actor: req.user.id,
+      task: task._id,
+      type: 'COMPLETED',
+      title: 'Task Completed',
+      message: `Task "${task.title}" has been marked as completed`
+    }).catch(err => console.error('Silent fail for notification in closeTask:', err));
+  }
 
   res.send({ success: true, data: task });
 });
@@ -435,6 +441,20 @@ export const extendTask = asyncHandler(async (req, res) => {
   
     task.dueDate = new Date(newDueDate);
     await task.save();
+
+    // NOTIFICATION: Task Extended
+    if (task.assigneeIds && task.assigneeIds.length > 0) {
+        for (const assigneeId of task.assigneeIds) {
+            await createNotification({
+                recipient: assigneeId,
+                actor: req.user.id,
+                task: task._id,
+                type: 'STATUS_CHANGE', // or a new type if we want
+                title: 'Task Due Date Updated',
+                message: `The due date for "${task.title}" has been updated to ${new Date(newDueDate).toLocaleDateString()}. Reason: ${reason || 'N/A'}`
+            });
+        }
+    }
   
     res.send({ success: true, data: task });
 });

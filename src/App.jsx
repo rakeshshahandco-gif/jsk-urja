@@ -183,21 +183,6 @@ function App() {
                                                 }
                                             />
 
-                                            {/* Messenger Page - WhatsApp Style Full Layout */}
-                                            <Route
-                                                path="/messenger"
-                                                element={
-                                                    <ProtectedRoute>
-                                                        <div style={{ display: 'flex', minHeight: '100vh', overflow: 'hidden' }}>
-                                                            <Sidebar />
-                                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                                                <MessengerPage />
-                                                            </div>
-                                                        </div>
-                                                    </ProtectedRoute>
-                                                }
-                                            />
-
                                             {/* Pages with sidebar and header */}
                                             <Route path="*" element={
                                                 <ProtectedRoute>
@@ -206,9 +191,17 @@ function App() {
                                                             <Sidebar />
                                                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                                                                 <Header />
-                                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "90vh", overflow: "auto" }}>
+                                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "92vh", overflow: "hidden" }}>
                                                                     <Routes>
                                                                         <Route path="/" element={<Navigate to="/tasks/list" replace />} />
+                                                                        <Route
+                                                                            path="/messenger"
+                                                                            element={
+                                                                                <ProtectedRoute>
+                                                                                    <MessengerPage />
+                                                                                </ProtectedRoute>
+                                                                            }
+                                                                        />
                                                                         <Route
                                                                             path="/customers"
                                                                             element={

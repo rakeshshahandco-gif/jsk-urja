@@ -10,7 +10,9 @@ export default function SearchableSelect({
     disabled = false,
     onCreateNew,
     dark = false,
-    noOptionsMessage = null
+    noOptionsMessage = null,
+    onKeyDown: parentOnKeyDown,
+    ...props
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(-1);
@@ -171,6 +173,11 @@ export default function SearchableSelect({
         } else if (e.key === 'Escape') {
             setIsOpen(false);
         }
+
+        // Pass to parent if not consumed
+        if (parentOnKeyDown) {
+            parentOnKeyDown(e);
+        }
     };
 
     useEffect(() => {
@@ -204,6 +211,7 @@ export default function SearchableSelect({
                         onFocus={handleInputFocus}
                         onKeyDown={handleKeyDown}
                         placeholder={placeholder}
+                        {...props}
                         style={{
                             border: 'none', outline: 'none', width: '100%', fontSize: '12px',
                             color: theme.text, background: 'transparent', textOverflow: 'ellipsis'

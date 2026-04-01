@@ -33,7 +33,11 @@ export const markAsRead = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Notification not found');
     }
 
-    res.json(new ApiResponse(200, notification, 'Notification marked as read'));
+    const unreadCount = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
+    const io = getIO();
+    io.to(`user_${req.user._id}`).emit('notification:sync', { unreadCount });
+
+    res.json(new ApiResponse(200, { notification, unreadCount }, 'Notification marked as read'));
 });
 
 // 标记所有通知为已读
@@ -43,6 +47,9 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
         { isRead: true }
     );
 
+    const io = getIO();
+    io.to(`user_${req.user._id}`).emit('notification:sync', { unreadCount: 0 });
+
     res.json(new ApiResponse(200, null, 'All notifications marked as read'));
 });
 
@@ -51,6 +58,9 @@ import { getIO } from '../config/socket.js';
 // Helper for other controllers to create notifications
 export const createNotification = async ({ recipient, actor, task, type, title, message, metadata = {} }) => {
     try {
+        // Don't notify if recipient or actor is missing
+        if (!recipient || !actor) return null;
+        
         // Don't notify the actor themselves
         if (recipient.toString() === actor.toString()) return null;
 
@@ -70,8 +80,16 @@ export const createNotification = async ({ recipient, actor, task, type, title, 
             .populate('task', 'title');
 
         // Emit real-time notification via socket
+        const unreadCount = await Notification.countDocuments({
+            recipient: recipient,
+            isRead: false
+        });
+
         const io = getIO();
-        io.to(`user_${recipient}`).emit('notification:new', populatedNotification);
+        io.to(`user_${recipient}`).emit('notification:new', {
+            ...populatedNotification.toObject(),
+            unreadCount // Include current count for instant badge update
+        });
 
         return populatedNotification;
     } catch (error) {

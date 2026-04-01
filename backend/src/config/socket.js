@@ -8,9 +8,11 @@ let io;
 export const initSocket = (server) => {
     io = new Server(server, {
         cors: {
-            origin: ['http://localhost:4000', 'http://localhost:5173', 'https://jsk-urja.onrender.com'],
+            origin: ['http://localhost:4000', 'http://localhost:4001', 'http://localhost:5173', 'https://jsk-urja.onrender.com'],
             credentials: true,
         },
+        transports: ['websocket', 'polling'], // Prioritize websocket
+        allowEIO3: true,
     });
 
     io.use((socket, next) => {

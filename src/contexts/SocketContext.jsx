@@ -16,7 +16,11 @@ export const SocketProvider = ({ children }) => {
         if (user && token) {
             socketRef.current = io(env.SOCKET_URL, {
                 auth: { token },
-                transports: ['websocket', 'polling'],
+                transports: ['websocket', 'polling'], // Prioritize websocket
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 2000,
+                timeout: 5000,
             });
 
             const socket = socketRef.current;

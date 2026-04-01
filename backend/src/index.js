@@ -6,6 +6,8 @@ import logger from './utils/logger.js';
 import http from 'http';
 import { initSocket } from './config/socket.js';
 import { initializeUserManagement } from './utils/userInitializer.js';
+import { startTaskCron } from './cron/taskCron.js';
+import { startReminderCron } from './cron/reminderCron.js';
 
 // Connect to Database
 let server;
@@ -15,6 +17,10 @@ connectDB().then((connected) => {
     } else {
         // Initialize User Management system on startup
         initializeUserManagement().catch(err => logger.error('User Init Error:', err));
+        
+        // Start Cron Jobs
+        startTaskCron();
+        startReminderCron();
     }
 
     // Create HTTP server wrapping Express app

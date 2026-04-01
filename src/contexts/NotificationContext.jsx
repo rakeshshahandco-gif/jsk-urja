@@ -33,11 +33,29 @@ export const NotificationProvider = ({ children }) => {
 
     // Custom Toast for Premium Experience
     const showNotificationToast = useCallback((notification) => {
+        // Determine type-specific styling
+        let borderColor = 'border-primary-600';
+        let bgColor = 'bg-primary-50';
+        let iconColor = 'text-primary-700';
+        let ringColor = 'ring-primary-100';
+
+        if (notification.type === 'REMINDER') {
+            borderColor = 'border-red-500';
+            bgColor = 'bg-red-50';
+            iconColor = 'text-red-700';
+            ringColor = 'ring-red-100';
+        } else if (notification.type === 'MESSENGER' || notification.threadId) {
+            borderColor = 'border-green-500';
+            bgColor = 'bg-green-50';
+            iconColor = 'text-green-700';
+            ringColor = 'ring-green-100';
+        }
+
         toast.custom((t) => (
             <div
                 className={`${
                     t.visible ? 'animate-enter' : 'animate-leave'
-                } max-w-md w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden border-l-4 border-primary-600`}
+                } max-w-md w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden border-l-4 ${borderColor}`}
                 style={{
                     backgroundColor: 'rgba(255, 255, 255, 0.98)',
                     backdropFilter: 'blur(10px)',
@@ -49,12 +67,12 @@ export const NotificationProvider = ({ children }) => {
                         <div className="flex-shrink-0 pt-0.5">
                             {notification.actor?.avatar ? (
                                 <img
-                                    className="h-12 w-12 rounded-full ring-2 ring-primary-100 object-cover"
+                                    className={`h-12 w-12 rounded-full ring-2 ${ringColor} object-cover`}
                                     src={notification.actor.avatar}
                                     alt={notification.actor.name}
                                 />
                             ) : (
-                                <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold border-2 border-primary-200">
+                                <div className={`h-12 w-12 rounded-full ${bgColor} flex items-center justify-center ${iconColor} font-bold border-2`}>
                                     {notification.actor?.name?.charAt(0).toUpperCase() || <Bell size={20} />}
                                 </div>
                             )}
@@ -62,6 +80,7 @@ export const NotificationProvider = ({ children }) => {
                         <div className="ml-4 flex-1">
                             <p className="text-sm font-semibold text-gray-900 line-clamp-1">
                                 {notification.title || 'New Notification'}
+                                {notification.type === 'REMINDER' && <span className="ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-red-100 text-red-600 rounded">Due Now</span>}
                             </p>
                             <p className="mt-1 text-sm text-gray-600 line-clamp-2">
                                 {notification.message}
@@ -69,7 +88,7 @@ export const NotificationProvider = ({ children }) => {
                             {notification.task && (
                                 <div className="mt-2 text-xs font-medium text-primary-600 flex items-center gap-1">
                                     <span className="bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
-                                        Task: {notification.task.title}
+                                        Ref: {notification.task.title}
                                     </span>
                                 </div>
                             )}
@@ -80,19 +99,22 @@ export const NotificationProvider = ({ children }) => {
                     <button
                         onClick={() => {
                             toast.dismiss(t.id);
-                            // Navigate if needed - adding window.location or similar would go here
                             if (notification.task) {
-                                window.location.href = `/tasks/list`;
+                                window.location.href = `/tasks/edit/${notification.task._id || notification.task}`;
+                            } else if (notification.link) {
+                                window.location.href = notification.link;
+                            } else if (notification.threadId) {
+                                window.location.href = `/messenger`;
                             }
                         }}
-                        className="w-full border border-transparent rounded-none flex items-center justify-center text-sm font-semibold text-primary-600 hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500 h-1/2 px-4"
+                        className={`w-full border border-transparent rounded-none flex items-center justify-center text-sm font-semibold h-1/2 px-4 hover:bg-gray-50 focus:outline-none ${iconColor}`}
                     >
                         <ExternalLink size={16} className="mr-2" />
                         View
                     </button>
                     <button
                         onClick={() => toast.dismiss(t.id)}
-                        className="w-full border border-transparent rounded-none flex items-center justify-center text-sm font-medium text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 h-1/2 px-4"
+                        className="w-full border border-transparent rounded-none flex items-center justify-center text-sm font-medium text-gray-500 hover:bg-gray-50 focus:outline-none h-1/2 px-4"
                     >
                         <X size={16} className="mr-2" />
                         Close
@@ -113,23 +135,42 @@ export const NotificationProvider = ({ children }) => {
             if (socket) {
                 const handleNewNotification = (notification) => {
                     console.log('📬 Real-time Notification Received:', notification);
-                    setNotifications(prev => [notification, ...prev]);
-                    setUnreadCount(prev => prev + 1);
+                    
+                    // Update notifications list
+                    setNotifications(prev => {
+                        if (prev.some(n => n._id === notification._id)) return prev;
+                        return [notification, ...prev];
+                    });
+                    
+                    // Instant count update from event or local increment
+                    if (notification.unreadCount !== undefined) {
+                        setUnreadCount(notification.unreadCount);
+                    } else {
+                        setUnreadCount(prev => prev + 1);
+                    }
+                    
                     showNotificationToast(notification);
 
                     // Browser Notification
                     showBrowserNotification({
                         title: notification.title || 'CRM Alert',
                         body: notification.message,
-                        url: notification.task ? '/tasks/list' : (notification.link || '/'),
+                        url: notification.task ? `/tasks/edit/${notification.task._id}` : (notification.link || '/'),
                         tag: notification._id
                     });
                 };
 
+                // Sync count across tabs
+                const handleNotificationSync = ({ unreadCount: count }) => {
+                    if (count !== undefined) setUnreadCount(count);
+                };
+
                 socket.on('notification:new', handleNewNotification);
+                socket.on('notification:sync', handleNotificationSync);
 
                 return () => {
                     socket.off('notification:new', handleNewNotification);
+                    socket.off('notification:sync', handleNotificationSync);
                 };
             }
         }

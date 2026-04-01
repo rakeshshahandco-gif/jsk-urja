@@ -1,8 +1,27 @@
 import api from './api';
 
 export const productionPlanningApi = {
+    // Single-product MRP (backward compatible)
     calculateMRP: async (data) => {
         const response = await api.post('/production-planning/calculate', data);
+        return response.data;
+    },
+
+    // Multi-product MRP
+    calculateMultiMRP: async (data) => {
+        const response = await api.post('/production-planning/calculate-multi', data);
+        return response.data;
+    },
+
+    // Export shortage data as JSON (frontend converts to XLSX)
+    exportShortage: async (data) => {
+        const response = await api.post('/production-planning/export-shortage', data);
+        return response.data;
+    },
+
+    // Convert shortage items to Draft PO
+    convertToPO: async (planningId, data) => {
+        const response = await api.post(`/production-planning/${planningId}/convert-to-po`, data);
         return response.data;
     },
 
