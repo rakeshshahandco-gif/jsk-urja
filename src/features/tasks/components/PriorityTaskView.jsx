@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
@@ -253,6 +254,28 @@ const PriorityTaskView = ({ searchTerm, priorityFilter, groupFilter, assigneeFil
     }, [searchTerm, priorityFilter, groupFilter, assigneeFilter]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
+    
+    useGlobalSync('task', (payload) => {
+        if (payload.action === 'create' || payload.action === 'delete') {
+            fetchAll();
+        } else if (payload.action === 'update') {
+            const isCompleted = payload.data?.status === 'COMPLETED' || payload.data?.status === 'CANCELLED';
+            // If it was completed, or if its group-affecting fields changed (dueDate), re-fetch
+            const groupFieldsChanged = payload.changedFields?.some(f => ['dueDate', 'priority', 'groupId', 'assigneeIds'].includes(f));
+            if (isCompleted || groupFieldsChanged) {
+                fetchAll();
+            } else {
+                // Minor update (title/desc), just patch locally if it exists in any group
+                setGroups(prev => {
+                    const next = { ...prev };
+                    Object.keys(next).forEach(k => {
+                        next[k] = next[k].map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t);
+                    });
+                    return next;
+                });
+            }
+        }
+    });
 
     const handleExtendConfirm = async (taskId, data) => {
         try { await extendTask(taskId, data); addToast('Task extended!', 'success'); fetchAll(); }

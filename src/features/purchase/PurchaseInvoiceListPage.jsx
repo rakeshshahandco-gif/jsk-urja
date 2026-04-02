@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { getPurchaseInvoices, deletePurchaseInvoice, restorePurchaseInvoice } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -27,17 +28,18 @@ export default function PurchaseInvoiceListPage() {
     const [payFilter, setPayFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [viewMode, setViewMode] = useState('active'); // active, archived
+    const { selectedFY } = useFinancialYear();
 
     const load = useCallback(() => {
         setLoading(true);
-        getPurchaseInvoices({ search, paymentStatus: payFilter, status: statusFilter, view: viewMode, limit: 100 })
+        getPurchaseInvoices({ search, paymentStatus: payFilter, status: statusFilter, view: viewMode, limit: 100, financialYear: selectedFY })
             .then(d => setInvoices(d.invoices || []))
             .catch((err) => {
                 console.error('[PurchaseInvoiceList] Error loading invoices:', err);
                 toast.error('Failed to load invoices');
             })
             .finally(() => setLoading(false));
-    }, [search, payFilter, statusFilter, viewMode]);
+    }, [search, payFilter, statusFilter, viewMode, selectedFY]);
 
     useEffect(() => { load(); }, [load]);
 
