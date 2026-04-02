@@ -1,3 +1,6 @@
-2026/03/23-22:09:18.969 4360 Reusing MANIFEST C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/MANIFEST-000001
-2026/03/23-22:09:19.055 4360 Recovering log #4
-2026/03/23-22:09:19.104 4360 Reusing old log C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/000004.log 
+2026/04/02-13:07:56.973 d2c Reusing MANIFEST C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/04/02-13:07:57.023 d2c Recovering log #6
+2026/04/02-13:07:57.033 d2c Reusing old log C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/000006.log 
+2026/04/02-13:08:57.065 558 Level-0 table #10: started
+2026/04/02-13:08:57.074 558 Level-0 table #10: 16790 bytes OK
+2026/04/02-13:08:57.078 558 Delete type=0 #6
