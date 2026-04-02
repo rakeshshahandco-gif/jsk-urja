@@ -1,0 +1,9 @@
+{
+  "ignore": [
+    ".whatsapp-session/*",
+    "node_modules/*",
+    "backend.log",
+    "uploads/*"
+  ],
+  "delay": "1000"
+}

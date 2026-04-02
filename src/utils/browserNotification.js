@@ -30,19 +30,33 @@ export const requestNotificationPermission = async () => {
  * @param {string} options.url URL to navigate to on click (relative or absolute)
  * @param {string} options.tag Optional tag to group notifications
  */
-export const showBrowserNotification = ({ title, body, icon, url, tag }) => {
+export const showBrowserNotification = ({ title, body, icon, url, tag, backendUrl }) => {
     if (!isNotificationSupported() || Notification.permission !== 'granted') {
         return null;
     }
 
     const origin = window.location.origin;
-    const fullIconPath = icon ? (icon.startsWith('http') ? icon : `${origin}${icon}`) : `${origin}${DEFAULT_ICON}`;
+    
+    // Resolve icon path: prioritize user avatar, then fallback
+    let fullIconPath = `${origin}${DEFAULT_ICON}`;
+    if (icon) {
+        if (icon.startsWith('http')) {
+            fullIconPath = icon;
+        } else if (backendUrl) {
+            fullIconPath = `${backendUrl}${icon.startsWith('/') ? '' : '/'}${icon}`;
+        } else {
+            fullIconPath = `${origin}${icon.startsWith('/') ? '' : '/'}${icon}`;
+        }
+    }
     
     const notification = new Notification(title, {
         body,
         icon: fullIconPath,
-        tag: tag || 'crm-notification',
-        requireInteraction: false, // Auto-close based on OS settings
+        tag: tag || 'crm-generic',
+        badge: `${origin}/favicon.ico`, // Small monochromatic icon for mobile/status bar
+        renotify: true, // If tag is same, alert the user again
+        requireInteraction: false, 
+        vibrate: [200, 100, 200]
     });
 
     notification.onclick = (event) => {

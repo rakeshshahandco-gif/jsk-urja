@@ -11,6 +11,7 @@ import { GroupMember } from '../models/groupMember.model.js';
 import { calculateNextDueDate } from '../utils/recurrence.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createNotification } from './notification.controller.js';
+import { User } from '../models/user.model.js';
 
 // ---------------------------
 // HELPERS
@@ -182,17 +183,28 @@ export const createTask = asyncHandler(async (req, res) => {
   const task = await Task.create(taskData);
 
   // NOTIFICATION: Task Assigned
-  if (task.assigneeIds && task.assigneeIds.length > 0) {
-    for (const assigneeId of task.assigneeIds) {
-      await createNotification({
-        recipient: assigneeId,
-        actor: req.user.id,
-        task: task._id,
-        type: 'ASSIGNED',
-        title: 'New Task Assigned',
-        message: `You have been assigned a new task: ${task.title}`
-      });
-    }
+  const notifyUsers = new Set();
+  
+  if (task.assignToAll) {
+    const allUsers = await User.find({ isActive: true, _id: { $ne: req.user.id } }).select('_id');
+    allUsers.forEach(u => notifyUsers.add(u._id.toString()));
+  } else if (task.assignedGroupId) {
+    const groupMembers = await GroupMember.find({ groupId: task.assignedGroupId }).select('userId');
+    groupMembers.forEach(m => notifyUsers.add(m.userId.toString()));
+  } else if (task.assigneeIds && task.assigneeIds.length > 0) {
+    task.assigneeIds.forEach(id => notifyUsers.add(id.toString()));
+  }
+
+  for (const userId of notifyUsers) {
+    if (userId === req.user.id.toString()) continue;
+    await createNotification({
+      recipient: userId,
+      actor: req.user.id,
+      task: task._id,
+      type: 'ASSIGNED',
+      title: 'New Task Assigned',
+      message: `You have been assigned a new task: ${task.title}`
+    });
   }
 
   res.status(httpStatus.CREATED).send({ success: true, data: task });
@@ -352,6 +364,7 @@ export const updateTask = asyncHandler(async (req, res) => {
   // NOTIFICATION: Reassigned
   const addedAssignees = newAssignees.filter(id => !prevAssignees.includes(id));
   for (const assigneeId of addedAssignees) {
+    if (assigneeId === req.user.id.toString()) continue;
     await createNotification({
       recipient: assigneeId,
       actor: req.user.id,
@@ -364,8 +377,17 @@ export const updateTask = asyncHandler(async (req, res) => {
 
   // NOTIFICATION: Status Change
   if (statusChanged) {
-    const notifyUsers = new Set([...newAssignees, task.createdBy.toString()]);
-    for (const userId of notifyUsers) {
+    const statusNotifyUsers = new Set([...newAssignees, task.createdBy.toString()]);
+    
+    // If assigned to all, we should theoretically notify everyone, but let's notify previous/new assignees and creator to keep it noisy but relevant.
+    if (task.assignToAll) {
+       // In assign-to-all, everyone is technically an assignee. 
+       // For status changes, let's notify the creator at minimum.
+       statusNotifyUsers.add(task.createdBy.toString());
+    }
+
+    for (const userId of statusNotifyUsers) {
+      if (userId === req.user.id.toString()) continue;
       await createNotification({
         recipient: userId,
         actor: req.user.id,

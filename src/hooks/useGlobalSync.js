@@ -1,32 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
-import { useAuth } from './useAuth'; // Assumes useAuth is available here
-
-import { env } from '../config/env';
-const SOCKET_URL = env.SOCKET_URL;
-
-let socketInstance = null;
-
-export const getSocket = (token) => {
-    if (!socketInstance && token) {
-        socketInstance = io(SOCKET_URL, {
-            auth: { token },
-            transports: ['websocket', 'polling'] // Try websocket first
-        });
-
-        socketInstance.on('connect', () => {
-            console.log('Connected to global real-time sync server');
-        });
-
-        socketInstance.on('disconnect', () => {
-            console.log('Disconnected from real-time sync server');
-        });
-    }
-    return socketInstance;
-};
+import { useAuth } from './useAuth';
+import { useSocket } from '../contexts/SocketContext';
 
 export const useGlobalSync = (moduleName, onSyncEvent) => {
     const { token } = useAuth();
+    const { socket } = useSocket();
     const callbackRef = useRef(onSyncEvent);
 
     // Keep the latest callback without re-triggering useEffect
@@ -35,9 +13,7 @@ export const useGlobalSync = (moduleName, onSyncEvent) => {
     }, [onSyncEvent]);
 
     useEffect(() => {
-        if (!token) return;
-
-        const socket = getSocket(token);
+        if (!token || !socket) return;
 
         const handleEntityChange = (payload) => {
             // payload format: { moduleName, action, recordId, data, changedFields, timestamp }
@@ -53,5 +29,5 @@ export const useGlobalSync = (moduleName, onSyncEvent) => {
         return () => {
             socket.off('entityChange', handleEntityChange);
         };
-    }, [token, moduleName]);
+    }, [token, socket, moduleName]);
 };

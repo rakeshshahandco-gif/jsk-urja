@@ -318,14 +318,49 @@
 .notifyStatusActive {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0.4rem 0.75rem;
+    gap: 8px;
+    padding: 0.25rem 0.5rem;
     background: #f0fdf4;
     border: 1px solid #dcfce7;
     border-radius: 8px;
     color: #16a34a;
     font-size: 0.73rem;
     font-weight: 700;
+
+    .statusInfo {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .testBtn {
+        background: white;
+        border: 1px solid #86efac;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        color: #166534;
+        font-size: 0.68rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+
+        &:hover {
+            background: #dcfce7;
+            border-color: #22c55e;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        }
+
+        @media (max-width: 1400px) {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.65rem;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        padding: 0.2rem 0.35rem;
+    }
 
     svg {
         color: #22c55e;

@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getPurchaseOrders, deletePurchaseOrder, restorePurchaseOrder } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
+import CommunicationModal from '@/components/communication/CommunicationModal';
+import { sendOrder as sendOrderApi } from '@/services/communicationApi';
 
 
 const STATUS_COLORS = {
@@ -25,6 +27,8 @@ export default function PurchaseOrderListPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [viewMode, setViewMode] = useState('active'); // active, archived
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const isMounted = useRef(true);
     useEffect(() => {
@@ -56,6 +60,26 @@ export default function PurchaseOrderListPage() {
         restorePurchaseOrder(id)
             .then(() => { toast.success('Restored'); load(); })
             .catch(e => toast.error('Failed to restore'));
+    };
+
+    const handleWhatsApp = (e, po) => {
+        e.stopPropagation();
+        setSelectedOrder(po);
+        setIsCommModalOpen(true);
+    };
+
+    const handleSendComm = async (commData) => {
+        const payload = { ...commData, id: selectedOrder?._id, type: 'Purchase Order' };
+        toast.promise(
+            sendOrderApi(payload),
+            {
+                loading: `Processing ${commData.channel}...`,
+                success: `Action completed! check WhatsApp window if Auto-Attach was used.`,
+                error: (err) => err.response?.data?.message || `Failed to process ${commData.channel}.`,
+            }
+        ).then(() => {
+            setIsCommModalOpen(false);
+        });
     };
 
     return (
@@ -150,6 +174,11 @@ export default function PurchaseOrderListPage() {
                                                             ✎
                                                         </button>
                                                     )}
+                                                    <button onClick={(e) => handleWhatsApp(e, po)}
+                                                        style={{ padding: '5px 8px', background: '#25d366', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="WhatsApp Dispatch">
+                                                        <MessageSquare size={14} />
+                                                    </button>
                                                     <button onClick={() => handleDelete(po._id)}
                                                         style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                         🗑
@@ -169,6 +198,25 @@ export default function PurchaseOrderListPage() {
                     </tbody>
                 </table>
             </div>
+
+            {selectedOrder && (
+                <CommunicationModal 
+                    isOpen={isCommModalOpen}
+                    onClose={() => setIsCommModalOpen(false)}
+                    onSend={handleSendComm}
+                    type="Purchase Order"
+                    data={{
+                        recipientName: selectedOrder.supplierName,
+                        email: selectedOrder.supplierEmail || selectedOrder.supplierId?.email,
+                        phone: selectedOrder.supplierPhone || selectedOrder.supplierId?.phone,
+                        supplierId: selectedOrder.supplierId?._id || selectedOrder.supplierId,
+                        number: selectedOrder.poNumber,
+                        id: selectedOrder._id,
+                        items: selectedOrder.items,
+                        total: selectedOrder.grandTotal
+                    }}
+                />
+            )}
 
 
         </div>

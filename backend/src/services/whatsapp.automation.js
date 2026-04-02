@@ -9,19 +9,53 @@ class WhatsAppAutomationService {
         this.userDataDir = path.join(process.cwd(), '.whatsapp-session');
     }
 
-    async init() {
-        if (!this.browser || !this.browser.connected) {
+    async init(onStatusUpdate) {
+        const update = (status) => onStatusUpdate && onStatusUpdate({ status, code: 'PROGRESS' });
+
+        // 1. Browser Singleton with Heartbeat
+        if (this.browser) {
+            try {
+                const isConnected = this.browser.isConnected();
+                if (!isConnected) throw new Error('Browser disconnected');
+            } catch (e) {
+                console.log('[WhatsApp] Browser instance stale, Re-launching...');
+                this.browser = null;
+            }
+        }
+
+        if (!this.browser) {
+            update('Launching private automation browser...');
             this.browser = await puppeteer.launch({
                 headless: false,
                 userDataDir: this.userDataDir,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized'],
+                args: [
+                    '--no-sandbox', 
+                    '--disable-setuid-sandbox', 
+                    '--start-maximized',
+                    '--disable-gpu',
+                    '--disable-dev-shm-usage',
+                    '--no-first-run',
+                    '--no-default-browser-check',
+                    '--disable-infobars'
+                ],
                 defaultViewport: null,
             });
         }
         
+        // 2. Page Management - Find existing WhatsApp tab or create new
+        const pages = await this.browser.pages();
+        this.page = pages.find(p => p.url().includes('whatsapp.com')) || pages[0];
+
         if (!this.page || this.page.isClosed()) {
-            const pages = await this.browser.pages();
-            this.page = pages[0] || await this.browser.newPage();
+            this.page = await this.browser.newPage();
+        }
+
+        if (!this.page.url().includes('whatsapp.com')) {
+            update('Navigating to WhatsApp Web...');
+            await this.page.goto('https://web.whatsapp.com', { 
+                waitUntil: 'load', 
+                timeout: 60000 
+            });
         }
         
         return { browser: this.browser, page: this.page };
@@ -192,6 +226,161 @@ class WhatsAppAutomationService {
             throw error;
         } finally {
             // DO NOT CLOSE - Keep session alive as requested
+        }
+    }
+
+    /**
+     * Prepares a document to be sent manually by the user.
+     * Navigates to chat, attaches file, but DOES NOT click send.
+     */
+    async prepareDocumentDraft(options) {
+        const { phone, groupName, filePath, caption, onStatusUpdate, delays = {} } = options;
+        const update = (status, code = 'PROGRESS') => {
+            console.log(`[WhatsApp Status] ${status}`);
+            onStatusUpdate && onStatusUpdate({ status, code });
+        };
+
+        update('Connecting to automation service...', 'NAVIGATING');
+        console.log(`[WhatsApp Debug] Starting draft preparation for ${phone || groupName}...`);
+        
+        const { page } = await this.init(onStatusUpdate);
+
+        try {
+            update('Browser ready. Preparing chat window...', 'NAVIGATING');
+            await page.bringToFront();
+
+            // 1. Normalize Phone Number
+            let fullPhone = null;
+            if (phone && !groupName) {
+                const digits = phone.replace(/\D/g, '');
+                if (digits.length === 10) {
+                    fullPhone = `91${digits}`;
+                } else if (digits.length > 10) {
+                    fullPhone = digits;
+                } else {
+                    throw new Error(`Invalid phone number: ${phone}. Must be at least 10 digits.`);
+                }
+                console.log(`[WhatsApp Debug] Normalized phone: ${fullPhone}`);
+            }
+
+            // 2. Navigation
+            update('Opening WhatsApp Web...', 'NAVIGATING');
+            let navigationSuccessful = false;
+
+            if (fullPhone && !groupName) {
+                const targetUrl = `https://web.whatsapp.com/send?phone=${fullPhone}`;
+                console.log(`[WhatsApp Debug] Trying direct URL: ${targetUrl}`);
+                try {
+                    await page.goto(targetUrl, { waitUntil: 'load', timeout: 45000 });
+                    // Wait for either the chat to load OR a "phone number invalid" dialog
+                    await this.wait(5000);
+                    
+                    const chatInput = await page.$('footer div[contenteditable="true"]');
+                    if (chatInput) {
+                        navigationSuccessful = true;
+                        update('Chat opened via direct link.', 'CHAT_OPENED');
+                    } else {
+                        console.log('[WhatsApp Debug] Direct link did not open chat. Trying search fallback...');
+                    }
+                } catch (e) {
+                    console.log(`[WhatsApp Debug] Direct link failed: ${e.message}`);
+                }
+            }
+
+            // 3. Fallback to Search Bar
+            if (!navigationSuccessful) {
+                const searchTerm = groupName || fullPhone;
+                if (!searchTerm) throw new Error('No phone number or group name provided.');
+
+                update(`Searching for "${searchTerm}"...`, 'SEARCHING');
+                
+                // Ensure we are on the main interface
+                if (page.url() === 'about:blank' || !page.url().includes('web.whatsapp.com')) {
+                    await page.goto('https://web.whatsapp.com', { waitUntil: 'load', timeout: 60000 });
+                }
+
+                try {
+                    await page.waitForSelector('#pane-side', { timeout: 30000 });
+                } catch (e) {
+                    throw new Error('WhatsApp session not ready. Please ensure you are logged in.');
+                }
+
+                const searchBoxSelector = 'div[contenteditable="true"][data-tab="3"]';
+                await page.waitForSelector(searchBoxSelector, { timeout: 10000 });
+                await page.click(searchBoxSelector);
+                
+                // Clear existing
+                await page.click(searchBoxSelector, { clickCount: 3 });
+                await page.keyboard.press('Backspace');
+                
+                await page.type(searchBoxSelector, searchTerm);
+                await this.wait(3000);
+                await page.keyboard.press('Enter');
+                await this.wait(3000);
+
+                // Verify chat opened
+                try {
+                    await page.waitForSelector('footer div[contenteditable="true"]', { timeout: 10000 });
+                    navigationSuccessful = true;
+                    update(groupName ? `Group "${groupName}" opened.` : `Chat for "${fullPhone}" opened.`, 'CHAT_OPENED');
+                } catch (e) {
+                    throw new Error(`Could not find or open chat for "${searchTerm}". Please check if it exists.`);
+                }
+            }
+
+            // 4. Attach File
+            update('Preparing PDF attachment...', 'ATTACHING');
+            await this.wait(2000);
+
+            let attachBtnSelector;
+            const attachSelectors = ['span[data-icon="plus"]', 'span[data-icon="attach-menu-plus"]', 'span[data-icon="clip"]'];
+            for (const sel of attachSelectors) {
+                try {
+                    await page.waitForSelector(sel, { timeout: 5000 });
+                    attachBtnSelector = sel;
+                    break;
+                } catch (_) { }
+            }
+
+            if (!attachBtnSelector) throw new Error('Attach button not found in this chat.');
+            
+            await page.click(attachBtnSelector);
+            await this.wait(1000);
+
+            const fileInputSelector = 'input[type="file"]';
+            await page.waitForSelector(fileInputSelector, { timeout: 10000 });
+            const input = await page.$(fileInputSelector);
+            await input.uploadFile(filePath);
+            
+            update('Document attached. Finalizing...', 'FINALIZING');
+            await this.wait(delays.attachDelay || 4000);
+
+            // 5. Add caption/message
+            const captionSelector = 'div[contenteditable="true"][data-tab="10"]';
+            try {
+                await page.waitForSelector(captionSelector, { timeout: 10000 });
+                if (caption) {
+                    const lines = caption.split('\n');
+                    for (let i = 0; i < lines.length; i++) {
+                        await page.type(captionSelector, lines[i]);
+                        if (i < lines.length - 1) {
+                            await page.keyboard.down('Shift');
+                            await page.keyboard.press('Enter');
+                            await page.keyboard.up('Shift');
+                        }
+                    }
+                }
+            } catch (_) {
+                console.log('[WhatsApp Debug] Caption field not found, continuing...');
+            }
+
+            await page.bringToFront();
+            update('WhatsApp Draft Ready!', 'SUCCESS');
+
+            return { success: true, message: 'Draft prepared successfully.' };
+        } catch (error) {
+            console.error(`[WhatsApp Error] ${error.message}`);
+            throw error;
         }
     }
 

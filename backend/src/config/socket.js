@@ -8,10 +8,19 @@ let io;
 export const initSocket = (server) => {
     io = new Server(server, {
         cors: {
-            origin: ['http://localhost:4000', 'http://localhost:4001', 'http://localhost:5173', 'https://jsk-urja.onrender.com'],
+            origin: [
+                'http://localhost:4000', 
+                'http://localhost:4001', 
+                'http://localhost:5173', 
+                'https://jsk-urja.onrender.com',
+                'https://jsk-urja-backend.onrender.com'
+            ],
             credentials: true,
         },
-        transports: ['websocket', 'polling'], // Prioritize websocket
+        transports: ['websocket', 'polling'],
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        connectTimeout: 45000,
         allowEIO3: true,
     });
 
@@ -31,14 +40,16 @@ export const initSocket = (server) => {
     });
 
     io.on('connection', (socket) => {
-        const userId = socket.user.sub;
+        const userId = socket.user.id || socket.user.sub;
+        if (!userId) {
+            logger.warn(`🔌 Socket connected without userId: ${socket.id}`);
+            return;
+        }
+        
         logger.info(`🔌 Socket connected: ${socket.id} (User: ${userId})`);
 
-        // Join user's specific room using specific requested format
+        // Join user's specific room
         socket.join(`user:${userId}`);
-        
-        // Backward compatibility
-        socket.join(`user_${userId}`); 
 
         // Join global company room
         socket.join('company_all');

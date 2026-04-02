@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getSalesOrders, deleteSalesOrder, restoreSalesOrder } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
+import CommunicationModal from '@/components/communication/CommunicationModal';
+import { sendOrder as sendOrderApi } from '@/services/communicationApi';
 
 
 const STATUS_COLORS = {
@@ -27,6 +29,8 @@ export default function SalesOrderListPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [viewMode, setViewMode] = useState('active'); // active, archived
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const isMounted = useRef(true);
     useEffect(() => {
@@ -94,6 +98,26 @@ export default function SalesOrderListPage() {
             .catch(err => {
                 toast.error(err.response?.data?.message || 'Failed to restore sales order');
             });
+    };
+
+    const handleWhatsApp = (e, so) => {
+        e.stopPropagation();
+        setSelectedOrder(so);
+        setIsCommModalOpen(true);
+    };
+
+    const handleSendComm = async (commData) => {
+        const payload = { ...commData, id: selectedOrder?._id, type: 'Sales Order' };
+        toast.promise(
+            sendOrderApi(payload),
+            {
+                loading: `Processing ${commData.channel}...`,
+                success: `Action completed! check WhatsApp window if Auto-Attach was used.`,
+                error: (err) => err.response?.data?.message || `Failed to process ${commData.channel}.`,
+            }
+        ).then(() => {
+            setIsCommModalOpen(false);
+        });
     };
 
     return (
@@ -191,6 +215,11 @@ export default function SalesOrderListPage() {
                                                         style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                         View
                                                     </button>
+                                                    <button onClick={(e) => handleWhatsApp(e, so)}
+                                                        style={{ padding: '5px 8px', background: '#25d366', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                        title="WhatsApp Dispatch">
+                                                        <MessageSquare size={14} />
+                                                    </button>
                                                     <button onClick={() => handleDelete(e, so)}
                                                         style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
                                                         title="Archive Sales Order">
@@ -211,6 +240,25 @@ export default function SalesOrderListPage() {
                     </tbody>
                 </table>
             </div>
+
+            {selectedOrder && (
+                <CommunicationModal 
+                    isOpen={isCommModalOpen}
+                    onClose={() => setIsCommModalOpen(false)}
+                    onSend={handleSendComm}
+                    type="Sales Order"
+                    data={{
+                        recipientName: selectedOrder.customerName,
+                        email: selectedOrder.customerEmail,
+                        phone: selectedOrder.customerPhone,
+                        customerId: selectedOrder.customerId,
+                        number: selectedOrder.soNumber,
+                        id: selectedOrder._id,
+                        items: selectedOrder.items,
+                        total: selectedOrder.roundedTotal || selectedOrder.grandTotal
+                    }}
+                />
+            )}
 
 
         </div>

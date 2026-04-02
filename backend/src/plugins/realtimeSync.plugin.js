@@ -47,19 +47,18 @@ const _emitEvent = (doc, action, oldDoc = null) => {
         if (modelName === 'Task') {
             rooms = [];
             
-            // Check if visibility field exists, else default to private (assignee only)
-            const isAllUsers = doc.visibility === 'All Users';
-            if (isAllUsers) {
+            // Check if task is assigned to everyone
+            if (doc.assignToAll === true) {
                 rooms.push('company_all');
             } else {
-                // Send to assigned users (Fix: use assigneeIds as per task.model.js)
+                // Send to assigned users
                 if (doc.assigneeIds && Array.isArray(doc.assigneeIds)) {
                     doc.assigneeIds.forEach(id => {
                         rooms.push(`user:${id.toString()}`);
                         rooms.push(`user_${id.toString()}`);
                     });
                 }
-                // Send to creator
+                // Send to creator (always want to see updates to their own created tasks)
                 if (doc.createdBy) {
                     rooms.push(`user:${doc.createdBy.toString()}`);
                     rooms.push(`user_${doc.createdBy.toString()}`);

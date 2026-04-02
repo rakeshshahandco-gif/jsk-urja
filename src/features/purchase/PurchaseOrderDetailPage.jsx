@@ -625,8 +625,9 @@ export default function PurchaseOrderDetailPage() {
                 type="Purchase Order"
                 data={{
                     recipientName: po.supplierName || po.supplierId?.supplierName,
-                    email: po.supplierId?.email,
-                    phone: po.supplierId?.phone,
+                    email: po.supplierEmail || po.supplierId?.email,
+                    phone: po.supplierPhone || po.supplierId?.phone,
+                    supplierId: po.supplierId?._id || po.supplierId,
                     number: po.poNumber,
                     id: id,
                     items: po.items,

@@ -43,6 +43,8 @@ const purchaseOrderSchema = new mongoose.Schema({
     supplierState: { type: String, default: '' },
     supplierStateCode: { type: String, default: '' },
     supplierContact: { type: String, default: '' },
+    supplierPhone: { type: String, default: '' },
+    supplierEmail: { type: String, default: '' },
     stickerType: { type: String, default: '' },
     deliveryAddress: { type: String, default: '' },
     deliveryFacility: { type: String, default: '' },

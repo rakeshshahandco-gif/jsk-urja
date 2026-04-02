@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -101,6 +101,7 @@ import ProductionReworkDashboard from '@/features/productionRework/ProductionRew
 import ProductionFailureListPage from '@/features/productionRework/ProductionFailureListPage';
 import ProductionFailureFormPage from '@/features/productionRework/ProductionFailureFormPage';
 import ReworkJobCardListPage from '@/features/productionRework/ReworkJobCardListPage';
+import ReworkJobCardListPage_fixed from '@/features/productionRework/ReworkJobCardListPage';
 import ReworkJobCardFormPage from '@/features/productionRework/ReworkJobCardFormPage';
 import ReworkMaterialIssueFormPage from '@/features/productionRework/ReworkMaterialIssueFormPage';
 import ReworkOutputFormPage from '@/features/productionRework/ReworkOutputFormPage';
@@ -149,12 +150,6 @@ import './styles/main.scss';
 
 import { Toaster } from 'react-hot-toast';
 
-// Component that uses the modal hook
-const DemoContent = () => {
-    // ... reused from before if needed for dashboard
-    return <div style={{ padding: '20px' }}><h1>Dashboard</h1><p>Welcome to the CRM.</p></div>;
-};
-
 function App() {
     return (
         <BrowserRouter>
@@ -187,386 +182,7 @@ function App() {
                                             <Route path="*" element={
                                                 <ProtectedRoute>
                                                     <ErrorBoundary>
-                                                        <div style={{ display: 'flex', minHeight: '100vh' }}>
-                                                            <Sidebar />
-                                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                                                                <Header />
-                                                                <main style={{ flex: 1, backgroundColor: '#F9FAFB', maxHeight: "92vh", overflow: "auto" }}>
-                                                                    <Routes>
-                                                                        <Route path="/" element={<Navigate to="/tasks/list" replace />} />
-                                                                        <Route
-                                                                            path="/messenger"
-                                                                            element={
-                                                                                <ProtectedRoute>
-                                                                                    <MessengerPage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/customers"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="view_customers">
-                                                                                    <CustomerList />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/customers/list"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="view_customers">
-                                                                                    <CustomerList />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Follow-up Dashboard - shows all customers */}
-                                                                        <Route
-                                                                            path="/followups"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="customers">
-                                                                                    <FollowupDashboard />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Follow-up and conversation pages require customerId */}
-                                                                        <Route
-                                                                            path="/followup/:customerId"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="customers">
-                                                                                    <FollowUpForm />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/talk/:customerId"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="customers">
-                                                                                    <TalkWithCustomerForm />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Redirect to customer list if no ID provided */}
-                                                                        <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
-                                                                        <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
-
-                                                                        <Route
-                                                                            path="/admin/users"
-                                                                            element={
-                                                                                <ProtectedRoute requireRole="admin">
-                                                                                    <UserManagement />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/company-profile"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="admin.company_profile.view">
-                                                                                    <CompanyProfilePage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/settings/whatsapp"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="admin.whatsapp_settings.view">
-                                                                                    <WhatsAppSettingsPage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/customer-master"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports.customer_master_report.view">
-                                                                                    <CustomerMasterReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/followups"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports.followup_report.view">
-                                                                                    <FollowUpTrackerReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/reminders"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports">
-                                                                                    <ReminderReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/open-reminders"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports.reminder_report.view">
-                                                                                    <OpenRemindersReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/conversation-history"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports">
-                                                                                    <ConversationHistoryReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/followup-dashboard"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports.followup_report.view">
-                                                                                    <FollowupDashboardReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/followup-task-report"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="reports.followup_report.view">
-                                                                                    <FollowupTaskReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reports/task-reminders"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskReminderReport />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Messenger disabled */}
-                                                                        <Route
-                                                                            path="/task-chats"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskChatDashboard />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/task-chats/:taskId"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskChatDashboard />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/reminders"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="customers">
-                                                                                    <RemindersDashboard />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        <Route
-                                                                            path="/tasks/create"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskCreatePage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/tasks/edit/:id"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskEditPage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/tasks/list"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <ManageTasksPage />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/tasks/groups"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <TaskGroupList />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Groups */}
-                                                                        <Route
-                                                                            path="/groups"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <GroupList />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-                                                                        <Route
-                                                                            path="/groups/:id"
-                                                                            element={
-                                                                                <ProtectedRoute requirePermission="tasks">
-                                                                                    <GroupDetails />
-                                                                                </ProtectedRoute>
-                                                                            }
-                                                                        />
-
-                                                                        {/* Inventory */}
-                                                                        <Route path="/inventory/items" element={<ProtectedRoute requirePermission="inventory"><ItemListPage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/items/new" element={<ProtectedRoute requirePermission="inventory"><ItemFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/items/:id" element={<ProtectedRoute requirePermission="inventory"><ItemFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/item-types" element={<ProtectedRoute requirePermission="inventory"><ItemTypePage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/item-groups" element={<ProtectedRoute requirePermission="inventory"><ItemGroupPage /></ProtectedRoute>} />
-
-                                                                        <Route path="/inventory/bom" element={<ProtectedRoute requirePermission="inventory"><BOMPage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/bom/new" element={<ProtectedRoute requirePermission="inventory"><BOMFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/bom/edit/:id" element={<ProtectedRoute requirePermission="inventory"><BOMFormPage /></ProtectedRoute>} />
-
-                                                                        {/* Production */}
-                                                                        <Route path="/production" element={<ProtectedRoute requirePermission="production"><ProductionDashboard /></ProtectedRoute>} />
-                                                                        <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="production"><WorkOrderListPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="production"><WorkOrderFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="production"><WorkOrderDetailPage /></ProtectedRoute>} />
-                                                                         <Route path="/production/planning" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningListPage /></ProtectedRoute>} />
-                                                                         <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
-                                                                         <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
-
-                                                                        {/* Purchase Module */}
-                                                                        <Route path="/purchase/suppliers" element={<ProtectedRoute requirePermission="purchase"><SupplierListPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/orders" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderListPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/orders/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/orders/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/orders/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/grn" element={<ProtectedRoute requirePermission="purchase"><GRNListPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/grn/new" element={<ProtectedRoute requirePermission="purchase"><GRNFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/invoices" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceListPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/invoices/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/invoices/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/invoices/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/cash-book" element={<ProtectedRoute requirePermission="purchase"><CashBookPage /></ProtectedRoute>} />
-                                                                        <Route path="/purchase/bank-book" element={<ProtectedRoute requirePermission="purchase"><BankBookPage /></ProtectedRoute>} />
-
-                                                                        {/* Purchase Comparison Report */}
-                                                                        <Route path="/reports/purchase-comparison" element={<ProtectedRoute requirePermission="purchase"><PurchaseComparisonReportPage /></ProtectedRoute>} />
-
-                                                                        {/* Sales Module */}
-                                                                        <Route path="/sales/orders" element={<ProtectedRoute requirePermission="sales"><SalesOrderListPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/orders/new" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/orders/:id" element={<ProtectedRoute requirePermission="sales"><SalesOrderDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
-                                                                        <Route path="/sales/invoice-series" element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
-
-                                                                        {/* Service / Replacement Module */}
-                                                                        <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/complaints/new" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/complaints/:id" element={<ProtectedRoute requirePermission="service"><ComplaintDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/replacement-dashboard" element={<ProtectedRoute requirePermission="service"><ReplacementDashboard /></ProtectedRoute>} />
-                                                                        <Route path="/service/replacement-dispatches/new" element={<ProtectedRoute requirePermission="service"><ReplacementDispatchFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/replacement-dispatches/:id/print" element={<ProtectedRoute requirePermission="service"><ReplacementDispatchPrintPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/faulty-receipts/new" element={<ProtectedRoute requirePermission="service"><FaultyReceiptFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/repair-job-cards/new" element={<ProtectedRoute requirePermission="service"><RepairJobCardFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requirePermission="service"><RepairedStockInwardFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/service/scrap-entries/new" element={<ProtectedRoute requirePermission="service"><ScrapEntryFormPage /></ProtectedRoute>} />
-
-                                                                        {/* Production Rework Module */}
-                                                                        <Route path="/production/rework/dashboard" element={<ProtectedRoute requirePermission="production"><ProductionReworkDashboard /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/failures" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/failures/new" element={<ProtectedRoute requirePermission="production"><ProductionFailureFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/failures/:id" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
-
-                                                                        <Route path="/production/rework/job-cards" element={<ProtectedRoute requirePermission="production"><ReworkJobCardListPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/job-cards/new" element={<ProtectedRoute requirePermission="production"><ReworkJobCardFormPage /></ProtectedRoute>} />
-
-                                                                        <Route path="/production/rework/material-issues/new" element={<ProtectedRoute requirePermission="production"><ReworkMaterialIssueFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/outputs/new" element={<ProtectedRoute requirePermission="production"><ReworkOutputFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/retests/new" element={<ProtectedRoute requirePermission="production"><RetestConfirmationFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rework/scraps/new" element={<ProtectedRoute requirePermission="production"><ProductionScrapFormPage /></ProtectedRoute>} />
-
-
-                                                                        {/* Redirects */}
-                                                                        <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
-
-                                                                        {/* Accounts Module Routes */}
-                                                                        <Route path="/accounts/receipt-entry" element={<ProtectedRoute requirePermission="accounts"><ReceiptEntryPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/payment-entry" element={<ProtectedRoute requirePermission="accounts"><PaymentEntryPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/expense-entry" element={<ProtectedRoute requirePermission="accounts"><ExpenseEntryPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/vouchers" element={<ProtectedRoute requirePermission="accounts"><VoucherListPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute requirePermission="accounts"><CashBankMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/masters/groups" element={<ProtectedRoute requirePermission="accounts"><GroupMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/masters/ledgers" element={<ProtectedRoute requirePermission="accounts"><LedgerMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/masters/voucher-types" element={<ProtectedRoute requirePermission="accounts"><VoucherTypeMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/ledger" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/sales-register" element={<ProtectedRoute requirePermission="accounts"><SalesRegisterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/purchase-register" element={<ProtectedRoute requirePermission="accounts"><PurchaseRegisterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/day-book" element={<ProtectedRoute requirePermission="accounts"><DayBookPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/asset-categories" element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />
-                                                                        <Route path="/accounts/asset-locations" element={<ProtectedRoute requirePermission="accounts"><AssetLocationPage /></ProtectedRoute>} />
-
-                                                                        {/* PRD Module Routes */}
-                                                                        <Route path="prd/dashboard" element={
-                                                                            <ProtectedRoute requirePermission="prd">
-                                                                                <PrdDashboard />
-                                                                            </ProtectedRoute>
-                                                                        } />
-                                                                        <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
-                                                                        <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />
-                                                                        <Route path="/prd/test-parameters" element={<ProtectedRoute requirePermission="prd"><PrdTestParameterMasterPage /></ProtectedRoute>} />
-
-                                                                        {/* HR Module Routes */}
-                                                                        <Route path="/hr/dashboard" element={<ProtectedRoute requirePermission="hr"><HRDashboard /></ProtectedRoute>} />
-                                                                        <Route path="/hr/employees" element={<ProtectedRoute requirePermission="hr"><EmployeeList /></ProtectedRoute>} />
-                                                                        <Route path="/hr/employees/new" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
-                                                                        <Route path="/hr/employees/:id" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
-                                                                        <Route path="/hr/shifts" element={<ProtectedRoute requirePermission="hr"><ShiftList /></ProtectedRoute>} />
-                                                                        <Route path="/hr/attendance" element={<ProtectedRoute requirePermission="hr"><AttendancePage /></ProtectedRoute>} />
-                                                                        <Route path="/hr/attendance/import" element={<ProtectedRoute requirePermission="hr"><AttendanceImportPage /></ProtectedRoute>} />
-                                                                        <Route path="/hr/leaves" element={<ProtectedRoute requirePermission="hr"><LeaveManagementPage /></ProtectedRoute>} />
-                                                                        <Route path="/hr/payroll" element={<ProtectedRoute requirePermission="hr"><PayrollPage /></ProtectedRoute>} />
-                                                                        <Route path="/hr/reports" element={<ProtectedRoute requirePermission="hr"><HRReportsPage /></ProtectedRoute>} />
-
-                                                                        {/* ── Stock Reports ─────────────────────────────────── */}
-                                                                        <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />
-                                                                        <Route path="/inventory/stock/ledger" element={<ProtectedRoute requirePermission="inventory"><StockMovementLedger /></ProtectedRoute>} />
-
-                                                                        {/* ── Production Entry Forms ────────────────────────── */}
-                                                                        <Route path="/production/outputs/new" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/outputs" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/component-replacements/new" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/component-replacements" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rejections/new" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
-                                                                        <Route path="/production/rejections" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
-                                                                    </Routes>
-                                                                </main>
-                                                            </div>
-                                                        </div>
+                                                        <AppLayout />
                                                     </ErrorBoundary>
                                                 </ProtectedRoute>
                                             } />
@@ -582,5 +198,172 @@ function App() {
         </BrowserRouter>
     );
 }
+
+// Separate layout component to handle route-specific logic
+const AppLayout = () => {
+    const { pathname } = useLocation();
+    const isMessenger = pathname.startsWith('/messenger');
+
+    return (
+        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+            <Sidebar />
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                {!isMessenger && <Header />}
+                <main 
+                    style={{ 
+                        flex: 1, 
+                        backgroundColor: isMessenger ? '#FFF' : '#F9FAFB', 
+                        height: isMessenger ? '100vh' : 'auto',
+                        maxHeight: isMessenger ? 'none' : "92vh", 
+                        overflow: isMessenger ? 'hidden' : "auto" 
+                    }}
+                >
+                    <Routes>
+                        <Route path="/" element={<Navigate to="/tasks/list" replace />} />
+                        <Route
+                            path="/messenger"
+                            element={
+                                <ProtectedRoute>
+                                    <MessengerPage />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route path="/customers" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
+                        <Route path="/customers/list" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
+                        <Route path="/followups" element={<ProtectedRoute requirePermission="customers"><FollowupDashboard /></ProtectedRoute>} />
+                        <Route path="/followup/:customerId" element={<ProtectedRoute requirePermission="customers"><FollowUpForm /></ProtectedRoute>} />
+                        <Route path="/talk/:customerId" element={<ProtectedRoute requirePermission="customers"><TalkWithCustomerForm /></ProtectedRoute>} />
+                        <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
+                        <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
+                        <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
+                        <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
+                        <Route path="/settings/whatsapp" element={<ProtectedRoute requirePermission="admin.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
+                        <Route path="/reports/customer-master" element={<ProtectedRoute requirePermission="reports.customer_master_report.view"><CustomerMasterReport /></ProtectedRoute>} />
+                        <Route path="/reports/followups" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowUpTrackerReport /></ProtectedRoute>} />
+                        <Route path="/reports/reminders" element={<ProtectedRoute requirePermission="reports"><ReminderReport /></ProtectedRoute>} />
+                        <Route path="/reports/open-reminders" element={<ProtectedRoute requirePermission="reports.reminder_report.view"><OpenRemindersReport /></ProtectedRoute>} />
+                        <Route path="/reports/conversation-history" element={<ProtectedRoute requirePermission="reports"><ConversationHistoryReport /></ProtectedRoute>} />
+                        <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
+                        <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
+                        <Route path="/reports/task-reminders" element={<ProtectedRoute requirePermission="tasks"><TaskReminderReport /></ProtectedRoute>} />
+                        <Route path="/task-chats" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
+                        <Route path="/task-chats/:taskId" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
+                        <Route path="/reminders" element={<ProtectedRoute requirePermission="customers"><RemindersDashboard /></ProtectedRoute>} />
+                        <Route path="/tasks/create" element={<ProtectedRoute requirePermission="tasks"><TaskCreatePage /></ProtectedRoute>} />
+                        <Route path="/tasks/edit/:id" element={<ProtectedRoute requirePermission="tasks"><TaskEditPage /></ProtectedRoute>} />
+                        <Route path="/tasks/list" element={<ProtectedRoute requirePermission="tasks"><ManageTasksPage /></ProtectedRoute>} />
+                        <Route path="/tasks/groups" element={<ProtectedRoute requirePermission="tasks"><TaskGroupList /></ProtectedRoute>} />
+                        <Route path="/groups" element={<ProtectedRoute requirePermission="tasks"><GroupList /></ProtectedRoute>} />
+                        <Route path="/groups/:id" element={<ProtectedRoute requirePermission="tasks"><GroupDetails /></ProtectedRoute>} />
+                        <Route path="/inventory/items" element={<ProtectedRoute requirePermission="inventory"><ItemListPage /></ProtectedRoute>} />
+                        <Route path="/inventory/items/new" element={<ProtectedRoute requirePermission="inventory"><ItemFormPage /></ProtectedRoute>} />
+                        <Route path="/inventory/items/:id" element={<ProtectedRoute requirePermission="inventory"><ItemFormPage /></ProtectedRoute>} />
+                        <Route path="/inventory/item-types" element={<ProtectedRoute requirePermission="inventory"><ItemTypePage /></ProtectedRoute>} />
+                        <Route path="/inventory/item-groups" element={<ProtectedRoute requirePermission="inventory"><ItemGroupPage /></ProtectedRoute>} />
+                        <Route path="/inventory/bom" element={<ProtectedRoute requirePermission="inventory"><BOMPage /></ProtectedRoute>} />
+                        <Route path="/inventory/bom/new" element={<ProtectedRoute requirePermission="inventory"><BOMFormPage /></ProtectedRoute>} />
+                        <Route path="/inventory/bom/edit/:id" element={<ProtectedRoute requirePermission="inventory"><BOMFormPage /></ProtectedRoute>} />
+                        <Route path="/production" element={<ProtectedRoute requirePermission="production"><ProductionDashboard /></ProtectedRoute>} />
+                        <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="production"><WorkOrderListPage /></ProtectedRoute>} />
+                        <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="production"><WorkOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="production"><WorkOrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/production/planning" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningListPage /></ProtectedRoute>} />
+                        <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
+                        <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/suppliers" element={<ProtectedRoute requirePermission="purchase"><SupplierListPage /></ProtectedRoute>} />
+                        <Route path="/purchase/orders" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderListPage /></ProtectedRoute>} />
+                        <Route path="/purchase/orders/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/orders/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/orders/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/purchase/grn" element={<ProtectedRoute requirePermission="purchase"><GRNListPage /></ProtectedRoute>} />
+                        <Route path="/purchase/grn/new" element={<ProtectedRoute requirePermission="purchase"><GRNFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/invoices" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceListPage /></ProtectedRoute>} />
+                        <Route path="/purchase/invoices/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/invoices/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
+                        <Route path="/purchase/invoices/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
+                        <Route path="/purchase/cash-book" element={<ProtectedRoute requirePermission="purchase"><CashBookPage /></ProtectedRoute>} />
+                        <Route path="/purchase/bank-book" element={<ProtectedRoute requirePermission="purchase"><BankBookPage /></ProtectedRoute>} />
+                        <Route path="/reports/purchase-comparison" element={<ProtectedRoute requirePermission="purchase"><PurchaseComparisonReportPage /></ProtectedRoute>} />
+                        <Route path="/sales/orders" element={<ProtectedRoute requirePermission="sales"><SalesOrderListPage /></ProtectedRoute>} />
+                        <Route path="/sales/orders/new" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/orders/:id/edit" element={<ProtectedRoute requirePermission="sales"><SalesOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/orders/:id" element={<ProtectedRoute requirePermission="sales"><SalesOrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
+                        <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoice-series" element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
+                        <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />
+                        <Route path="/service/complaints/new" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
+                        <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
+                        <Route path="/service/complaints/:id" element={<ProtectedRoute requirePermission="service"><ComplaintDetailPage /></ProtectedRoute>} />
+                        <Route path="/service/replacement-dashboard" element={<ProtectedRoute requirePermission="service"><ReplacementDashboard /></ProtectedRoute>} />
+                        <Route path="/service/replacement-dispatches/new" element={<ProtectedRoute requirePermission="service"><ReplacementDispatchFormPage /></ProtectedRoute>} />
+                        <Route path="/service/replacement-dispatches/:id/print" element={<ProtectedRoute requirePermission="service"><ReplacementDispatchPrintPage /></ProtectedRoute>} />
+                        <Route path="/service/faulty-receipts/new" element={<ProtectedRoute requirePermission="service"><FaultyReceiptFormPage /></ProtectedRoute>} />
+                        <Route path="/service/repair-job-cards/new" element={<ProtectedRoute requirePermission="service"><RepairJobCardFormPage /></ProtectedRoute>} />
+                        <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requirePermission="service"><RepairedStockInwardFormPage /></ProtectedRoute>} />
+                        <Route path="/service/scrap-entries/new" element={<ProtectedRoute requirePermission="service"><ScrapEntryFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/dashboard" element={<ProtectedRoute requirePermission="production"><ProductionReworkDashboard /></ProtectedRoute>} />
+                        <Route path="/production/rework/failures" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/failures/new" element={<ProtectedRoute requirePermission="production"><ProductionFailureFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/failures/:id" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/job-cards" element={<ProtectedRoute requirePermission="production"><ReworkJobCardListPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/job-cards/new" element={<ProtectedRoute requirePermission="production"><ReworkJobCardFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/material-issues/new" element={<ProtectedRoute requirePermission="production"><ReworkMaterialIssueFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/outputs/new" element={<ProtectedRoute requirePermission="production"><ReworkOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/retests/new" element={<ProtectedRoute requirePermission="production"><RetestConfirmationFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rework/scraps/new" element={<ProtectedRoute requirePermission="production"><ProductionScrapFormPage /></ProtectedRoute>} />
+                        <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
+                        <Route path="/accounts/receipt-entry" element={<ProtectedRoute requirePermission="accounts"><ReceiptEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/payment-entry" element={<ProtectedRoute requirePermission="accounts"><PaymentEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/expense-entry" element={<ProtectedRoute requirePermission="accounts"><ExpenseEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/vouchers" element={<ProtectedRoute requirePermission="accounts"><VoucherListPage /></ProtectedRoute>} />
+                        <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute requirePermission="accounts"><CashBankMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/masters/groups" element={<ProtectedRoute requirePermission="accounts"><GroupMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/masters/ledgers" element={<ProtectedRoute requirePermission="accounts"><LedgerMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/masters/voucher-types" element={<ProtectedRoute requirePermission="accounts"><VoucherTypeMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/ledger" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/sales-register" element={<ProtectedRoute requirePermission="accounts"><SalesRegisterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/purchase-register" element={<ProtectedRoute requirePermission="accounts"><PurchaseRegisterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/day-book" element={<ProtectedRoute requirePermission="accounts"><DayBookPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
+                        <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
+                        <Route path="/accounts/asset-categories" element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/asset-locations" element={<ProtectedRoute requirePermission="accounts"><AssetLocationPage /></ProtectedRoute>} />
+                        <Route path="prd/dashboard" element={<ProtectedRoute requirePermission="prd"><PrdDashboard /></ProtectedRoute>} />
+                        <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
+                        <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />
+                        <Route path="/prd/test-parameters" element={<ProtectedRoute requirePermission="prd"><PrdTestParameterMasterPage /></ProtectedRoute>} />
+                        <Route path="/hr/dashboard" element={<ProtectedRoute requirePermission="hr"><HRDashboard /></ProtectedRoute>} />
+                        <Route path="/hr/employees" element={<ProtectedRoute requirePermission="hr"><EmployeeList /></ProtectedRoute>} />
+                        <Route path="/hr/employees/new" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
+                        <Route path="/hr/employees/:id" element={<ProtectedRoute requirePermission="hr"><EmployeeForm /></ProtectedRoute>} />
+                        <Route path="/hr/shifts" element={<ProtectedRoute requirePermission="hr"><ShiftList /></ProtectedRoute>} />
+                        <Route path="/hr/attendance" element={<ProtectedRoute requirePermission="hr"><AttendancePage /></ProtectedRoute>} />
+                        <Route path="/hr/attendance/import" element={<ProtectedRoute requirePermission="hr"><AttendanceImportPage /></ProtectedRoute>} />
+                        <Route path="/hr/leaves" element={<ProtectedRoute requirePermission="hr"><LeaveManagementPage /></ProtectedRoute>} />
+                        <Route path="/hr/payroll" element={<ProtectedRoute requirePermission="hr"><PayrollPage /></ProtectedRoute>} />
+                        <Route path="/hr/reports" element={<ProtectedRoute requirePermission="hr"><HRReportsPage /></ProtectedRoute>} />
+                        <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
+                        <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />
+                        <Route path="/inventory/stock/ledger" element={<ProtectedRoute requirePermission="inventory"><StockMovementLedger /></ProtectedRoute>} />
+                        <Route path="/production/outputs/new" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/outputs" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/component-replacements/new" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
+                        <Route path="/production/component-replacements" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rejections/new" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
+                        <Route path="/production/rejections" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
+                    </Routes>
+                </main>
+            </div>
+        </div>
+    );
+};
 
 export default App;

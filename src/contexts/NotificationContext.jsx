@@ -6,8 +6,9 @@ import { useSocket } from './SocketContext';
 import toast from 'react-hot-toast';
 import { Bell, X, ExternalLink } from 'lucide-react';
 import { showBrowserNotification } from '@/utils/browserNotification';
+import { env } from '@/config/env';
 
-// Generate a WhatsApp-style "ting" without external assets
+// Generate a WhatsApp-style crisp alert sound
 const playTingSound = () => {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -19,15 +20,15 @@ const playTingSound = () => {
         gain.connect(ctx.destination);
         
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 note
+        osc.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.05); // D6 note (crisp)
         
         gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
         
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.5);
+        osc.stop(ctx.currentTime + 0.4);
     } catch (e) {
         console.warn('Audio play failed', e);
     }
@@ -116,66 +117,75 @@ export const NotificationProvider = ({ children }) => {
             <div
                 className={`${
                     t.visible ? 'animate-enter' : 'animate-leave'
-                } max-w-md w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden border-l-4 ${borderColor}`}
+                } max-w-sm w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex flex-col ring-1 ring-black ring-opacity-5 overflow-hidden border-l-4 ${borderColor}`}
                 style={{
                     backgroundColor: 'rgba(255, 255, 255, 0.98)',
-                    backdropFilter: 'blur(10px)',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                    backdropFilter: 'blur(16px)',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    transform: 'translateY(-10px)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
-                <div className="flex-1 w-0 p-4">
+                <div 
+                    className="p-4 cursor-pointer hover:bg-gray-50 flex-1"
+                    onClick={() => {
+                        toast.dismiss(t.id);
+                        const dest = notification.link || (notification.task ? `/tasks/edit/${notification.task._id || notification.task}` : (notification.metadata?.threadId ? '/messenger' : null));
+                        if (dest) window.location.href = dest;
+                    }}
+                >
                     <div className="flex items-start">
-                        <div className="flex-shrink-0 pt-0.5">
+                        <div className="flex-shrink-0">
                             {notification.actor?.avatar ? (
                                 <img
-                                    className={`h-12 w-12 rounded-full ring-2 ${ringColor} object-cover`}
-                                    src={notification.actor.avatar}
+                                    className={`h-11 w-11 rounded-full ring-2 ${ringColor} object-cover shadow-sm`}
+                                    src={notification.actor.avatar.startsWith('http') ? notification.actor.avatar : `${env.SOCKET_URL.replace(/\/$/, '')}/${notification.actor.avatar.replace(/^\//, '')}`}
                                     alt={notification.actor.name}
                                 />
                             ) : (
-                                <div className={`h-12 w-12 rounded-full ${bgColor} flex items-center justify-center ${iconColor} font-bold border-2`}>
-                                    {notification.actor?.name?.charAt(0).toUpperCase() || <Bell size={20} />}
+                                <div className={`h-11 w-11 rounded-full ${bgColor} flex items-center justify-center ${iconColor} font-bold border-2`}>
+                                    {notification.actor?.name?.charAt(0).toUpperCase() || <Bell size={18} />}
                                 </div>
                             )}
+                            <div className="relative -mt-3 -mr-1 flex justify-end">
+                                <div className={`p-1 rounded-full ${bgColor} ring-2 ring-white`}>
+                                    {notification.type === 'MESSENGER' ? <MessageSquare size={10} className={iconColor} /> : <Bell size={10} className={iconColor} />}
+                                </div>
+                            </div>
                         </div>
                         <div className="ml-4 flex-1">
-                            <p className="text-sm font-semibold text-gray-900 line-clamp-1">
-                                {notification.title || 'New Notification'}
-                                {notification.type === 'REMINDER' && <span className="ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-red-100 text-red-600 rounded">Due Now</span>}
+                            <div className="flex justify-between items-start">
+                                <p className="text-xs font-bold text-gray-400 tracking-wider uppercase">
+                                    {notification.type === 'MESSENGER' ? 'Messenger' : (notification.type === 'ASSIGNED' ? 'Task Assigned' : 'New Update')}
+                                </p>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); toast.dismiss(t.id); }}
+                                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <p className="text-sm font-bold text-gray-900 mt-0.5 line-clamp-1">
+                                {notification.title || (notification.actor?.name || 'Notification')}
+                                {notification.type === 'REMINDER' && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full font-black uppercase">Due</span>}
                             </p>
-                            <p className="mt-1 text-sm text-gray-600 line-clamp-2">
+                            <p className="mt-1 text-sm text-gray-600 line-clamp-2 leading-relaxed">
                                 {notification.message}
                             </p>
-                            {notification.task && (
-                                <div className="mt-2 text-xs font-medium text-primary-600 flex items-center gap-1">
-                                    <span className="bg-primary-50 px-2 py-0.5 rounded-full border border-primary-100">
-                                        Ref: {notification.task.title}
-                                    </span>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
-                <div className="flex flex-col border-l border-gray-100">
-                    <button
-                        onClick={() => {
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-50/50 border-t border-gray-100">
+                    <span className="text-[10px] text-gray-400 font-medium">Just now</span>
+                    <button 
+                         onClick={() => {
                             toast.dismiss(t.id);
                             const dest = notification.link || (notification.task ? `/tasks/edit/${notification.task._id || notification.task}` : null);
-                            if (dest) {
-                                window.location.href = dest;
-                            }
+                            if (dest) window.location.href = dest;
                         }}
-                        className={`w-full border border-transparent rounded-none flex items-center justify-center text-sm font-semibold h-1/2 px-4 hover:bg-gray-50 focus:outline-none ${iconColor}`}
+                        className={`text-[11px] font-bold ${iconColor} hover:underline flex items-center gap-1`}
                     >
-                        <ExternalLink size={16} className="mr-2" />
-                        View
-                    </button>
-                    <button
-                        onClick={() => toast.dismiss(t.id)}
-                        className="w-full border border-transparent rounded-none flex items-center justify-center text-sm font-medium text-gray-500 hover:bg-gray-50 focus:outline-none h-1/2 px-4"
-                    >
-                        <X size={16} className="mr-2" />
-                        Close
+                        View Details <ExternalLink size={10} />
                     </button>
                 </div>
             </div>
@@ -225,8 +235,10 @@ export const NotificationProvider = ({ children }) => {
                         showBrowserNotification({
                             title: notification.title || 'CRM Alert',
                             body: notification.message,
+                            icon: notification.actor?.avatar || null,
+                            backendUrl: env.SOCKET_URL,
                             url: notification.link || (notification.task ? `/tasks/edit/${notification.task._id || notification.task}` : '/'),
-                            tag: notification._id
+                            tag: notification.type || 'crm-default'
                         });
                     }
                 };
@@ -294,6 +306,31 @@ export const NotificationProvider = ({ children }) => {
         }
     };
 
+    const sendTestNotification = () => {
+        const testNotif = {
+            _id: 'test-' + Date.now(),
+            title: 'Test Notification',
+            message: 'This is a test of the premium alert system. Both desktop and in-app pop-ups are working!',
+            type: 'MESSENGER',
+            actor: { name: 'System Admin', avatar: null },
+            createdAt: new Date().toISOString()
+        };
+        
+        if (preferences.inApp) {
+            showNotificationToast(testNotif);
+            if (preferences.sound) playTingSound();
+        }
+        
+        if (preferences.desktop) {
+            showBrowserNotification({
+                title: testNotif.title,
+                body: testNotif.message,
+                backendUrl: env.SOCKET_URL,
+                tag: 'crm-test'
+            });
+        }
+    };
+
     const value = useMemo(() => ({
         notifications,
         unreadCount,
@@ -302,7 +339,8 @@ export const NotificationProvider = ({ children }) => {
         markAllRead,
         loading,
         preferences,
-        updatePreferences
+        updatePreferences,
+        sendTestNotification
     }), [notifications, unreadCount, fetchNotifications, loading, preferences]);
 
     return (

@@ -95,15 +95,18 @@ export default function PurchaseInvoiceFormPage() {
         setPoList([]); setGrnList([]);
     };
 
-    const onPoChange = useCallback(async (poId) => {
+    const onPoChange = useCallback(async (poId, forcedFlow = null) => {
+        const activeFlow = forcedFlow || flowType;
         setH('selectedPoId', poId);
         setRows([{ ...EMPTY_ROW }]);
         if (!poId) return;
-        if (flowType === 'PO→Direct Invoice') {
+
+        if (activeFlow === 'PO→Direct Invoice') {
             setLoadingRef(true);
             try {
                 const po = await getPurchaseOrderById(poId);
                 const poData = po.data || po;
+                console.log('onPoChange: PO Data Fetched:', poData);
 
                 // Sync header from PO
                 setHeader(h => ({
@@ -136,7 +139,7 @@ export default function PurchaseInvoiceFormPage() {
                             itemCode: pi.itemCode,
                             hsnCode: pi.hsnCode || '',
                             uom: pi.uom,
-                            qty: avail,
+                            qty: avail > 0 ? avail : 0,
                             rate: pi.rate,
                             discountPercent: pi.discountPercent || 0,
                             gstRate: pi.taxPercent || 18,
@@ -144,13 +147,27 @@ export default function PurchaseInvoiceFormPage() {
                             maxQty: avail,
                             poItemId: pi._id,
                             grnItemId: null,
+                            orderedQty: pi.orderedQty,
+                            invoicedQty: pi.invoicedQty || 0
                         };
-                    })
-                    .filter(pi => pi.qty > 0);
-                if (newRows.length) setRows(newRows); else toast.error('Selected Purchase Order is already fully billed.');
-            } catch { toast.error('Failed to load PO items'); }
+                    });
+
+                console.log('onPoChange: Mapped Rows:', newRows);
+
+                if (newRows.length) {
+                    setRows(newRows);
+                    if (newRows.every(r => r.qty <= 0)) {
+                        toast.error('Warning: Selected Purchase Order is already fully billed. Proceed only if over-billing is manual.', { duration: 5000 });
+                    }
+                } else {
+                    toast.error('Selected Purchase Order has no items.');
+                }
+            } catch (err) { 
+                console.error('onPoChange Error:', err);
+                toast.error('Failed to load PO items'); 
+            }
             finally { setLoadingRef(false); }
-        } else if (flowType === 'PO→GRN→Invoice') {
+        } else if (activeFlow === 'PO→GRN→Invoice') {
             // Load GRNs for this PO
             setLoadingRef(true);
             try {
@@ -179,10 +196,14 @@ export default function PurchaseInvoiceFormPage() {
 
                 const grns = await getGRNsByPO(poId);
                 setGrnList(Array.isArray(grns) ? grns.filter(g => g.invoiceStatus !== 'Fully Invoiced') : []);
-            } catch { toast.error('Failed to load GRNs'); }
+            } catch (err) { 
+                console.error('onPoChange GRN Error:', err);
+                toast.error('Failed to load GRNs'); 
+            }
             finally { setLoadingRef(false); }
         }
     }, [flowType]);
+
 
     const onGrnChange = useCallback(async (grnId) => {
         setH('selectedGrnId', grnId);
@@ -201,7 +222,7 @@ export default function PurchaseInvoiceFormPage() {
                         itemCode: gi.itemCode,
                         hsnCode: gi.hsnCode || '',
                         uom: gi.uom,
-                        qty: avail,
+                        qty: avail > 0 ? avail : 0,
                         rate: gi.rate,
                         discountPercent: gi.discountPercent || 0,
                         gstRate: gi.taxPercent || 18,
@@ -209,9 +230,19 @@ export default function PurchaseInvoiceFormPage() {
                         maxQty: avail,
                         grnItemId: gi._id,
                         poItemId: gi.poItemId || null,
+                        receivedQty: gi.receivedQty,
+                        invoicedQty: gi.invoicedQty || 0
                     };
-                }).filter(r => r.maxQty > 0);
-            if (newRows.length) setRows(newRows); else toast.error('Selected GRN is already fully billed.');
+                });
+
+            if (newRows.length) {
+                setRows(newRows);
+                if (newRows.every(r => r.maxQty <= 0)) {
+                    toast.error('Warning: Selected GRN is already fully billed. Proceed only if over-billing is manual.', { duration: 5000 });
+                }
+            } else {
+                toast.error('Selected GRN has no items.');
+            }
 
             // Sync header from GRN
             setHeader(h => ({
@@ -310,40 +341,37 @@ export default function PurchaseInvoiceFormPage() {
         init();
     }, [id, isEdit]);
 
-    // Auto-prefill if poId or grnId is present in search params
-    useEffect(() => {
-        if (!isEdit && !loading) {
-            if (prefillPoId) {
-                setFlowType('PO→Direct Invoice');
-                // We'll let the onPoChange trigger after setFlowType
-            } else if (prefillGrnId) {
-                setFlowType('PO→GRN→Invoice');
-            }
-        }
-    }, [prefillPoId, prefillGrnId, isEdit, loading]);
-
-    // Handle flowType and prefill trigger
+    // Auto-prefill Logic (Consolidated to avoid race conditions)
     useEffect(() => {
         if (!isEdit && !loading && !prefillProcessed.current) {
-            if (prefillPoId && flowType === 'PO→Direct Invoice') {
-                onPoChange(prefillPoId);
-                prefillProcessed.current = true;
-            } else if (prefillGrnId && flowType === 'PO→GRN→Invoice') {
-                // If we have GRN, we need to set the PO first (if it belongs to one)
-                getGRNById(prefillGrnId).then(grn => {
-                    const g = grn.data || grn;
-                    if (g.poId) {
-                       setH('selectedPoId', g.poId?._id || g.poId);
-                       onGrnChange(prefillGrnId);
-                    } else {
-                       setFlowType('Direct GRN→Invoice');
-                       onGrnChange(prefillGrnId);
+            const run = async () => {
+                if (prefillPoId) {
+                    setFlowType('PO→Direct Invoice');
+                    // We call onPoChange directly with the target flow to bypass the state re-render delay
+                    await onPoChange(prefillPoId, 'PO→Direct Invoice').catch(() => {});
+                    prefillProcessed.current = true;
+                } else if (prefillGrnId) {
+                    setFlowType('PO→GRN→Invoice');
+                    const grn = await getGRNById(prefillGrnId).catch(() => null);
+                    if (grn) {
+                        const g = grn.data || grn;
+                        if (g.poId) {
+                            setH('selectedPoId', g.poId?._id || g.poId);
+                            // Ensure the onPoChange is executed to load GRN list for this PO
+                            await onPoChange(g.poId?._id || g.poId, 'PO→GRN→Invoice').catch(() => {});
+                            onGrnChange(prefillGrnId);
+                        } else {
+                            setFlowType('Direct GRN→Invoice');
+                            onGrnChange(prefillGrnId);
+                        }
                     }
-                });
-                prefillProcessed.current = true;
-            }
+                    prefillProcessed.current = true;
+                }
+            };
+            run();
         }
-    }, [flowType, prefillPoId, prefillGrnId, isEdit, loading, onPoChange, onGrnChange]);
+    }, [prefillPoId, prefillGrnId, isEdit, loading, onPoChange, onGrnChange]);
+
 
     // Load PO list when supplier + flow changes
     useEffect(() => {
@@ -662,7 +690,7 @@ export default function PurchaseInvoiceFormPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                         <thead>
                                             <tr style={{ background: '#f8f9fa', color: '#64748b' }}>
-                                                {['#', 'Item', 'Description', 'HSN', 'UOM', 'Qty', 'Max Qty', 'Rate', 'Total', ''].map((h, i) =>
+                                                {['#', 'Item', 'Description', 'HSN', 'UOM', 'Qty', 'Balance', 'Rate', 'Total', ''].map((h, i) =>
                                                     h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : 'auto' }}>{h}</th> : null
                                                 )}
                                             </tr>
@@ -706,7 +734,7 @@ export default function PurchaseInvoiceFormPage() {
                                                         <td style={{ padding: '6px 10px', minWidth: '120px' }}>
                                                             <input type="number" min="0.01" max={flowType.includes('GRN') ? (row.maxQty || undefined) : undefined} step="0.01" value={row.qty} onChange={e => setRow(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={{ ...inp, fontSize: '12px', fontWeight: 'bold', minWidth: '100px', borderColor: row.maxQty && row.qty > row.maxQty ? '#ef4444' : '#e2e8f0' }} />
                                                         </td>
-                                                        <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{row.maxQty ?? '—'}</td>
+                                                        <td style={{ padding: '6px 10px', color: row.maxQty <= 0 ? '#ef4444' : '#64748b', fontSize: '11px', fontWeight: row.maxQty <= 0 ? 700 : 400 }}>{row.maxQty ?? '—'}</td>
                                                         <td style={{ padding: '6px 10px', width: '90px' }}><input type="number" min="0" step="0.01" value={row.rate} onChange={e => setRow(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...inp, fontSize: '12px', minWidth: '70px' }} /></td>
 
                                                         <td style={{ padding: '6px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total}</td>

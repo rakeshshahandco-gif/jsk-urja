@@ -11,6 +11,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import PDFDocument from 'pdfkit';
+import { getIO } from '../config/socket.js';
 
 // ── Pure-JS PDF generator using pdfkit (no Chrome/Puppeteer needed) ──────────
 const generateOrderPDF = (order, company, type) => {
@@ -206,13 +207,47 @@ const sendOrder = catchAsync(async (req, res) => {
             results.push('Email sent');
         }
 
-        log.status = 'Sent';
+            // 2. WhatsApp Draft Preparation
+            log.status = 'Preparing WhatsApp Draft';
+            await log.save();
+
+            const caption = message || `Please find attached ${type}: ${log.documentNumber}`;
+            
+            // Early validation
+            if (sendMode === 'Number' && (!phone || phone.length < 10)) {
+                throw new Error('A valid 10-digit WhatsApp number is required for Direct Number mode.');
+            }
+            if (sendMode === 'Group' && !groupName) {
+                throw new Error('A Group Name is required for WhatsApp Group mode.');
+            }
+
+            // Get IO for real-time updates
+            const io = getIO();
+            const userRoom = `user:${req.user._id.toString()}`;
+
+            await WhatsAppAutomationService.prepareDocumentDraft({
+                phone: sendMode === 'Number' ? phone : null,
+                groupName: sendMode === 'Group' ? groupName : null,
+                filePath: tempFilePath,
+                caption,
+                onStatusUpdate: (data) => {
+                    console.log(`[Socket] Status update for ${userRoom}: ${data.status} (${data.code})`);
+                    io.to(userRoom).emit('whatsapp:status', {
+                        documentId: id,
+                        channel: 'WhatsApp',
+                        ...data
+                    });
+                }
+            });
+            results.push('WhatsApp draft prepared in browser');
+
+        log.status = 'Sent / Prepared';
         await log.save();
 
         // Cleanup temp file
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
 
-        res.status(httpStatus.OK).send({ message: 'Sent successfully', results });
+        res.status(httpStatus.OK).send({ message: 'Operation completed successfully', results });
     } catch (e) {
         log.status = 'Failed';
         log.errorMessage = e.message;

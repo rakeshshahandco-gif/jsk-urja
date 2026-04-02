@@ -488,6 +488,7 @@ export default function SalesOrderDetailPage() {
                     recipientName: so.customerName,
                     email: so.customerEmail,
                     phone: so.customerPhone,
+                    customerId: so.customerId,
                     number: so.soNumber,
                     id: id,
                     items: so.items,
