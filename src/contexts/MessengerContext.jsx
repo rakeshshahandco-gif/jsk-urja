@@ -114,37 +114,40 @@ export const MessengerProvider = ({ children }) => {
     // ── Socket.IO Event Listeners ──────────────────────────────
     useEffect(() => {
         if (socket && user) {
-            socket.on('messenger:new_message', ({ threadId, message }) => {
-                const currentActive = activeThreadRef.current;
-                
-                setThreads(prev => {
-                    const index = prev.findIndex(t => t._id === threadId);
-                    if (index === -1) {
-                         fetchThreads();
-                         return prev;
-                    }
-                    const updatedThreads = [...prev];
-                    const thread = { ...updatedThreads[index] };
-                    thread.lastMessage = {
-                        content: message.content,
-                        sender: message.sender,
-                        timestamp: message.createdAt
-                    };
-                    if (!currentActive || currentActive._id !== threadId) {
-                        thread.unreadCount = (thread.unreadCount || 0) + 1;
-                        setUnreadTotal(t => t + 1);
-                    }
+                const handleChatMessage = ({ threadId, message }) => {
+                    const currentActive = activeThreadRef.current;
                     
-                    updatedThreads.splice(index, 1);
-                    updatedThreads.unshift(thread);
-                    return updatedThreads;
-                });
+                    setThreads(prev => {
+                        const index = prev.findIndex(t => t._id === threadId);
+                        if (index === -1) {
+                             fetchThreads();
+                             return prev;
+                        }
+                        const updatedThreads = [...prev];
+                        const thread = { ...updatedThreads[index] };
+                        thread.lastMessage = {
+                            content: message.content,
+                            sender: message.sender,
+                            timestamp: message.createdAt
+                        };
+                        if (!currentActive || currentActive._id !== threadId) {
+                            thread.unreadCount = (thread.unreadCount || 0) + 1;
+                            setUnreadTotal(t => t + 1);
+                        }
+                        
+                        updatedThreads.splice(index, 1);
+                        updatedThreads.unshift(thread);
+                        return updatedThreads;
+                    });
 
-                if (currentActive && currentActive._id === threadId) {
-                    setMessages(prev => [...prev, message]);
-                    messengerApi.markThreadRead(threadId).catch(console.error);
-                }
-            });
+                    if (currentActive && currentActive._id === threadId) {
+                        setMessages(prev => [...prev, message]);
+                        messengerApi.markThreadRead(threadId).catch(console.error);
+                    }
+                };
+
+                socket.on('messenger:new_message', handleChatMessage);
+                socket.on('chat:message', handleChatMessage);
 
             socket.on('messenger:thread_created', ({ thread, message }) => {
                 setThreads(prev => [thread, ...prev]);
@@ -204,6 +207,7 @@ export const MessengerProvider = ({ children }) => {
 
             return () => {
                 socket.off('messenger:new_message');
+                socket.off('chat:message');
                 socket.off('messenger:thread_created');
                 socket.off('messenger:message_seen');
                 socket.off('messenger:unread_update');

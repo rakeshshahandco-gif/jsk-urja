@@ -33,7 +33,8 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             billNumber: task.billNumber || '',
             referenceNumber: task.referenceNumber || '',
             remarks: task.remarks || '',
-            isPaid: task.isPaid || false
+            isPaid: task.isPaid || false,
+            enableBilling: !!(task.amount > 0 || task.billNumber || task.referenceNumber || task.remarks || task.isPaid)
         } : {
             priority: 'MEDIUM',
             status: 'OPEN',
@@ -41,7 +42,8 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             assigneeIds: [],
             recurrence: { enabled: false, frequency: 'MONTHLY', interval: 1 },
             amount: 0,
-            isPaid: false
+            isPaid: false,
+            enableBilling: false
         }
     });
 
@@ -56,6 +58,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const recurrenceEnabled = watch('recurrence.enabled');
     const recurrenceEndType = watch('recurrence.recurrenceEndType');
     const selectedGroupId = watch('groupId');
+    const enableBilling = watch('enableBilling');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -336,46 +339,59 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             )}
 
             {/* ── Billing & Payment Details ── */}
-            <div className={styles.sectionHeader}>
-                <Receipt size={16} /> <span>Billing & Payment Details</span>
-            </div>
-            <div className={clsx(styles.row, styles.fourCols)}>
-                <div className={styles.field}>
-                    <label className={styles.label}>Amount (₹)</label>
-                    <div className={styles.inputWithIcon}>
-                        <span className={styles.prefix}>₹</span>
-                        <input type="number" step="0.01" className={styles.input} {...register('amount')} placeholder="0.00" />
-                    </div>
-                </div>
-                <div className={styles.field}>
-                    <label className={styles.label}>Bill Number</label>
-                    <div className={styles.inputWithIcon}>
-                        <Receipt size={14} className={styles.icon} />
-                        <input className={styles.input} {...register('billNumber')} placeholder="Invoice #" />
-                    </div>
-                </div>
-                <div className={styles.field}>
-                    <label className={styles.label}>Reference / Ref #</label>
-                    <div className={styles.inputWithIcon}>
-                        <Landmark size={14} className={styles.icon} />
-                        <input className={styles.input} {...register('referenceNumber')} placeholder="UTR / Ref" />
-                    </div>
-                </div>
-                <div className={styles.field}>
-                    <label className={styles.label}>Payment Status</label>
-                    <div className={styles.paymentToggle}>
-                        <input type="checkbox" id="isPaid" {...register('isPaid')} />
-                        <label htmlFor="isPaid" className={clsx(styles.paidLabel, { [styles.paid]: watch('isPaid') })}>
-                            <CreditCard size={14} /> {watch('isPaid') ? 'PAID' : 'UNPAID'}
-                        </label>
-                    </div>
+            <div className={styles.field} style={{ marginTop: '1rem', marginBottom: '0.5rem' }}>
+                <div className={styles.recurrenceBox} style={{ display: 'inline-flex' }}>
+                    <input type="checkbox" id="enableBilling" {...register('enableBilling')} />
+                    <label
+                        htmlFor="enableBilling"
+                        className={clsx({ [styles.active]: enableBilling })}
+                    >
+                        <Receipt size={14} style={{ marginRight: '6px' }} /> Add Billing & Payment Details
+                    </label>
                 </div>
             </div>
 
-            <div className={styles.field}>
-                <label className={styles.label}>Billing Remarks</label>
-                <input className={styles.input} {...register('remarks')} placeholder="Payment method, date, etc." />
-            </div>
+            {enableBilling && (
+                <div className={styles.billingSectionWrapper} style={{ backgroundColor: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #f3f4f6', marginBottom: '1rem' }}>
+                    <div className={clsx(styles.row, styles.fourCols)} style={{ marginBottom: '1rem' }}>
+                        <div className={styles.field}>
+                            <label className={styles.label}>Amount (₹)</label>
+                            <div className={styles.inputWithIcon}>
+                                <span className={styles.prefix}>₹</span>
+                                <input type="number" step="0.01" className={styles.input} {...register('amount')} placeholder="0.00" />
+                            </div>
+                        </div>
+                        <div className={styles.field}>
+                            <label className={styles.label}>Bill Number</label>
+                            <div className={styles.inputWithIcon}>
+                                <Receipt size={14} className={styles.icon} />
+                                <input className={styles.input} {...register('billNumber')} placeholder="Invoice #" />
+                            </div>
+                        </div>
+                        <div className={styles.field}>
+                            <label className={styles.label}>Reference / Ref #</label>
+                            <div className={styles.inputWithIcon}>
+                                <Landmark size={14} className={styles.icon} />
+                                <input className={styles.input} {...register('referenceNumber')} placeholder="UTR / Ref" />
+                            </div>
+                        </div>
+                        <div className={styles.field}>
+                            <label className={styles.label}>Payment Status</label>
+                            <div className={styles.paymentToggle}>
+                                <input type="checkbox" id="isPaid" {...register('isPaid')} />
+                                <label htmlFor="isPaid" className={clsx(styles.paidLabel, { [styles.paid]: watch('isPaid') })}>
+                                    <CreditCard size={14} /> {watch('isPaid') ? 'PAID' : 'UNPAID'}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={styles.field}>
+                        <label className={styles.label}>Billing Remarks</label>
+                        <input className={styles.input} {...register('remarks')} placeholder="Payment method, date, etc." />
+                    </div>
+                </div>
+            )}
 
             {/* ── ROW 4: Description ── */}
             <div className={styles.field}>

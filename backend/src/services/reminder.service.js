@@ -1,6 +1,7 @@
 import Reminder from '../models/reminder.model.js';
 import httpStatus from 'http-status';
 import { ApiError } from '../utils/ApiError.js';
+import { createNotification } from '../controllers/notification.controller.js';
 
 /**
  * Create a reminder
@@ -8,7 +9,21 @@ import { ApiError } from '../utils/ApiError.js';
  * @returns {Promise<Reminder>}
  */
 const createReminder = async (reminderBody) => {
-    return Reminder.create(reminderBody);
+    const reminder = await Reminder.create(reminderBody);
+    
+    // Notify if assigned to someone else (or even if self for real-time unread count update)
+    if (reminder.createdBy) {
+        await createNotification({
+            recipient: reminder.createdBy,
+            actor: reminder.createdBy, // In this case actor is self
+            type: 'REMINDER',
+            title: 'New Reminder Set',
+            message: `Reminder for ${reminder.followUpType} with customer. Note: ${reminder.taskNote || 'N/A'}`,
+            metadata: { reminderId: reminder._id }
+        }).catch(err => console.error('Notification error in createReminder:', err));
+    }
+    
+    return reminder;
 };
 
 /**
@@ -225,6 +240,19 @@ const closeReminder = async (reminderId) => {
     reminder.isClosed = true;
     reminder.closedAt = new Date();
     await reminder.save();
+
+    // Notify of closure (useful if multiple people track the same customer)
+    if (reminder.createdBy) {
+        await createNotification({
+            recipient: reminder.createdBy,
+            actor: reminder.createdBy,
+            type: 'REMINDER',
+            title: 'Reminder Closed',
+            message: `The reminder for customer has been marked as closed.`,
+            metadata: { reminderId: reminder._id, status: 'CLOSED' }
+        }).catch(err => console.error('Notification error in closeReminder:', err));
+    }
+
     return reminder;
 };
 
@@ -266,6 +294,19 @@ const extendReminder = async (reminderId, updateBody) => {
     reminder.reminderTime = newTime;
 
     await reminder.save();
+
+    // Notify of extension
+    if (reminder.createdBy) {
+        await createNotification({
+            recipient: reminder.createdBy,
+            actor: reminder.createdBy,
+            type: 'REMINDER',
+            title: 'Reminder Rescheduled',
+            message: `Reminder rescheduled to ${newDate.toLocaleDateString()} at ${newTime}.`,
+            metadata: { reminderId: reminder._id, newDate, newTime }
+        }).catch(err => console.error('Notification error in extendReminder:', err));
+    }
+
     return reminder;
 };
 
@@ -432,7 +473,7 @@ const queryOpenRemindersWithDetails = async (filters, options) => {
 const upsertReminderForCustomer = async (customerId, reminderData) => {
     if (reminderData.enableReminder) {
         // Upsert open reminder
-        return Reminder.findOneAndUpdate(
+        const reminder = await Reminder.findOneAndUpdate(
             {
                 customerId: customerId,
                 isClosed: false
@@ -450,6 +491,18 @@ const upsertReminderForCustomer = async (customerId, reminderData) => {
             },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
+
+        if (reminder && reminder.createdBy) {
+            await createNotification({
+                recipient: reminder.createdBy,
+                actor: reminder.createdBy,
+                type: 'REMINDER',
+                title: 'Reminder Created/Updated',
+                message: `Task: ${reminder.taskNote || 'N/A'} for ${reminder.followUpType}`,
+                metadata: { reminderId: reminder._id }
+            }).catch(err => console.error('Notification error in upsertReminderForCustomer:', err));
+        }
+        return reminder;
     } else {
         // Close any open reminders if disabled
         await Reminder.updateMany(

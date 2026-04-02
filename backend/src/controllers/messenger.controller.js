@@ -15,6 +15,7 @@ const emitToParticipants = (participantIds, event, payload) => {
     try {
         const io = getIO();
         participantIds.forEach((uid) => {
+            io.to(`user:${uid.toString()}`).emit(event, payload);
             io.to(`user_${uid.toString()}`).emit(event, payload);
         });
     } catch (e) {
@@ -104,9 +105,16 @@ export const createThread = asyncHandler(async (req, res) => {
             await incrementUnread(existing.participants, existing._id, myId);
 
             const populated = await MsgMessage.findById(msg._id).populate('sender', 'name');
-            emitToParticipants(existing.participants, 'messenger:new_message', {
-                threadId: existing._id,
-                message: populated,
+            const roomNew = `user:${myId}`; // Just an example, we need to loop
+            
+            existing.participants.forEach(uid => {
+                const uRoomNew = `user:${uid.toString()}`;
+                const uRoomOld = `user_${uid.toString()}`;
+                const data = { threadId: existing._id, message: populated };
+                getIO().to(uRoomNew).emit('messenger:new_message', data);
+                getIO().to(uRoomOld).emit('messenger:new_message', data);
+                getIO().to(uRoomNew).emit('chat:message', data);
+                getIO().to(uRoomOld).emit('chat:message', data);
             });
 
             // Global Notification
@@ -157,6 +165,11 @@ export const createThread = asyncHandler(async (req, res) => {
     emitToParticipants(participantSet, 'messenger:thread_created', {
         thread: populatedThread,
         message: populatedMsg,
+    });
+    // Also emit chat:message for compatibility
+    participantSet.forEach(uid => {
+        getIO().to(`user:${uid.toString()}`).emit('chat:message', { threadId: thread._id, message: populatedMsg });
+        getIO().to(`user_${uid.toString()}`).emit('chat:message', { threadId: thread._id, message: populatedMsg });
     });
 
     // Global Notification
@@ -320,9 +333,14 @@ export const sendMessage = asyncHandler(async (req, res) => {
         .populate({ path: 'replyTo', populate: { path: 'sender', select: 'name' } });
 
     // Emit real-time to all participants
-    emitToParticipants(thread.participants, 'messenger:new_message', {
-        threadId: thread._id.toString(),
-        message: populated,
+    thread.participants.forEach(uid => {
+        const uRoomNew = `user:${uid.toString()}`;
+        const uRoomOld = `user_${uid.toString()}`;
+        const data = { threadId: thread._id.toString(), message: populated };
+        getIO().to(uRoomNew).emit('messenger:new_message', data);
+        getIO().to(uRoomOld).emit('messenger:new_message', data);
+        getIO().to(uRoomNew).emit('chat:message', data);
+        getIO().to(uRoomOld).emit('chat:message', data);
     });
 
     // Global Notification for Messenger
@@ -350,7 +368,9 @@ export const sendMessage = asyncHandler(async (req, res) => {
     Promise.all(others.map(async (otherId) => {
         try {
             const total = await getUserUnreadTotal(otherId);
-            getIO().to(`user_${otherId.toString()}`).emit('messenger:unread_update', { total });
+            const oid = otherId.toString();
+            getIO().to(`user:${oid}`).emit('messenger:unread_update', { total });
+            getIO().to(`user_${oid}`).emit('messenger:unread_update', { total });
         } catch (e) {
             console.error('Failed to emit unread update for', otherId, e.message);
         }
@@ -391,6 +411,7 @@ export const markThreadRead = asyncHandler(async (req, res) => {
     // Send updated total unread to the user
     const total = await getUserUnreadTotal(myId);
     try {
+        getIO().to(`user:${myId.toString()}`).emit('messenger:unread_update', { total });
         getIO().to(`user_${myId.toString()}`).emit('messenger:unread_update', { total });
     } catch (e) { /* ignore */ }
 

@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
+import { useSocket } from '@/contexts/SocketContext';
 
 export const TaskList = () => {
     const [tasks, setTasks] = useState([]);
@@ -48,10 +49,26 @@ export const TaskList = () => {
     }, [view, filter.status, filter.priority, filter.taskCategoryId, filter.group, filter.assigneeType]);
 
     useGlobalSync('task', (payload) => {
-        if (payload.action === 'create') setTasks(prev => [payload.data, ...prev]);
+        if (payload.action === 'create') fetchTasks(); // Re-fetch to ensure full data/sorting
         else if (payload.action === 'update') setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
         else if (payload.action === 'delete') setTasks(prev => prev.filter(t => t._id !== payload.recordId));
     });
+
+    // Listen for specific task assignment/update events via socket for instant feedback
+    const { socket } = useSocket();
+    useEffect(() => {
+        if (!socket) return;
+        
+        const handleForceRefresh = () => fetchTasks();
+        
+        socket.on('task:assigned', handleForceRefresh);
+        socket.on('task:updated', handleForceRefresh);
+        
+        return () => {
+            socket.off('task:assigned', handleForceRefresh);
+            socket.off('task:updated', handleForceRefresh);
+        };
+    }, [socket]);
 
     const fetchTasks = async () => {
         try {

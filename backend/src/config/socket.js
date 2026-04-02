@@ -31,10 +31,15 @@ export const initSocket = (server) => {
     });
 
     io.on('connection', (socket) => {
-        logger.info(`🔌 Socket connected: ${socket.id} (User: ${socket.user.sub})`);
+        const userId = socket.user.sub;
+        logger.info(`🔌 Socket connected: ${socket.id} (User: ${userId})`);
 
-        // Join user's specific room
-        socket.join(`user_${socket.user.sub}`);
+        // Join user's specific room using specific requested format
+        socket.join(`user:${userId}`);
+        
+        // Backward compatibility
+        socket.join(`user_${userId}`); 
+
         // Join global company room
         socket.join('company_all');
 
@@ -42,10 +47,15 @@ export const initSocket = (server) => {
         socket.on('messenger:typing', ({ threadId, participantIds }) => {
             if (!threadId || !participantIds) return;
             participantIds.forEach((uid) => {
-                if (uid !== socket.user.sub) {
+                if (uid !== userId) {
+                    // Emit to both formats for safety during migration
+                    io.to(`user:${uid}`).emit('messenger:typing', {
+                        threadId,
+                        userId,
+                    });
                     io.to(`user_${uid}`).emit('messenger:typing', {
                         threadId,
-                        userId: socket.user.sub,
+                        userId,
                     });
                 }
             });
@@ -54,10 +64,14 @@ export const initSocket = (server) => {
         socket.on('messenger:stop_typing', ({ threadId, participantIds }) => {
             if (!threadId || !participantIds) return;
             participantIds.forEach((uid) => {
-                if (uid !== socket.user.sub) {
+                if (uid !== userId) {
+                    io.to(`user:${uid}`).emit('messenger:stop_typing', {
+                        threadId,
+                        userId,
+                    });
                     io.to(`user_${uid}`).emit('messenger:stop_typing', {
                         threadId,
-                        userId: socket.user.sub,
+                        userId,
                     });
                 }
             });
@@ -65,12 +79,12 @@ export const initSocket = (server) => {
 
         // ── Messenger: Online Presence ─────────────────────────────────────────
         // Broadcast to company_all that this user is online
-        socket.to('company_all').emit('messenger:user_online', { userId: socket.user.sub });
+        socket.to('company_all').emit('messenger:user_online', { userId });
 
-        socket.on('disconnect', () => {
-            logger.info(`🔌 Socket disconnected: ${socket.id}`);
+        socket.on('disconnect', (reason) => {
+            logger.info(`🔌 Socket disconnected: ${socket.id} (User: ${userId}) Reason: ${reason}`);
             socket.to('company_all').emit('messenger:user_offline', {
-                userId: socket.user.sub,
+                userId,
                 lastSeen: new Date(),
             });
         });

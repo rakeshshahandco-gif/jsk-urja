@@ -46,24 +46,28 @@ const _emitEvent = (doc, action, oldDoc = null) => {
         // E.g Task model where visibility is restrictive
         if (modelName === 'Task') {
             rooms = [];
+            
+            // Check if visibility field exists, else default to private (assignee only)
             const isAllUsers = doc.visibility === 'All Users';
             if (isAllUsers) {
                 rooms.push('company_all');
             } else {
-                // Send to assigned users
-                if (doc.assignedUsers && Array.isArray(doc.assignedUsers)) {
-                    doc.assignedUsers.forEach(id => rooms.push(`user_${id.toString()}`));
+                // Send to assigned users (Fix: use assigneeIds as per task.model.js)
+                if (doc.assigneeIds && Array.isArray(doc.assigneeIds)) {
+                    doc.assigneeIds.forEach(id => {
+                        rooms.push(`user:${id.toString()}`);
+                        rooms.push(`user_${id.toString()}`);
+                    });
                 }
                 // Send to creator
                 if (doc.createdBy) {
+                    rooms.push(`user:${doc.createdBy.toString()}`);
                     rooms.push(`user_${doc.createdBy.toString()}`);
                 }
-                // Send to task group members
-                // This requires joining group rooms or querying the group. 
-                // To keep it simple globally, if it has restricted assignment, we emit strictly. 
-                // If the frontend receives an event for a record they don't have access to, they just won't show it anyway.
-                // So emitting strictly to assignee/creator is best here.
             }
+        } else {
+            // For other models, broadcast to all for now or define more rules
+            rooms.push('company_all');
         }
 
         // Ensure unique rooms

@@ -57,6 +57,13 @@ export const NotificationProvider = ({ children }) => {
         if (user?.notificationPreferences) {
             setPreferences(prev => ({ ...prev, ...user.notificationPreferences }));
         }
+        
+        // Request browser notification permission properly
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                console.log('Browser notification permission:', permission);
+            });
+        }
     }, [user]);
 
     const updatePreferences = async (newPrefs) => {
@@ -237,11 +244,21 @@ export const NotificationProvider = ({ children }) => {
                 socket.on('notification:new', handleNewNotification);
                 socket.on('notification:sync', handleNotificationSync);
                 socket.on('connect', handleConnect);
+                
+                // Specific listeners as requested
+                socket.on('task:assigned', handleNewNotification);
+                socket.on('task:updated', handleNewNotification);
+                socket.on('chat:message', handleNewNotification);
+                socket.on('reminder:new', handleNewNotification);
 
                 return () => {
                     socket.off('notification:new', handleNewNotification);
                     socket.off('notification:sync', handleNotificationSync);
                     socket.off('connect', handleConnect);
+                    socket.off('task:assigned', handleNewNotification);
+                    socket.off('task:updated', handleNewNotification);
+                    socket.off('chat:message', handleNewNotification);
+                    socket.off('reminder:new', handleNewNotification);
                 };
             }
         }

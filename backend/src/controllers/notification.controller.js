@@ -35,6 +35,7 @@ export const markAsRead = asyncHandler(async (req, res) => {
 
     const unreadCount = await Notification.countDocuments({ recipient: req.user._id, isRead: false });
     const io = getIO();
+    io.to(`user:${req.user._id}`).emit('notification:sync', { unreadCount });
     io.to(`user_${req.user._id}`).emit('notification:sync', { unreadCount });
 
     res.json(new ApiResponse(200, { notification, unreadCount }, 'Notification marked as read'));
@@ -48,6 +49,7 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
     );
 
     const io = getIO();
+    io.to(`user:${req.user._id}`).emit('notification:sync', { unreadCount: 0 });
     io.to(`user_${req.user._id}`).emit('notification:sync', { unreadCount: 0 });
 
     res.json(new ApiResponse(200, null, 'All notifications marked as read'));
@@ -86,10 +88,31 @@ export const createNotification = async ({ recipient, actor, task, type, title, 
         });
 
         const io = getIO();
-        io.to(`user_${recipient}`).emit('notification:new', {
+        const roomNew = `user:${recipient}`;
+        const roomOld = `user_${recipient}`;
+        const payload = {
             ...populatedNotification.toObject(),
             unreadCount // Include current count for instant badge update
-        });
+        };
+
+        // 1. Generic event for all notifications
+        io.to(roomNew).emit('notification:new', payload);
+        io.to(roomOld).emit('notification:new', payload);
+
+        // 2. Specific events as requested for instant UI logic/filtering
+        if (type === 'ASSIGNED') {
+            io.to(roomNew).emit('task:assigned', payload);
+            io.to(roomOld).emit('task:assigned', payload);
+        } else if (type === 'STATUS_CHANGE' || type === 'REASSIGNED' || type === 'DUE_DATE_CHANGE') {
+            io.to(roomNew).emit('task:updated', payload);
+            io.to(roomOld).emit('task:updated', payload);
+        } else if (type === 'MESSENGER') {
+            io.to(roomNew).emit('chat:message', payload);
+            io.to(roomOld).emit('chat:message', payload);
+        } else if (type === 'REMINDER') {
+            io.to(roomNew).emit('reminder:new', payload);
+            io.to(roomOld).emit('reminder:new', payload);
+        }
 
         return populatedNotification;
     } catch (error) {
