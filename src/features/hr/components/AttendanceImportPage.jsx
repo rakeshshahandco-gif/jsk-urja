@@ -238,7 +238,7 @@ const AttendanceImportPage = () => {
                             <div>
                                 <h5 style={{ fontSize: '13px', fontWeight: '800', color: '#854d0e', margin: '0 0 4px' }}>Important Note</h5>
                                 <p style={{ fontSize: '12px', color: '#a16207', margin: 0, lineHeight: '1.5' }}>
-                                    Ensure that employee IDs in the file match the system employee codes to avoid mapping errors.
+                                    You can provide an <strong>Employee Code</strong> or <strong>Employee Name</strong> column to identify staff. Ensure the values match the registered records exactly.
                                 </p>
                             </div>
                         </div>

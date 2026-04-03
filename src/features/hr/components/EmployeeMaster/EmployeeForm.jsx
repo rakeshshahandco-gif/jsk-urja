@@ -195,7 +195,32 @@ const EmployeeForm = () => {
                             </div>
                             <div style={{ flex: 1 }}>
                                 <div style={f.row(2)}>
+                                    <div style={{ marginBottom: 12 }}>
+                                        <label style={f.label}>Employee Code</label>
+                                        <div style={{ display: 'flex', gap: 4 }}>
+                                            <input 
+                                                style={{ ...f.input, flex: 1, fontFamily: 'monospace', fontWeight: '700' }} 
+                                                value={form.employeeCode} 
+                                                onChange={e => set('employeeCode', e.target.value.toUpperCase())} 
+                                                placeholder="Leave empty to auto-generate" 
+                                            />
+                                            <button 
+                                                type="button" 
+                                                onClick={handleGenerateCode} 
+                                                disabled={generatingCode} 
+                                                title="Auto-generate code"
+                                                style={{ height: 36, width: 36, border: '1px solid #cbd5e1', borderRadius: 6, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
+                                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                                    <path d="M3 3v5h5"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
                                     <Field label="Full Name" required><input style={f.input} value={form.employeeName} onChange={e => set('employeeName', e.target.value)} placeholder="e.g. John Doe" /></Field>
+                                </div>
+                                <div style={f.row(2)}>
                                     <Field label="Gender">
                                         <select style={f.sel} value={form.gender} onChange={e => set('gender', e.target.value)}>
                                             <option value="">Select Gender</option>
@@ -204,9 +229,9 @@ const EmployeeForm = () => {
                                             <option value="Other">Other</option>
                                         </select>
                                     </Field>
-                                </div>
-                                <div style={f.row(2)}>
                                     <Field label="Contact Number" required><input style={f.input} value={form.mobileNumber} onChange={e => set('mobileNumber', e.target.value)} placeholder="10 Digit Mobile" /></Field>
+                                </div>
+                                <div style={f.row(1)}>
                                     <Field label="Personal Email"><input style={f.input} value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@example.com" /></Field>
                                 </div>
                             </div>
@@ -224,29 +249,6 @@ const EmployeeForm = () => {
                     <div>
                         <div style={f.sectionTitle}>Employment Details</div>
                         <div style={f.row(2)}>
-                            <div style={{ marginBottom: 12 }}>
-                                <label style={f.label}>Employee Code</label>
-                                <div style={{ display: 'flex', gap: 4 }}>
-                                    <input 
-                                        style={{ ...f.input, flex: 1, fontFamily: 'monospace', fontWeight: '700' }} 
-                                        value={form.employeeCode} 
-                                        onChange={e => set('employeeCode', e.target.value.toUpperCase())} 
-                                        placeholder="Leave empty to auto-generate" 
-                                    />
-                                    <button 
-                                        type="button" 
-                                        onClick={handleGenerateCode} 
-                                        disabled={generatingCode} 
-                                        title="Auto-generate code"
-                                        style={{ height: 36, width: 36, border: '1px solid #cbd5e1', borderRadius: 6, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
-                                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                                            <path d="M3 3v5h5"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
                             <Field label="Department" required>
                                 <select style={f.sel} value={form.department} onChange={e => set('department', e.target.value)}>
                                     <option value="">-- Select Department --</option>

@@ -184,16 +184,17 @@ export const importAttendance = asyncHandler(async (req, res) => {
     const colMap = {};
     headerRow.eachCell((cell, colNumber) => {
         const val = cell.value?.toString().trim().toLowerCase().replace(/\s+/g, '') || '';
-        if (val.includes('employeecode') || val.includes('employeeid') || val === 'code') colMap.employeeCode = colNumber;
+        if (val.includes('employeecode') || val.includes('employeeid') || val === 'code' || val === 'empcode' || val === 'empid') colMap.employeeCode = colNumber;
+        else if (val.includes('employeename') || val === 'name' || val === 'empname' || val === 'employee') colMap.employeeName = colNumber;
         else if (val.includes('date')) colMap.date = colNumber;
         else if (val.includes('status')) colMap.status = colNumber;
-        else if (val.includes('checkin') || val.includes('clockin') || val.includes('inTime')) colMap.checkIn = colNumber;
-        else if (val.includes('checkout') || val.includes('clockout') || val.includes('outTime')) colMap.checkOut = colNumber;
+        else if (val.includes('checkin') || val.includes('clockin') || val.includes('intime')) colMap.checkIn = colNumber;
+        else if (val.includes('checkout') || val.includes('clockout') || val.includes('outtime')) colMap.checkOut = colNumber;
         else if (val.includes('remark')) colMap.remarks = colNumber;
     });
 
     // Default fallbacks if no clear headers found
-    if (!colMap.employeeCode) colMap.employeeCode = 1;
+    if (!colMap.employeeCode && !colMap.employeeName) colMap.employeeName = 1;
     if (!colMap.date) colMap.date = 2;
 
     worksheet.eachRow((row, rowNumber) => {
@@ -201,6 +202,7 @@ export const importAttendance = asyncHandler(async (req, res) => {
         rowsToProcess.push({
             rowNumber,
             employeeCode: colMap.employeeCode ? row.getCell(colMap.employeeCode).value?.toString()?.trim() : undefined,
+            employeeName: colMap.employeeName ? row.getCell(colMap.employeeName).value?.toString()?.trim() : undefined,
             dateValue: colMap.date ? row.getCell(colMap.date).value : undefined,
             status: colMap.status ? row.getCell(colMap.status).value?.toString()?.trim() : 'Present',
             checkIn: colMap.checkIn ? row.getCell(colMap.checkIn).value?.toString()?.trim() : '',
@@ -211,9 +213,9 @@ export const importAttendance = asyncHandler(async (req, res) => {
 
     for (const data of rowsToProcess) {
         try {
-            if (!data.employeeCode || !data.dateValue) {
-                if (!data.employeeCode && !data.dateValue) continue; // skip entirely empty rows
-                if (!data.employeeCode) errors.push(`Row ${data.rowNumber}: Employee code missing`);
+            if ((!data.employeeCode && !data.employeeName) || !data.dateValue) {
+                if (!data.employeeCode && !data.employeeName && !data.dateValue) continue; // skip entirely empty rows
+                if (!data.employeeCode && !data.employeeName) errors.push(`Row ${data.rowNumber}: Employee Code or Name missing`);
                 if (!data.dateValue) errors.push(`Row ${data.rowNumber}: Date missing`);
                 continue;
             }
@@ -226,11 +228,18 @@ export const importAttendance = asyncHandler(async (req, res) => {
             }
 
             // Find employee
-            const employee = await Employee.findOne({ 
-                employeeCode: { $regex: new RegExp(`^${data.employeeCode}$`, 'i') } 
-            });
+            let query = {};
+            if (data.employeeCode) {
+                query.employeeCode = { $regex: new RegExp(`^${data.employeeCode}$`, 'i') };
+            } else if (data.employeeName) {
+                query.employeeName = { $regex: new RegExp(`^${data.employeeName}$`, 'i') };
+            }
+
+            const employee = await Employee.findOne(query);
+            
             if (!employee) {
-                errors.push(`Row ${data.rowNumber}: Employee code ${data.employeeCode} not found`);
+                const identifier = data.employeeCode || data.employeeName;
+                errors.push(`Row ${data.rowNumber}: Employee "${identifier}" not found`);
                 continue;
             }
 
@@ -240,7 +249,7 @@ export const importAttendance = asyncHandler(async (req, res) => {
                 { status: data.status, checkIn: data.checkIn, checkOut: data.checkOut, remarks: data.remarks },
                 { upsert: true, new: true }
             );
-            importedRecords.push(data.employeeCode);
+            importedRecords.push(data.employeeCode || data.employeeName);
         } catch (e) {
             errors.push(`Row ${data.rowNumber}: ${e.message}`);
         }
