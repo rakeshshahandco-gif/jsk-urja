@@ -19,6 +19,11 @@ const createCustomer = catchAsync(async (req, res) => {
     res.status(201).send(new ApiResponse(201, customer, 'Customer created successfully'));
 });
 
+const generateCustomerCode = catchAsync(async (req, res) => {
+    const code = await customerService.genCustomerCode();
+    res.status(200).send(new ApiResponse(200, { customerCode: code }, 'Customer code generated successfully'));
+});
+
 const getCustomers = catchAsync(async (req, res) => {
     console.log('Customers API hit with query:', req.query);
     const filter = pick(req.query, ['customerName', 'status']);
@@ -1084,5 +1089,6 @@ export default {
     searchCustomers,
     previewGSTImport,
     confirmGSTImport,
-    restoreAllCustomers
+    restoreAllCustomers,
+    generateCustomerCode
 };

@@ -71,22 +71,46 @@ export const TaskList = () => {
             setTasks(prev => prev.map(t => t._id === taskData._id ? taskData : t));
         };
 
-        const handleConnect = () => fetchTasks(); // Reconnect auto-recovery
+        const handleDeletedTask = (payload) => {
+            setTasks(prev => prev.filter(t => t._id !== payload._id));
+        };
+        const handleClosedTask = (taskData) => {
+            // Depending on view, if closed, we might remove it or update it
+            if (view !== 'closed') {
+                setTasks(prev => prev.filter(t => t._id !== taskData._id));
+            } else {
+                setTasks(prev => prev.map(t => t._id === taskData._id ? taskData : t));
+            }
+        };
+
+        const handleConnect = () => fetchTasks(true); // Reconnect auto-recovery
         
         socket.on('task:assigned', handleNewTask);
         socket.on('task:updated', handleUpdateTask);
+        socket.on('task:deleted', handleDeletedTask);
+        socket.on('task:closed', handleClosedTask);
         socket.on('connect', handleConnect);
         
         return () => {
             socket.off('task:assigned', handleNewTask);
             socket.off('task:updated', handleUpdateTask);
+            socket.off('task:deleted', handleDeletedTask);
+            socket.off('task:closed', handleClosedTask);
             socket.off('connect', handleConnect);
         };
-    }, [socket]);
+    }, [socket, view]);
 
-    const fetchTasks = async () => {
+    // 1-second silent sync fallback
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            fetchTasks(true);
+        }, 1000);
+        return () => clearInterval(intervalId);
+    }, [view, filter.status, filter.priority, filter.taskCategoryId, filter.group, filter.assigneeType]);
+
+    const fetchTasks = async (silent = false) => {
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const params = {
                 view, // today, upcoming, overdue, closed
                 status: filter.status || undefined,
@@ -98,12 +122,20 @@ export const TaskList = () => {
             };
 
             const data = await getTasks(params);
-            setTasks(Array.isArray(data) ? data : (data.results || []));
+            const newData = Array.isArray(data) ? data : (data.results || []);
+            
+            // Prevent exact duplicate state sets to stop flickering
+            setTasks(prev => {
+                if (JSON.stringify(prev) === JSON.stringify(newData)) {
+                    return prev;
+                }
+                return newData;
+            });
         } catch (error) {
             console.error('Fetch Tasks Error:', error);
-            toast.error('Failed to load tasks');
+            if (!silent) toast.error('Failed to load tasks');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 

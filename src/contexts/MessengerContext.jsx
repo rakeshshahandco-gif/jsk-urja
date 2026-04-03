@@ -148,6 +148,13 @@ export const MessengerProvider = ({ children }) => {
 
                 socket.on('messenger:new_message', handleChatMessage);
                 socket.on('chat:message', handleChatMessage);
+                
+                socket.on('messenger:message_deleted', ({ threadId, messageId }) => {
+                    const currentActive = activeThreadRef.current;
+                    if (currentActive && currentActive._id === threadId) {
+                        setMessages(prev => prev.filter(m => m._id !== messageId));
+                    }
+                });
 
             socket.on('messenger:thread_created', ({ thread, message }) => {
                 setThreads(prev => [thread, ...prev]);
@@ -211,6 +218,7 @@ export const MessengerProvider = ({ children }) => {
                 socket.off('messenger:thread_created');
                 socket.off('messenger:message_seen');
                 socket.off('messenger:unread_update');
+                socket.off('messenger:message_deleted');
                 socket.off('messenger:typing');
                 socket.off('messenger:stop_typing');
                 socket.off('messenger:user_online');
@@ -219,12 +227,40 @@ export const MessengerProvider = ({ children }) => {
         }
     }, [socket, user, fetchThreads, fetchUnreadTotal]);
 
-    // Initial load
+    // Initial load and 1-second silent sync fallback
     useEffect(() => {
-        if (user) {
-            fetchThreads();
-            fetchUnreadTotal();
-        }
+        if (!user) return;
+        
+        // Initial fetch
+        fetchThreads();
+        fetchUnreadTotal();
+
+        // 1-second interval
+        const intervalId = setInterval(async () => {
+            try {
+                const threadData = await messengerApi.getMyThreads();
+                if (threadData) {
+                    setThreads(prev => JSON.stringify(prev) === JSON.stringify(threadData) ? prev : threadData);
+                }
+                const unreadData = await messengerApi.getUnreadSummary();
+                if (unreadData) {
+                    setUnreadTotal(prev => prev === unreadData.total ? prev : unreadData.total);
+                }
+                
+                // If active thread, sync messages
+                const currentActive = activeThreadRef.current;
+                if (currentActive) {
+                    const msgData = await messengerApi.getMessages(currentActive._id);
+                    if (msgData?.messages) {
+                        setMessages(prev => JSON.stringify(prev) === JSON.stringify(msgData.messages) ? prev : msgData.messages);
+                    }
+                }
+            } catch (e) {
+                // silently ignore fallback errors
+            }
+        }, 1000);
+        
+        return () => clearInterval(intervalId);
     }, [user, fetchThreads, fetchUnreadTotal]);
 
     // ── Actions ──────────────────────────────────────────────

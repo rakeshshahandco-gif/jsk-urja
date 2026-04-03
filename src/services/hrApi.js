@@ -27,6 +27,11 @@ export const getEmployees = async (params) => {
     return response.data;
 };
 
+export const generateEmployeeCode = async () => {
+    const response = await api.get('/hr/employees/generate-code');
+    return response.data;
+};
+
 export const getEmployee = async (id) => {
     const response = await api.get(`/hr/employees/${id}`);
     return response.data;

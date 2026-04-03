@@ -58,6 +58,16 @@ export const getCustomer = async (id) => {
     }
 };
 
+export const generateCustomerCode = async () => {
+    try {
+        const response = await apiClient.get('/customers/generate-code');
+        return response.data.data;
+    } catch (error) {
+        console.error('Error generating customer code:', error);
+        throw error;
+    }
+};
+
 export const getCustomerTypes = async () => {
     try {
         const response = await apiClient.get('/customers/types');
@@ -227,4 +237,5 @@ export default {
     searchCustomers,
     previewGSTImport,
     confirmGSTImport,
+    generateCustomerCode,
 };

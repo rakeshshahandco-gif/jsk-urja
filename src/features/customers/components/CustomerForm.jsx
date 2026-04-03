@@ -3,10 +3,11 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Plus, Trash2, Star } from 'lucide-react';
 import { INDIAN_STATES } from '@/utils/constants';
-import { getCustomerTypes } from '@/services/customerApi';
+import { getCustomerTypes, generateCustomerCode } from '@/services/customerApi';
 import { getStickers } from '@/services/stickerApi';
 import { AddStickerModal } from './AddStickerModal';
 import { MultiSelect } from '@/components/ui';
+import { useToast } from '@/components/ui/Toast';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -142,6 +143,21 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         name: 'contactPersons',
     });
 
+    const { addToast } = useToast();
+    const [generatingCode, setGeneratingCode] = useState(false);
+
+    const handleGenerateCode = async () => {
+        setGeneratingCode(true);
+        try {
+            const res = await generateCustomerCode();
+            setValue('customerCode', res.customerCode || res?.data?.customerCode || res || '', { shouldDirty: true });
+        } catch (error) {
+            console.error('Failed to generate code:', error);
+        } finally {
+            setGeneratingCode(false);
+        }
+    };
+
     // Reset form when customer prop changes (to prevent cache)
     useEffect(() => {
         const normalized = normalizeCustomerData(customer);
@@ -232,6 +248,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         fetchStickers();
     }, []);
 
+
+
     // Helper function to convert input to uppercase
     const handleUppercaseChange = (fieldName) => (e) => {
         const upperValue = e.target.value.toUpperCase();
@@ -303,17 +321,32 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             <h3>Basic Information</h3>
 
                     <div className={styles.grid4}>
-                        {customer?.customerCode && (
-                            <div className={styles['form-group']}>
-                                <label>CUSTOMER CODE</label>
+                        <div className={styles['form-group']}>
+                            <label>CUSTOMER CODE</label>
+                            <div style={{ display: 'flex', gap: 4 }}>
                                 <Input
-                                    value={customer.customerCode}
-                                    readOnly
-                                    className={styles['read-only-input']}
-                                    style={{ fontWeight: 'bold', backgroundColor: '#f3f4f6' }}
+                                    {...register('customerCode')}
+                                    placeholder="Leave empty to auto-generate"
+                                    onChange={handleUppercaseChange('customerCode')}
+                                    style={{ flex: 1, fontFamily: 'monospace', fontWeight: 'bold' }}
+                                    readOnly={customer?.customerCode ? true : false}
                                 />
+                                {!customer?.customerCode && (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleGenerateCode} 
+                                        disabled={generatingCode} 
+                                        title="Auto-generate code"
+                                        style={{ height: '42px', width: '42px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
+                                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                            <path d="M3 3v5h5"></path>
+                                        </svg>
+                                    </button>
+                                )}
                             </div>
-                        )}
+                        </div>
                         <div className={styles['form-group']}>
                             <label htmlFor="customerName">CUSTOMER NAME (OPTIONAL)</label>
                             <Input

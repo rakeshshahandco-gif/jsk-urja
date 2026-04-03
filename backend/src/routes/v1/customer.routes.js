@@ -35,6 +35,8 @@ router
     .post(validate(customerValidation.createCustomer), customerController.createCustomer)
     .get(validate(customerValidation.getCustomers), customerController.getCustomers);
 
+router.get('/generate-code', customerController.generateCustomerCode);
+
 // Import/Export routes
 router.get('/template/download', customerController.downloadTemplate);
 router.post('/import', upload.single('file'), customerController.importCustomers);

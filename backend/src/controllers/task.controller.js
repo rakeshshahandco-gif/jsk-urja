@@ -33,6 +33,41 @@ const buildSort = (sortBy) => {
   return Object.keys(sort).length ? sort : { dueDate: 1, createdAt: -1 };
 };
 
+const emitTaskEvent = async (taskId, eventName, actorId) => {
+    try {
+        const fullTask = await Task.findById(taskId)
+            .populate('assigneeIds', 'name email username')
+            .populate('createdBy', 'name email username')
+            .populate('taskCategoryId', 'name')
+            .populate('assignedGroupId', 'name')
+            .populate('groupId', 'name');
+
+        if (!fullTask) return;
+
+        const updateNotifyUsers = new Set();
+        if (fullTask.assigneeIds) {
+            fullTask.assigneeIds.forEach(u => updateNotifyUsers.add(u._id.toString()));
+        }
+        if (fullTask.createdBy) {
+            updateNotifyUsers.add(fullTask.createdBy._id.toString());
+        }
+
+        if (fullTask.assignToAll) {
+            const allUsers = await User.find({ isActive: true }).select('_id');
+            allUsers.forEach(u => updateNotifyUsers.add(u._id.toString()));
+        }
+
+        const io = getIO();
+        for (const userId of updateNotifyUsers) {
+            if (actorId && userId === actorId.toString()) continue;
+            io.to(`user:${userId}`).emit(eventName, fullTask.toObject());
+            io.to(`user_${userId}`).emit(eventName, fullTask.toObject());
+        }
+    } catch (err) {
+        console.error(`Socket emit ${eventName} failed:`, err);
+    }
+};
+
 // ---------------------------
 // TASK MASTER CONTROLLERS
 // ---------------------------
@@ -472,6 +507,9 @@ export const closeTask = asyncHandler(async (req, res) => {
     }).catch(err => console.error('Silent fail for notification in closeTask:', err));
   }
 
+  await emitTaskEvent(task._id, 'task:closed', req.user.id);
+  await emitTaskEvent(task._id, 'task:updated', req.user.id);
+
   res.send({ success: true, data: task });
 });
 
@@ -482,13 +520,23 @@ export const updateTaskStatus = asyncHandler(async (req, res) => {
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
   task.status = status;
   await task.save();
+  await emitTaskEvent(task._id, 'task:updated', req.user.id);
   res.send({ success: true, data: task });
 });
 
 export const deleteTask = asyncHandler(async (req, res) => {
   const task = await Task.findById(req.params.taskId);
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
+  
+  // Keep ID before deletion to emit
+  const deletedId = task._id;
   await Task.deleteOne({ _id: task._id });
+  
+  try {
+    const io = getIO();
+    io.emit('task:deleted', { _id: deletedId }); // emit to everyone quickly, or restrict by rooms if preferred
+  } catch (err) {}
+  
   res.send({ success: true, message: 'Task deleted' });
 });
 
@@ -522,6 +570,8 @@ export const extendTask = asyncHandler(async (req, res) => {
             });
         }
     }
+  
+    await emitTaskEvent(task._id, 'task:updated', req.user.id);
   
     res.send({ success: true, data: task });
 });

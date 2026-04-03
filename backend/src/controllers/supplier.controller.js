@@ -246,15 +246,46 @@ const supplierSchema = Joi.object({
 
 // Auto-generate supplier code
 const generateSupplierCode = async () => {
-    const count = await Supplier.countDocuments();
-    return `SUP-${String(count + 1).padStart(4, '0')}`;
+    const lastSupplier = await Supplier.findOne(
+        { supplierCode: { $regex: /^SUP-\d+$/i } },
+        { supplierCode: 1 }
+    ).sort({ createdAt: -1 });
+
+    let nextNum = 1;
+    if (lastSupplier && lastSupplier.supplierCode) {
+        const numPart = parseInt(lastSupplier.supplierCode.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(numPart)) nextNum = numPart + 1;
+    }
+
+    let isUnique = false;
+    let newCode;
+    while (!isUnique) {
+        newCode = `SUP-${String(nextNum).padStart(4, '0')}`;
+        const exists = await Supplier.exists({ supplierCode: new RegExp(`^${newCode}$`, 'i') });
+        if (!exists) isUnique = true;
+        else nextNum++;
+    }
+    return newCode;
 };
+
+export const generateSupplierCodeRoute = asyncHandler(async (req, res) => {
+    const code = await generateSupplierCode();
+    res.json(new ApiResponse(200, { supplierCode: code }, 'Code generated successfully'));
+});
 
 export const createSupplier = asyncHandler(async (req, res) => {
     const { error, value } = supplierSchema.validate(req.body, { allowUnknown: true });
     if (error) throw new ApiError(400, error.details[0].message);
 
-    const supplierCode = await generateSupplierCode();
+    let supplierCode = value.supplierCode;
+    if (!supplierCode || supplierCode.trim() === '') {
+        supplierCode = await generateSupplierCode();
+    } else {
+        supplierCode = supplierCode.trim().toUpperCase();
+        const existing = await Supplier.findOne({ supplierCode });
+        if (existing) throw new ApiError(400, `Supplier code ${supplierCode} already exists`);
+    }
+
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
 
     // Create Ledger under Sundry Creditors

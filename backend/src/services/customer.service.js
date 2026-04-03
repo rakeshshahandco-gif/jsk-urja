@@ -341,4 +341,5 @@ export default {
     bulkCreateCustomers,
     getCustomerTypes,
     getCustomerStickers,
+    genCustomerCode,
 };

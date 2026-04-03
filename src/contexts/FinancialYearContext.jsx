@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { AuthContext } from './AuthContext';
 import { getFinancialYears } from '../services/financialYearApi';
 import toast from 'react-hot-toast';
 
@@ -75,9 +76,13 @@ export const FinancialYearProvider = ({ children }) => {
         localStorage.setItem('selectedFY', fyName);
     };
 
+    const { token } = useContext(AuthContext) || {};
+
     useEffect(() => {
-        refreshFYs();
-    }, []);
+        if (token) {
+            refreshFYs();
+        }
+    }, [token]);
 
     // Derive the full object for the selected FY
     const selectedFYObject = useMemo(

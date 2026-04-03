@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate } from '@/services/purchaseApi';
+import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate, generateSupplierCode } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
@@ -15,6 +15,7 @@ export default function SupplierListPage() {
     const [modal, setModal] = useState(null);
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [generatingCode, setGeneratingCode] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -54,6 +55,19 @@ export default function SupplierListPage() {
             setModal(null); load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
         finally { setSaving(false); }
+    };
+
+    const handleGenerateCode = async () => {
+        setGeneratingCode(true);
+        try {
+            const res = await generateSupplierCode();
+            set('supplierCode', res.supplierCode || res?.data?.supplierCode || res || '');
+            toast.success('Code generated successfully');
+        } catch { 
+            toast.error('Could not generate code'); 
+        } finally { 
+            setGeneratingCode(false); 
+        }
     };
 
     const handleDelete = async (id, name) => {
@@ -162,6 +176,31 @@ export default function SupplierListPage() {
                     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
                         <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#1e293b' }}>{modal.mode === 'create' ? 'Add Supplier' : 'Edit Supplier'}</h2>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Supplier Code</label>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    <input 
+                                        value={modal.data.supplierCode || ''} 
+                                        onChange={e => set('supplierCode', e.target.value.toUpperCase())} 
+                                        style={{ ...inp, fontFamily: 'monospace', fontWeight: 'bold' }} 
+                                        placeholder="Leave empty to auto-generate" 
+                                    />
+                                    {modal.mode === 'create' && (
+                                        <button 
+                                            type="button" 
+                                            onClick={handleGenerateCode} 
+                                            disabled={generatingCode} 
+                                            title="Auto-generate code"
+                                            style={{ height: '36px', width: '40px', border: '1px solid #d1d5db', borderRadius: 7, background: '#f9fafb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0 }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
+                                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                                <path d="M3 3v5h5"></path>
+                                            </svg>
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                             {[
                                 ['supplierName', 'Supplier Name *', 'text'],
                                 ['contactPerson', 'Contact Person', 'text'],

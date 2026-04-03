@@ -9,6 +9,7 @@ export const updateSupplier = async (id, data) => { const r = await api.put(`${S
 export const deleteSupplier = async (id) => { const r = await api.delete(`${SUP}/${id}`); return r.data; };
 export const importSuppliersExcel = async (formData) => { const r = await api.post(`${SUP}/import/excel`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }); return r.data; };
 export const downloadSupplierTemplate = async () => { const r = await api.get(`${SUP}/export/template`, { responseType: 'blob' }); return r.data; };
+export const generateSupplierCode = async () => { const r = await api.get(`${SUP}/generate-code`); return r.data.data; };
 
 // ── Purchase Orders ────────────────────────────────────────────────────────────
 const PO = '/purchase-orders';

@@ -12,12 +12,50 @@ export const ChatWindow = () => {
     const { activeThread, messages, loading, typingUsers, onlineUsers } = useMessenger();
     const { user: currentUser } = useAuth();
     const scrollRef = useRef(null);
+    const prevThreadIdRef = useRef(activeThread?._id);
+    const [showNewMsgBubble, setShowNewMsgBubble] = useState(false);
 
+    // Smart auto-scroll logic
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        const el = scrollRef.current;
+        if (!el) return;
+
+        const isThreadChanged = prevThreadIdRef.current !== activeThread?._id;
+        prevThreadIdRef.current = activeThread?._id;
+
+        // If thread changed, always scroll to bottom
+        if (isThreadChanged) {
+            el.scrollTop = el.scrollHeight;
+            setShowNewMsgBubble(false);
+            return;
+        }
+
+        // For new messages, see if we are already at bottom (within 100px)
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        
+        if (isAtBottom) {
+            el.scrollTop = el.scrollHeight;
+            setShowNewMsgBubble(false);
+        } else {
+            // User is scrolling up, show indicator
+            setShowNewMsgBubble(true);
         }
     }, [messages, activeThread]);
+
+    const handleScroll = (e) => {
+        const el = e.target;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+        if (isAtBottom && showNewMsgBubble) {
+            setShowNewMsgBubble(false);
+        }
+    };
+
+    const scrollToBottom = () => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            setShowNewMsgBubble(false);
+        }
+    };
 
     const isDirect = activeThread?.type === 'direct';
     const otherUser = isDirect 
@@ -96,7 +134,7 @@ export const ChatWindow = () => {
             </header>
 
             {/* Message Area */}
-            <div ref={scrollRef} className={styles.messageArea}>
+            <div ref={scrollRef} className={styles.messageArea} onScroll={handleScroll}>
                 {loading && (
                     <div style={{ textAlign: 'center', margin: '10px 0' }}>
                         <span style={{ fontSize: '11px', color: '#667781', background: '#fff9c2', padding: '4px 10px', borderRadius: '4px' }}>
@@ -122,6 +160,18 @@ export const ChatWindow = () => {
                     )
                 ))}
             </div>
+
+            {/* Float to Bottom Indicator */}
+            {showNewMsgBubble && (
+                <div style={{ position: 'absolute', bottom: '80px', right: '30px', zIndex: 10 }}>
+                    <button 
+                        onClick={scrollToBottom}
+                        style={{ background: '#25d366', color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 16px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}
+                    >
+                        New messages ↓
+                    </button>
+                </div>
+            )}
 
             {/* Bottom Composer Area */}
             <MessageComposer />

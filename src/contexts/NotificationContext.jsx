@@ -210,6 +210,9 @@ export const NotificationProvider = ({ children }) => {
                     if (!preferences.reminderAlerts && notification.type === 'REMINDER') return;
                     if (!preferences.taskAlerts && notification.type === 'APPROVAL') return;
 
+                    // Ensure this is a valid notification object, not a raw chat payload
+                    if (typeof notification.message === 'object') return;
+
                     // Update notifications list
                     setNotifications(prev => {
                         if (prev.some(n => n._id === notification._id)) return prev;
@@ -256,17 +259,11 @@ export const NotificationProvider = ({ children }) => {
                 socket.on('notification:new', handleNewNotification);
                 socket.on('notification:sync', handleNotificationSync);
                 socket.on('connect', handleConnect);
-                
-                // Specific listeners as requested (only messaging and reminders are legacy here)
-                socket.on('chat:message', handleNewNotification);
-                socket.on('reminder:new', handleNewNotification);
 
                 return () => {
                     socket.off('notification:new', handleNewNotification);
                     socket.off('notification:sync', handleNotificationSync);
                     socket.off('connect', handleConnect);
-                    socket.off('chat:message', handleNewNotification);
-                    socket.off('reminder:new', handleNewNotification);
                 };
             }
         }

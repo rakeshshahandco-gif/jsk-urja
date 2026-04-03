@@ -11,6 +11,7 @@ router.use(protect);
 
 router.get('/export/template', supplierController.exportSupplierTemplate);
 router.post('/import/excel', upload.single('file'), supplierController.importSuppliersExcel);
+router.get('/generate-code', supplierController.generateSupplierCodeRoute);
 
 router.route('/').get(supplierController.getSuppliers).post(supplierController.createSupplier);
 router.route('/:id')

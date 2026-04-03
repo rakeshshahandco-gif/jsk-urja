@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Save, User, Briefcase, IndianRupee, Landmark, Camera } from 'lucide-react';
-import { getEmployee, createEmployee, updateEmployee, getShifts } from '@/services/hrApi';
+import { getEmployee, createEmployee, updateEmployee, getShifts, generateEmployeeCode } from '@/services/hrApi';
 import { getDepartments } from '@/services/userApi';
 import { getUsers } from '@/services/userApi';
 import { useToast } from '@/components/ui/Toast';
@@ -48,6 +48,7 @@ const EmployeeForm = () => {
     const [form, setForm] = useState({ ...DEFAULT });
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
+    const [generatingCode, setGeneratingCode] = useState(false);
     
     // Masters for dropdowns
     const [departments, setDepartments] = useState([]);
@@ -83,7 +84,7 @@ const EmployeeForm = () => {
 
     const handleSave = async () => {
         // Basic Validation
-        if (!form.employeeCode) { addToast('Employee Code is required', 'error'); setActiveTab('employment'); return; }
+        if (!form.employeeCode && isEdit) { addToast('Employee Code is required', 'error'); setActiveTab('employment'); return; }
         if (!form.employeeName) { addToast('Employee Name is required', 'error'); setActiveTab('personal'); return; }
         if (!form.department) { addToast('Department is required', 'error'); setActiveTab('employment'); return; }
         if (!form.shiftType) { addToast('Shift is required', 'error'); setActiveTab('employment'); return; }
@@ -99,6 +100,19 @@ const EmployeeForm = () => {
         } finally {
             setSaving(true); // Don't reset saving on success to prevent double clicks during nav
             if (!isEdit) setSaving(false); // Reset if it's new so they can try again on error
+        }
+    };
+
+    const handleGenerateCode = async () => {
+        setGeneratingCode(true);
+        try {
+            const res = await generateEmployeeCode();
+            set('employeeCode', res.data?.employeeCode || res.employeeCode || '');
+            addToast('Code generated successfully', 'success');
+        } catch { 
+            addToast('Could not generate code', 'error'); 
+        } finally { 
+            setGeneratingCode(false); 
         }
     };
 
@@ -210,7 +224,29 @@ const EmployeeForm = () => {
                     <div>
                         <div style={f.sectionTitle}>Employment Details</div>
                         <div style={f.row(2)}>
-                            <Field label="Employee Code" required><input style={{ ...f.input, fontFamily: 'monospace', fontWeight: '700' }} value={form.employeeCode} onChange={e => set('employeeCode', e.target.value.toUpperCase())} placeholder="E001" /></Field>
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={f.label}>Employee Code</label>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    <input 
+                                        style={{ ...f.input, flex: 1, fontFamily: 'monospace', fontWeight: '700' }} 
+                                        value={form.employeeCode} 
+                                        onChange={e => set('employeeCode', e.target.value.toUpperCase())} 
+                                        placeholder="Leave empty to auto-generate" 
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleGenerateCode} 
+                                        disabled={generatingCode} 
+                                        title="Auto-generate code"
+                                        style={{ height: 36, width: 36, border: '1px solid #cbd5e1', borderRadius: 6, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
+                                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                            <path d="M3 3v5h5"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
                             <Field label="Department" required>
                                 <select style={f.sel} value={form.department} onChange={e => set('department', e.target.value)}>
                                     <option value="">-- Select Department --</option>

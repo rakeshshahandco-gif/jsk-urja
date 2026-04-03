@@ -23,6 +23,8 @@ router.route('/employees')
     .get(checkPermission('hr.employee_master.view'), hrController.getEmployees)
     .post(checkPermission('hr.employee_master.add'), hrController.createEmployee);
 
+router.get('/employees/generate-code', checkPermission('hr.employee_master.add'), hrController.generateEmployeeCode);
+
 router.route('/employees/:id')
     .get(checkPermission('hr.employee_master.view'), hrController.getEmployee)
     .patch(checkPermission('hr.employee_master.edit'), hrController.updateEmployee)

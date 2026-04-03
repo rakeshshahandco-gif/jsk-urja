@@ -35,12 +35,49 @@ export const deleteShift = asyncHandler(async (req, res) => {
 
 // --- EMPLOYEE CONTROLLERS ---
 
-export const createEmployee = asyncHandler(async (req, res) => {
-    // Check for unique employee code
-    const existing = await Employee.findOne({ employeeCode: req.body.employeeCode });
-    if (existing) throw new ApiError(httpStatus.BAD_REQUEST, 'Employee code already exists');
+// Generate Employee Code
+export const generateEmployeeCode = asyncHandler(async (req, res) => {
+    const lastEmployee = await Employee.findOne(
+        { employeeCode: { $regex: /^EMP\d+$/i } },
+        { employeeCode: 1 }
+    ).sort({ createdAt: -1 });
 
-    const employee = await Employee.create({ ...req.body, createdBy: req.user._id });
+    let nextNum = 1;
+    if (lastEmployee && lastEmployee.employeeCode) {
+        const numPart = parseInt(lastEmployee.employeeCode.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(numPart)) nextNum = numPart + 1;
+    }
+
+    let isUnique = false;
+    let newCode;
+    while (!isUnique) {
+        newCode = `EMP${String(nextNum).padStart(3, '0')}`;
+        const exists = await Employee.exists({ employeeCode: new RegExp(`^${newCode}$`, 'i') });
+        if (!exists) isUnique = true;
+        else nextNum++;
+    }
+
+    if (res) {
+        res.send(new ApiResponse(httpStatus.OK, { employeeCode: newCode }, 'Code generated'));
+    }
+    return newCode;
+});
+
+export const createEmployee = asyncHandler(async (req, res) => {
+    const body = { ...req.body };
+    
+    // Auto-generate employee code if missing
+    if (!body.employeeCode || String(body.employeeCode).trim() === '') {
+        body.employeeCode = await generateEmployeeCode();
+    } else {
+        body.employeeCode = String(body.employeeCode).trim().toUpperCase();
+    }
+
+    // Check for unique employee code
+    const existing = await Employee.findOne({ employeeCode: body.employeeCode });
+    if (existing) throw new ApiError(httpStatus.BAD_REQUEST, `Employee code ${body.employeeCode} already exists`);
+
+    const employee = await Employee.create({ ...body, createdBy: req.user._id });
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, employee, 'Employee created successfully'));
 });
 
@@ -142,23 +179,44 @@ export const importAttendance = asyncHandler(async (req, res) => {
     const errors = [];
     const rowsToProcess = [];
 
-    // Assuming first row is header. Columns: Employee Code, Date, Status, Check In, Check Out, Remarks
+    // Dynamically find columns
+    const headerRow = worksheet.getRow(1);
+    const colMap = {};
+    headerRow.eachCell((cell, colNumber) => {
+        const val = cell.value?.toString().trim().toLowerCase().replace(/\s+/g, '') || '';
+        if (val.includes('employeecode') || val.includes('employeeid') || val === 'code') colMap.employeeCode = colNumber;
+        else if (val.includes('date')) colMap.date = colNumber;
+        else if (val.includes('status')) colMap.status = colNumber;
+        else if (val.includes('checkin') || val.includes('clockin') || val.includes('inTime')) colMap.checkIn = colNumber;
+        else if (val.includes('checkout') || val.includes('clockout') || val.includes('outTime')) colMap.checkOut = colNumber;
+        else if (val.includes('remark')) colMap.remarks = colNumber;
+    });
+
+    // Default fallbacks if no clear headers found
+    if (!colMap.employeeCode) colMap.employeeCode = 1;
+    if (!colMap.date) colMap.date = 2;
+
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
         rowsToProcess.push({
             rowNumber,
-            employeeCode: row.getCell(1).value?.toString()?.trim(),
-            dateValue: row.getCell(2).value,
-            status: row.getCell(3).value?.toString()?.trim() || 'Present',
-            checkIn: row.getCell(4).value?.toString()?.trim() || '',
-            checkOut: row.getCell(5).value?.toString()?.trim() || '',
-            remarks: row.getCell(6).value?.toString()?.trim() || ''
+            employeeCode: colMap.employeeCode ? row.getCell(colMap.employeeCode).value?.toString()?.trim() : undefined,
+            dateValue: colMap.date ? row.getCell(colMap.date).value : undefined,
+            status: colMap.status ? row.getCell(colMap.status).value?.toString()?.trim() : 'Present',
+            checkIn: colMap.checkIn ? row.getCell(colMap.checkIn).value?.toString()?.trim() : '',
+            checkOut: colMap.checkOut ? row.getCell(colMap.checkOut).value?.toString()?.trim() : '',
+            remarks: colMap.remarks ? row.getCell(colMap.remarks).value?.toString()?.trim() : ''
         });
     });
 
     for (const data of rowsToProcess) {
         try {
-            if (!data.employeeCode || !data.dateValue) continue;
+            if (!data.employeeCode || !data.dateValue) {
+                if (!data.employeeCode && !data.dateValue) continue; // skip entirely empty rows
+                if (!data.employeeCode) errors.push(`Row ${data.rowNumber}: Employee code missing`);
+                if (!data.dateValue) errors.push(`Row ${data.rowNumber}: Date missing`);
+                continue;
+            }
 
             let parsedDate;
             if (data.dateValue instanceof Date) {
@@ -168,7 +226,9 @@ export const importAttendance = asyncHandler(async (req, res) => {
             }
 
             // Find employee
-            const employee = await Employee.findOne({ employeeCode: data.employeeCode });
+            const employee = await Employee.findOne({ 
+                employeeCode: { $regex: new RegExp(`^${data.employeeCode}$`, 'i') } 
+            });
             if (!employee) {
                 errors.push(`Row ${data.rowNumber}: Employee code ${data.employeeCode} not found`);
                 continue;
