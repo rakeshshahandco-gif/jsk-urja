@@ -10,8 +10,22 @@ export const errorHandler = (err, req, res, next) => {
         message = 'Database is not connected. Please contact the administrator to set up the database connection.';
     }
 
+    // Handle Mongoose Validation Error (Model-level)
+    if (err.name === 'ValidationError') {
+        statusCode = 400;
+        message = Object.values(err.errors).map(val => val.message).join(', ');
+    }
+
+    // Handle Mongo Duplicate Key Error (Code 11000)
+    if (err.code === 11000) {
+        statusCode = 409;
+        const field = Object.keys(err.keyValue)[0];
+        message = `Duplicate entry: A record with this "${field}" already exists.`;
+    }
+
     if (!statusCode) {
         statusCode = 500;
+        message = err.message || 'Internal Server Error';
     }
 
     res.locals.errorMessage = err.message;

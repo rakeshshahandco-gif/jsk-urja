@@ -100,13 +100,9 @@ export const createNotification = async ({ recipient, actor, task, type, title, 
         io.to(roomOld).emit('notification:new', payload);
 
         // 2. Specific events as requested for instant UI logic/filtering
-        if (type === 'ASSIGNED') {
-            io.to(roomNew).emit('task:assigned', payload);
-            io.to(roomOld).emit('task:assigned', payload);
-        } else if (type === 'STATUS_CHANGE' || type === 'REASSIGNED' || type === 'DUE_DATE_CHANGE') {
-            io.to(roomNew).emit('task:updated', payload);
-            io.to(roomOld).emit('task:updated', payload);
-        } else if (type === 'MESSENGER') {
+        // Note: 'task:assigned' and 'task:updated' are now emitted directly by task.controller.js
+        // so we don't emit Notification objects under Task event names!
+        if (type === 'MESSENGER') {
             io.to(roomNew).emit('chat:message', payload);
             io.to(roomOld).emit('chat:message', payload);
         } else if (type === 'REMINDER') {

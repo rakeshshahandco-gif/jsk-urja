@@ -257,9 +257,7 @@ export const NotificationProvider = ({ children }) => {
                 socket.on('notification:sync', handleNotificationSync);
                 socket.on('connect', handleConnect);
                 
-                // Specific listeners as requested
-                socket.on('task:assigned', handleNewNotification);
-                socket.on('task:updated', handleNewNotification);
+                // Specific listeners as requested (only messaging and reminders are legacy here)
                 socket.on('chat:message', handleNewNotification);
                 socket.on('reminder:new', handleNewNotification);
 
@@ -267,8 +265,6 @@ export const NotificationProvider = ({ children }) => {
                     socket.off('notification:new', handleNewNotification);
                     socket.off('notification:sync', handleNotificationSync);
                     socket.off('connect', handleConnect);
-                    socket.off('task:assigned', handleNewNotification);
-                    socket.off('task:updated', handleNewNotification);
                     socket.off('chat:message', handleNewNotification);
                     socket.off('reminder:new', handleNewNotification);
                 };

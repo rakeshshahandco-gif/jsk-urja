@@ -46,3 +46,24 @@ export const deleteEmployee = async (id) => {
     const response = await api.delete(`/hr/employees/${id}`);
     return response.data;
 };
+
+// --- HOLIDAYS ---
+export const getHolidays = async (params) => {
+    const response = await api.get('/hr/holidays', { params });
+    return response.data;
+};
+
+export const createHoliday = async (data) => {
+    const response = await api.post('/hr/holidays', data);
+    return response.data;
+};
+
+export const updateHoliday = async (id, data) => {
+    const response = await api.patch(`/hr/holidays/${id}`, data);
+    return response.data;
+};
+
+export const deleteHoliday = async (id) => {
+    const response = await api.delete(`/hr/holidays/${id}`);
+    return response.data;
+};

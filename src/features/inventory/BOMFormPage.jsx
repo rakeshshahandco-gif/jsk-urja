@@ -147,7 +147,11 @@ const BOMFormPage = () => {
                 const masterItem = items.find(i => i._id === comp.itemId);
                 if (!masterItem) return comp;
 
-                const pts = parseInt(masterItem.points) || comp.points || 0;
+                const qty = parseFloat(comp.quantity) || 0;
+
+                // Calculate Total Points (Base Points * Qty). Ensure Pts column acts as Total Points.
+                const masterPts = parseInt(masterItem.points) || 0;
+                const pts = masterPts > 0 ? masterPts * qty : (parseFloat(comp.points) || 0);
 
                 // If rate in BOM is currently 0 or missing, try to auto-fetch the actual rate from item master
                 let rate = parseFloat(comp.rate) || 0;
@@ -155,15 +159,13 @@ const BOMFormPage = () => {
                     rate = masterItem.purchaseRate || masterItem.valuationRate || 0;
                 }
 
-                const qty = parseFloat(comp.quantity) || 0;
-
                 return {
                     ...comp,
                     points: pts,
                     rate: rate,
                     totalCost: qty * rate,
                     componentType: comp.componentType || (masterItem.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (masterItem.itemType?.toUpperCase().includes('TH') ? 'TH' : '')),
-                    pointsLabourCost: qty * pts * labourRate
+                    pointsLabourCost: pts * labourRate
                 };
             });
             return { ...prev, components: updated };
@@ -184,9 +186,20 @@ const BOMFormPage = () => {
                 comp.uom = item.uom;
                 comp.componentType = item.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (item.itemType?.toUpperCase().includes('TH') ? 'TH' : '');
                 comp.rate = item.purchaseRate || item.valuationRate || 0;
-                comp.points = parseInt(item.points) || 0;
+                
+                const qty = parseFloat(comp.quantity) || 0;
+                comp.points = (parseInt(item.points) || 0) * (qty === 0 ? 1 : qty);
                 comp.remarks = item.remarks || '';
             }
+        } else if (field === 'quantity') {
+            const oldQty = parseFloat(comp.quantity) || 1;
+            comp.quantity = value;
+            const newQty = parseFloat(value) || 0;
+            
+            // Re-calculate Total Points automatically based on new Qty
+            const item = items.find(i => i._id === comp.itemId);
+            const basePts = item && parseInt(item.points) ? parseInt(item.points) : (oldQty > 0 ? (parseFloat(comp.points) || 0) / oldQty : 0);
+            comp.points = basePts * newQty;
         } else {
             comp[field] = value;
         }
@@ -194,7 +207,8 @@ const BOMFormPage = () => {
         const qty = parseFloat(comp.quantity) || 0;
         comp.totalCost = qty * (parseFloat(comp.rate) || 0);
         const pts = parseFloat(comp.points) || 0;
-        comp.pointsLabourCost = qty * pts * (parseFloat(currentLabourRate) || 0);
+        // Pts is now treated as Total Points, do not multiply by Qty again
+        comp.pointsLabourCost = pts * (parseFloat(currentLabourRate) || 0);
 
         newComponents[index] = comp;
         setForm(prev => ({ ...prev, components: newComponents }));
@@ -218,8 +232,7 @@ const BOMFormPage = () => {
         const rate = parseFloat(newRate) || 0;
         const updatedComponents = form.components.map(comp => {
             const pts = parseFloat(comp.points) || 0;
-            const qty = parseFloat(comp.quantity) || 0;
-            return { ...comp, pointsLabourCost: qty * pts * rate };
+            return { ...comp, pointsLabourCost: pts * rate }; // Pts is now Total Points
         });
         setForm(prev => ({ ...prev, labourCostPerPoint: newRate, components: updatedComponents }));
     };
@@ -601,7 +614,7 @@ const BOMFormPage = () => {
                             <input type="number" min="0" step="0.01"
                                 style={{ ...s.input, border: '2px solid #fcd34d', background: '#fffbeb', color: '#92400e', fontWeight: 700 }}
                                 value={form.labourCostPerPoint} onChange={e => handleLabourRateChange(e.target.value)} placeholder="0.25" />
-                            <p style={s.hint}>e.g. ₹0.25 × 3 pts × qty = labour</p>
+                            <p style={s.hint}>e.g. ₹0.25 × Total Points = labour</p>
                         </Field>
 
                         {/* Remarks */}

@@ -7,6 +7,7 @@ import s from "./OutstandingReportPage.module.scss";
 
 const OutstandingReportPage = () => {
     const [reportType, setReportType] = useState('Receivable'); // Receivable (Customers) or Payable (Suppliers)
+    const [showAll, setShowAll] = useState(false);
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -14,7 +15,7 @@ const OutstandingReportPage = () => {
     const fetchReport = async () => {
         setLoading(true);
         try {
-            const results = await getOutstandingSummary(reportType);
+            const results = await getOutstandingSummary(reportType, showAll);
             setData(results);
         } catch (error) {
             toast.error('Failed to fetch outstanding report');
@@ -25,7 +26,7 @@ const OutstandingReportPage = () => {
 
     useEffect(() => {
         fetchReport();
-    }, [reportType]);
+    }, [reportType, showAll]);
 
     const filteredData = data.filter(item =>
         item.ledgerName.toLowerCase().includes(search.toLowerCase())
@@ -51,6 +52,12 @@ const OutstandingReportPage = () => {
                         >
                             Payables
                         </button>
+                        <button
+                            onClick={() => setReportType('Expense')}
+                            className={`${s.payable} ${reportType === 'Expense' ? s.active : ''}`}
+                        >
+                            Expenses
+                        </button>
                     </div>
                 </div>
                 <div className="flex gap-4">
@@ -65,7 +72,7 @@ const OutstandingReportPage = () => {
                     <div className={`${s.iconContainer} ${reportType === 'Receivable' ? s.receivable : s.payable}`}>
                         <TrendingUp size={32} />
                     </div>
-                    <span className={s.label}>Total {reportType} Amount</span>
+                    <span className={s.label}>Total {reportType === 'Receivable' ? 'Receivable' : reportType === 'Payable' ? 'Payable' : 'Outstanding Expense'} Amount</span>
                     <span className={`${s.value} ${reportType === 'Receivable' ? s.receivable : s.payable}`}>
                         ₹{totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
@@ -84,13 +91,22 @@ const OutstandingReportPage = () => {
                             />
                         </div>
                         <Select
+                            value={showAll ? 'all' : 'outstanding'}
+                            onChange={(val) => setShowAll(val === 'all')}
+                            options={[
+                                { label: 'Outstanding Only', value: 'outstanding' },
+                                { label: 'All Accounts', value: 'all' }
+                            ]}
+                            className="w-48 font-bold text-[10px] tracking-wider uppercase"
+                        />
+                        <Select
                             options={[
                                 { label: 'All Ageing Slabs', value: 'all' },
                                 { label: 'Due > 30 Days', value: '30' },
                                 { label: 'Due > 60 Days', value: '60' },
                                 { label: 'Due > 90 Days', value: '90' }
                             ]}
-                            className="w-48 font-bold text-xs"
+                            className="w-48 font-bold text-[10px] tracking-wider uppercase"
                         />
                     </div>
                     <div className="overflow-auto max-h-[500px]">

@@ -12,6 +12,7 @@ import { calculateNextDueDate } from '../utils/recurrence.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createNotification } from './notification.controller.js';
 import { User } from '../models/user.model.js';
+import { getIO } from '../config/socket.js';
 
 // ---------------------------
 // HELPERS
@@ -207,6 +208,25 @@ export const createTask = asyncHandler(async (req, res) => {
     });
   }
 
+  // Socket: Emit Full Task Object natively
+  try {
+    const fullTask = await Task.findById(task._id)
+      .populate('assigneeIds', 'name email username')
+      .populate('createdBy', 'name email username')
+      .populate('taskCategoryId', 'name')
+      .populate('assignedGroupId', 'name')
+      .populate('groupId', 'name');
+
+    const io = getIO();
+    for (const userId of notifyUsers) {
+      if (userId === req.user.id.toString()) continue;
+      io.to(`user:${userId}`).emit('task:assigned', fullTask.toObject());
+      io.to(`user_${userId}`).emit('task:assigned', fullTask.toObject());
+    }
+  } catch (err) {
+    console.error('Socket emit task:assigned failed:', err);
+  }
+
   res.status(httpStatus.CREATED).send({ success: true, data: task });
 });
 
@@ -397,6 +417,31 @@ export const updateTask = asyncHandler(async (req, res) => {
         message: `Status of "${task.title}" changed to ${task.status}`
       });
     }
+  }
+
+  // Socket: Emit Full Task Object for Update
+  try {
+    const fullTask = await Task.findById(task._id)
+      .populate('assigneeIds', 'name email username')
+      .populate('createdBy', 'name email username')
+      .populate('taskCategoryId', 'name')
+      .populate('assignedGroupId', 'name')
+      .populate('groupId', 'name');
+
+    const updateNotifyUsers = new Set([...newAssignees, task.createdBy.toString()]);
+    if (task.assignToAll) {
+        const allUsers = await User.find({ isActive: true }).select('_id');
+        allUsers.forEach(u => updateNotifyUsers.add(u._id.toString()));
+    }
+
+    const io = getIO();
+    for (const userId of updateNotifyUsers) {
+      if (userId === req.user.id.toString()) continue;
+      io.to(`user:${userId}`).emit('task:updated', fullTask.toObject());
+      io.to(`user_${userId}`).emit('task:updated', fullTask.toObject());
+    }
+  } catch (err) {
+    console.error('Socket emit task:updated failed:', err);
   }
 
   res.send({ success: true, data: task });

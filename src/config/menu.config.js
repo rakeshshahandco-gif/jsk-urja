@@ -214,6 +214,7 @@ export const menuConfig = [
             { id: 'leave-management', title: 'Leave Management', path: '/hr/leaves', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.leave_management.view' },
             { id: 'payroll', title: 'Payroll / Salary Working', path: '/hr/payroll', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.payroll.view' },
             { id: 'hr-reports', title: 'HR Reports', path: '/hr/reports', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
+            { id: 'holiday-list', title: '📅 Holiday List', path: '/hr/holidays', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
         ],
     },
     {
@@ -238,6 +239,19 @@ export const menuConfig = [
             { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.cash_book.view' },
             { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.bank_book.view' },
             { id: 'outstanding', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'accounts.outstanding.view' },
+        ]
+    },
+    {
+        id: 'mis-reports',
+        title: 'MIS Reports',
+        icon: 'AssessmentIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER],
+        permission: 'accounts',
+        children: [
+            { id: 'mis-dashboard', title: '📊 MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.trial_balance.view' },
+            { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.trial_balance.view' },
+            { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.profit_loss.view' },
+            { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.balance_sheet.view' },
         ]
     },
     {

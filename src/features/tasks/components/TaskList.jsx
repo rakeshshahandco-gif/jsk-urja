@@ -59,14 +59,28 @@ export const TaskList = () => {
     useEffect(() => {
         if (!socket) return;
         
-        const handleForceRefresh = () => fetchTasks();
+        const handleNewTask = (taskData) => {
+            // Direct native injection without REST API polling
+            setTasks(prev => {
+                if (prev.some(t => t._id === taskData._id)) return prev;
+                return [taskData, ...prev];
+            });
+        };
+
+        const handleUpdateTask = (taskData) => {
+            setTasks(prev => prev.map(t => t._id === taskData._id ? taskData : t));
+        };
+
+        const handleConnect = () => fetchTasks(); // Reconnect auto-recovery
         
-        socket.on('task:assigned', handleForceRefresh);
-        socket.on('task:updated', handleForceRefresh);
+        socket.on('task:assigned', handleNewTask);
+        socket.on('task:updated', handleUpdateTask);
+        socket.on('connect', handleConnect);
         
         return () => {
-            socket.off('task:assigned', handleForceRefresh);
-            socket.off('task:updated', handleForceRefresh);
+            socket.off('task:assigned', handleNewTask);
+            socket.off('task:updated', handleUpdateTask);
+            socket.off('connect', handleConnect);
         };
     }, [socket]);
 

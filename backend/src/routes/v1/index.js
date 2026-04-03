@@ -25,6 +25,7 @@ import paymentEntryRoute from './paymentEntry.routes.js';
 import salesOrderRoute from './salesOrder.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
 import accountReportRoutes from './accountReport.routes.js';
+import accountingReportRoutes from './accountingReport.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
@@ -328,6 +329,10 @@ const defaultRoutes = [
     {
         path: '/accounts/reports',
         route: accountReportRoutes,
+    },
+    {
+        path: '/accounting/reports',
+        route: accountingReportRoutes,
     },
     {
         path: '/permissions',

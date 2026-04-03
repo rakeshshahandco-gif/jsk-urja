@@ -147,21 +147,26 @@ export const getCashBankBalances = asyncHandler(async (req, res) => {
 });
 
 export const getOutstandingSummary = asyncHandler(async (req, res) => {
-    const { type } = req.query; // Receivable or Payable
-    const ledgerType = type === 'Receivable' ? 'Customer' : 'Supplier';
+    const { type, showAll } = req.query; // Receivable, Payable, or Expense
+    const isShowAll = showAll === 'true';
+
+    let ledgerType = 'Customer';
+    if (type === 'Payable') ledgerType = 'Supplier';
+    if (type === 'Expense') ledgerType = 'Expense';
 
     const ledgers = await AccountLedger.find({ type: ledgerType }).lean();
     const summary = [];
 
     for (const ledger of ledgers) {
         let billCount = 0;
+        // Only fetch bill counts for actual trade accounts (Customer/Supplier)
         if (ledgerType === 'Customer') {
             billCount = await SalesInvoice.countDocuments({
                 customerId: ledger.referenceId,
                 paymentStatus: { $ne: 'Paid' },
                 status: 'Confirmed'
             });
-        } else {
+        } else if (ledgerType === 'Supplier') {
             billCount = await PurchaseInvoice.countDocuments({
                 supplierId: ledger.referenceId,
                 paymentStatus: { $ne: 'Paid' },
@@ -169,7 +174,17 @@ export const getOutstandingSummary = asyncHandler(async (req, res) => {
             });
         }
 
-        if (ledger.currentBalance !== 0 || billCount > 0) {
+        // Logic for "Outstanding Only" filtering:
+        // Receivable: Must have Debit balance (> 0)
+        // Payable / Expense: Must have Credit balance (< 0)
+        let isOutstanding = false;
+        if (type === 'Receivable') {
+            isOutstanding = ledger.currentBalance > 0;
+        } else {
+            isOutstanding = ledger.currentBalance < 0;
+        }
+
+        if (isShowAll || isOutstanding) {
             summary.push({
                 ledgerId: ledger._id,
                 ledgerName: ledger.name,

@@ -12,14 +12,42 @@ import { SalesInvoice } from '../models/salesInvoice.model.js';
  * @returns {Promise<string>}
  */
 const genCustomerCode = async (offset = 0) => {
-    // Look for codes that follow the CU000 pattern
-    const last = await Customer.findOne({ customerCode: { $regex: /^CU\d+$/ } }).sort({ customerCode: -1 });
+    // 🛡️  ROBUST ID GENERATOR: 
+    // Uses numeric sorting to find the absolute max, ignoring alphabetical order.
+    const lastArr = await Customer.aggregate([
+        { $match: { customerCode: { $regex: /^CU\d+$/ } } },
+        { 
+            $project: { 
+                numericPart: { 
+                    $toInt: { 
+                        $substrCP: ["$customerCode", 2, { $subtract: [{ $strLenCP: "$customerCode" }, 2] }] 
+                    } 
+                } 
+            } 
+        },
+        { $sort: { numericPart: -1 } },
+        { $limit: 1 }
+    ]);
+
     let nextNum = 1;
-    if (last && last.customerCode) {
-        const numericPart = last.customerCode.replace('CU', '');
-        nextNum = parseInt(numericPart, 10) + 1;
+    if (lastArr.length > 0 && lastArr[0].numericPart) {
+        nextNum = lastArr[0].numericPart + 1;
     }
-    return `CU${String(nextNum + offset).padStart(3, '0')}`;
+
+    let finalCode = `CU${String(nextNum + offset).padStart(3, '0')}`;
+    
+    // Safety Check: If the generated code somehow already exists (e.g. in index but not projection), 
+    // we keep incrementing until we find a truly free slot.
+    let exists = await Customer.findOne({ customerCode: finalCode });
+    let safetyCounter = 0;
+    while (exists && safetyCounter < 100) {
+        nextNum++;
+        finalCode = `CU${String(nextNum + offset).padStart(3, '0')}`;
+        exists = await Customer.findOne({ customerCode: finalCode });
+        safetyCounter++;
+    }
+
+    return finalCode;
 };
 
 /**
@@ -65,7 +93,20 @@ const createCustomer = async (body) => {
         body.customerCode = await genCustomerCode();
     }
 
-    const customer = await Customer.create(body);
+    let customer;
+    try {
+        customer = await Customer.create(body);
+    } catch (createErr) {
+        // 🔄  SELF-HEALING RETRY: 
+        // If there's a duplicate key error (likely a race condition or ghost record), try one more time with a fresh ID.
+        if (createErr.code === 11000 && createErr.keyPattern?.customerCode) {
+            logger.warn('⚠️  CU-ID Collision detected. Regenerating and retrying...');
+            body.customerCode = await genCustomerCode();
+            customer = await Customer.create(body);
+        } else {
+            throw createErr;
+        }
+    }
 
     // Create Ledger in Chart of Accounts under Sundry Debtors
     try {

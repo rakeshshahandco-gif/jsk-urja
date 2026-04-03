@@ -1,0 +1,4 @@
+EmployeeCode,Date,ClockIn,ClockOut,Status
+EMP001,2026-04-01,09:00:00,18:00:00,Present
+EMP002,2026-04-01,09:15:00,18:10:00,Present
+EMP003,2026-04-01,,,Absent

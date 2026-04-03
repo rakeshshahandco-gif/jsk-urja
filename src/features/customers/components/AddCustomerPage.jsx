@@ -27,7 +27,8 @@ export const AddCustomerPage = () => {
             toast.success('Customer created successfully!');
             navigate(-1); // Go back to keep user flow
         } catch (error) {
-            toast.error('Failed to create customer: ' + error.message);
+            const message = error?.response?.data?.message || error.message;
+            toast.error('Failed to create customer: ' + message);
             console.error('Error creating customer:', error);
         } finally {
             setIsSubmitting(false);

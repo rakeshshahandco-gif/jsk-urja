@@ -77,8 +77,8 @@ export const getCashBankBalances = () =>
 export const getOutstandingBills = (ledgerId) =>
     apiClient.get(`/ledgers/${ledgerId}/outstanding`).then(r => r.data.data);
 
-export const getOutstandingSummary = (type) =>
-    apiClient.get('/ledgers/outstanding-summary', { params: { type } }).then(r => r.data.data);
+export const getOutstandingSummary = (type, showAll = false) =>
+    apiClient.get('/ledgers/outstanding-summary', { params: { type, showAll } }).then(r => r.data.data);
 
 // ── Accounting Reports (Tally Style) ────────────────────────────────────────
 
@@ -117,7 +117,10 @@ const accountApi = {
     getSalesRegister,
     getPurchaseRegister,
     getDayBook,
-    getCashBankBook
+    getCashBankBook,
+    getProfitAndLoss: (params) => apiClient.get('/accounting/reports/profit-loss', { params }).then(r => r.data.data),
+    getBalanceSheet: (params) => apiClient.get('/accounting/reports/balance-sheet', { params }).then(r => r.data.data),
+    getTrialBalance: (params) => apiClient.get('/accounting/reports/trial-balance', { params }).then(r => r.data.data),
 };
 
 export default accountApi;

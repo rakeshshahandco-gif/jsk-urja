@@ -91,7 +91,11 @@ const FinancialYearMasterPage = lazy(() => import('./features/accounts/Financial
 const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
 const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
 const OutstandingReportPage = lazy(() => import('./features/accounts/OutstandingReportPage'));
-import AssetCategoryPage from '@/features/fixedAssets/AssetCategoryPage';
+const TrialBalancePage = lazy(() => import('./features/mis/TrialBalancePage'));
+const ProfitAndLossPage = lazy(() => import('./features/mis/ProfitAndLossPage'));
+const BalanceSheetPage = lazy(() => import('./features/mis/BalanceSheetPage'));
+const MISDashboard = lazy(() => import('./features/mis/MISDashboard'));
+const AssetCategoryPage = lazy(() => import('./features/fixedAssets/AssetCategoryPage'));
 import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
 import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
 import AssetDetailPage from '@/features/fixedAssets/AssetDetailPage';
@@ -131,6 +135,7 @@ import ShiftList from '@/features/hr/components/ShiftMaster/ShiftList';
 import EmployeeList from '@/features/hr/components/EmployeeMaster/EmployeeList';
 import EmployeeForm from '@/features/hr/components/EmployeeMaster/EmployeeForm';
 import HRDashboard from '@/features/hr/components/HRDashboard';
+import HolidayListPage from '@/features/hr/components/HolidayListPage';
 import AttendancePage from '@/features/hr/components/AttendancePage';
 import AttendanceImportPage from '@/features/hr/components/AttendanceImportPage';
 import LeaveManagementPage from '@/features/hr/components/LeaveManagementPage';
@@ -331,6 +336,10 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
+                        <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="accounts"><MISDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="accounts"><ProfitAndLossPage /></ProtectedRoute>} />
+                        <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="accounts"><BalanceSheetPage /></ProtectedRoute>} />
+                        <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="accounts"><TrialBalancePage /></ProtectedRoute>} />
                         <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
@@ -349,6 +358,7 @@ const AppLayout = () => {
                         <Route path="/hr/attendance/import" element={<ProtectedRoute requirePermission="hr"><AttendanceImportPage /></ProtectedRoute>} />
                         <Route path="/hr/leaves" element={<ProtectedRoute requirePermission="hr"><LeaveManagementPage /></ProtectedRoute>} />
                         <Route path="/hr/payroll" element={<ProtectedRoute requirePermission="hr"><PayrollPage /></ProtectedRoute>} />
+                        <Route path="/hr/holidays" element={<ProtectedRoute requirePermission="hr"><HolidayListPage /></ProtectedRoute>} />
                         <Route path="/hr/reports" element={<ProtectedRoute requirePermission="hr"><HRReportsPage /></ProtectedRoute>} />
                         <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
                         <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />

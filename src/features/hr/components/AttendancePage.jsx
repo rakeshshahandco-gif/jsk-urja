@@ -1,7 +1,40 @@
-import React from 'react';
-import { Calendar, Filter, Download, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Filter, Download, UserCheck, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import api from '../../../services/api';
+import toast from 'react-hot-toast';
+import moment from 'moment';
 
 const AttendancePage = () => {
+    const [attendanceData, setAttendanceData] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchAttendance();
+    }, []);
+
+    const fetchAttendance = async () => {
+        try {
+            setLoading(true);
+            const res = await api.get('/hr/attendance');
+            setAttendanceData(res.data.data);
+        } catch (error) {
+            console.error('Error fetching attendance:', error);
+            toast.error('Failed to load attendance records');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getStatusStyles = (status) => {
+        switch(status) {
+            case 'Present': return { bg: '#dcfce7', text: '#16a34a', icon: <CheckCircle size={14} /> };
+            case 'Absent': return { bg: '#fee2e2', text: '#ef4444', icon: <XCircle size={14} /> };
+            case 'Late': return { bg: '#ffedd5', text: '#f97316', icon: <Clock size={14} /> };
+            case 'Half Day': return { bg: '#fef3c7', text: '#d97706', icon: <AlertCircle size={14} /> };
+            default: return { bg: '#f1f5f9', text: '#64748b', icon: <UserCheck size={14} /> };
+        }
+    };
+
     return (
         <div style={{ padding: '32px', background: '#f8fafc', minHeight: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' }}>
@@ -19,23 +52,59 @@ const AttendancePage = () => {
                 </div>
             </div>
 
-            <div style={{ background: '#fff', borderRadius: '20px', border: '1px solid #f1f5f9', padding: '80px 40px', textAlign: 'center' }}>
-                <div style={{ width: '80px', height: '80px', background: '#eff6ff', borderRadius: '24px', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                    <Calendar size={40} />
-                </div>
-                <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#1e293b', marginBottom: '12px' }}>Daily Attendance View</h2>
-                <p style={{ fontSize: '16px', color: '#64748b', maxWidth: '500px', margin: '0 auto 32px', lineHeight: '1.6' }}>
-                    The high-performance attendance tracking interface is currently being optimized for biometric synchronization. 
-                    Manage your workforce attendance records seamlessly here soon.
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-                    <div style={{ padding: '16px 24px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
-                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Module Status</div>
-                        <div style={{ fontSize: '16px', color: '#059669', fontWeight: '800', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <UserCheck size={18} /> Setting Up
-                        </div>
+            <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                {loading ? (
+                    <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>Loading records...</div>
+                ) : attendanceData.length === 0 ? (
+                    <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
+                        <Calendar size={48} style={{ margin: '0 auto 16px', color: '#cbd5e1' }} />
+                        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#475569' }}>No Attendance Data Found</h3>
+                        <p style={{ fontSize: '14px', marginTop: '8px' }}>Import an Excel or CSV file in the Attendance Import module.</p>
                     </div>
-                </div>
+                ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Date</th>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Employee</th>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Status</th>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Check In</th>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Check Out</th>
+                                <th style={{ padding: '16px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {attendanceData.map((record, idx) => {
+                                const st = getStatusStyles(record.status);
+                                return (
+                                    <tr key={record._id || idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                        <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1e293b', fontWeight: '600' }}>
+                                            {moment(record.date).format('DD MMM YYYY')}
+                                        </td>
+                                        <td style={{ padding: '16px 24px' }}>
+                                            <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{record.employee?.employeeName || 'Unknown'}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{record.employee?.employeeCode || 'N/A'} • {record.employee?.department?.name || 'No Dept'}</div>
+                                        </td>
+                                        <td style={{ padding: '16px 24px' }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: st.bg, color: st.text, padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                                                {st.icon} {record.status}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '16px 24px', fontSize: '14px', color: '#475569', fontWeight: '500' }}>
+                                            {record.checkIn || '-'}
+                                        </td>
+                                        <td style={{ padding: '16px 24px', fontSize: '14px', color: '#475569', fontWeight: '500' }}>
+                                            {record.checkOut || '-'}
+                                        </td>
+                                        <td style={{ padding: '16px 24px', fontSize: '13px', color: '#64748b', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {record.remarks || '-'}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
             </div>
         </div>
     );

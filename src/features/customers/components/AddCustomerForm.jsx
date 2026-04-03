@@ -20,7 +20,15 @@ const MOCK_DB_COMPANIES = [
 ];
 
 export const AddCustomerForm = ({ closeModal }) => {
-    const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm({ mode: 'onChange' });
+    const { register, handleSubmit, control, setValue, watch, formState: { errors, isSubmitting } } = useForm({ 
+        mode: 'onChange',
+        defaultValues: {
+            primaryContactIndex: '0',
+            status: 'lead',
+            paymentType: 'Credit',
+            creditPeriod: 0
+        }
+    });
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
     const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
@@ -171,7 +179,7 @@ export const AddCustomerForm = ({ closeModal }) => {
     const onSubmit = async (data) => {
         try {
             // Transform contactPersons to set isPrimary based on primaryContactIndex
-            const primaryIndex = parseInt(data.primaryContactIndex);
+            const primaryIndex = parseInt(data.primaryContactIndex) || 0;
             const transformedData = {
                 ...data,
                 contactPersons: data.contactPersons.map((contact, index) => ({
