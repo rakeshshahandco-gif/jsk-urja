@@ -4,7 +4,7 @@ import { authService } from '../services/auth.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useSocket } from './SocketContext';
 import toast from 'react-hot-toast';
-import { Bell, X, ExternalLink } from 'lucide-react';
+import { Bell, X, ExternalLink, MessageSquare } from 'lucide-react';
 import { showBrowserNotification } from '@/utils/browserNotification';
 import { env } from '@/config/env';
 
