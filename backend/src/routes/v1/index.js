@@ -75,7 +75,7 @@ import prdAuditRoute from './prdAudit.routes.js';
 import hrRoute from './hr.routes.js';
 import messengerRoute from './messenger.routes.js';
 import fyRoute from './fy.routes.js';
-
+import payrollRoute from './payroll.routes.js';
 
 const router = express.Router();
 
@@ -386,6 +386,10 @@ const defaultRoutes = [
     {
         path: '/hr',
         route: hrRoute,
+    },
+    {
+        path: '/payroll',
+        route: payrollRoute,
     },
     // ── Internal Messenger ────────────────────────────────────────────────────
     {

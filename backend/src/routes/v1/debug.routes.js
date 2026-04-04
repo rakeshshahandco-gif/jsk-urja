@@ -12,7 +12,7 @@ router.get('/health', (req, res) => {
 });
 
 // Admin-only repair endpoint for conversation dates
-router.post('/repair-dates', protect, authorize('admin'), async (req, res) => {
+router.post('/repair-dates', protect, authorize('superadmin', 'admin'), async (req, res) => {
     try {
         logger.info('🛠️ Starting Conversation Date Repair...');
 

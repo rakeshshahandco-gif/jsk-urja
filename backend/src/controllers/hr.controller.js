@@ -3,6 +3,7 @@ import { Shift } from '../models/shift.model.js';
 import { Employee } from '../models/employee.model.js';
 import { Holiday } from '../models/holiday.model.js';
 import { Attendance } from '../models/attendance.model.js';
+import { Department } from '../models/department.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -35,8 +36,7 @@ export const deleteShift = asyncHandler(async (req, res) => {
 
 // --- EMPLOYEE CONTROLLERS ---
 
-// Generate Employee Code
-export const generateEmployeeCode = asyncHandler(async (req, res) => {
+export const generateNextEmployeeCodeInternal = async () => {
     const lastEmployee = await Employee.findOne(
         { employeeCode: { $regex: /^EMP\d+$/i } },
         { employeeCode: 1 }
@@ -56,11 +56,12 @@ export const generateEmployeeCode = asyncHandler(async (req, res) => {
         if (!exists) isUnique = true;
         else nextNum++;
     }
-
-    if (res) {
-        res.send(new ApiResponse(httpStatus.OK, { employeeCode: newCode }, 'Code generated'));
-    }
     return newCode;
+};
+
+export const generateEmployeeCode = asyncHandler(async (req, res) => {
+    const newCode = await generateNextEmployeeCodeInternal();
+    res.send(new ApiResponse(httpStatus.OK, { employeeCode: newCode }, 'Code generated'));
 });
 
 export const createEmployee = asyncHandler(async (req, res) => {
@@ -68,7 +69,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     
     // Auto-generate employee code if missing
     if (!body.employeeCode || String(body.employeeCode).trim() === '') {
-        body.employeeCode = await generateEmployeeCode();
+        body.employeeCode = await generateNextEmployeeCodeInternal();
     } else {
         body.employeeCode = String(body.employeeCode).trim().toUpperCase();
     }
@@ -235,12 +236,40 @@ export const importAttendance = asyncHandler(async (req, res) => {
                 query.employeeName = { $regex: new RegExp(`^${data.employeeName}$`, 'i') };
             }
 
-            const employee = await Employee.findOne(query);
+            let employee = await Employee.findOne(query);
             
             if (!employee) {
-                const identifier = data.employeeCode || data.employeeName;
-                errors.push(`Row ${data.rowNumber}: Employee "${identifier}" not found`);
-                continue;
+                if (!data.employeeName) {
+                    errors.push(`Row ${data.rowNumber}: Employee Name missing, cannot auto-create`);
+                    continue;
+                }
+                
+                // Get or create dummy department
+                let dept = await Department.findOne({ name: 'Imported Staff' });
+                if (!dept) dept = await Department.create({ name: 'Imported Staff', isActive: true, createdBy: req.user._id });
+                
+                // Get or create dummy shift
+                let shift = await Shift.findOne({ name: 'Imported Shift' });
+                if (!shift) shift = await Shift.create({ name: 'Imported Shift', startTime: '09:00', endTime: '18:00', duration: 9, isActive: true, createdBy: req.user._id });
+                
+                // Generate new code
+                let newCode = data.employeeCode;
+                if (!newCode) {
+                    newCode = await generateNextEmployeeCodeInternal(); 
+                }
+
+                employee = await Employee.create({
+                    employeeCode: newCode,
+                    employeeName: data.employeeName,
+                    department: dept._id,
+                    designation: 'Staff',
+                    branch: 'Main Location',
+                    mobileNumber: '0000000000',
+                    dateOfJoining: new Date(),
+                    shiftType: shift._id,
+                    remarks: 'Auto-created from Attendance Import',
+                    createdBy: req.user._id
+                });
             }
 
             // Upsert record
@@ -251,7 +280,8 @@ export const importAttendance = asyncHandler(async (req, res) => {
             );
             importedRecords.push(data.employeeCode || data.employeeName);
         } catch (e) {
-            errors.push(`Row ${data.rowNumber}: ${e.message}`);
+            // Trigger nodemon restart comment
+            errors.push(`Row ${data.rowNumber}: Server Error - ${e.message}`);
         }
     }
 

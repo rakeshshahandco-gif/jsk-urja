@@ -10,12 +10,12 @@ router.use(protect);
 
 router
     .route('/')
-    .post(authorize('admin'), validate(itemGroupValidation.createItemGroup), itemGroupController.createItemGroup)
+    .post(authorize('superadmin', 'admin'), validate(itemGroupValidation.createItemGroup), itemGroupController.createItemGroup)
     .get(validate(itemGroupValidation.getItemGroups), itemGroupController.getItemGroups);
 
 router
     .route('/:id')
-    .patch(authorize('admin'), validate(itemGroupValidation.updateItemGroup), itemGroupController.updateItemGroup)
-    .delete(authorize('admin'), validate(itemGroupValidation.deleteItemGroup), itemGroupController.deleteItemGroup);
+    .patch(authorize('superadmin', 'admin'), validate(itemGroupValidation.updateItemGroup), itemGroupController.updateItemGroup)
+    .delete(authorize('superadmin', 'admin'), validate(itemGroupValidation.deleteItemGroup), itemGroupController.deleteItemGroup);
 
 export default router;
