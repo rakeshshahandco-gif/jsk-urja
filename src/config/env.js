@@ -6,8 +6,8 @@ const isLocal = typeof window !== 'undefined' &&
 const prodBackend = 'https://jsk-urja-backend.onrender.com';
 
 export const env = {
-    API_URL: !isLocal ? `${prodBackend}/api/v1` : (import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api/v1`),
-    SOCKET_URL: !isLocal ? prodBackend : (import.meta.env.VITE_API_URL?.replace('/api/v1', '') || `${window.location.protocol}//${window.location.hostname}:5000`),
+    API_URL: !isLocal ? `${prodBackend}/api/v1` : (import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5100/api/v1`),
+    SOCKET_URL: !isLocal ? prodBackend : (import.meta.env.VITE_API_URL?.replace('/api/v1', '') || `${window.location.protocol}//${window.location.hostname}:5100`),
 };
 
 if (typeof window !== 'undefined') {

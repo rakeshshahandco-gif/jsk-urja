@@ -11,40 +11,49 @@ export const SocketProvider = ({ children }) => {
     const { user, token } = useAuth();
     const [connected, setConnected] = useState(false);
     const socketRef = useRef(null);
+    const [socketInstance, setSocketInstance] = useState(null);
 
     useEffect(() => {
         if (user && token) {
-            socketRef.current = io(env.SOCKET_URL, {
+            const socket = io(env.SOCKET_URL, {
                 auth: { token },
-                transports: ['websocket', 'polling'], // Prioritize websocket
+                transports: ['websocket', 'polling'],
                 reconnection: true,
-                reconnectionAttempts: 10,
-                reconnectionDelay: 2000,
-                timeout: 5000,
+                reconnectionAttempts: 15,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 10000,
             });
 
-            const socket = socketRef.current;
+            socketRef.current = socket;
+            setSocketInstance(socket);
 
             socket.on('connect', () => {
-                console.log('🔌 Global Socket Connected');
+                console.log('🔌 Socket Connected:', socket.id);
                 setConnected(true);
             });
 
-            socket.on('disconnect', () => {
-                console.log('🔌 Global Socket Disconnected');
+            socket.on('disconnect', (reason) => {
+                console.log('🔌 Socket Disconnected:', reason);
+                setConnected(false);
+            });
+
+            socket.on('connect_error', (err) => {
+                console.warn('🔌 Socket Connection Error:', err.message);
                 setConnected(false);
             });
 
             return () => {
-                if (socket) {
-                    socket.disconnect();
-                }
+                socket.disconnect();
+                socketRef.current = null;
+                setSocketInstance(null);
+                setConnected(false);
             };
         }
     }, [user, token]);
 
     return (
-        <SocketContext.Provider value={{ socket: socketRef.current, connected }}>
+        <SocketContext.Provider value={{ socket: socketInstance, connected }}>
             {children}
         </SocketContext.Provider>
     );

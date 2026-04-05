@@ -7,7 +7,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
+// DEBUG VERSION CHECK (Unprotected)
+router.get('/v7-lockdown', (req, res) => res.send({ status: 'LOCKEDDOWN_V7_ACTIVE', port: process.env.PORT || 5000 }));
+
 router.use(protect);
+
+// --- ATTENDANCE ROUTES ---
+router.route('/attendance')
+    .get(checkPermission('hr.hr_reports.view'), hrController.getAttendances);
 
 // --- SHIFT MASTER ROUTES ---
 router.route('/shifts')

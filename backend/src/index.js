@@ -1,4 +1,4 @@
-console.log('--- BACKEND STARTING (v5 - stock management module) ---');
+console.log('--- BACKEND STARTING (v7 - logic lockdown active) ---');
 import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';

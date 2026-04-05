@@ -63,15 +63,16 @@ const EmployeeForm = () => {
 
         if (isEdit) {
             getEmployee(id)
-                .then(data => {
+                .then(res => {
+                    const data = res.data; // The actual employee object is inside res.data
                     setForm({ 
                         ...DEFAULT, 
                         ...data,
-                        dateOfJoining: data.dateOfJoining ? new Date(data.dateOfJoining).toISOString().split('T')[0] : '',
-                        dateOfLeaving: data.dateOfLeaving ? new Date(data.dateOfLeaving).toISOString().split('T')[0] : '',
-                        department: data.department?._id || data.department,
-                        shiftType: data.shiftType?._id || data.shiftType,
-                        reportingManager: data.reportingManager?._id || data.reportingManager
+                        dateOfJoining: data?.dateOfJoining ? new Date(data.dateOfJoining).toISOString().split('T')[0] : '',
+                        dateOfLeaving: data?.dateOfLeaving ? new Date(data.dateOfLeaving).toISOString().split('T')[0] : '',
+                        department: data?.department?._id || data?.department,
+                        shiftType: data?.shiftType?._id || data?.shiftType,
+                        reportingManager: data?.reportingManager?._id || data?.reportingManager
                     });
                 })
                 .catch(err => addToast('Failed to load employee', 'error'))

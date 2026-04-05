@@ -41,7 +41,7 @@ app.use('/api/v1', routes);
 
 // 404 Handler for API routes
 app.use('/api', (req, res, next) => {
-    next(new ApiError(404, 'Endpoint not found'));
+    next(new ApiError(404, 'LOCKEDDOWN v7 Endpoint not found'));
 });
 
 // SPA Fallback - Serve index.html for all non-API routes

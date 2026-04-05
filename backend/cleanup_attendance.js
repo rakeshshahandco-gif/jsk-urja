@@ -1,25 +1,39 @@
-import { connect } from 'mongoose';
-import { Attendance } from './src/models/attendance.model.js';
-import { Employee } from './src/models/employee.model.js';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-(async () => {
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+async function cleanup() {
     try {
-        await connect(process.env.MONGODB_URL);
-        console.log('Connected to DB');
+        console.log('Connecting to MongoDB: ' + process.env.MONGODB_URL?.substring(0, 20) + '...');
+        await mongoose.connect(process.env.MONGODB_URL);
+        console.log('Connected.');
+
+        const Attendance = mongoose.model('Attendance', new mongoose.Schema({ date: Date }));
         
-        // 1. Delete all attendances
-        const attRes = await Attendance.deleteMany({});
-        console.log(`Deleted ${attRes.deletedCount} attendance records.`);
+        // Target: December 2026 (leakage source)
+        const start = new Date('2026-11-01');
+        const end = new Date('2027-01-01');
         
-        // 2. Delete auto-created employees
-        const empRes = await Employee.deleteMany({ remarks: 'Auto-created from Attendance Import' });
-        console.log(`Deleted ${empRes.deletedCount} auto-created employee records.`);
+        const count = await Attendance.countDocuments({ date: { $gte: start, $lte: end } });
+        console.log(`Found ${count} future records in range ${start.toISOString()} - ${end.toISOString()}`);
         
-        process.exit(0);
-    } catch (e) {
-        console.error(e);
-        process.exit(1);
+        if (count > 0) {
+            const result = await Attendance.deleteMany({ date: { $gte: start, $lte: end } });
+            console.log(`Successfully deleted ${result.deletedCount} future/ghost records.`);
+        } else {
+            console.log('No future records found to delete.');
+        }
+
+    } catch (error) {
+        console.error('Cleanup failed:', error);
+    } finally {
+        await mongoose.disconnect();
+        console.log('Disconnected.');
     }
-})();
+}
+
+cleanup();

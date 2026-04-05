@@ -1,23 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Filter, Download, UserCheck, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
 import moment from 'moment';
+import { useFinancialYear } from '../../../contexts/FinancialYearContext';
 
 const AttendancePage = () => {
+    const { selectedFY, selectedFYObject } = useFinancialYear();
     const [attendanceData, setAttendanceData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState(moment().format('MM'));
     const [selectedYear, setSelectedYear] = useState(moment().format('YYYY'));
 
+    // Automatically sync year/month with Financial Year if current selection is invalid
+    useEffect(() => {
+        if (selectedFYObject) {
+            const start = moment(selectedFYObject.startDate);
+            const end = moment(selectedFYObject.endDate);
+            const current = moment(`${selectedYear}-${selectedMonth}-01`, 'YYYY-MM-DD');
+
+            if (current.isBefore(start) || current.isAfter(end)) {
+                // Default to first month of FY (April)
+                setSelectedMonth(start.format('MM'));
+                setSelectedYear(start.format('YYYY'));
+            }
+        }
+    }, [selectedFY]);
+
     useEffect(() => {
         fetchAttendance();
-    }, [selectedMonth, selectedYear]);
+    }, [selectedMonth, selectedYear, selectedFY]);
 
     const fetchAttendance = async () => {
         try {
             setLoading(true);
-            const res = await api.get(`/hr/attendance?month=${selectedMonth}&year=${selectedYear}`);
+            const res = await api.get(`/hr/attendance?month=${selectedMonth}&year=${selectedYear}&financialYear=${selectedFY}`);
             setAttendanceData(res.data.data);
         } catch (error) {
             console.error('Error fetching attendance:', error);
@@ -72,15 +89,24 @@ const AttendancePage = () => {
         { val: '10', label: 'October' }, { val: '11', label: 'November' }, { val: '12', label: 'December' }
     ];
 
-    const currentYear = parseInt(moment().format('YYYY'));
-    const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
+    // Determine valid years for the Year dropdown based on selected FY
+    const years = useMemo(() => {
+        if (!selectedFYObject) return [moment().format('YYYY')];
+        const startYear = moment(selectedFYObject.startDate).year();
+        const endYear = moment(selectedFYObject.endDate).year();
+        const result = [];
+        for (let y = startYear; y <= endYear; y++) {
+            result.push(y.toString());
+        }
+        return result;
+    }, [selectedFYObject]);
 
     return (
         <div style={{ padding: '32px', background: '#f8fafc', minHeight: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' }}>
                 <div>
                     <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', margin: 0 }}>Attendance Tracking</h1>
-                    <p style={{ fontSize: '14px', color: '#64748b', marginTop: '6px' }}>Monitor daily punch-ins, late arrivals, and absent staff</p>
+                    <p style={{ fontSize: '14px', color: '#64748b', marginTop: '6px' }}>Showing records for Financial Year <span style={{ fontWeight: 800, color: '#2563eb' }}>{selectedFY}</span></p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -140,7 +166,9 @@ const AttendancePage = () => {
                                     <tr key={record._id || idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                         <td style={{ padding: '16px 24px', fontSize: '14px', color: '#1e293b', fontWeight: '600' }}>
                                             {moment(record.date).format('DD MMM YYYY')}
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '400', marginTop: '2px' }}>{moment(record.date).format('dddd')}</div>
+                                            <div style={{ fontSize: '11px', color: moment(record.date).day() === 0 ? '#ef4444' : '#94a3b8', fontWeight: moment(record.date).day() === 0 ? '700' : '400', marginTop: '2px' }}>
+                                                {moment(record.date).format('dddd')}
+                                            </div>
                                         </td>
                                         <td style={{ padding: '16px 24px' }}>
                                             <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{record.employee?.employeeName || 'Unknown'}</div>

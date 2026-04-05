@@ -9,6 +9,8 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
+import moment from 'moment';
+import { FinancialYear } from '../models/financialYear.model.js';
 
 // --- SHIFT CONTROLLERS ---
 
@@ -308,60 +310,97 @@ export const importAttendance = asyncHandler(async (req, res) => {
 });
 
 export const getAttendances = asyncHandler(async (req, res) => {
-    const { date, status, month, year } = req.query;
+    const { date, status, month, year, financialYear } = req.query;
+    res.setHeader('X-Permanent-Fix', 'True');
+    console.log(`[Attendance API] LOCKEDDOWN REQ: month=${month}, year=${year}, FY=${financialYear}`);
     let filter = {};
     
     // If month and year are provided, we generate a FULL REPORT for the month
-    if (month && year) {
-        const m = parseInt(month);
-        const y = parseInt(year);
+    const m = Number(Array.isArray(month) ? month[0] : month);
+    const y = Number(Array.isArray(year) ? year[0] : year);
+    if (month && year && !isNaN(m) && !isNaN(y)) {
+        // 0. Financial Year Validation (Optional but recommended)
+        if (financialYear) {
+            const fy = await FinancialYear.findOne({ name: financialYear });
+            if (fy) {
+                // Use object constructor for maximum safety
+                const requestedDate = moment.utc({ year: y, month: m - 1, day: 1 });
+                const fyStart = moment.utc(fy.startDate).startOf('day');
+                const fyEnd = moment.utc(fy.endDate).endOf('day');
+                
+                if (requestedDate.isBefore(fyStart) || requestedDate.isAfter(fyEnd)) {
+                    console.log(`[Attendance API] Period ${y}-${m} is OUTSIDE FY ${financialYear}`);
+                    return res.send(new ApiResponse(httpStatus.OK, [], `Selected month/year is outside Financial Year ${financialYear}`));
+                }
+            }
+        }
+
+        // 1. Calculate Strict UTC boundaries using object notation
+        const startDate = moment.utc({ year: y, month: m - 1, day: 1 }).startOf('month');
+        const endDate = moment.utc({ year: y, month: m - 1, day: 1 }).endOf('month');
         
-        // Use UTC boundaries to avoid timezone shifts
-        const startDate = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
-        const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        if (!startDate.isValid() || !endDate.isValid()) {
+            console.warn(`[Attendance API] Invalid date computation for m=${m}, y=${y}`);
+            return res.send(new ApiResponse(httpStatus.OK, [], 'Invalid date parameters'));
+        }
+
+        console.log(`[Attendance API] FETCHING STRICT RANGE: ${startDate.toISOString()} - ${endDate.toISOString()}`);
         
-        console.log(`Fetching Attendance Report for Period: ${y}-${m} (Query Range: ${startDate.toISOString()} - ${endDate.toISOString()})`);
-        
-        // 1. Fetch all active employees
+        // 2. Fetch active employees
         const employees = await Employee.find({ isActive: true }).populate('department', 'name').sort({ employeeName: 1 });
         
-        // 2. Fetch all actual attendance records for this strict range
-        const actualRecords = await Attendance.find({
-            date: { $gte: startDate, $lte: endDate }
+        // 3. Fetch ACTUAL records for the range (standard query for compatibility)
+        let actualRecords = await Attendance.find({
+            date: { $gte: startDate.toDate(), $lte: endDate.toDate() }
         }).populate('employee', 'employeeName employeeCode department');
+
+        // [LOGIC LOCKDOWN] Ensure absolute year/month alignment (compensates for TZ shifts)
+        actualRecords = actualRecords.filter(rec => {
+            const rd = moment.utc(rec.date).add(5.5, 'hours'); // IST Correction
+            return rd.year() === y && (rd.month() + 1) === m;
+        });
+
+        console.log(`[Attendance API] Found ${actualRecords.length} records after Logic Lockdown.`);
+        res.setHeader('X-Lockdown-Applied', 'v3');
         
-        console.log(`Found ${actualRecords.length} actual records in range.`);
-        
-        // 3. Fetch all holidays for this month
+        // 4. Fetch holidays for this month
         const holidays = await Holiday.find({
-            date: { $gte: startDate, $lte: endDate },
+            date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
             isActive: true
         });
 
-        // 4. Build a map of existing attendance: [employeeId][dateKey]
+        // 5. Mapping
         const attendanceMap = {};
         actualRecords.forEach(rec => {
-            const empId = rec.employee._id.toString();
-            const dateKey = new Date(rec.date).toISOString().split('T')[0];
+            const empId = rec.employee?._id?.toString();
+            if (!empId) return;
+            
+            // CRITICAL SAFETY CHECK: Ensure the actual record date matches the requested month/year
+            const recordMoment = moment.utc(rec.date);
+            if (recordMoment.year() !== y || (recordMoment.month() + 1) !== m) {
+                console.warn(`[Attendance API] LEAKAGE PREVENTED: Skipping record from ${recordMoment.format('YYYY-MM-DD')} for ${y}-${m} query`);
+                return;
+            }
+
+            const dateKey = recordMoment.format('YYYY-MM-DD');
             if (!attendanceMap[empId]) attendanceMap[empId] = {};
             attendanceMap[empId][dateKey] = rec;
         });
 
-        // 5. Build a map of holidays: [dateKey]
         const holidayMap = {};
         holidays.forEach(h => {
-            const dateKey = new Date(h.date).toISOString().split('T')[0];
+            const dateKey = moment.utc(h.date).format('YYYY-MM-DD');
             holidayMap[dateKey] = h.name;
         });
 
-        // 6. Generate the full report
+        // 6. Generate the FULL REPORT GRID
         const report = [];
-        const daysInMonth = endDate.getDate();
+        const daysInMonth = startDate.daysInMonth();
         
         for (let d = 1; d <= daysInMonth; d++) {
-            const currentDate = new Date(y, m - 1, d);
-            const dateKey = currentDate.toISOString().split('T')[0];
-            const isSunday = currentDate.getDay() === 0;
+            const currentDate = moment.utc({ year: y, month: m - 1, day: d });
+            const dateKey = currentDate.format('YYYY-MM-DD');
+            const isSunday = currentDate.day() === 0;
             const holidayName = holidayMap[dateKey];
 
             for (const emp of employees) {
@@ -369,24 +408,30 @@ export const getAttendances = asyncHandler(async (req, res) => {
                 const existing = attendanceMap[empId]?.[dateKey];
 
                 if (existing) {
+                    // Rule: If it's a Sunday, but we have an 'Absent' record, we might want to override to 'Holiday'
+                    // as per "Sunday = Present" logic. But let's keep the actual record if it exists, UNLESS it's specifically absent.
+                    if (isSunday && existing.status === 'Absent') {
+                        existing.status = 'Holiday';
+                        existing.remarks = 'Weekly Off (Sunday)';
+                    }
                     report.push(existing);
                 } else if (isSunday || holidayName) {
                     // Virtual "Holiday" record
                     report.push({
                         _id: `v-${empId}-${dateKey}`,
                         employee: emp,
-                        date: currentDate,
+                        date: currentDate.toDate(),
                         status: 'Holiday',
                         checkIn: '',
                         checkOut: '',
-                        remarks: holidayName || 'Sunday'
+                        remarks: holidayName || 'Weekly Off (Sunday)'
                     });
                 } else {
                     // Virtual "Absent" record
                     report.push({
                         _id: `v-${empId}-${dateKey}`,
                         employee: emp,
-                        date: currentDate,
+                        date: currentDate.toDate(),
                         status: 'Absent',
                         checkIn: '',
                         checkOut: '',
@@ -396,18 +441,26 @@ export const getAttendances = asyncHandler(async (req, res) => {
             }
         }
 
-        // Apply filters if needed (e.g. status)
         let filteredReport = report;
         if (status) {
-            filteredReport = report.filter(r => r.status === status);
+            const statusFilter = Array.isArray(status) ? status[0] : status;
+            filteredReport = report.filter(r => r.status === statusFilter);
         }
 
-        return res.send(new ApiResponse(httpStatus.OK, filteredReport.sort((a,b) => new Date(b.date) - new Date(a.date))));
+        // 7. FINAL LOGICAL LOCKDOWN: Filter out ANY record that somehow got through
+        filteredReport = filteredReport.filter(r => {
+            const rd = moment.utc(r.date).add(5.5, 'hours'); // Correct to IST for logic check
+            return rd.year() === y && (rd.month() + 1) === m;
+        });
+
+        // Sort: Latest date first for the display
+        return res.send(new ApiResponse(httpStatus.OK, filteredReport.sort((a,b) => new Date(b.date) - new Date(a.date)), 'Report generated', { debug: { m, y, actualCount: actualRecords.length, daysInMonth } }));
     }
 
     // Default legacy behavior for single date or overall view
     if (date) {
-        const queryDate = new Date(date);
+        const dateVal = Array.isArray(date) ? date[0] : date;
+        const queryDate = new Date(dateVal);
         const startOfDay = new Date(queryDate.setHours(0,0,0,0));
         const endOfDay = new Date(queryDate.setHours(23,59,59,999));
         filter.date = { $gte: startOfDay, $lte: endOfDay };
@@ -417,9 +470,19 @@ export const getAttendances = asyncHandler(async (req, res) => {
         filter.status = status;
     }
 
+    // Default: if no filters, at least cap to a reasonable range or return empty 
+    // to prevent showing future junk or massive data dumps
+    if (!filter.date && !filter.status && !filter.employee) {
+        // Return empty or filter to current month if no parameters given
+        const start = moment().startOf('month').toDate();
+        const end = moment().endOf('month').toDate();
+        filter.date = { $gte: start, $lte: end };
+    }
+
     const attendance = await Attendance.find(filter)
         .populate('employee', 'employeeName employeeCode department')
-        .sort({ date: -1 });
+        .sort({ date: -1 })
+        .limit(100);
         
     res.send(new ApiResponse(httpStatus.OK, attendance));
 });

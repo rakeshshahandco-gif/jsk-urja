@@ -31,10 +31,11 @@ export const initSocket = (server) => {
                 return next(new Error('Authentication error'));
             }
 
-            const decoded = jwt.verify(token, config.jwt.secret);
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
             socket.user = decoded; // Attach user info to socket
             next();
         } catch (error) {
+            logger.error(`Socket auth failed: ${error.message}`);
             next(new Error('Authentication error'));
         }
     });
@@ -48,23 +49,25 @@ export const initSocket = (server) => {
         
         logger.info(`🔌 Socket connected: ${socket.id} (User: ${userId})`);
 
-        // Join user's specific room
+        // Join both user room formats
         socket.join(`user:${userId}`);
+        socket.join(`user_${userId}`);
 
         // Join global company room
         socket.join('company_all');
+
+        // Notify others that user is online
+        socket.to('company_all').emit('messenger:user_online', { userId });
+        
+        // Sync status on connect/reconnect
+        socket.emit('messenger:sync_status', { status: 'online' });
 
         // ── Messenger: Typing Indicators ──────────────────────────────────────
         socket.on('messenger:typing', ({ threadId, participantIds }) => {
             if (!threadId || !participantIds) return;
             participantIds.forEach((uid) => {
                 if (uid !== userId) {
-                    // Emit to both formats for safety during migration
-                    io.to(`user:${uid}`).emit('messenger:typing', {
-                        threadId,
-                        userId,
-                    });
-                    io.to(`user_${uid}`).emit('messenger:typing', {
+                    io.to(`user:${uid}`).to(`user_${uid}`).emit('messenger:typing', {
                         threadId,
                         userId,
                     });
@@ -76,11 +79,7 @@ export const initSocket = (server) => {
             if (!threadId || !participantIds) return;
             participantIds.forEach((uid) => {
                 if (uid !== userId) {
-                    io.to(`user:${uid}`).emit('messenger:stop_typing', {
-                        threadId,
-                        userId,
-                    });
-                    io.to(`user_${uid}`).emit('messenger:stop_typing', {
+                    io.to(`user:${uid}`).to(`user_${uid}`).emit('messenger:stop_typing', {
                         threadId,
                         userId,
                     });
@@ -89,9 +88,6 @@ export const initSocket = (server) => {
         });
 
         // ── Messenger: Online Presence ─────────────────────────────────────────
-        // Broadcast to company_all that this user is online
-        socket.to('company_all').emit('messenger:user_online', { userId });
-
         socket.on('disconnect', (reason) => {
             logger.info(`🔌 Socket disconnected: ${socket.id} (User: ${userId}) Reason: ${reason}`);
             socket.to('company_all').emit('messenger:user_offline', {
