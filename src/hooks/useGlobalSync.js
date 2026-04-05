@@ -30,4 +30,6 @@ export const useGlobalSync = (moduleName, onSyncEvent) => {
             socket.off('entityChange', handleEntityChange);
         };
     }, [token, socket, moduleName]);
+
+    return { socket };
 };
