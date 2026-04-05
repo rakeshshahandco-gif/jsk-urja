@@ -125,20 +125,32 @@ const ManageTasksPage = () => {
 
     useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
-    useGlobalSync('task', (payload) => {
+    const { socket } = useGlobalSync('task', (payload) => {
         if (payload.action === 'create') {
             setTasks(prev => {
                 if (prev.find(t => t._id === payload.recordId)) return prev;
+                // Since data is now fully populated from backend, we can add it directly
                 return [payload.data, ...prev].slice(0, pagination.limit);
             });
             setPagination(p => ({ ...p, total: p.total + 1 }));
-        } else if (payload.action === 'update') {
+        } else if (payload.action === 'update' || payload.action === 'assigned') {
             setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
         } else if (payload.action === 'delete') {
             setTasks(prev => prev.filter(t => t._id !== payload.recordId));
             setPagination(p => ({ ...p, total: Math.max(0, p.total - 1) }));
         }
     });
+
+    // Reconnection Sync: Ensure we have the latest data if socket was offline
+    useEffect(() => {
+        if (!socket) return;
+        const handleReconnect = () => {
+             console.log('🔄 Reconnected! Syncing task list...');
+             fetchTasks();
+        };
+        socket.on('connect', handleReconnect);
+        return () => socket.off('connect', handleReconnect);
+    }, [socket, fetchTasks]);
 
     const resetFilters = () => {
         setSearchTerm(''); setPriorityFilter(''); setGroupFilter('');

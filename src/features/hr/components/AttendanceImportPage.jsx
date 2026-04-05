@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, FilePlus, X, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
+import moment from 'moment';
 import api from '../../../services/api'; // Corrected import path
 
 const AttendanceImportPage = () => {
@@ -8,6 +9,8 @@ const AttendanceImportPage = () => {
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [importErrors, setImportErrors] = useState([]);
+    const [selectedMonth, setSelectedMonth] = useState(moment().format('MM'));
+    const [selectedYear, setSelectedYear] = useState(moment().format('YYYY'));
     const fileInputRef = useRef(null);
 
     const handleDragOver = (e) => {
@@ -68,6 +71,8 @@ const AttendanceImportPage = () => {
         setImportErrors([]);
         const formData = new FormData();
         formData.append('file', selectedFile);
+        formData.append('month', selectedMonth);
+        formData.append('year', selectedYear);
 
         try {
             const response = await api.post('/hr/attendance/import', formData, {
@@ -91,12 +96,38 @@ const AttendanceImportPage = () => {
         }
     };
 
+    const months = [
+        { val: '01', label: 'January' }, { val: '02', label: 'February' }, { val: '03', label: 'March' },
+        { val: '04', label: 'April' }, { val: '05', label: 'May' }, { val: '06', label: 'June' },
+        { val: '07', label: 'July' }, { val: '08', label: 'August' }, { val: '09', label: 'September' },
+        { val: '10', label: 'October' }, { val: '11', label: 'November' }, { val: '12', label: 'December' }
+    ];
+
+    const currentYear = parseInt(moment().format('YYYY'));
+    const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
+
     return (
         <div style={{ padding: '32px', background: '#f8fafc', minHeight: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' }}>
                 <div>
                     <h1 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', margin: 0 }}>Import Attendance</h1>
                     <p style={{ fontSize: '14px', color: '#64748b', marginTop: '6px' }}>Synchronize biometric or Excel logs with the HR system</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <select 
+                        value={selectedMonth} 
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                        style={{ height: '40px', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', outline: 'none' }}
+                    >
+                        {months.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+                    </select>
+                    <select 
+                        value={selectedYear} 
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        style={{ height: '40px', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', outline: 'none' }}
+                    >
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
                 </div>
             </div>
 
@@ -212,16 +243,25 @@ const AttendanceImportPage = () => {
                         </h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <a 
-                                href="/attendance_template.csv" 
-                                download="Attendance_Template.csv"
+                                href="/attendance_template.xlsx" 
+                                download="Attendance_Template.xlsx"
                                 style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
                                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.background = '#f0fdf4'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
                             >
-                                <FilePlus size={16} color="#059669" /> Excel Template.xlsx
+                                <FilePlus size={16} color="#059669" /> Excel Template (.xlsx)
                             </a>
                             <a 
                                 href="/attendance_template.csv" 
+                                download="Attendance_Template.csv"
+                                style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#0ea5e9'; e.currentTarget.style.background = '#f0f9ff'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
+                            >
+                                <FilePlus size={16} color="#0ea5e9" /> CSV Template (.csv)
+                            </a>
+                            <a 
+                                href="/attendance_format_guide.csv" 
                                 download="CSV_Format_Guide.csv"
                                 style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
                                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#d97706'; e.currentTarget.style.background = '#fffbeb'; }}

@@ -106,11 +106,26 @@ export const NotificationProvider = ({ children }) => {
             bgColor = 'bg-red-50';
             iconColor = 'text-red-700';
             ringColor = 'ring-red-100';
-        } else if (notification.type === 'MESSENGER' || notification.threadId) {
+        } else if (notification.type === 'MESSENGER' || notification.type === 'CHAT') {
             borderColor = 'border-green-500';
             bgColor = 'bg-green-50';
             iconColor = 'text-green-700';
             ringColor = 'ring-green-100';
+        } else if (notification.type === 'COMPLETED') {
+            borderColor = 'border-emerald-500';
+            bgColor = 'bg-emerald-50';
+            iconColor = 'text-emerald-700';
+            ringColor = 'ring-emerald-100';
+        } else if (notification.type === 'STATUS_CHANGE') {
+            borderColor = 'border-amber-400';
+            bgColor = 'bg-amber-50';
+            iconColor = 'text-amber-700';
+            ringColor = 'ring-amber-100';
+        } else if (notification.type === 'ASSIGNED') {
+            borderColor = 'border-blue-600';
+            bgColor = 'bg-blue-50';
+            iconColor = 'text-blue-700';
+            ringColor = 'ring-blue-100';
         }
 
         toast.custom((t) => (

@@ -83,7 +83,10 @@ export const TaskList = () => {
             }
         };
 
-        const handleConnect = () => fetchTasks(true); // Reconnect auto-recovery
+        const handleConnect = () => {
+            console.log('🔄 TaskList: Reconnected! Syncing lists...');
+            fetchTasks(true);
+        };
         
         socket.on('task:assigned', handleNewTask);
         socket.on('task:updated', handleUpdateTask);
@@ -98,13 +101,13 @@ export const TaskList = () => {
             socket.off('task:closed', handleClosedTask);
             socket.off('connect', handleConnect);
         };
-    }, [socket, view]);
+    }, [socket, view, fetchMetadata]);
 
-    // 1-second silent sync fallback
+    // Background Refresh: Reduced frequency since we have robust sockets
     useEffect(() => {
         const intervalId = setInterval(() => {
             fetchTasks(true);
-        }, 1000);
+        }, 60000); // Once a minute as safety net
         return () => clearInterval(intervalId);
     }, [view, filter.status, filter.priority, filter.taskCategoryId, filter.group, filter.assigneeType]);
 

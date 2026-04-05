@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 const _emitEvent = (doc, action, oldDoc = null) => {
     try {
         const io = getIO();
-        if (!io) return;
+        if (!io || doc._skipSync) return;
 
         const modelName = doc.constructor.modelName;
         const recordId = doc._id.toString();
@@ -96,6 +96,7 @@ export const realtimeSyncPlugin = (schema) => {
         // if isNew is true, it was created, else updated
         // Mongoose post save on existing docs does not have `isNew` directly available here unless we checked it pre-save.
         // However, standard .save() on new docs triggers this.
+        if (doc._skipSync) return;
         const action = doc.createdAt && doc.createdAt.getTime() === doc.updatedAt?.getTime() ? 'create' : 'update';
         _emitEvent(doc, action);
     });

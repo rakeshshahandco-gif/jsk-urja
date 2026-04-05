@@ -33,14 +33,15 @@ const buildSort = (sortBy) => {
   return Object.keys(sort).length ? sort : { dueDate: 1, createdAt: -1 };
 };
 
-const emitTaskEvent = async (taskId, eventName, actorId) => {
+const emitTaskUpdate = async (taskId, action, actorId) => {
     try {
         const fullTask = await Task.findById(taskId)
             .populate('assigneeIds', 'name email username')
             .populate('createdBy', 'name email username')
             .populate('taskCategoryId', 'name')
             .populate('assignedGroupId', 'name')
-            .populate('groupId', 'name');
+            .populate('groupId', 'name')
+            .populate('taskMasterId', 'title recurrence');
 
         if (!fullTask) return;
 
@@ -58,13 +59,33 @@ const emitTaskEvent = async (taskId, eventName, actorId) => {
         }
 
         const io = getIO();
+        const payload = {
+            moduleName: 'task',
+            action, // 'create', 'update', 'delete'
+            recordId: taskId.toString(),
+            data: fullTask.toObject(),
+            timestamp: new Date()
+        };
+
         for (const userId of updateNotifyUsers) {
-            if (actorId && userId === actorId.toString()) continue;
-            io.to(`user:${userId}`).emit(eventName, fullTask.toObject());
-            io.to(`user_${userId}`).emit(eventName, fullTask.toObject());
+            const roomNew = `user:${userId}`;
+            const roomOld = `user_${userId}`;
+            
+            // 1. Unified entityChange event for sync logic
+            io.to(roomNew).emit('entityChange', payload);
+            io.to(roomOld).emit('entityChange', payload);
+
+            // 2. Specific 'task:*' events for detailed UI/state management
+            const taskEventMapping = {
+                create: 'task:assigned',
+                update: 'task:updated',
+                delete: 'task:deleted'
+            };
+            io.to(roomNew).emit(taskEventMapping[action] || 'task:updated', fullTask.toObject());
+            io.to(roomOld).emit(taskEventMapping[action] || 'task:updated', fullTask.toObject());
         }
     } catch (err) {
-        console.error(`Socket emit ${eventName} failed:`, err);
+        console.error(`Socket emit task update failed:`, err);
     }
 };
 
@@ -216,7 +237,10 @@ export const createTask = asyncHandler(async (req, res) => {
     };
   }
 
-  const task = await Task.create(taskData);
+  // Use _skipSync to prevent the basic plugin from emitting an unpopulated event
+  const task = new Task(taskData);
+  task._skipSync = true;
+  await task.save();
 
   // NOTIFICATION: Task Assigned
   const notifyUsers = new Set();
@@ -243,24 +267,8 @@ export const createTask = asyncHandler(async (req, res) => {
     });
   }
 
-  // Socket: Emit Full Task Object natively
-  try {
-    const fullTask = await Task.findById(task._id)
-      .populate('assigneeIds', 'name email username')
-      .populate('createdBy', 'name email username')
-      .populate('taskCategoryId', 'name')
-      .populate('assignedGroupId', 'name')
-      .populate('groupId', 'name');
-
-    const io = getIO();
-    for (const userId of notifyUsers) {
-      if (userId === req.user.id.toString()) continue;
-      io.to(`user:${userId}`).emit('task:assigned', fullTask.toObject());
-      io.to(`user_${userId}`).emit('task:assigned', fullTask.toObject());
-    }
-  } catch (err) {
-    console.error('Socket emit task:assigned failed:', err);
-  }
+  // Socket: Emit Full Task Object natively with high-context
+  await emitTaskUpdate(task._id, 'create', req.user.id);
 
   res.status(httpStatus.CREATED).send({ success: true, data: task });
 });
@@ -454,30 +462,8 @@ export const updateTask = asyncHandler(async (req, res) => {
     }
   }
 
-  // Socket: Emit Full Task Object for Update
-  try {
-    const fullTask = await Task.findById(task._id)
-      .populate('assigneeIds', 'name email username')
-      .populate('createdBy', 'name email username')
-      .populate('taskCategoryId', 'name')
-      .populate('assignedGroupId', 'name')
-      .populate('groupId', 'name');
-
-    const updateNotifyUsers = new Set([...newAssignees, task.createdBy.toString()]);
-    if (task.assignToAll) {
-        const allUsers = await User.find({ isActive: true }).select('_id');
-        allUsers.forEach(u => updateNotifyUsers.add(u._id.toString()));
-    }
-
-    const io = getIO();
-    for (const userId of updateNotifyUsers) {
-      if (userId === req.user.id.toString()) continue;
-      io.to(`user:${userId}`).emit('task:updated', fullTask.toObject());
-      io.to(`user_${userId}`).emit('task:updated', fullTask.toObject());
-    }
-  } catch (err) {
-    console.error('Socket emit task:updated failed:', err);
-  }
+  // Socket: Emit Full Task Object for Update with high-context
+  await emitTaskUpdate(task._id, 'update', req.user.id);
 
   res.send({ success: true, data: task });
 });
@@ -507,8 +493,7 @@ export const closeTask = asyncHandler(async (req, res) => {
     }).catch(err => console.error('Silent fail for notification in closeTask:', err));
   }
 
-  await emitTaskEvent(task._id, 'task:closed', req.user.id);
-  await emitTaskEvent(task._id, 'task:updated', req.user.id);
+  await emitTaskUpdate(task._id, 'update', req.user.id);
 
   res.send({ success: true, data: task });
 });
@@ -520,7 +505,7 @@ export const updateTaskStatus = asyncHandler(async (req, res) => {
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
   task.status = status;
   await task.save();
-  await emitTaskEvent(task._id, 'task:updated', req.user.id);
+  await emitTaskUpdate(task._id, 'update', req.user.id);
   res.send({ success: true, data: task });
 });
 
@@ -534,7 +519,15 @@ export const deleteTask = asyncHandler(async (req, res) => {
   
   try {
     const io = getIO();
-    io.emit('task:deleted', { _id: deletedId }); // emit to everyone quickly, or restrict by rooms if preferred
+    const payload = {
+        moduleName: 'task',
+        action: 'delete',
+        recordId: deletedId.toString(),
+        data: { _id: deletedId },
+        timestamp: new Date()
+    };
+    io.emit('entityChange', payload);
+    io.emit('task:deleted', { _id: deletedId });
   } catch (err) {}
   
   res.send({ success: true, message: 'Task deleted' });
@@ -571,7 +564,7 @@ export const extendTask = asyncHandler(async (req, res) => {
         }
     }
   
-    await emitTaskEvent(task._id, 'task:updated', req.user.id);
+    await emitTaskUpdate(task._id, 'update', req.user.id);
   
     res.send({ success: true, data: task });
 });

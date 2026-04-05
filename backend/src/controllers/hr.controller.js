@@ -156,6 +156,8 @@ export const deleteHoliday = asyncHandler(async (req, res) => {
 // --- ATTENDANCE CONTROLLERS ---
 
 export const importAttendance = asyncHandler(async (req, res) => {
+    const { month, year } = req.body;
+    
     if (!req.file) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Please upload an excel or csv file');
     }
@@ -225,7 +227,24 @@ export const importAttendance = asyncHandler(async (req, res) => {
             if (data.dateValue instanceof Date) {
                 parsedDate = data.dateValue;
             } else {
-                parsedDate = new Date(data.dateValue);
+                // If the user provided a month/year context, try to force the date into that period
+                if (month && year && typeof data.dateValue === 'string') {
+                    const dayPart = data.dateValue.split(/[-\/]/)[0]; // Assume first part is day if simple
+                    const day = parseInt(dayPart);
+                    if (!isNaN(day) && day >= 1 && day <= 31) {
+                        parsedDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, day));
+                    } else {
+                        parsedDate = new Date(data.dateValue);
+                    }
+                } else {
+                    parsedDate = new Date(data.dateValue);
+                }
+            }
+            
+            // Final validation: if we have month/year context, ensure the date belongs to it
+            if (month && year && !isNaN(parsedDate)) {
+                parsedDate.setUTCFullYear(parseInt(year));
+                parsedDate.setUTCMonth(parseInt(month) - 1);
             }
 
             // Find employee
@@ -289,9 +308,104 @@ export const importAttendance = asyncHandler(async (req, res) => {
 });
 
 export const getAttendances = asyncHandler(async (req, res) => {
-    const { date, status } = req.query;
-    const filter = {};
+    const { date, status, month, year } = req.query;
+    let filter = {};
     
+    // If month and year are provided, we generate a FULL REPORT for the month
+    if (month && year) {
+        const m = parseInt(month);
+        const y = parseInt(year);
+        
+        // Use UTC boundaries to avoid timezone shifts
+        const startDate = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
+        const endDate = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+        
+        console.log(`Fetching Attendance Report for Period: ${y}-${m} (Query Range: ${startDate.toISOString()} - ${endDate.toISOString()})`);
+        
+        // 1. Fetch all active employees
+        const employees = await Employee.find({ isActive: true }).populate('department', 'name').sort({ employeeName: 1 });
+        
+        // 2. Fetch all actual attendance records for this strict range
+        const actualRecords = await Attendance.find({
+            date: { $gte: startDate, $lte: endDate }
+        }).populate('employee', 'employeeName employeeCode department');
+        
+        console.log(`Found ${actualRecords.length} actual records in range.`);
+        
+        // 3. Fetch all holidays for this month
+        const holidays = await Holiday.find({
+            date: { $gte: startDate, $lte: endDate },
+            isActive: true
+        });
+
+        // 4. Build a map of existing attendance: [employeeId][dateKey]
+        const attendanceMap = {};
+        actualRecords.forEach(rec => {
+            const empId = rec.employee._id.toString();
+            const dateKey = new Date(rec.date).toISOString().split('T')[0];
+            if (!attendanceMap[empId]) attendanceMap[empId] = {};
+            attendanceMap[empId][dateKey] = rec;
+        });
+
+        // 5. Build a map of holidays: [dateKey]
+        const holidayMap = {};
+        holidays.forEach(h => {
+            const dateKey = new Date(h.date).toISOString().split('T')[0];
+            holidayMap[dateKey] = h.name;
+        });
+
+        // 6. Generate the full report
+        const report = [];
+        const daysInMonth = endDate.getDate();
+        
+        for (let d = 1; d <= daysInMonth; d++) {
+            const currentDate = new Date(y, m - 1, d);
+            const dateKey = currentDate.toISOString().split('T')[0];
+            const isSunday = currentDate.getDay() === 0;
+            const holidayName = holidayMap[dateKey];
+
+            for (const emp of employees) {
+                const empId = emp._id.toString();
+                const existing = attendanceMap[empId]?.[dateKey];
+
+                if (existing) {
+                    report.push(existing);
+                } else if (isSunday || holidayName) {
+                    // Virtual "Holiday" record
+                    report.push({
+                        _id: `v-${empId}-${dateKey}`,
+                        employee: emp,
+                        date: currentDate,
+                        status: 'Holiday',
+                        checkIn: '',
+                        checkOut: '',
+                        remarks: holidayName || 'Sunday'
+                    });
+                } else {
+                    // Virtual "Absent" record
+                    report.push({
+                        _id: `v-${empId}-${dateKey}`,
+                        employee: emp,
+                        date: currentDate,
+                        status: 'Absent',
+                        checkIn: '',
+                        checkOut: '',
+                        remarks: 'No record found'
+                    });
+                }
+            }
+        }
+
+        // Apply filters if needed (e.g. status)
+        let filteredReport = report;
+        if (status) {
+            filteredReport = report.filter(r => r.status === status);
+        }
+
+        return res.send(new ApiResponse(httpStatus.OK, filteredReport.sort((a,b) => new Date(b.date) - new Date(a.date))));
+    }
+
+    // Default legacy behavior for single date or overall view
     if (date) {
         const queryDate = new Date(date);
         const startOfDay = new Date(queryDate.setHours(0,0,0,0));
