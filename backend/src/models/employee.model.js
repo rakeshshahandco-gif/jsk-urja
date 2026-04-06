@@ -50,6 +50,23 @@ const employeeSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    city: {
+        type: String,
+        trim: true
+    },
+    state: {
+        type: String,
+        trim: true
+    },
+    country: {
+        type: String,
+        trim: true,
+        default: 'India'
+    },
+    pincode: {
+        type: String,
+        trim: true
+    },
     dateOfJoining: {
         type: Date,
         required: [true, 'Date of Joining is required']

@@ -26,6 +26,10 @@ const salaryWorkingSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    masterGross: {
+        type: Number,
+        default: 0
+    },
     basic: {
         type: Number,
         default: 0

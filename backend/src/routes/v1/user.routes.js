@@ -22,12 +22,16 @@ router.route('/roles/:id')
 router.route('/departments')
     .post(authorize('superadmin', 'admin'), userController.createDepartment);
 
-// 3. USER MANAGEMENT (Admin only)
+// 3. USER MANAGEMENT
+// Allow all authenticated users to view users
+router.route('/')
+    .get(userController.getUsers);
+
+// Admin only routes
 router.use(authorize('superadmin', 'admin'));
 
 router.route('/')
-    .post(userController.createUser)
-    .get(userController.getUsers);
+    .post(userController.createUser);
 
 router.route('/:id')
     .get(userController.getUser)

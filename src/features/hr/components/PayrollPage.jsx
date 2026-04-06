@@ -161,12 +161,12 @@ const PayrollPage = () => {
                             <thead style={{ position: 'sticky', top: 0, background: '#f1f5f9', zIndex: 10 }}>
                                 <tr>
                                     <th style={thStyle}>Employee</th>
+                                    <th style={{ ...thStyle, textAlign: 'right' }}>Monthly Salary</th>
                                     <th style={{ ...thStyle, textAlign: 'center' }}>Total Days</th>
-                                    <th style={{ ...thStyle, textAlign: 'center' }}>Days Worked</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>Master Gross</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>Basic Pay</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>HRA</th>
-                                    <th style={{ ...thStyle, textAlign: 'right' }}>Other Allowances</th>
+                                    <th style={{ ...thStyle, textAlign: 'right' }}>Day Rate</th>
+                                    <th style={{ ...thStyle, textAlign: 'center' }}>Present</th>
+                                    <th style={{ ...thStyle, textAlign: 'center' }}>Absent</th>
+                                    <th style={{ ...thStyle, textAlign: 'right' }}>Prorated Gross</th>
                                     <th style={{ ...thStyle, textAlign: 'right' }}>Deductions</th>
                                     <th style={{ ...thStyle, textAlign: 'right' }}>Net Payable</th>
                                 </tr>
@@ -185,20 +185,26 @@ const PayrollPage = () => {
                                             <div style={{ fontSize: '11px', color: '#64748b' }}>{r.employeeCode}</div>
                                             {r.isNew && <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>New Preview</span>}
                                         </td>
-                                        <td style={{ ...tdStyle, textAlign: 'center', fontWeight: '600' }}>{r.totalDays || 0}</td>
+                                        <td style={{ ...tdStyle, textAlign: 'right', color: '#475569', fontWeight: '600' }}>
+                                            {formatCurrency(r.masterGross)}
+                                        </td>
+                                        <td style={{ ...tdStyle, textAlign: 'center', color: '#64748b' }}>{r.totalDays || 0}</td>
+                                        <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b', fontSize: '12px' }}>
+                                            {formatCurrency(r.masterGross / (r.totalDays || 1))}
+                                        </td>
                                         <td style={{ ...tdStyle, textAlign: 'center' }}>
                                             <span style={{ display: 'inline-block', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
                                                 {r.daysWorked || 0}
                                             </span>
                                         </td>
-                                        <td style={{ ...tdStyle, textAlign: 'right', color: '#64748b' }}>
-                                            {formatCurrency(r.masterGross)}
+                                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                            <span style={{ display: 'inline-block', background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                                                {(r.totalDays || 0) - (r.daysWorked || 0)}
+                                            </span>
                                         </td>
-                                        <td style={{ ...tdStyle, textAlign: 'right' }}>
-                                            {formatCurrency(r.basic)}
+                                        <td style={{ ...tdStyle, textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
+                                            {formatCurrency(r.grossAmount)}
                                         </td>
-                                        <td style={{ ...tdStyle, textAlign: 'right' }}>{formatCurrency(r.hra)}</td>
-                                        <td style={{ ...tdStyle, textAlign: 'right' }}>{formatCurrency((r.conveyance || 0) + (r.specialAllowance || 0) + (r.incentives || 0))}</td>
                                         <td style={{ ...tdStyle, textAlign: 'right', padding: '8px' }}>
                                             <input 
                                                 type="number" 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, BookOpen, Search, Pencil, Trash2, X, ChevronDown, ShieldCheck, Landmark, MapPin, CreditCard } from 'lucide-react';
+import { Plus, BookOpen, Search, Pencil, Trash2, X, ChevronDown, ShieldCheck, Landmark, MapPin, CreditCard, Loader2 } from 'lucide-react';
 import { getAccountGroups, getLedgers, createLedger, updateLedger, deleteLedger } from '@/services/accountApi';
+import { fetchGeocodeAddress } from '@/services/locationApi';
 import { toast } from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,6 +21,47 @@ const EMPTY = { name: '', printName: '', alias: '', underGroup: '', openingBalan
 
 const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading }) => {
     const [form, setForm] = useState({ ...EMPTY, ...initial, underGroup: initial.underGroup?._id || initial.underGroup || '' });
+    const [isFetchingPin, setIsFetchingPin] = useState(false);
+
+    const handleFetchPin = async () => {
+        if (!form.address || !form.address.trim()) {
+            toast.error('Please enter an address first');
+            return;
+        }
+        setIsFetchingPin(true);
+        try {
+            const data = await fetchGeocodeAddress(form.address);
+            let updatedPin = false;
+            
+            setForm(prev => {
+                const newForm = { ...prev };
+                if (data.postalCode && (!newForm.pincode || !newForm.pincode.trim())) {
+                    newForm.pincode = data.postalCode;
+                    updatedPin = true;
+                }
+                if (data.city && (!newForm.city || !newForm.city.trim())) {
+                    newForm.city = data.city.toUpperCase();
+                }
+                if (data.state && (!newForm.state || !newForm.state.trim())) {
+                    newForm.state = data.state.toUpperCase();
+                }
+                // country is not in Ledger EMPTY state, ignoring it.
+                return newForm;
+            });
+
+            if (updatedPin) {
+                toast.success('PIN code fetched successfully!');
+            } else if (!data.postalCode) {
+                toast('PIN code not found from Google for this address.', { icon: 'ℹ️' });
+            } else {
+                toast('Address data fetched. Existing fields were not overwritten.', { icon: 'ℹ️' });
+            }
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message || 'Failed to fetch PIN from Google');
+        } finally {
+            setIsFetchingPin(false);
+        }
+    };
 
     const set = (name, value) => setForm(p => ({ ...p, [name]: value }));
     const change = e => {
@@ -104,7 +146,21 @@ const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading })
                     <div style={{ ...grid3, ...mb }}>
                         <div><label style={s.label}>City</label><input name="city" value={form.city} onChange={change} style={s.input} /></div>
                         <div><label style={s.label}>State</label><input name="state" value={form.state} onChange={change} style={s.input} /></div>
-                        <div><label style={s.label}>Pincode</label><input name="pincode" value={form.pincode} onChange={change} style={s.input} /></div>
+                        <div>
+                            <label style={s.label}>Pincode</label>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <input name="pincode" value={form.pincode} onChange={change} style={{ ...s.input, flex: 1 }} />
+                                <button 
+                                    type="button" 
+                                    onClick={handleFetchPin}
+                                    disabled={isFetchingPin}
+                                    title="Fetch PIN from Google"
+                                    style={{ padding: '0 10px', height: '33px', background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#374151' }}
+                                >
+                                    {isFetchingPin ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

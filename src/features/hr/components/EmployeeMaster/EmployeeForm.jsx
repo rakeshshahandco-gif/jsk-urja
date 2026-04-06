@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Save, User, Briefcase, IndianRupee, Landmark, Camera } from 'lucide-react';
+import { ChevronLeft, Save, User, Briefcase, IndianRupee, Landmark, Camera, MapPin, Loader2 } from 'lucide-react';
 import { getEmployee, createEmployee, updateEmployee, getShifts, generateEmployeeCode } from '@/services/hrApi';
+import { fetchGeocodeAddress } from '@/services/locationApi';
 import { getDepartments } from '@/services/userApi';
 import { getUsers } from '@/services/userApi';
 import { useToast } from '@/components/ui/Toast';
@@ -35,7 +36,8 @@ const DEFAULT = {
     employmentStatus: 'Active', employmentType: 'Permanent', shiftType: '', weeklyOff: ['Sunday'],
     salaryType: 'Monthly', basicSalary: 0, hra: 0, conveyance: 0, specialAllowance: 0, incentive: 0, overtimeRate: 0,
     pfApplicable: false, esicApplicable: false, bankName: '', bankAccountNumber: '', ifscCode: '',
-    uan: '', aadhaarNo: '', panNo: '', remarks: '', employeePhoto: '', userId: null
+    uan: '', aadhaarNo: '', panNo: '', remarks: '', employeePhoto: '', userId: null,
+    pincode: '', city: '', state: '', country: 'India'
 };
 
 const EmployeeForm = () => {
@@ -49,6 +51,51 @@ const EmployeeForm = () => {
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
     const [generatingCode, setGeneratingCode] = useState(false);
+    const [isFetchingPin, setIsFetchingPin] = useState(false);
+
+    const handleFetchPin = async () => {
+        const addressText = form.address;
+        if (!addressText || !addressText.trim()) {
+            addToast('Please enter an address first', 'error');
+            return;
+        }
+
+        setIsFetchingPin(true);
+        try {
+            const data = await fetchGeocodeAddress(addressText);
+            let updatedPin = false;
+            
+            setForm(prev => {
+                const newForm = { ...prev };
+                if (data.postalCode && (!newForm.pincode || !newForm.pincode.trim())) {
+                    newForm.pincode = data.postalCode;
+                    updatedPin = true;
+                }
+                if (data.city && (!newForm.city || !newForm.city.trim())) {
+                    newForm.city = data.city;
+                }
+                if (data.state && (!newForm.state || !newForm.state.trim())) {
+                    newForm.state = data.state;
+                }
+                if (data.country && (!newForm.country || !newForm.country.trim())) {
+                    newForm.country = data.country;
+                }
+                return newForm;
+            });
+
+            if (updatedPin) {
+                addToast('PIN code fetched successfully!', 'success');
+            } else if (!data.postalCode) {
+                addToast('PIN code not found from Google for this address.', 'info');
+            } else {
+                addToast('Address data fetched. Existing fields were not overwritten.', 'info');
+            }
+        } catch (error) {
+            addToast(error?.response?.data?.message || error.message || 'Failed to fetch PIN from Google', 'error');
+        } finally {
+            setIsFetchingPin(false);
+        }
+    };
     
     // Masters for dropdowns
     const [departments, setDepartments] = useState([]);
@@ -242,6 +289,25 @@ const EmployeeForm = () => {
                             <Field label="Permanent Address">
                                 <textarea style={{ ...f.textarea, minHeight: '60px' }} value={form.address} onChange={e => set('address', e.target.value)} placeholder="Full residential address..." />
                             </Field>
+                        </div>
+                        <div style={f.row(4)}>
+                            <Field label="Pincode">
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input style={{...f.input, flex: 1}} value={form.pincode} onChange={e => set('pincode', e.target.value)} placeholder="PIN Code" />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleFetchPin}
+                                        disabled={isFetchingPin}
+                                        title="Fetch PIN from Google"
+                                        style={{ height: '36px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#334155' }}
+                                    >
+                                        {isFetchingPin ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                                    </button>
+                                </div>
+                            </Field>
+                            <Field label="City"><input style={f.input} value={form.city} onChange={e => set('city', e.target.value)} placeholder="City" /></Field>
+                            <Field label="State"><input style={f.input} value={form.state} onChange={e => set('state', e.target.value)} placeholder="State" /></Field>
+                            <Field label="Country"><input style={f.input} value={form.country} onChange={e => set('country', e.target.value)} placeholder="Country" /></Field>
                         </div>
                     </div>
                 )}

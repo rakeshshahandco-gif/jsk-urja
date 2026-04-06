@@ -76,6 +76,7 @@ import hrRoute from './hr.routes.js';
 import messengerRoute from './messenger.routes.js';
 import fyRoute from './fy.routes.js';
 import payrollRoute from './payroll.routes.js';
+import utilsRoute from './utils.routes.js';
 
 const router = express.Router();
 
@@ -399,6 +400,10 @@ const defaultRoutes = [
     {
         path: '/financial-years',
         route: fyRoute,
+    },
+    {
+        path: '/utils',
+        route: utilsRoute,
     },
 ];
 

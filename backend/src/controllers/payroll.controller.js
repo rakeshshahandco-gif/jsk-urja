@@ -5,9 +5,20 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { Employee } from '../models/employee.model.js';
 import { Attendance } from '../models/attendance.model.js';
 import { SalaryWorking } from '../models/salaryWorking.model.js';
+import { Holiday } from '../models/holiday.model.js';
 
 const getDaysInMonth = (year, month) => {
     return new Date(year, month, 0).getDate();
+};
+
+const getSundaysInRange = (start, end) => {
+    let count = 0;
+    let current = new Date(start);
+    while (current <= end) {
+        if (current.getDay() === 0) count++;
+        current.setDate(current.getDate() + 1);
+    }
+    return count;
 };
 
 export const generateSalaryPreview = asyncHandler(async (req, res) => {
@@ -28,11 +39,17 @@ export const generateSalaryPreview = asyncHandler(async (req, res) => {
             { isActive: true },
             { dateOfLeaving: { $gte: startDate } }
         ]
-    }).select('employeeCode employeeName basicSalary hra conveyance specialAllowance incentive salaryType');
+    }).select('employeeCode employeeName basicSalary hra conveyance specialAllowance incentive salaryType dateOfJoining dateOfLeaving');
 
     // 2. Fetch attendance for this month
     const attendances = await Attendance.find({
         date: { $gte: startDate, $lte: endDate }
+    });
+
+    // 3. Fetch holidays for this month
+    const holidays = await Holiday.find({
+        date: { $gte: startDate, $lte: endDate },
+        isActive: true
     });
 
     const attendanceMap = {};
@@ -47,16 +64,48 @@ export const generateSalaryPreview = asyncHandler(async (req, res) => {
         }
     });
 
-    // 3. Draft calculation
+    // 4. Draft calculation
     const previewRecords = employees.map(emp => {
-        const daysWorked = attendanceMap[emp._id.toString()] || 0;
+        // Define actual tenure range within this month
+        const tenureStart = emp.dateOfJoining > startDate ? new Date(emp.dateOfJoining) : startDate;
+        const tenureEnd = (emp.dateOfLeaving && emp.dateOfLeaving < endDate) ? new Date(emp.dateOfLeaving) : endDate;
+        
+        // Reset time for comparison
+        tenureStart.setHours(0,0,0,0);
+        tenureEnd.setHours(23,59,59,999);
+
+        // Count Sundays and Holidays in their tenure
+        const sundays = getSundaysInRange(tenureStart, tenureEnd);
+        const activeHolidays = holidays.filter(h => h.date >= tenureStart && h.date <= tenureEnd).length;
+
+        // Count Attendance (excluding Sundays/Holidays to avoid double counting)
+        const recordedAttendance = attendances.filter(att => 
+            att.employee.toString() === emp._id.toString() &&
+            att.date >= tenureStart && 
+            att.date <= tenureEnd
+        );
+
+        let attendanceDays = 0;
+        recordedAttendance.forEach(att => {
+            const day = new Date(att.date);
+            const isSunday = day.getDay() === 0;
+            const isHoliday = holidays.some(h => h.date.toDateString() === day.toDateString());
+
+            // Only add if it's NOT a Sunday/Holiday (those are added separately)
+            if (!isSunday && !isHoliday) {
+                if (att.status === 'Present') attendanceDays += 1;
+                else if (att.status === 'Half Day') attendanceDays += 0.5;
+            }
+        });
+
+        const daysWorked = attendanceDays + sundays + activeHolidays;
         const fraction = totalDays > 0 ? (daysWorked / totalDays) : 0;
 
         const basic = Math.round((emp.basicSalary || 0) * fraction);
         const hra = Math.round((emp.hra || 0) * fraction);
         const conveyance = Math.round((emp.conveyance || 0) * fraction);
         const specialAllowance = Math.round((emp.specialAllowance || 0) * fraction);
-        const incentives = Math.round((emp.incentive || 0) * fraction); // Based on fraction or flat? Assume fraction for simplicity unless mapped later.
+        const incentives = Math.round((emp.incentive || 0) * fraction);
         
         const grossAmount = basic + hra + conveyance + specialAllowance + incentives;
         const deductions = 0;
@@ -96,6 +145,7 @@ export const getSavedSalaries = asyncHandler(async (req, res) => {
         employeeId: r.employeeId._id,
         employeeCode: r.employeeId.employeeCode,
         employeeName: r.employeeId.employeeName,
+        masterGross: r.masterGross,
         totalDays: r.totalDays,
         daysWorked: r.daysWorked,
         basic: r.basic,
@@ -128,6 +178,7 @@ export const saveSalaryBatch = asyncHandler(async (req, res) => {
                     month,
                     year,
                     employeeId: r.employeeId,
+                    masterGross: r.masterGross,
                     totalDays: r.totalDays,
                     daysWorked: r.daysWorked,
                     basic: r.basic,

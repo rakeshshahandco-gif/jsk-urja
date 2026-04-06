@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
-import { Plus, Trash2, Star } from 'lucide-react';
+import { Plus, Trash2, Star, MapPin, Loader2 } from 'lucide-react';
 import { INDIAN_STATES } from '@/utils/constants';
 import { getCustomerTypes, generateCustomerCode } from '@/services/customerApi';
 import { getStickers } from '@/services/stickerApi';
+import { fetchGeocodeAddress } from '@/services/locationApi';
 import { AddStickerModal } from './AddStickerModal';
 import { MultiSelect } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
@@ -145,6 +146,62 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
     const { addToast } = useToast();
     const [generatingCode, setGeneratingCode] = useState(false);
+    const [isFetchingPin, setIsFetchingPin] = useState(false);
+
+    const handleFetchPin = async () => {
+        const addressText = watch('address');
+        if (!addressText || !addressText.trim()) {
+            addToast('Please enter an address first', 'error');
+            return;
+        }
+
+        setIsFetchingPin(true);
+        try {
+            const data = await fetchGeocodeAddress(addressText);
+            let updatedPin = false;
+
+            const currentPin = watch('pincode');
+            const currentCity = watch('city');
+            const currentDistrict = watch('district');
+            const currentTaluka = watch('taluka');
+            const currentState = watch('state');
+            const currentCountry = watch('country');
+
+            if (data.postalCode && (!currentPin || !currentPin.trim())) {
+                setValue('pincode', data.postalCode, { shouldValidate: true, shouldDirty: true });
+                updatedPin = true;
+            }
+            if (data.city && (!currentCity || !currentCity.trim())) {
+                setValue('city', data.city.toUpperCase(), { shouldValidate: true, shouldDirty: true });
+            }
+            if (data.district && (!currentDistrict || !currentDistrict.trim())) {
+                setValue('district', data.district.toUpperCase(), { shouldValidate: true, shouldDirty: true });
+            }
+            if (data.taluka && (!currentTaluka || !currentTaluka.trim())) {
+                setValue('taluka', data.taluka.toUpperCase(), { shouldValidate: true, shouldDirty: true });
+            }
+            if (data.state && (!currentState || !currentState.trim())) {
+                const matchedState = INDIAN_STATES.find(s => s.toLowerCase() === data.state.toLowerCase());
+                setValue('state', matchedState || data.state, { shouldValidate: true, shouldDirty: true });
+            }
+            if (data.country && (!currentCountry || !currentCountry.trim())) {
+                setValue('country', data.country.toUpperCase(), { shouldValidate: true, shouldDirty: true });
+            }
+
+            if (updatedPin) {
+                addToast('PIN code fetched successfully!', 'success');
+            } else if (!data.postalCode) {
+                addToast('PIN code not found from Google for this address.', 'info');
+            } else {
+                addToast('Address data fetched. Existing fields were not overwritten.', 'info');
+            }
+        } catch (error) {
+            console.error('Geocoding error:', error);
+            addToast(error?.response?.data?.message || error.message || 'Failed to fetch PIN from Google', 'error');
+        } finally {
+            setIsFetchingPin(false);
+        }
+    };
 
     const handleGenerateCode = async () => {
         setGeneratingCode(true);
@@ -458,12 +515,26 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
                         <div className={styles['form-group']}>
                             <label htmlFor="pincode">PINCODE</label>
-                            <Input
-                                id="pincode"
-                                {...register('pincode')}
-                                placeholder="Enter pincode"
-                                onChange={handleUppercaseChange('pincode')}
-                            />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <Input
+                                    id="pincode"
+                                    {...register('pincode')}
+                                    placeholder="Enter pincode"
+                                    onChange={handleUppercaseChange('pincode')}
+                                    style={{ flex: 1 }}
+                                />
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={handleFetchPin} 
+                                    disabled={isFetchingPin}
+                                    title="Fetch PIN from Google"
+                                    style={{ padding: '0 12px', height: '42px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    {isFetchingPin ? <Loader2 className="animate-spin" size={16} /> : <MapPin size={16} />}
+                                    <span style={{ fontSize: '13px' }}>Fetch PIN</span>
+                                </Button>
+                            </div>
                         </div>
 
                         <div className={styles['form-group']}>
