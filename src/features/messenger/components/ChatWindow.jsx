@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { useMessenger } from '@/contexts/MessengerContext';
 import { MessageBubble } from './MessageBubble';
 import { MessageComposer } from './MessageComposer';
@@ -31,16 +31,21 @@ export const ChatWindow = () => {
         }
 
         // For new messages, see if we are already at bottom (within 100px)
-        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
         
-        if (isAtBottom) {
-            el.scrollTop = el.scrollHeight;
+        // Force scroll down if the last message was sent by the current user
+        const lastMsg = messages && messages.length > 0 ? messages[messages.length - 1] : null;
+        const isMyMsg = lastMsg && (lastMsg.sender?._id === currentUser?._id || lastMsg.sender === currentUser?._id);
+        
+        if (isAtBottom || isMyMsg) {
+            // Using smooth behavior makes it feel more premium
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
             setShowNewMsgBubble(false);
         } else {
             // User is scrolling up, show indicator
             setShowNewMsgBubble(true);
         }
-    }, [messages, activeThread]);
+    }, [messages, activeThread, currentUser]);
 
     const handleScroll = (e) => {
         const el = e.target;
@@ -110,7 +115,7 @@ export const ChatWindow = () => {
     }, [messages]);
 
     return (
-        <div className={styles.mainContent}>
+        <div className={styles.chatWrapper}>
             {/* WhatsApp Style Header */}
             <header className={styles.chatHeader}>
                 <div className={styles.chatInfo}>

@@ -76,7 +76,7 @@ export const MessageComposer = () => {
                 <input 
                     type="file" 
                     ref={fileInputRef} 
-                    className="hidden" 
+                    style={{ display: 'none' }} 
                     multiple 
                     onChange={handleFileSelect}
                 />

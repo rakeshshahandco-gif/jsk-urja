@@ -63,6 +63,10 @@ export const updateSeries = asyncHandler(async (req, res) => {
     if (body.startNumber !== undefined) s.startNumber = Number(body.startNumber);
     if (body.padLength !== undefined) s.padLength = Number(body.padLength);
 
+    if (body.resetSequence === true || String(body.resetSequence) === 'true') {
+        s.currentNumber = 0;
+    }
+
     // Explicitly handle booleans
     if (body.gstApplicable !== undefined) {
         s.gstApplicable = String(body.gstApplicable) === 'true' || body.gstApplicable === true;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMessenger } from '@/contexts/MessengerContext';
 import { useAuth } from '@/hooks/useAuth';
 import { ThreadList } from './components/ThreadList';
@@ -19,14 +19,29 @@ import clsx from 'clsx';
 
 const MessengerPage = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { user: currentUser } = useAuth();
     const { threads, activeThread, selectThread, loading } = useMessenger();
     const [isNewThreadModalOpen, setIsNewThreadModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeFilter, setActiveFilter] = useState('all'); // all, unread, groups, broadcast
+    const [activeFilter, setActiveFilter] = useState('all');
+    const [autoOpenDone, setAutoOpenDone] = useState(false);
 
-    // Handle initial thread selection if ID in URL (optional, currently handled by context)
-    
+    // Auto-open thread from popup click (?thread=<threadId>)
+    useEffect(() => {
+        if (autoOpenDone) return;
+        const targetThreadId = searchParams.get('thread');
+        if (!targetThreadId || threads.length === 0) return;
+        const thread = threads.find(t => t._id === targetThreadId);
+        if (thread) {
+            selectThread(thread);
+            setAutoOpenDone(true);
+            // Clean up the URL
+            setSearchParams({}, { replace: true });
+        }
+    }, [searchParams, threads, selectThread, autoOpenDone, setSearchParams]);
+
+
     return (
         <div className={styles.container}>
             {/* Sidebar / Thread List Section */}

@@ -147,6 +147,7 @@ import { SocketProvider } from '@/contexts/SocketContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { MessengerProvider } from '@/contexts/MessengerContext';
 import { FinancialYearProvider } from '@/contexts/FinancialYearContext';
+import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
 
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -161,10 +162,17 @@ function App() {
             <AuthProvider>
                 <FinancialYearProvider>
                     <SocketProvider>
+                    <LiveNotificationProvider>
                     <NotificationProvider>
                         <MessengerProvider>
                             <ToastProvider>
-                                <Toaster position="top-right" />
+                                <Toaster
+                                    position="bottom-right"
+                                    toastOptions={{
+                                        duration: 5000,
+                                        style: { zIndex: 99999 }
+                                    }}
+                                />
                                 <ModalProvider>
                                     <Suspense fallback={<div className="flex items-center justify-center h-screen font-bold text-gray-400">Loading Module...</div>}>
                                         <Routes>
@@ -183,6 +191,18 @@ function App() {
                                                 }
                                             />
 
+                                            {/* Messenger - full screen, no CRM sidebar */}
+                                            <Route
+                                                path="/messenger"
+                                                element={
+                                                    <ProtectedRoute>
+                                                        <ErrorBoundary>
+                                                            <MessengerPage />
+                                                        </ErrorBoundary>
+                                                    </ProtectedRoute>
+                                                }
+                                            />
+
                                             {/* Pages with sidebar and header */}
                                             <Route path="*" element={
                                                 <ProtectedRoute>
@@ -197,7 +217,8 @@ function App() {
                             </ToastProvider>
                         </MessengerProvider>
                     </NotificationProvider>
-                </SocketProvider>
+                    </LiveNotificationProvider>
+                    </SocketProvider>
                 </FinancialYearProvider>
             </AuthProvider>
         </BrowserRouter>
@@ -206,33 +227,21 @@ function App() {
 
 // Separate layout component to handle route-specific logic
 const AppLayout = () => {
-    const { pathname } = useLocation();
-    const isMessenger = pathname.startsWith('/messenger');
-
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
             <Sidebar />
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                {!isMessenger && <Header />}
+                <Header />
                 <main 
                     style={{ 
                         flex: 1, 
-                        backgroundColor: isMessenger ? '#FFF' : '#F9FAFB', 
-                        height: isMessenger ? '100vh' : 'auto',
-                        maxHeight: isMessenger ? 'none' : "92vh", 
-                        overflow: isMessenger ? 'hidden' : "auto" 
+                        backgroundColor: '#F9FAFB', 
+                        maxHeight: '92vh', 
+                        overflow: 'auto' 
                     }}
                 >
                     <Routes>
                         <Route path="/" element={<Navigate to="/tasks/list" replace />} />
-                        <Route
-                            path="/messenger"
-                            element={
-                                <ProtectedRoute>
-                                    <MessengerPage />
-                                </ProtectedRoute>
-                            }
-                        />
                         <Route path="/customers" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/customers/list" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/followups" element={<ProtectedRoute requirePermission="customers"><FollowupDashboard /></ProtectedRoute>} />

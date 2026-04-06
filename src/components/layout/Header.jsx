@@ -21,7 +21,7 @@ export const Header = () => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { openModal } = useModal();
-    const { unreadCount, sendTestNotification } = useNotification();
+    const { unreadCount } = useNotification();
     const { unreadTotal } = useMessenger();
     const { financialYears, selectedFY, setSelectedFY } = useFinancialYear();
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -160,13 +160,6 @@ export const Header = () => {
                                         <CheckCircle size={14} />
                                         <span className={styles.statusText}>Live Alerts</span>
                                     </div>
-                                    <button 
-                                        className={styles.testBtn} 
-                                        onClick={sendTestNotification}
-                                        title="Send a sample notification to test your setup"
-                                    >
-                                        Test Pop-up
-                                    </button>
                                 </div>
                             )}
                             {notificationPermission === 'denied' && (

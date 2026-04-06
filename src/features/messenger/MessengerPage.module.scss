@@ -1,51 +1,63 @@
-.container {
-    display: flex;
-    height: 100vh;
-    background-color: #f0f2f5;
-    overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    position: relative;
-    width: 100%;
+// ── WhatsApp Web-style Full-Screen Messenger ──────────────────────────────────
+// Fills the entire browser viewport. No CRM sidebar shown (route is full-screen).
+// Layout: .container → .sidebar (30%) + .mainContent (70%)
+//   .sidebar → header (fixed) + threadListArea (flex:1, scrollable)
+//   .mainContent → chatHeader (fixed) + messageArea (flex:1, scrollable) + composer (fixed)
+
+// ── Scrollbars (thin, global within messenger) ────────────────────────────────
+:global {
+    .messenger-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,0,0,0.2) transparent;
+        &::-webkit-scrollbar { width: 6px; }
+        &::-webkit-scrollbar-thumb {
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+    }
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
-* {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0,0,0,0.2) transparent;
+// ── Root Container ────────────────────────────────────────────────────────────
+.container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #f0f2f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    position: fixed;          // ← ensures it truly covers the full viewport
+    top: 0;
+    left: 0;
+    z-index: 100;
 }
 
-*::-webkit-scrollbar {
-    width: 6px;
-}
-
-*::-webkit-scrollbar-thumb {
-    background-color: rgba(0,0,0,0.2);
-    border-radius: 10px;
-}
-
-// ── Sidebar ─────────────────────────────────────────────────
+// ── Left Sidebar (Thread List) ────────────────────────────────────────────────
 .sidebar {
     width: 30%;
-    min-width: 320px;
-    max-width: 450px;
+    min-width: 300px;
+    max-width: 420px;
     background-color: #ffffff;
-    border-right: 1px solid rgba(0,0,0,0.1);
+    border-right: 1px solid rgba(0,0,0,0.08);
     display: flex;
     flex-direction: column;
+    height: 100%;
+    overflow: hidden;
     z-index: 10;
+    flex-shrink: 0;
 }
 
 .sidebarHeader {
-    padding: 10px 16px;
+    padding: 10px 16px 8px;
     background-color: #f0f2f5;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    position: relative;
+    gap: 10px;
+    flex-shrink: 0;           // ← never shrinks — always visible
     z-index: 10;
 }
 
@@ -65,18 +77,19 @@
         justify-content: center;
         font-weight: bold;
         color: #54656f;
+        font-size: 16px;
     }
 
     .actions {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 4px;
         color: #54656f;
 
         .backBtn {
-            margin-right: 8px;
+            margin-right: 6px;
             color: #008069;
-            &:hover { background: rgba(0,128,105,0.05); }
+            &:hover { background: rgba(0,128,105,0.08); }
         }
 
         button {
@@ -89,14 +102,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-
-            &:hover { background: rgba(0,0,0,0.05); }
+            transition: background 0.15s;
+            &:hover { background: rgba(0,0,0,0.06); }
         }
     }
 }
 
 .searchArea {
-    padding: 0 0 4px 0;
     .searchWrapper {
         display: flex;
         align-items: center;
@@ -105,7 +117,8 @@
         padding: 0 12px;
         height: 35px;
 
-        .searchIcon { color: #54656f; margin-right: 12px; opacity: 0.7; }
+        .searchIcon { color: #54656f; margin-right: 10px; opacity: 0.7; flex-shrink: 0; }
+
         input {
             border: none;
             background: transparent;
@@ -113,37 +126,55 @@
             outline: none;
             font-size: 14px;
             color: #3b4a54;
+            &::placeholder { color: #8696a0; }
         }
     }
 }
 
 .filterTabs {
     display: flex;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+
     .tab {
-        padding: 6px 14px;
+        padding: 5px 14px;
         background-color: #f0f2f5;
         border-radius: 18px;
         font-size: 13px;
         color: #54656f;
         cursor: pointer;
         border: none;
+        white-space: nowrap;
+        transition: all 0.15s;
+        flex-shrink: 0;
+
         &.active {
             background-color: #d9fdd3;
             color: #008069;
-            font-weight: 500;
+            font-weight: 600;
+        }
+        &:hover:not(.active) {
+            background-color: #e9edef;
         }
     }
 }
 
+// Thread list scrollable area — fills remaining space
 .threadListArea {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     background-color: #fff;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.15) transparent;
+    &::-webkit-scrollbar { width: 5px; }
+    &::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.15); border-radius: 10px; }
 }
 
-// ── Thread List Item ─────────────────────────────────────────
+// ── Thread List Item ──────────────────────────────────────────────────────────
 .threadItem {
     display: flex;
     align-items: center;
@@ -152,15 +183,16 @@
     height: 72px;
     cursor: pointer;
     border-bottom: 1px solid #f5f6f6;
-    transition: background 0.2s;
+    transition: background 0.15s;
+    flex-shrink: 0;
 
-    &:hover { background-color: #f5f6f6; }
+    &:hover  { background-color: #f5f6f6; }
     &.active { background-color: #f0f2f5; }
 
     .avatarWrapper {
         position: relative;
         flex-shrink: 0;
-        
+
         .avatar {
             width: 48px;
             height: 48px;
@@ -172,10 +204,10 @@
             font-size: 18px;
             overflow: hidden;
             background-color: #dfe5e7;
-            
-            &.group { background-color: #00a884; }
+
+            &.group     { background-color: #00a884; }
             &.broadcast { background-color: #2b2b2b; }
-            &.direct { color: #54656f; }
+            &.direct    { color: #54656f; }
         }
 
         .onlineStatus {
@@ -216,7 +248,9 @@
             .time {
                 font-size: 12px;
                 color: #667781;
-                &.unread { color: #00a884; font-weight: 500; }
+                flex-shrink: 0;
+                margin-left: 4px;
+                &.unread { color: #00a884; font-weight: 600; }
             }
         }
 
@@ -231,9 +265,9 @@
                 gap: 4px;
                 flex: 1;
                 min-width: 0;
-                
-                .statusIcon { display: flex; align-items: center; color: #8696a0; &.read { color: #53bdeb; } }
-                
+
+                .statusIcon { display: flex; align-items: center; color: #8696a0; flex-shrink: 0; &.read { color: #53bdeb; } }
+
                 p {
                     font-size: 14px;
                     color: #667781;
@@ -242,7 +276,7 @@
                     text-overflow: ellipsis;
                     white-space: nowrap;
                     &.unread { color: #111b21; font-weight: 500; }
-                    &.typing { color: #00a884; }
+                    &.typing  { color: #00a884; }
                 }
             }
 
@@ -259,100 +293,159 @@
                 justify-content: center;
                 padding: 0 6px;
                 margin-left: 4px;
+                flex-shrink: 0;
             }
         }
     }
 }
 
-// ── Main Content Area ───────────────────────────────────────
+// ── Main Chat Area ─────────────────────────────────────────────────────────────
+// CRITICAL: This must be flex-column with height:100%.
+// Children: chatHeader (fixed height) + messageArea (flex:1) + composer (fixed height)
 .mainContent {
     flex: 1;
     display: flex;
     flex-direction: column;
     background-color: #efeae2;
     position: relative;
-    border-left: 1px solid rgba(0,0,0,0.05);
     height: 100%;
     min-width: 0;
+    overflow: hidden;      // ← prevent any overflow leaking out
 
+    // WhatsApp background pattern
     &::before {
         content: "";
         position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
+        inset: 0;
         background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
         background-repeat: repeat;
-        opacity: 0.05;
+        opacity: 0.04;
         pointer-events: none;
         z-index: 0;
     }
 }
 
+// ── ChatWindow inner wrapper (fills mainContent) ───────────────────────────────
+// Used as the root div of ChatWindow.jsx
+.chatWrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+}
+
+// ── Chat Header ───────────────────────────────────────────────────────────────
 .chatHeader {
     height: 60px;
+    min-height: 60px;
     padding: 0 16px;
     background-color: #f0f2f5;
     display: flex;
     align-items: center;
     justify-content: space-between;
     z-index: 10;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    flex-shrink: 0;            // ← always visible, never shrinks
 
     .chatInfo {
         display: flex;
         align-items: center;
         gap: 12px;
         cursor: pointer;
+        flex: 1;
+        min-width: 0;
 
         .avatar {
             width: 40px;
             height: 40px;
+            min-width: 40px;
             border-radius: 50%;
             background-color: #dfe5e7;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #54656f;
+            font-weight: 600;
         }
 
         .details {
             display: flex;
             flex-direction: column;
-            h3 { font-size: 16px; font-weight: 500; color: #111b21; margin: 0; }
-            span { font-size: 12px; color: #667781; }
+            min-width: 0;
+            h3 {
+                font-size: 16px;
+                font-weight: 500;
+                color: #111b21;
+                margin: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            span {
+                font-size: 13px;
+                color: #667781;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                &.typing { color: #00a884; }
+            }
+        }
+    }
+
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+
+        button {
+            padding: 8px;
+            border-radius: 50%;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #54656f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+            &:hover { background: rgba(0,0,0,0.06); }
         }
     }
 }
 
+// ── Message Scroll Area ───────────────────────────────────────────────────────
+// flex:1 makes it fill all remaining height between header and composer
 .messageArea {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 5%;
+    overflow-x: hidden;
+    padding: 16px 6%;
     display: flex;
     flex-direction: column;
     z-index: 1;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.15) transparent;
 
-    // Custom Scrollbar
     &::-webkit-scrollbar { width: 6px; }
-    &::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); }
+    &::-webkit-scrollbar-thumb {
+        background-color: rgba(0,0,0,0.15);
+        border-radius: 10px;
+    }
 }
 
-// ── Bubbles ─────────────────────────────────────────────────
+// ── Message Bubbles ───────────────────────────────────────────────────────────
 .bubbleRow {
     display: flex;
     width: 100%;
     margin-bottom: 2px;
     position: relative;
-    animation: fadeIn 0.3s ease-out;
-    &.own { 
-        justify-content: flex-end; 
-        padding-left: 15%; 
-        @media (max-width: 768px) { padding-left: 10px; }
-    }
-    &.other { 
-        justify-content: flex-start; 
-        padding-right: 15%; 
-        @media (max-width: 768px) { padding-right: 10px; }
-    }
+    animation: fadeIn 0.2s ease-out;
+
+    &.own   { justify-content: flex-end;   padding-left:  20%; }
+    &.other { justify-content: flex-start; padding-right: 20%; }
 }
 
 .bubble {
@@ -362,6 +455,8 @@
     box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
     position: relative;
     min-width: 80px;
+    display: flex;
+    flex-direction: column;
 
     &.own {
         background-color: #d9fdd3;
@@ -370,8 +465,7 @@
             content: "";
             position: absolute;
             top: 0; right: -8px;
-            width: 8px;
-            height: 13px;
+            width: 8px; height: 13px;
             background-color: #d9fdd3;
             clip-path: polygon(0 0, 0 100%, 100% 0);
         }
@@ -384,8 +478,7 @@
             content: "";
             position: absolute;
             top: 0; left: -8px;
-            width: 8px;
-            height: 13px;
+            width: 8px; height: 13px;
             background-color: #ffffff;
             clip-path: polygon(100% 0, 100% 100%, 0 0);
         }
@@ -401,29 +494,23 @@
     .content {
         margin: 0;
         font-size: 14.2px;
-        line-height: 1.4;
+        line-height: 1.45;
         white-space: pre-wrap;
         word-break: break-word;
         color: #111b21;
-
-        strong {
-            color: #008069;
-        }
     }
 
     .footer {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
+        align-self: flex-end;
         gap: 4px;
-        margin-top: -4px;
-        float: right;
+        margin-top: 2px;
         margin-left: 10px;
 
         .time {
             font-size: 11px;
             color: #667781;
-            text-transform: uppercase;
         }
 
         .statusIcon {
@@ -435,15 +522,16 @@
     }
 }
 
-// ── Composer ────────────────────────────────────────────────
+// ── Composer (footer) ─────────────────────────────────────────────────────────
 .composer {
     min-height: 62px;
     padding: 10px 16px;
     background-color: #f0f2f5;
     display: flex;
     align-items: flex-end;
-    gap: 12px;
+    gap: 10px;
     z-index: 10;
+    flex-shrink: 0;            // ← always visible, never shrinks
 
     .iconBtn {
         padding: 8px;
@@ -452,7 +540,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        &:hover { opacity: 0.8; }
+        flex-shrink: 0;
+        &:hover { opacity: 0.75; }
     }
 
     .inputWrapper {
@@ -462,6 +551,7 @@
         padding: 9px 12px;
         display: flex;
         align-items: flex-end;
+        min-width: 0;
 
         textarea {
             width: 100%;
@@ -474,11 +564,13 @@
             max-height: 120px;
             line-height: 20px;
             padding: 0;
+            font-family: inherit;
             &::placeholder { color: #8696a0; }
         }
     }
 }
 
+// ── Empty State (no chat selected) ────────────────────────────────────────────
 .emptyState {
     flex: 1;
     display: flex;
@@ -504,28 +596,30 @@
     }
 
     h3 { color: #41525d; font-weight: 300; font-size: 32px; margin-bottom: 16px; }
-    p { color: #667781; font-size: 14.5px; max-width: 450px; line-height: 1.6; }
+    p  { color: #667781; font-size: 14.5px; max-width: 450px; line-height: 1.6; }
 }
 
-// -- Contact List ---------------------------------------------
+// ── Contact List ──────────────────────────────────────────────────────────────
 .contactList {
     display: flex;
     flex-direction: column;
     padding-bottom: 80px;
 
     .contactSectionHeader {
-        padding: 30px 16px 10px 16px;
-        font-size: 14px;
-        font-weight: 500;
+        padding: 28px 16px 8px;
+        font-size: 13px;
+        font-weight: 600;
         color: #008069;
         background-color: #fff;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
 
     .quickActions {
         display: flex;
         flex-direction: column;
         background-color: #fff;
-        padding-top: 10px;
+        padding-top: 8px;
 
         .actionItem {
             display: flex;
@@ -534,8 +628,7 @@
             padding: 0 16px;
             height: 64px;
             cursor: pointer;
-            transition: background 0.2s;
-
+            transition: background 0.15s;
             &:hover { background-color: #f5f6f6; }
 
             .actionIcon {
@@ -546,8 +639,7 @@
                 align-items: center;
                 justify-content: center;
                 color: white;
-                
-                &.bgGroup { background-color: #00a884; }
+                &.bgGroup     { background-color: #00a884; }
                 &.bgBroadcast { background-color: #00a884; }
             }
 
@@ -569,8 +661,7 @@
         padding: 0 16px;
         height: 72px;
         cursor: pointer;
-        transition: background 0.2s;
-
+        transition: background 0.15s;
         &:hover { background-color: #f5f6f6; }
 
         .contactAvatar {
@@ -583,7 +674,7 @@
             color: #fff;
             font-weight: 500;
             font-size: 20px;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+            flex-shrink: 0;
         }
 
         .contactInfo {
@@ -595,33 +686,30 @@
             flex-direction: column;
             justify-content: center;
             h4 { font-size: 16px; font-weight: 400; color: #111b21; margin: 0; }
-            p { font-size: 14px; color: #667781; margin: 2px 0 0 0; }
+            p  { font-size: 14px; color: #667781; margin: 2px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         }
 
         .multiSelectBadge {
-             width: 20px;
-             height: 20px;
-             border-radius: 4px;
-             border: 2px solid #adb5bd;
-             display: flex;
-             align-items: center;
-             justify-content: center;
-             &.selected {
-                 background-color: #00a884;
-                 border-color: #00a884;
-                 color: white;
-             }
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #adb5bd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            &.selected { background-color: #00a884; border-color: #00a884; color: white; }
         }
     }
 
     .multiSelectActions {
         position: sticky;
         bottom: 24px;
-        margin-top: -80px; 
+        margin-top: -80px;
         align-self: flex-end;
         margin-right: 24px;
         z-index: 100;
-        
+
         button {
             width: 56px;
             height: 56px;
@@ -635,10 +723,7 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            &:hover { 
-                transform: scale(1.1) rotate(5deg); 
-                box-shadow: 0 8px 24px rgba(0,0,0,0.3); 
-            }
+            &:hover  { transform: scale(1.1); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
             &:active { transform: scale(0.9); }
         }
     }

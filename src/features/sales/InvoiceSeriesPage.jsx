@@ -21,7 +21,8 @@ export default function InvoiceSeriesPage() {
         gstApplicable: true, 
         isDefault: false, 
         isEstimate: false, 
-        description: '' 
+        description: '',
+        resetSequence: false
     });
     const [saving, setSaving] = useState(false);
 
@@ -45,7 +46,8 @@ export default function InvoiceSeriesPage() {
             gstApplicable: true, 
             isDefault: false, 
             isEstimate: false,
-            description: '' 
+            description: '',
+            resetSequence: false
         }); 
         setShowModal(true); 
     };
@@ -60,7 +62,8 @@ export default function InvoiceSeriesPage() {
             gstApplicable: s.gstApplicable === false ? false : true,
             isDefault: !!s.isDefault,
             isEstimate: !!s.isEstimate,
-            description: s.description || ''
+            description: s.description || '',
+            resetSequence: false
         });
         setShowModal(true);
     };
@@ -179,6 +182,12 @@ export default function InvoiceSeriesPage() {
                                     <input type="checkbox" checked={form.isEstimate} onChange={e => f('isEstimate', e.target.checked)} style={{ width: 16, height: 16 }} />
                                     <span style={{ fontWeight: 600, color: '#7c3aed' }}>Is Estimate Series?</span>
                                 </label>
+                                {editing && (
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, background: '#fffbeb', padding: '4px 10px', borderRadius: 6, border: '1px solid #fde68a' }}>
+                                        <input type="checkbox" checked={form.resetSequence} onChange={e => f('resetSequence', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#d97706' }} />
+                                        <span style={{ fontWeight: 700, color: '#b45309' }}>Reset Seq. to 0 (For New Year)</span>
+                                    </label>
+                                )}
                             </div>
                         </div>
                         <div style={{ marginTop: 24, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

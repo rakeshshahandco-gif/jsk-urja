@@ -2,6 +2,7 @@ import { Notification } from '../models/notification.model.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
+import { getIO } from '../config/socket.js';
 
 // 获取当前用户的通知
 export const getMyNotifications = asyncHandler(async (req, res) => {
@@ -55,7 +56,7 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
     res.json(new ApiResponse(200, null, 'All notifications marked as read'));
 });
 
-import { getIO } from '../config/socket.js';
+
 
 // Helper for other controllers to create notifications
 export const createNotification = async ({ recipient, actor, task, type, title, message, metadata = {} }) => {
@@ -99,13 +100,10 @@ export const createNotification = async ({ recipient, actor, task, type, title, 
         io.to(roomNew).emit('notification:new', payload);
         io.to(roomOld).emit('notification:new', payload);
 
-        // 2. Specific events as requested for instant UI logic/filtering
-        // Note: 'task:assigned' and 'task:updated' are now emitted directly by task.controller.js
-        // so we don't emit Notification objects under Task event names!
-        if (type === 'MESSENGER') {
-            io.to(roomNew).emit('chat:message', payload);
-            io.to(roomOld).emit('chat:message', payload);
-        } else if (type === 'REMINDER') {
+        // 2. Specific events for non-MESSENGER types
+        // MESSENGER popups are handled by MessengerContext via 'messenger:new_message' events
+        // emitted directly by messenger.controller.js — do NOT re-emit here to avoid duplicates.
+        if (type === 'REMINDER') {
             io.to(roomNew).emit('reminder:new', payload);
             io.to(roomOld).emit('reminder:new', payload);
         }
