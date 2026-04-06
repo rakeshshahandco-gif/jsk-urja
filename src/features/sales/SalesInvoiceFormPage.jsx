@@ -4,6 +4,7 @@ import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceS
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
+import { numberToWords } from '@/utils/numberToWords';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
@@ -371,7 +372,20 @@ export default function SalesInvoiceFormPage() {
                     rate: Number(i.rate), 
                     gstRate: Number(i.gstRate) || 18, 
                     discountPercent: Number(i.discountPercent) || 0 
-                }))
+                })),
+                totalQty: form.items.reduce((acc, i) => acc + (Number(i.qty) || 0), 0),
+                subTotal: totalItemTaxable,
+                totalTaxableAmount: totalTaxable,
+                totalCgst: isIGST ? 0 : totalGst / 2,
+                totalSgst: isIGST ? 0 : totalGst / 2,
+                totalIgst: isIGST ? totalGst : 0,
+                totalGst: totalGst,
+                freightAmount: freight,
+                freightGstAmount: freightGst,
+                grandTotal: grandTotal,
+                roundedTotal: roundedTotal,
+                roundOff: Number((roundedTotal - grandTotal).toFixed(2)),
+                amountInWords: numberToWords(roundedTotal)
             };
             const inv = await createSalesInvoice(payload);
             toast.success('Invoice created!');
