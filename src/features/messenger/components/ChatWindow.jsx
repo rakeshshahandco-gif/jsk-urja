@@ -159,8 +159,11 @@ export const ChatWindow = () => {
                         <MessageBubble 
                             key={item.data._id} 
                             message={item.data} 
-                            isOwn={item.data.sender._id === currentUser._id || item.data.sender === currentUser._id}
-                            showSenderName={!isDirect && item.data.sender?._id !== currentUser._id}
+                            isOwn={
+                                item.data.sender?._id?.toString() === currentUser?._id?.toString() ||
+                                item.data.sender?.toString() === currentUser?._id?.toString()
+                            }
+                            showSenderName={!isDirect && item.data.sender?._id?.toString() !== currentUser?._id?.toString()}
                         />
                     )
                 ))}

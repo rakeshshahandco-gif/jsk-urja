@@ -26,13 +26,13 @@ export const MessengerProvider = ({ children }) => {
     // Dedup guard for message popups
     const seenMsgIds = useRef(new Set());
 
-    // ── Keep active thread ref in sync ────────────────────────────────────
+    // Keep active thread ref in sync
     const activeThreadRef = useRef(activeThread);
     useEffect(() => {
         activeThreadRef.current = activeThread;
     }, [activeThread]);
 
-    // ── Initial Data Fetch ────────────────────────────────────────────────
+    // Initial Data Fetch
     const fetchThreads = useCallback(async () => {
         if (!user) return;
         try {
@@ -53,28 +53,30 @@ export const MessengerProvider = ({ children }) => {
         }
     }, [user]);
 
-    // ── Initial Load ──────────────────────────────────────────────────────
+    // Initial Load
     useEffect(() => {
         if (!user) return;
         fetchThreads();
         fetchUnreadTotal();
     }, [user, fetchThreads, fetchUnreadTotal]);
 
-    // ── Socket.IO Event Listeners ─────────────────────────────────────────
+    // Socket.IO Event Listeners
     useEffect(() => {
         if (!socket || !user) return;
 
         const handleChatMessage = ({ threadId, message }) => {
             const currentActive = activeThreadRef.current;
 
-            // If sender is the current user, skip popup
+            // Normalize IDs to strings for all comparisons
+            const threadIdStr = threadId?.toString();
             const senderIdStr = message?.sender?._id?.toString() || message?.sender?.toString();
             const myIdStr = user._id?.toString();
             const isMine = senderIdStr && myIdStr && senderIdStr === myIdStr;
+            const activeIdStr = currentActive?._id?.toString();
 
-            // ── Update threads list ──────────────────────────────────────
+            // Update threads list
             setThreads(prev => {
-                const index = prev.findIndex(t => t._id === threadId);
+                const index = prev.findIndex(t => t._id?.toString() === threadIdStr);
                 if (index === -1) {
                     fetchThreads(); // new thread not yet in local state
                     return prev;
@@ -87,7 +89,7 @@ export const MessengerProvider = ({ children }) => {
                     timestamp: message.createdAt
                 };
                 // Increment unread only if not viewing this thread AND not sender
-                if ((!currentActive || currentActive._id !== threadId) && !isMine) {
+                if ((!currentActive || activeIdStr !== threadIdStr) && !isMine) {
                     thread.unreadCount = (thread.unreadCount || 0) + 1;
                     setUnreadTotal(t => t + 1);
                 }
@@ -96,11 +98,12 @@ export const MessengerProvider = ({ children }) => {
                 return updatedThreads;
             });
 
-            // ── Append to active window ──────────────────────────────────
-            if (currentActive && currentActive._id?.toString() === threadId?.toString()) {
+            // Append to active window
+            if (currentActive && activeIdStr === threadIdStr) {
                 setMessages(prev => {
-                    // Dedup by message _id
-                    if (message._id && prev.some(m => m._id === message._id)) return prev;
+                    // Dedup by message _id — use toString() on both sides to handle ObjectId vs string
+                    const msgIdStr = message._id?.toString();
+                    if (msgIdStr && prev.some(m => m._id?.toString() === msgIdStr)) return prev;
                     return [...prev, message];
                 });
                 if (!isMine) {
@@ -109,9 +112,9 @@ export const MessengerProvider = ({ children }) => {
                 return; // In view — no popup needed
             }
 
-            // ── Show popup to receiving user (not sender) ─────────────────
+            // Show popup to receiving user (not sender)
             if (!isMine) {
-                const msgId = message._id || `msg-${Date.now()}`;
+                const msgId = message._id?.toString() || `msg-${Date.now()}`;
 
                 // Dedup guard
                 if (seenMsgIds.current.has(msgId)) return;
@@ -119,7 +122,7 @@ export const MessengerProvider = ({ children }) => {
                 setTimeout(() => seenMsgIds.current.delete(msgId), 30000);
 
                 // Find thread info for group name
-                const threadInfo = threads.find(t => t._id === threadId) || {};
+                const threadInfo = threads.find(t => t._id?.toString() === threadIdStr) || {};
                 const isGroup = threadInfo.type === 'group' || threadInfo.type === 'broadcast';
                 const groupName = isGroup ? (threadInfo.name || 'Group Chat') : null;
                 const senderName = message.sender?.name || 'Someone';
@@ -132,17 +135,17 @@ export const MessengerProvider = ({ children }) => {
                     actorName: senderName,
                     actorAvatar: null,
                     groupName,
-                    navigateTo: `/messenger?thread=${threadId}`,
+                    navigateTo: `/messenger?thread=${threadIdStr}`,
                     createdAt: message.createdAt,
                 });
 
                 // Browser notification
                 if ('Notification' in window && Notification.permission === 'granted') {
                     showBrowserNotification({
-                        title: `💬 ${senderName}${groupName ? ` · ${groupName}` : ''}`,
+                        title: `\u{1F4AC} ${senderName}${groupName ? ` \u00B7 ${groupName}` : ''}`,
                         body: message.content,
-                        url: `/messenger?thread=${threadId}`,
-                        tag: `crm-msg-${threadId}`,
+                        url: `/messenger?thread=${threadIdStr}`,
+                        tag: `crm-msg-${threadIdStr}`,
                         backendUrl: env.SOCKET_URL,
                     });
                 }
@@ -151,30 +154,29 @@ export const MessengerProvider = ({ children }) => {
 
         const handleMessageDeleted = ({ threadId, messageId }) => {
             const currentActive = activeThreadRef.current;
-            if (currentActive && currentActive._id === threadId) {
-                setMessages(prev => prev.filter(m => m._id !== messageId));
+            if (currentActive && currentActive._id?.toString() === threadId?.toString()) {
+                setMessages(prev => prev.filter(m => m._id?.toString() !== messageId?.toString()));
             }
         };
 
         const handleThreadCreated = ({ thread, message }) => {
             setThreads(prev => {
-                if (prev.some(t => t._id === thread._id)) return prev; // already known
+                if (prev.some(t => t._id?.toString() === thread._id?.toString())) return prev;
                 return [thread, ...prev];
             });
             // If I'm not the sender, also trigger a message event
             const senderIdStr = message?.sender?._id?.toString() || message?.sender?.toString();
             const myIdStr = user._id?.toString();
             if (senderIdStr !== myIdStr) {
-                // Trigger the chat message handler to show popup
                 handleChatMessage({ threadId: thread._id, message });
             }
         };
 
         const handleMessageSeen = ({ threadId, userId }) => {
             const currentActive = activeThreadRef.current;
-            if (currentActive && currentActive._id === threadId) {
+            if (currentActive && currentActive._id?.toString() === threadId?.toString()) {
                 setMessages(prev => prev.map(m => {
-                    if (m.sender._id !== userId && !m.readBy?.some(r => r.user === userId)) {
+                    if (m.sender?._id?.toString() !== userId?.toString() && !m.readBy?.some(r => r.user?.toString() === userId?.toString())) {
                         return { ...m, readBy: [...(m.readBy || []), { user: userId, readAt: new Date() }] };
                     }
                     return m;
@@ -217,7 +219,7 @@ export const MessengerProvider = ({ children }) => {
 
         // On reconnect: re-sync unread counts
         const handleConnect = () => {
-            console.log('🔄 MessengerContext: Reconnected — syncing unread counts...');
+            console.log('Messenger: Reconnected, syncing...');
             fetchUnreadTotal();
             fetchThreads();
         };
@@ -251,7 +253,7 @@ export const MessengerProvider = ({ children }) => {
     // `activeThreadRef` is used for activeThread to avoid stale closure
     }, [socket, user, fetchThreads, fetchUnreadTotal, showPopup]);
 
-    // ── Background polling (1-min safety net, replaces the 1-second aggressive poll) ──
+    // Background polling (1-min safety net)
     useEffect(() => {
         if (!user) return;
 
@@ -275,12 +277,12 @@ export const MessengerProvider = ({ children }) => {
             } catch (e) {
                 // silent fallback
             }
-        }, 60000); // 60 seconds instead of 1 second
+        }, 60000); // 60 seconds
 
         return () => clearInterval(intervalId);
     }, [user, fetchThreads, fetchUnreadTotal]);
 
-    // ── Actions ───────────────────────────────────────────────────────────
+    // Actions
     const selectThread = async (thread) => {
         setLoading(true);
         setActiveThread(thread);
@@ -290,7 +292,7 @@ export const MessengerProvider = ({ children }) => {
             if (thread.unreadCount > 0) {
                 await messengerApi.markThreadRead(thread._id);
                 setThreads(prev => prev.map(t =>
-                    t._id === thread._id ? { ...t, unreadCount: 0 } : t
+                    t._id?.toString() === thread._id?.toString() ? { ...t, unreadCount: 0 } : t
                 ));
                 fetchUnreadTotal();
             }
@@ -305,6 +307,7 @@ export const MessengerProvider = ({ children }) => {
         if (!activeThread || (!content.trim() && attachments.length === 0)) return;
         
         const currentThreadId = activeThread._id;
+        const currentThreadIdStr = currentThreadId?.toString();
         
         try {
             const returnedMessage = await messengerApi.sendMessage(currentThreadId, {
@@ -312,15 +315,17 @@ export const MessengerProvider = ({ children }) => {
                 replyTo: replyTo || null
             });
             
-            // Eagerly append sent message to local state if we are still on the same thread
+            // Eagerly append sent message to local state immediately
             if (returnedMessage) {
+                const returnedIdStr = returnedMessage._id?.toString();
                 setMessages(prev => {
-                    if (prev.some(m => m._id === returnedMessage._id)) return prev;
+                    // Avoid adding if already present (e.g. from socket echo)
+                    if (returnedIdStr && prev.some(m => m._id?.toString() === returnedIdStr)) return prev;
                     return [...prev, returnedMessage];
                 });
 
                 setThreads(prev => {
-                    const idx = prev.findIndex(t => t._id?.toString() === currentThreadId?.toString());
+                    const idx = prev.findIndex(t => t._id?.toString() === currentThreadIdStr);
                     if (idx === -1) return prev;
                     const updated = [...prev];
                     const thread = { ...updated[idx] };
