@@ -140,9 +140,7 @@ export default function PurchaseOrderDetailPage() {
                     {/* Header Section */}
                     <div className="p-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '25px' }}>
                         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                            {company.logoUrl && (
-                                <img src={company.logoUrl} alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
-                            )}
+                            <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
                             <div>
                                 <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'JSK URJA'}</div>
                                 <div style={{ fontSize: '9pt', color: '#000', lineHeight: '1.4', maxWidth: '400px' }}>

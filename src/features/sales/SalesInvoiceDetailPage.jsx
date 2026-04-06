@@ -86,9 +86,7 @@ export default function SalesInvoiceDetailPage() {
                         <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
                             {!isEstimate && (
                                 <>
-                                    {company.logoUrl && (
-                                        <img src={company.logoUrl} alt="Logo" style={{ maxHeight: `${company.logoHeight || 60}px`, maxWidth: '150px', objectFit: 'contain' }} />
-                                    )}
+                                    <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: `${company.logoHeight || 60}px`, maxWidth: '150px', objectFit: 'contain' }} />
                                     <div>
                                         <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px' }}>{company.companyName}</div>
                                         <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '400px' }}>
@@ -406,7 +404,7 @@ export default function SalesInvoiceDetailPage() {
                         {/* Header: Logo & Company */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px', borderBottom: '2px solid #eee', paddingBottom: '15px' }}>
                             <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                                {company.logoUrl && <img src={company.logoUrl} style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />}
+                                <img src="/logo.jpeg" style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, textTransform: 'uppercase' }}>{company.companyName}</h2>
                                     <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>
