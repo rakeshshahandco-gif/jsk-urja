@@ -32,10 +32,11 @@ export const startTaskCron = () => {
                     const taskInstance = await Task.create({
                         title: master.title,
                         description: master.description,
-                        category: master.category,
+                        taskCategoryId: master.category,
                         priority: master.priority,
-                        assignedTo: master.assignedTo,
-                        group: master.group,
+                        assigneeIds: master.assignedTo ? [master.assignedTo] : [master.createdBy],
+                        assignmentMode: master.assignedTo ? 'SINGLE' : 'SELF',
+                        groupId: master.group, // [MANDATORY] Correct mapping to TaskGroup ID
                         dueDate: dueDate,
                         status: 'OPEN',
                         taskMasterId: master._id,

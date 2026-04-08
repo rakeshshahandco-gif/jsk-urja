@@ -1,4 +1,4 @@
-console.log('--- BACKEND STARTING (v7 - logic lockdown active) ---'); // Trigger restart: 2026-04-08T09:12:30Z
+console.log('--- BACKEND STARTING (v8 - visibility lockdown active) ---'); // Trigger restart: 2026-04-08T11:15:00Z
 import { app } from './app.js';
 import config from './config/config.js';
 import { connectDB } from './config/db.js';

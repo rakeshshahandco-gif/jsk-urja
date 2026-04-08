@@ -12,15 +12,32 @@ export const calculateNextDueDate = (task) => {
         return null;
     }
 
-    const { frequency, interval = 1, recurrenceEndType, recurrenceEndDate, recurrenceEndCount, occurrenceCount = 1 } = task.recurrence;
-    let nextDate = new Date(task.dueDate);
+    const { 
+        frequency, 
+        interval = 1, 
+        recurrenceEndType, 
+        endType, // Fallback for TaskMaster
+        recurrenceEndDate, 
+        endDate, // Fallback for TaskMaster
+        recurrenceEndCount, 
+        occurrenceCount: endCount // Fallback for TaskMaster
+    } = task.recurrence;
 
+    const actualEndType = recurrenceEndType || endType || 'NEVER';
+    const actualEndDate = recurrenceEndDate || endDate;
+    const actualEndCount = recurrenceEndCount || endCount;
+    const currentCount = task.recurrence.occurrenceCount || 1;
+
+    let nextDate = new Date(task.dueDate);
+    
     // Safety check date
     if (isNaN(nextDate.getTime())) return null;
 
     // Check if we hit the count limit
-    if (recurrenceEndType === 'ON_COUNT' && recurrenceEndCount && occurrenceCount >= recurrenceEndCount) {
-        return null;
+    if (actualEndType === 'ON_COUNT' || actualEndType === 'AFTER_COUNT') {
+        if (actualEndCount && currentCount >= actualEndCount) {
+             return null;
+        }
     }
 
     switch (frequency) {
@@ -54,10 +71,12 @@ export const calculateNextDueDate = (task) => {
     }
 
     // Check end date
-    if (recurrenceEndType === 'DATE' && recurrenceEndDate) {
-        const endDateTime = new Date(recurrenceEndDate);
-        if (nextDate.getTime() > endDateTime.getTime()) {
-            return null;
+    if (actualEndType === 'ON_DATE' || actualEndType === 'DATE') {
+        if (actualEndDate) {
+            const endDateTime = new Date(actualEndDate);
+            if (nextDate.getTime() > endDateTime.getTime()) {
+                return null;
+            }
         }
     }
 

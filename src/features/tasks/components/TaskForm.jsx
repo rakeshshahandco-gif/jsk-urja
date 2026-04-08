@@ -128,8 +128,9 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                         interval: parseInt(data.recurrence.interval),
                         startDate: new Date(data.dueDate),
                         endType: data.recurrence.recurrenceEndType || 'NEVER',
-                        occurrenceCount: data.recurrence.recurrenceEndCount ? parseInt(data.recurrence.recurrenceEndCount) : null,
-                        endDate: data.recurrence.recurrenceEndDate ? new Date(data.recurrence.recurrenceEndDate) : null
+                        // Only include these if they have values to avoid Joi null errors
+                        ...(data.recurrence.recurrenceEndCount && { occurrenceCount: parseInt(data.recurrence.recurrenceEndCount) }),
+                        ...(data.recurrence.recurrenceEndDate && { endDate: new Date(data.recurrence.recurrenceEndDate) })
                     }
                 };
                 await createTaskMaster(masterPayload);

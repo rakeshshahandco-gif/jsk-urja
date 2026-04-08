@@ -94,18 +94,52 @@ const emitTaskUpdate = async (taskId, action, actorId) => {
 // ---------------------------
 
 export const createTaskMaster = asyncHandler(async (req, res) => {
-    const masterData = {
+    const master = await TaskMaster.create({
         ...req.body,
-        createdBy: req.user.id
-    };
+        createdBy: req.user.id,
+        isActive: true
+    });
     
-    // Set initial nextRunDate if not provided
-    if (!masterData.nextRunDate && masterData.recurrence?.startDate) {
-        masterData.nextRunDate = masterData.recurrence.startDate;
-    }
+    // [VISIBILITY LOCKDOWN] Immediately generate the FIRST instance
+    const now = new Date();
+    // Ensure we have a valid starting date for the Task
+    const initialDueDate = master.recurrence.startDate || now;
 
-    const master = await TaskMaster.create(masterData);
-    res.status(httpStatus.CREATED).send({ success: true, data: master });
+    const taskInstance = await Task.create({
+        title: master.title,
+        description: master.description,
+        taskCategoryId: master.category,
+        priority: master.priority,
+        // Correctly handle SELF vs specifically assigned users
+        assigneeIds: master.assignedTo ? [master.assignedTo] : [req.user.id],
+        assignmentMode: master.assignedTo ? 'SINGLE' : 'SELF',
+        groupId: master.group, // [MANDATORY] Correct mapping to TaskGroup ID
+        dueDate: initialDueDate,
+        status: 'OPEN',
+        taskMasterId: master._id,
+        amount: master.defaultAmount || 0,
+        createdBy: req.user.id
+    });
+
+    // Calculate the NEXT run date for the Template itself
+    const nextDate = calculateNextDueDate({
+        dueDate: initialDueDate,
+        recurrence: {
+            ...master.recurrence,
+            enabled: true,
+            occurrenceCount: 1 // We just created the first one
+        }
+    });
+
+    master.lastGeneratedAt = now;
+    master.nextRunDate = nextDate;
+    await master.save();
+
+    res.status(httpStatus.CREATED).send({ 
+        success: true, 
+        data: master, 
+        message: 'Recurring Template and first visible Task created successfully.' 
+    });
 });
 
 export const getTaskMasters = asyncHandler(async (req, res) => {
