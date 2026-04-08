@@ -79,6 +79,7 @@ export const menuConfig = [
     },
     {
         id: 'inventory',
+
         title: 'Inventory',
         icon: 'InventoryIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
@@ -284,6 +285,28 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'rd-samples',
+        title: 'R&D Samples',
+        icon: 'ScienceIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER],
+        permission: 'rd_samples',
+        children: [
+            { id: 'rd-projects', title: 'R&D Projects', path: '/rd-samples/projects', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'rd_samples.projects.view' },
+            { id: 'rd-sample-list', title: 'Sample Tracker', path: '/rd-samples/samples', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'rd_samples.samples.view' },
+            { id: 'rd-comparison', title: 'Sample Comparison', path: '/rd-samples/comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'rd_samples.samples.compare' },
+        ],
+    },
+    {
+        id: 'wechat',
+        title: 'WeChat Contacts',
+        icon: 'ChatIcon',
+        roles: [ROLES.ADMIN],
+        permission: 'wechat',
+        children: [
+            { id: 'wechat-contacts', title: 'Manage Contacts', path: '/wechat/contacts', roles: [ROLES.ADMIN], permission: 'wechat.contacts.view' },
+        ],
+    },
+    {
         id: 'admin',
         title: 'Admin',
         icon: 'SettingsIcon',
@@ -296,4 +319,5 @@ export const menuConfig = [
         ],
     },
 ];
+
 

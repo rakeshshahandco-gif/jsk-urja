@@ -266,11 +266,8 @@ const searchCustomers = catchAsync(async (req, res) => {
         let fullAddress = addrParts.join(', ');
         if (c.pincode) fullAddress += ` - ${c.pincode}`;
 
-        // Comprehensive name display
+        // Comprehensive name display (Use only company name as per user request)
         let displayName = c.company || c.customerName || 'No Name';
-        if (c.company && c.customerName && c.company !== c.customerName) {
-            displayName = `${c.company} (${c.customerName})`;
-        }
 
         return {
             id: c._id,

@@ -24,9 +24,51 @@ const attendanceSchema = mongoose.Schema(
             type: String, // e.g., '06:00 PM'
             default: '',
         },
+        inTime: {
+            type: String, // Raw imported in time
+            default: '',
+        },
+        outTime: {
+            type: String, // Raw imported out time
+            default: '',
+        },
+        inTimeActual: {
+            type: Date, // Parsed in time Date object
+        },
+        outTimeActual: {
+            type: Date, // Parsed out time Date object
+        },
         workDuration: {
             type: String, // e.g., '8h 30m'
             default: '',
+        },
+        workingHours: {
+            type: Number, // Total hours worked (numerical)
+            default: 0,
+        },
+        lateMinutes: {
+            type: Number, // Delay in minutes
+            default: 0,
+        },
+        isLate: {
+            type: Boolean,
+            default: false,
+        },
+        isHalfDay: {
+            type: Boolean,
+            default: false,
+        },
+        isMissingCheckout: {
+            type: Boolean,
+            default: false,
+        },
+        isHoliday: {
+            type: Boolean,
+            default: false,
+        },
+        isSunday: {
+            type: Boolean,
+            default: false,
         },
         remarks: {
             type: String,

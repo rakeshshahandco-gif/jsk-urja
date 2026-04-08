@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getSalesInvoiceById, cancelSalesInvoice, restoreSalesInvoice, recordSalesPayment } from '@/services/salesApi';
+import { getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, restoreSalesInvoice, recordSalesPayment } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
@@ -48,11 +48,31 @@ export default function SalesInvoiceDetailPage() {
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
     const handleCancel = async () => {
-        if (!window.confirm('Cancel this invoice? This will restore item stocks.')) return;
+        if (!window.confirm('Cancel this invoice? The invoice number will remain reserved and the record will be kept for audit/GST. Stock and ledger impacts will be reversed.')) return;
         setCancelling(true);
-        try { await cancelSalesInvoice(id); toast.success('Invoice cancelled'); load(); }
-        catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+        try { 
+            const res = await cancelSalesInvoice(id); 
+            toast.success(res.message || 'Invoice cancelled. Number reserved.'); 
+            load(); 
+        }
+        catch (e) { toast.error(e.response?.data?.message || 'Failed to cancel'); }
         finally { setCancelling(false); }
+    };
+
+    const handleDelete = async () => {
+        const reason = window.prompt('DELETION IS ONLY ALLOWED FOR THE LATEST INVOICE.\n\nThis will permanently delete the record and FREE UP the invoice number for reuse.\n\nPlease enter the reason for deletion:');
+        if (!reason) return;
+        
+        setCancelling(true);
+        try {
+            const res = await deleteSalesInvoice(id, { reason });
+            toast.success(res.message || 'Invoice deleted and number freed.');
+            navigate(PATHS.SALES.INVOICES);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to delete. Make sure this is the latest invoice in the series.');
+        } finally {
+            setCancelling(false);
+        }
     };
 
     const handleRestore = async () => {
@@ -353,10 +373,22 @@ export default function SalesInvoiceDetailPage() {
                                  <button
                                      onClick={handleCancel}
                                      disabled={cancelling}
-                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                                     title="Cancel this invoice"
+                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#f59e0b', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     title="Cancel this invoice (Preserves Number)"
                                  >
-                                     {cancelling ? 'Cancelling...' : '🚫 Cancel'}
+                                     {cancelling ? 'Processing...' : '🚫 Cancel Invoice'}
+                                 </button>
+                             )}
+
+                             {/* Delete Invoice */}
+                             {notCancelled && (
+                                 <button
+                                     onClick={handleDelete}
+                                     disabled={cancelling}
+                                     style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     title="Delete Invoice (Frees Number, Latest Only)"
+                                 >
+                                     {cancelling ? 'Processing...' : '🗑️ Delete Invoice'}
                                  </button>
                              )}
                             {/* Receive Payment */}

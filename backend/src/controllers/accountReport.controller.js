@@ -18,7 +18,7 @@ export const getSalesRegister = asyncHandler(async (req, res) => {
         if (to) filter.invoiceDate.$lte = new Date(to);
     }
 
-    const invoices = await SalesInvoice.find(filter)
+    const invoices = await SalesInvoice.find({ ...filter, isDeleted: false })
         .sort({ invoiceDate: -1, invoiceNumber: -1 })
         .populate('customerId', 'name')
         .lean();
@@ -38,7 +38,7 @@ export const getPurchaseRegister = asyncHandler(async (req, res) => {
         if (to) filter.invoiceDate.$lte = new Date(to);
     }
 
-    const invoices = await PurchaseInvoice.find(filter)
+    const invoices = await PurchaseInvoice.find({ ...filter, isDeleted: false })
         .sort({ invoiceDate: -1, invoiceNumber: -1 })
         .populate('supplierId', 'name')
         .lean();

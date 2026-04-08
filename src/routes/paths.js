@@ -90,6 +90,7 @@ export const PATHS = {
         INVOICE_DETAIL: (id) => `/sales/invoices/${id}`,
         PRODUCTION_SHEET: (id) => `/sales/production-sheets/${id}`,
         INVOICE_SERIES: '/sales/invoice-series',
+        INVOICE_CLEANUP: '/sales/invoice-cleanup',
     },
     SERVICE: {
         COMPLAINTS: '/service/complaints',
@@ -138,5 +139,16 @@ export const PATHS = {
     MESSENGER: {
         ROOT: '/messenger',
         THREAD: (id) => `/messenger/${id}`,
+    },
+    RD_SAMPLES: {
+        ROOT: '/rd-samples',
+        PROJECTS: '/rd-samples/projects',
+        SAMPLES: '/rd-samples/samples',
+        COMPARISON: '/rd-samples/comparison',
+    },
+    WECHAT: {
+        ROOT: '/wechat',
+        CONTACTS: '/wechat/contacts',
     }
 };
+

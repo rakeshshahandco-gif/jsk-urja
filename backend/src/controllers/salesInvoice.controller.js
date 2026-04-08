@@ -12,6 +12,11 @@ import { postSalesInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/l
 import httpStatus from 'http-status';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { InvoiceSeries } from '../models/invoiceSeries.model.js';
+import { AuditLog } from '../models/auditLog.model.js';
+import { Voucher } from '../models/voucher.model.js';
+import { LedgerEntry } from '../models/ledgerEntry.model.js';
+import { recomputeSeriesState } from '../utils/numberingUtils.js';
 
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
@@ -95,6 +100,35 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 
 export const getSalesInvoices = asyncHandler(async (req, res) => {
     const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
+    
+    // --- TEMPORARY REPAIR PATCH START ---
+    // Forcefully rename 26-27/03 to 26-27/01 if found
+    try {
+        const inv03 = await SalesInvoice.findOne({ invoiceNumber: '26-27/03' });
+        if (inv03) {
+            // Check if 01 exists to avoid conflict
+            const inv01 = await SalesInvoice.findOne({ invoiceNumber: '26-27/01' });
+            if (inv01) {
+                // Rename existing 01 (deleted or otherwise)
+                await SalesInvoice.updateOne({ _id: inv01._id }, { $set: { invoiceNumber: `26-27/01-OLD-${Date.now()}` } });
+            }
+            // Now rename 03 to 01
+            await SalesInvoice.updateOne({ _id: inv03._id }, { $set: { invoiceNumber: '26-27/01' } });
+            
+            // Sync all references
+            await StockLedger.updateMany({ referenceId: inv03._id }, { $set: { referenceNo: '26-27/01' } });
+            await Voucher.updateMany({ voucherNo: '26-27/03' }, { $set: { voucherNo: '26-27/01' } });
+            await LedgerEntry.updateMany({ voucherNo: '26-27/03' }, { $set: { voucherNo: '26-27/01' } });
+            
+            // Sync Series
+            await InvoiceSeries.updateOne({ prefix: '26-27/', isActive: true }, { $set: { currentNumber: 1 } });
+            console.log('[REPAIR] Successfully renamed 26-27/03 to 26-27/01 and synced all ledgers');
+        }
+    } catch (repairErr) {
+        console.error('[REPAIR] Failed to rename 03 to 01:', repairErr.message);
+    }
+    // --- TEMPORARY REPAIR PATCH END ---
+
     const filter = { isDeleted: { $ne: true } };
 
     if (view === 'archived') {
@@ -104,7 +138,15 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     }
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
-    if (req.query.financialYear) filter.financialYear = req.query.financialYear;
+    if (req.query.financialYear) {
+        filter.$or = filter.$or || [];
+        filter.$or.push(
+            { financialYear: req.query.financialYear },
+            { financialYear: { $exists: false } },
+            { financialYear: null },
+            { financialYear: '' }
+        );
+    }
     if (search) filter.$or = [
         { invoiceNumber: { $regex: search, $options: 'i' } },
         { customerName: { $regex: search, $options: 'i' } },
@@ -223,21 +265,32 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
-        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments');
+        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded');
         
+        const oldNumber = inv.invoiceNumber;
         inv.status = 'Cancelled';
         inv.paymentStatus = 'Cancelled';
         inv.updatedBy = req.user.id;
         await inv.save({ session });
 
-        // Hard rollback stock ledger (hides entry from movement history)
+        // Reverse stock effects
         await rollbackStockLedger(inv._id, session);
 
-        // Reverse Financial Impact
+        // Reverse financial effects
         await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
 
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'CANCEL',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Cancelled Sales Invoice ${oldNumber}. Number remains reserved.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
         await session.commitTransaction();
-        res.json({ success: true, data: inv });
+        res.json({ success: true, data: inv, message: 'Invoice cancelled successfully. Number remains reserved.' });
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -256,20 +309,43 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         
-        // Restriction: Cannot delete if payments exist
+        // 1. Security/Payment Check
         if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
-            throw new ApiError(httpStatus.BAD_REQUEST, `Cannot archive Sales Invoice ${inv.invoiceNumber} because payments have already been recorded against it. Please delete the payments first if you must archive this invoice.`);
+            throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${inv.invoiceNumber} cannot be deleted because payments exist. Delete payments first.`);
         }
 
+        // 2. Strict Sequence Check (Only latest in series can be deleted)
+        if (inv.seriesId) {
+            const series = await InvoiceSeries.findById(inv.seriesId).session(session);
+            if (series) {
+                // Generate the current string to verify if it's indeed the latest
+                const currentNumberStr = series.prefix + String(series.currentNumber).padStart(series.padLength, '0');
+                
+                if (inv.invoiceNumber !== currentNumberStr) {
+                    throw new ApiError(httpStatus.BAD_REQUEST, `Cannot delete invoice ${inv.invoiceNumber} as it is not the latest in series ${series.seriesName}. A later invoice (${currentNumberStr}) exists. Please cancel it instead.`);
+                }
+                
+                // Decrement series to allow reuse. 
+                // If it was the very first in series (currentNumber == startNumber), it goes back to startNumber - 1.
+                series.currentNumber = Math.max(series.currentNumber - 1, (series.startNumber || 1) - 1);
+                await series.save({ session });
+            }
+        }
+
+        const oldNumber = inv.invoiceNumber;
+        
+        // Soft delete and rename number to free up the original for reuse
         inv.isDeleted = true;
         inv.deletedAt = new Date();
         inv.deletedBy = req.user.id;
         inv.deleteReason = reason;
-        inv.status = 'Cancelled'; // Standard archival state
+        inv.status = 'Cancelled';
+        // Free the number: Append suffix to original number
+        inv.invoiceNumber = `${oldNumber}-DEL-${Date.now()}`;
 
         // Rollback stock and ledger impact
         await rollbackStockLedger(inv._id, session);
-        await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
+        await reverseInvoiceLedgerImpact(oldNumber, session);
 
         await inv.save({ session });
         
@@ -278,14 +354,240 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
             action: 'DELETE',
             module: 'SalesInvoice',
             resourceId: inv._id,
-            description: `Soft Deleted Sales Invoice ${inv.invoiceNumber}`,
-            details: { reason },
+            description: `Deleted latest Sales Invoice ${oldNumber}. Number is now available for reuse.`,
+            details: { reason, originalNumber: oldNumber },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        if (inv.soId) {
+            await SalesOrder.findByIdAndUpdate(inv.soId, { status: 'Confirmed', invoiceId: null }).session(session);
+        }
+
+        await session.commitTransaction();
+        res.json({ success: true, message: `Sales Invoice ${oldNumber} deleted and number freed for reuse.` });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * Preview Draft Invoices for Cleanup
+ */
+export const cleanupPreviewDraftInvoices = asyncHandler(async (req, res) => {
+    const { financialYear, seriesId, search } = req.query;
+    if (!financialYear && !seriesId && !search) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Financial Year, Series ID, or Search term are required');
+    }
+
+    // Build query
+    let query = {};
+    if (search) {
+        query.invoiceNumber = { $regex: search, $options: 'i' };
+    } else {
+        query.financialYear = financialYear;
+        query.seriesId = seriesId;
+    }
+
+    // Find all invoices in this scope (including soft-deleted ones)
+    const invoices = await SalesInvoice.find(query).sort({ invoiceNumber: 1 });
+
+    console.log(`🔍 [CleanupScan] Query=${JSON.stringify(query)} Found=${invoices.length}`);
+    const eligible = [];
+    const blocked = [];
+
+    for (const inv of invoices) {
+        const reasons = [];
+
+        // Rule 1: Must be Draft
+        if (inv.status !== 'Draft') {
+            reasons.push(`Status is ${inv.status} (Not Draft)`);
+        }
+
+        // Rule 2: No payments
+        if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
+            reasons.push('Payments are linked to this invoice');
+        }
+
+        // Rule 3: No Stock impact
+        const stockEntries = await StockLedger.countDocuments({ referenceId: inv._id });
+        if (stockEntries > 0) {
+            reasons.push('Stock ledger entries exist for this invoice');
+        }
+
+        // Rule 4: No Accounting impact
+        const voucher = await Voucher.countDocuments({ voucherNo: inv.invoiceNumber });
+        if (voucher > 0) {
+            reasons.push('Accounting voucher exists for this invoice');
+        }
+
+        if (reasons.length === 0) {
+            eligible.push({
+                _id: inv._id,
+                invoiceNumber: inv.invoiceNumber,
+                customerName: inv.customerName,
+                grandTotal: inv.grandTotal,
+                invoiceDate: inv.invoiceDate
+            });
+        } else {
+            blocked.push({
+                _id: inv._id,
+                invoiceNumber: inv.invoiceNumber,
+                customerName: inv.customerName,
+                reasons
+            });
+        }
+    }
+
+    res.json({
+        success: true,
+        data: {
+            seriesName: series.seriesName,
+            prefix: series.prefix,
+            eligible,
+            blocked
+        }
+    });
+});
+
+/**
+ * Execute Hard Delete on Eligible Draft Invoices
+ */
+export const executeCleanupDraftInvoices = asyncHandler(async (req, res) => {
+    const { financialYear, seriesId, invoiceIds } = req.body;
+
+    if (!financialYear || !seriesId || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid request data');
+    }
+
+    // Role check (Admin only)
+    if (req.user.roleName !== 'superadmin' && req.user.roleName !== 'admin') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only administrators can perform cleanup');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Double check eligibility before delete
+        const invoices = await SalesInvoice.find({
+            _id: { $in: invoiceIds },
+            financialYear,
+            seriesId,
+            status: 'Draft',
+            isDeleted: { $ne: true }
+        }).session(session);
+
+        const verifiedIds = [];
+        const deletedNumbers = [];
+
+        for (const inv of invoices) {
+            // Check stock/accounting again inside transaction
+            const stockEntries = await StockLedger.countDocuments({ referenceId: inv._id }).session(session);
+            const voucher = await Voucher.countDocuments({ voucherNo: inv.invoiceNumber }).session(session);
+            
+            if (stockEntries === 0 && voucher === 0 && inv.paidAmount === 0) {
+                verifiedIds.push(inv._id);
+                deletedNumbers.push(inv.invoiceNumber);
+            }
+        }
+
+        if (verifiedIds.length === 0) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'No eligible invoices found for deletion after verification');
+        }
+
+        // Perform Hard Delete
+        await SalesInvoice.deleteMany({ _id: { $in: verifiedIds } }).session(session);
+
+        // Reset numbering
+        const newCurrentNumber = await recomputeSeriesState(seriesId, session);
+
+        // Audit Log
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'CLEANUP_DELETE',
+            module: 'SalesInvoice',
+            description: `Admin Cleanup: Permanently deleted ${verifiedIds.length} draft invoices for FY ${financialYear}. Numbering reset to ${newCurrentNumber}.`,
+            details: {
+                deletedInvoices: deletedNumbers,
+                seriesId,
+                financialYear,
+                newCurrentNumber
+            },
             ipAddress: req.ip,
             userAgent: req.headers['user-agent']
         }], { session });
 
         await session.commitTransaction();
-        res.json({ success: true, message: 'Sales Invoice archived successfully' });
+        res.json({
+            success: true,
+            message: `Successfully deleted ${verifiedIds.length} draft invoices. Series numbering has been reset.`,
+            data: { newCurrentNumber }
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * FORCE Cleanup an individual invoice (even if Confirmed)
+ * This rolls back stock, reverses ledger and hardnd-deletes the record.
+ */
+export const forceCleanupInvoice = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Reason is required for force cleanup');
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const inv = await SalesInvoice.findById(id).session(session);
+        if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+
+        const seriesId = inv.seriesId;
+        const oldNumber = inv.invoiceNumber;
+
+        // 1. Rollback Stock
+        await rollbackStockLedger(inv._id, session);
+
+        // 2. Reverse Ledger
+        await reverseInvoiceLedgerImpact(oldNumber, session);
+
+        // 3. Delete Vouchers / Ledger entries (Cleanup orphans)
+        await Voucher.deleteMany({ voucherNo: oldNumber }).session(session);
+        await LedgerEntry.deleteMany({ voucherNo: oldNumber }).session(session);
+
+        // 4. Hard Delete
+        await inv.deleteOne({ session });
+
+        // 5. Audit Log
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'FORCE_CLEANUP',
+            module: 'SalesInvoice',
+            resourceId: id,
+            description: `Admin FORCE CLEANUP: Hard-deleted invoice ${oldNumber} with stock/ledger rollback.`,
+            details: { reason, originalData: inv },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        // 6. Recompute Series
+        if (seriesId) {
+            await recomputeSeriesState(seriesId, session);
+        }
+
+        await session.commitTransaction();
+        res.send(new ApiResponse(httpStatus.OK, null, `Invoice ${oldNumber} hard-deleted.`));
     } catch (error) {
         await session.abortTransaction();
         throw error;

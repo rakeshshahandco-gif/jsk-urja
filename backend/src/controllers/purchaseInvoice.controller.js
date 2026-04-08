@@ -348,7 +348,15 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (status) query.status = status;
     if (flowType) query.flowType = flowType;
-    if (req.query.financialYear) query.financialYear = req.query.financialYear;
+    if (req.query.financialYear) {
+        query.$or = query.$or || [];
+        query.$or.push(
+            { financialYear: req.query.financialYear },
+            { financialYear: { $exists: false } },
+            { financialYear: null },
+            { financialYear: '' }
+        );
+    }
     if (search) query.$or = [
         { invoiceNumber: { $regex: search, $options: 'i' } },
         { supplierName: { $regex: search, $options: 'i' } },
@@ -435,15 +443,26 @@ export const cancelPurchaseInvoice = asyncHandler(async (req, res) => {
         if (!inv) throw new ApiError(404, 'Invoice not found');
         if (inv.paymentStatus === 'Paid') throw new ApiError(400, 'Cannot cancel a fully paid invoice');
         
+        const oldNumber = inv.invoiceNumber;
         inv.status = 'Cancelled';
         inv.paymentStatus = 'Cancelled';
         inv.updatedBy = req.user._id;
         
         await rollbackSideEffects(inv, req.user._id, session);
         await inv.save({ session });
+
+        await AuditLog.create([{
+            user: req.user._id,
+            action: 'CANCEL',
+            module: 'PurchaseInvoice',
+            resourceId: inv._id,
+            description: `Cancelled Purchase Invoice ${oldNumber}. Number remains reserved.`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
         
         await session.commitTransaction();
-        res.json(new ApiResponse(200, inv, 'Invoice cancelled'));
+        res.json(new ApiResponse(200, inv, 'Purchase Invoice cancelled successfully. Number remains reserved.'));
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -461,14 +480,51 @@ export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
     try {
         const inv = await PurchaseInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(404, 'Invoice not found');
-        if (inv.paymentStatus === 'Paid' || inv.paymentStatus === 'Partially Paid') throw new ApiError(400, 'Cannot delete an invoice with payments.');
+        
+        // 1. Payment Check
+        if (inv.paymentStatus === 'Paid' || inv.paymentStatus === 'Partially Paid' || (inv.payments && inv.payments.length > 0)) {
+            throw new ApiError(400, 'Cannot delete an invoice with payments. Delete payments first.');
+        }
+
+        // 2. Strict Sequence Check (Only latest in series can be deleted)
+        if (inv.seriesId) {
+            const series = await InvoiceSeries.findById(inv.seriesId).session(session);
+            if (series) {
+                // Verify if it's the latest in series
+                const currentNumberStr = series.prefix + String(series.currentNumber).padStart(series.padLength, '0');
+                
+                if (inv.invoiceNumber !== currentNumberStr) {
+                    throw new ApiError(400, `Cannot delete invoice ${inv.invoiceNumber} as it is not the latest in series ${series.seriesName}. A later invoice (${currentNumberStr}) already exists. Please cancel it instead.`);
+                }
+                
+                // Decrement series to allow reuse. 
+                // If it was the very first in series (currentNumber == startNumber), it goes back to startNumber - 1.
+                series.currentNumber = Math.max(series.currentNumber - 1, (series.startNumber || 1) - 1);
+                await series.save({ session });
+            }
+        } else {
+            // Fallback for non-series invoices: check if any newer invoice exists for this supplier or in general
+            const newerInv = await PurchaseInvoice.findOne({
+                _id: { $ne: inv._id },
+                isDeleted: { $ne: true },
+                invoiceDate: { $gt: inv.invoiceDate }
+            }).session(session);
+            
+            if (newerInv) {
+                throw new ApiError(400, "This invoice cannot be deleted because a later invoice already exists. You may cancel it instead.");
+            }
+        }
+
+        const oldNumber = inv.invoiceNumber;
         
         // Soft delete logic
         inv.isDeleted = true;
         inv.deletedAt = new Date();
         inv.deletedBy = req.user._id;
         inv.deleteReason = reason;
-        inv.status = 'Cancelled'; // Standard practice for soft-deleted financial documents
+        inv.status = 'Cancelled';
+        // Free the number: Append suffix to original number
+        inv.invoiceNumber = `${oldNumber}-DEL-${Date.now()}`;
 
         await rollbackSideEffects(inv, req.user._id, session);
         await inv.save({ session });
@@ -478,14 +534,14 @@ export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
             action: 'DELETE',
             module: 'PurchaseInvoice',
             resourceId: inv._id,
-            description: `Soft deleted Purchase Invoice ${inv.invoiceNumber}`,
-            details: { reason },
+            description: `Deleted latest Purchase Invoice ${oldNumber}. Number is now available for reuse.`,
+            details: { reason, originalNumber: oldNumber },
             ipAddress: req.ip,
             userAgent: req.headers['user-agent']
         }], { session });
         
         await session.commitTransaction();
-        res.json(new ApiResponse(200, null, 'Purchase Invoice archived'));
+        res.json(new ApiResponse(200, null, `Purchase Invoice ${oldNumber} deleted successfully and number freed.`));
     } catch (error) {
         await session.abortTransaction();
         throw error;

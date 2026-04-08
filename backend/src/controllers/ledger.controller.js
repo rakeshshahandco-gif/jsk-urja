@@ -126,13 +126,15 @@ export const getOutstandingBills = asyncHandler(async (req, res) => {
         bills = await SalesInvoice.find({
             customerId: ledger.referenceId,
             paymentStatus: { $ne: 'Paid' },
-            status: 'Confirmed'
+            status: 'Confirmed',
+            isDeleted: false
         }).sort({ invoiceDate: 1 }).lean();
     } else if (ledger.type === 'Supplier') {
         bills = await PurchaseInvoice.find({
             supplierId: ledger.referenceId,
             paymentStatus: { $ne: 'Paid' },
-            status: { $in: ['Confirmed', 'Posted'] }
+            status: { $in: ['Confirmed', 'Posted'] },
+            isDeleted: false
         }).sort({ invoiceDate: 1 }).lean();
     }
 
@@ -164,13 +166,15 @@ export const getOutstandingSummary = asyncHandler(async (req, res) => {
             billCount = await SalesInvoice.countDocuments({
                 customerId: ledger.referenceId,
                 paymentStatus: { $ne: 'Paid' },
-                status: 'Confirmed'
+                status: 'Confirmed',
+                isDeleted: false
             });
         } else if (ledgerType === 'Supplier') {
             billCount = await PurchaseInvoice.countDocuments({
-                supplierId: ledger.referenceId,
+                customerId: ledger.referenceId,
                 paymentStatus: { $ne: 'Paid' },
-                status: { $in: ['Confirmed', 'Posted'] }
+                status: { $in: ['Confirmed', 'Posted'] },
+                isDeleted: false
             });
         }
 

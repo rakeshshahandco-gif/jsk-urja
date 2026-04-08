@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, FilePlus, X, Loader } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, FilePlus, X, Loader, Trash2 } from 'lucide-react';
+
 import toast from 'react-hot-toast';
 import moment from 'moment';
 import api from '../../../services/api'; // Corrected import path
@@ -11,7 +12,9 @@ const AttendanceImportPage = () => {
     const [importErrors, setImportErrors] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState(moment().format('MM'));
     const [selectedYear, setSelectedYear] = useState(moment().format('YYYY'));
+    const [isDeleting, setIsDeleting] = useState(false);
     const fileInputRef = useRef(null);
+
 
     const handleDragOver = (e) => {
         e.preventDefault();
@@ -64,7 +67,29 @@ const AttendanceImportPage = () => {
         }
     };
 
+    const handleBulkDelete = async () => {
+        const monthName = months.find(m => m.val === selectedMonth)?.label;
+        const confirmMsg = `Are you sure you want to PERMANENTLY delete ALL attendance and salary data for ${monthName} ${selectedYear}?\n\nThis action cannot be undone.`;
+        
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsDeleting(true);
+        try {
+            const response = await api.delete('/hr/attendance/bulk', {
+                data: { month: selectedMonth, year: selectedYear }
+            });
+            toast.success(response.data.message || 'Data cleared successfully');
+        } catch (error) {
+            console.error('Bulk delete error:', error);
+            const msg = error.response?.data?.message || 'Failed to clear data';
+            toast.error(msg);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const handleUpload = async () => {
+
         if (!selectedFile) return;
         
         setIsUploading(true);
@@ -128,7 +153,34 @@ const AttendanceImportPage = () => {
                     >
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
+                    
+                    <button
+                        onClick={handleBulkDelete}
+                        disabled={isDeleting || isUploading}
+                        title="Delete all attendance for selected month"
+                        style={{ 
+                            height: '40px', 
+                            padding: '0 15px', 
+                            background: '#fff', 
+                            color: '#e11d48', 
+                            border: '1px solid #fecdd3', 
+                            borderRadius: '10px', 
+                            fontSize: '13px', 
+                            fontWeight: '700', 
+                            cursor: (isDeleting || isUploading) ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => { if(!isDeleting) e.currentTarget.style.background = '#fff1f2'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                    >
+                        {isDeleting ? <Loader size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        {isDeleting ? 'Clearing...' : 'Clear Month Data'}
+                    </button>
                 </div>
+
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px' }}>
@@ -243,31 +295,14 @@ const AttendanceImportPage = () => {
                         </h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <a 
-                                href="/attendance_template.xlsx" 
-                                download="Attendance_Template.xlsx"
+                                href={`${api.defaults.baseURL}/hr/attendance/template`}
+                                target="_blank"
+                                rel="noreferrer"
                                 style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
                                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.background = '#f0fdf4'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
                             >
-                                <FilePlus size={16} color="#059669" /> Excel Template (.xlsx)
-                            </a>
-                            <a 
-                                href="/attendance_template.csv" 
-                                download="Attendance_Template.csv"
-                                style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
-                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#0ea5e9'; e.currentTarget.style.background = '#f0f9ff'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                            >
-                                <FilePlus size={16} color="#0ea5e9" /> CSV Template (.csv)
-                            </a>
-                            <a 
-                                href="/attendance_format_guide.csv" 
-                                download="CSV_Format_Guide.csv"
-                                style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
-                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#d97706'; e.currentTarget.style.background = '#fffbeb'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-                            >
-                                <FilePlus size={16} color="#d97706" /> CSV Format Guide.csv
+                                <FilePlus size={16} color="#059669" /> Download Attendance Template (.xlsx)
                             </a>
                         </div>
                     </div>
@@ -276,13 +311,23 @@ const AttendanceImportPage = () => {
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <AlertCircle size={20} color="#854d0e" />
                             <div>
-                                <h5 style={{ fontSize: '13px', fontWeight: '800', color: '#854d0e', margin: '0 0 4px' }}>Important Note</h5>
-                                <p style={{ fontSize: '12px', color: '#a16207', margin: 0, lineHeight: '1.5' }}>
-                                    You can provide an <strong>Employee Code</strong> or <strong>Employee Name</strong> column to identify staff. Ensure the values match the registered records exactly.
+                                <h5 style={{ fontSize: '13px', fontWeight: '800', color: '#854d0e', margin: '0 0 4px' }}>Import Instructions</h5>
+                                <p style={{ fontSize: '12px', color: '#854d0e', margin: '0 0 12px', lineHeight: '1.5' }}>
+                                    Your Excel/CSV file must have the following columns in exactly these positions:
+                                </p>
+                                <ul style={{ fontSize: '12px', color: '#a16207', margin: '0 0 12px', paddingLeft: '20px', lineHeight: '1.8' }}>
+                                    <li><strong>Column 1:</strong> Employee Name (or Employee Code)</li>
+                                    <li><strong>Column 2:</strong> Date (DD-MM-YYYY)</li>
+                                    <li><strong>Column 3:</strong> In Time (HH:mm AM/PM)</li>
+                                    <li><strong>Column 4:</strong> Out Time (HH:mm AM/PM)</li>
+                                </ul>
+                                <p style={{ fontSize: '11px', color: '#a16207', margin: 0, lineHeight: '1.5', background: '#fffbeb', padding: '8px', borderRadius: '8px' }}>
+                                    <strong>Safety:</strong> Only records for the selected month/year will be imported. Any dates outside this range in the file will be automatically skipped.
                                 </p>
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
             {/* Inject minimal keyframes for progress bar animation */}

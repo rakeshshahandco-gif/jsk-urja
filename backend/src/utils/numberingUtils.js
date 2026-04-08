@@ -1,3 +1,4 @@
+import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { getShortFY } from './fyUtils.js';
 import mongoose from 'mongoose';
@@ -42,4 +43,36 @@ export const getDefaultSeriesForFY = async (fy) => {
     }
 
     return series;
+};
+
+/**
+ * Re-scan all surviving invoices in a series to reset the currentNumber.
+ * This is used after administrative cleanup/deletions.
+ * @param {string} seriesId 
+ * @param {ClientSession} session 
+ */
+export const recomputeSeriesState = async (seriesId, session = null) => {
+    const series = await InvoiceSeries.findById(seriesId).session(session);
+    if (!series) return;
+
+    // Find all non-deleted invoices in this series
+    const invoices = await SalesInvoice.find({ 
+        seriesId, 
+        isDeleted: { $ne: true } 
+    }).session(session).select('invoiceNumber');
+
+    if (invoices.length === 0) {
+        series.currentNumber = Math.max(0, (series.startNumber || 1) - 1);
+    } else {
+        let maxNum = 0;
+        invoices.forEach(inv => {
+            const numStr = inv.invoiceNumber.slice(series.prefix.length);
+            const num = parseInt(numStr, 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+        });
+        series.currentNumber = maxNum;
+    }
+
+    await series.save({ session });
+    return series.currentNumber;
 };

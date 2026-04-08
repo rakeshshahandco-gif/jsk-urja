@@ -49,11 +49,31 @@ export default function PurchaseInvoiceDetailPage() {
     useEffect(() => { load(); }, [load]);
 
     const handleCancel = async () => {
-        if (!window.confirm('Cancel this invoice?')) return;
+        if (!window.confirm('Cancel this invoice? The record remains and the number is reserved. Side effects (stock/PO/GRN/Ledger) will be reversed.')) return;
         setCancelling(true);
-        try { await cancelPurchaseInvoice(id); toast.success('Invoice cancelled'); load(); }
-        catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+        try { 
+            const res = await cancelPurchaseInvoice(id); 
+            toast.success(res.message || 'Invoice cancelled'); 
+            load(); 
+        }
+        catch (err) { toast.error(err.response?.data?.message || 'Failed to cancel'); }
         finally { setCancelling(false); }
+    };
+
+    const handleDelete = async () => {
+        const reason = window.prompt('DELETION IS ONLY ALLOWED FOR THE LATEST INVOICE.\n\nThis will permanently delete the record and FREE UP the invoice number for reuse.\n\nEnter reason for deletion:');
+        if (!reason) return;
+        
+        setCancelling(true);
+        try {
+            const res = await deletePurchaseInvoice(id, { reason });
+            toast.success(res.message || 'Invoice deleted and number freed.');
+            navigate(PATHS.PURCHASE.INVOICES);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to delete. Checks for latest invoice may have failed.');
+        } finally {
+            setCancelling(false);
+        }
     };
 
     const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', {
@@ -310,13 +330,12 @@ export default function PurchaseInvoiceDetailPage() {
                                 </button>
                             )}
                             {inv.status !== 'Cancelled' && livePaymentStatus === 'Unpaid' && (
-                                <button onClick={() => {
-                                    if (window.confirm('Delete this Invoice?')) {
-                                        deletePurchaseInvoice(inv._id).then(() => { toast.success('Deleted'); navigate(PATHS.PURCHASE.INVOICES); }).catch(e => toast.error(e.response?.data?.message || 'Failed'));
-                                    }
-                                }}
-                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
-                                    🗑 Delete
+                                <button
+                                    onClick={handleDelete}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
+                                    title="Delete Invoice (Frees Number, Latest Only)"
+                                >
+                                    🗑 Delete Invoice
                                 </button>
                             )}
 
@@ -337,7 +356,14 @@ export default function PurchaseInvoiceDetailPage() {
                             )}
                             <button onClick={() => window.print()} style={{ padding: '9px 18px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
                             {notCancelled && notFullyPaid && (
-                                <button onClick={handleCancel} disabled={cancelling} style={{ padding: '9px 18px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>✕ Cancel</button>
+                                <button
+                                    onClick={handleCancel}
+                                    disabled={cancelling}
+                                    style={{ padding: '9px 18px', background: '#fffbeb', color: '#d97706', border: '1px solid #fcd34d', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                                    title="Cancel Invoice (Preserves Number)"
+                                >
+                                    {cancelling ? 'Processing...' : '✕ Cancel Invoice'}
+                                </button>
                             )}
                         </div>
                     </div>

@@ -27,12 +27,12 @@ export default function PurchaseInvoiceListPage() {
     const [search, setSearch] = useState('');
     const [payFilter, setPayFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [viewMode, setViewMode] = useState('active'); // active, archived
+    const [viewMode, setViewMode] = useState('all'); // all, active, archived
     const { selectedFY } = useFinancialYear();
 
     const load = useCallback(() => {
         setLoading(true);
-        getPurchaseInvoices({ search, paymentStatus: payFilter, status: statusFilter, view: viewMode, limit: 100, financialYear: selectedFY })
+        getPurchaseInvoices({ search, paymentStatus: payFilter, status: statusFilter, view: viewMode, includeDeleted: true, limit: 100, financialYear: selectedFY })
             .then(d => setInvoices(d.invoices || []))
             .catch((err) => {
                 console.error('[PurchaseInvoiceList] Error loading invoices:', err);
@@ -72,15 +72,19 @@ export default function PurchaseInvoiceListPage() {
                 </button>
             </div>
 
-            {/* Visibility Tabs */}
+            {/* Visibility Filters */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#e2e8f0', padding: 4, borderRadius: 10, width: 'fit-content' }}>
+                <button onClick={() => setViewMode('all')}
+                    style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'all' ? '#fff' : 'transparent', color: viewMode === 'all' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+                    All Invoices
+                </button>
                 <button onClick={() => setViewMode('active')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'active' ? '#fff' : 'transparent', color: viewMode === 'active' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'active' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-                    Active
+                    Only Active
                 </button>
                 <button onClick={() => setViewMode('archived')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'archived' ? '#fff' : 'transparent', color: viewMode === 'archived' ? '#dc2626' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'archived' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-                    Archived
+                    Deleted
                 </button>
             </div>
 
@@ -139,7 +143,16 @@ export default function PurchaseInvoiceListPage() {
                                         })()}
                                     </td>
                                     <td style={td}>
-                                        <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: pc.bg, color: pc.color, border: `1px solid ${pc.border}` }}>{inv.paymentStatus}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <span style={{ padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: pc.bg, color: pc.color, border: `1px solid ${pc.border}`, width: 'fit-content' }}>
+                                                {inv.paymentStatus}
+                                            </span>
+                                            {isDeleted && (
+                                                <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626', background: '#fef2f2', padding: '1px 8px', borderRadius: 4, border: '1px solid #fca5a5', width: 'fit-content' }}>
+                                                    🗑 DELETED
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td style={td} onClick={e => e.stopPropagation()}>
                                         <div style={{ display: 'flex', gap: 6 }}>

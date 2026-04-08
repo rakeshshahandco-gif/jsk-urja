@@ -216,7 +216,8 @@ customerSchema.pre('save', function (next) {
  */
 const _stripIsDeletedFromUpdate = function (next) {
     const update = this.getUpdate();
-    if (!update) return next();
+    const options = this.getOptions();
+    if (!update || options.bypassSecurity) return next();
 
     // Remove from $set
     if (update.$set && update.$set.isDeleted !== undefined) {

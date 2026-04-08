@@ -50,6 +50,15 @@ export const restoreSalesInvoice = (id, data) =>
 export const recordSalesPayment = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/record-payment`, data).then(r => r.data);
 
+export const previewCleanupDrafts = (financialYear, seriesId, search) =>
+    apiClient.get('admin/cleanup-preview', { params: { financialYear, seriesId, search } }).then(r => r.data.data);
+
+export const executeCleanupDrafts = (data) =>
+    apiClient.post('admin/cleanup-execute', data).then(r => r.data);
+
+export const forceCleanupInvoice = (id, reason) =>
+    apiClient.delete(`admin/force-cleanup/${id}`, { data: { reason } }).then(r => r.data);
+
 // ─── INVOICE SERIES ───────────────────────────────────────────────────────────
 
 export const getInvoiceSeries = (params = {}) =>

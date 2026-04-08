@@ -9,7 +9,7 @@ import httpStatus from 'http-status';
  * Helper to post to ledger and update balance
  */
 const postEntry = async (data, session) => {
-    const { voucherId, voucherNo, date, ledgerId, amount, type, narration } = data;
+    const { voucherId, voucherNo, date, ledgerId, amount, type, narration, financialYear } = data;
     if (amount <= 0) return;
 
     const ledger = await AccountLedger.findById(ledgerId).session(session);
@@ -17,7 +17,7 @@ const postEntry = async (data, session) => {
 
     await LedgerEntry.create([{
         voucherId, voucherNo, date, ledgerId, ledgerName: ledger.name,
-        amount, type, narration
+        amount, type, narration, financialYear
     }], { session });
 
     // Debit increases Asset/Expense, decreases Liability/Income
@@ -76,7 +76,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         narration: `Auto-generated from Sales Invoice ${invoice.invoiceNumber}`,
         isSystemGenerated: true,
         createdBy: userId,
-        status: 'Confirmed'
+        status: 'Confirmed',
+        financialYear: invoice.financialYear
     }], { session });
 
     const vId = voucher[0]._id;
@@ -86,7 +87,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
     await postEntry({
         voucherId: vId, voucherNo, date,
         ledgerId: customerLedger._id, amount: invoice.roundedTotal || invoice.grandTotal,
-        type: 'Debit', narration: `Sale to ${invoice.customerName}`
+        type: 'Debit', narration: `Sale to ${invoice.customerName}`,
+        financialYear: invoice.financialYear
     }, session);
 
     // Credit Sales Account (Taxable minus freight)
@@ -99,7 +101,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
     await postEntry({
         voucherId: vId, voucherNo, date,
         ledgerId: salesLedger._id, amount: baseSalesTaxable,
-        type: 'Credit', narration: `Revenue from Sales`
+        type: 'Credit', narration: `Revenue from Sales`,
+        financialYear: invoice.financialYear
     }, session);
 
     // Credit Freight Account
@@ -107,7 +110,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: freightLedger._id, amount: invoice.freightAmount,
-            type: 'Credit', narration: `Freight & Forwarding Income`
+            type: 'Credit', narration: `Freight & Forwarding Income`,
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -116,21 +120,24 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: cgstLedger._id, amount: invoice.totalCgst,
-            type: 'Credit', narration: 'Output CGST'
+            type: 'Credit', narration: 'Output CGST',
+            financialYear: invoice.financialYear
         }, session);
     }
     if (invoice.totalSgst > 0 && sgstLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: sgstLedger._id, amount: invoice.totalSgst,
-            type: 'Credit', narration: 'Output SGST'
+            type: 'Credit', narration: 'Output SGST',
+            financialYear: invoice.financialYear
         }, session);
     }
     if (invoice.totalIgst > 0 && igstLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: igstLedger._id, amount: invoice.totalIgst,
-            type: 'Credit', narration: 'Output IGST'
+            type: 'Credit', narration: 'Output IGST',
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -140,7 +147,8 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: Math.abs(invoice.roundOff),
-            type, narration: 'Invoice Round Off'
+            type, narration: 'Invoice Round Off',
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -213,7 +221,8 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         narration: `Auto-generated from Purchase Invoice ${invoice.invoiceNumber} from ${invoice.supplierName}`,
         isSystemGenerated: true,
         createdBy: userId,
-        status: 'Confirmed'
+        status: 'Confirmed',
+        financialYear: invoice.financialYear
     }], { session });
 
     const vId = voucher[0]._id;
@@ -224,7 +233,8 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: purchaseLedger._id, amount: purchaseDebit,
-            type: 'Debit', narration: `Direct Purchase`
+            type: 'Debit', narration: `Direct Purchase`,
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -233,7 +243,8 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: freightLedger._id, amount: freightAmt,
-            type: 'Debit', narration: `Freight Inward Expense`
+            type: 'Debit', narration: `Freight Inward Expense`,
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -242,21 +253,24 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: cgstInputLedger._id, amount: cgstAmt,
-            type: 'Debit', narration: 'Input CGST'
+            type: 'Debit', narration: 'Input CGST',
+            financialYear: invoice.financialYear
         }, session);
     }
     if (sgstAmt > 0 && sgstInputLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: sgstInputLedger._id, amount: sgstAmt,
-            type: 'Debit', narration: 'Input SGST'
+            type: 'Debit', narration: 'Input SGST',
+            financialYear: invoice.financialYear
         }, session);
     }
     if (igstAmt > 0 && igstInputLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: igstInputLedger._id, amount: igstAmt,
-            type: 'Debit', narration: 'Input IGST'
+            type: 'Debit', narration: 'Input IGST',
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -265,14 +279,16 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: roundOffDebit,
-            type: 'Debit', narration: 'Invoice Round Off'
+            type: 'Debit', narration: 'Invoice Round Off',
+            financialYear: invoice.financialYear
         }, session);
     }
     if (roundOffCredit > 0 && roundOffLedger) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: roundOffCredit,
-            type: 'Credit', narration: 'Invoice Round Off'
+            type: 'Credit', narration: 'Invoice Round Off',
+            financialYear: invoice.financialYear
         }, session);
     }
 
@@ -280,7 +296,8 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     await postEntry({
         voucherId: vId, voucherNo, date,
         ledgerId: supplierLedger._id, amount: grandTotal,
-        type: 'Credit', narration: `Purchased from ${invoice.supplierName}`
+        type: 'Credit', narration: `Purchased from ${invoice.supplierName}`,
+        financialYear: invoice.financialYear
     }, session);
 
     return vId;

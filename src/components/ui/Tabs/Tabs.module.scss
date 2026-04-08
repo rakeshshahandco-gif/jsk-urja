@@ -1,0 +1,55 @@
+.tabsRoot {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabsList {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  background-color: #f1f5f9;
+  border-radius: 0.75rem;
+  width: fit-content;
+}
+
+.tabsTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  border-radius: 0.5rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+
+  &:hover {
+    color: #0f172a;
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+
+  &[data-state='active'] {
+    background-color: #ffffff;
+    color: #0d9488;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.tabsContent {
+  margin-top: 1rem;
+  outline: none;
+
+  &[data-state='inactive'] {
+    display: none;
+  }
+}

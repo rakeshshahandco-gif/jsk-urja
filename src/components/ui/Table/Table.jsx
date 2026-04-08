@@ -1,7 +1,15 @@
 import React from 'react';
 import styles from './Table.module.scss';
+import clsx from 'clsx';
 
-export const Table = ({ columns, data, loading, className = '', noDataMessage = 'No records found' }) => {
+export const Table = ({ 
+    columns, 
+    data, 
+    loading, 
+    className = '', 
+    noDataMessage = 'No records found',
+    children 
+}) => {
     if (loading) {
         return (
             <div className={styles.loading}>
@@ -11,6 +19,18 @@ export const Table = ({ columns, data, loading, className = '', noDataMessage = 
         );
     }
 
+    // If children are provided, we use the composition pattern
+    if (children) {
+        return (
+            <div className={clsx(styles.tableWrapper, className)}>
+                <table className={styles.table}>
+                    {children}
+                </table>
+            </div>
+        );
+    }
+
+    // Otherwise, we use the legacy columns/data pattern
     if (!data || data.length === 0) {
         return (
             <div className={styles.noData}>
@@ -20,7 +40,7 @@ export const Table = ({ columns, data, loading, className = '', noDataMessage = 
     }
 
     return (
-        <div className={`${styles.tableWrapper} ${className}`}>
+        <div className={clsx(styles.tableWrapper, className)}>
             <table className={styles.table}>
                 <thead>
                     <tr>
@@ -46,5 +66,18 @@ export const Table = ({ columns, data, loading, className = '', noDataMessage = 
         </div>
     );
 };
+
+// Sub-components for composition pattern
+Table.Th = ({ children, className = '', ...props }) => (
+    <th className={clsx(styles.th, className)} {...props}>
+        {children}
+    </th>
+);
+
+Table.Td = ({ children, className = '', ...props }) => (
+    <td className={clsx(styles.td, className)} {...props}>
+        {children}
+    </td>
+);
 
 export default Table;

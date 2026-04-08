@@ -46,11 +46,27 @@ router.route('/holidays/:id')
     .patch(checkPermission('hr.hr_dashboard.view'), hrController.updateHoliday)
     .delete(checkPermission('hr.hr_dashboard.view'), hrController.deleteHoliday);
 
-// --- ATTENDANCE ROUTES ---
+// --- ATTENDANCE & REPORT ROUTES ---
 router.route('/attendance')
     .get(checkPermission('hr.hr_reports.view'), hrController.getAttendances);
 
 router.route('/attendance/import')
     .post(checkPermission('hr.hr_dashboard.view'), upload.single('file'), hrController.importAttendance);
+
+router.get('/attendance/template', checkPermission('hr.hr_dashboard.view'), hrController.downloadAttendanceTemplate);
+router.delete('/attendance/bulk', checkPermission('hr.hr_dashboard.view'), hrController.bulkDeleteAttendance);
+
+
+// --- HR SETTINGS ROUTES ---
+router.route('/settings')
+    .get(checkPermission('hr.hr_dashboard.view'), hrController.getHRSettings)
+    .patch(checkPermission('hr.hr_dashboard.view'), hrController.updateHRSettings);
+
+// --- SPECIFIC REPORT ROUTES ---
+router.get('/reports/daily', checkPermission('hr.hr_reports.view'), hrController.getDailyAttendanceReport);
+router.get('/reports/monthly-summary', checkPermission('hr.hr_reports.view'), hrController.getMonthlySummaryReport);
+router.get('/reports/late-coming', checkPermission('hr.hr_reports.view'), hrController.getLateComingReport);
+router.get('/reports/missing-punch', checkPermission('hr.hr_reports.view'), hrController.getMissingPunchReport);
+router.get('/reports/salary-working', checkPermission('hr.hr_reports.view'), hrController.getSalaryWorkingReport);
 
 export default router;

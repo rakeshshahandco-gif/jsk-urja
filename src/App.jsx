@@ -62,6 +62,7 @@ import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
+import InvoiceCleanupPage from '@/features/sales/InvoiceCleanupPage';
 
 // Service / Replacement Module
 import ComplaintListPage from '@/features/service/ComplaintListPage';
@@ -130,6 +131,14 @@ import PrdDashboard from './features/prd/PrdDashboard';
 
 import MessengerPage from '@/features/messenger/MessengerPage';
 
+// R&D Samples Module
+const RdProjectListPage = lazy(() => import('./features/rdSamples/pages/RdProjectListPage'));
+const RdSampleListPage = lazy(() => import('./features/rdSamples/pages/RdSampleListPage'));
+const RdComparisonPage = lazy(() => import('./features/rdSamples/pages/RdComparisonPage'));
+
+// WeChat Module
+const WechatListPage = lazy(() => import('./features/wechat/pages/WechatListPage'));
+
 // HR Module
 import ShiftList from '@/features/hr/components/ShiftMaster/ShiftList';
 import EmployeeList from '@/features/hr/components/EmployeeMaster/EmployeeList';
@@ -141,6 +150,12 @@ import AttendanceImportPage from '@/features/hr/components/AttendanceImportPage'
 import LeaveManagementPage from '@/features/hr/components/LeaveManagementPage';
 import PayrollPage from '@/features/hr/components/PayrollPage';
 import HRReportsPage from '@/features/hr/components/HRReportsPage';
+import HRSettingsPage from '@/features/hr/components/HRSettingsPage';
+import DailyAttendanceReport from '@/features/hr/components/DailyAttendanceReport';
+import MonthlySummaryReport from '@/features/hr/components/MonthlySummaryReport';
+import LateComingReport from '@/features/hr/components/LateComingReport';
+import MissingPunchReport from '@/features/hr/components/MissingPunchReport';
+import SalaryWorkingReport from '@/features/hr/components/SalaryWorkingReport';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -307,6 +322,7 @@ const AppLayout = () => {
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
                         <Route path="/sales/invoice-series" element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoice-cleanup" element={<ProtectedRoute requireRole="admin"><InvoiceCleanupPage /></ProtectedRoute>} />
                         <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />
                         <Route path="/service/complaints/new" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
                         <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
@@ -369,7 +385,24 @@ const AppLayout = () => {
                         <Route path="/hr/payroll" element={<ProtectedRoute requirePermission="hr"><PayrollPage /></ProtectedRoute>} />
                         <Route path="/hr/holidays" element={<ProtectedRoute requirePermission="hr"><HolidayListPage /></ProtectedRoute>} />
                         <Route path="/hr/reports" element={<ProtectedRoute requirePermission="hr"><HRReportsPage /></ProtectedRoute>} />
+                        <Route path="/hr/settings" element={<ProtectedRoute requirePermission="hr"><HRSettingsPage /></ProtectedRoute>} />
+                        <Route path="/hr/reports/daily" element={<ProtectedRoute requirePermission="hr"><DailyAttendanceReport /></ProtectedRoute>} />
+                        <Route path="/hr/reports/monthly-summary" element={<ProtectedRoute requirePermission="hr"><MonthlySummaryReport /></ProtectedRoute>} />
+                        <Route path="/hr/reports/late-coming" element={<ProtectedRoute requirePermission="hr"><LateComingReport /></ProtectedRoute>} />
+                        <Route path="/hr/reports/missing-punch" element={<ProtectedRoute requirePermission="hr"><MissingPunchReport /></ProtectedRoute>} />
+                        <Route path="/hr/reports/salary-working" element={<ProtectedRoute requirePermission="hr"><SalaryWorkingReport /></ProtectedRoute>} />
+                        
+                        {/* R&D Samples Module */}
+                        <Route path="/rd-samples/projects" element={<ProtectedRoute requirePermission="rd_samples.projects.view"><RdProjectListPage /></ProtectedRoute>} />
+                        <Route path="/rd-samples/samples" element={<ProtectedRoute requirePermission="rd_samples.samples.view"><RdSampleListPage /></ProtectedRoute>} />
+                        <Route path="/rd-samples/comparison" element={<ProtectedRoute requirePermission="rd_samples.samples.compare"><RdComparisonPage /></ProtectedRoute>} />
+
+                        {/* WeChat Module */}
+                        <Route path="/wechat/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+
                         <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
+
+
                         <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />
                         <Route path="/inventory/stock/ledger" element={<ProtectedRoute requirePermission="inventory"><StockMovementLedger /></ProtectedRoute>} />
                         <Route path="/production/outputs/new" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />

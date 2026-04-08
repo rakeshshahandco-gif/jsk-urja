@@ -76,7 +76,11 @@ import hrRoute from './hr.routes.js';
 import messengerRoute from './messenger.routes.js';
 import fyRoute from './fy.routes.js';
 import payrollRoute from './payroll.routes.js';
+import adminRoute from './admin.routes.js';
 import utilsRoute from './utils.routes.js';
+import rdSampleRoute from './rdSample.routes.js';
+import weChatRoute from './weChat.routes.js';
+
 
 const router = express.Router();
 
@@ -402,10 +406,23 @@ const defaultRoutes = [
         route: fyRoute,
     },
     {
+        path: '/admin',
+        route: adminRoute,
+    },
+    {
         path: '/utils',
         route: utilsRoute,
     },
+    {
+        path: '/rd-samples',
+        route: rdSampleRoute,
+    },
+    {
+        path: '/wechat',
+        route: weChatRoute,
+    },
 ];
+
 
 defaultRoutes.forEach((route) => {
     console.log(`Registering route: ${route.path}`);

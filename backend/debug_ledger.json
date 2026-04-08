@@ -1,36 +1,7 @@
 {
-  "ledgerId": "69c238cb4630f0dab9b546f5",
-  "voucherIds": [
-    "69c38eb37f9a4f24e8ffc962"
-  ],
-  "relatedEntriesCount": 4,
-  "relatedEntries": [
-    {
-      "vId": "69c38eb37f9a4f24e8ffc962",
-      "lId": "69c238cb4630f0dab9b546f5",
-      "lName": "OPTOL TECHNOLOGIES PVT. LTD."
-    },
-    {
-      "vId": "69c38eb37f9a4f24e8ffc962",
-      "lId": "69bcb30f32c5fc43f54059c9",
-      "lName": "Sales Account"
-    },
-    {
-      "vId": "69c38eb37f9a4f24e8ffc962",
-      "lId": "69bcb30f32c5fc43f54059cc",
-      "lName": "CGST Output"
-    },
-    {
-      "vId": "69c38eb37f9a4f24e8ffc962",
-      "lId": "69bcb30f32c5fc43f54059cf",
-      "lName": "SGST Output"
-    }
-  ],
-  "oppositeNamesByVoucher": {
-    "69c38eb37f9a4f24e8ffc962": [
-      "Sales Account",
-      "CGST Output",
-      "SGST Output"
-    ]
-  }
+  "ledgerId": "69c75cca8a5ae3037ef08f6e",
+  "voucherIds": [],
+  "relatedEntriesCount": 0,
+  "relatedEntries": [],
+  "oppositeNamesByVoucher": {}
 }

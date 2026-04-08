@@ -11,6 +11,9 @@ import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
 import moment from 'moment';
 import { FinancialYear } from '../models/financialYear.model.js';
+import { HRSettings } from '../models/hrSettings.model.js';
+import { SalaryWorking } from '../models/salaryWorking.model.js';
+
 
 // --- SHIFT CONTROLLERS ---
 
@@ -164,14 +167,13 @@ export const importAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Please upload an excel or csv file');
     }
 
+    const settings = await HRSettings.findOne() || await HRSettings.create({ updatedBy: req.user._id });
+
     const workbook = new ExcelJS.Workbook();
-    
     if (req.file.originalname.toLowerCase().endsWith('.csv')) {
-        // Read CSV from buffer by wrapping it in a stream
         const stream = Readable.from(req.file.buffer);
         await workbook.csv.read(stream);
     } else {
-        // Read Excel from buffer
         await workbook.xlsx.load(req.file.buffer);
     }
 
@@ -191,16 +193,18 @@ export const importAttendance = asyncHandler(async (req, res) => {
         const val = cell.value?.toString().trim().toLowerCase().replace(/\s+/g, '') || '';
         if (val.includes('employeecode') || val.includes('employeeid') || val === 'code' || val === 'empcode' || val === 'empid') colMap.employeeCode = colNumber;
         else if (val.includes('employeename') || val === 'name' || val === 'empname' || val === 'employee') colMap.employeeName = colNumber;
-        else if (val.includes('date')) colMap.date = colNumber;
+        else if (val === 'date') colMap.date = colNumber;
         else if (val.includes('status')) colMap.status = colNumber;
-        else if (val.includes('checkin') || val.includes('clockin') || val.includes('intime')) colMap.checkIn = colNumber;
-        else if (val.includes('checkout') || val.includes('clockout') || val.includes('outtime')) colMap.checkOut = colNumber;
+        else if (val.includes('intime') || val.includes('checkin') || val.includes('clockin')) colMap.inTime = colNumber;
+        else if (val.includes('outtime') || val.includes('checkout') || val.includes('clockout')) colMap.outTime = colNumber;
         else if (val.includes('remark')) colMap.remarks = colNumber;
     });
 
-    // Default fallbacks if no clear headers found
-    if (!colMap.employeeCode && !colMap.employeeName) colMap.employeeName = 1;
+    // Fallbacks
+    if (!colMap.employeeName && !colMap.employeeCode) colMap.employeeName = 1;
     if (!colMap.date) colMap.date = 2;
+    if (!colMap.inTime) colMap.inTime = 3;
+    if (!colMap.outTime) colMap.outTime = 4;
 
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
@@ -209,9 +213,9 @@ export const importAttendance = asyncHandler(async (req, res) => {
             employeeCode: colMap.employeeCode ? row.getCell(colMap.employeeCode).value?.toString()?.trim() : undefined,
             employeeName: colMap.employeeName ? row.getCell(colMap.employeeName).value?.toString()?.trim() : undefined,
             dateValue: colMap.date ? row.getCell(colMap.date).value : undefined,
-            status: colMap.status ? row.getCell(colMap.status).value?.toString()?.trim() : 'Present',
-            checkIn: colMap.checkIn ? row.getCell(colMap.checkIn).value?.toString()?.trim() : '',
-            checkOut: colMap.checkOut ? row.getCell(colMap.checkOut).value?.toString()?.trim() : '',
+            statusValue: colMap.status ? row.getCell(colMap.status).value?.toString()?.trim() : '',
+            inTimeStr: colMap.inTime ? row.getCell(colMap.inTime).value?.toString()?.trim() : '',
+            outTimeStr: colMap.outTime ? row.getCell(colMap.outTime).value?.toString()?.trim() : '',
             remarks: colMap.remarks ? row.getCell(colMap.remarks).value?.toString()?.trim() : ''
         });
     });
@@ -219,95 +223,143 @@ export const importAttendance = asyncHandler(async (req, res) => {
     for (const data of rowsToProcess) {
         try {
             if ((!data.employeeCode && !data.employeeName) || !data.dateValue) {
-                if (!data.employeeCode && !data.employeeName && !data.dateValue) continue; // skip entirely empty rows
-                if (!data.employeeCode && !data.employeeName) errors.push(`Row ${data.rowNumber}: Employee Code or Name missing`);
+                if (!data.employeeCode && !data.employeeName && !data.dateValue) continue;
+                if (!data.employeeCode && !data.employeeName) errors.push(`Row ${data.rowNumber}: Employee mapping missing`);
                 if (!data.dateValue) errors.push(`Row ${data.rowNumber}: Date missing`);
                 continue;
             }
 
             let parsedDate;
             if (data.dateValue instanceof Date) {
-                parsedDate = data.dateValue;
+                parsedDate = moment.utc(data.dateValue).startOf('day').toDate();
             } else {
-                // If the user provided a month/year context, try to force the date into that period
-                if (month && year && typeof data.dateValue === 'string') {
-                    const dayPart = data.dateValue.split(/[-\/]/)[0]; // Assume first part is day if simple
-                    const day = parseInt(dayPart);
-                    if (!isNaN(day) && day >= 1 && day <= 31) {
-                        parsedDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, day));
-                    } else {
-                        parsedDate = new Date(data.dateValue);
-                    }
-                } else {
-                    parsedDate = new Date(data.dateValue);
-                }
+                parsedDate = moment.utc(data.dateValue, ['DD-MM-YYYY', 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'D-M-YYYY', 'YYYY/MM/DD']).startOf('day').toDate();
             }
-            
-            // Final validation: if we have month/year context, ensure the date belongs to it
-            if (month && year && !isNaN(parsedDate)) {
-                parsedDate.setUTCFullYear(parseInt(year));
-                parsedDate.setUTCMonth(parseInt(month) - 1);
+
+            if (!moment(parsedDate).isValid()) {
+                errors.push(`Row ${data.rowNumber}: Invalid date format (${data.dateValue})`);
+                continue;
             }
 
             // Find employee
-            let query = {};
+            let query = { isActive: true };
             if (data.employeeCode) {
                 query.employeeCode = { $regex: new RegExp(`^${data.employeeCode}$`, 'i') };
-            } else if (data.employeeName) {
+            } else {
                 query.employeeName = { $regex: new RegExp(`^${data.employeeName}$`, 'i') };
             }
 
-            let employee = await Employee.findOne(query);
-            
+            let employee = await Employee.findOne(query).populate('shiftType');
             if (!employee) {
-                if (!data.employeeName) {
-                    errors.push(`Row ${data.rowNumber}: Employee Name missing, cannot auto-create`);
-                    continue;
-                }
-                
-                // Get or create dummy department
-                let dept = await Department.findOne({ name: 'Imported Staff' });
-                if (!dept) dept = await Department.create({ name: 'Imported Staff', isActive: true, createdBy: req.user._id });
-                
-                // Get or create dummy shift
-                let shift = await Shift.findOne({ name: 'Imported Shift' });
-                if (!shift) shift = await Shift.create({ name: 'Imported Shift', startTime: '09:00', endTime: '18:00', duration: 9, isActive: true, createdBy: req.user._id });
-                
-                // Generate new code
-                let newCode = data.employeeCode;
-                if (!newCode) {
-                    newCode = await generateNextEmployeeCodeInternal(); 
-                }
-
-                employee = await Employee.create({
-                    employeeCode: newCode,
-                    employeeName: data.employeeName,
-                    department: dept._id,
-                    designation: 'Staff',
-                    branch: 'Main Location',
-                    mobileNumber: '0000000000',
-                    dateOfJoining: new Date(),
-                    shiftType: shift._id,
-                    remarks: 'Auto-created from Attendance Import',
-                    createdBy: req.user._id
-                });
+                errors.push(`Row ${data.rowNumber}: Employee not found (${data.employeeCode || data.employeeName})`);
+                continue;
             }
 
-            // Upsert record
+            // Logic Calculation
+            let inTime = data.inTimeStr || '';
+            let outTime = data.outTimeStr || '';
+            let status = 'Present';
+            let isMissingCheckout = false;
+            let isLate = false;
+            let lateMinutes = 0;
+            let workingHours = 0;
+            let isHalfDay = false;
+            let inTimeActual = null;
+            let outTimeActual = null;
+
+            const parseTime = (timeStr, baseDate) => {
+                if (!timeStr || timeStr.toLowerCase() === 'null' || timeStr === '') return null;
+                let mTime = moment.utc(timeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'hh:mm:ss A', 'h:mm A', 'H:mm']);
+                if (!mTime.isValid()) return null;
+                
+                const result = moment.utc(baseDate);
+                result.hour(mTime.hour());
+                result.minute(mTime.minute());
+                result.second(mTime.second());
+                return result.toDate();
+            };
+
+            inTimeActual = parseTime(inTime, parsedDate);
+            outTimeActual = parseTime(outTime, parsedDate);
+
+            // 1. Present/Absent Logic (Rule 2)
+            if (!inTime && !outTime) {
+                status = 'Absent';
+            } else {
+                status = 'Present';
+                // 2. Missing Checkout Logic (Rule 4)
+                if (inTime && !outTime) {
+                    isMissingCheckout = true;
+                    if (settings.missingCheckoutHandling === 'Mark as Absent') {
+                        status = 'Absent';
+                    }
+                }
+
+                // 3. Late Coming Logic (Rule 5)
+                const shift = employee.shiftType || { startTime: settings.officeStartTime, graceMinutes: settings.graceMinutes };
+                const shiftStartStr = shift.startTime || settings.officeStartTime || '10:00';
+                const grace = shift.graceMinutes !== undefined ? shift.graceMinutes : settings.graceMinutes;
+                
+                if (inTimeActual) {
+                    const [sh, sm] = shiftStartStr.split(':');
+                    const shiftStart = moment.utc(parsedDate).hour(parseInt(sh)).minute(parseInt(sm)).second(0);
+                    const diff = moment(inTimeActual).diff(shiftStart, 'minutes');
+                    if (diff > grace) {
+                        isLate = true;
+                        lateMinutes = diff;
+                    }
+                }
+
+                // 4. Working Hours & Half Day Logic (Rule 3)
+                if (inTimeActual && outTimeActual) {
+                    workingHours = moment(outTimeActual).diff(moment(inTimeActual), 'hours', true);
+                    if (workingHours < 0) workingHours += 24; // Handle night shifts briefly
+                    
+                    const halfDayThreshold = shift.halfDayMinHours || settings.halfDayThresholdHours || 4;
+                    if (workingHours < halfDayThreshold) {
+                        isHalfDay = true;
+                        status = 'Half Day';
+                    }
+                }
+            }
+
+            // Override with manual status if provided
+            if (data.statusValue && ['Present', 'Absent', 'Half Day', 'Late', 'Holiday', 'Leave'].includes(data.statusValue)) {
+                status = data.statusValue;
+            }
+
+            const isSunday = moment(parsedDate).day() === 0;
+
             await Attendance.findOneAndUpdate(
                 { employee: employee._id, date: parsedDate },
-                { status: data.status, checkIn: data.checkIn, checkOut: data.checkOut, remarks: data.remarks },
+                { 
+                    status, 
+                    checkIn: inTime, 
+                    checkOut: outTime, 
+                    inTime,
+                    outTime,
+                    inTimeActual,
+                    outTimeActual,
+                    workingHours,
+                    isLate,
+                    lateMinutes,
+                    isHalfDay,
+                    isMissingCheckout,
+                    isSunday,
+                    remarks: data.remarks 
+                },
                 { upsert: true, new: true }
             );
-            importedRecords.push(data.employeeCode || data.employeeName);
+            importedRecords.push(employee.employeeName);
         } catch (e) {
-            // Trigger nodemon restart comment
-            errors.push(`Row ${data.rowNumber}: Server Error - ${e.message}`);
+            errors.push(`Row ${data.rowNumber}: ${e.message}`);
         }
     }
 
     res.send(new ApiResponse(httpStatus.OK, { imported: importedRecords.length, errors }, 'Attendance data processed successfully'));
 });
+
+
 
 export const getAttendances = asyncHandler(async (req, res) => {
     const { date, status, month, year, financialYear } = req.query;
@@ -486,3 +538,352 @@ export const getAttendances = asyncHandler(async (req, res) => {
         
     res.send(new ApiResponse(httpStatus.OK, attendance));
 });
+
+// --- HR SETTINGS CONTROLLERS ---
+
+export const getHRSettings = asyncHandler(async (req, res) => {
+    let settings = await HRSettings.findOne();
+    if (!settings) {
+        settings = await HRSettings.create({ updatedBy: req.user._id });
+    }
+    res.send(new ApiResponse(httpStatus.OK, settings));
+});
+
+export const updateHRSettings = asyncHandler(async (req, res) => {
+    let settings = await HRSettings.findOne();
+    if (settings) {
+        settings = await HRSettings.findByIdAndUpdate(settings._id, { ...req.body, updatedBy: req.user._id }, { new: true });
+    } else {
+        settings = await HRSettings.create({ ...req.body, updatedBy: req.user._id });
+    }
+    res.send(new ApiResponse(httpStatus.OK, settings, 'HR Settings updated successfully'));
+});
+
+// --- REPORT CONTROLLERS ---
+
+export const getDailyAttendanceReport = asyncHandler(async (req, res) => {
+    const { date, department, employee } = req.query;
+    
+    const reportDate = date ? moment.utc(date).startOf('day') : moment.utc().startOf('day');
+    const start = reportDate.toDate();
+    const end = moment.utc(reportDate).endOf('day').toDate();
+
+    const empFilter = { isActive: true };
+    if (department) empFilter.department = department;
+    if (employee) empFilter._id = employee;
+
+    const employees = await Employee.find(empFilter).populate('department', 'name');
+    const records = await Attendance.find({
+        date: { $gte: start, $lte: end }
+    });
+
+    const report = employees.map(emp => {
+        const rec = records.find(r => r.employee.toString() === emp._id.toString());
+        if (rec) return rec;
+        
+        // If no record, it's Absent (unless it's Sunday/Holiday, but Daily Report usually shows status as is)
+        return {
+            _id: `absent-${emp._id}`,
+            employee: emp,
+            date: start,
+            status: 'Absent',
+            inTime: '',
+            outTime: '',
+            workingHours: 0,
+            isLate: false,
+            isHalfDay: false,
+            isMissingCheckout: false
+        };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, report));
+});
+
+
+
+export const getMonthlySummaryReport = asyncHandler(async (req, res) => {
+    const { month, year, employee, department } = req.query;
+    if (!month || !year) throw new ApiError(httpStatus.BAD_REQUEST, 'Month and Year are required');
+
+    const mInt = parseInt(month);
+    const yInt = parseInt(year);
+    const startDate = moment.utc({ year: yInt, month: mInt - 1, day: 1 }).startOf('day');
+    const endDate = moment.utc(startDate).endOf('month');
+    const daysInMonth = startDate.daysInMonth();
+
+    const empFilter = { isActive: true };
+    if (employee) empFilter._id = employee;
+    if (department) empFilter.department = department;
+
+    const employees = await Employee.find(empFilter).populate('department', 'name');
+    const records = await Attendance.find({
+        date: { $gte: startDate.toDate(), $lte: endDate.toDate() }
+    });
+
+    const settings = await HRSettings.findOne() || {};
+    const holidays = await Holiday.find({
+        date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
+        isActive: true
+    });
+
+    const holidayMap = {};
+    holidays.forEach(h => holidayMap[moment.utc(h.date).format('YYYY-MM-DD')] = h.name);
+
+    const summary = employees.map(emp => {
+        const empRecords = records.filter(r => r.employee.toString() === emp._id.toString());
+        
+        const counts = {
+            present: 0,
+            absent: 0,
+            halfDay: 0,
+            late: 0,
+            missingCheckout: 0,
+            sundays: 0,
+            holidays: 0,
+        };
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const currDate = moment.utc(startDate).date(d);
+            const dateKey = currDate.format('YYYY-MM-DD');
+            const isSun = currDate.day() === 0;
+            const isHol = holidayMap[dateKey];
+            
+            const rec = empRecords.find(r => moment.utc(r.date).format('YYYY-MM-DD') === dateKey);
+
+            if (rec && rec.status !== 'Absent') {
+                if (rec.status === 'Present') counts.present++;
+                else if (rec.status === 'Half Day') counts.halfDay++;
+                
+                if (rec.isLate) counts.late++;
+                if (rec.isMissingCheckout) counts.missingCheckout++;
+            } else {
+                // If record is Absent OR no record, check if it's Sunday or Holiday for paid status
+                if (isSun) counts.sundays++;
+                else if (isHol) counts.holidays++;
+                else counts.absent++;
+            }
+        }
+
+        const paidHolidays = settings.isHolidayPaid ? counts.holidays : 0;
+        const paidSundays = settings.isSundayPaid ? counts.sundays : 0;
+        // Formula: Present + HalfDay(0.5) + Paid Non-Working (Sun + Hol)
+        const totalPayableDays = counts.present + (counts.halfDay * 0.5) + paidHolidays + paidSundays;
+
+        return {
+            employee: emp,
+            employeeName: emp.employeeName,
+            employeeCode: emp.employeeCode,
+            departmentName: emp.department?.name || 'N/A',
+            month: `${moment.months(mInt - 1)} ${yInt}`,
+            totalDays: daysInMonth,
+            present: counts.present,
+            absent: counts.absent,
+            halfDay: counts.halfDay,
+            late: counts.late,
+            missingCheckout: counts.missingCheckout,
+            sundays: counts.sundays,
+            holidays: counts.holidays,
+            paidNonWorkingDays: counts.sundays + counts.holidays,
+            totalPayableDays,
+            salaryWorkingDays: totalPayableDays
+        };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, summary));
+});
+
+
+export const getLateComingReport = asyncHandler(async (req, res) => {
+    const { month, year, employee, department } = req.query;
+    
+    const filter = { isLate: true };
+    if (month && year) {
+        const start = moment.utc({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }).startOf('day').toDate();
+        const end = moment.utc(start).endOf('month').toDate();
+        filter.date = { $gte: start, $lte: end };
+    }
+
+    if (employee) filter.employee = employee;
+
+    let report = await Attendance.find(filter)
+        .populate({
+            path: 'employee',
+            match: department ? { department } : {},
+            populate: { path: 'shiftType' }
+        })
+        .sort({ date: -1 });
+
+    report = report.filter(r => r.employee);
+
+    const results = report.map(r => ({
+        employeeName: r.employee.employeeName,
+        employeeCode: r.employee.employeeCode,
+        date: r.date,
+        inTime: r.inTime,
+        shiftTime: r.employee.shiftType?.startTime || '10:00',
+        graceTime: r.employee.shiftType?.graceMinutes || 10,
+        delayMinutes: r.lateMinutes,
+        status: 'Late'
+    }));
+
+    res.send(new ApiResponse(httpStatus.OK, results));
+});
+
+
+export const getMissingPunchReport = asyncHandler(async (req, res) => {
+    const { month, year, employee, department } = req.query;
+    const filter = { isMissingCheckout: true };
+
+    if (month && year) {
+        const start = moment.utc({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }).startOf('day').toDate();
+        const end = moment.utc(start).endOf('month').toDate();
+        filter.date = { $gte: start, $lte: end };
+    }
+
+    if (employee) filter.employee = employee;
+
+    let report = await Attendance.find(filter)
+        .populate({
+            path: 'employee',
+            match: department ? { department } : {},
+            populate: { path: 'department', select: 'name' }
+        })
+        .sort({ date: -1 });
+
+    report = report.filter(r => r.employee);
+
+    res.send(new ApiResponse(httpStatus.OK, report));
+});
+
+
+export const getSalaryWorkingReport = asyncHandler(async (req, res) => {
+    const { month, year, employee, department } = req.query;
+    if (!month || !year) throw new ApiError(httpStatus.BAD_REQUEST, 'Month and Year are required');
+
+    const mInt = parseInt(month);
+    const yInt = parseInt(year);
+    const startDate = moment.utc({ year: yInt, month: mInt - 1, day: 1 }).startOf('day');
+    const endDate = moment.utc(startDate).endOf('month');
+    const daysInMonth = startDate.daysInMonth();
+
+    const empFilter = { isActive: true };
+    if (employee) empFilter._id = employee;
+    if (department) empFilter.department = department;
+
+    const employees = await Employee.find(empFilter).populate('department', 'name');
+    const records = await Attendance.find({
+        date: { $gte: startDate.toDate(), $lte: endDate.toDate() }
+    });
+
+    const settings = await HRSettings.findOne() || {};
+    const holidays = await Holiday.find({
+        date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
+        isActive: true
+    });
+
+    const holidayMap = {};
+    holidays.forEach(h => holidayMap[moment.utc(h.date).format('YYYY-MM-DD')] = h.name);
+
+    const salaryData = employees.map(emp => {
+        const empRecords = records.filter(r => r.employee.toString() === emp._id.toString());
+        
+        let present = 0;
+        let halfDay = 0;
+        let absent = 0;
+        let sundays = 0;
+        let monthHolidays = 0;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const currDate = moment.utc(startDate).date(d);
+            const dateKey = currDate.format('YYYY-MM-DD');
+            const isSun = currDate.day() === 0;
+            const isHol = holidayMap[dateKey];
+
+            const rec = empRecords.find(r => moment.utc(r.date).format('YYYY-MM-DD') === dateKey);
+
+            if (rec && rec.status !== 'Absent') {
+                if (rec.status === 'Present') present++;
+                else if (rec.status === 'Half Day') halfDay++;
+            } else {
+                if (isSun) sundays++;
+                else if (isHol) monthHolidays++;
+                else absent++;
+            }
+        }
+
+        const paidHolidays = settings.isHolidayPaid ? monthHolidays : 0;
+        const paidSundays = settings.isSundayPaid ? sundays : 0;
+        const totalPayable = present + (halfDay * 0.5) + paidHolidays + paidSundays;
+
+        return {
+            employee: emp.employeeName,
+            employeeCode: emp.employeeCode,
+            department: emp.department?.name || 'N/A',
+            month: `${moment.months(mInt - 1)} ${yInt}`,
+            totalDays: daysInMonth,
+            present,
+            halfDay,
+            absent,
+            sundays,
+            holidays: monthHolidays,
+            totalPayableDays: totalPayable,
+            salaryWorkingBasis: `Present(${present}) + HalfDay(${halfDay}*0.5) + Sun(${paidSundays}) + Hol(${paidHolidays})`
+        };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, salaryData));
+});
+
+
+export const downloadAttendanceTemplate = asyncHandler(async (req, res) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Attendance Upload Template');
+
+    worksheet.columns = [
+        { header: 'Employee Name', key: 'name', width: 25 },
+        { header: 'Date', key: 'date', width: 15 },
+        { header: 'In Time', key: 'inTime', width: 15 },
+        { header: 'Out Time', key: 'outTime', width: 15 },
+    ];
+
+    // Add sample row
+    worksheet.addRow({
+        name: 'John Doe',
+        date: moment().format('DD-MM-YYYY'),
+        inTime: '10:00 AM',
+        outTime: '06:00 PM'
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=attendance_template.xlsx');
+
+    await workbook.xlsx.write(res);
+    res.end();
+});
+
+export const bulkDeleteAttendance = asyncHandler(async (req, res) => {
+    const { month, year } = req.body;
+    if (!month || !year) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Month and Year are required');
+    }
+
+    const m = parseInt(month);
+    const y = parseInt(year);
+    const startOfMonth = moment.utc({ year: y, month: m - 1, day: 1 }).startOf('day');
+    const endOfMonth = moment.utc(startOfMonth).endOf('month');
+
+    // Delete attendance records
+    const attResult = await Attendance.deleteMany({
+        date: { $gte: startOfMonth.toDate(), $lte: endOfMonth.toDate() }
+    });
+
+    // Delete salary working records to force regenerate
+    const swResult = await SalaryWorking.deleteMany({ month: m, year: y });
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        attendanceDeleted: attResult.deletedCount,
+        salaryWorkingDeleted: swResult.deletedCount
+    }, `Successfully cleared data for ${moment.months(m - 1)} ${y}`));
+});
+
+

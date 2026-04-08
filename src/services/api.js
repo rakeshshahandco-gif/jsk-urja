@@ -9,7 +9,7 @@ export const currentLocation = env.API_URL;
 
 // Create axios instance
 const api = axios.create({
-    baseURL: currentLocation,
+    baseURL: currentLocation.endsWith('/') ? currentLocation : `${currentLocation}/`,
     headers: {
         'Content-Type': 'application/json',
     },

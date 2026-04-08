@@ -279,7 +279,8 @@ const deleteCustomerById = async (customerId) => {
                 isDeleted: true,
                 deletedAt: new Date(),
             }
-        }
+        },
+        { bypassSecurity: true }
     );
     if (result.matchedCount === 0) {
         throw new ApiError(404, 'Customer not found');
