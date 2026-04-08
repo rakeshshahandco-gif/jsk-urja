@@ -7,7 +7,11 @@
 const pick = (object, keys) => {
     return keys.reduce((obj, key) => {
         if (object && Object.prototype.hasOwnProperty.call(object, key)) {
-            obj[key] = object[key];
+            const value = object[key];
+            // Exclude empty strings to avoid CastErrors in Mongoose
+            if (value !== '') {
+                obj[key] = value;
+            }
         }
         return obj;
     }, {});

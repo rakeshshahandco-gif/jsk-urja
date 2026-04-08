@@ -131,6 +131,27 @@ const AttendanceImportPage = () => {
     const currentYear = parseInt(moment().format('YYYY'));
     const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
 
+    const handleDownloadTemplate = async () => {
+        try {
+            const response = await api.get('/hr/attendance/template', {
+                responseType: 'blob'
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'attendance_template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success('Template download started');
+        } catch (error) {
+            console.error('Download failed:', error);
+            toast.error('Failed to download template');
+        }
+    };
+
     return (
         <div style={{ padding: '32px', background: '#f8fafc', minHeight: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px' }}>
@@ -294,16 +315,30 @@ const AttendanceImportPage = () => {
                             <FileText size={18} /> Templates
                         </h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <a 
-                                href={`${api.defaults.baseURL}/hr/attendance/template`}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{ textDecoration: 'none', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s' }}
+                            <button 
+                                onClick={handleDownloadTemplate}
+                                style={{ 
+                                    width: '100%',
+                                    textDecoration: 'none', 
+                                    padding: '12px', 
+                                    background: '#f8fafc', 
+                                    border: '1px solid #e2e8f0', 
+                                    borderRadius: '10px', 
+                                    fontSize: '13px', 
+                                    fontWeight: '600', 
+                                    color: '#475569', 
+                                    textAlign: 'left', 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '10px', 
+                                    transition: 'all 0.2s' 
+                                }}
                                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.background = '#f0fdf4'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
                             >
                                 <FilePlus size={16} color="#059669" /> Download Attendance Template (.xlsx)
-                            </a>
+                            </button>
                         </div>
                     </div>
 

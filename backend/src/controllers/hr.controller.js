@@ -241,6 +241,16 @@ export const importAttendance = asyncHandler(async (req, res) => {
                 continue;
             }
 
+            // [VALIDATION LOCKDOWN] Period Match Validation
+            const pDate = moment.utc(parsedDate);
+            if (month && year) {
+                const targetM = parseInt(month);
+                const targetY = parseInt(year);
+                if (pDate.month() + 1 !== targetM || pDate.year() !== targetY) {
+                    throw new ApiError(httpStatus.BAD_REQUEST, `Data Mismatch: Row ${data.rowNumber} contains date ${pDate.format('YYYY-MM-DD')}, but you selected ${moment().month(targetM-1).format('MMMM')} ${targetY}. Please upload the correct file.`);
+                }
+            }
+
             // Find employee
             let query = { isActive: true };
             if (data.employeeCode) {
@@ -362,15 +372,19 @@ export const importAttendance = asyncHandler(async (req, res) => {
 
 
 export const getAttendances = asyncHandler(async (req, res) => {
-    const { date, status, month, year, financialYear } = req.query;
+    const { date, status, month, year, financialYear, view } = req.query;
     res.setHeader('X-Permanent-Fix', 'True');
-    console.log(`[Attendance API] LOCKEDDOWN REQ: month=${month}, year=${year}, FY=${financialYear}`);
+    console.log(`[Attendance API] LOCKEDDOWN REQ: month=${month}, year=${year}, FY=${financialYear}, view=${view}`);
     let filter = {};
     
-    // If month and year are provided, we generate a FULL REPORT for the month
+    // If month and year are provided, decide between simple list or full report
     const m = Number(Array.isArray(month) ? month[0] : month);
     const y = Number(Array.isArray(year) ? year[0] : year);
+    
     if (month && year && !isNaN(m) && !isNaN(y)) {
+        if (view === 'report') {
+            console.log(`[Attendance API] GENERATING FULL REPORT GRID for ${y}-${m}`);
+            // --- FULL REPORT GRID LOGIC ---
         // 0. Financial Year Validation (Optional but recommended)
         if (financialYear) {
             const fy = await FinancialYear.findOne({ name: financialYear });
@@ -507,6 +521,20 @@ export const getAttendances = asyncHandler(async (req, res) => {
 
         // Sort: Latest date first for the display
         return res.send(new ApiResponse(httpStatus.OK, filteredReport.sort((a,b) => new Date(b.date) - new Date(a.date)), 'Report generated', { debug: { m, y, actualCount: actualRecords.length, daysInMonth } }));
+    } else {
+            console.log(`[Attendance API] FETCHING SIMPLE LIST for ${y}-${m}`);
+            const startDate = moment.utc({ year: y, month: m - 1, day: 1 }).startOf('month');
+            const endDate = moment.utc({ year: y, month: m - 1, day: 1 }).endOf('month');
+            
+            filter.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
+            if (status) filter.status = status;
+
+            const attendance = await Attendance.find(filter)
+                .populate('employee', 'employeeName employeeCode department')
+                .sort({ date: -1 });
+
+            return res.send(new ApiResponse(httpStatus.OK, attendance));
+        }
     }
 
     // Default legacy behavior for single date or overall view
@@ -869,8 +897,9 @@ export const bulkDeleteAttendance = asyncHandler(async (req, res) => {
 
     const m = parseInt(month);
     const y = parseInt(year);
-    const startOfMonth = moment.utc({ year: y, month: m - 1, day: 1 }).startOf('day');
-    const endOfMonth = moment.utc(startOfMonth).endOf('month');
+    // [TZ LOCKDOWN] Expand range by 6 hours to capture records shifted by IST (+5:30)
+    const startOfMonth = moment.utc({ year: y, month: m - 1, day: 1 }).subtract(6, 'hours');
+    const endOfMonth = moment.utc({ year: y, month: m - 1, day: 1 }).endOf('month').add(6, 'hours');
 
     // Delete attendance records
     const attResult = await Attendance.deleteMany({

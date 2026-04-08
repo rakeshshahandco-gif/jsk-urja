@@ -91,6 +91,16 @@ export const getSamples = asyncHandler(async (req, res) => {
     const options = pick(req.query, ['sortBy', 'limit', 'page', 'search']);
     
     const query = { ...filter };
+    
+    // Explicitly remove empty string or null values to prevent Mongoose CastErrors
+    Object.keys(query).forEach(key => {
+        if (query[key] === '' || query[key] === null || query[key] === undefined) {
+            delete query[key];
+        }
+    });
+
+    console.log(`🔍 [getSamples] Querying with fixed filter:`, JSON.stringify(query));
+
     if (options.search) {
         query.$or = [
             { itemName: { $regex: options.search, $options: 'i' } },

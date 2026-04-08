@@ -60,7 +60,7 @@ const RdSampleForm = ({ sample, onClose, onSuccess }) => {
     const fetchProjects = async () => {
         try {
             const res = await getRdProjects();
-            setProjects(res.data || []);
+            setProjects(res.data?.data || []);
         } catch (error) {
             console.error('Failed to fetch projects', error);
         }

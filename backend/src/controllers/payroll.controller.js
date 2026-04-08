@@ -98,7 +98,10 @@ export const generateSalaryPreview = asyncHandler(async (req, res) => {
             }
         });
 
-        const daysWorked = attendanceDays + sundays + activeHolidays;
+        // [STRICT DATA PRESENCE] Only pay for Sundays/Holidays if the employee has actual physical attendance or leaves.
+        // This ensures that cleared or not-yet-started months show exactly 0 days.
+        const hasWorkingData = attendanceDays > 0 || recordedAttendance.some(att => att.status === 'Leave');
+        const daysWorked = hasWorkingData ? (attendanceDays + sundays + activeHolidays) : 0;
         const fraction = totalDays > 0 ? (daysWorked / totalDays) : 0;
 
         const basic = Math.round((emp.basicSalary || 0) * fraction);

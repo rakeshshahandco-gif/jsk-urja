@@ -7,8 +7,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
-// DEBUG VERSION CHECK (Unprotected)
-router.get('/v7-lockdown', (req, res) => res.send({ status: 'LOCKEDDOWN_V7_ACTIVE', port: process.env.PORT || 5000 }));
+// --- PUBLIC ROUTES (No Auth Required) ---
+router.get('/v7-lockdown', (req, res) => res.send({ status: 'LOCKEDDOWN_V7_RESTARTED_2026_04_08', port: process.env.PORT || 5000 }));
+router.get('/attendance/template', hrController.downloadAttendanceTemplate);
 
 router.use(protect);
 
@@ -53,7 +54,6 @@ router.route('/attendance')
 router.route('/attendance/import')
     .post(checkPermission('hr.hr_dashboard.view'), upload.single('file'), hrController.importAttendance);
 
-router.get('/attendance/template', checkPermission('hr.hr_dashboard.view'), hrController.downloadAttendanceTemplate);
 router.delete('/attendance/bulk', checkPermission('hr.hr_dashboard.view'), hrController.bulkDeleteAttendance);
 
 
