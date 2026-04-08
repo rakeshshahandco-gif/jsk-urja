@@ -8,9 +8,14 @@
  * @returns {Date|null} - The next due date or null if no next occurrence
  */
 export const calculateNextDueDate = (task) => {
-    if (!task.recurrence || !task.recurrence.enabled) {
+    // For TaskMaster, recurrence is always considered enabled if the master itself is active.
+    // For Task instance, we check the enabled flag.
+    if (!task.recurrence) {
         return null;
     }
+
+    const { enabled } = task.recurrence;
+    if (enabled === false) return null;
 
     const { 
         frequency, 
