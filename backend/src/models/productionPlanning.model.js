@@ -72,6 +72,7 @@ const productionPlanningSchema = new mongoose.Schema({
         default: 'Draft'
     },
     remarks: { type: String, trim: true },
+    warrantyDetails: { type: String, trim: true },
 
     // ── Summary cards data ───────────────────────────────────────────────────
     summary: {

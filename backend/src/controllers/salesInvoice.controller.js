@@ -99,7 +99,8 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const getSalesInvoices = asyncHandler(async (req, res) => {
-    const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
+    const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view, series } = req.query;
+    console.log(`[SalesInvoices] Fetching with filter:`, { search, paymentStatus, series, view });
     
     const filter = { isDeleted: { $ne: true } };
 
@@ -108,33 +109,76 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     } else if (view === 'all' || includeDeleted === 'true') {
         delete filter.isDeleted;
     }
+
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
-    if (req.query.financialYear) {
-        filter.$or = filter.$or || [];
-        filter.$or.push(
-            { financialYear: req.query.financialYear },
-            { financialYear: { $exists: false } },
-            { financialYear: null },
-            { financialYear: '' }
-        );
+
+    // Series Filter (Robust with Prefix Match)
+    if (series && series !== 'All Series' && series !== '') {
+        try {
+            const seriesIdObj = new mongoose.Types.ObjectId(series);
+            const seriesDoc = await InvoiceSeries.findById(seriesIdObj);
+            
+            const orConditions = [{ seriesId: seriesIdObj }];
+            if (seriesDoc?.prefix) {
+                // If the prefix has a slash (like JU/SALES "26-27/"), match it exactly.
+                // If it doesn't (like ESTIMATE "26-27"), match it but ensure it's NOT followed by a slash to avoid collision.
+                const escapedPrefix = seriesDoc.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (seriesDoc.prefix.endsWith('/')) {
+                    orConditions.push({ invoiceNumber: { $regex: `^${escapedPrefix}`, $options: 'i' } });
+                } else {
+                    // Match prefix but ensure next char is NOT a slash
+                    orConditions.push({ invoiceNumber: { $regex: `^${escapedPrefix}[^/]`, $options: 'i' } });
+                }
+            }
+            filter.$and = filter.$and || [];
+            filter.$and.push({ $or: orConditions });
+        } catch (e) {
+            console.warn(`[SalesInvoices] Series Filter Error:`, e.message);
+        }
     }
-    if (search) filter.$or = [
-        { invoiceNumber: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-    ];
+
+    if (req.query.financialYear) {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+            $or: [
+                { financialYear: req.query.financialYear },
+                { financialYear: { $exists: false } },
+                { financialYear: null },
+                { financialYear: '' }
+            ]
+        });
+    }
+
+    if (search) {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+            $or: [
+                { invoiceNumber: { $regex: search, $options: 'i' } },
+                { customerName: { $regex: search, $options: 'i' } },
+            ]
+        });
+    }
+
     if (dateFrom || dateTo) {
         filter.invoiceDate = {};
         if (dateFrom) filter.invoiceDate.$gte = new Date(dateFrom);
         if (dateTo) filter.invoiceDate.$lte = new Date(dateTo);
     }
 
+    console.log(`[SalesInvoices] Final MongoDB Filter:`, JSON.stringify(filter));
+
     const skip = (Number(page) - 1) * Number(limit);
     const [invoices, total] = await Promise.all([
-        SalesInvoice.find(filter).populate('createdBy', 'name mobile').sort({ invoiceDate: -1 }).skip(skip).limit(Number(limit)),
+        SalesInvoice.find(filter)
+            .populate('seriesId', 'seriesName')
+            .populate('createdBy', 'name mobile')
+            .sort({ invoiceDate: -1 })
+            .skip(skip)
+            .limit(Number(limit)),
         SalesInvoice.countDocuments(filter),
     ]);
-    res.json({ success: true, invoices, total });
+   res.json({ success: true, invoices, total });
 });
 
 export const getSalesInvoiceById = asyncHandler(async (req, res) => {

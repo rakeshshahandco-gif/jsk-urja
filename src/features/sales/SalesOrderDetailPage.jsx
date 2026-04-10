@@ -449,7 +449,7 @@ export default function SalesOrderDetailPage() {
                       {fmt(so.soDate)}
                     </td>
                   </tr>
-                  <tr>
+                    <tr>
                     <td
                       style={{
                         fontSize: "10pt",
@@ -463,6 +463,24 @@ export default function SalesOrderDetailPage() {
                       {so.orderCategory || "Order"}
                     </td>
                   </tr>
+                  {so.orderCategory === 'Replacement' && so.warrantyDetails && (
+                    <tr>
+                      <td
+                        style={{
+                          fontSize: "10pt",
+                          fontWeight: 800,
+                          padding: "4px 0",
+                          verticalAlign: "top",
+                          color: "#dc2626"
+                        }}
+                      >
+                        Warranty Details:
+                      </td>
+                      <td style={{ fontSize: "10pt", padding: "4px 0", color: "#dc2626", fontWeight: 700 }}>
+                        {so.warrantyDetails}
+                      </td>
+                    </tr>
+                  )}
                   <tr>
                     <td
                       style={{
@@ -1186,8 +1204,13 @@ export default function SalesOrderDetailPage() {
                 <strong style={{ color: "#374151" }}>
                   {so.customerCode || "—"}
                 </strong>{" "}
-                · {so.customerName} · {so.orderCategory}
+                · {so.customerName} · <span style={{ color: so.orderCategory === 'Replacement' ? '#dc2626' : 'inherit', fontWeight: so.orderCategory === 'Replacement' ? 700 : 'normal' }}>{so.orderCategory}</span>
               </div>
+              {so.orderCategory === 'Replacement' && so.warrantyDetails && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', padding: '8px 12px', borderRadius: 8, marginTop: 8, fontSize: 13, color: '#991b1b' }}>
+                  <strong>Warranty Details:</strong> {so.warrantyDetails}
+                </div>
+              )}
               <div style={{ color: "#9ca3af", fontSize: 13, marginTop: 2 }}>
                 Date: {fmt(so.soDate)} · Delivery: {fmt(so.deliveryDate)}
               </div>

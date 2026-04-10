@@ -533,6 +533,16 @@ export default function ProductionPlanningFormPage() {
                             style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                         />
                     </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#dc2626' }}>Warranty Details (for Replacements)</label>
+                        <input
+                            type="text"
+                            value={header.warrantyDetails || ''}
+                            onChange={e => setHeader(h => ({ ...h, warrantyDetails: e.target.value }))}
+                            placeholder="Enter warranty instructions if this plan includes replacement items..."
+                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #fca5a5', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fef2f2' }}
+                        />
+                    </div>
                 </div>
             </div>
 

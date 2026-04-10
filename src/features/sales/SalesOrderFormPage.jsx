@@ -39,6 +39,7 @@ export default function SalesOrderFormPage() {
         customerCode: '',
         soDate: new Date().toISOString().split('T')[0],
         deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
+        warrantyDetails: '',
         freightAmount: '', freightGstRate: 0,
         creditPeriod: 0,
         seriesId: '',
@@ -202,6 +203,7 @@ export default function SalesOrderFormPage() {
                 customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
                 soDate: new Date().toISOString().split('T')[0],
                 deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
+                warrantyDetails: '',
                 freightAmount: '', freightGstRate: 18,
                 creditPeriod: 0,
                 items: [BLANK_ITEM()],
@@ -293,6 +295,7 @@ export default function SalesOrderFormPage() {
     const handleSubmit = async (nextStatus) => {
 
         if (!form.customerName) return toast.error('Customer name is required');
+        if (form.orderCategory === 'Replacement' && !form.warrantyDetails?.trim()) return toast.error('Please enter Warranty Details for Replacement order.');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
         try {
@@ -375,6 +378,17 @@ export default function SalesOrderFormPage() {
                                 <option>Order</option><option>Sample</option><option>Replacement</option>
                             </select>
                         </Field>
+                        {form.orderCategory === 'Replacement' && (
+                            <Field label="Warranty Details *">
+                                <textarea 
+                                    value={form.warrantyDetails} 
+                                    onChange={e => setF('warrantyDetails', e.target.value)} 
+                                    style={{ ...inp, height: 56, resize: 'vertical', borderColor: !form.warrantyDetails?.trim() ? '#fca5a5' : '#d1d5db' }} 
+                                    placeholder="Enter replacement reason / warranty details..." 
+                                    disabled={form.status && form.status !== 'Draft'} 
+                                />
+                            </Field>
+                        )}
                         <Field label="Delivery Date"><input type="date" value={form.deliveryDate || ''} onChange={e => setF('deliveryDate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
                         <Field label="Sticker Type">
                             <select value={form.stickerType || ''} onChange={e => setF('stickerType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={form.status && form.status !== 'Draft'}>

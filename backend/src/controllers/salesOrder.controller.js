@@ -328,6 +328,7 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
         customerAddress: so.shippingAddress || so.billingAddress,
         deliveryDate: so.deliveryDate,
         orderCategory: so.orderCategory,
+        warrantyDetails: so.warrantyDetails || '',
         orderDate: so.soDate,
         stickerType,
         notes: so.remarks || '',

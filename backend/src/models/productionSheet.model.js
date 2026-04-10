@@ -23,6 +23,7 @@ const productionSheetSchema = new mongoose.Schema({
     customerAddress: { type: String, default: '' },
     deliveryDate: { type: Date, default: null },
     orderCategory: { type: String, default: '' },
+    warrantyDetails: { type: String, default: '' },
     orderDate: { type: Date, default: null },
     notes: { type: String, default: '' },
     modelNo: { type: String, default: '' },

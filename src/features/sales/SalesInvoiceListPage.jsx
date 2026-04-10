@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSalesInvoices, deleteSalesOrder, restoreSalesInvoice } from '@/services/salesApi';
+import { getSalesInvoices, deleteSalesOrder, restoreSalesInvoice, getInvoiceSeries } from '@/services/salesApi';
 import { deleteSalesInvoice } from '@/services/salesApi'; // Ensure this is exported or added if needed
 import { PATHS } from '@/routes/paths';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,16 +29,31 @@ export default function SalesInvoiceListPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [payFilter, setPayFilter] = useState('');
+    const [seriesFilter, setSeriesFilter] = useState('');
+    const [seriesOptions, setSeriesOptions] = useState([]);
     const [includeDeleted, setIncludeDeleted] = useState(true);
     const [viewMode, setViewMode] = useState('all'); // all, active, deleted
 
     const load = useCallback(() => {
         setLoading(true);
-        getSalesInvoices({ search, paymentStatus: payFilter, view: viewMode, includeDeleted: true, limit: 100 })
+        getSalesInvoices({ 
+            search, 
+            paymentStatus: payFilter, 
+            series: seriesFilter || undefined,
+            view: viewMode, 
+            includeDeleted: true, 
+            limit: 100 
+        })
             .then(data => setInvoices(data.invoices || []))
             .catch(() => toast.error('Failed to load invoices'))
             .finally(() => setLoading(false));
-    }, [search, payFilter, viewMode]);
+    }, [search, payFilter, seriesFilter, viewMode]);
+
+    useEffect(() => {
+        getInvoiceSeries()
+            .then(data => setSeriesOptions(data || []))
+            .catch(() => { });
+    }, []);
 
     useEffect(() => { load(); }, [load]);
 
@@ -110,6 +125,11 @@ export default function SalesInvoiceListPage() {
             <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 <input placeholder="Search invoice / customer..." value={search} onChange={e => setSearch(e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: 260 }} />
+                <select value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}
+                    style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+                    <option value="">All Series</option>
+                    {seriesOptions.map(s => <option key={s._id} value={s._id}>{s.seriesName}</option>)}
+                </select>
                 <select value={payFilter} onChange={e => setPayFilter(e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Payment Status</option>
@@ -127,17 +147,30 @@ export default function SalesInvoiceListPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr>
-                            {['Invoice No', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Status', 'Payment', 'Actions'].map(h => (
+                            {['Invoice No', 'Series', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Status', 'Payment', 'Actions'].map(h => (
                                 <th key={h} style={th}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
                         ) : invoices.length === 0 ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices found.</td></tr>
-                        ) : invoices.map((inv) => {
+                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices found.</td></tr>
+                        ) : invoices
+                            .filter(inv => {
+                                if (!seriesFilter) return true;
+                                const selectedSrs = seriesOptions.find(s => s._id === seriesFilter);
+                                if (!selectedSrs) return true;
+                                
+                                // Match by ID
+                                if (inv.seriesId?._id === seriesFilter || inv.seriesId === seriesFilter) return true;
+                                
+                                // Match by deduced series (Fallback for older records)
+                                const deducedSeries = inv.invoiceNumber?.includes('/') ? 'JU/SALES' : 'ESTIMATE';
+                                return selectedSrs.seriesName === deducedSeries;
+                            })
+                            .map((inv) => {
                             const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS['Unpaid'];
                             const isDeleted = inv.isDeleted;
                             return (
@@ -146,6 +179,9 @@ export default function SalesInvoiceListPage() {
                                     onMouseEnter={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : '#f8f9fa'}
                                     onMouseLeave={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : 'transparent'}>
                                     <td style={{ ...td, color: isDeleted ? '#94a3b8' : '#2563eb', fontWeight: 700, textDecoration: isDeleted ? 'line-through' : 'none' }}>{inv.invoiceNumber}</td>
+                                    <td style={{ ...td, fontWeight: 600, color: '#475569' }}>
+                                        {inv.seriesId?.seriesName || (inv.invoiceNumber?.includes('/') ? 'JU/SALES' : 'ESTIMATE')}
+                                    </td>
                                     <td style={td}>{fmt(inv.invoiceDate)}</td>
                                     <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{inv.customerName}</td>
                                     <td style={{ ...td, color: '#64748b' }}>{inv.soNumber || '—'}</td>

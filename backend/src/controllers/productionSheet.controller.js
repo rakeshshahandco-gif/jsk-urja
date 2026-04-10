@@ -5,14 +5,14 @@ import { ProductionSheet } from '../models/productionSheet.model.js';
 
 // GET SINGLE
 export const getPSById = asyncHandler(async (req, res) => {
-    const ps = await ProductionSheet.findById(req.params.id).populate('soId', 'soNumber customerName');
+    const ps = await ProductionSheet.findById(req.params.id).populate('soId', 'soNumber customerName warrantyDetails orderCategory');
     if (!ps) throw new ApiError(httpStatus.NOT_FOUND, 'Production sheet not found');
     res.json({ success: true, data: ps });
 });
 
 // GET BY SO ID
 export const getPSBySOId = asyncHandler(async (req, res) => {
-    const ps = await ProductionSheet.findOne({ soId: req.params.soId });
+    const ps = await ProductionSheet.findOne({ soId: req.params.soId }).populate('soId', 'soNumber customerName warrantyDetails orderCategory');
     if (!ps) throw new ApiError(httpStatus.NOT_FOUND, 'Production sheet not found for this SO');
     res.json({ success: true, data: ps });
 });
