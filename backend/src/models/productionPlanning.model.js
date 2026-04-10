@@ -68,7 +68,6 @@ const productionPlanningSchema = new mongoose.Schema({
     requiredDate: Date,
     status: {
         type: String,
-        enum: ['Draft', 'Calculated', 'Approved', 'Purchase Pending', 'Material Arranged', 'Ready for Production', 'Closed', 'Cancelled'],
         default: 'Draft'
     },
     remarks: { type: String, trim: true },

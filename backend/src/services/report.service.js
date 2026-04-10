@@ -11,6 +11,7 @@ import { Task } from '../models/task.model.js';
 import { TaskGroup } from '../models/taskGroup.model.js';
 import { TaskCategory } from '../models/taskCategory.model.js';
 import { User } from '../models/user.model.js';
+import { GroupMember } from '../models/groupMember.model.js';
 
 /**
  * Build dynamic MongoDB query for customer report
@@ -1218,7 +1219,6 @@ const generateFollowupTaskReportExport = async (format, filters, customerId = nu
  * Reuses same logic as queryTaskReminderReport but adds createdById filter
  */
 const queryManageTasks = async (filters, options) => {
-    const { GroupMember } = await import('../models/groupMember.model.js');
 
     const tab = filters.tab || 'ALL';
     const andConditions = [];
@@ -1311,7 +1311,6 @@ const queryManageTasks = async (filters, options) => {
  * Task Reminder Report (Internal Tasks)
  */
 const queryTaskReminderReport = async (filters, options) => {
-    const { GroupMember } = await import('../models/groupMember.model.js');
 
     const tab = filters.tab || 'TODAY';
     const andConditions = [];

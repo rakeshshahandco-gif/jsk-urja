@@ -171,11 +171,11 @@ export const TaskReportTable = ({ tasks, loading, onExtend, onCloseTask, onRefre
                                 <td className="px-6 py-4 max-w-[200px]">
                                     <div
                                         className="font-bold text-gray-900 leading-tight truncate"
-                                        title={task.title}
+                                        title={task?.title || ''}
                                     >
-                                        {task.title}
+                                        {task?.title || '—'}
                                     </div>
-                                    {task.description && (
+                                    {task?.description && (
                                         <div className="text-[11px] text-gray-400 mt-0.5 truncate" title={task.description}>
                                             {task.description}
                                         </div>
@@ -203,7 +203,7 @@ export const TaskReportTable = ({ tasks, loading, onExtend, onCloseTask, onRefre
 
                                 {/* Due Date & Time */}
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    {dueDate ? (
+                                    {dueDate && !isNaN(dueDate.getTime()) ? (
                                         <div className="flex flex-col">
                                             <div className={`font-bold ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
                                                 {format(dueDate, 'dd/MM/yyyy')}
@@ -225,8 +225,8 @@ export const TaskReportTable = ({ tasks, loading, onExtend, onCloseTask, onRefre
 
                                 {/* Status */}
                                 <td className="px-6 py-4">
-                                    <span className={`px-3 py-1 rounded-md text-[10px] font-bold border ${statusColors[task.status] || statusColors.OPEN}`}>
-                                        {task.status?.replace('_', ' ') || 'OPEN'}
+                                    <span className={`px-3 py-1 rounded-md text-[10px] font-bold border ${statusColors[task?.status] || statusColors.OPEN}`}>
+                                        {task?.status?.replace('_', ' ') || 'OPEN'}
                                     </span>
                                 </td>
 

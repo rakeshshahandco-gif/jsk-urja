@@ -13,13 +13,13 @@ const complaintItemSchema = new mongoose.Schema({
     pendingReturnQty: { type: Number, default: 0 },
     complaintReason: {
         type: String,
-        enum: ['Not Working', 'Low Output', 'Flickering', 'Dimming Issue', 'Driver Failure',
-            'PCB Burnt', 'CCT Not Changing', 'Physical Damage', 'Wrong Item', 'Other'],
+        // enum: ['Not Working', 'Low Output', 'Flickering', 'Dimming Issue', 'Driver Failure',
+        //     'PCB Burnt', 'CCT Not Changing',Physical Damage', 'Wrong Item', 'Other'],
         default: 'Not Working',
     },
     actionRequired: {
         type: String,
-        enum: ['Replacement to be sent', 'Repair only', 'Return for inspection', 'Credit note later', 'No action / under review'],
+        // enum: ['Replacement to be sent', 'Repair only', 'Return for inspection', 'Credit note later', 'No action / under review'],
         default: 'Replacement to be sent',
     },
     notes: { type: String, default: '' },
@@ -30,12 +30,12 @@ const complaintSchema = new mongoose.Schema({
     date: { type: Date, required: true, default: Date.now },
     status: {
         type: String,
-        enum: ['Open', 'Under Review', 'Approved', 'Replacement Sent', 'Waiting Faulty Return',
-            'Faulty Partially Received', 'Faulty Fully Received', 'In QC', 'Repair In Process',
-            'Closed', 'Closed with Scrap', 'Cancelled'],
+        // enum: ['Open', 'Under Review', 'Approved', 'Replacement Sent', 'Waiting Faulty Return',
+        //     'Faulty Partially Received', 'Faulty Fully Received', 'In QC', 'Repair In Process',
+        //     'Closed', 'Closed with Scrap', 'Cancelled'],
         default: 'Open',
     },
-    priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
+    priority: { type: String, /* enum: ['Low', 'Medium', 'High', 'Urgent'], */ default: 'Medium' },
 
     // Customer
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
@@ -54,10 +54,10 @@ const complaintSchema = new mongoose.Schema({
     // Complaint meta
     faultCategory: {
         type: String,
-        enum: ['Customer Complaint', 'Warranty Return', 'Transit Damage', 'Production Defect', 'Old Service Return'],
+        // enum: ['Customer Complaint', 'Warranty Return', 'Transit Damage', 'Production Defect', 'Old Service Return'],
         default: 'Customer Complaint',
     },
-    warrantyStatus: { type: String, enum: ['In Warranty', 'Out of Warranty', 'Unknown'], default: 'Unknown' },
+    warrantyStatus: { type: String, /* enum: ['In Warranty', 'Out of Warranty', 'Unknown'], */ default: 'Unknown' },
 
     // Line items
     items: [complaintItemSchema],

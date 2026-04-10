@@ -20,16 +20,16 @@ const employeeSchema = new mongoose.Schema({
     department: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Department',
-        required: [true, 'Department is required']
+        required: false // Relaxed
     },
     designation: {
         type: String,
-        required: [true, 'Designation is required'],
+        required: false, // Relaxed
         trim: true
     },
     branch: {
         type: String,
-        required: [true, 'Branch / Location is required'],
+        required: false, // Relaxed
         trim: true
     },
     reportingManager: {
@@ -38,7 +38,7 @@ const employeeSchema = new mongoose.Schema({
     },
     mobileNumber: {
         type: String,
-        required: [true, 'Mobile number is required'],
+        required: false, // Relaxed
         trim: true
     },
     email: {
@@ -69,34 +69,34 @@ const employeeSchema = new mongoose.Schema({
     },
     dateOfJoining: {
         type: Date,
-        required: [true, 'Date of Joining is required']
+        required: false // Relaxed
     },
     dateOfLeaving: {
         type: Date
     },
     employmentStatus: {
         type: String,
-        enum: ['Active', 'Inactive', 'Resigned', 'Terminated'],
+        // enum: ['Active', 'Inactive', 'Resigned', 'Terminated'],
         default: 'Active'
     },
     employmentType: {
         type: String,
-        enum: ['Permanent', 'Temporary', 'Contract', 'Trainee'],
+        // enum: ['Permanent', 'Temporary', 'Contract', 'Trainee'],
         default: 'Permanent'
     },
     shiftType: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Shift',
-        required: [true, 'Shift type is required']
+        required: false // Relaxed
     },
     weeklyOff: {
         type: [String],
-        enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+        // enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
         default: ['Sunday']
     },
     salaryType: {
         type: String,
-        enum: ['Monthly', 'Daily', 'Hourly'],
+        // enum: ['Monthly', 'Daily', 'Hourly'],
         default: 'Monthly'
     },
     basicSalary: {

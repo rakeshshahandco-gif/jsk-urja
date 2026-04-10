@@ -44,12 +44,15 @@ const SHOW_MORE_DEFAULT = 10;
 
 const sortTasks = (tasks) =>
     [...tasks].sort((a, b) => {
-        const pa = PRIORITY_ORDER[a.priority] ?? 99;
-        const pb = PRIORITY_ORDER[b.priority] ?? 99;
+        const pa = PRIORITY_ORDER[a?.priority] ?? 99;
+        const pb = PRIORITY_ORDER[b?.priority] ?? 99;
         if (pa !== pb) return pa - pb;
-        const da = a.dueDate ? new Date(a.dueDate) : new Date('9999-01-01');
-        const db = b.dueDate ? new Date(b.dueDate) : new Date('9999-01-01');
-        return da - db;
+        const da = a?.dueDate ? new Date(a.dueDate) : new Date('9999-01-01');
+        const db = b?.dueDate ? new Date(b.dueDate) : new Date('9999-01-01');
+        // Handle invalid dates
+        const ta = isNaN(da.getTime()) ? 9999999999999 : da.getTime();
+        const tb = isNaN(db.getTime()) ? 9999999999999 : db.getTime();
+        return ta - tb;
     });
 
 const groupTasks = (tasks) => {
@@ -57,12 +60,19 @@ const groupTasks = (tasks) => {
     const in7Days = addDays(today, 7);
     const groups = { overdue: [], today: [], week: [], future: [] };
     tasks.forEach(t => {
-        if (!t.dueDate) { groups.future.push(t); return; }
-        const due = startOfDay(parseISO(t.dueDate));
-        if (isToday(due))                    groups.today.push(t);
-        else if (isPast(due))                groups.overdue.push(t);
-        else if (isBefore(due, in7Days) || due.getTime() === in7Days.getTime()) groups.week.push(t);
-        else                                 groups.future.push(t);
+        if (!t?.dueDate) { groups.future.push(t); return; }
+        try {
+            const due = startOfDay(parseISO(t.dueDate));
+            if (isNaN(due.getTime())) { groups.future.push(t); return; }
+            
+            if (isToday(due))                    groups.today.push(t);
+            else if (isPast(due))                groups.overdue.push(t);
+            else if (isBefore(due, in7Days) || due.getTime() === in7Days.getTime()) groups.week.push(t);
+            else                                 groups.future.push(t);
+        } catch (err) {
+            console.error("Error grouping task:", err, t);
+            groups.future.push(t);
+        }
     });
     Object.keys(groups).forEach(k => { groups[k] = sortTasks(groups[k]); });
     return groups;
@@ -237,7 +247,7 @@ const PriorityTaskView = ({ searchTerm, priorityFilter, groupFilter, assigneeFil
         setLoading(true);
         try {
             const params = {
-                tab: 'ALL', limit: 500, page: 1,
+                tab: 'ALL', limit: 200, page: 1,
                 search:     searchTerm    || undefined,
                 priority:   priorityFilter || undefined,
                 groupId:    groupFilter   || undefined,

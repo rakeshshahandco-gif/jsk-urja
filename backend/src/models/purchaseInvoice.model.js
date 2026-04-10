@@ -51,7 +51,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     buyerStateCode: { type: String, default: '' },
 
     // GST
-    gstType: { type: String, enum: ['CGST / SGST', 'IGST'], default: 'CGST / SGST' },
+    gstType: { type: String, /* enum: ['CGST / SGST', 'IGST'], */ default: 'CGST / SGST' },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: Boolean, default: false },
     irnNumber: { type: String, default: '' },
@@ -59,7 +59,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     // Flow type
     flowType: {
         type: String,
-        enum: ['PO→GRN→Invoice', 'PO→Direct Invoice', 'Direct GRN→Invoice', 'Direct Invoice'],
+        // enum: ['PO→GRN→Invoice', 'PO→Direct Invoice', 'Direct GRN→Invoice', 'Direct Invoice'],
         default: 'Direct Invoice',
     },
     isDirectPurchase: { type: Boolean, default: false }, // true = stock hit on invoice  // e-invoicing IRN (optional)
@@ -99,7 +99,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     dueDate: { type: Date, default: null },
     paymentStatus: {
         type: String,
-        enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'],
+        // enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'],
         default: 'Unpaid',
     },
     paidAmount: { type: Number, default: 0 },
@@ -114,7 +114,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
         recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     }],
 
-    status: { type: String, enum: ['Draft', 'Confirmed', 'Posted', 'Cancelled'], default: 'Draft' },
+    status: { type: String, /* enum: ['Draft', 'Confirmed', 'Posted', 'Cancelled'], */ default: 'Draft' },
     remarks: { type: String, default: '' },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

@@ -13,17 +13,17 @@ const taskSchema = new mongoose.Schema({
     },
     priority: {
         type: String,
-        enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'],
+        // enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'],
         default: 'MEDIUM'
     },
     status: {
         type: String,
-        enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'OVERDUE'],
+        // enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'OVERDUE'],
         default: 'OPEN'
     },
     assignmentMode: {
         type: String,
-        enum: ['SELF', 'SINGLE', 'MULTI', 'ALL', 'GROUP'],
+        // enum: ['SELF', 'SINGLE', 'MULTI', 'ALL', 'GROUP'],
         default: 'SELF'
     },
     assignedGroupId: {
@@ -48,7 +48,7 @@ const taskSchema = new mongoose.Schema({
     groupId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'TaskGroup',
-        required: true
+        required: false // Relaxed for legacy compatibility
     },
     assigneeIds: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -127,7 +127,7 @@ const taskSchema = new mongoose.Schema({
         },
         frequency: {
             type: String,
-            enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
+            // enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
             default: 'MONTHLY'
         },
         interval: {
@@ -139,7 +139,7 @@ const taskSchema = new mongoose.Schema({
         },
         recurrenceEndType: {
             type: String,
-            enum: ['NEVER', 'DATE', 'ON_COUNT'],
+            // enum: ['NEVER', 'DATE', 'ON_COUNT'],
             default: 'NEVER'
         },
         recurrenceEndDate: {

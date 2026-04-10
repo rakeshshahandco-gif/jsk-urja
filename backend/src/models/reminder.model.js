@@ -25,7 +25,7 @@ const reminderSchema = mongoose.Schema(
         },
         followUpType: {
             type: String,
-            enum: ['CALL', 'WHATSAPP'],
+            // enum: ['CALL', 'WHATSAPP'],
             required: true,
         },
         taskNote: {
@@ -33,7 +33,7 @@ const reminderSchema = mongoose.Schema(
         },
         priority: {
             type: String,
-            enum: ['high', 'medium', 'low'],
+            // enum: ['high', 'medium', 'low'],
             default: 'medium',
         },
         isClosed: {

@@ -65,7 +65,7 @@ const salesInvoiceSchema = new mongoose.Schema({
     sellerStateCode: { type: String, default: '' },
 
     // GST
-    gstType: { type: String, enum: ['CGST / SGST', 'IGST'], default: 'CGST / SGST' },
+    gstType: { type: String, /* enum: ['CGST / SGST', 'IGST'], */ default: 'CGST / SGST' },
     gstApplicable: { type: Boolean, default: true },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: Boolean, default: false },
@@ -94,8 +94,8 @@ const salesInvoiceSchema = new mongoose.Schema({
     amountInWords: { type: String, default: '' },
 
     // Payment
-    paymentType: { type: String, enum: ['Cash', 'Credit'], default: 'Credit' },
-    paymentStatus: { type: String, enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'], default: 'Unpaid' },
+    paymentType: { type: String, /* enum: ['Cash', 'Credit'], */ default: 'Credit' },
+    paymentStatus: { type: String, /* enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'], */ default: 'Unpaid' },
     paidAmount: { type: Number, default: 0 },
     paymentTerms: { type: String, default: '' },
 
@@ -109,7 +109,7 @@ const salesInvoiceSchema = new mongoose.Schema({
         recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     }],
 
-    status: { type: String, enum: ['Draft', 'Confirmed', 'Cancelled'], default: 'Draft' },
+    status: { type: String, /* enum: ['Draft', 'Confirmed', 'Cancelled'], */ default: 'Draft' },
     remarks: { type: String, default: '' },
 
     // Cancellation Fields

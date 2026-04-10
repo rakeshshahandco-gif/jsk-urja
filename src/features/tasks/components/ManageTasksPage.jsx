@@ -59,7 +59,7 @@ const ManageTasksPage = () => {
     const { user } = useAuth();
 
     const [viewMode, setViewMode] = useState('priority');
-    const [activeTab, setActiveTab] = useState(null);
+    const [activeTab, setActiveTab] = useState('overdue');
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -87,13 +87,6 @@ const ManageTasksPage = () => {
                 setOptions(prev => ({ ...prev, taskGroups: Array.isArray(groups) ? groups : [] }));
             })
             .catch(() => { });
-
-        api.get('/reports/manage-tasks', { params: { tab: 'OVERDUE', limit: 1 } })
-            .then(res => {
-                if (res.data.meta?.total > 0) setActiveTab('overdue');
-                else setActiveTab('today');
-            })
-            .catch(() => setActiveTab('today'));
     }, []);
 
     const fetchTasks = useCallback(async () => {
@@ -123,7 +116,11 @@ const ManageTasksPage = () => {
         }
     }, [activeTab, pagination.page, pagination.limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo]);
 
-    useEffect(() => { fetchTasks(); }, [fetchTasks]);
+    useEffect(() => {
+        if (viewMode === 'existing') {
+            fetchTasks(); 
+        }
+    }, [fetchTasks, viewMode]);
 
     const { socket } = useGlobalSync('task', (payload) => {
         if (payload.action === 'create') {

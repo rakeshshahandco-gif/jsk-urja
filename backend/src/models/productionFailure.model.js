@@ -13,7 +13,7 @@ const productionFailureSchema = new mongoose.Schema({
 
     stage: {
         type: String,
-        enum: ['PCB Assembly', 'Manual Assembly', 'Soldering', 'Testing', '1st QC', 'Final QC', 'Burn Test', 'Packing Inspection', 'Other'],
+        // enum: ['PCB Assembly', 'Manual Assembly', 'Soldering', 'Testing', '1st QC', 'Final QC', 'Burn Test', 'Packing Inspection', 'Other'],
         required: true
     },
 
@@ -23,17 +23,17 @@ const productionFailureSchema = new mongoose.Schema({
 
     reason: {
         type: String,
-        enum: ['Not Working', 'Low Output', 'Flickering', 'Wrong CCT', 'Dimming Issue', 'Driver Failure', 'Solder Issue', 'Component Missing', 'Wrong Component Mounted', 'Short Circuit', 'Open Circuit', 'PCB Damage', 'Heating Issue', 'Cosmetic Defect', 'Label Issue', 'Packing Issue', 'Other'],
+        // enum: ['Not Working', 'Low Output', 'Flickering', 'Wrong CCT', 'Dimming Issue', 'Driver Failure', 'Solder Issue', 'Component Missing', 'Wrong Component Mounted', 'Short Circuit', 'Open Circuit', 'PCB Damage', 'Heating Issue', 'Cosmetic Defect', 'Label Issue', 'Packing Issue', 'Other'],
         required: true
     },
     detailedObservation: { type: String },
     reportedBy: { type: String, required: true },
     department: { type: String },
-    priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
+    priority: { type: String, /* enum: ['Low', 'Medium', 'High', 'Urgent'], */ default: 'Medium' },
 
     status: {
         type: String,
-        enum: ['Open', 'Sent for Rework', 'Under Repair', 'Waiting Components', 'Retest Pending', 'Passed After Rework', 'Partially Passed', 'Rejected', 'Closed'],
+        // enum: ['Open', 'Sent for Rework', 'Under Repair', 'Waiting Components', 'Retest Pending', 'Passed After Rework', 'Partially Passed', 'Rejected', 'Closed'],
         default: 'Open'
     },
 

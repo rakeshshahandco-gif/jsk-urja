@@ -20,7 +20,7 @@ const PRODUCTION_STAGES = [
 // ─────────────────────────────────────────────
 const checklistItemSchema = new mongoose.Schema({
     item: { type: String, required: true },
-    result: { type: String, enum: ['Pending', 'Pass', 'Fail'], default: 'Pending' },
+    result: { type: String, /* enum: ['Pending', 'Pass', 'Fail'], */ default: 'Pending' },
     remarks: { type: String, default: '' },
 }, { _id: false });
 
@@ -35,7 +35,7 @@ const testDataSchema = new mongoose.Schema({
     loadPercent: { type: Number },
     temperature: { type: Number },
     burninMinutes: { type: Number },
-    result: { type: String, enum: ['Pass', 'Fail', 'Pending'], default: 'Pending' },
+    result: { type: String, /* enum: ['Pass', 'Fail', 'Pending'], */ default: 'Pending' },
     resultSummary: { type: String, default: '' },
     testerName: { type: String, default: '' },
     testedAt: { type: Date },
@@ -81,7 +81,7 @@ const stageSchema = new mongoose.Schema({
     isTestGate: { type: Boolean, default: false },
     status: {
         type: String,
-        enum: ['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'],
+        // enum: ['Not Started', 'Running', 'Completed', 'QC Hold', 'Failed', 'Rework'],
         default: 'Not Started',
     },
     inputQty: { type: Number, default: 0 },
@@ -115,7 +115,7 @@ const materialStatusSchema = new mongoose.Schema({
     consumptionStage: { type: String, default: '' },
     procurementStatus: {
         type: String,
-        enum: ['Not Ordered', 'Ordered', 'In Transit', 'Received'],
+        // enum: ['Not Ordered', 'Ordered', 'In Transit', 'Received'],
         default: 'Not Ordered',
     },
     remarks: { type: String, default: '' },
@@ -147,7 +147,7 @@ const workOrderSchema = new mongoose.Schema({
     targetQty: { type: Number, required: true, default: 1 },
     priority: {
         type: String,
-        enum: ['Low', 'Medium', 'High', 'Urgent'],
+        // enum: ['Low', 'Medium', 'High', 'Urgent'],
         default: 'Medium',
     },
     plannedStart: { type: Date },
@@ -158,7 +158,7 @@ const workOrderSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: [
+        /* enum: [
             'Draft',
             'Released',
             'In Process',
@@ -166,7 +166,7 @@ const workOrderSchema = new mongoose.Schema({
             'On Hold',
             'Completed',
             'Closed',
-        ],
+        ], */
         default: 'Draft',
     },
 

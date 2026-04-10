@@ -72,7 +72,7 @@ const productionSheetSchema = new mongoose.Schema({
         ex3: { type: String, default: '' },
     },
 
-    status: { type: String, enum: ['Pending', 'In Testing', 'Ready', 'Dispatched'], default: 'Pending' },
+    status: { type: String, default: 'Pending' },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

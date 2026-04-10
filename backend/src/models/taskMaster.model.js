@@ -16,7 +16,7 @@ const taskMasterSchema = new mongoose.Schema({
     },
     priority: {
         type: String,
-        enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+        // enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
         default: 'MEDIUM'
     },
     assignedTo: {
@@ -30,7 +30,7 @@ const taskMasterSchema = new mongoose.Schema({
     recurrence: {
         frequency: {
             type: String,
-            enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
+            // enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
             required: true
         },
         interval: {
@@ -43,7 +43,7 @@ const taskMasterSchema = new mongoose.Schema({
         },
         endType: {
             type: String,
-            enum: ['NEVER', 'AFTER_COUNT', 'ON_DATE'],
+            // enum: ['NEVER', 'AFTER_COUNT', 'ON_DATE'],
             default: 'NEVER'
         },
         occurrenceCount: Number,

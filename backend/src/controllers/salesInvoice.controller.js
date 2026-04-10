@@ -500,8 +500,8 @@ export const cleanupPreviewDraftInvoices = asyncHandler(async (req, res) => {
     res.json({
         success: true,
         data: {
-            seriesName: series.seriesName,
-            prefix: series.prefix,
+            seriesName: seriesDoc?.seriesName || 'Unknown',
+            prefix: seriesDoc?.prefix || '',
             eligible,
             blocked
         }

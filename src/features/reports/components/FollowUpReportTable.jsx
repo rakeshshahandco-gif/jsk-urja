@@ -28,9 +28,11 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
     };
 
     const getStatusLabel = (r) => {
+        if (!r?.reminderDate) return <span className={`${styles.statusBadge}`}>N/A</span>;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const reminderDate = new Date(r.reminderDate);
+        if (isNaN(reminderDate.getTime())) return <span className={`${styles.statusBadge}`}>Invalid Date</span>;
 
         if (r.isClosed) return <span className={`${styles.statusBadge} ${styles.inactive}`}>Closed</span>;
         if (reminderDate < today) return <span className={`${styles.statusBadge} ${styles.running_high}`}>Overdue</span>;
@@ -87,7 +89,12 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                                         </div>
                                     ) : 'N/A'}
                                 </td>
-                                <td>{new Date(r.reminderDate).toLocaleDateString()}</td>
+                                <td>
+                                    {(() => {
+                                        const d = new Date(r.reminderDate);
+                                        return !isNaN(d.getTime()) ? d.toLocaleDateString() : '—';
+                                    })()}
+                                </td>
                                 <td>{r.reminderTime || '-'}</td>
                                 <td>{r.followUpType === 'CALL' ? '📞 CALL' : '💬 WHATSAPP'}</td>
                                 <td>
@@ -104,7 +111,10 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                                 <td>{r.createdBy?.name || r.creator?.name || '-'}</td>
                                 <td>{getStatusLabel(r)}</td>
                                 <td className={styles.dateCell}>
-                                    {new Date(r.createdAt).toLocaleDateString()}
+                                    {(() => {
+                                        const d = new Date(r.createdAt);
+                                        return !isNaN(d.getTime()) ? d.toLocaleDateString() : '—';
+                                    })()}
                                 </td>
                             </tr>
                         );

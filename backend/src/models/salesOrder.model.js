@@ -46,7 +46,7 @@ const salesOrderSchema = new mongoose.Schema({
     customerPODate: { type: Date, default: null },
 
     // Order Info
-    orderCategory: { type: String, enum: ['Order', 'Sample', 'Replacement'], default: 'Order' },
+    orderCategory: { type: String, default: 'Order' },
     warrantyDetails: { type: String, default: '' },
     deliveryDate: { type: Date, default: null },
     stickerType: { type: String, default: '' },
@@ -72,13 +72,13 @@ const salesOrderSchema = new mongoose.Schema({
     amountInWords: { type: String, default: '' },
 
     // GST
-    gstType: { type: String, enum: ['CGST / SGST', 'IGST', ''], default: '' },
+    gstType: { type: String, default: '' },
     placeOfSupply: { type: String, default: '' },
 
     // Payment / Status
-    paymentType: { type: String, enum: ['Cash', 'Credit'], default: 'Credit' },
+    paymentType: { type: String, /* enum: ['Cash', 'Credit'], */ default: 'Credit' },
     creditPeriod: { type: Number, default: 0 },
-    status: { type: String, enum: ['Draft', 'Confirmed', 'Dispatched', 'Invoiced', 'Closed', 'Cancelled'], default: 'Draft' },
+    status: { type: String, default: 'Draft' },
 
     // Linked docs
     productionSheetId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductionSheet', default: null },

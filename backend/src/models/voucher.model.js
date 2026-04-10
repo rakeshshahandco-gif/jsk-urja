@@ -3,11 +3,11 @@ import mongoose from 'mongoose';
 const billAdjustmentSchema = new mongoose.Schema({
     adjustmentType: {
         type: String,
-        enum: ['Against Bill', 'Advance', 'On Account', 'New Reference'],
+        // enum: ['Against Bill', 'Advance', 'On Account', 'New Reference'],
         default: 'Against Bill'
     },
     refId: { type: mongoose.Schema.Types.ObjectId, refPath: 'items.adjustments.refModel' },
-    refModel: { type: String, enum: ['SalesInvoice', 'PurchaseInvoice'], default: 'SalesInvoice' },
+    refModel: { type: String, /* enum: ['SalesInvoice', 'PurchaseInvoice'], */ default: 'SalesInvoice' },
     refNumber: { type: String, default: '' },
     amount: { type: Number, required: true },
 });
@@ -25,7 +25,7 @@ const voucherSchema = new mongoose.Schema({
     voucherNo: { type: String, required: true, unique: true },
     voucherType: { type: mongoose.Schema.Types.ObjectId, ref: 'VoucherType', required: true },
     voucherTypeName: { type: String, default: '' },
-    nature: { type: String, enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Expense', 'Debit Note', 'Credit Note', 'Sales', 'Purchase'], required: true },
+    nature: { type: String, /* enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Expense', 'Debit Note', 'Credit Note', 'Sales', 'Purchase'], */ required: true },
     date: { type: Date, required: true, default: Date.now },
 
     // Header Cash/Bank selection
@@ -41,7 +41,7 @@ const voucherSchema = new mongoose.Schema({
     // Instrument details
     instrumentType: {
         type: String,
-        enum: ['Cash', 'Cheque', 'Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Card', 'Other'],
+        // enum: ['Cash', 'Cheque', 'Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Card', 'Other'],
         default: 'Cash'
     },
     instrumentNo: { type: String, default: '' },
@@ -49,7 +49,7 @@ const voucherSchema = new mongoose.Schema({
     bankReference: { type: String, default: '' }, // UTR etc.
 
     narration: { type: String, default: '' },
-    status: { type: String, enum: ['Draft', 'Confirmed', 'Cancelled'], default: 'Confirmed' },
+    status: { type: String, /* enum: ['Draft', 'Confirmed', 'Cancelled'], */ default: 'Confirmed' },
 
     items: [voucherItemSchema],
 

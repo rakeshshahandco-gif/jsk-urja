@@ -35,7 +35,8 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                             || customer.contactPersons?.[0];
                         const contactName = primaryContact?.name || '-';
 
-                        const rDate = new Date(reminder.reminderDate);
+                        const rDate = reminder.reminderDate ? new Date(reminder.reminderDate) : null;
+                        const isValidDate = rDate && !isNaN(rDate.getTime());
 
                         return (
                             <tr key={reminder._id} className="hover:bg-gray-50 border-b border-gray-100 last:border-0 align-top">
@@ -55,7 +56,7 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                                 {/* Column 2: Date & Status */}
                                 <td className="px-6 py-4 w-1/6">
                                     <div className="font-medium text-gray-900 whitespace-nowrap">
-                                        {format(rDate, 'dd MMM yyyy')}
+                                        {isValidDate ? format(rDate, 'dd MMM yyyy') : 'No Date'}
                                     </div>
                                     <div className="flex flex-col gap-1 mt-1">
                                         {reminder.reminderTime && (
@@ -91,9 +92,12 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                                         <div>
                                             <div className="flex justify-between items-baseline mb-0.5">
                                                 <div className="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Latest Conversation</div>
-                                                {reminder.lastConversation && (
+                                                {reminder.lastConversation && reminder.lastConversation.conversationDate && (
                                                     <span className="text-[10px] text-gray-400">
-                                                        {format(new Date(reminder.lastConversation.conversationDate), 'dd MMM')}
+                                                        {(() => {
+                                                            const d = new Date(reminder.lastConversation.conversationDate);
+                                                            return !isNaN(d.getTime()) ? format(d, 'dd MMM') : '';
+                                                        })()}
                                                     </span>
                                                 )}
                                             </div>

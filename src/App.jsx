@@ -258,8 +258,9 @@ const AppLayout = () => {
                         overflow: 'auto' 
                     }}
                 >
-                    <Routes>
-                        <Route path="/" element={<Navigate to="/tasks/list" replace />} />
+                    <ErrorBoundary>
+                        <Routes>
+                            <Route path="/" element={<Navigate to="/tasks/list" replace />} />
                         <Route path="/customers" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/customers/list" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/followups" element={<ProtectedRoute requirePermission="customers"><FollowupDashboard /></ProtectedRoute>} />
@@ -415,6 +416,7 @@ const AppLayout = () => {
                         <Route path="/production/rejections/new" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
                         <Route path="/production/rejections" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
                     </Routes>
+                    </ErrorBoundary>
                 </main>
             </div>
         </div>

@@ -15,7 +15,7 @@ const grnItemSchema = new mongoose.Schema({
     invoicedQty: { type: Number, default: 0 },    // Tracked as invoices are posted
     rate: { type: Number, required: true, min: 0 },
     amount: { type: Number, default: 0 },
-    qcStatus: { type: String, enum: ['Pending', 'Accepted', 'Rejected', 'Hold'], default: 'Accepted' },
+    qcStatus: { type: String, /* enum: ['Pending', 'Accepted', 'Rejected', 'Hold'], */ default: 'Accepted' },
     batchNo: { type: String, default: '' },
     serialNo: { type: String, default: '' },
     remarks: { type: String, default: '' },
@@ -46,16 +46,16 @@ const grnSchema = new mongoose.Schema({
     // Source type
     sourceType: {
         type: String,
-        enum: ['Against PO', 'Direct GRN'],
+        // enum: ['Against PO', 'Direct GRN'],
         default: 'Against PO',
     },
 
-    status: { type: String, enum: ['Draft', 'Confirmed', 'QC Hold'], default: 'Confirmed' },
+    status: { type: String, /* enum: ['Draft', 'Confirmed', 'QC Hold'], */ default: 'Confirmed' },
 
     // Invoice tracking at GRN level
     invoiceStatus: {
         type: String,
-        enum: ['Open', 'Partially Invoiced', 'Fully Invoiced'],
+        // enum: ['Open', 'Partially Invoiced', 'Fully Invoiced'],
         default: 'Open',
     },
 
