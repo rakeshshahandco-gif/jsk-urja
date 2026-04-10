@@ -38,8 +38,12 @@ const WechatGroupForm = ({ group, onClose, onSuccess }) => {
 
     useEffect(() => {
         const fetchContacts = async () => {
-            const res = await getWeChatContacts({ limit: 1000 });
-            setContacts(res.data || []);
+            try {
+                const res = await getWeChatContacts({ limit: 1000 });
+                setContacts(Array.isArray(res.data?.data) ? res.data.data : []);
+            } catch (error) {
+                setContacts([]);
+            }
         };
         fetchContacts();
 
@@ -233,7 +237,7 @@ const WechatGroupForm = ({ group, onClose, onSuccess }) => {
                                     <p className="text-[10px] text-gray-500 px-2 italic">Select individual contacts who belong to this group</p>
                                 </div>
                                 <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
-                                    {contacts.map(contact => (
+                                    {(Array.isArray(contacts) ? contacts : []).map(contact => (
                                         <div 
                                             key={contact._id} 
                                             onClick={() => toggleMember(contact._id)}

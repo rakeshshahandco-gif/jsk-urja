@@ -10,34 +10,59 @@ export const ROLES = {
 
 export const menuConfig = [
     {
-        id: 'customers',
-        title: 'Customers',
-        icon: 'PeopleIcon',
+        id: 'crm',
+        title: 'CRM',
+        icon: 'BusinessIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
-        permission: 'customers',
+        permission: 'customers', // Use customers as base permission for CRM
         children: [
             {
-                id: 'customer-list',
-                title: 'Customer Master',
-                path: PATHS.CUSTOMERS.LIST,
+                id: 'crm-customers',
+                title: 'Customers',
+                icon: 'PeopleIcon',
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
-                permission: 'customers.customer_master.view',
+                permission: 'customers',
+                children: [
+                    {
+                        id: 'customer-list',
+                        title: 'Customer Master',
+                        path: PATHS.CUSTOMERS.LIST,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
+                        permission: 'customers.customer_master.view',
+                    },
+                    {
+                        id: 'reminder-tasks',
+                        title: 'Reminder Tasks',
+                        path: '/reminders',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'customers.reminder_tasks.view',
+                    },
+                    {
+                        id: 'follow-up-tracker',
+                        title: 'Follow-up Dashboard',
+                        path: '/followups',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'customers.follow_up.view',
+                    },
+                ]
             },
             {
-                id: 'reminder-tasks',
-                title: 'Reminder Tasks',
-                path: '/reminders',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'customers.reminder_tasks.view',
-            },
-            {
-                id: 'follow-up-tracker',
-                title: 'Follow-up Dashboard',
-                path: '/followups',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'customers.follow_up.view',
-            },
-        ],
+                id: 'crm-reports',
+                title: 'Reports',
+                icon: 'BarChartIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
+                permission: 'reports',
+                children: [
+                    { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.customer_master_report.view' },
+                    { id: 'report-followup-tracker', title: 'Follow-up Tracker Report', path: '/reports/followups', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_report.view' },
+                    { id: 'report-followup-dashboard', title: 'Follow-up Dashboard Report', path: '/reports/followup-dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_dashboard_report.view' },
+                    { id: 'report-followup-task', title: 'Follow-up Task Report', path: '/reports/followup-task-report', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_task_report.view' },
+                    { id: 'report-conversation-history', title: 'Conversation History', path: '/reports/conversation-history', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.conversation_history_report.view' },
+                    { id: 'report-task-reminders', title: 'Task Reminder Report', path: '/reports/task-reminders', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports.task_reminder_report.view' },
+                    { id: 'report-open-reminders', title: 'Open Reminders', path: '/reports/open-reminders', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'reports.reminder_report.view' },
+                ]
+            }
+        ]
     },
     {
         id: 'tasks',
@@ -46,13 +71,6 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'tasks',
         children: [
-            {
-                id: 'task-create',
-                title: 'Add Task',
-                path: '/tasks/create',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'tasks.task_list.add',
-            },
             {
                 id: 'task-list',
                 title: 'Manage Tasks',
@@ -274,13 +292,6 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         permission: 'reports',
         children: [
-            { id: 'report-customer-master', title: 'Customer Master', path: PATHS.REPORTS.CUSTOMER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.customer_master_report.view' },
-            { id: 'report-followup-tracker', title: 'Follow-up Tracker Report', path: '/reports/followups', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_report.view' },
-            { id: 'report-followup-dashboard', title: 'Follow-up Dashboard Report', path: '/reports/followup-dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_dashboard_report.view' },
-            { id: 'report-followup-task', title: 'Follow-up Task Report', path: '/reports/followup-task-report', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_task_report.view' },
-            { id: 'report-conversation-history', title: 'Conversation History', path: '/reports/conversation-history', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.conversation_history_report.view' },
-            { id: 'report-task-reminders', title: 'Task Reminder Report', path: '/reports/task-reminders', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports.task_reminder_report.view' },
-            { id: 'report-open-reminders', title: 'Open Reminders', path: '/reports/open-reminders', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'reports.reminder_report.view' },
             { id: 'report-purchase-comparison', title: 'Purchase Comparison Report', path: '/reports/purchase-comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.purchase_comparison_report.view' },
         ],
     },

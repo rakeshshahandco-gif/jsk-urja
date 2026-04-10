@@ -101,34 +101,6 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 export const getSalesInvoices = asyncHandler(async (req, res) => {
     const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view } = req.query;
     
-    // --- TEMPORARY REPAIR PATCH START ---
-    // Forcefully rename 26-27/03 to 26-27/01 if found
-    try {
-        const inv03 = await SalesInvoice.findOne({ invoiceNumber: '26-27/03' });
-        if (inv03) {
-            // Check if 01 exists to avoid conflict
-            const inv01 = await SalesInvoice.findOne({ invoiceNumber: '26-27/01' });
-            if (inv01) {
-                // Rename existing 01 (deleted or otherwise)
-                await SalesInvoice.updateOne({ _id: inv01._id }, { $set: { invoiceNumber: `26-27/01-OLD-${Date.now()}` } });
-            }
-            // Now rename 03 to 01
-            await SalesInvoice.updateOne({ _id: inv03._id }, { $set: { invoiceNumber: '26-27/01' } });
-            
-            // Sync all references
-            await StockLedger.updateMany({ referenceId: inv03._id }, { $set: { referenceNo: '26-27/01' } });
-            await Voucher.updateMany({ voucherNo: '26-27/03' }, { $set: { voucherNo: '26-27/01' } });
-            await LedgerEntry.updateMany({ voucherNo: '26-27/03' }, { $set: { voucherNo: '26-27/01' } });
-            
-            // Sync Series
-            await InvoiceSeries.updateOne({ prefix: '26-27/', isActive: true }, { $set: { currentNumber: 1 } });
-            console.log('[REPAIR] Successfully renamed 26-27/03 to 26-27/01 and synced all ledgers');
-        }
-    } catch (repairErr) {
-        console.error('[REPAIR] Failed to rename 03 to 01:', repairErr.message);
-    }
-    // --- TEMPORARY REPAIR PATCH END ---
-
     const filter = { isDeleted: { $ne: true } };
 
     if (view === 'archived') {
@@ -260,37 +232,60 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const cancelSalesInvoice = asyncHandler(async (req, res) => {
+    const { reason } = req.body;
+    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Cancellation reason is required');
+
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
-        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded');
+        if (inv.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already cancelled');
         
-        const oldNumber = inv.invoiceNumber;
+        // Safety: If payments exist, they must be unlinked/deleted first to avoid mismatch
+        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded. Please delete payments first.');
+        
+        const oldStatus = inv.status;
+        const invoiceNo = inv.invoiceNumber;
+
+        // 1. Update Invoice Status
         inv.status = 'Cancelled';
         inv.paymentStatus = 'Cancelled';
+        inv.cancelReason = reason;
+        inv.cancelledAt = new Date();
+        inv.cancelledBy = req.user.id;
         inv.updatedBy = req.user.id;
         await inv.save({ session });
 
-        // Reverse stock effects
+        // 2. Reverse Stock Effects
         await rollbackStockLedger(inv._id, session);
 
-        // Reverse financial effects
-        await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
+        // 3. Reverse Financial Ledger Impact (Vouchers/Ledger entries)
+        await reverseInvoiceLedgerImpact(invoiceNo, session);
 
+        // 4. Audit Trail with Full Snapshot
         await AuditLog.create([{
             user: req.user.id,
             action: 'CANCEL',
             module: 'SalesInvoice',
             resourceId: inv._id,
-            description: `Cancelled Sales Invoice ${oldNumber}. Number remains reserved.`,
+            description: `CANCELLED Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER PERMANENTLY BLOCKED.`,
+            details: { 
+                reason, 
+                invoiceNo, 
+                snapshot: inv.toObject(),
+                previousStatus: oldStatus 
+            },
             ipAddress: req.ip,
             userAgent: req.headers['user-agent']
         }], { session });
 
+        // Link SO back if it was linked (Optional: User might want to re-invoice or SO stays cancelled)
+        // Leaving SO as 'Invoiced' but maybe user wants it back to 'Confirmed'? 
+        // Rule usually says Cancelled invoice means the transaction is DEAD.
+        
         await session.commitTransaction();
-        res.json({ success: true, data: inv, message: 'Invoice cancelled successfully. Number remains reserved.' });
+        res.json({ success: true, data: inv, message: `Invoice ${invoiceNo} cancelled. This number will not be reused.` });
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -301,7 +296,7 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
 
 export const deleteSalesInvoice = asyncHandler(async (req, res) => {
     const { reason } = req.body;
-    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required');
+    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required for administrative tracking');
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -309,63 +304,79 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         
-        // 1. Security/Payment Check
+        const invoiceNo = inv.invoiceNumber;
+
+        // 1. Payment Check
         if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
-            throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${inv.invoiceNumber} cannot be deleted because payments exist. Delete payments first.`);
+            throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${invoiceNo} cannot be deleted because payments are linked.`);
         }
 
-        // 2. Strict Sequence Check (Only latest in series can be deleted)
+        // 2. STRICT SEQUENCE CHECK (Rule 3)
+        // Reuse is ONLY allowed if this is the highest number in the series.
         if (inv.seriesId) {
             const series = await InvoiceSeries.findById(inv.seriesId).session(session);
             if (series) {
-                // Generate the current string to verify if it's indeed the latest
-                const currentNumberStr = series.prefix + String(series.currentNumber).padStart(series.padLength, '0');
+                // Calculate what the current "last generated string" is
+                const currentLastStr = series.prefix + String(series.currentNumber).padStart(series.padLength, '0');
                 
-                if (inv.invoiceNumber !== currentNumberStr) {
-                    throw new ApiError(httpStatus.BAD_REQUEST, `Cannot delete invoice ${inv.invoiceNumber} as it is not the latest in series ${series.seriesName}. A later invoice (${currentNumberStr}) exists. Please cancel it instead.`);
+                if (invoiceNo !== currentLastStr) {
+                    throw new ApiError(httpStatus.BAD_REQUEST, 
+                        `STRICT RULE: Only the LATEST invoice (${currentLastStr}) can be DELETED to reuse its number. ` +
+                        `Invoice ${invoiceNo} is in the middle of the sequence. Please CANCEL it instead to block the number.`
+                    );
                 }
                 
-                // Decrement series to allow reuse. 
-                // If it was the very first in series (currentNumber == startNumber), it goes back to startNumber - 1.
-                series.currentNumber = Math.max(series.currentNumber - 1, (series.startNumber || 1) - 1);
+                // If it is the latest, we decrement the counter
+                series.currentNumber = Math.max((series.startNumber || 1) - 1, series.currentNumber - 1);
                 await series.save({ session });
             }
         }
 
-        const oldNumber = inv.invoiceNumber;
-        
-        // Soft delete and rename number to free up the original for reuse
+        // 3. Mark as Deleted & Free Number (Rename original doc for audit)
         inv.isDeleted = true;
         inv.deletedAt = new Date();
         inv.deletedBy = req.user.id;
         inv.deleteReason = reason;
         inv.status = 'Cancelled';
-        // Free the number: Append suffix to original number
-        inv.invoiceNumber = `${oldNumber}-DEL-${Date.now()}`;
+        
+        // Rename original invoice number in the record to allow reuse of the string in new creations
+        const renamedNumber = `${invoiceNo}-DEL-${Date.now()}`;
+        inv.invoiceNumber = renamedNumber;
 
-        // Rollback stock and ledger impact
+        // 4. Reverse All Impacts
         await rollbackStockLedger(inv._id, session);
-        await reverseInvoiceLedgerImpact(oldNumber, session);
+        await reverseInvoiceLedgerImpact(invoiceNo, session);
 
         await inv.save({ session });
         
+        // 5. Audit Log with reason and original sequence info
         await AuditLog.create([{
             user: req.user.id,
             action: 'DELETE',
             module: 'SalesInvoice',
             resourceId: inv._id,
-            description: `Deleted latest Sales Invoice ${oldNumber}. Number is now available for reuse.`,
-            details: { reason, originalNumber: oldNumber },
+            description: `DELETED latest Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER FREED FOR REUSE.`,
+            details: { 
+                reason, 
+                originalNumber: invoiceNo,
+                renamedTo: renamedNumber,
+                seriesId: inv.seriesId
+            },
             ipAddress: req.ip,
             userAgent: req.headers['user-agent']
         }], { session });
 
+        // 6. Restore SO back to 'Confirmed' so it can be re-invoiced
         if (inv.soId) {
-            await SalesOrder.findByIdAndUpdate(inv.soId, { status: 'Confirmed', invoiceId: null }).session(session);
+            await SalesOrder.findByIdAndUpdate(inv.soId, { 
+                status: 'Confirmed', 
+                invoiceId: null 
+            }).session(session);
         }
 
         await session.commitTransaction();
-        res.json({ success: true, message: `Sales Invoice ${oldNumber} deleted and number freed for reuse.` });
+        res.json({ success: true, message: `Invoice ${invoiceNo} deleted successfully. The number is now available for the next entry.` });
+
     } catch (error) {
         await session.abortTransaction();
         throw error;

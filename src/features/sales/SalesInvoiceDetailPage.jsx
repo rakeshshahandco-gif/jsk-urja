@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, restoreSalesInvoice, recordSalesPayment } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
+import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 
@@ -16,6 +17,8 @@ const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4f6
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 
 export default function SalesInvoiceDetailPage() {
+    const { hasRole } = useAuth();
+    const isAdmin = hasRole('admin') || hasRole('superadmin');
     const { id } = useParams();
     const navigate = useNavigate();
     const [inv, setInv] = useState(null);
@@ -37,21 +40,22 @@ export default function SalesInvoiceDetailPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', {
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+        year: 'numeric'
     }) : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
     const handleCancel = async () => {
-        if (!window.confirm('Cancel this invoice? The invoice number will remain reserved and the record will be kept for audit/GST. Stock and ledger impacts will be reversed.')) return;
+        if (!isAdmin) return toast.error('Only administrators can cancel invoices');
+        
+        const reason = window.prompt('CANCEL INVOICE (Rule 1 & 2):\n\nThis will reverse stock and ledger impacts but the INVOICE NUMBER WILL REMAIN RESERVED and cannot be reused.\n\nPlease enter the reason for cancellation:');
+        if (!reason || !reason.trim()) return;
+
         setCancelling(true);
         try { 
-            const res = await cancelSalesInvoice(id); 
+            const res = await cancelSalesInvoice(id, { reason }); 
             toast.success(res.message || 'Invoice cancelled. Number reserved.'); 
             load(); 
         }
@@ -60,8 +64,11 @@ export default function SalesInvoiceDetailPage() {
     };
 
     const handleDelete = async () => {
-        const reason = window.prompt('DELETION IS ONLY ALLOWED FOR THE LATEST INVOICE.\n\nThis will permanently delete the record and FREE UP the invoice number for reuse.\n\nPlease enter the reason for deletion:');
-        if (!reason) return;
+        if (!isAdmin) return toast.error('Only administrators can delete invoices');
+
+        const msg = `STRICT DELETE RULE (Rule 3):\n\n1. You can ONLY delete the LATEST invoice in a series.\n2. Deletion will PERMANENTLY remove the record and FREE UP the number for reuse.\n\nPlease enter the reason for deletion:`;
+        const reason = window.prompt(msg);
+        if (!reason || !reason.trim()) return;
         
         setCancelling(true);
         try {
@@ -69,7 +76,7 @@ export default function SalesInvoiceDetailPage() {
             toast.success(res.message || 'Invoice deleted and number freed.');
             navigate(PATHS.SALES.INVOICES);
         } catch (e) {
-            toast.error(e.response?.data?.message || 'Failed to delete. Make sure this is the latest invoice in the series.');
+            toast.error(e.response?.data?.message || 'Failed to delete. Sequence violation detected.');
         } finally {
             setCancelling(false);
         }
@@ -311,6 +318,27 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                         </div>
 
+                        {/* Watermark for Cancelled */}
+                        {inv.status === 'Cancelled' && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%) rotate(-45deg)',
+                                fontSize: '100pt',
+                                fontWeight: 900,
+                                color: 'rgba(239, 68, 68, 0.15)',
+                                border: '15px solid rgba(239, 68, 68, 0.15)',
+                                padding: '20px 50px',
+                                borderRadius: '20px',
+                                pointerEvents: 'none',
+                                zIndex: 100,
+                                textTransform: 'uppercase'
+                            }}>
+                                CANCELLED
+                            </div>
+                        )}
+
                         <div style={{ textAlign: 'center', fontSize: '7.5pt', color: '#666', marginTop: '10px' }}>
                             This is a computer generated tax invoice and does not require a physical signature.
                         </div>
@@ -369,7 +397,7 @@ export default function SalesInvoiceDetailPage() {
                              )}
 
                              {/* Cancel Invoice */}
-                             {notCancelled && (
+                             {notCancelled && isAdmin && (
                                  <button
                                      onClick={handleCancel}
                                      disabled={cancelling}
@@ -381,7 +409,7 @@ export default function SalesInvoiceDetailPage() {
                              )}
 
                              {/* Delete Invoice */}
-                             {notCancelled && (
+                             {notCancelled && isAdmin && (
                                  <button
                                      onClick={handleDelete}
                                      disabled={cancelling}

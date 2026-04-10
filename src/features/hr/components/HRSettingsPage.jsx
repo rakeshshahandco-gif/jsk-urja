@@ -11,7 +11,12 @@ const HRSettingsPage = () => {
         isSundayPaid: true,
         isHolidayPaid: true,
         singlePunchIsPresent: true,
-        missingCheckoutHandling: 'Mark as Missing'
+        missingCheckoutHandling: 'Mark as Missing',
+        latePenaltyRule: 'No Deduction',
+        latePenaltyThresholdMarks: 3,
+        overtimeRule: false,
+        isSandwichRuleEnabled: true,
+        sandwichPaidLeaveAsAbsent: false
     });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -162,6 +167,71 @@ const HRSettingsPage = () => {
                                 <option value="Mark as Absent">Mark status as 'Absent'</option>
                                 <option value="Mark as Present">Mark status as 'Present' (Ignore missing out time)</option>
                             </select>
+                        </div>
+
+                        <div style={{ marginTop: '20px', padding: '16px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fecaca' }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#991b1b', marginBottom: '12px' }}>Late Penalty Calculations</h4>
+                            <div style={{ display: 'flex', gap: '16px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#7f1d1d', marginBottom: '6px' }}>Penalty Rule</label>
+                                    <select 
+                                        value={settings.latePenaltyRule}
+                                        onChange={(e) => setSettings({...settings, latePenaltyRule: e.target.value})}
+                                        style={{ width: '100%', height: '40px', padding: '0 10px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', fontWeight: '600', color: '#991b1b', outline: 'none' }}
+                                    >
+                                        <option value="No Deduction">No Automatic Deduction</option>
+                                        <option value="Half Day Deduction">Deduct Half (0.5) Day</option>
+                                        <option value="Full Day Deduction">Deduct Full (1.0) Day</option>
+                                    </select>
+                                </div>
+                                <div style={{ width: '150px' }}>
+                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#7f1d1d', marginBottom: '6px' }}>After (X) Late Marks</label>
+                                    <input 
+                                        type="number" 
+                                        value={settings.latePenaltyThresholdMarks}
+                                        onChange={(e) => setSettings({...settings, latePenaltyThresholdMarks: parseInt(e.target.value)})}
+                                        style={{ width: '100%', height: '40px', padding: '0 10px', background: '#fff', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', fontWeight: '600', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sandwich Rules */}
+                    <div style={{ gridColumn: 'span 2', background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#1e293b', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Settings size={18} className="text-purple-600" /> Sandwich Penalty Policy
+                        </h3>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#faf5ff', borderRadius: '12px', border: '1px solid #f3e8ff' }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="sandwichEnable"
+                                    checked={settings.isSandwichRuleEnabled}
+                                    onChange={(e) => setSettings({...settings, isSandwichRuleEnabled: e.target.checked})}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="sandwichEnable" style={{ fontSize: '15px', fontWeight: '700', color: '#6b21a8', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                                    Enable Sandwich Rule
+                                    <span style={{ fontSize: '12px', fontWeight: '500', color: '#9333ea', marginTop: '4px' }}>If an employee is absent on the working day before AND after a Sunday/Holiday block, those off-days become unpaid.</span>
+                                </label>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#fdf4ff', borderRadius: '12px', border: '1px solid #fae8ff', opacity: settings.isSandwichRuleEnabled ? 1 : 0.5 }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="sandwichPaidLeave"
+                                    checked={settings.sandwichPaidLeaveAsAbsent}
+                                    disabled={!settings.isSandwichRuleEnabled}
+                                    onChange={(e) => setSettings({...settings, sandwichPaidLeaveAsAbsent: e.target.checked})}
+                                    style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="sandwichPaidLeave" style={{ fontSize: '15px', fontWeight: '700', color: '#86198f', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                                    Treat Approved Paid Leave as Absence
+                                    <span style={{ fontSize: '12px', fontWeight: '500', color: '#a21caf', marginTop: '4px' }}>If enabled, a paid leave adjacent to a Sunday will still trigger the sandwich deduction.</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>

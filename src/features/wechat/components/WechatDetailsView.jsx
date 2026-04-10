@@ -118,7 +118,7 @@ const WechatDetailsView = ({ item, type, onClose, onAddNote, onUpload }) => {
                                                     <Tag className="w-3 h-3" /> {tag}
                                                 </Badge>
                                             ))}
-                                            {item.searchKeywords?.map(tag => (
+                                            {(item.searchKeywords || []).map(tag => (
                                                 <Badge key={tag} variant="secondary" className="bg-gray-100 text-gray-600 border-0 px-3 py-1">
                                                     {tag}
                                                 </Badge>
@@ -159,18 +159,18 @@ const WechatDetailsView = ({ item, type, onClose, onAddNote, onUpload }) => {
                                     )}
 
                                     <div className="space-y-4">
-                                        {item.notesHistory?.length === 0 ? (
+                                        {(!Array.isArray(item.notesHistory) || item.notesHistory.length === 0) ? (
                                             <p className="text-center py-8 text-gray-400 text-xs italic border-2 border-dashed rounded-2xl">No recorded discussions yet.</p>
                                         ) : item.notesHistory.slice().reverse().map((h, i) => (
                                             <div key={i} className="flex gap-4">
                                                 <div className="flex flex-col items-center">
                                                     <div className="w-2 h-2 rounded-full bg-gray-300 mt-1.5" />
-                                                    {i !== item.notesHistory.length - 1 && <div className="w-0.5 flex-1 bg-gray-100 my-1" />}
+                                                    {i !== (item.notesHistory || []).length - 1 && <div className="w-0.5 flex-1 bg-gray-100 my-1" />}
                                                 </div>
                                                 <div className="flex-1 pb-4">
                                                     <div className="flex justify-between items-start mb-1">
                                                         <span className="text-[10px] font-black text-gray-900">{h.user?.name || 'Admin'}</span>
-                                                        <span className="text-[10px] text-gray-400">{format(new Date(h.date), 'dd MMM yyyy')}</span>
+                                                        <span className="text-[10px] text-gray-400">{h.date ? format(new Date(h.date), 'dd MMM yyyy') : '--'}</span>
                                                     </div>
                                                     <p className="text-xs text-gray-600">{h.note}</p>
                                                 </div>
@@ -184,29 +184,31 @@ const WechatDetailsView = ({ item, type, onClose, onAddNote, onUpload }) => {
                                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">
                                     {isContact ? 'WeChat Groups this person is in' : 'Individual contacts in this group'}
                                 </h3>
-                                {(isContact ? item.groupIds : item.memberIds)?.length === 0 ? (
+                                {(isContact ? item.groupIds : item.memberIds)?.length > 0 ? (
+                                    (isContact ? item.groupIds : item.memberIds).map(link => (
+                                        <div key={link._id || link} className="flex items-center justify-between p-3 border rounded-xl mb-3 hover:bg-gray-50 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${isContact ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
+                                                    {isContact ? <Users className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-gray-900">
+                                                        {isContact ? link.groupName : link.weChatDisplayName}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-500 font-hindi">
+                                                        {isContact ? (link.chineseGroupName || link.groupAlias) : link.chineseName}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <ChevronRight className="w-4 h-4 text-gray-300" />
+                                        </div>
+                                    ))
+                                ) : (
                                     <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed">
                                         <LinkIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                                         <p className="text-xs text-gray-400">No active links found.</p>
                                     </div>
-                                ) : (isContact ? item.groupIds : item.memberIds)?.map(link => (
-                                    <div key={link._id} className="flex items-center justify-between p-3 border rounded-xl mb-3 hover:bg-gray-50 transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${isContact ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
-                                                {isContact ? <Users className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-900">
-                                                    {isContact ? link.groupName : link.weChatDisplayName}
-                                                </p>
-                                                <p className="text-[10px] text-gray-500 font-hindi">
-                                                    {isContact ? (link.chineseGroupName || link.groupAlias) : link.chineseName}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <ChevronRight className="w-4 h-4 text-gray-300" />
-                                    </div>
-                                ))}
+                                )}
                             </TabsContent>
 
                             <TabsContent value="files" className="mt-0">
@@ -221,29 +223,31 @@ const WechatDetailsView = ({ item, type, onClose, onAddNote, onUpload }) => {
                                 </div>
                                 
                                 <div className="grid grid-cols-2 gap-4">
-                                    {item.attachments?.length === 0 ? (
+                                    {(Array.isArray(item.attachments) && item.attachments.length > 0) ? (
+                                        item.attachments.map((file, idx) => (
+                                            <Card key={idx} className="p-3 border-2 hover:border-gray-900 transition-all cursor-pointer group">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
+                                                        {file.mimetype?.startsWith('image') ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[11px] font-bold text-gray-900 truncate" title={file.filename}>{file.filename}</p>
+                                                        <p className="text-[9px] text-gray-400 uppercase mt-0.5">{file.type || 'Document'}</p>
+                                                        <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <a href={file.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
+                                                                <Download className="w-3 h-3" /> View
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        ))
+                                    ) : (
                                         <div className="col-span-full text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed">
                                             <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                                             <p className="text-xs text-gray-400">No catalogs or screenshots uploaded.</p>
                                         </div>
-                                    ) : item.attachments.map((file, idx) => (
-                                        <Card key={idx} className="p-3 border-2 hover:border-gray-900 transition-all cursor-pointer group">
-                                            <div className="flex items-start gap-3">
-                                                <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
-                                                    {file.mimetype?.startsWith('image') ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-[11px] font-bold text-gray-900 truncate" title={file.filename}>{file.filename}</p>
-                                                    <p className="text-[9px] text-gray-400 uppercase mt-0.5">{file.type || 'Document'}</p>
-                                                    <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <a href={file.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
-                                                            <Download className="w-3 h-3" /> View
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    ))}
+                                    )}
                                 </div>
 
                                 {item.attachments?.some(a => a.type === 'Screenshot') && (
@@ -252,7 +256,7 @@ const WechatDetailsView = ({ item, type, onClose, onAddNote, onUpload }) => {
                                             <ImageIcon className="w-3.5 h-3.5" /> Visual Verification (Screenshots)
                                         </h3>
                                         <div className="grid grid-cols-2 gap-4">
-                                            {item.attachments.filter(a => a.type === 'Screenshot').map((ss, i) => (
+                                            {(item.attachments || []).filter(a => a.type === 'Screenshot').map((ss, i) => (
                                                 <div key={i} className="aspect-video rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm relative group bg-gray-100">
                                                     <img src={ss.url} alt="Proof" className="w-full h-full object-cover" />
                                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

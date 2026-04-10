@@ -11,6 +11,20 @@ const AttendancePage = () => {
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState(moment().format('MM'));
     const [selectedYear, setSelectedYear] = useState(moment().format('YYYY'));
+    const [employees, setEmployees] = useState([]);
+    const [selectedEmployee, setSelectedEmployee] = useState('');
+
+    useEffect(() => {
+        const fetchEmployees = async () => {
+            try {
+                const res = await api.get('/hr/employees?status=Active');
+                setEmployees(res.data.data || []);
+            } catch (error) {
+                console.error("Error fetching employees:", error);
+            }
+        };
+        fetchEmployees();
+    }, []);
 
     // Automatically sync year/month with Financial Year if current selection is invalid
     useEffect(() => {
@@ -29,12 +43,14 @@ const AttendancePage = () => {
 
     useEffect(() => {
         fetchAttendance();
-    }, [selectedMonth, selectedYear, selectedFY]);
+    }, [selectedMonth, selectedYear, selectedFY, selectedEmployee]);
 
     const fetchAttendance = async () => {
         try {
             setLoading(true);
-            const res = await api.get(`/hr/attendance?month=${selectedMonth}&year=${selectedYear}&financialYear=${selectedFY}`);
+            const employeeParam = selectedEmployee ? `&employee=${selectedEmployee}` : '';
+            const t = new Date().getTime();
+            const res = await api.get(`/hr/attendance?month=${selectedMonth}&year=${selectedYear}&financialYear=${selectedFY}${employeeParam}&t=${t}`);
             setAttendanceData(res.data.data);
         } catch (error) {
             console.error('Error fetching attendance:', error);
@@ -110,6 +126,14 @@ const AttendancePage = () => {
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
+                        <select
+                            value={selectedEmployee}
+                            onChange={(e) => setSelectedEmployee(e.target.value)}
+                            style={{ height: '40px', padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#475569', outline: 'none', maxWidth: '180px' }}
+                        >
+                            <option value="">All Employees</option>
+                            {employees.map(emp => <option key={emp._id} value={emp._id}>{emp.employeeName} ({emp.employeeCode})</option>)}
+                        </select>
                         <select 
                             value={selectedMonth} 
                             onChange={(e) => setSelectedMonth(e.target.value)}

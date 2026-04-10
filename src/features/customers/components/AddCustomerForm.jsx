@@ -257,13 +257,13 @@ export const AddCustomerForm = ({ closeModal }) => {
                             error={errors.companyEmail}
                         />
 
-                        {/* Mobile input would typically go here to complete the row, but it's not in the original Basic Info section? 
-                            Checking original: Mobile was not in Basic Info. Let's look for it.
-                            Wait, Mobile was in ContactPersonInput logic? 
-                            Ah, I don't see Mobile field in the Basic Info JSX of the original file provided in context. 
-                            Let's assume "Company Email" is the only other field in Basic Info provided in snippet. 
-                            We'll leave the 3rd slot empty or generic.
-                         */}
+                        <Input
+                            label="Website"
+                            type="url"
+                            placeholder="https://www.company.com"
+                            {...register('website')}
+                            error={errors.website}
+                        />
                     </div>
                 </section>
 
@@ -282,9 +282,17 @@ export const AddCustomerForm = ({ closeModal }) => {
                     <div className={styles.grid3}>
                         <div className={styles.colSpan3}>
                             <Input
-                                label="Full Address"
+                                label="Primary Address (Billing & Shipping)"
                                 placeholder="123 Main St, Suite 100"
                                 {...register('address')}
+                            />
+                        </div>
+
+                        <div className={styles.colSpan3}>
+                            <Input
+                                label="Factory / Secondary Address (For Record Only)"
+                                placeholder="Plot 45, Industrial Estate..."
+                                {...register('additionalAddress')}
                             />
                         </div>
 

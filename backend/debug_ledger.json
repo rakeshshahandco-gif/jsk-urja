@@ -1,7 +1,52 @@
 {
-  "ledgerId": "69c75cca8a5ae3037ef08f6e",
-  "voucherIds": [],
-  "relatedEntriesCount": 0,
-  "relatedEntries": [],
-  "oppositeNamesByVoucher": {}
+  "ledgerId": "69b43e3f73caad9b89392659",
+  "voucherIds": [
+    "69d75a87d7ee6e5a795d096d",
+    "69d75ae4d7ee6e5a795d0ab9",
+    "69d75b10d7ee6e5a795d0b4c"
+  ],
+  "relatedEntriesCount": 6,
+  "relatedEntries": [
+    {
+      "vId": "69d75a87d7ee6e5a795d096d",
+      "lId": "69b43e3f73caad9b89392659",
+      "lName": "BANK OF BARODA"
+    },
+    {
+      "vId": "69d75a87d7ee6e5a795d096d",
+      "lId": "69c239c1892c5bf4c4429d12",
+      "lName": "ACTIVESTAR LIGHTING LLP"
+    },
+    {
+      "vId": "69d75ae4d7ee6e5a795d0ab9",
+      "lId": "69b43e3f73caad9b89392659",
+      "lName": "BANK OF BARODA"
+    },
+    {
+      "vId": "69d75ae4d7ee6e5a795d0ab9",
+      "lId": "69d0e498c69569f78d4e1ac2",
+      "lName": "SMITA ELECTRICAL INDUSTRIES"
+    },
+    {
+      "vId": "69d75b10d7ee6e5a795d0b4c",
+      "lId": "69b43e3f73caad9b89392659",
+      "lName": "BANK OF BARODA"
+    },
+    {
+      "vId": "69d75b10d7ee6e5a795d0b4c",
+      "lId": "69d60613327a2684779297e2",
+      "lName": "DYNAM & CO."
+    }
+  ],
+  "oppositeNamesByVoucher": {
+    "69d75a87d7ee6e5a795d096d": [
+      "ACTIVESTAR LIGHTING LLP"
+    ],
+    "69d75ae4d7ee6e5a795d0ab9": [
+      "SMITA ELECTRICAL INDUSTRIES"
+    ],
+    "69d75b10d7ee6e5a795d0b4c": [
+      "DYNAM & CO."
+    ]
+  }
 }

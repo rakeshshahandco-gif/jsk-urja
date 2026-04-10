@@ -49,8 +49,12 @@ const WechatContactForm = ({ contact, onClose, onSuccess }) => {
 
     useEffect(() => {
         const fetchGroups = async () => {
-            const res = await getWeChatGroups();
-            setGroups(res.data || []);
+            try {
+                const res = await getWeChatGroups();
+                setGroups(Array.isArray(res.data?.data) ? res.data.data : []);
+            } catch (error) {
+                setGroups([]);
+            }
         };
         fetchGroups();
 
@@ -266,7 +270,7 @@ const WechatContactForm = ({ contact, onClose, onSuccess }) => {
                                 <Layout className="w-3.5 h-3.5" /> Group Memberships
                             </h3>
                             <div className="border rounded-2xl p-3 space-y-2 bg-gray-50/50 max-h-[300px] overflow-y-auto">
-                                {groups.length === 0 ? (
+                                {(!Array.isArray(groups) || groups.length === 0) ? (
                                     <p className="text-[10px] text-gray-400 italic text-center py-4">No groups available. Create one first.</p>
                                 ) : groups.map(group => (
                                     <label key={group._id} className="flex items-center gap-3 p-2 bg-white rounded-xl border cursor-pointer hover:border-blue-300 transition-colors">

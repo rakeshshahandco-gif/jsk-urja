@@ -6,15 +6,35 @@ import clsx from 'clsx';
 // Placeholder icons - in real app would map to generic Icon component
 const IconPlaceholder = ({ name }) => <span>Build</span>; // Fallback
 
-export const SidebarItem = ({ item, collapsed, isOpen, onToggle }) => {
+export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle: externalOnToggle }) => {
     const location = useLocation();
+    const [internalIsOpen, setInternalIsOpen] = React.useState(false);
+
+    // For top-level items, Sidebar manages expansion (one-at-a-time accordion).
+    // For nested sub-menus, the item manages its own expansion state.
+    const isOpen = externalOnToggle ? externalIsOpen : internalIsOpen;
+    const onToggle = externalOnToggle ? externalOnToggle : () => setInternalIsOpen(!internalIsOpen);
 
     // Check if item has children
     const hasChildren = item.children && item.children.length > 0;
 
-    // Check if current path matches item path
-    // For parent items, check if any child is active
-    const isChildActive = hasChildren && item.children.some(child => location.pathname.startsWith(child.path));
+    const isItemActive = React.useCallback((it) => {
+        if (it.path && location.pathname.startsWith(it.path)) return true;
+        if (it.children) return it.children.some(child => isItemActive(child));
+        return false;
+    }, [location.pathname]);
+
+    // Check if any child (including deeply nested ones) is active
+    const isChildActive = React.useMemo(() => 
+        hasChildren && item.children.some(child => isItemActive(child)),
+    [hasChildren, item.children, isItemActive]);
+
+    // Auto-expand nested sub-menus if an item inside them is active
+    React.useEffect(() => {
+        if (isChildActive && !externalOnToggle) {
+            setInternalIsOpen(true);
+        }
+    }, [isChildActive, externalOnToggle]);
 
     if (hasChildren) {
         return (

@@ -11,11 +11,10 @@ const router = express.Router();
 router.get('/v7-lockdown', (req, res) => res.send({ status: 'LOCKEDDOWN_V7_RESTARTED_2026_04_08', port: process.env.PORT || 5000 }));
 router.get('/attendance/template', hrController.downloadAttendanceTemplate);
 
-router.use(protect);
+// --- PUBLIC TEST ROUTE ---
+router.get('/attendance-test', hrController.getAttendances);
 
-// --- ATTENDANCE ROUTES ---
-router.route('/attendance')
-    .get(checkPermission('hr.hr_reports.view'), hrController.getAttendances);
+router.use(protect);
 
 // --- SHIFT MASTER ROUTES ---
 router.route('/shifts')
@@ -54,7 +53,7 @@ router.route('/attendance')
 router.route('/attendance/import')
     .post(checkPermission('hr.hr_dashboard.view'), upload.single('file'), hrController.importAttendance);
 
-router.delete('/attendance/bulk', checkPermission('hr.hr_dashboard.view'), hrController.bulkDeleteAttendance);
+router.delete('/attendance/bulk', checkPermission('admin.company_profile.view'), hrController.bulkDeleteAttendance);
 
 
 // --- HR SETTINGS ROUTES ---

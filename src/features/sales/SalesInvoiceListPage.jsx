@@ -44,28 +44,19 @@ export default function SalesInvoiceListPage() {
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
+    const isAdmin = hasRole('admin') || hasRole('superadmin');
+
     const handleDelete = (e, inv) => {
         e.stopPropagation();
+        if (!isAdmin) return toast.error('Only administrators can delete invoices');
+        if (inv.paidAmount > 0) return toast.error('Delete Blocked: Payments exist.');
+        const msg = `STRICT DELETE RULE (Rule 3):\n\nOnly the LATEST invoice can be DELETED to reuse its number.\n\nEnter reason for deletion:`;
+        const reason = window.prompt(msg);
+        if (!reason || !reason.trim()) return;
         
-        // Restriction Guard: Cannot archive if payments exist
-        if (inv.paidAmount > 0) {
-            toast.error(
-                <div style={{ textAlign: 'center' }}>
-                    <strong>Archive Blocked</strong><br/>
-                    Payments have already been recorded against <b>{inv.invoiceNumber}</b>.<br/>
-                    Please delete the payments first if you must archive this invoice.
-                </div>,
-                { duration: 4500, style: { border: '1px solid #fecaca', padding: '12px', color: '#991b1b', background: '#fef2f2' } }
-            );
-            return;
-        }
-
-        const reason = window.prompt(`Enter reason for archiving invoice "${inv.invoiceNumber}":`);
-        if (reason === null) return;
-        
-        deleteSalesInvoice(inv._id, { reason: reason || 'Soft archived' })
-            .then(() => { toast.success('Invoice archived.'); load(); })
-            .catch(e => toast.error(e.response?.data?.message || 'Archive failed'));
+        deleteSalesInvoice(inv._id, { reason })
+            .then(() => { toast.success('Invoice deleted and number freed.'); load(); })
+            .catch(e => toast.error(e.response?.data?.message || 'Delete failed'));
     };
 
     const handleRestore = (e, inv) => {

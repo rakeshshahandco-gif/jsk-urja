@@ -49,15 +49,19 @@ const WechatListPage = () => {
             setLoading(true);
             if (search.trim()) {
                 const response = await searchWeChatUnified({ search });
-                setResults(response.data.data || { contacts: [], groups: [] });
+                const data = response.data?.data || {};
+                setResults({
+                    contacts: Array.isArray(data.contacts) ? data.contacts : [],
+                    groups: Array.isArray(data.groups) ? data.groups : []
+                });
             } else {
                 const [contactsRes, groupsRes] = await Promise.all([
                     getWeChatContacts({ limit: 50 }),
                     getWeChatGroups()
                 ]);
                 setResults({
-                    contacts: contactsRes.data.data || [],
-                    groups: groupsRes.data.data || []
+                    contacts: Array.isArray(contactsRes.data?.data) ? contactsRes.data.data : [],
+                    groups: Array.isArray(groupsRes.data?.data) ? groupsRes.data.data : []
                 });
             }
         } catch (error) {
@@ -255,8 +259,8 @@ const WechatListPage = () => {
                                 </div>
                             ) : (
                                 <>
-                                    {results.groups.map(group => <ResultCard key={group._id} item={group} type="group" />)}
-                                    {results.contacts.map(contact => <ResultCard key={contact._id} item={contact} type="contact" />)}
+                                    {(results?.groups || []).map(group => <ResultCard key={group._id} item={group} type="group" />)}
+                                    {(results?.contacts || []).map(contact => <ResultCard key={contact._id} item={contact} type="contact" />)}
                                 </>
                             )}
                         </div>
@@ -264,13 +268,13 @@ const WechatListPage = () => {
 
                     <TabsContent value="contacts" className="mt-0">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {results.contacts.map(contact => <ResultCard key={contact._id} item={contact} type="contact" />)}
+                            {(results?.contacts || []).map(contact => <ResultCard key={contact._id} item={contact} type="contact" />)}
                         </div>
                     </TabsContent>
 
                     <TabsContent value="groups" className="mt-0">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {results.groups.map(group => <ResultCard key={group._id} item={group} type="group" />)}
+                            {(results?.groups || []).map(group => <ResultCard key={group._id} item={group} type="group" />)}
                         </div>
                     </TabsContent>
                 </Tabs>

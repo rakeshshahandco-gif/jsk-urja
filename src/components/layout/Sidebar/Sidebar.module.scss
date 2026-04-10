@@ -286,4 +286,15 @@
             }
         }
     }
+
+    // Indent for 3rd level items (e.g., CRM -> Customers -> Master)
+    .subMenu {
+        .link {
+            padding-left: 48px !important;
+            
+            &.active::before {
+                left: 30px !important;
+            }
+        }
+    }
 }

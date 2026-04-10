@@ -59,6 +59,11 @@ const customerSchema = mongoose.Schema(
             lowercase: true,
             match: /^\S+@\S+$/i,
         },
+        website: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         company: {
             type: String,
             trim: true,
@@ -92,6 +97,11 @@ const customerSchema = mongoose.Schema(
         address: {
             type: String,
             trim: true,
+        },
+        additionalAddress: {
+            type: String,
+            trim: true,
+            default: "",
         },
         pincode: {
             type: String,

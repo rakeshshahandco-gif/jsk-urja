@@ -112,6 +112,11 @@ const salesInvoiceSchema = new mongoose.Schema({
     status: { type: String, enum: ['Draft', 'Confirmed', 'Cancelled'], default: 'Draft' },
     remarks: { type: String, default: '' },
 
+    // Cancellation Fields
+    cancelledAt: { type: Date, default: null },
+    cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    cancelReason: { type: String, default: '' },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     

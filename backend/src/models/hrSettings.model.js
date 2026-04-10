@@ -31,6 +31,27 @@ const hrSettingsSchema = new mongoose.Schema(
             enum: ['Mark as Missing', 'Mark as Absent', 'Mark as Present'],
             default: 'Mark as Missing',
         },
+        latePenaltyRule: {
+            type: String,
+            enum: ['No Deduction', 'Half Day Deduction', 'Full Day Deduction'],
+            default: 'No Deduction',
+        },
+        latePenaltyThresholdMarks: {
+            type: Number,
+            default: 3,
+        },
+        overtimeRule: {
+            type: Boolean,
+            default: false,
+        },
+        isSandwichRuleEnabled: {
+            type: Boolean,
+            default: true,
+        },
+        sandwichPaidLeaveAsAbsent: {
+            type: Boolean,
+            default: false,
+        },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

@@ -410,99 +410,81 @@ export default function SalesInvoiceFormPage() {
                 </div>
             </div>
 
-            <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
-                {/* Invoice Details */}
-                <Section title="Invoice Details">
-                    <Grid cols={3}>
-                        <Field label="Invoice Series & Invoice No">
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <select value={form.seriesId} onChange={async e => {
-                                    const val = e.target.value;
-                                    const selected = seriesList.find(s => s._id === val);
-                                    const isGst = selected ? (selected.gstApplicable !== false) : true;
-                                    await fetchPreviewNo(val);
-                                    setForm(p => ({
-                                        ...p,
-                                        seriesId: val,
-                                        gstApplicable: isGst,
-                                        items: p.items.map(item => ({
-                                            ...item,
-                                            gstRate: isGst ? (item.gstRate || 18) : 0
-                                        })),
-                                        freightGstRate: isGst ? (p.freightGstRate || 18) : 0
-                                    }));
-                                }}
-                                    style={{ ...inp, flex: 1, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}
-                                >
-                                    <option value="">-- Select Series --</option>
-                                    {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix})</option>)}
-                                </select>
-                                <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 32, background: '#f8fafc', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }} title="Add Series">＋</button>
-                            </div>
-                            {previewInvoiceNo && (
-                                <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Invoice No:</span>
-                                    <span style={{
-                                        fontSize: 15,
-                                        fontWeight: 800,
-                                        color: '#0d9488',
-                                        background: '#f0fdfa',
-                                        border: '1.5px solid #99f6e4',
-                                        borderRadius: 6,
-                                        padding: '3px 12px',
-                                        letterSpacing: '0.04em',
-                                        fontFamily: 'monospace'
-                                    }}>{previewInvoiceNo}</span>
-                                    <span style={{ fontSize: 10, color: '#94a3b8' }}>(will be assigned on save)</span>
-                                </div>
-                            )}
-                            {form.seriesId && !form.gstApplicable && (
-                                <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <span>⚠️</span> This series is non-GST. Tax will not be applied.
-                                </div>
-                            )}
-                        </Field>
-                        <Field label="Invoice Date *"><input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={inp} /></Field>
-                        <Field label="Payment Type">
-                            <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-                                <option>Credit</option><option>Cash</option>
+            <div style={{ padding: '20px 28px', maxWidth: 1200, margin: '0 auto' }}>
+                {/* PRIMARY HEADER INFO (TALLY STYLE) */}
+                <div style={{ background: '#fff', border: '1px solid #1e293b', borderLeft: '8px solid #0d9488', borderRadius: '8px 12px 12px 8px', padding: '20px', marginBottom: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+                    <Field label="Invoice Series">
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <select value={form.seriesId} onChange={async e => {
+                                const val = e.target.value;
+                                const selected = seriesList.find(s => s._id === val);
+                                const isGst = selected ? (selected.gstApplicable !== false) : true;
+                                await fetchPreviewNo(val);
+                                setForm(p => ({
+                                    ...p,
+                                    seriesId: val,
+                                    gstApplicable: isGst,
+                                    items: p.items.map(item => ({
+                                        ...item,
+                                        gstRate: isGst ? (item.gstRate || 18) : 0
+                                    })),
+                                    freightGstRate: isGst ? (p.freightGstRate || 18) : 0
+                                }));
+                            }}
+                                style={{ ...inp, cursor: 'pointer', fontWeight: 700, fontSize: 14, borderColor: !form.seriesId ? '#fca5a5' : '#1e293b' }}
+                            >
+                                <option value="">-- Select Series --</option>
+                                {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix})</option>)}
                             </select>
-                        </Field>
-                        <Field label="Linked SO">{soId ? <input value={form.soNumber} readOnly style={{ ...inp, background: '#f1f5f9', color: '#6b7280' }} /> : <input value={form.soNumber} onChange={e => setF('soNumber', e.target.value)} style={inp} placeholder="Optional SO Number" />}</Field>
-                        <Field label="Order Type"><input value={form.orderType} onChange={e => setF('orderType', e.target.value)} style={inp} placeholder="e.g. Supply" /></Field>
-                        <Field label="Dispatch Through"><input value={form.dispatchThrough} onChange={e => setF('dispatchThrough', e.target.value)} style={inp} placeholder="By Road / Courier" /></Field>
-                        <Field label="Payment Due Date"><input type="date" value={form.paymentDueDate || ''} onChange={e => setF('paymentDueDate', e.target.value)} style={inp} /></Field>
-                    </Grid>
-                </Section>
-
-                {/* Buyer Details */}
-                <Section title="Buyer Details">
-                    <Grid cols={3}>
-                        <Field label="Customer Name *"><input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, borderColor: !form.customerName ? '#fca5a5' : '#d1d5db' }} placeholder="Customer / Company Name" /></Field>
-                        <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={inp} placeholder="e.g. 27XXXXX..." /></Field>
-                        <Field label="Phone"><input value={form.customerPhone} onChange={e => setF('customerPhone', e.target.value)} style={inp} /></Field>
-                        <Field label="Billing State"><input value={form.billingState} onChange={e => setF('billingState', e.target.value)} style={inp} placeholder="Maharashtra" /></Field>
-                        <Field label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={inp} placeholder="27" /></Field>
-                        <Field label="Place of Supply"><input value={form.placeOfSupply} onChange={e => setF('placeOfSupply', e.target.value)} style={inp} /></Field>
-                        <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: -8, borderBottom: '1px solid #f3f4f6', paddingBottom: 4 }}>
-                            <h4 style={{ margin: 0, fontSize: 11, color: '#374151' }}>BILLING & SHIPPING ADDRESS</h4>
-                            <button type="button" onClick={() => setForm(p => ({ ...p, shippingAddress: p.billingAddress, shippingCity: p.city || '', shippingState: p.billingState, shippingStateCode: p.billingStateCode, shippingGstin: p.customerGstin, shippingPhone: p.customerPhone }))} style={{ fontSize: 11, background: '#f0fdfa', border: '1px solid #ccfbf1', color: '#0d9488', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>Same as Billing</button>
+                            <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 35, background: '#f8fafc', border: '1px solid #1e293b', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Add Series">＋</button>
                         </div>
-                        <Field label="Billing Address" style={{ gridColumn: 'span 1' }}><textarea value={form.billingAddress} onChange={e => setF('billingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} /></Field>
-                        <Field label="Shipping Address" style={{ gridColumn: 'span 2' }}>
-                            <Grid cols={2}>
-                                <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', gridColumn: 'span 2' }} placeholder="Shipping Address..." />
-                                <input value={form.shippingCity} onChange={e => setF('shippingCity', e.target.value)} style={inp} placeholder="City" />
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                    <input value={form.shippingState} onChange={e => setF('shippingState', e.target.value)} style={{ ...inp, flex: 2 }} placeholder="State" />
-                                    <input value={form.shippingStateCode} onChange={e => setF('shippingStateCode', e.target.value)} style={{ ...inp, flex: 1 }} placeholder="Code" />
-                                </div>
-                            </Grid>
-                        </Field>
-                        <Field label="Buyer Order No"><input value={form.buyerOrderNo} onChange={e => setF('buyerOrderNo', e.target.value)} style={inp} /></Field>
-                        <Field label="Buyer Order Date"><input type="date" value={form.buyerOrderDate || ''} onChange={e => setF('buyerOrderDate', e.target.value)} style={inp} /></Field>
-                    </Grid>
-                </Section>
+                        {previewInvoiceNo && (
+                            <div style={{ marginTop: 8, fontSize: 16, fontWeight: 900, color: '#0d9488', fontFamily: 'monospace', background: '#f0fdfa', border: '1.5px solid #99f6e4', padding: '4px 12px', borderRadius: 6, display: 'inline-block' }}>
+                                NO: {previewInvoiceNo}
+                            </div>
+                        )}
+                    </Field>
+                    
+                    <Field label="Invoice Date *">
+                        <input type="date" value={form.invoiceDate} onChange={e => setF('invoiceDate', e.target.value)} style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b' }} />
+                    </Field>
+
+                    <Field label="Customer (Buyer) *">
+                        <input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b', borderColor: !form.customerName ? '#fca5a5' : '#1e293b' }} placeholder="Type Customer Name..." />
+                        {form.customerGstin && <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontWeight: 600 }}>GSTIN: {form.customerGstin}</div>}
+                    </Field>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
+                    {/* Secondary Details (Compact) */}
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid #f3f4f6', paddingBottom: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Shipment & Payment Info</span>
+                            {soId && <span style={{ fontSize: 10, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>SO: {form.soNumber}</span>}
+                        </div>
+                        <Grid cols={3}>
+                            <Field label="Payment Type">
+                                <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, padding: '5px 8px', fontSize: 12 }}>
+                                    <option>Credit</option><option>Cash</option>
+                                </select>
+                            </Field>
+                            <Field label="Due Date"><input type="date" value={form.paymentDueDate || ''} onChange={e => setF('paymentDueDate', e.target.value)} style={{ ...inp, padding: '5px 8px', fontSize: 12 }} /></Field>
+                            <Field label="Dispatch Thru"><input value={form.dispatchThrough} onChange={e => setF('dispatchThrough', e.target.value)} style={{ ...inp, padding: '5px 8px', fontSize: 12 }} placeholder="Road/Courier" /></Field>
+                        </Grid>
+                    </div>
+
+                    {/* Address & GST (Compact) */}
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '15px' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid #f3f4f6', paddingBottom: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Supply Details</span>
+                            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{form.gstType}</span>
+                        </div>
+                        <Grid cols={2}>
+                            <Field label="GSTIN"><input value={form.customerGstin} onChange={e => setF('customerGstin', e.target.value)} style={{ ...inp, padding: '5px 8px', fontSize: 12 }} /></Field>
+                            <Field label="State Code"><input value={form.billingStateCode} onChange={e => setF('billingStateCode', e.target.value)} style={{ ...inp, padding: '5px 8px', fontSize: 12 }} /></Field>
+                        </Grid>
+                    </div>
+                </div>
 
                 {/* Production Details */}
                 <Section title="Production Details">

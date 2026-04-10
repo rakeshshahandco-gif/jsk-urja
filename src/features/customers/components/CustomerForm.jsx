@@ -82,6 +82,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             company: customerData.company || '',
             companyBrand: customerData.companyBrand || '',
             companyEmail: customerData.companyEmail || '',
+            website: customerData.website || '',
             customerType: customerData.customerType || '',
             stickers: Array.isArray(customerData.stickers) ? customerData.stickers.map(s => s._id || s) : [],
             city: customerData.area || customerData.city || '',
@@ -96,6 +97,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 return matchedState || stateStr;
             })(),
             address: customerData.address || '',
+            additionalAddress: customerData.additionalAddress || '',
             pincode: customerData.pincode || '',
             country: customerData.country || 'India',
             status: customerData.status || customerData.customerStatus || 'lead',
@@ -437,6 +439,16 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </div>
 
                         <div className={styles['form-group']}>
+                            <label htmlFor="website">WEBSITE</label>
+                            <Input
+                                id="website"
+                                type="url"
+                                {...register('website')}
+                                placeholder="https://www.company.com"
+                            />
+                        </div>
+
+                        <div className={styles['form-group']}>
                             <label htmlFor="companyBrand">COMPANY BRAND (OPTIONAL)</label>
                             <Input
                                 id="companyBrand"
@@ -470,7 +482,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </div>
                     </div>
                     <div className={`${styles['form-group']} ${styles.colSpan3}`}>
-                        <label htmlFor="address">ADDRESS</label>
+                        <label htmlFor="address">PRIMARY ADDRESS (BILLING & SHIPPING)</label>
                         <textarea
                             id="address"
                             {...register('address')}
@@ -478,6 +490,18 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             rows={3}
                             className={styles['form-textarea']}
                             onChange={handleUppercaseChange('address')}
+                        />
+                    </div>
+                    
+                    <div className={`${styles['form-group']} ${styles.colSpan3}`}>
+                        <label htmlFor="additionalAddress">FACTORY / SECONDARY ADDRESS (FOR RECORD ONLY)</label>
+                        <textarea
+                            id="additionalAddress"
+                            {...register('additionalAddress')}
+                            placeholder="Enter additional or factory address..."
+                            rows={3}
+                            className={styles['form-textarea']}
+                            onChange={handleUppercaseChange('additionalAddress')}
                         />
                     </div>
                     <div className={styles.grid4}>

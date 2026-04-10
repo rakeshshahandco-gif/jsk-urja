@@ -29,7 +29,6 @@ export const CustomerList = () => {
     const [showImportModal, setShowImportModal] = useState(false);
     const [showGSTModal, setShowGSTModal] = useState(false);
     const limit = 10;
-
     // Fetch customers from API
     const fetchCustomers = async () => {
         setLoading(true);
@@ -209,7 +208,7 @@ export const CustomerList = () => {
             {/* Page Header */}
             <div className={styles.headerContainer}>
                 <div className={styles.titleWrapper}>
-                    <h1 className={styles.title}>Customers</h1>
+                    <h1 className={styles.title}>Customer Master</h1>
                     {totalResults > 0 && (
                         <span className={styles.count}>({totalResults} total)</span>
                     )}

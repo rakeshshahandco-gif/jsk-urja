@@ -68,16 +68,11 @@ export default function SalesOrderDetailPage() {
   }, [load]);
 
   const fmt = (d) =>
-    d
-      ? new Date(d).toLocaleString("en-IN", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })
-      : "—";
+    d ? new Date(d).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        }) : "—";
   const fmtCur = (n) => `₹${(n || 0).toLocaleString("en-IN")}`;
 
   const handleGeneratePS = async () => {

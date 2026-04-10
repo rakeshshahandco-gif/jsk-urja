@@ -58,7 +58,7 @@ const ManageTasksPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    const [viewMode, setViewMode] = useState('existing');
+    const [viewMode, setViewMode] = useState('priority');
     const [activeTab, setActiveTab] = useState(null);
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);

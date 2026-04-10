@@ -28,7 +28,8 @@ const PayrollPage = () => {
             }
 
             // If refresh forced or no saved data, generate preview from live attendance
-            const previewRes = await api.get('/payroll/preview', { params: { month, year } });
+            const t = new Date().getTime();
+            const previewRes = await api.get('/payroll/preview', { params: { month, year, t } });
             setRecords(previewRes.data?.data || []);
             setIsSaved(false);
         } catch (error) {
@@ -184,6 +185,7 @@ const PayrollPage = () => {
                                             <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '13px' }}>{r.employeeName}</div>
                                             <div style={{ fontSize: '11px', color: '#64748b' }}>{r.employeeCode}</div>
                                             {r.isNew && <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>New Preview</span>}
+                                            {r.remarks && <div style={{ fontSize: '10px', color: '#b91c1c', marginTop: '4px', fontStyle: 'italic' }}>{r.remarks}</div>}
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'right', color: '#475569', fontWeight: '600' }}>
                                             {formatCurrency(r.masterGross)}
@@ -193,14 +195,26 @@ const PayrollPage = () => {
                                             {formatCurrency(r.masterGross / (r.totalDays || 1))}
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                            <span style={{ display: 'inline-block', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                                            <span style={{ display: 'inline-block', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }} title="Present Working Days + Paid Leaves + Paid Holidays/Sundays">
                                                 {r.daysWorked || 0}
                                             </span>
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                            <span style={{ display: 'inline-block', background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
-                                                {(r.totalDays || 0) - (r.daysWorked || 0)}
-                                            </span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                                                <span style={{ display: 'inline-block', background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }} title="Explicit Absences + Unpaid Days">
+                                                    {((r.totalDays || 0) - (r.daysWorked || 0) - (r.lateDeductionDays || 0) - (r.sandwichDeductionDays || 0)).toFixed(1)}
+                                                </span>
+                                                {(r.lateDeductionDays > 0) && (
+                                                    <span style={{ display: 'inline-block', background: '#ffedd5', color: '#9a3412', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }} title="Late Penalties Deducted from Payable">
+                                                        +{r.lateDeductionDays.toFixed(1)} Late Pen.
+                                                    </span>
+                                                )}
+                                                {(r.sandwichDeductionDays > 0) && (
+                                                    <span style={{ display: 'inline-block', background: '#fce7f3', color: '#9d174d', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '700' }} title="Sandwich Penalty Deducted">
+                                                        +{r.sandwichDeductionDays.toFixed(1)} Sand. Pen.
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td style={{ ...tdStyle, textAlign: 'right', fontWeight: '600', color: '#1e293b' }}>
                                             {formatCurrency(r.grossAmount)}

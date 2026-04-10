@@ -6,6 +6,7 @@ import { Employee } from '../models/employee.model.js';
 import { Attendance } from '../models/attendance.model.js';
 import { SalaryWorking } from '../models/salaryWorking.model.js';
 import { Holiday } from '../models/holiday.model.js';
+import { recalculateMonthlySalary } from '../services/payroll.service.js';
 
 const getDaysInMonth = (year, month) => {
     return new Date(year, month, 0).getDate();
@@ -29,110 +30,10 @@ export const generateSalaryPreview = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Month and Year parameters are required.');
     }
 
-    const totalDays = getDaysInMonth(year, month);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month - 1, totalDays, 23, 59, 59);
+    // Call the centralized calculation engine without saving to strictly retrieve preview.
+    const previewRecords = await recalculateMonthlySalary(month, year, null, false);
 
-    // 1. Fetch active employees (or those who left in this month)
-    const employees = await Employee.find({
-        $or: [
-            { isActive: true },
-            { dateOfLeaving: { $gte: startDate } }
-        ]
-    }).select('employeeCode employeeName basicSalary hra conveyance specialAllowance incentive salaryType dateOfJoining dateOfLeaving');
-
-    // 2. Fetch attendance for this month
-    const attendances = await Attendance.find({
-        date: { $gte: startDate, $lte: endDate }
-    });
-
-    // 3. Fetch holidays for this month
-    const holidays = await Holiday.find({
-        date: { $gte: startDate, $lte: endDate },
-        isActive: true
-    });
-
-    const attendanceMap = {};
-    attendances.forEach(att => {
-        const empId = att.employee.toString();
-        if (!attendanceMap[empId]) attendanceMap[empId] = 0;
-        // Basic calculation: Present counts as 1 day
-        if (att.status === 'Present') {
-            attendanceMap[empId] += 1;
-        } else if (att.status === 'Half Day') {
-            attendanceMap[empId] += 0.5;
-        }
-    });
-
-    // 4. Draft calculation
-    const previewRecords = employees.map(emp => {
-        // Define actual tenure range within this month
-        const tenureStart = emp.dateOfJoining > startDate ? new Date(emp.dateOfJoining) : startDate;
-        const tenureEnd = (emp.dateOfLeaving && emp.dateOfLeaving < endDate) ? new Date(emp.dateOfLeaving) : endDate;
-        
-        // Reset time for comparison
-        tenureStart.setHours(0,0,0,0);
-        tenureEnd.setHours(23,59,59,999);
-
-        // Count Sundays and Holidays in their tenure
-        const sundays = getSundaysInRange(tenureStart, tenureEnd);
-        const activeHolidays = holidays.filter(h => h.date >= tenureStart && h.date <= tenureEnd).length;
-
-        // Count Attendance (excluding Sundays/Holidays to avoid double counting)
-        const recordedAttendance = attendances.filter(att => 
-            att.employee.toString() === emp._id.toString() &&
-            att.date >= tenureStart && 
-            att.date <= tenureEnd
-        );
-
-        let attendanceDays = 0;
-        recordedAttendance.forEach(att => {
-            const day = new Date(att.date);
-            const isSunday = day.getDay() === 0;
-            const isHoliday = holidays.some(h => h.date.toDateString() === day.toDateString());
-
-            // Only add if it's NOT a Sunday/Holiday (those are added separately)
-            if (!isSunday && !isHoliday) {
-                if (att.status === 'Present') attendanceDays += 1;
-                else if (att.status === 'Half Day') attendanceDays += 0.5;
-            }
-        });
-
-        // [STRICT DATA PRESENCE] Only pay for Sundays/Holidays if the employee has actual physical attendance or leaves.
-        // This ensures that cleared or not-yet-started months show exactly 0 days.
-        const hasWorkingData = attendanceDays > 0 || recordedAttendance.some(att => att.status === 'Leave');
-        const daysWorked = hasWorkingData ? (attendanceDays + sundays + activeHolidays) : 0;
-        const fraction = totalDays > 0 ? (daysWorked / totalDays) : 0;
-
-        const basic = Math.round((emp.basicSalary || 0) * fraction);
-        const hra = Math.round((emp.hra || 0) * fraction);
-        const conveyance = Math.round((emp.conveyance || 0) * fraction);
-        const specialAllowance = Math.round((emp.specialAllowance || 0) * fraction);
-        const incentives = Math.round((emp.incentive || 0) * fraction);
-        
-        const grossAmount = basic + hra + conveyance + specialAllowance + incentives;
-        const deductions = 0;
-        const netPayable = grossAmount - deductions;
-
-        return {
-            employeeId: emp._id,
-            employeeCode: emp.employeeCode,
-            employeeName: emp.employeeName,
-            masterGross: (emp.basicSalary || 0) + (emp.hra || 0) + (emp.conveyance || 0) + (emp.specialAllowance || 0),
-            totalDays,
-            daysWorked,
-            basic,
-            hra,
-            conveyance,
-            specialAllowance,
-            incentives,
-            deductions,
-            grossAmount,
-            netPayable,
-            isNew: true
-        };
-    });
-
+    console.log('Sending preview records size:', previewRecords.length);
     res.send(new ApiResponse(httpStatus.OK, previewRecords, 'Preview generated successfully based on Attendance.'));
 });
 

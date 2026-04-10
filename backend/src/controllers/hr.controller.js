@@ -372,7 +372,7 @@ export const importAttendance = asyncHandler(async (req, res) => {
 
 
 export const getAttendances = asyncHandler(async (req, res) => {
-    const { date, status, month, year, financialYear, view } = req.query;
+    const { date, status, month, year, financialYear, view, employee } = req.query;
     res.setHeader('X-Permanent-Fix', 'True');
     console.log(`[Attendance API] LOCKEDDOWN REQ: month=${month}, year=${year}, FY=${financialYear}, view=${view}`);
     let filter = {};
@@ -477,17 +477,17 @@ export const getAttendances = asyncHandler(async (req, res) => {
                     // Rule: If it's a Sunday, but we have an 'Absent' record, we might want to override to 'Holiday'
                     // as per "Sunday = Present" logic. But let's keep the actual record if it exists, UNLESS it's specifically absent.
                     if (isSunday && existing.status === 'Absent') {
-                        existing.status = 'Holiday';
+                        existing.status = 'Present';
                         existing.remarks = 'Weekly Off (Sunday)';
                     }
                     report.push(existing);
                 } else if (isSunday || holidayName) {
-                    // Virtual "Holiday" record
+                    // Virtual "Holiday" / Sunday record treated as Present
                     report.push({
                         _id: `v-${empId}-${dateKey}`,
                         employee: emp,
                         date: currentDate.toDate(),
-                        status: 'Holiday',
+                        status: 'Present',
                         checkIn: '',
                         checkOut: '',
                         remarks: holidayName || 'Weekly Off (Sunday)'
@@ -527,13 +527,38 @@ export const getAttendances = asyncHandler(async (req, res) => {
             const endDate = moment.utc({ year: y, month: m - 1, day: 1 }).endOf('month');
             
             filter.date = { $gte: startDate.toDate(), $lte: endDate.toDate() };
-            if (status) filter.status = status;
+            if (employee) filter.employee = employee;
 
             const attendance = await Attendance.find(filter)
                 .populate('employee', 'employeeName employeeCode department')
                 .sort({ date: -1 });
 
-            return res.send(new ApiResponse(httpStatus.OK, attendance));
+            // Apply "Sunday & Holiday = Present" rule
+            const holidays = await Holiday.find({
+                date: { $gte: startDate.toDate(), $lte: endDate.toDate() },
+                isActive: true
+            });
+            const holidayMap = {};
+            holidays.forEach(h => {
+                holidayMap[moment.utc(h.date).add(5.5, 'hours').format('YYYY-MM-DD')] = h.name;
+            });
+
+            const processedAttendance = attendance.map(doc => {
+                const rec = doc.toObject();
+                const d = moment.utc(rec.date).add(5.5, 'hours');
+                const isSunday = d.day() === 0;
+                const isHol = holidayMap[d.format('YYYY-MM-DD')];
+                
+                if (isSunday || isHol) {
+                    rec.status = 'Present';
+                    if (!rec.remarks || rec.remarks === '-') {
+                        rec.remarks = isSunday ? 'Weekly Off (Sunday)' : isHol;
+                    }
+                }
+                return rec;
+            });
+
+            return res.send(new ApiResponse(httpStatus.OK, processedAttendance));
         }
     }
 
@@ -548,6 +573,9 @@ export const getAttendances = asyncHandler(async (req, res) => {
     
     if (status) {
         filter.status = status;
+    }
+    if (employee) {
+        filter.employee = employee;
     }
 
     // Default: if no filters, at least cap to a reasonable range or return empty 
@@ -564,7 +592,35 @@ export const getAttendances = asyncHandler(async (req, res) => {
         .sort({ date: -1 })
         .limit(100);
         
-    res.send(new ApiResponse(httpStatus.OK, attendance));
+    // Apply "Sunday & Holiday = Present" rule for legacy block
+    let dateRange = filter.date;
+    let fallbackHoliFilter = { isActive: true };
+    if (dateRange && dateRange.$gte && dateRange.$lte) {
+        fallbackHoliFilter.date = { $gte: dateRange.$gte, $lte: dateRange.$lte };
+    }
+    
+    const holidays = await Holiday.find(fallbackHoliFilter);
+    const holidayMap = {};
+    holidays.forEach(h => {
+        holidayMap[moment.utc(h.date).add(5.5, 'hours').format('YYYY-MM-DD')] = h.name;
+    });
+
+    const processedAttendance = attendance.map(doc => {
+        const rec = doc.toObject();
+        const d = moment.utc(rec.date).add(5.5, 'hours');
+        const isSunday = d.day() === 0;
+        const isHol = holidayMap[d.format('YYYY-MM-DD')];
+        
+        if (isSunday || isHol) {
+            rec.status = 'Present';
+            if (!rec.remarks || rec.remarks === '-') {
+                rec.remarks = isSunday ? 'Weekly Off (Sunday)' : isHol;
+            }
+        }
+        return rec;
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, processedAttendance));
 });
 
 // --- HR SETTINGS CONTROLLERS ---

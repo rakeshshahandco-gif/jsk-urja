@@ -38,7 +38,8 @@ export const searchUnified = asyncHandler(async (req, res) => {
         return res.send(new ApiResponse(httpStatus.OK, { contacts: [], groups: [] }));
     }
 
-    const searchRegex = { $regex: search, $options: 'i' };
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = { $regex: escapedSearch, $options: 'i' };
     
     // 1. Search Contacts
     const contactsQuery = {
@@ -47,11 +48,11 @@ export const searchUnified = asyncHandler(async (req, res) => {
             { englishName: searchRegex },
             { chineseName: searchRegex },
             { searchName: searchRegex },
-            { searchKeywords: { $in: [searchRegex] } },
+            { searchKeywords: searchRegex },
             { companyName: searchRegex },
             { contactPersonName: searchRegex },
-            { productKeywords: { $in: [searchRegex] } },
-            { relatedItems: { $in: [searchRegex] } },
+            { productKeywords: searchRegex },
+            { relatedItems: searchRegex },
             { shortCode: searchRegex }
         ],
         isActive: true
@@ -63,9 +64,9 @@ export const searchUnified = asyncHandler(async (req, res) => {
             { groupName: searchRegex },
             { groupAlias: searchRegex },
             { chineseGroupName: searchRegex },
-            { productKeywords: { $in: [searchRegex] } },
-            { relatedItems: { $in: [searchRegex] } },
-            { relatedCompanies: { $in: [searchRegex] } },
+            { productKeywords: searchRegex },
+            { relatedItems: searchRegex },
+            { relatedCompanies: searchRegex },
             { purpose: searchRegex }
         ],
         isActive: true
@@ -109,14 +110,15 @@ export const getContacts = asyncHandler(async (req, res) => {
     let query = { ...filter };
     
     if (options.search) {
-        const searchRegex = { $regex: options.search, $options: 'i' };
+        const escapedSearch = options.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = { $regex: escapedSearch, $options: 'i' };
         query.$or = [
             { weChatDisplayName: searchRegex },
             { englishName: searchRegex },
             { chineseName: searchRegex },
             { companyName: searchRegex },
-            { productKeywords: { $in: [searchRegex] } },
-            { searchKeywords: { $in: [searchRegex] } }
+            { productKeywords: searchRegex },
+            { searchKeywords: searchRegex }
         ];
     }
 
@@ -191,12 +193,13 @@ export const getGroups = asyncHandler(async (req, res) => {
     
     let query = { ...filter };
     if (options.search) {
-        const searchRegex = { $regex: options.search, $options: 'i' };
+        const escapedSearch = options.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = { $regex: escapedSearch, $options: 'i' };
         query.$or = [
             { groupName: searchRegex },
             { groupAlias: searchRegex },
             { chineseGroupName: searchRegex },
-            { productKeywords: { $in: [searchRegex] } }
+            { productKeywords: searchRegex }
         ];
     }
 

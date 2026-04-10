@@ -161,7 +161,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { MessengerProvider } from '@/contexts/MessengerContext';
-import { FinancialYearProvider } from '@/contexts/FinancialYearContext';
+import { FinancialYearProvider, useFinancialYear } from '@/contexts/FinancialYearContext';
 import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
 
@@ -242,12 +242,15 @@ function App() {
 
 // Separate layout component to handle route-specific logic
 const AppLayout = () => {
+    const { selectedFY } = useFinancialYear();
+
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
             <Sidebar />
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                 <Header />
                 <main 
+                    key={selectedFY}
                     style={{ 
                         flex: 1, 
                         backgroundColor: '#F9FAFB', 

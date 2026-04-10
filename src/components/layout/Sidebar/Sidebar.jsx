@@ -28,48 +28,24 @@ export const Sidebar = () => {
             .catch(() => { });
     }, []);
 
-    // Initial state based on current location
-    useEffect(() => {
-        const activeParent = menuConfig.find(item =>
-            item.children?.some(child => location.pathname.startsWith(child.path))
-        );
-        if (activeParent) {
-            setExpandedMenuId(activeParent.id);
-        }
-    }, [location.pathname]);
-
     const handleToggle = (id) => {
         setExpandedMenuId(prevId => prevId === id ? null : id);
     };
 
     // Filter items based on user role and permissions
-    const filterItems = (items) => {
+    const filterItems = React.useCallback((items) => {
         return items.filter(item => {
-            // Admin & Superadmin bypass: hasPermission() handles this
-            // Custom roles (sales, accounts, etc.): rely on additionalPermissions
-            // Standard roles (manager, staff, viewer): fall back to item.roles list
-
-            // 1. If item has a permission key, check it first
             if (item.permission) {
-                // hasPermission returns true for admin/superadmin automatically
-                // For custom roles (sales etc.), it checks additionalPermissions
                 const allowed = hasPermission(item.permission);
                 if (allowed) return true;
 
-                // Permission check failed. Check if user has an explicit entry for this module.
-                // If yes, the admin explicitly configured access - honor the denial.
                 const moduleName = item.permission.split('.')[0];
                 const hasExplicitEntry = user?.additionalPermissions && 
                     user.additionalPermissions[moduleName] !== undefined;
                 
-                if (hasExplicitEntry) {
-                    // Explicit entry found but permission is false → deny
-                    return false;
-                }
-                // No explicit entry → fall through to role check below
+                if (hasExplicitEntry) return false;
             }
 
-            // 2. Role-based fallback (for standard roles: admin, manager, staff, viewer)
             if (item.roles && item.roles.includes(userRole)) {
                 return true;
             }
@@ -79,15 +55,32 @@ export const Sidebar = () => {
             if (item.children) {
                 const filteredChildren = filterItems(item.children);
                 if (filteredChildren.length === 0 && item.children.length > 0) {
-                    return null; // Hide parent if all children are hidden
+                    return null;
                 }
                 return { ...item, children: filteredChildren };
             }
             return item;
-        }).filter(Boolean); // Filter out nulls from map (hidden parents)
-    };
+        }).filter(Boolean);
+    }, [hasPermission, userRole, user?.additionalPermissions]);
 
-    const visibleMenuItems = filterItems(menuConfig);
+    const visibleMenuItems = React.useMemo(() => 
+        filterItems(menuConfig),
+    [filterItems]);
+
+    // Initial state based on current location
+    useEffect(() => {
+        const isItemActive = (it) => {
+            if (it.path && location.pathname.startsWith(it.path)) return true;
+            if (it.children) return it.children.some(child => isItemActive(child));
+            return false;
+        };
+
+        const activeParent = menuConfig.find(item => isItemActive(item));
+        if (activeParent) {
+            setExpandedMenuId(activeParent.id);
+        }
+        // Only run on mount or when URL changes
+    }, [location.pathname]);
     const isMessenger = location.pathname.startsWith('/messenger');
 
     return (

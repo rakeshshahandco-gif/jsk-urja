@@ -1,0 +1,15 @@
+{
+  "id": "69d0d35ce9fcaad268dd6c7f",
+  "count": 31,
+  "statusCounts": {
+    "Absent": 7,
+    "Present": 24
+  },
+  "gauri": {
+    "count": 31,
+    "statuses": {
+      "Absent": 8,
+      "Present": 23
+    }
+  }
+}

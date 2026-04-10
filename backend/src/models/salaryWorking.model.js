@@ -26,6 +26,26 @@ const salaryWorkingSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    paidHolidays: {
+        type: Number,
+        default: 0
+    },
+    paidSundays: {
+        type: Number,
+        default: 0
+    },
+    lateDeductionDays: {
+        type: Number,
+        default: 0
+    },
+    absentDeductionDays: {
+        type: Number,
+        default: 0
+    },
+    sandwichDeductionDays: {
+        type: Number,
+        default: 0
+    },
     masterGross: {
         type: Number,
         default: 0
