@@ -101,12 +101,18 @@ export const createSO = asyncHandler(async (req, res) => {
     const fy = body.financialYear || getFYFromDate(body.soDate || new Date());
 
     if (body.seriesId) {
-        soNumber = await getNextNumberFromSeries(body.seriesId);
-        if (!soNumber) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
+        const numbering = await getNextNumberFromSeries(body.seriesId, fy);
+        if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
+        soNumber = numbering.displayInvoiceNumber;
         const series = await InvoiceSeries.findById(body.seriesId);
         gstApplicable = series.gstApplicable === false ? false : true;
     } else {
         soNumber = await genSONumber();
+    }
+
+    // Defensive: ensure soNumber is a string and not overwritten by body
+    if (typeof soNumber !== 'string') {
+        soNumber = String(soNumber?.displayInvoiceNumber || soNumber || '');
     }
 
     const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
@@ -128,7 +134,7 @@ export const createSO = asyncHandler(async (req, res) => {
 
     const so = await SalesOrder.create({
         ...body,
-        soNumber,
+        soNumber: String(soNumber),
         gstApplicable,
         stickerType,
         customerCode: body.customerCode || '',

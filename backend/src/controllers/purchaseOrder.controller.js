@@ -110,7 +110,13 @@ export const createPO = asyncHandler(async (req, res) => {
 
     let poNumber = value.poNumber;
     if (!poNumber && value.seriesId) {
-        poNumber = await getNextNumberFromSeries(value.seriesId);
+        const numbering = await getNextNumberFromSeries(value.seriesId, fy);
+        if (numbering) poNumber = numbering.displayInvoiceNumber;
+    }
+    
+    // Defensive: ensure poNumber is a string
+    if (typeof poNumber !== 'string') {
+        poNumber = String(poNumber?.displayInvoiceNumber || poNumber || '');
     }
     
     if (!poNumber) {

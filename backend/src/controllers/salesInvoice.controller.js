@@ -952,7 +952,7 @@ export const bulkRenumberInvoices = asyncHandler(async (req, res) => {
 
         const stats = { updated: 0, locked: 0 };
         
-        // 3. Process each update
+        // 3. Pass 1: Temporary Rename (to free up unique strings)
         for (const update of updates) {
             const inv = await SalesInvoice.findById(update.id).session(session);
             if (!inv) continue;
@@ -960,12 +960,32 @@ export const bulkRenumberInvoices = asyncHandler(async (req, res) => {
                 throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${inv.displayInvoiceNumber} is locked and cannot be renumbered`);
             }
 
-            const oldNumber = inv.displayInvoiceNumber || inv.invoiceNumber;
+            const oldNumber = inv.invoiceNumber;
+            const tempNum = `_TEMP_REN_${inv._id}`;
+
+            inv.invoiceNumber = tempNum;
+            inv.displayInvoiceNumber = tempNum;
+            await inv.save({ session });
+
+            // Also temporarily rename associated Voucher if exists
+            await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: tempNum }).session(session);
+        }
+
+        // 4. Pass 2: Final Reassignment & Reference Updates
+        for (const update of updates) {
+            const inv = await SalesInvoice.findById(update.id).session(session);
+            if (!inv) continue;
+
+            const oldTempNumber = inv.invoiceNumber; // This is the _TEMP_REN_ value
             const newNum = update.newDisplayNumber;
             const newSeq = extractSequenceNumber(series.prefix, newNum);
 
+            // Fetch the old display number (before Pass 1) if possible, or just use history
+            // Actually renumberHistory should reflect truth
+            const historyOldNumber = inv.renumberHistory.length > 0 ? inv.renumberHistory[inv.renumberHistory.length - 1].newNumber : inv.invoiceNumber;
+
             inv.renumberHistory.push({
-                oldNumber,
+                oldNumber: inv.displayInvoiceNumber.startsWith('_TEMP_REN_') ? 'BATCH_REORG' : inv.displayInvoiceNumber,
                 newNumber: newNum,
                 reason: 'Bulk Manual Renumbering',
                 changedBy: req.user.id
@@ -980,8 +1000,8 @@ export const bulkRenumberInvoices = asyncHandler(async (req, res) => {
 
             // Update References
             await StockLedger.updateMany({ referenceId: inv._id }, { referenceNo: newNum }).session(session);
-            await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: newNum }).session(session);
-            await LedgerEntry.updateMany({ voucherNo: oldNumber }, { voucherNo: newNum }).session(session);
+            await Voucher.updateMany({ voucherNo: oldTempNumber }, { voucherNo: newNum }).session(session);
+            await LedgerEntry.updateMany({ voucherNo: oldTempNumber }, { voucherNo: newNum }).session(session);
             
             stats.updated++;
             if (update.lock) stats.locked++;
