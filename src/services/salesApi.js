@@ -59,6 +59,21 @@ export const executeCleanupDrafts = (data) =>
 export const forceCleanupInvoice = (id, reason) =>
     apiClient.delete(`admin/force-cleanup/${id}`, { data: { reason } }).then(r => r.data);
 
+export const renumberInvoice = (id, data) =>
+    apiClient.post(`/sales-invoices/renumber/${id}`, data).then(r => r.data);
+
+export const resequenceSeries = (data) =>
+    apiClient.post('/sales-invoices/resequence', data).then(r => r.data);
+
+export const changeInvoiceSeries = (id, data) =>
+    apiClient.post(`/sales-invoices/change-series/${id}`, data).then(r => r.data);
+
+export const bulkRenumberInvoices = (data) =>
+    apiClient.post('/sales-invoices/bulk-renumber', data).then(r => r.data);
+
+export const bulkLockInvoices = (data) =>
+    apiClient.post('/sales-invoices/bulk-lock', data).then(r => r.data);
+
 // ─── INVOICE SERIES ───────────────────────────────────────────────────────────
 
 export const getInvoiceSeries = (params = {}) =>

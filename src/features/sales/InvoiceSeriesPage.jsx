@@ -126,6 +126,12 @@ export default function InvoiceSeriesPage() {
                                 <div style={{ fontSize: 13, color: s.isActive ? '#16a34a' : '#dc2626', fontWeight: 600, marginBottom: 12 }}>{s.isActive ? '● Active' : '○ Inactive'}</div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <button onClick={() => openEdit(s)} style={{ flex: 1, padding: '7px 0', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', color: '#374151', fontWeight: 600, fontSize: 12 }}>Edit</button>
+                                    <button 
+                                        onClick={() => navigate(PATHS.SALES.RESEQUENCE_TOOL, { state: { seriesId: s._id, financialYear: s.financialYear } })} 
+                                        style={{ flex: 1, padding: '7px 0', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, cursor: 'pointer', color: '#b45309', fontWeight: 700, fontSize: 12 }}
+                                    >
+                                        Resequence
+                                    </button>
                                     {s.currentNumber === 0 && <button onClick={() => handleDelete(s._id)} style={{ padding: '7px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 7, cursor: 'pointer', color: '#dc2626', fontWeight: 600, fontSize: 12 }}>Delete</button>}
                                 </div>
                             </div>

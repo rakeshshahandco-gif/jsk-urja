@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import logger from '../utils/logger.js';
+import { getLatestSequenceNumber, formatInvoiceNumber } from '../utils/numberingUtils.js';
 
 // LIST
 export const getSeries = asyncHandler(async (req, res) => {
@@ -101,22 +102,13 @@ export const previewNextNumber = asyncHandler(async (req, res) => {
     const s = await InvoiceSeries.findById(req.params.id);
     if (!s || !s.isActive) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found or inactive');
 
-    // Import SalesInvoice inline to avoid circular deps
-    const { SalesInvoice } = await import('../models/salesInvoice.model.js');
-    const lastActual = await SalesInvoice.findOne({
-        invoiceNumber: { $regex: `^${s.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` }
-    }).sort({ invoiceNumber: -1 });
+    // Get FY (assumed current or provided)
+    const financialYear = req.query.financialYear || s.financialYear;
 
-    let syncedCurrent = s.currentNumber;
-    if (lastActual) {
-        const lastNum = parseInt(lastActual.invoiceNumber.replace(s.prefix, ''), 10);
-        if (!isNaN(lastNum) && lastNum < syncedCurrent) {
-            syncedCurrent = lastNum;
-        }
-    }
-
-    const next = Math.max(syncedCurrent + 1, s.startNumber || 1);
-    const nextInvoiceNo = `${s.prefix}${String(next).padStart(s.padLength || 5, '0')}`;
-    res.json({ success: true, nextInvoiceNo, currentNumber: syncedCurrent });
+    const lastSeq = await getLatestSequenceNumber(s._id, financialYear);
+    const nextSeq = Math.max(lastSeq + 1, s.startNumber || 1);
+    
+    const nextInvoiceNo = formatInvoiceNumber(s.prefix, nextSeq, s.padLength || 2);
+    res.json({ success: true, nextInvoiceNo, currentNumber: lastSeq });
 });
 

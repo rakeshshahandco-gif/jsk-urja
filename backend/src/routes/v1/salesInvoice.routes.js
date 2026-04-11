@@ -13,6 +13,16 @@ router.use((req, res, next) => {
 // Standard Invoice Routes
 router.route('/').get(siCtrl.getSalesInvoices).post(siCtrl.createSalesInvoice);
 
+// Administrative & Numbering Tools (Placed before /:id to avoid collisions)
+router.post('/resequence', authorize('admin', 'superadmin'), siCtrl.resequenceSeries);
+router.post('/renumber/:id', authorize('admin', 'superadmin'), siCtrl.renumberInvoice);
+router.post('/change-series/:id', authorize('admin', 'superadmin'), siCtrl.changeInvoiceSeries);
+router.post('/bulk-renumber', authorize('admin', 'superadmin'), siCtrl.bulkRenumberInvoices);
+router.post('/bulk-lock', authorize('admin', 'superadmin'), siCtrl.bulkLockInvoices);
+router.get('/cleanup-preview', authorize('admin', 'superadmin'), siCtrl.cleanupPreviewDraftInvoices);
+router.post('/cleanup-execute', authorize('admin', 'superadmin'), siCtrl.executeCleanupDraftInvoices);
+router.delete('/force-cleanup/:id', authorize('admin', 'superadmin'), siCtrl.forceCleanupInvoice);
+
 router.route('/:id')
     .get(siCtrl.getSalesInvoiceById)
     .delete(authorize('admin', 'superadmin'), siCtrl.deleteSalesInvoice);

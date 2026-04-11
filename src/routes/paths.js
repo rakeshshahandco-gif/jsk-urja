@@ -91,6 +91,8 @@ export const PATHS = {
         PRODUCTION_SHEET: (id) => `/sales/production-sheets/${id}`,
         INVOICE_SERIES: '/sales/invoice-series',
         INVOICE_CLEANUP: '/sales/invoice-cleanup',
+        RESEQUENCE_TOOL: '/sales/invoice-resequence',
+        BULK_RENUMBER: '/sales/bulk-renumber',
     },
     SERVICE: {
         COMPLAINTS: '/service/complaints',

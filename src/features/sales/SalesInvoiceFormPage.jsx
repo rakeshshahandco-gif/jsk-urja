@@ -439,8 +439,11 @@ export default function SalesInvoiceFormPage() {
                             <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 35, background: '#f8fafc', border: '1px solid #1e293b', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Add Series">＋</button>
                         </div>
                         {previewInvoiceNo && (
-                            <div style={{ marginTop: 8, fontSize: 16, fontWeight: 900, color: '#0d9488', fontFamily: 'monospace', background: '#f0fdfa', border: '1.5px solid #99f6e4', padding: '4px 12px', borderRadius: 6, display: 'inline-block' }}>
-                                NO: {previewInvoiceNo}
+                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <div style={{ fontSize: 18, fontWeight: 900, color: '#0d9488', fontFamily: 'monospace', background: '#f0fdfa', border: '2px solid #0d9488', padding: '6px 14px', borderRadius: 8, display: 'inline-block', boxShadow: '0 2px 4px rgba(13,148,136,0.1)' }}>
+                                    NO: {previewInvoiceNo}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginLeft: 2 }}>System Generated Serial Number</span>
                             </div>
                         )}
                     </Field>

@@ -122,6 +122,19 @@ const salesInvoiceSchema = new mongoose.Schema({
     
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
+    // New Serial Numbering Fields
+    sequenceNumber: { type: Number, default: 0 },
+    displayInvoiceNumber: { type: String, trim: true },
+    numberLocked: { type: Boolean, default: false },
+    issuedToCustomer: { type: Boolean, default: false },
+    renumberHistory: [{
+        oldNumber: String,
+        newNumber: String,
+        reason: String,
+        changedAt: { type: Date, default: Date.now },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }],
+
     // Soft Delete Fields
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -130,6 +143,8 @@ const salesInvoiceSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 salesInvoiceSchema.index({ invoiceNumber: 1 });
+salesInvoiceSchema.index({ displayInvoiceNumber: 1 });
+salesInvoiceSchema.index({ financialYear: 1, seriesId: 1, sequenceNumber: 1 });
 salesInvoiceSchema.index({ customerId: 1, invoiceDate: -1 });
 salesInvoiceSchema.index({ paymentStatus: 1 });
 salesInvoiceSchema.index({ soId: 1 });

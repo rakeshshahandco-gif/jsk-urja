@@ -148,7 +148,7 @@ export default function SalesInvoiceListPage() {
                     <thead>
                         <tr>
                             {['Invoice No', 'Series', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Status', 'Payment', 'Actions'].map(h => (
-                                <th key={h} style={th}>{h}</th>
+                                <th key={h} style={h === 'Invoice No' ? { ...th, width: '120px' } : th}>{h}</th>
                             ))}
                         </tr>
                     </thead>
@@ -178,7 +178,9 @@ export default function SalesInvoiceListPage() {
                                     onClick={() => navigate(PATHS.SALES.INVOICE_DETAIL(inv._id))}
                                     onMouseEnter={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : '#f8f9fa'}
                                     onMouseLeave={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : 'transparent'}>
-                                    <td style={{ ...td, color: isDeleted ? '#94a3b8' : '#2563eb', fontWeight: 700, textDecoration: isDeleted ? 'line-through' : 'none' }}>{inv.invoiceNumber}</td>
+                                    <td style={{ ...td, color: isDeleted ? '#94a3b8' : '#2563eb', fontWeight: 700, textDecoration: isDeleted ? 'line-through' : 'none' }}>
+                                        {inv.displayInvoiceNumber || inv.invoiceNumber}
+                                    </td>
                                     <td style={{ ...td, fontWeight: 600, color: '#475569' }}>
                                         {inv.seriesId?.seriesName || (inv.invoiceNumber?.includes('/') ? 'JU/SALES' : 'ESTIMATE')}
                                     </td>

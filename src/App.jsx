@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -63,6 +64,8 @@ import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import InvoiceCleanupPage from '@/features/sales/InvoiceCleanupPage';
+import ResequenceTool from '@/features/sales/ResequenceTool';
+import BulkInvoiceRenumber from '@/features/sales/BulkInvoiceRenumber';
 
 // Service / Replacement Module
 import ComplaintListPage from '@/features/service/ComplaintListPage';
@@ -325,8 +328,10 @@ const AppLayout = () => {
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
-                        <Route path="/sales/invoice-series" element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
-                        <Route path="/sales/invoice-cleanup" element={<ProtectedRoute requireRole="admin"><InvoiceCleanupPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.INVOICE_SERIES} element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.BULK_RENUMBER} element={<ProtectedRoute requireRole="admin"><BulkInvoiceRenumber /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.INVOICE_CLEANUP} element={<ProtectedRoute requireRole="admin"><InvoiceCleanupPage /></ProtectedRoute>} />
+                        <Route path="/sales/invoice-resequence" element={<ProtectedRoute requireRole="admin"><ResequenceTool /></ProtectedRoute>} />
                         <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />
                         <Route path="/service/complaints/new" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />
                         <Route path="/service/complaints/:id/edit" element={<ProtectedRoute requirePermission="service"><ComplaintFormPage /></ProtectedRoute>} />

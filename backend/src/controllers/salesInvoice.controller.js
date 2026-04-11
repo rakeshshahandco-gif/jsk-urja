@@ -11,12 +11,11 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { postSalesInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
 import httpStatus from 'http-status';
 import { getFYFromDate } from '../utils/fyUtils.js';
-import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { getNextNumberFromSeries, formatInvoiceNumber, getLatestSequenceNumber, recomputeSeriesState, extractSequenceNumber } from '../utils/numberingUtils.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { AuditLog } from '../models/auditLog.model.js';
 import { Voucher } from '../models/voucher.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
-import { recomputeSeriesState } from '../utils/numberingUtils.js';
 
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
@@ -28,21 +27,33 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         const fy = body.financialYear || getFYFromDate(body.invoiceDate || new Date());
         
         let invoiceNumber = body.invoiceNumber;
+        let sequenceNumber = body.sequenceNumber || 0;
+        let displayInvoiceNumber = body.displayInvoiceNumber || '';
+
         if (!invoiceNumber && body.seriesId) {
-            invoiceNumber = await getNextNumberFromSeries(body.seriesId, session);
+            const numbering = await getNextNumberFromSeries(body.seriesId, fy, session);
+            if (numbering) {
+                sequenceNumber = numbering.sequenceNumber;
+                displayInvoiceNumber = numbering.displayInvoiceNumber;
+                invoiceNumber = displayInvoiceNumber; // Sync for module compatibility
+            }
         }
         
         if (!invoiceNumber) {
             invoiceNumber = `SI-${Date.now()}`;
+            displayInvoiceNumber = invoiceNumber;
         }
         
         const invData = {
             ...body,
             invoiceNumber,
+            displayInvoiceNumber,
+            sequenceNumber,
             financialYear: fy,
             createdBy: req.user.id,
-            status: 'Confirmed',
-            paymentStatus: 'Unpaid'
+            status: body.status || 'Confirmed',
+            paymentStatus: 'Unpaid',
+            numberLocked: body.status === 'Confirmed' // Auto-lock if confirmed
         };
 
         const [invoice] = await SalesInvoice.create([invData], { session });
@@ -643,6 +654,372 @@ export const forceCleanupInvoice = asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
         res.send(new ApiResponse(httpStatus.OK, null, `Invoice ${oldNumber} hard-deleted.`));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * ADMIN ONLY: Renumber a single unlocked invoice
+ * Optionally reflows all subsequent invoices in the same series/FY
+ */
+export const renumberInvoice = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { newDisplayNumber, reason, reflowRemaining = false } = req.body;
+
+    if (!newDisplayNumber || !reason) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'New number and reason are required');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await SalesInvoice.findById(id).session(session);
+        if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+        if (inv.numberLocked) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is locked and cannot be renumbered');
+
+        const series = await InvoiceSeries.findById(inv.seriesId).session(session);
+        if (!series) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found');
+
+        const oldNumber = inv.invoiceNumber;
+        const newSeq = extractSequenceNumber(series.prefix, newDisplayNumber);
+        
+        // 1. Update Target Invoice
+        inv.renumberHistory.push({
+            oldNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
+            newNumber: newDisplayNumber,
+            reason: reason + (reflowRemaining ? ' (with Auto-Reflow)' : ''),
+            changedBy: req.user.id
+        });
+        inv.sequenceNumber = newSeq;
+        inv.displayInvoiceNumber = newDisplayNumber;
+        inv.invoiceNumber = newDisplayNumber;
+        await inv.save({ session });
+
+        // Update References
+        await StockLedger.updateMany({ referenceId: inv._id }, { referenceNo: newDisplayNumber }).session(session);
+        await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+        await LedgerEntry.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+
+        // 2. Optional Reflow
+        let reflowCount = 0;
+        if (reflowRemaining) {
+            const subsequentInvoices = await SalesInvoice.find({
+                seriesId: inv.seriesId,
+                financialYear: inv.financialYear,
+                _id: { $ne: inv._id },
+                invoiceDate: { $gte: inv.invoiceDate },
+                isDeleted: { $ne: true }
+            }).sort({ invoiceDate: 1, createdAt: 1 }).session(session);
+
+            let nextSeq = newSeq + 1;
+            for (const other of subsequentInvoices) {
+                // Skip if it's already in the correct sequence (optional optimization)
+                const targetNum = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
+                if (other.invoiceNumber !== targetNum) {
+                    const oOldNum = other.invoiceNumber;
+                    other.renumberHistory.push({
+                        oldNumber: other.displayInvoiceNumber || other.invoiceNumber,
+                        newNumber: targetNum,
+                        reason: `Auto-Reflow from ${newDisplayNumber}`,
+                        changedBy: req.user.id
+                    });
+                    other.sequenceNumber = nextSeq;
+                    other.displayInvoiceNumber = targetNum;
+                    other.invoiceNumber = targetNum;
+                    await other.save({ session });
+
+                    await StockLedger.updateMany({ referenceId: other._id }, { referenceNo: targetNum }).session(session);
+                    await Voucher.updateMany({ voucherNo: oOldNum }, { voucherNo: targetNum }).session(session);
+                    await LedgerEntry.updateMany({ voucherNo: oOldNum }, { voucherNo: targetNum }).session(session);
+                    reflowCount++;
+                }
+                nextSeq++;
+            }
+        }
+
+        // Sync Series State
+        await recomputeSeriesState(inv.seriesId, session);
+
+        // Audit Log
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'RENUMBER',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Renumbered invoice from ${oldNumber} to ${newDisplayNumber}${reflowRemaining ? `. Reflowed ${reflowCount} others.` : ''}`,
+            details: { oldNumber, newDisplayNumber, reason, reflowCount },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: `Renumbered successfully.${reflowCount > 0 ? ` Reflowed ${reflowCount} subsequent invoices.` : ''}` });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * ADMIN ONLY: Bulk Resequence a series/FY
+ */
+export const resequenceSeries = asyncHandler(async (req, res) => {
+    const { seriesId, financialYear, forceAll = false, overrideStartNumber } = req.body;
+    if (!seriesId || !financialYear) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Series and FY are required');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const series = await InvoiceSeries.findById(seriesId).session(session);
+        if (!series) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found');
+
+        // Find all non-deleted invoices in this series/FY
+        const query = { seriesId, financialYear, isDeleted: { $ne: true } };
+        if (!forceAll) {
+            query.numberLocked = { $ne: true };
+            query.paymentStatus = 'Unpaid';
+        }
+
+        const invoices = await SalesInvoice.find(query)
+            .sort({ invoiceDate: 1, createdAt: 1 })
+            .session(session);
+
+        let currentSeq = (overrideStartNumber !== undefined && overrideStartNumber !== null) 
+            ? Number(overrideStartNumber) 
+            : series.startNumber;
+        const results = [];
+
+        for (const inv of invoices) {
+            const oldNumber = inv.invoiceNumber;
+            const newDisplayNumber = formatInvoiceNumber(series.prefix, currentSeq, series.padLength || 2);
+
+            if (oldNumber !== newDisplayNumber) {
+                inv.renumberHistory.push({
+                    oldNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
+                    newNumber: newDisplayNumber,
+                    reason: 'Bulk Resequence',
+                    changedBy: req.user.id
+                });
+                inv.sequenceNumber = currentSeq;
+                inv.displayInvoiceNumber = newDisplayNumber;
+                inv.invoiceNumber = newDisplayNumber;
+                await inv.save({ session });
+
+                // Update References
+                await StockLedger.updateMany({ referenceId: inv._id }, { referenceNo: newDisplayNumber }).session(session);
+                await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+                await LedgerEntry.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+                
+                results.push({ id: inv._id, oldNumber, newNumber: newDisplayNumber });
+            }
+            currentSeq++;
+        }
+
+        // Update series currentNumber
+        series.currentNumber = Math.max(series.currentNumber, currentSeq - 1);
+        await series.save({ session });
+
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'RESEQUENCE',
+            module: 'SalesInvoice',
+            description: `Bulk resequenced ${results.length} invoices in series ${series.seriesName}`,
+            details: { seriesId, financialYear, results },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, count: results.length, details: results });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+/**
+ * ADMIN ONLY: Change an invoice's series
+ */
+export const changeInvoiceSeries = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { targetSeriesId, newSequenceNumber, reason } = req.body;
+
+    if (!targetSeriesId) throw new ApiError(httpStatus.BAD_REQUEST, 'Target series is required');
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const inv = await SalesInvoice.findById(id).session(session);
+        if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+
+        const targetSeries = await InvoiceSeries.findById(targetSeriesId).session(session);
+        if (!targetSeries) throw new ApiError(httpStatus.NOT_FOUND, 'Target series not found');
+
+        const oldNumber = inv.displayInvoiceNumber || inv.invoiceNumber;
+        
+        // Determine sequence number
+        let seq = newSequenceNumber;
+        if (!seq) {
+            const numbering = await getNextNumberFromSeries(targetSeriesId, inv.financialYear, session);
+            seq = numbering.sequenceNumber;
+        }
+
+        const newDisplayNumber = formatInvoiceNumber(targetSeries.prefix, seq, targetSeries.padLength || 2);
+
+        inv.renumberHistory.push({
+            oldNumber,
+            newNumber: newDisplayNumber,
+            reason: reason || `Series Change to ${targetSeries.seriesName}`,
+            changedBy: req.user.id
+        });
+
+        inv.seriesId = targetSeriesId;
+        inv.sequenceNumber = seq;
+        inv.displayInvoiceNumber = newDisplayNumber;
+        inv.invoiceNumber = newDisplayNumber;
+
+        await inv.save({ session });
+
+        // Update References
+        await StockLedger.updateMany({ referenceId: inv._id }, { referenceNo: newDisplayNumber }).session(session);
+        await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+        await LedgerEntry.updateMany({ voucherNo: oldNumber }, { voucherNo: newDisplayNumber }).session(session);
+
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'CHANGE_SERIES',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Changed series from ${inv.seriesId} to ${targetSeriesId}. Number: ${oldNumber} -> ${newDisplayNumber}`,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: 'Series changed successfully', newNumber: newDisplayNumber });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * ADMIN ONLY: Bulk renumber multiple invoices manually
+ */
+export const bulkRenumberInvoices = asyncHandler(async (req, res) => {
+    const { updates, seriesId, financialYear } = req.body; // updates: [{id, newDisplayNumber, lock}]
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'No updates provided');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const series = await InvoiceSeries.findById(seriesId).session(session);
+        if (!series) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found');
+
+        // 1. Validate duplicates in the request itself
+        const newNumbers = updates.map(u => u.newDisplayNumber);
+        if (new Set(newNumbers).size !== newNumbers.length) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Duplicate invoice numbers found in the update list');
+        }
+
+        // 2. Validate duplicates against DB (excluding the ones we are editing)
+        const updateIds = updates.map(u => u.id);
+        const existingWithNewNumbers = await SalesInvoice.findOne({
+            seriesId,
+            financialYear,
+            displayInvoiceNumber: { $in: newNumbers },
+            _id: { $nin: updateIds },
+            isDeleted: { $ne: true }
+        }).session(session);
+
+        if (existingWithNewNumbers) {
+            throw new ApiError(httpStatus.BAD_REQUEST, `Invoice number ${existingWithNewNumbers.displayInvoiceNumber} already exists in this series/FY`);
+        }
+
+        const stats = { updated: 0, locked: 0 };
+        
+        // 3. Process each update
+        for (const update of updates) {
+            const inv = await SalesInvoice.findById(update.id).session(session);
+            if (!inv) continue;
+            if (inv.numberLocked) {
+                throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${inv.displayInvoiceNumber} is locked and cannot be renumbered`);
+            }
+
+            const oldNumber = inv.displayInvoiceNumber || inv.invoiceNumber;
+            const newNum = update.newDisplayNumber;
+            const newSeq = extractSequenceNumber(series.prefix, newNum);
+
+            inv.renumberHistory.push({
+                oldNumber,
+                newNumber: newNum,
+                reason: 'Bulk Manual Renumbering',
+                changedBy: req.user.id
+            });
+
+            inv.sequenceNumber = newSeq;
+            inv.displayInvoiceNumber = newNum;
+            inv.invoiceNumber = newNum;
+            if (update.lock) inv.numberLocked = true;
+
+            await inv.save({ session });
+
+            // Update References
+            await StockLedger.updateMany({ referenceId: inv._id }, { referenceNo: newNum }).session(session);
+            await Voucher.updateMany({ voucherNo: oldNumber }, { voucherNo: newNum }).session(session);
+            await LedgerEntry.updateMany({ voucherNo: oldNumber }, { voucherNo: newNum }).session(session);
+            
+            stats.updated++;
+            if (update.lock) stats.locked++;
+        }
+
+        // Sync Series
+        await recomputeSeriesState(seriesId, session);
+
+        await session.commitTransaction();
+        res.json({ success: true, message: `Successfully updated ${stats.updated} invoices.` });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * ADMIN ONLY: Bulk lock/unlock invoices
+ */
+export const bulkLockInvoices = asyncHandler(async (req, res) => {
+    const { ids, lock = true } = req.body;
+
+    if (!ids || !Array.isArray(ids)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid IDs provided');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        await SalesInvoice.updateMany(
+            { _id: { $in: ids } },
+            { $set: { numberLocked: lock } }
+        ).session(session);
+
+        await session.commitTransaction();
+        res.json({ success: true, message: `Successfully ${lock ? 'locked' : 'unlocked'} ${ids.length} invoices.` });
     } catch (error) {
         await session.abortTransaction();
         throw error;

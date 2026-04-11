@@ -4,20 +4,50 @@ import { getShortFY } from './fyUtils.js';
 import mongoose from 'mongoose';
 
 /**
- * Generate the next number for a given series and increment it
- * @param {string} seriesId 
- * @param {ClientSession} session 
- * @returns {Promise<string>}
+ * Format an invoice number based on prefix, sequence, and padding
  */
-export const getNextNumberFromSeries = async (seriesId, session = null) => {
+export const formatInvoiceNumber = (prefix, sequence, padLength = 2) => {
+    const padded = String(sequence).padStart(padLength, '0');
+    return `${prefix}${padded}`;
+};
+
+/**
+ * Get the latest sequence number for a series and financial year
+ */
+export const getLatestSequenceNumber = async (seriesId, financialYear, session = null) => {
+    const lastInvoice = await SalesInvoice.findOne({ seriesId, financialYear, isDeleted: { $ne: true } })
+        .sort({ sequenceNumber: -1 })
+        .session(session)
+        .select('sequenceNumber');
+    
+    return lastInvoice ? (lastInvoice.sequenceNumber || 0) : 0;
+};
+
+/**
+ * Generate the next number for a given series and increment it
+ * Returns an object with { sequenceNumber, displayInvoiceNumber }
+ * @param {string} seriesId 
+ * @param {string} financialYear 
+ * @param {ClientSession} session 
+ */
+export const getNextNumberFromSeries = async (seriesId, financialYear, session = null) => {
     const series = await InvoiceSeries.findById(seriesId).session(session);
     if (!series) return null;
 
-    const nextNumber = series.nextInvoiceNumber();
-    series.currentNumber = Math.max(series.currentNumber + 1, series.startNumber);
+    // Use DB to find the absolute max used sequence number to avoid gaps/duplicates if currentNumber is out of sync
+    const lastSeq = await getLatestSequenceNumber(seriesId, financialYear, session);
+    const nextSeq = Math.max(lastSeq + 1, series.startNumber);
+    
+    const displayInvoiceNumber = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
+    
+    // Update series currentNumber for tracking
+    series.currentNumber = nextSeq;
     await series.save({ session });
     
-    return nextNumber;
+    return {
+        sequenceNumber: nextSeq,
+        displayInvoiceNumber
+    };
 };
 
 /**
@@ -56,23 +86,28 @@ export const recomputeSeriesState = async (seriesId, session = null) => {
     if (!series) return;
 
     // Find all non-deleted invoices in this series
-    const invoices = await SalesInvoice.find({ 
+    const lastInvoice = await SalesInvoice.findOne({ 
         seriesId, 
         isDeleted: { $ne: true } 
-    }).session(session).select('invoiceNumber');
+    }).sort({ sequenceNumber: -1 }).session(session).select('sequenceNumber');
 
-    if (invoices.length === 0) {
+    if (!lastInvoice) {
         series.currentNumber = Math.max(0, (series.startNumber || 1) - 1);
     } else {
-        let maxNum = 0;
-        invoices.forEach(inv => {
-            const numStr = inv.invoiceNumber.slice(series.prefix.length);
-            const num = parseInt(numStr, 10);
-            if (!isNaN(num) && num > maxNum) maxNum = num;
-        });
-        series.currentNumber = maxNum;
+        series.currentNumber = lastInvoice.sequenceNumber || 0;
     }
 
     await series.save({ session });
     return series.currentNumber;
+};
+
+/**
+ * Extract sequence number from a formatted invoice number
+ */
+export const extractSequenceNumber = (prefix, displayNumber) => {
+    if (!displayNumber) return 0;
+    // Replace prefix (e.g. "JU/SALES/26-27/") with empty string
+    const seqStr = displayNumber.replace(prefix, '');
+    const seq = parseInt(seqStr, 10);
+    return isNaN(seq) ? 0 : seq;
 };

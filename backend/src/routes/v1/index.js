@@ -92,6 +92,10 @@ router.get('/health', (req, res) => {
 
 const defaultRoutes = [
     {
+        path: '/admin',
+        route: adminRoute,
+    },
+    {
         path: '/production-planning',
         route: productionPlanningRoute,
     },

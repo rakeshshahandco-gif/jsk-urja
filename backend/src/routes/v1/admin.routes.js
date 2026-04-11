@@ -15,4 +15,11 @@ router.get('/cleanup-preview', siCtrl.cleanupPreviewDraftInvoices);
 router.post('/cleanup-execute', siCtrl.executeCleanupDraftInvoices);
 router.delete('/force-cleanup/:id', siCtrl.forceCleanupInvoice);
 
+/**
+ * Sales Invoice Numbering Tools
+ */
+router.post('/renumber-invoice/:id', siCtrl.renumberInvoice);
+router.post('/resequence-series', siCtrl.resequenceSeries);
+router.post('/change-invoice-series/:id', siCtrl.changeInvoiceSeries);
+
 export default router;

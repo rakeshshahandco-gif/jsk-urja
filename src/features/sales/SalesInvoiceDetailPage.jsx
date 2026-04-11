@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, restoreSalesInvoice, recordSalesPayment } from '@/services/salesApi';
+import { 
+    getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, 
+    restoreSalesInvoice, recordSalesPayment, renumberInvoice, 
+    changeInvoiceSeries, getInvoiceSeries 
+} from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
@@ -26,6 +30,8 @@ export default function SalesInvoiceDetailPage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('invoice');
     const [cancelling, setCancelling] = useState(false);
+    const [seriesList, setSeriesList] = useState([]);
+    const [showSeriesModal, setShowSeriesModal] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -38,7 +44,10 @@ export default function SalesInvoiceDetailPage() {
         }).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
     }, [id]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { 
+        load(); 
+        getInvoiceSeries({ active: true }).then(setSeriesList).catch(() => {});
+    }, [load]);
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', {
         day: '2-digit',
@@ -79,6 +88,47 @@ export default function SalesInvoiceDetailPage() {
             toast.error(e.response?.data?.message || 'Failed to delete. Sequence violation detected.');
         } finally {
             setCancelling(false);
+        }
+    };
+
+    const handleRenumber = async () => {
+        const newNum = window.prompt('Enter NEW display invoice number:', inv.displayInvoiceNumber || inv.invoiceNumber);
+        const reason = window.prompt('Reason for renumbering:');
+        if (newNum && reason) {
+            const reflow = window.confirm('REFLOW SEQUENCE?\n\nWould you like the system to automatically re-calculate and update ALL FOLLOWING invoices in this series to maintain a perfect sequence?');
+            
+            setLoading(true);
+            try {
+                const res = await renumberInvoice(id, { 
+                    newDisplayNumber: newNum, 
+                    reason, 
+                    reflowRemaining: reflow 
+                });
+                toast.success(res.message || 'Renumbered!');
+                load();
+            } catch (e) {
+                toast.error(e.response?.data?.message || 'Failed to renumber');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    const handleChangeSeries = async (targetId) => {
+        if (!targetId) return;
+        const reason = window.prompt('Reason for moving to this series:');
+        if (reason === null) return;
+        
+        setLoading(true);
+        try {
+            await changeInvoiceSeries(id, { targetSeriesId: targetId, reason });
+            toast.success('Series changed successfully!');
+            setShowSeriesModal(false);
+            load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to change series');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -353,9 +403,17 @@ export default function SalesInvoiceDetailPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{inv.invoiceNumber}</h1>
+                                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{inv.displayInvoiceNumber || inv.invoiceNumber}</h1>
                                 <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: pc.bg, color: pc.color, border: `1px solid ${pc.border}` }}>{inv.paymentStatus}</span>
-                                <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: inv.paymentType === 'Cash' ? '#f0fdf4' : '#fffbeb', color: inv.paymentType === 'Cash' ? '#16a34a' : '#d97706', border: `1px solid ${inv.paymentType === 'Cash' ? '#86efac' : '#fcd34d'}` }}>{inv.paymentType}</span>
+                                {inv.numberLocked ? (
+                                    <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        🔒 LOCKED
+                                    </span>
+                                ) : (
+                                    <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800, background: '#ecfdf5', color: '#059669', border: '1px solid #6ee7b7', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        🔓 UNLOCKED
+                                    </span>
+                                )}
                             </div>
                             <div style={{ color: '#9ca3af', fontSize: 13, marginTop: 4 }}>
                                 {inv.customerName} · {fmt(inv.invoiceDate)}
@@ -363,6 +421,30 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                             {isAdmin && (
+                                 <>
+                                     {!inv.numberLocked && (
+                                         <button
+                                             onClick={handleRenumber}
+                                             style={{ padding: '9px 18px', borderRadius: 8, background: '#6366f1', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                         >
+                                             🔢 Renumber
+                                         </button>
+                                     )}
+                                     <button
+                                         onClick={() => setShowSeriesModal(true)}
+                                         style={{ padding: '9px 18px', borderRadius: 8, background: '#8b5cf6', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     >
+                                         📁 Change Series
+                                     </button>
+                                     <button
+                                         onClick={() => navigate(PATHS.SALES.RESEQUENCE_TOOL, { state: { seriesId: inv.seriesId?._id || inv.seriesId, financialYear: inv.financialYear } })}
+                                         style={{ padding: '9px 18px', borderRadius: 8, background: '#4338ca', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                     >
+                                         🔄 Resequence Series
+                                     </button>
+                                 </>
+                             )}
                             {/* Print Button */}
                             <button
                                 onClick={() => window.print()}
@@ -613,6 +695,39 @@ export default function SalesInvoiceDetailPage() {
             </div>
 
 
+
+            {/* Series Change Modal */}
+            {showSeriesModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+                    <div style={{ background: '#fff', padding: 24, borderRadius: 12, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>Move Invoice to Different Series</h3>
+                        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20 }}>
+                            Moving this invoice will change its Prefix and Serial Number. 
+                            The system will automatically assign the next available number in the target series.
+                        </p>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                            {seriesList.filter(s => s._id !== inv.seriesId?._id).map(s => (
+                                <button 
+                                    key={s._id} 
+                                    onClick={() => handleChangeSeries(s._id)}
+                                    style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', textAlign: 'left', cursor: 'pointer', transition: 'background 0.2s' }}
+                                    onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                    onMouseOut={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                >
+                                    <div style={{ fontWeight: 700, fontSize: 14 }}>{s.seriesName}</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Prefix: {s.prefix} · FY: {s.financialYear}</div>
+                                </button>
+                            ))}
+                        </div>
+                        <button 
+                            onClick={() => setShowSeriesModal(false)}
+                            style={{ width: '100%', marginTop: 20, padding: '10px', background: '#f1f5f9', border: 'none', borderRadius: 8, color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Print Styles */}
             <style>{`

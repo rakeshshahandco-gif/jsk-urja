@@ -192,6 +192,7 @@ export const menuConfig = [
             { id: 'sales-orders', title: 'Sales Orders', path: PATHS.SALES.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
             { id: 'sales-invoices', title: 'Tax Invoices (GST)', path: PATHS.SALES.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
+            { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
         ],
     },
     {
