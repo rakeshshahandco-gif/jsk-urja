@@ -117,7 +117,7 @@ export default function SalesInvoiceFormPage() {
     const fetchPreviewNo = async (seriesId) => {
         if (!seriesId) { setPreviewInvoiceNo(''); return; }
         try {
-            const res = await previewNextInvoiceNo(seriesId);
+            const res = await previewNextInvoiceNo(seriesId, 'SalesInvoice');
             setPreviewInvoiceNo(res.nextInvoiceNo || '');
         } catch { setPreviewInvoiceNo(''); }
     };

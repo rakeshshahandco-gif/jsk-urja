@@ -2,6 +2,11 @@ import httpStatus from 'http-status';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
+import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { SalesOrder } from '../models/salesOrder.model.js';
+import { PurchaseOrder } from '../models/purchaseOrder.model.js';
+import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { GRN } from '../models/grn.model.js';
 import logger from '../utils/logger.js';
 import { getLatestSequenceNumber, formatInvoiceNumber } from '../utils/numberingUtils.js';
 
@@ -97,18 +102,29 @@ export const deleteSeries = asyncHandler(async (req, res) => {
     res.json({ success: true, message: 'Deleted' });
 });
 
-// PREVIEW NEXT NUMBER — same self-healing sync as createSalesInvoice
+// PREVIEW NEXT NUMBER — model-aware to support all modules
 export const previewNextNumber = asyncHandler(async (req, res) => {
     const s = await InvoiceSeries.findById(req.params.id);
     if (!s || !s.isActive) throw new ApiError(httpStatus.NOT_FOUND, 'Series not found or inactive');
 
-    // Get FY (assumed current or provided)
     const financialYear = req.query.financialYear || s.financialYear;
+    const modelName = req.query.model || 'SalesInvoice';
 
-    const lastSeq = await getLatestSequenceNumber(s._id, financialYear);
+    // Map string names to Mongoose models
+    const modelMap = {
+        'SalesInvoice': SalesInvoice,
+        'SalesOrder': SalesOrder,
+        'PurchaseOrder': PurchaseOrder,
+        'PurchaseInvoice': PurchaseInvoice,
+        'GRN': GRN
+    };
+
+    const TargetModel = modelMap[modelName] || SalesInvoice;
+
+    const lastSeq = await getLatestSequenceNumber(TargetModel, s._id, financialYear);
     const nextSeq = Math.max(lastSeq + 1, s.startNumber || 1);
     
     const nextInvoiceNo = formatInvoiceNumber(s.prefix, nextSeq, s.padLength || 2);
-    res.json({ success: true, nextInvoiceNo, currentNumber: lastSeq });
+    res.json({ success: true, nextInvoiceNo, currentNumber: lastSeq, modelUsed: modelName });
 });
 

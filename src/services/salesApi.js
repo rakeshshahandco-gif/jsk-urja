@@ -82,8 +82,8 @@ export const getInvoiceSeries = (params = {}) =>
 export const getInvoiceSeriesById = (id) =>
     apiClient.get(`/invoice-series/${id}`).then(r => r.data.data);
 
-export const previewNextInvoiceNo = (id) =>
-    apiClient.get(`/invoice-series/${id}/preview-next`).then(r => r.data);
+export const previewNextInvoiceNo = (id, model = 'SalesInvoice') =>
+    apiClient.get(`/invoice-series/${id}/preview-next`, { params: { model } }).then(r => r.data);
 
 export const createInvoiceSeries = (data) =>
     apiClient.post('/invoice-series', data).then(r => r.data.data);
