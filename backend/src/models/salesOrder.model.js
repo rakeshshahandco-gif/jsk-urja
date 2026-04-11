@@ -26,6 +26,7 @@ const soItemSchema = new mongoose.Schema({
 const salesOrderSchema = new mongoose.Schema({
     soNumber: { type: String, unique: true, trim: true },
     seriesId: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+    sequenceNumber: { type: Number },
     soDate: { type: Date, required: true, default: Date.now },
     gstApplicable: { type: Boolean, default: true },
 

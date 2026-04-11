@@ -97,13 +97,14 @@ export const createSO = asyncHandler(async (req, res) => {
     if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
 
     // Get SO number from series if provided
-    let soNumber, gstApplicable = true;
+    let soNumber, sequenceNumber, gstApplicable = true;
     const fy = body.financialYear || getFYFromDate(body.soDate || new Date());
 
     if (body.seriesId) {
-        const numbering = await getNextNumberFromSeries(body.seriesId, fy);
+        const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy);
         if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
         soNumber = numbering.displayInvoiceNumber;
+        sequenceNumber = numbering.sequenceNumber;
         const series = await InvoiceSeries.findById(body.seriesId);
         gstApplicable = series.gstApplicable === false ? false : true;
     } else {
@@ -135,6 +136,8 @@ export const createSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.create({
         ...body,
         soNumber: String(soNumber),
+        seriesId: body.seriesId,
+        sequenceNumber,
         gstApplicable,
         stickerType,
         customerCode: body.customerCode || '',

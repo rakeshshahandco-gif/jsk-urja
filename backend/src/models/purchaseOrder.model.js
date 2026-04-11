@@ -25,6 +25,8 @@ const poItemSchema = new mongoose.Schema({
 
 const purchaseOrderSchema = new mongoose.Schema({
     poNumber: { type: String, unique: true, trim: true },
+    seriesId: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+    sequenceNumber: { type: Number },
     poDate: { type: Date, required: true, default: Date.now },
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
     supplierName: { type: String, default: '' },

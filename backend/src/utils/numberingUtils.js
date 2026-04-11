@@ -12,35 +12,53 @@ export const formatInvoiceNumber = (prefix, sequence, padLength = 2) => {
 };
 
 /**
- * Get the latest sequence number for a series and financial year
+ * Get the latest sequence number for a series and financial year from a specific model
  */
-export const getLatestSequenceNumber = async (seriesId, financialYear, session = null) => {
-    const lastInvoice = await SalesInvoice.findOne({ seriesId, financialYear, isDeleted: { $ne: true } })
+export const getLatestSequenceNumber = async (TargetModel, seriesId, financialYear, session = null) => {
+    const lastDoc = await TargetModel.findOne({ seriesId, financialYear, isDeleted: { $ne: true } })
         .sort({ sequenceNumber: -1 })
         .session(session)
         .select('sequenceNumber');
     
-    return lastInvoice ? (lastInvoice.sequenceNumber || 0) : 0;
+    return lastDoc ? (lastDoc.sequenceNumber || 0) : 0;
 };
 
 /**
  * Generate the next number for a given series and increment it
  * Returns an object with { sequenceNumber, displayInvoiceNumber }
+ * @param {mongoose.Model} TargetModel - The Mongoose model to check against
  * @param {string} seriesId 
  * @param {string} financialYear 
  * @param {ClientSession} session 
  */
-export const getNextNumberFromSeries = async (seriesId, financialYear, session = null) => {
+export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYear, session = null) => {
     const series = await InvoiceSeries.findById(seriesId).session(session);
     if (!series) return null;
 
     // Use DB to find the absolute max used sequence number to avoid gaps/duplicates if currentNumber is out of sync
-    const lastSeq = await getLatestSequenceNumber(seriesId, financialYear, session);
-    const nextSeq = Math.max(lastSeq + 1, series.startNumber);
+    let lastSeq = await getLatestSequenceNumber(TargetModel, seriesId, financialYear, session);
+    let nextSeq = Math.max(lastSeq + 1, series.startNumber);
     
-    const displayInvoiceNumber = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
+    let displayInvoiceNumber = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
     
-    // Update series currentNumber for tracking
+    // Resilience Loop: Ensure the generated sequence number DOES NOT already exist in the database
+    // This handles cases where manual entries or out-of-sync series state might cause collisions.
+    let isDuplicate = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 100;
+
+    while (isDuplicate && attempts < MAX_ATTEMPTS) {
+        const existing = await TargetModel.exists({ seriesId, sequenceNumber: nextSeq }).session(session);
+        if (existing) {
+            nextSeq++;
+            displayInvoiceNumber = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
+            attempts++;
+        } else {
+            isDuplicate = false;
+        }
+    }
+    
+    // Update series currentNumber for tracking (internal purpose)
     series.currentNumber = nextSeq;
     await series.save({ session });
     
@@ -76,25 +94,26 @@ export const getDefaultSeriesForFY = async (fy) => {
 };
 
 /**
- * Re-scan all surviving invoices in a series to reset the currentNumber.
+ * Re-scan all surviving docs in a series to reset the currentNumber.
  * This is used after administrative cleanup/deletions.
+ * @param {mongoose.Model} TargetModel
  * @param {string} seriesId 
  * @param {ClientSession} session 
  */
-export const recomputeSeriesState = async (seriesId, session = null) => {
+export const recomputeSeriesState = async (TargetModel, seriesId, session = null) => {
     const series = await InvoiceSeries.findById(seriesId).session(session);
     if (!series) return;
 
-    // Find all non-deleted invoices in this series
-    const lastInvoice = await SalesInvoice.findOne({ 
+    // Find all non-deleted docs in this series
+    const lastDoc = await TargetModel.findOne({ 
         seriesId, 
         isDeleted: { $ne: true } 
     }).sort({ sequenceNumber: -1 }).session(session).select('sequenceNumber');
 
-    if (!lastInvoice) {
+    if (!lastDoc) {
         series.currentNumber = Math.max(0, (series.startNumber || 1) - 1);
     } else {
-        series.currentNumber = lastInvoice.sequenceNumber || 0;
+        series.currentNumber = lastDoc.sequenceNumber || 0;
     }
 
     await series.save({ session });

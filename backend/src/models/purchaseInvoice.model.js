@@ -25,6 +25,8 @@ const piItemSchema = new mongoose.Schema({
 
 const purchaseInvoiceSchema = new mongoose.Schema({
     invoiceNumber: { type: String, required: true, unique: true, trim: true },
+    seriesId: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+    sequenceNumber: { type: Number },
     invoiceDate: { type: Date, required: true, default: Date.now },
 
     // Reference

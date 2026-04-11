@@ -97,6 +97,8 @@ const createGRNAgainstPOSchema = Joi.object({
     complaintId: Joi.string().optional().allow(null, ''),
     complaintNo: Joi.string().optional().allow(''),
     items: Joi.array().items(grnItemAgainstPO).min(1).required(),
+    seriesId: Joi.string().optional().allow('', null),
+    grnNumber: Joi.string().optional().allow(''),
 });
 
 const createDirectGRNSchema = Joi.object({
@@ -108,6 +110,8 @@ const createDirectGRNSchema = Joi.object({
     complaintId: Joi.string().optional().allow(null, ''),
     complaintNo: Joi.string().optional().allow(''),
     items: Joi.array().items(grnItemDirect).min(1).required(),
+    seriesId: Joi.string().optional().allow('', null),
+    grnNumber: Joi.string().optional().allow(''),
 });
 
 // ── POST /grns – Create GRN (Against PO or Direct) ───────────────────────────
@@ -160,9 +164,13 @@ const createGRNAgainstPO = async (req, res) => {
         }
 
         const fy = value.financialYear || getFYFromDate(value.grnDate || new Date());
-        let grnNumber = value.grnNumber;
+        let grnNumber = value.grnNumber, sequenceNumber;
         if (!grnNumber && value.seriesId) {
-            grnNumber = await getNextNumberFromSeries(value.seriesId, session);
+            const numbering = await getNextNumberFromSeries(GRN, value.seriesId, fy, session);
+            if (numbering) {
+                grnNumber = numbering.displayInvoiceNumber;
+                sequenceNumber = numbering.sequenceNumber;
+            }
         }
 
         if (!grnNumber) {
@@ -171,6 +179,8 @@ const createGRNAgainstPO = async (req, res) => {
 
         const grn = await GRN.create([{
             grnNumber,
+            seriesId: value.seriesId,
+            sequenceNumber,
             grnDate: value.grnDate || new Date(),
             poId: po._id,
             poNumber: po.poNumber,
@@ -266,9 +276,13 @@ const createDirectGRN = async (req, res) => {
         }));
 
         const fy = value.financialYear || getFYFromDate(value.grnDate || new Date());
-        let grnNumber = value.grnNumber;
+        let grnNumber = value.grnNumber, sequenceNumber;
         if (!grnNumber && value.seriesId) {
-            grnNumber = await getNextNumberFromSeries(value.seriesId, session);
+            const numbering = await getNextNumberFromSeries(GRN, value.seriesId, fy, session);
+            if (numbering) {
+                grnNumber = numbering.displayInvoiceNumber;
+                sequenceNumber = numbering.sequenceNumber;
+            }
         }
 
         if (!grnNumber) {
@@ -277,6 +291,8 @@ const createDirectGRN = async (req, res) => {
 
         const grn = await GRN.create([{
             grnNumber,
+            seriesId: value.seriesId,
+            sequenceNumber,
             grnDate: value.grnDate || new Date(),
             poId: null,
             poNumber: '',

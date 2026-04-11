@@ -31,7 +31,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         let displayInvoiceNumber = body.displayInvoiceNumber || '';
 
         if (!invoiceNumber && body.seriesId) {
-            const numbering = await getNextNumberFromSeries(body.seriesId, fy, session);
+            const numbering = await getNextNumberFromSeries(SalesInvoice, body.seriesId, fy, session);
             if (numbering) {
                 sequenceNumber = numbering.sequenceNumber;
                 displayInvoiceNumber = numbering.displayInvoiceNumber;
@@ -869,7 +869,7 @@ export const changeInvoiceSeries = asyncHandler(async (req, res) => {
         // Determine sequence number
         let seq = newSequenceNumber;
         if (!seq) {
-            const numbering = await getNextNumberFromSeries(targetSeriesId, inv.financialYear, session);
+            const numbering = await getNextNumberFromSeries(SalesInvoice, targetSeriesId, inv.financialYear, session);
             seq = numbering.sequenceNumber;
         }
 
@@ -1008,7 +1008,7 @@ export const bulkRenumberInvoices = asyncHandler(async (req, res) => {
         }
 
         // Sync Series
-        await recomputeSeriesState(seriesId, session);
+        await recomputeSeriesState(SalesInvoice, seriesId, session);
 
         await session.commitTransaction();
         res.json({ success: true, message: `Successfully updated ${stats.updated} invoices.` });

@@ -209,6 +209,7 @@ const createPISchema = Joi.object({
     lrNumber: Joi.string().optional().allow(''),
     freightAmount: Joi.number().min(0).default(0),
     freightGstRate: Joi.number().valid(0, 5, 12, 18).default(0),
+    seriesId: Joi.string().optional().allow('', null),
     items: Joi.array().items(piItemJoi).min(1).required(),
 });
 
@@ -249,9 +250,13 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 
         const fy = value.financialYear || getFYFromDate(value.invoiceDate || new Date());
 
-        let invoiceNumber = value.invoiceNumber;
+        let invoiceNumber = value.invoiceNumber, sequenceNumber;
         if (!invoiceNumber && value.seriesId) {
-            invoiceNumber = await getNextNumberFromSeries(value.seriesId, session);
+            const numbering = await getNextNumberFromSeries(PurchaseInvoice, value.seriesId, fy, session);
+            if (numbering) {
+                invoiceNumber = numbering.displayInvoiceNumber;
+                sequenceNumber = numbering.sequenceNumber;
+            }
         }
         
         if (!invoiceNumber) {
@@ -263,7 +268,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         const isDirectStock = flowType === 'PO→Direct Invoice' || flowType === 'Direct Invoice';
 
         const inv = await PurchaseInvoice.create([{
-            ...value, invoiceNumber, invoiceDate: value.invoiceDate || new Date(),
+            ...value, invoiceNumber, sequenceNumber, seriesId: value.seriesId, invoiceDate: value.invoiceDate || new Date(),
             flowType, isDirectPurchase: isDirectStock,
             supplierName: supplier.supplierName,
             supplierGstin: value.supplierGstin || supplier.gstNumber || '',

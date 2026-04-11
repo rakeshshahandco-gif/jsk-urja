@@ -108,10 +108,13 @@ export const createPO = asyncHandler(async (req, res) => {
 
     const fy = value.financialYear || getFYFromDate(value.poDate || new Date());
 
-    let poNumber = value.poNumber;
+    let poNumber = value.poNumber, sequenceNumber;
     if (!poNumber && value.seriesId) {
-        const numbering = await getNextNumberFromSeries(value.seriesId, fy);
-        if (numbering) poNumber = numbering.displayInvoiceNumber;
+        const numbering = await getNextNumberFromSeries(PurchaseOrder, value.seriesId, fy);
+        if (numbering) {
+            poNumber = numbering.displayInvoiceNumber;
+            sequenceNumber = numbering.sequenceNumber;
+        }
     }
     
     // Defensive: ensure poNumber is a string
@@ -127,6 +130,8 @@ export const createPO = asyncHandler(async (req, res) => {
 
     const po = await PurchaseOrder.create({
         poNumber,
+        seriesId: value.seriesId,
+        sequenceNumber,
         ...value,
         supplierName: supplier.supplierName,
         supplierAddress: value.supplierAddress || supplier.address,
