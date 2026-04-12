@@ -8,6 +8,7 @@ import Followup from '../models/followup.model.js';
 import Conversation from '../models/conversation.model.js';
 import Reminder from '../models/reminder.model.js';
 import Customer from '../models/customer.model.js';
+import { Sticker } from '../models/sticker.model.js';
 import { GSTImportLog } from '../models/gstImportLog.model.js';
 
 const catchAsync = (fn) => (req, res, next) => {
@@ -248,6 +249,7 @@ const searchCustomers = catchAsync(async (req, res) => {
     };
 
     const customers = await Customer.find(filter)
+        .populate('stickers')
         .sort({ company: 1, customerName: 1 })
         .limit(15)
         .lean();
@@ -272,6 +274,10 @@ const searchCustomers = catchAsync(async (req, res) => {
         return {
             id: c._id,
             name: displayName,
+            sticker: c.stickers && c.stickers.length > 0 && typeof c.stickers[0] === 'object' && c.stickers[0].name 
+                ? c.stickers[0].name.trim() 
+                : (c.sticker ? c.sticker.trim() : ''),
+            backend_trace: "FINAL_FIX_B48126_V1",
             company: c.company || '',
             customerName: c.customerName || '',
             brand: c.companyBrand || '',
@@ -290,6 +296,11 @@ const searchCustomers = catchAsync(async (req, res) => {
             paymentType: c.paymentType || 'Credit',
         };
     });
+
+    if (customers.length > 0) {
+        const first = formattedResults[0];
+        console.log(`🔍 [SearchTrace] Customer: ${first.name}, Sticker: "${first.sticker}", Trace: ${first.backend_trace}`);
+    }
 
     res.send(new ApiResponse(200, formattedResults));
 });

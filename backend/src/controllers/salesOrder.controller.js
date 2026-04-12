@@ -101,7 +101,7 @@ export const createSO = asyncHandler(async (req, res) => {
     const fy = body.financialYear || getFYFromDate(body.soDate || new Date());
 
     if (body.seriesId) {
-        const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy);
+        const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy, null, 'soNumber');
         if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
         soNumber = numbering.displayInvoiceNumber;
         sequenceNumber = numbering.sequenceNumber;

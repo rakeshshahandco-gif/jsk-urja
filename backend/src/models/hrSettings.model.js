@@ -6,6 +6,10 @@ const hrSettingsSchema = new mongoose.Schema(
             type: String, // HH:mm format, e.g., "10:00"
             default: '10:00',
         },
+        officeEndTime: {
+            type: String, // HH:mm format, e.g., "18:00"
+            default: '18:00',
+        },
         graceMinutes: {
             type: Number,
             default: 10,

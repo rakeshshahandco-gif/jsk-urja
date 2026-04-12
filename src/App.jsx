@@ -66,6 +66,12 @@ import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import InvoiceCleanupPage from '@/features/sales/InvoiceCleanupPage';
 import ResequenceTool from '@/features/sales/ResequenceTool';
 import BulkInvoiceRenumber from '@/features/sales/BulkInvoiceRenumber';
+import EwayBillListPage from '@/features/eway-bill/EwayBillListPage';
+import EwayBillDraftPage from '@/features/eway-bill/EwayBillDraftPage';
+import TransporterListPage from '@/features/transporters/TransporterListPage';
+import DiagnosticDashboard from '@/features/admin/diagnostics/DiagnosticDashboard';
+
+
 
 // Service / Replacement Module
 import ComplaintListPage from '@/features/service/ComplaintListPage';
@@ -99,6 +105,7 @@ const TrialBalancePage = lazy(() => import('./features/mis/TrialBalancePage'));
 const ProfitAndLossPage = lazy(() => import('./features/mis/ProfitAndLossPage'));
 const BalanceSheetPage = lazy(() => import('./features/mis/BalanceSheetPage'));
 const MISDashboard = lazy(() => import('./features/mis/MISDashboard'));
+const SalesMarketingDashboard = lazy(() => import('./features/mis/SalesMarketingDashboard'));
 const AssetCategoryPage = lazy(() => import('./features/fixedAssets/AssetCategoryPage'));
 import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
 import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
@@ -272,6 +279,8 @@ const AppLayout = () => {
                         <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
+                        <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
+
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
                         <Route path="/settings/whatsapp" element={<ProtectedRoute requirePermission="admin.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
                         <Route path="/reports/customer-master" element={<ProtectedRoute requirePermission="reports.customer_master_report.view"><CustomerMasterReport /></ProtectedRoute>} />
@@ -330,6 +339,10 @@ const AppLayout = () => {
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.INVOICE_SERIES} element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.BULK_RENUMBER} element={<ProtectedRoute requireRole="admin"><BulkInvoiceRenumber /></ProtectedRoute>} />
+                        <Route path={PATHS.EWAY_BILL.LIST} element={<ProtectedRoute requirePermission="sales"><EwayBillListPage /></ProtectedRoute>} />
+                        <Route path="/eway-bills/draft/:id" element={<ProtectedRoute requirePermission="sales"><EwayBillDraftPage /></ProtectedRoute>} />
+                        <Route path={PATHS.TRANSPORTERS.LIST} element={<ProtectedRoute requirePermission="sales"><TransporterListPage /></ProtectedRoute>} />
+
                         <Route path={PATHS.SALES.INVOICE_CLEANUP} element={<ProtectedRoute requireRole="admin"><InvoiceCleanupPage /></ProtectedRoute>} />
                         <Route path="/sales/invoice-resequence" element={<ProtectedRoute requireRole="admin"><ResequenceTool /></ProtectedRoute>} />
                         <Route path="/service/complaints" element={<ProtectedRoute requirePermission="service"><ComplaintListPage /></ProtectedRoute>} />
@@ -371,6 +384,7 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
                         <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="accounts"><MISDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="accounts"><SalesMarketingDashboard /></ProtectedRoute>} />
                         <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="accounts"><ProfitAndLossPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="accounts"><BalanceSheetPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="accounts"><TrialBalancePage /></ProtectedRoute>} />

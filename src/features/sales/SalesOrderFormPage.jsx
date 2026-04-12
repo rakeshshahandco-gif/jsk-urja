@@ -141,6 +141,8 @@ export default function SalesOrderFormPage() {
     };
 
     const handleCustomerSelect = (c) => {
+        console.log('🎯 [SelectionTrace] Selected:', c.name, 'Sticker:', c.sticker, 'Trace:', c.backend_trace);
+        if (!c.backend_trace) console.warn('⚠️ [SelectionTrace] WARNING: Missing backend_trace! Server might be stale.');
         setForm(p => ({
             ...p,
             customerName: c.name,
@@ -155,7 +157,8 @@ export default function SalesOrderFormPage() {
             gstType: c.gstType || p.gstType,
             customerId: c.id,
             creditPeriod: c.creditPeriod || 0,
-            paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash')
+            paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash'),
+            stickerType: c.sticker || '',
         }));
         setShowCustDropdown(false);
     };
@@ -206,6 +209,7 @@ export default function SalesOrderFormPage() {
                 warrantyDetails: '',
                 freightAmount: '', freightGstRate: 18,
                 creditPeriod: 0,
+                stickerType: '',
                 items: [BLANK_ITEM()],
             });
             setCustHighlightIndex(-1);

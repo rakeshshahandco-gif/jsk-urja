@@ -277,9 +277,36 @@ export const importAttendance = asyncHandler(async (req, res) => {
             let inTimeActual = null;
             let outTimeActual = null;
 
-            const parseTime = (timeStr, baseDate) => {
-                if (!timeStr || timeStr.toLowerCase() === 'null' || timeStr === '') return null;
-                let mTime = moment.utc(timeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'hh:mm:ss A', 'h:mm A', 'H:mm']);
+            const parseTime = (input, baseDate) => {
+                if (!input || input.toString().toLowerCase() === 'null' || input === '') return null;
+                
+                let mTime;
+                
+                // Handle Date objects (direct from Excel)
+                if (input instanceof Date) {
+                    mTime = moment.utc(input);
+                } else {
+                    const inputStr = input.toString().trim();
+                    // Try standard formats
+                    mTime = moment.utc(inputStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'hh:mm:ss A', 'h:mm A', 'H:mm', 'YYYY-MM-DDTHH:mm:ss.SSSZ']);
+                    
+                    // If still invalid, try to extract time using regex (e.g. "Sat Dec 30 1899 16:37:10...")
+                    if (!mTime.isValid()) {
+                        const timeMatch = inputStr.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+                        if (timeMatch) {
+                            const h = parseInt(timeMatch[1]);
+                            const m = parseInt(timeMatch[2]);
+                            const s = parseInt(timeMatch[3] || 0);
+                            
+                            const res = moment.utc(baseDate);
+                            res.hour(h);
+                            res.minute(m);
+                            res.second(s);
+                            return res.toDate();
+                        }
+                    }
+                }
+
                 if (!mTime.isValid()) return null;
                 
                 const result = moment.utc(baseDate);
@@ -305,25 +332,57 @@ export const importAttendance = asyncHandler(async (req, res) => {
                     }
                 }
 
-                // 3. Late Coming Logic (Rule 5)
-                const shift = employee.shiftType || { startTime: settings.officeStartTime, graceMinutes: settings.graceMinutes };
+                // 3. Adherence Logic (Arrival & Exit)
+                const shift = employee.shiftType || { 
+                    startTime: settings.officeStartTime, 
+                    endTime: settings.officeEndTime || '18:00', 
+                    graceMinutes: settings.graceMinutes 
+                };
                 const shiftStartStr = shift.startTime || settings.officeStartTime || '10:00';
+                const shiftEndStr = shift.endTime || settings.officeEndTime || '18:00';
                 const grace = shift.graceMinutes !== undefined ? shift.graceMinutes : settings.graceMinutes;
                 
+                // Arrival Performance
                 if (inTimeActual) {
                     const [sh, sm] = shiftStartStr.split(':');
                     const shiftStart = moment.utc(parsedDate).hour(parseInt(sh)).minute(parseInt(sm)).second(0);
-                    const diff = moment(inTimeActual).diff(shiftStart, 'minutes');
-                    if (diff > grace) {
+                    const diffIn = moment(inTimeActual).diff(shiftStart, 'minutes');
+                    
+                    if (diffIn > grace) {
                         isLate = true;
-                        lateMinutes = diff;
+                        lateMinutes = diffIn;
+                    } else if (diffIn < 0) {
+                        isEarlyIn = true;
+                        earlyInMinutes = Math.abs(diffIn);
+                    }
+                }
+
+                // Exit Performance
+                if (outTimeActual) {
+                    const [eh, em] = shiftEndStr.split(':');
+                    let shiftEnd = moment.utc(parsedDate).hour(parseInt(eh)).minute(parseInt(em)).second(0);
+                    
+                    // Handle night shift end (if end time is less than start time numerically)
+                    const [sh_check] = shiftStartStr.split(':');
+                    if (parseInt(eh) < parseInt(sh_check)) {
+                        shiftEnd = shiftEnd.add(1, 'days');
+                    }
+
+                    const diffOut = moment(outTimeActual).diff(shiftEnd, 'minutes');
+                    
+                    if (diffOut < 0) {
+                        isEarlyOut = true;
+                        earlyOutMinutes = Math.abs(diffOut);
+                    } else if (diffOut > 0) {
+                        isLateOut = true;
+                        lateOutMinutes = diffOut;
                     }
                 }
 
                 // 4. Working Hours & Half Day Logic (Rule 3)
                 if (inTimeActual && outTimeActual) {
                     workingHours = moment(outTimeActual).diff(moment(inTimeActual), 'hours', true);
-                    if (workingHours < 0) workingHours += 24; // Handle night shifts briefly
+                    if (workingHours < 0) workingHours += 24; 
                     
                     const halfDayThreshold = shift.halfDayMinHours || settings.halfDayThresholdHours || 4;
                     if (workingHours < halfDayThreshold) {
@@ -351,8 +410,14 @@ export const importAttendance = asyncHandler(async (req, res) => {
                     inTimeActual,
                     outTimeActual,
                     workingHours,
-                    isLate,
-                    lateMinutes,
+                    isLate,             // Legacy compatible
+                    lateMinutes,        // Legacy compatible
+                    isEarlyIn,
+                    earlyInMinutes,
+                    isLateOut,
+                    lateOutMinutes,
+                    isEarlyOut,
+                    earlyOutMinutes,
                     isHalfDay,
                     isMissingCheckout,
                     isSunday,
@@ -721,6 +786,9 @@ export const getMonthlySummaryReport = asyncHandler(async (req, res) => {
             absent: 0,
             halfDay: 0,
             late: 0,
+            lateMinutes: 0,
+            earlyOut: 0,
+            earlyOutMinutes: 0,
             missingCheckout: 0,
             sundays: 0,
             holidays: 0,
@@ -738,7 +806,14 @@ export const getMonthlySummaryReport = asyncHandler(async (req, res) => {
                 if (rec.status === 'Present') counts.present++;
                 else if (rec.status === 'Half Day') counts.halfDay++;
                 
-                if (rec.isLate) counts.late++;
+                if (rec.isLate) {
+                    counts.late++;
+                    counts.lateMinutes += (rec.lateMinutes || 0);
+                }
+                if (rec.isEarlyOut) {
+                    counts.earlyOut++;
+                    counts.earlyOutMinutes += (rec.earlyOutMinutes || 0);
+                }
                 if (rec.isMissingCheckout) counts.missingCheckout++;
             } else {
                 // If record is Absent OR no record, check if it's Sunday or Holiday for paid status
@@ -764,6 +839,9 @@ export const getMonthlySummaryReport = asyncHandler(async (req, res) => {
             absent: counts.absent,
             halfDay: counts.halfDay,
             late: counts.late,
+            lateMinutes: counts.lateMinutes,
+            earlyOut: counts.earlyOut,
+            earlyOutMinutes: counts.earlyOutMinutes,
             missingCheckout: counts.missingCheckout,
             sundays: counts.sundays,
             holidays: counts.holidays,
@@ -780,7 +858,14 @@ export const getMonthlySummaryReport = asyncHandler(async (req, res) => {
 export const getLateComingReport = asyncHandler(async (req, res) => {
     const { month, year, employee, department } = req.query;
     
-    const filter = { isLate: true };
+    const filter = {
+        $or: [
+            { isLate: true },
+            { isEarlyIn: true },
+            { isEarlyOut: true },
+            { isLateOut: true }
+        ]
+    };
     if (month && year) {
         const start = moment.utc({ year: parseInt(year), month: parseInt(month) - 1, day: 1 }).startOf('day').toDate();
         const end = moment.utc(start).endOf('month').toDate();
@@ -804,10 +889,24 @@ export const getLateComingReport = asyncHandler(async (req, res) => {
         employeeCode: r.employee.employeeCode,
         date: r.date,
         inTime: r.inTime,
+        outTime: r.outTime,
         shiftTime: r.employee.shiftType?.startTime || '10:00',
+        shiftEndTime: r.employee.shiftType?.endTime || '18:00',
         graceTime: r.employee.shiftType?.graceMinutes || 10,
-        delayMinutes: r.lateMinutes,
-        status: 'Late'
+        
+        // Arrival
+        isLateIn: r.isLate,
+        lateInMinutes: r.lateMinutes,
+        isEarlyIn: r.isEarlyIn,
+        earlyInMinutes: r.earlyInMinutes,
+
+        // Exit
+        isEarlyOut: r.isEarlyOut,
+        earlyOutMinutes: r.earlyOutMinutes,
+        isLateOut: r.isLateOut,
+        lateOutMinutes: r.lateOutMinutes,
+
+        status: r.status
     }));
 
     res.send(new ApiResponse(httpStatus.OK, results));

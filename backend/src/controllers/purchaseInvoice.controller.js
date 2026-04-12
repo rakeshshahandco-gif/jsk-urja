@@ -122,18 +122,53 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
     let totalCgst = 0, totalSgst = 0, totalIgst = 0;
     const isIGST = gstType === 'IGST';
 
-    items.forEach(item => {
-        const lineTaxable = r2(item.qty * item.rate - item.discountAmount);
-        subTotal += r2(item.qty * item.rate);
-        totalDiscount += r2(item.discountAmount);
-        totalTaxable += lineTaxable;
+    const updatedItems = items.map(item => {
+        const itemQty = Number(item.qty || 0);
+        const itemRate = Number(item.rate || 0);
+        const itemDiscPercent = Number(item.discountPercent || 0);
+        const itemGstRate = Number(item.gstRate || 0);
+
+        // 1. Calculate Discount Amount if not provided or based on percent
+        const discountAmount = item.discountAmount !== undefined ? Number(item.discountAmount) : r2(itemQty * itemRate * itemDiscPercent / 100);
+        
+        // 2. Line Taxable
+        const taxableAmount = r2(itemQty * itemRate - discountAmount);
+        
+        // 3. Line GST
+        let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
+        let cgstRate = 0, sgstRate = 0, igstRate = 0;
 
         if (isIGST) {
-            totalIgst += r2(lineTaxable * item.gstRate / 100);
+            igstRate = itemGstRate;
+            igstAmount = r2(taxableAmount * igstRate / 100);
         } else {
-            totalCgst += r2(lineTaxable * (item.gstRate / 2) / 100);
-            totalSgst += r2(lineTaxable * (item.gstRate / 2) / 100);
+            cgstRate = itemGstRate / 2;
+            sgstRate = itemGstRate / 2;
+            cgstAmount = r2(taxableAmount * cgstRate / 100);
+            sgstAmount = r2(taxableAmount * sgstRate / 100);
         }
+
+        const totalAmount = r2(taxableAmount + cgstAmount + sgstAmount + igstAmount);
+
+        // Accumulate Header Totals
+        subTotal += r2(itemQty * itemRate);
+        totalDiscount += discountAmount;
+        totalTaxable += taxableAmount;
+        totalCgst += cgstAmount;
+        totalSgst += sgstAmount;
+        totalIgst += igstAmount;
+
+        return {
+            ...item,
+            qty: itemQty,
+            rate: itemRate,
+            discountAmount,
+            taxableAmount,
+            cgstRate, cgstAmount,
+            sgstRate, sgstAmount,
+            igstRate, igstAmount,
+            totalAmount
+        };
     });
 
     // Freight GST
@@ -151,6 +186,7 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
     const roundOff = r2(grandTotal - rawGrandTotal);
 
     return {
+        updatedItems,
         subTotal: r2(subTotal),
         totalDiscount: r2(totalDiscount),
         totalTaxableAmount: r2(totalTaxable),
@@ -158,9 +194,14 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
         totalCgst: r2(totalCgst),
         totalSgst: r2(totalSgst),
         totalTax: r2(totalTax),
-        freightGstRate, freightIgstAmount: freightIgstAmt,
+        freightGstRate, 
+        freightIgstAmount: freightIgstAmt,
+        freightCgstAmount: freightCgstAmt,
+        freightSgstAmount: freightSgstAmt,
         freightTotalGst: r2(freightIgstAmt + freightCgstAmt + freightSgstAmt),
-        roundOff, grandTotal, amountInWords: amountInWords(grandTotal),
+        roundOff, 
+        grandTotal, 
+        amountInWords: amountInWords(grandTotal),
     };
 };
 
@@ -264,11 +305,14 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         }
 
         const totals = calculateInvoiceTotals(value.items, value.gstType, value.freightAmount || 0, value.freightGstRate || 0);
+        const { updatedItems, ...headerTotals } = totals;
 
         const isDirectStock = flowType === 'PO→Direct Invoice' || flowType === 'Direct Invoice';
 
         const inv = await PurchaseInvoice.create([{
-            ...value, invoiceNumber, sequenceNumber, seriesId: value.seriesId, invoiceDate: value.invoiceDate || new Date(),
+            ...value, 
+            items: updatedItems,
+            invoiceNumber, sequenceNumber, seriesId: value.seriesId, invoiceDate: value.invoiceDate || new Date(),
             flowType, isDirectPurchase: isDirectStock,
             supplierName: supplier.supplierName,
             supplierGstin: value.supplierGstin || supplier.gstNumber || '',
@@ -277,7 +321,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             poId: po?._id || null, poNumber, grnId: grn?._id || null, grnNumber: grn?.grnNumber || '',
             buyerName: value.buyerName || 'JSK URJA',
             poDate: parseDate(value.poDate) || (po ? po.poDate : null),
-            ...totals,
+            ...headerTotals,
             financialYear: fy,
             status: 'Confirmed', paymentStatus: 'Unpaid',
             createdBy: req.user._id,
@@ -406,7 +450,9 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
             // Recalculate if items or freight changed
             if (auditTrail.items || auditTrail.freightAmount || auditTrail.freightGstRate || auditTrail.gstType) {
                 const totals = calculateInvoiceTotals(inv.items, inv.gstType, inv.freightAmount, inv.freightGstRate);
-                Object.assign(inv, totals);
+                const { updatedItems, ...headerTotals } = totals;
+                inv.items = updatedItems;
+                Object.assign(inv, headerTotals);
             }
 
             inv.updatedBy = req.user._id;

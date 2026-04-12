@@ -1,6 +1,8 @@
 import express from 'express';
 import * as siCtrl from '../../controllers/salesInvoice.controller.js';
+import diagnosticRoute from './diagnostic.route.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
+
 
 const router = express.Router();
 
@@ -22,4 +24,10 @@ router.post('/renumber-invoice/:id', siCtrl.renumberInvoice);
 router.post('/resequence-series', siCtrl.resequenceSeries);
 router.post('/change-invoice-series/:id', siCtrl.changeInvoiceSeries);
 
+/**
+ * System Diagnostics & Auto-Discovery
+ */
+router.use('/diagnostics', diagnosticRoute);
+
 export default router;
+

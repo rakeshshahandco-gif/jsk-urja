@@ -80,6 +80,10 @@ import adminRoute from './admin.routes.js';
 import utilsRoute from './utils.routes.js';
 import rdSampleRoute from './rdSample.routes.js';
 import weChatRoute from './weChat.routes.js';
+import analyticsRoute from './analytics.routes.js';
+import transporterRoute from './transporter.routes.js';
+import ewayBillRoute from './ewayBill.routes.js';
+
 
 
 const router = express.Router();
@@ -425,7 +429,20 @@ const defaultRoutes = [
         path: '/wechat',
         route: weChatRoute,
     },
+  {
+    path: '/analytics',
+    route: analyticsRoute,
+  },
+  {
+    path: '/transporters',
+    route: transporterRoute,
+  },
+  {
+    path: '/eway-bills',
+    route: ewayBillRoute,
+  },
 ];
+
 
 
 defaultRoutes.forEach((route) => {

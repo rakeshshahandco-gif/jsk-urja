@@ -31,7 +31,7 @@ export const getLatestSequenceNumber = async (TargetModel, seriesId, financialYe
  * @param {string} financialYear 
  * @param {ClientSession} session 
  */
-export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYear, session = null) => {
+export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYear, session = null, numberField = 'invoiceNumber') => {
     const series = await InvoiceSeries.findById(seriesId).session(session);
     if (!series) return null;
 
@@ -48,8 +48,13 @@ export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYe
     const MAX_ATTEMPTS = 100;
 
     while (isDuplicate && attempts < MAX_ATTEMPTS) {
-        const existing = await TargetModel.exists({ seriesId, sequenceNumber: nextSeq }).session(session);
-        if (existing) {
+        // Double check: both by sequence number AND by the final formatted string
+        const [seqExists, strExists] = await Promise.all([
+            TargetModel.exists({ seriesId, sequenceNumber: nextSeq }).session(session),
+            TargetModel.exists({ [numberField]: displayInvoiceNumber }).session(session)
+        ]);
+        
+        if (seqExists || strExists) {
             nextSeq++;
             displayInvoiceNumber = formatInvoiceNumber(series.prefix, nextSeq, series.padLength || 2);
             attempts++;
@@ -57,6 +62,7 @@ export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYe
             isDuplicate = false;
         }
     }
+
     
     // Update series currentNumber for tracking (internal purpose)
     series.currentNumber = nextSeq;

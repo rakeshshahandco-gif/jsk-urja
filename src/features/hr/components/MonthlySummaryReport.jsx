@@ -111,7 +111,9 @@ const MonthlySummaryReport = () => {
                             <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#0ea5e9' }}>Sundays</th>
                             <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#0ea5e9' }}>Holidays</th>
                             <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#6366f1' }}>Paid Non-Working</th>
-                            <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#475569' }}>Late/Miss</th>
+                            <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#b45309' }}>Delay (Late)</th>
+                            <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#dc2626' }}>Early Exit</th>
+                            <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#b91c1c' }}>Miss</th>
                             <th style={{ padding: '16px', fontSize: '13px', fontWeight: '800', color: '#f59e0b' }}>Salary Working Days</th>
                         </tr>
                     </thead>
@@ -145,9 +147,18 @@ const MonthlySummaryReport = () => {
                                 <td style={{ padding: '16px', fontSize: '14px', fontWeight: '700', color: '#0ea5e9' }}>{row.holidays}</td>
                                 <td style={{ padding: '16px', fontSize: '14px', fontWeight: '700', color: '#6366f1' }}>{row.paidNonWorkingDays}</td>
                                 <td style={{ padding: '16px' }}>
-                                    <div style={{ fontSize: '11px', fontWeight: '700' }}>
-                                        <div style={{ color: '#b45309' }}>Late: {row.late}</div>
-                                        <div style={{ color: '#b91c1c' }}>Miss: {row.missingCheckout}</div>
+                                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#b45309' }}>
+                                        {row.late} Days / {row.lateMinutes} Min
+                                    </div>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#dc2626' }}>
+                                        {row.earlyOut} Days / {row.earlyOutMinutes} Min
+                                    </div>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#b91c1c' }}>
+                                        {row.missingCheckout} Days
                                     </div>
                                 </td>
                                 <td style={{ padding: '16px' }}>

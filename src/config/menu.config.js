@@ -54,6 +54,7 @@ export const menuConfig = [
                 permission: 'reports',
                 children: [
                     { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.customer_master_report.view' },
+                    { id: 'report-sales-marketing', title: 'Sales & Marketing Analysis', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
                     { id: 'report-followup-tracker', title: 'Follow-up Tracker Report', path: '/reports/followups', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_report.view' },
                     { id: 'report-followup-dashboard', title: 'Follow-up Dashboard Report', path: '/reports/followup-dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_dashboard_report.view' },
                     { id: 'report-followup-task', title: 'Follow-up Task Report', path: '/reports/followup-task-report', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_task_report.view' },
@@ -191,8 +192,12 @@ export const menuConfig = [
         children: [
             { id: 'sales-orders', title: 'Sales Orders', path: PATHS.SALES.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
             { id: 'sales-invoices', title: 'Tax Invoices (GST)', path: PATHS.SALES.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
+            { id: 'eway-bills', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
+            { id: 'logistics-master', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
+
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
+            { id: 'sales-analysis', title: 'Sales Analysis Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
         ],
     },
     {
@@ -328,6 +333,7 @@ export const menuConfig = [
             { id: 'company-profile', title: 'Company Profile', path: PATHS.SETTINGS.COMPANY_PROFILE, roles: [ROLES.ADMIN], permission: 'admin.company_profile.view' },
             { id: 'whatsapp-settings', title: 'WhatsApp Settings', path: PATHS.SETTINGS.WHATSAPP, roles: [ROLES.ADMIN], permission: 'admin.whatsapp_settings.view' },
             { id: 'user-management', title: 'User Management', path: '/admin/users', roles: [ROLES.ADMIN], permission: 'admin.user_management.view' },
+            { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', roles: [ROLES.ADMIN], permission: 'admin' },
         ],
     },
 ];

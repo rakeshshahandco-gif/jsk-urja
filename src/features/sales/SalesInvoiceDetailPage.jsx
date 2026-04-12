@@ -8,7 +8,9 @@ import {
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
+import { createEwayBillDraft } from '@/services/ewayBillApi';
 import toast from 'react-hot-toast';
+
 
 const PAY_COLORS = {
     Unpaid: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -139,6 +141,20 @@ export default function SalesInvoiceDetailPage() {
         catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
         finally { setLoading(false); }
     };
+
+    const handleEwayBill = async () => {
+        setLoading(true);
+        try {
+            const res = await createEwayBillDraft(id);
+            toast.success('E-Way Bill Draft Ready!');
+            navigate(`/eway-bills/draft/${res.data._id}`);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to prepare E-Way Bill');
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
 
 
@@ -521,6 +537,17 @@ export default function SalesInvoiceDetailPage() {
                                     💳 Receive Payment
                                 </button>
                             )}
+
+                            {/* E-Way Bill Button */}
+                            {notCancelled && (
+                                <button
+                                    onClick={handleEwayBill}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
+                                >
+                                    🚚 Prepare E-Way Bill
+                                </button>
+                            )}
+
 
                         </div>
                     </div>

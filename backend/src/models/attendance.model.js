@@ -47,10 +47,34 @@ const attendanceSchema = mongoose.Schema(
             default: 0,
         },
         lateMinutes: {
-            type: Number, // Delay in minutes
+            type: Number, // Delay in arrival in minutes
             default: 0,
         },
         isLate: {
+            type: Boolean,
+            default: false,
+        },
+        earlyInMinutes: {
+            type: Number, // Early arrival in minutes
+            default: 0,
+        },
+        isEarlyIn: {
+            type: Boolean,
+            default: false,
+        },
+        lateOutMinutes: {
+            type: Number, // Late departure in minutes
+            default: 0,
+        },
+        isLateOut: {
+            type: Boolean,
+            default: false,
+        },
+        earlyOutMinutes: {
+            type: Number, // Early departure in minutes
+            default: 0,
+        },
+        isEarlyOut: {
             type: Boolean,
             default: false,
         },

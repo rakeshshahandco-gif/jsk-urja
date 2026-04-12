@@ -125,6 +125,39 @@ const customerSchema = mongoose.Schema(
             enum: ['running_high', 'running_low', 'inactive', 'lead'],
             default: 'lead',
         },
+        leadSource: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        assignedSalesperson: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        leadStage: {
+            type: String,
+            enum: ['New', 'Contacted', 'Qualified', 'Sample Sent', 'Negotiation', 'Converted', 'Lost', 'Closed', ''],
+            default: 'New',
+        },
+        leadDate: {
+            type: Date,
+            default: Date.now,
+        },
+        interestedProducts: {
+            type: [String],
+            default: [],
+        },
+        lostReason: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        lostCompetitor: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         notes: {
             type: String,
         },

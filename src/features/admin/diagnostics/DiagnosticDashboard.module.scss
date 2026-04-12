@@ -1,0 +1,272 @@
+.container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+}
+
+.title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.025em;
+}
+
+.subtitle {
+    color: #6B7280;
+    font-size: 14px;
+    margin: 0;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.lastUpdate {
+    font-size: 12px;
+    color: #9CA3AF;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+
+    &:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+
+    h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0;
+    }
+}
+
+.icon {
+    color: #4F46E5;
+}
+
+.statusCard {
+    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+}
+
+.statusValue {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 12px;
+
+    span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+}
+
+.safe {
+    color: #10B981;
+}
+
+.warning {
+    color: #F59E0B;
+}
+
+.cardFooter {
+    font-size: 12px;
+    color: #6B7280;
+    margin: 20px 0 0 0;
+    padding-top: 16px;
+    border-top: 1px solid #F3F4F6;
+}
+
+.infoList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.infoItem {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+
+    span {
+        color: #6B7280;
+    }
+
+    strong {
+        color: #111827;
+        font-weight: 500;
+    }
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.statBox {
+    background: #F3F4F6;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.statVal {
+    font-size: 24px;
+    font-weight: 800;
+    color: #111827;
+}
+
+.statLabel {
+    font-size: 11px;
+    color: #6B7280;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.section {
+    margin-top: 40px;
+}
+
+.sectionTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.tableContainer {
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+
+    th {
+        background: #F9FAFB;
+        padding: 12px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6B7280;
+        text-transform: uppercase;
+    }
+
+    td {
+        padding: 16px;
+        border-top: 1px solid #E5E7EB;
+        font-size: 14px;
+        color: #111827;
+    }
+
+    tr:hover td {
+        background: #F9FAFB;
+    }
+}
+
+.routeCell {
+    code {
+        background: #F3F4F6;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: #4F46E5;
+    }
+}
+
+.securityBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #DCFCE7;
+    color: #166534;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.statusTag {
+    font-size: 12px;
+    color: #10B981;
+    font-weight: 600;
+}
+
+.modelGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.modelTag {
+    background: white;
+    border: 1px solid #D1D5DB;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #374151;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+    &:hover {
+        border-color: #4F46E5;
+        color: #4F46E5;
+    }
+}
+
+.loading {
+    display: flex;
+    height: 300px;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #9CA3AF;
+    font-weight: 500;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}

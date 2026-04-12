@@ -151,6 +151,16 @@ export const PATHS = {
     WECHAT: {
         ROOT: '/wechat',
         CONTACTS: '/wechat/contacts',
+    },
+    EWAY_BILL: {
+        ROOT: '/eway-bills',
+        LIST: '/eway-bills/list',
+        DRAFT: (id) => `/eway-bills/draft/${id}`,
+    },
+    TRANSPORTERS: {
+        ROOT: '/transporters',
+        LIST: '/transporters/list',
     }
 };
+
 
