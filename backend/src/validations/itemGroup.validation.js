@@ -11,6 +11,7 @@ const createItemGroup = {
 
 const getItemGroups = {
     query: Joi.object().keys({
+        search: Joi.string().allow('').optional(),
         isActive: Joi.boolean().optional(),
         sortBy: Joi.string().optional(),
         limit: Joi.number().integer().optional(),

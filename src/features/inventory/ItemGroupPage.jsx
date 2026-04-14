@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Layers, Plus, Pencil, Trash2, Check, X } from 'lucide-react';
+import { Layers, Plus, Pencil, Trash2, Check, X, Search } from 'lucide-react';
 import { getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
 
@@ -22,20 +22,26 @@ const ItemGroupPage = () => {
     const [editId, setEditId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (search = '') => {
         setLoading(true);
         try {
-            const data = await getItemGroups();
+            const data = await getItemGroups({ search });
             setGroups(data);
         } catch (err) {
             console.error('Load Error:', err);
             addToast(err?.response?.data?.message || 'Failed to load item groups', 'error');
         }
         finally { setLoading(false); }
-    }, []);
+    }, [addToast]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { 
+        const delaySearch = setTimeout(() => {
+            load(searchTerm);
+        }, 300);
+        return () => clearTimeout(delaySearch);
+    }, [load, searchTerm]);
 
     const openAdd = () => { setForm({ ...BLANK }); setEditId(null); setShowForm(true); };
     const openEdit = (g) => { setForm({ name: g.name, code: g.code, description: g.description || '' }); setEditId(g._id); setShowForm(true); };
@@ -85,14 +91,45 @@ const ItemGroupPage = () => {
         } catch { addToast('Failed to update', 'error'); }
     };
 
+    const filteredGroups = groups.filter(g => 
+        g.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        g.code.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
         <div style={{ padding: '10px 16px', background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Layers size={15} style={{ color: '#059669' }} />
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Item Group Master</span>
-                    <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '1px 8px', borderRadius: 10, fontWeight: 600 }}>{groups.length} groups</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Layers size={15} style={{ color: '#059669' }} />
+                        <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Item Group Master</span>
+                        <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '1px 8px', borderRadius: 10, fontWeight: 600 }}>{filteredGroups.length} groups</span>
+                    </div>
+
+                    {/* Search Input */}
+                    <div style={{ position: 'relative', width: 220 }}>
+                        <Search size={14} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                        <input 
+                            type="text"
+                            placeholder="Search code or name..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{ 
+                                height: 28, width: '100%', paddingLeft: 28, paddingRight: 25, 
+                                fontSize: 11, border: '1px solid #e5e7eb', borderRadius: 6,
+                                background: '#fff', outline: 'none'
+                            }}
+                        />
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                style={{ position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af' }}
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
                 </div>
                 {!showForm && (
                     <button onClick={openAdd}
@@ -163,7 +200,7 @@ const ItemGroupPage = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {groups.map((g, i) => {
+                            {filteredGroups.map((g, i) => {
                                 const rowBg = i % 2 === 0 ? '#fff' : '#fafafa';
                                 return (
                                     <tr key={g._id} style={{ background: rowBg }}

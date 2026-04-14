@@ -185,6 +185,14 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
     const grandTotal = Math.round(rawGrandTotal);
     const roundOff = r2(grandTotal - rawGrandTotal);
 
+    // Safety Safeguard: If there are items with value, grandTotal should NOT be 0
+    if (items.length > 0 && grandTotal === 0) {
+        const hasRate = items.some(i => Number(i.rate) > 0 && Number(i.qty) > 0);
+        if (hasRate) {
+            throw new ApiError(400, 'Calculation failed: Invoice has items with rates but result is ₹0 total. Please verify item GST rates and quantities.');
+        }
+    }
+
     return {
         updatedItems,
         subTotal: r2(subTotal),
@@ -453,6 +461,12 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
                 const { updatedItems, ...headerTotals } = totals;
                 inv.items = updatedItems;
                 Object.assign(inv, headerTotals);
+            }
+            
+            // Final Safeguard for update
+            if (inv.items?.length > 0 && inv.grandTotal === 0) {
+                const hasValue = inv.items.some(i => i.rate > 0 && i.qty > 0);
+                if (hasValue) throw new ApiError(400, "Integrity check failed: Update resulted in ₹0 grand total despite having valued items.");
             }
 
             inv.updatedBy = req.user._id;

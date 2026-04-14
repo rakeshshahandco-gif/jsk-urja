@@ -2,11 +2,23 @@ import httpStatus from 'http-status';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ItemGroup } from '../models/itemGroup.model.js';
+import { Item } from '../models/item.model.js';
+import mongoose from 'mongoose';
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
 export const getItemGroups = asyncHandler(async (req, res) => {
+    const { search, isActive } = req.query;
     const filter = {};
-    if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
+    
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    
+    if (search) {
+        filter.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { code: { $regex: search, $options: 'i' } }
+        ];
+    }
+
     const groups = await ItemGroup.find(filter).sort({ name: 1 }).lean();
     res.send({ success: true, data: groups });
 });
@@ -34,12 +46,39 @@ export const updateItemGroup = asyncHandler(async (req, res) => {
     if (!itemGroup) throw new ApiError(httpStatus.NOT_FOUND, 'Item group not found');
 
     const { name, code, description, isActive } = req.body;
-    if (name !== undefined) itemGroup.name = name.trim();
+    const oldName = itemGroup.name;
+    const newName = name?.trim();
+
+    if (newName !== undefined && newName !== oldName) {
+        // Check if final new name already exists elsewhere
+        const exists = await ItemGroup.findOne({ 
+            name: newName, 
+            _id: { $ne: itemGroup._id } 
+        });
+        
+        if (exists) throw new ApiError(httpStatus.CONFLICT, 'Another item group with this name already exists');
+        
+        console.log(`Renaming Item Group from "${oldName}" to "${newName}"...`);
+        
+        // Escape special characters for regex
+        const escapedOldName = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Cascade update to Items (Case-Insensitive match)
+        const updateResult = await Item.updateMany(
+            { itemGroupName: { $regex: new RegExp(`^${escapedOldName}$`, 'i') } },
+            { itemGroupName: newName }
+        );
+        
+        console.log(`Successfully updated ${updateResult.modifiedCount} items.`);
+        itemGroup.name = newName;
+    }
+
     if (code !== undefined) itemGroup.code = code.trim().toUpperCase();
     if (description !== undefined) itemGroup.description = description.trim();
     if (isActive !== undefined) itemGroup.isActive = isActive;
 
     await itemGroup.save();
+    
     res.send({ success: true, data: itemGroup });
 });
 

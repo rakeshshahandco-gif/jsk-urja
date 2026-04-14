@@ -13,9 +13,12 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 async function runSync() {
     console.log('Starting Inventory Synchronization for Existing Completed Work Orders...');
     
+    // Support command line override for Prod Sync
+    const mongoUrl = process.argv[2] || process.env.MONGODB_URL;
+    
     try {
-        await mongoose.connect(process.env.MONGODB_URL);
-        console.log('Connected to MongoDB');
+        await mongoose.connect(mongoUrl);
+        console.log(`Connected to MongoDB: ${mongoUrl.includes('jskurja-prod') ? 'PRODUCTION' : 'DEVELOPMENT'}`);
 
         const completedWos = await WorkOrder.find({
             status: 'Completed',
