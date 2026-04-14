@@ -185,6 +185,7 @@ const workOrderSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
+    inventorySynced: { type: Boolean, default: false }, // Track if FG has been added to stock
 }, { timestamps: true });
 
 workOrderSchema.index({ status: 1 });

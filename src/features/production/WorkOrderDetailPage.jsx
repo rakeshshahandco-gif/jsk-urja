@@ -116,7 +116,7 @@ export default function WorkOrderDetailPage() {
                         <td>Company : JSK Innovative Technology Pvt Ltd</td>
                     </tr>
                     <tr>
-                        <td>Item to Manufacture : ${wo.finishedProductName || '—'}</td>
+                        <td>Item to Manufacture : ${wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}</td>
                         <td>Qty to Manufacture : ${wo.targetQty}</td>
                     </tr>
                     <tr>
@@ -193,7 +193,7 @@ export default function WorkOrderDetailPage() {
                             <span style={{ fontSize: '13px', color: '#94a3b8' }}>Priority: <strong style={{ color: '#f59e0b' }}>{wo.priority}</strong></span>
                         </div>
                         <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                            {wo.finishedProductName} · Target: {wo.targetQty} pcs · Supervisor: {wo.supervisor || '—'}
+                            {wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'} · Target: {wo.targetQty} pcs · Supervisor: {wo.supervisor || '—'}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -349,7 +349,7 @@ function OverviewTab({ wo, load }) {
         ['WO Number', wo.woNumber],
         ['Status', wo.status],
         ['BOM Version', wo.bomVersion || '—'],
-        ['Finished Product', wo.finishedProductName || '—'],
+        ['Finished Product', wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'],
         ['Target Qty', editing ? (
             <div>
                 <input type="number" min="1" value={form.targetQty} onChange={e => set('targetQty', Number(e.target.value))} style={{ ...inputStyle, borderColor: hasStarted ? '#ef4444' : '#3b82f6' }} disabled={hasStarted} />
@@ -483,7 +483,7 @@ function BomMaterialTab({ wo, load }) {
                 <body style="padding:20px; font-family:sans-serif;">
                     <h2>BOM Components - ${wo.woNumber}</h2>
                     <div style="margin-bottom: 20px; font-size: 14px;">
-                        <strong>Product:</strong> ${wo.finishedProductName || '-'} <br/>
+                        <strong>Product:</strong> ${wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '-'} <br/>
                         <strong>Target Qty:</strong> ${wo.targetQty || '-'} pcs<br/>
                     </div>
                     ${tableHtml}

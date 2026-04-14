@@ -3,35 +3,47 @@ import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardStats } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
-
-const tile = (label, value, color, bg) => ({ label, value, color, bg });
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
 
 const tiles_config = [
-    tile('Draft', 'Draft', '#64748b', '#f8fafc'),
-    tile('Released', 'Released', '#2563eb', '#eff6ff'),
-    tile('In Process', 'In Process', '#d97706', '#fffbeb'),
-    tile('WIP – Waiting Material', 'WIP – Waiting Material', '#dc2626', '#fef2f2'),
-    tile('On Hold', 'On Hold', '#9333ea', '#faf5ff'),
-    tile('Completed Today', 'Completed Today', '#16a34a', '#f0fdf4'),
-    tile('QC Pending', 'QC Pending', '#0891b2', '#ecfeff'),
-    tile('Testing Pending', 'Testing Pending', '#ea580c', '#fff7ed'),
+    { label: 'Draft', color: '#64748b', bg: '#f8fafc' },
+    { label: 'Released', color: '#2563eb', bg: '#eff6ff' },
+    { label: 'In Process', color: '#d97706', bg: '#fffbeb' },
+    { label: 'WIP – Waiting Material', color: '#dc2626', bg: '#fef2f2' },
+    { label: 'On Hold', color: '#9333ea', bg: '#faf5ff' },
+    { label: 'Completed (Range)', color: '#16a34a', bg: '#f0fdf4', valueKey: 'Completed Today' },
+    { label: 'Completed Total', color: '#059669', bg: '#ecfdf5', valueKey: 'Completed Total' },
+    { label: 'QC Pending', color: '#0891b2', bg: '#ecfeff' },
+    { label: 'Testing Pending', color: '#ea580c', bg: '#fff7ed' },
 ];
 
 export default function ProductionDashboard() {
     const navigate = useNavigate();
+    const { selectedFY } = useFinancialYear();
     const [stats, setStats] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Date Filters - Default to current month
+    const [dates, setDates] = useState(() => {
+        const d = new Date();
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+        const today = d.toISOString().split('T')[0];
+        return { from: firstDay, to: today };
+    });
+
     const fetchDashboardData = (silent = false) => {
         if (!silent) setLoading(true);
-        getDashboardStats()
+        getDashboardStats({ ...dates, financialYear: selectedFY })
             .then(setStats)
             .catch(e => setError(e.message || 'Failed to load stats'))
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { fetchDashboardData(); }, []);
+    useEffect(() => { 
+        if (selectedFY) fetchDashboardData(); 
+    }, [dates.from, dates.to, selectedFY]);
+    
     useGlobalSync('workorder', () => { fetchDashboardData(true); });
 
     const s = (key) => loading ? '...' : (stats[key] ?? '0');
@@ -40,7 +52,7 @@ export default function ProductionDashboard() {
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
 
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: '#1e293b' }}>
                         🏭 Production Dashboard
@@ -49,17 +61,28 @@ export default function ProductionDashboard() {
                         Real-time overview of all Work Orders
                     </p>
                 </div>
-                <button
-                    onClick={() => navigate(PATHS.PRODUCTION.NEW_WO)}
-                    style={{
-                        background: '#0d9488', color: '#fff', border: 'none',
-                        borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                        boxShadow: '0 2px 8px rgba(13,148,136,0.3)',
-                    }}
-                >
-                    + New Work Order
-                </button>
+
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', background: '#fff', padding: '4px 12px', borderRadius: 8, border: '1px solid #e5e7eb', gap: 8, alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af' }}>FROM</div>
+                        <input type="date" value={dates.from} onChange={e => setDates(d => ({ ...d, from: e.target.value }))} style={{ border: 'none', fontSize: 13, outline: 'none', color: '#374151', padding: '4px 0' }} />
+                        <div style={{ width: 1, background: '#e5e7eb', height: 16, margin: '0 4px' }} />
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af' }}>TO</div>
+                        <input type="date" value={dates.to} onChange={e => setDates(d => ({ ...d, to: e.target.value }))} style={{ border: 'none', fontSize: 13, outline: 'none', color: '#374151', padding: '4px 0' }} />
+                    </div>
+
+                    <button
+                        onClick={() => navigate(PATHS.PRODUCTION.NEW_WO)}
+                        style={{
+                            background: '#0d9488', color: '#fff', border: 'none',
+                            borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            boxShadow: '0 2px 8px rgba(13,148,136,0.3)',
+                        }}
+                    >
+                        + New Work Order
+                    </button>
+                </div>
             </div>
 
             {error && (
@@ -70,29 +93,33 @@ export default function ProductionDashboard() {
 
             {/* Stat Tiles */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 28 }}>
-                {tiles_config.map(t => (
-                    <div key={t.label}
-                        onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS + (
-                            t.label !== 'Completed Today' && t.label !== 'QC Pending' && t.label !== 'Testing Pending'
-                                ? `?status=${encodeURIComponent(t.label)}` : ''
-                        ))}
-                        style={{
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
-                            borderLeft: `4px solid ${t.color}`,
-                            borderRadius: 12,
-                            padding: '18px 20px',
-                            cursor: 'pointer',
-                            transition: 'transform 0.15s, box-shadow 0.15s',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
-                    >
-                        <div style={{ fontSize: 32, fontWeight: 800, color: t.color }}>{s(t.label)}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, fontWeight: 500 }}>{t.label}</div>
-                    </div>
-                ))}
+                {tiles_config.map(t => {
+                    const valueKey = t.valueKey || t.label;
+                    
+                    return (
+                        <div key={t.label}
+                            onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS + (
+                                !t.valueKey && t.label !== 'QC Pending' && t.label !== 'Testing Pending'
+                                    ? `?status=${encodeURIComponent(t.label)}` : ''
+                            ))}
+                            style={{
+                                background: '#fff',
+                                border: '1px solid #e5e7eb',
+                                borderLeft: `4px solid ${t.color}`,
+                                borderRadius: 12,
+                                padding: '18px 20px',
+                                cursor: 'pointer',
+                                transition: 'transform 0.15s, box-shadow 0.15s',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
+                        >
+                            <div style={{ fontSize: 32, fontWeight: 800, color: t.color }}>{s(valueKey)}</div>
+                            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, fontWeight: 500 }}>{t.label}</div>
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Quick Nav */}

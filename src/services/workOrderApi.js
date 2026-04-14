@@ -2,8 +2,8 @@ import api from './api';
 
 const BASE = '/work-orders';
 
-export const getDashboardStats = async () => {
-    const response = await api.get(`${BASE}/dashboard-stats`);
+export const getDashboardStats = async (params) => {
+    const response = await api.get(`${BASE}/dashboard-stats`, { params });
     return response.data.data;
 };
 

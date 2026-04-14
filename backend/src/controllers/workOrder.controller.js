@@ -12,6 +12,8 @@ import {
     updateMaterialStatusSchema,
     addProductionLogSchema,
 } from '../validations/workOrder.validation.js';
+import { syncWorkOrderToInventory } from '../services/inventory.service.js';
+import mongoose from 'mongoose';
 
 // ── Auto-generate WO Number ──────────────────────────────────────────────────
 const generateWoNumber = async () => {
@@ -236,67 +238,83 @@ export const releaseWorkOrder = asyncHandler(async (req, res) => {
 // PATCH /work-orders/:id/stages/:seq  – Update a production stage
 // ────────────────────────────────────────────────────────────────────────────
 export const updateStage = asyncHandler(async (req, res) => {
-    const { error, value } = updateStageSchema.validate(req.body);
-    if (error) throw new ApiError(400, error.details[0].message);
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { error, value } = updateStageSchema.validate(req.body);
+        if (error) throw new ApiError(400, error.details[0].message);
 
-    const wo = await WorkOrder.findById(req.params.id);
-    if (!wo) throw new ApiError(404, 'Work Order not found');
-    if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
-        throw new ApiError(400, `WO in status "${wo.status}" cannot have stages updated`);
-    }
+        const wo = await WorkOrder.findById(req.params.id).session(session);
+        if (!wo) throw new ApiError(404, 'Work Order not found');
+        if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
+            throw new ApiError(400, `WO in status "${wo.status}" cannot have stages updated`);
+        }
 
-    const seq = Number(req.params.seq);
-    const stage = wo.stages.find(s => s.seq === seq);
-    if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
+        const seq = Number(req.params.seq);
+        const stage = wo.stages.find(s => s.seq === seq);
+        if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
 
-    // Assign values
-    Object.assign(stage, value);
+        // Assign values
+        Object.assign(stage, value);
 
-    // Auto-calculate aggregated quantities from productionLogs if provided
-    if (value.productionLogs !== undefined) {
-        stage.inputQty = value.productionLogs.reduce((sum, log) => sum + (log.inputQty || 0), 0);
-        stage.outputQty = value.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
-        stage.reworkQty = value.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
-        stage.rejectionQty = value.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
+        // Auto-calculate aggregated quantities from productionLogs if provided
+        if (value.productionLogs !== undefined) {
+            stage.inputQty = value.productionLogs.reduce((sum, log) => sum + (log.inputQty || 0), 0);
+            stage.outputQty = value.productionLogs.reduce((sum, log) => sum + (log.outputQty || 0), 0);
+            stage.reworkQty = value.productionLogs.reduce((sum, log) => sum + (log.reworkQty || 0), 0);
+            stage.rejectionQty = value.productionLogs.reduce((sum, log) => sum + (log.rejectionQty || 0), 0);
 
-        // Stage Dependency Math:
-        const maxAllowed = getMaxAllowedOutput(wo, stage);
-        if (stage.outputQty > maxAllowed) {
-            if (stage.seq === 1) {
-                throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Total is ${stage.outputQty}.`);
-            } else {
-                throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Total is ${stage.outputQty}.`);
+            // Stage Dependency Math:
+            const maxAllowed = getMaxAllowedOutput(wo, stage);
+            if (stage.outputQty > maxAllowed) {
+                if (stage.seq === 1) {
+                    throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Total is ${stage.outputQty}.`);
+                } else {
+                    throw new ApiError(400, `Cannot exceed Previous Stage Output (${maxAllowed}). Total is ${stage.outputQty}.`);
+                }
             }
         }
-    }
 
-    // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
-    if (seq === 9 && value.status === 'Completed') {
-        const mandatoryShortages = wo.materialStatus.filter(
-            m => m.isMandatory && m.shortQty > 0
-        );
-        if (mandatoryShortages.length > 0) {
-            stage.status = 'QC Hold';
-            wo.status = 'WIP – Waiting Material';
-            wo.wip.isOnHold = true;
-            wo.wip.holdReason = 'Mandatory material shortage – cannot complete FG';
-            wo.wip.missingMandatoryItems = mandatoryShortages.map(m => m.itemName);
-            await wo.save();
-            return res.status(200).json(new ApiResponse(200, wo,
-                'Final QC blocked: mandatory material shortage. WO set to WIP – Waiting Material.'));
+        // ── Shortage gate: prevent Completed on Final QC (seq 9) if mandatory shortage ──
+        if (seq === 9 && value.status === 'Completed') {
+            const mandatoryShortages = wo.materialStatus.filter(
+                m => m.isMandatory && m.shortQty > 0
+            );
+            if (mandatoryShortages.length > 0) {
+                stage.status = 'QC Hold';
+                wo.status = 'WIP – Waiting Material';
+                wo.wip.isOnHold = true;
+                wo.wip.holdReason = 'Mandatory material shortage – cannot complete FG';
+                wo.wip.missingMandatoryItems = mandatoryShortages.map(m => m.itemName);
+                await wo.save({ session });
+                await session.commitTransaction();
+                return res.status(200).json(new ApiResponse(200, wo,
+                    'Final QC blocked: mandatory material shortage. WO set to WIP – Waiting Material.'));
+            }
         }
-    }
 
-    // Derive overall WO status
-    if (wo.status !== 'On Hold') {
-        wo.status = deriveWoStatus(wo.stages, wo.status);
-        if (wo.status === 'In Process' && !wo.actualStart) wo.actualStart = new Date();
-        if (wo.status === 'Completed') wo.actualEnd = new Date();
-    }
+        // Derive overall WO status
+        if (wo.status !== 'On Hold') {
+            wo.status = deriveWoStatus(wo.stages, wo.status);
+            if (wo.status === 'In Process' && !wo.actualStart) wo.actualStart = new Date();
+            if (wo.status === 'Completed') wo.actualEnd = new Date();
+        }
 
-    wo.updatedBy = req.user._id;
-    await wo.save();
-    res.json(new ApiResponse(200, wo, `Stage "${stage.stageName}" updated`));
+        // ── INVENTORY SYNC ──
+        if (wo.status === 'Completed' && !wo.inventorySynced) {
+            await syncWorkOrderToInventory(wo, session, req.user._id);
+        }
+
+        wo.updatedBy = req.user._id;
+        await wo.save({ session });
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, wo, `Stage "${stage.stageName}" updated`));
+    } catch (e) {
+        await session.abortTransaction();
+        throw e;
+    } finally {
+        session.endSession();
+    }
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -379,91 +397,102 @@ const recalculateStageAndWo = (wo, stage) => {
 // POST /work-orders/:id/stages/:seq/production-logs – Add Production Log
 // ────────────────────────────────────────────────────────────────────────────
 export const addProductionLog = asyncHandler(async (req, res) => {
-    const { error, value } = addProductionLogSchema.validate(req.body);
-    if (error) throw new ApiError(400, error.details[0].message);
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { error, value } = addProductionLogSchema.validate(req.body);
+        if (error) throw new ApiError(400, error.details[0].message);
 
-    const wo = await WorkOrder.findById(req.params.id);
-    if (!wo) throw new ApiError(404, 'Work Order not found');
-    if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
-        throw new ApiError(400, `WO in status "${wo.status}" cannot have production logged`);
-    }
-
-    const seq = Number(req.params.seq);
-    const stage = wo.stages.find(s => s.seq === seq);
-    if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
-
-    // ── 1. STAGE-SPECIFIC MATERIAL DEPENDENCY ────────────────────────────────
-    if (seq === 1) { // PCB Stage
-        const pcbShortages = wo.materialStatus.filter(m => m.itemType === 'PCB' && m.shortQty > 0);
-        if (pcbShortages.length > 0) {
-            throw new ApiError(400, `PCB Stage blocked: Missing PCB items (${pcbShortages.map(m => m.itemName).join(', ')}).`);
+        const wo = await WorkOrder.findById(req.params.id).session(session);
+        if (!wo) throw new ApiError(404, 'Work Order not found');
+        if (!['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status)) {
+            throw new ApiError(400, `WO in status "${wo.status}" cannot have production logged`);
         }
-    }
 
-    // Auto-populate missing components for Pick & Place and TH Mounting
-    if (seq === 2 || seq === 3) { // Pick & Place or TH Mounting
-        const relevantType = seq === 2 ? 'SMD' : 'TH';
-        const shortages = wo.materialStatus.filter(m => m.itemType === relevantType && m.shortQty > 0);
+        const seq = Number(req.params.seq);
+        const stage = wo.stages.find(s => s.seq === seq);
+        if (!stage) throw new ApiError(404, `Stage ${seq} not found`);
 
-        if (shortages.length > 0) {
-            // If the user didn't provide missingComponents, auto-identify them from shortages
-            if (!value.missingComponents || value.missingComponents.length === 0) {
-                value.missingComponents = shortages.map(s => ({
-                    itemId: s.itemId,
-                    itemCode: s.itemCode,
-                    itemName: s.itemName,
-                    quantity: s.shortQty,
-                    remarks: 'Auto-recorded shortage during production logging'
-                }));
+        // ── 1. STAGE-SPECIFIC MATERIAL DEPENDENCY ────────────────────────────────
+        if (seq === 1) { // PCB Stage
+            const pcbShortages = wo.materialStatus.filter(m => m.itemType === 'PCB' && m.shortQty > 0);
+            if (pcbShortages.length > 0) {
+                throw new ApiError(400, `PCB Stage blocked: Missing PCB items (${pcbShortages.map(m => m.itemName).join(', ')}).`);
             }
         }
-    }
 
-    // ── 2. QC RESULT AGGREGATION ─────────────────────────────────────────────
-    // For QC stages (7: 1st QC, 9: Final QC), outputQty should be the sum of results if not provided
-    if (stage.isQcGate) {
-        const passed = value.qcPassedQty || 0;
-        const rejected = value.qcRejectedQty || 0;
-        const rework = value.qcReworkQty || 0;
-        const totalOutput = passed + rejected + rework;
+        // Auto-populate missing components for Pick & Place and TH Mounting
+        if (seq === 2 || seq === 3) { // Pick & Place or TH Mounting
+            const relevantType = seq === 2 ? 'SMD' : 'TH';
+            const shortages = wo.materialStatus.filter(m => m.itemType === relevantType && m.shortQty > 0);
 
-        if (totalOutput > 0) {
-            value.outputQty = totalOutput;
-            value.reworkQty = rework;
-            value.rejectionQty = rejected;
+            if (shortages.length > 0) {
+                // If the user didn't provide missingComponents, auto-identify them from shortages
+                if (!value.missingComponents || value.missingComponents.length === 0) {
+                    value.missingComponents = shortages.map(s => ({
+                        itemId: s.itemId,
+                        itemCode: s.itemCode,
+                        itemName: s.itemName,
+                        quantity: s.shortQty,
+                        remarks: 'Auto-recorded shortage during production logging'
+                    }));
+                }
+            }
         }
-    }
 
-    // ── 3. SEQUENTIAL QUANTITY LIMITS ────────────────────────────────────────
-    const expectedOutput = stage.outputQty + (value.outputQty || 0);
-    const maxAllowed = getMaxAllowedOutput(wo, stage);
-    if (expectedOutput > maxAllowed) {
-        if (stage.seq === 1) {
-            throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending: ${wo.targetQty - stage.outputQty}.`);
-        } else {
-            const prevStage = wo.stages.find(s => s.seq === seq - 1);
-            throw new ApiError(400, `Cannot exceed Previous Stage ("${prevStage?.stageName}") Output (${maxAllowed}). Pending: ${maxAllowed - stage.outputQty}.`);
+        // ── 2. QC RESULT AGGREGATION ─────────────────────────────────────────────
+        // For QC stages (7: 1st QC, 9: Final QC), outputQty should be the sum of results if not provided
+        if (stage.isQcGate) {
+            const passed = value.qcPassedQty || 0;
+            const rejected = value.qcRejectedQty || 0;
+            const rework = value.qcReworkQty || 0;
+            const totalOutput = passed + rejected + rework;
+
+            if (totalOutput > 0) {
+                value.outputQty = totalOutput;
+                value.reworkQty = rework;
+                value.rejectionQty = rejected;
+            }
         }
+
+        // ── 3. SEQUENTIAL QUANTITY LIMITS ────────────────────────────────────────
+        const expectedOutput = stage.outputQty + (value.outputQty || 0);
+        const maxAllowed = getMaxAllowedOutput(wo, stage);
+        if (expectedOutput > maxAllowed) {
+            if (stage.seq === 1) {
+                throw new ApiError(400, `Cannot exceed Target Qty (${wo.targetQty}). Pending: ${wo.targetQty - stage.outputQty}.`);
+            } else {
+                const prevStage = wo.stages.find(s => s.seq === seq - 1);
+                throw new ApiError(400, `Cannot exceed Previous Stage ("${prevStage?.stageName}") Output (${maxAllowed}). Pending: ${maxAllowed - stage.outputQty}.`);
+            }
+        }
+
+        // Add Log
+        stage.productionLogs.push(value);
+
+        // Recalculate Totals & Status
+        const { blocked } = recalculateStageAndWo(wo, stage);
+
+        // ── 4. FG COMPLETION LOGIC ──
+        if (wo.status === 'Completed' && !wo.inventorySynced) {
+            await syncWorkOrderToInventory(wo, session, req.user._id);
+        }
+
+        wo.updatedBy = req.user._id;
+        await wo.save({ session });
+        await session.commitTransaction();
+
+        const responseMsg = blocked
+            ? 'Production logged, but Final QC blocked due to material shortage'
+            : `Production logged successfully for Stage "${stage.stageName}"`;
+
+        res.status(201).json(new ApiResponse(201, wo, responseMsg));
+    } catch (e) {
+        await session.abortTransaction();
+        throw e;
+    } finally {
+        session.endSession();
     }
-
-    // Add Log
-    stage.productionLogs.push(value);
-
-    // Recalculate Totals & Status
-    const { blocked } = recalculateStageAndWo(wo, stage);
-
-    // ── 4. FG COMPLETION LOGIC ───────────────────────────────────────────────
-    // If Final QC (seq 9) is completed, update FG stock if needed (or hand over to inventory controller)
-    // Note: Inventory update logic would typically be in a separate service, but we handle the status here.
-
-    wo.updatedBy = req.user._id;
-    await wo.save();
-
-    const responseMsg = blocked
-        ? 'Production logged, but Final QC blocked due to material shortage'
-        : `Production logged successfully for Stage "${stage.stageName}"`;
-
-    res.status(201).json(new ApiResponse(201, wo, responseMsg));
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -562,50 +591,61 @@ export const refreshMaterialStock = asyncHandler(async (req, res) => {
 // GET /work-orders/dashboard-stats  – Summary counts for dashboard tiles
 // ────────────────────────────────────────────────────────────────────────────
 export const getDashboardStats = asyncHandler(async (req, res) => {
+    const { from, to, financialYear } = req.query;
+    
+    // Status list for defaulting
     const statuses = [
         'Draft', 'Released', 'In Process',
         'WIP – Waiting Material', 'On Hold', 'Completed', 'Closed',
     ];
 
-    const pipeline = [
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-    ];
+    // 1. Build Global Stats Match (only filtered by Financial Year)
+    const globalMatch = {};
+    if (financialYear) globalMatch.financialYear = financialYear;
 
-    const results = await WorkOrder.aggregate(pipeline);
+    const results = await WorkOrder.aggregate([
+        { $match: globalMatch },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+
     const stats = {};
     statuses.forEach(s => { stats[s] = 0; });
-    results.forEach(r => { stats[r._id] = r.count; });
+    results.forEach(r => { if (r._id) stats[r._id] = r.count; });
 
-    // Today completed
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    stats['Completed Today'] = await WorkOrder.countDocuments({
+    // 2. Completed range calculations
+    let start = from ? new Date(from) : new Date();
+    let end = to ? new Date(to) : new Date();
+    
+    // Set to absolute start/end of day
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const completedRangeQuery = {
         status: 'Completed',
-        actualEnd: { $gte: todayStart },
-    });
+        actualEnd: { $gte: start, $lte: end }
+    };
+    if (financialYear) completedRangeQuery.financialYear = financialYear;
 
-    // QC Pending (stage 7 or 9 Running or QC Hold)
+    stats['Completed Today'] = await WorkOrder.countDocuments(completedRangeQuery);
+    stats['Completed Total'] = stats['Completed'] || 0;
+
+    // 3. QC & Testing Pending (Filtered by FY)
+    const pendingMatch = { 
+        status: { $in: ['In Process', 'Released'] },
+        ...(financialYear ? { financialYear } : {})
+    };
+
     stats['QC Pending'] = await WorkOrder.countDocuments({
-        'stages': {
-            $elemMatch: {
-                seq: { $in: [7, 9] },
-                status: { $in: ['Not Started', 'Running'] },
-            },
-        },
-        status: { $in: ['In Process', 'Released'] },
+        ...pendingMatch,
+        'stages': { $elemMatch: { seq: { $in: [7, 9] }, status: { $in: ['Not Started', 'Running'] } } }
     });
 
-    // Testing Pending (stage 8)
     stats['Testing Pending'] = await WorkOrder.countDocuments({
-        'stages': {
-            $elemMatch: {
-                seq: 8,
-                status: { $in: ['Not Started', 'Running'] },
-            },
-        },
-        status: { $in: ['In Process', 'Released'] },
+        ...pendingMatch,
+        'stages': { $elemMatch: { seq: 8, status: { $in: ['Not Started', 'Running'] } } }
     });
 
+    console.log(`[DASHBOARD DEBUG] FY: ${financialYear} | Range: ${from} to ${to} | Matches: ${JSON.stringify(stats)}`);
     res.json(new ApiResponse(200, stats, 'Dashboard stats fetched'));
 });
 

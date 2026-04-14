@@ -208,6 +208,9 @@ export const exportEwayBillJson = asyncHandler(async (req, res) => {
     const ewayBill = await EwayBill.findById(req.params.id);
     if (!ewayBill) throw new ApiError(404, 'E-way bill not found');
 
+    const company = await CompanyProfile.findOne();
+    if (!company) throw new ApiError(404, 'Company profile not found in settings');
+
     const schema = {
         version: "1.0.0421",
         billLists: [{
@@ -216,12 +219,15 @@ export const exportEwayBillJson = asyncHandler(async (req, res) => {
             docType: "INV",
             docNo: ewayBill.partA.docNo,
             docDate: ewayBill.partA.docDate.toISOString().split('T')[0].split('-').reverse().join('/'), // dd/MM/yyyy
-            fromGstin: ewayBill.partA.fromGstin,
-            fromTrdName: ewayBill.partA.fromTrdName,
-            fromAddr1: ewayBill.partA.fromAddr1,
-            fromPlace: ewayBill.partA.fromPlace,
-            fromPincode: Number(ewayBill.partA.fromPincode),
-            fromStateCode: ewayBill.partA.fromStateCode,
+            
+            // Always pull "From" details from Current Company Profile at time of export
+            fromGstin: company.gstNumber,
+            fromTrdName: company.companyName,
+            fromAddr1: company.address,
+            fromPlace: company.city,
+            fromPincode: Number(company.pincode),
+            fromStateCode: getStateCode(company.state) || Number(company.stateCode) || 0,
+            
             toGstin: ewayBill.partA.toGstin || 'URP',
             toTrdName: ewayBill.partA.toTrdName,
             toAddr1: ewayBill.partA.toAddr1,
