@@ -75,7 +75,7 @@ export default function RawMaterialStockReport() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f1f5f9' }}>
-                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
+                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Returned', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
                                     <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                                 ))}
                             </tr>
@@ -95,6 +95,7 @@ export default function RawMaterialStockReport() {
                                     <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.openingQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>+{fmt(r.purchaseQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.consumedQty)}</td>
+                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981' }}>+{fmt(r.returnedQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.replacementQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#ef4444' }}>-{fmt(r.rejectionQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(r.closingQty)}</td>

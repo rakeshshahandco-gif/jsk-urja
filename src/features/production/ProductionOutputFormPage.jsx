@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, Save, Package, ClipboardList, Warehouse, Info, CheckCircle, X } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
+import SearchableSelect from '../../components/ui/SearchableSelect';
+import { Button } from '../../components/ui';
 
 export default function ProductionOutputFormPage() {
     const navigate = useNavigate();
@@ -19,7 +22,13 @@ export default function ProductionOutputFormPage() {
 
     const handleWOChange = (woId) => {
         const wo = workOrders.find(w => w._id === woId);
-        setForm(p => ({ ...p, workOrderId: woId, workOrderNo: wo ? (wo.sheetNo || wo.workOrderNo || '') : '' }));
+        setForm(p => ({ 
+            ...p, 
+            workOrderId: woId, 
+            workOrderNo: wo ? (wo.sheetNo || wo.workOrderNo || '') : '',
+            // Auto-fill finished item if available in Work Order
+            finishedItemId: wo?.finishedProductId || wo?.productId || p.finishedItemId 
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -35,60 +44,138 @@ export default function ProductionOutputFormPage() {
         } finally { setSaving(false); }
     };
 
-    const fieldStyle = { width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff' };
-    const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 };
+    const cardStyle = { 
+        background: '#fff', 
+        border: '1px solid #e2e8f0', 
+        borderRadius: 16, 
+        padding: 32, 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        maxWidth: 800,
+        margin: '0 auto'
+    };
+    const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 };
     const gridCell = { display: 'flex', flexDirection: 'column' };
+    const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', transition: 'border-color 0.2s' };
 
     return (
-        <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 700 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                <button onClick={() => navigate(-1)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Back</button>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Production Output Entry</h2>
+        <div style={{ padding: '32px 24px', background: '#F6F8FC', minHeight: '100vh', fontFamily: "'Outfit', sans-serif" }}>
+            <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <button 
+                        onClick={() => navigate(-1)} 
+                        style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = '#2563EB'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>Production Output</h2>
+                        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Record new finished goods production</p>
+                    </div>
+                </div>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <form onSubmit={handleSubmit} style={cardStyle}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
                     <div style={gridCell}>
-                        <label style={labelStyle}>Date *</label>
-                        <input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
+                        <label style={labelStyle}>Entry Date <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input 
+                            type="date" 
+                            style={inputStyle} 
+                            value={form.date} 
+                            onChange={e => setForm(p => ({ ...p, date: e.target.value }))} 
+                            required 
+                        />
                     </div>
+
                     <div style={gridCell}>
                         <label style={labelStyle}>Work Order (Optional)</label>
-                        <select style={fieldStyle} value={form.workOrderId} onChange={e => handleWOChange(e.target.value)}>
-                            <option value="">-- Select Work Order --</option>
-                            {workOrders.map(w => <option key={w._id} value={w._id}>{w.sheetNo || w.workOrderNo} — {w.productName || w.itemName}</option>)}
-                        </select>
+                        <SearchableSelect
+                            options={workOrders.map(w => ({ value: w._id, label: `${w.sheetNo || w.workOrderNo} — ${w.productName || w.itemName}` }))}
+                            value={form.workOrderId}
+                            onChange={handleWOChange}
+                            placeholder="Search Work Order..."
+                            icon={<ClipboardList size={16} />}
+                        />
                     </div>
+
                     <div style={{ ...gridCell, gridColumn: 'span 2' }}>
-                        <label style={labelStyle}>Finished Item *</label>
-                        <select style={fieldStyle} value={form.finishedItemId} onChange={e => setForm(p => ({ ...p, finishedItemId: e.target.value }))} required>
-                            <option value="">-- Select Finished Item --</option>
-                            {items.map(i => <option key={i._id} value={i._id}>{i.itemCode} — {i.itemName}</option>)}
-                        </select>
+                        <label style={labelStyle}>Finished Item <span style={{ color: '#ef4444' }}>*</span></label>
+                        <SearchableSelect
+                            options={items.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                            value={form.finishedItemId}
+                            onChange={val => setForm(p => ({ ...p, finishedItemId: val }))}
+                            placeholder="Select Finished Product"
+                            icon={<Package size={16} />}
+                            required
+                        />
                     </div>
+
                     <div style={gridCell}>
-                        <label style={labelStyle}>Qty Produced *</label>
-                        <input type="number" min="0.01" step="0.01" style={fieldStyle} value={form.qtyProduced} onChange={e => setForm(p => ({ ...p, qtyProduced: e.target.value }))} required placeholder="Enter quantity" />
+                        <label style={labelStyle}>Quantity Produced <span style={{ color: '#ef4444' }}>*</span></label>
+                        <div style={{ position: 'relative' }}>
+                            <input 
+                                type="number" 
+                                min="0.01" 
+                                step="0.01" 
+                                style={{ ...inputStyle, paddingRight: 45 }} 
+                                value={form.qtyProduced} 
+                                onChange={e => setForm(p => ({ ...p, qtyProduced: e.target.value }))} 
+                                required 
+                                placeholder="0.00"
+                            />
+                            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 12, fontWeight: 600 }}>PCS</span>
+                        </div>
                     </div>
+
                     <div style={gridCell}>
                         <label style={labelStyle}>Warehouse / Location</label>
-                        <input style={fieldStyle} value={form.warehouse} onChange={e => setForm(p => ({ ...p, warehouse: e.target.value }))} placeholder="e.g. Main Store" />
+                        <div style={{ position: 'relative' }}>
+                            <Warehouse size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input 
+                                style={{ ...inputStyle, paddingLeft: 40 }} 
+                                value={form.warehouse} 
+                                onChange={e => setForm(p => ({ ...p, warehouse: e.target.value }))} 
+                                placeholder="e.g. Main Store" 
+                            />
+                        </div>
                     </div>
+
                     <div style={{ ...gridCell, gridColumn: 'span 2' }}>
                         <label style={labelStyle}>Remarks</label>
-                        <textarea rows={2} style={{ ...fieldStyle, resize: 'vertical' }} value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} placeholder="Optional notes..." />
+                        <textarea 
+                            rows={3} 
+                            style={{ ...inputStyle, resize: 'none' }} 
+                            value={form.remarks} 
+                            onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} 
+                            placeholder="Add any internal notes here..." 
+                        />
                     </div>
                 </div>
 
-                <div style={{ background: '#dcfce7', border: '1px solid #16a34a', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534', marginBottom: 16 }}>
-                    📦 Saving this entry will <strong>increase Finished Goods stock</strong> by the quantity entered.
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: 16, display: 'flex', gap: 12, marginBottom: 32 }}>
+                    <Info size={20} style={{ color: '#2563eb', flexShrink: 0 }} />
+                    <div style={{ fontSize: 13, color: '#1e40af', lineHeight: '1.5' }}>
+                        Recording this output will automatically <strong>increase Finished Goods stock</strong> and update inventory balances.
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
-                    <button type="submit" disabled={saving} style={{ padding: '8px 24px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                        {saving ? 'Saving...' : '✓ Save Production Output'}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: 24 }}>
+                    <button 
+                        type="button" 
+                        onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} 
+                        style={{ padding: '10px 24px', background: 'transparent', color: '#64748b', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+                    >
+                        Cancel
                     </button>
+                    <Button 
+                        type="submit" 
+                        disabled={saving} 
+                        style={{ padding: '10px 32px', display: 'flex', alignItems: 'center', gap: 8, height: 44 }}
+                    >
+                        {saving ? 'Saving...' : <><CheckCircle size={18} /> Save Output</>}
+                    </Button>
                 </div>
             </form>
         </div>

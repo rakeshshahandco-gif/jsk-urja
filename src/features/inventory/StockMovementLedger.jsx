@@ -13,6 +13,7 @@ const TYPE_LABELS = {
     REPLACEMENT_DISPATCH: 'Replacement Dispatch', FAULTY_RECEIPT: 'Faulty Receipt',
     REPAIR_INWARD: 'Repair Inward', SCRAP_ENTRY: 'Scrap', PROD_FAILURE: 'Production Failure',
     REWORK_CONSUMPTION: 'Rework Consumption', REWORK_QC_PASS: 'Rework Output',
+    MODEL_CONVERSION: 'Model Conversion / Rework',
 };
 
 const TABS = [
@@ -278,8 +279,8 @@ function RawMaterialSection({ onSelectItem }) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#dbeafe', color: '#1e40af' }}>
-                                {['#', 'Item Code', 'Item Name', 'UOM', 'Opening', '↑ Purchase', '↓ Consumed', '↓ Replacement', '↓ Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map((h, i) => (
-                                    <th key={h} style={{ ...TH(['Opening','↑ Purchase','↓ Consumed','↓ Replacement','↓ Rejection','Closing','Current Stock','Value (₹)'].includes(h)), color: '#1e40af', borderColor: '#93c5fd' }}>{h}</th>
+                                {['#', 'Item Code', 'Item Name', 'UOM', 'Opening', '↑ Purchase', '↓ Consumed', '↑ Returned', '↓ Replacement', '↓ Rejection', 'Misc Adj.', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map((h, i) => (
+                                    <th key={h} style={{ ...TH(['Opening','↑ Purchase','↓ Consumed', '↑ Returned','↓ Replacement','↓ Rejection', 'Misc Adj.', 'Closing','Current Stock','Value (₹)'].includes(h)), color: '#1e40af', borderColor: '#93c5fd' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -298,8 +299,10 @@ function RawMaterialSection({ onSelectItem }) {
                                     <td style={TDR}>{fmt(r.openingQty)}</td>
                                     <td style={{ ...TDR, color: '#10b981', fontWeight: 700 }}>+{fmt(r.purchaseQty)}</td>
                                     <td style={{ ...TDR, color: '#f59e0b' }}>-{fmt(r.consumedQty)}</td>
+                                    <td style={{ ...TDR, color: '#10b981' }}>+{fmt(r.returnedQty)}</td>
                                     <td style={{ ...TDR, color: '#f59e0b' }}>-{fmt(r.replacementQty)}</td>
                                     <td style={{ ...TDR, color: '#ef4444' }}>-{fmt(r.rejectionQty)}</td>
+                                    <td style={{ ...TDR, color: '#64748b', fontSize: 11 }}>{r.adjustmentIn > 0 ? `+${fmt(r.adjustmentIn)}` : r.adjustmentOut > 0 ? `-${fmt(r.adjustmentOut)}` : '0.00'}</td>
                                     <td style={{ ...TDR, fontWeight: 700 }}>{fmt(r.closingQty)}</td>
                                     <td style={{ ...TDR, fontWeight: 700, color: r.belowReorder ? '#ef4444' : '#1e293b' }}>{fmt(r.currentStock)}</td>
                                     <td style={TDR}>₹{Number(r.stockValue || 0).toLocaleString('en-IN')}</td>
@@ -314,6 +317,7 @@ function RawMaterialSection({ onSelectItem }) {
                                     <td style={{ ...TDR, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(rows.reduce((s,r)=>s+(r.purchaseQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.consumedQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(rows.reduce((s,r)=>s+(r.returnedQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.replacementQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.rejectionQty||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
@@ -392,8 +396,8 @@ function FinishedGoodsSection({ onSelectItem }) {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#ede9fe', color: '#5b21b6' }}>
-                                {['#', 'Item Code', 'Item Name', 'UOM', 'Opening', '↑ Production', '↓ Sales', '↓ Replacement', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
-                                    <th key={h} style={{ ...TH(['Opening','↑ Production','↓ Sales','↓ Replacement','Closing','Current Stock','Value (₹)'].includes(h)), color: '#5b21b6', borderColor: '#c4b5fd' }}>{h}</th>
+                                {['#', 'Item Code', 'Item Name', 'UOM', 'Opening', '↑ Production', '↑ Conv. In', '↓ Sales', '↓ Replacement', '↓ Conv. Out', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
+                                    <th key={h} style={{ ...TH(['Opening','↑ Production', '↑ Conv. In','↓ Sales','↓ Replacement', '↓ Conv. Out','Closing','Current Stock','Value (₹)'].includes(h)), color: '#5b21b6', borderColor: '#c4b5fd' }}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -411,8 +415,10 @@ function FinishedGoodsSection({ onSelectItem }) {
                                     <td style={{ ...TD, color: '#64748b' }}>{r.uom}</td>
                                     <td style={TDR}>{fmt(r.openingQty)}</td>
                                     <td style={{ ...TDR, color: '#10b981', fontWeight: 700 }}>+{fmt(r.productionQty)}</td>
+                                    <td style={{ ...TDR, color: '#10b981' }}>+{fmt(r.conversionIn)}</td>
                                     <td style={{ ...TDR, color: '#f59e0b' }}>-{fmt(r.salesQty)}</td>
                                     <td style={{ ...TDR, color: '#ef4444' }}>-{fmt(r.replacementDispatch)}</td>
+                                    <td style={{ ...TDR, color: '#ef4444' }}>-{fmt(r.conversionOut)}</td>
                                     <td style={{ ...TDR, fontWeight: 700 }}>{fmt(r.closingQty)}</td>
                                     <td style={{ ...TDR, fontWeight: 700, color: r.belowReorder ? '#ef4444' : '#1e293b' }}>{fmt(r.currentStock)}</td>
                                     <td style={TDR}>₹{Number(r.stockValue || 0).toLocaleString('en-IN')}</td>
@@ -426,8 +432,10 @@ function FinishedGoodsSection({ onSelectItem }) {
                                     <td colSpan={4} style={{ padding: '10px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>TOTALS</td>
                                     <td style={{ ...TDR, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(rows.reduce((s,r)=>s+(r.productionQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(rows.reduce((s,r)=>s+(r.conversionIn||0),0))}</td>
                                     <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.salesQty||0),0))}</td>
                                     <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.replacementDispatch||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.conversionOut||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.currentStock||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, color: '#a78bfa', background: '#1e293b' }}>₹{Number(summary.totalValue).toLocaleString('en-IN')}</td>

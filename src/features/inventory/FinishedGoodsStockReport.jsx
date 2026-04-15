@@ -36,7 +36,7 @@ export default function FinishedGoodsStockReport() {
     return (
         <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#1e293b' }}>Finished Goods Stock Report</h2>
-            <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13 }}>Opening + Production − Sales − Replacement Dispatch = Closing</p>
+            <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13 }}>Opening + Production + Conversion In − Sales − Replacement Dispatch − Conversion Out = Closing</p>
 
             <div style={{ display: 'flex', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
                 {[
@@ -71,7 +71,7 @@ export default function FinishedGoodsStockReport() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f5f3ff' }}>
-                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Production', 'Sales', 'Replacement Out', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
+                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Production', 'Conv. In', 'Sales', 'Repl. Out', 'Conv. Out', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
                                     <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
                                 ))}
                             </tr>
@@ -90,8 +90,10 @@ export default function FinishedGoodsStockReport() {
                                     <td style={{ padding: '7px 12px', color: '#64748b' }}>{r.uom}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.openingQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>+{fmt(r.productionQty)}</td>
+                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981' }}>+{fmt(r.conversionIn)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.salesQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', color: '#ef4444' }}>-{fmt(r.replacementDispatch)}</td>
+                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#ef4444' }}>-{fmt(r.conversionOut)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(r.closingQty)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: r.belowReorder ? '#ef4444' : '#1e293b' }}>{fmt(r.currentStock)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right' }}>₹{Number(r.stockValue || 0).toLocaleString('en-IN')}</td>

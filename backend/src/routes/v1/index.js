@@ -57,6 +57,7 @@ import whatsappSettingsRoute from './whatsappSettings.routes.js';
 import assetDisposalRoute from './assetDisposal.routes.js';
 import stockRoute from './stock.routes.js';
 import productionOutputRoute from './productionOutput.routes.js';
+import modelConversionRoute from './modelConversion.routes.js';
 import componentReplacementRoute from './componentReplacement.routes.js';
 import productionRejectionRoute from './productionRejection.routes.js';
 import accountMasterRoute from './accountMaster.routes.js';
@@ -327,6 +328,10 @@ const defaultRoutes = [
     {
         path: '/production-outputs',
         route: productionOutputRoute,
+    },
+    {
+        path: '/model-conversions',
+        route: modelConversionRoute,
     },
     {
         path: '/component-replacements',

@@ -13,7 +13,26 @@ const generateEntryNo = async () => {
 
 // POST /component-replacements
 export const createComponentReplacement = asyncHandler(async (req, res) => {
-    const { date, workOrderId, workOrderNo, finishedItemId, finishedItemName, qtyUnderTesting, testedBy, remarks, components } = req.body;
+    const { 
+        date, 
+        referenceType,
+        workOrderId, 
+        workOrderNo, 
+        finishedItemId, 
+        finishedItemName, 
+        qtyUnderTesting, 
+        testedBy, 
+        remarks, 
+        components,
+        // Independent tracking fields
+        customerName,
+        salesInvoiceNo,
+        dispatchRef,
+        serviceRefNo,
+        complaintRef,
+        warrantyDetails,
+        failureDate
+    } = req.body;
 
     if (!components || components.length === 0) throw new ApiError(400, 'At least one component is required');
 
@@ -48,7 +67,7 @@ export const createComponentReplacement = asyncHandler(async (req, res) => {
             rate: item.valuationRate || 0,
             amount: Math.round(replQty * (item.valuationRate || 0) * 100) / 100,
             runningStock: item.currentStock,
-            remarks: `Component Replacement: ${entryNo}`,
+            remarks: `Component Replacement (${referenceType || 'Manual'}): ${entryNo}`,
             createdBy: req.user._id,
         });
 
@@ -66,6 +85,7 @@ export const createComponentReplacement = asyncHandler(async (req, res) => {
     const entry = await ComponentReplacement.create({
         entryNo,
         date: date || new Date(),
+        referenceType: referenceType || 'Work Order Based',
         workOrderId: workOrderId || null,
         workOrderNo: workOrderNo || '',
         finishedItemId: finishedItemId || null,
@@ -74,6 +94,14 @@ export const createComponentReplacement = asyncHandler(async (req, res) => {
         testedBy: testedBy || '',
         remarks: remarks || '',
         components: processedComponents,
+        // Independent fields
+        customerName: customerName || '',
+        salesInvoiceNo: salesInvoiceNo || '',
+        dispatchRef: dispatchRef || '',
+        serviceRefNo: serviceRefNo || '',
+        complaintRef: complaintRef || '',
+        warrantyDetails: warrantyDetails || '',
+        failureDate: failureDate ? new Date(failureDate) : null,
         createdBy: req.user._id,
     });
 

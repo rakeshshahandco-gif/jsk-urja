@@ -164,7 +164,7 @@ export const menuConfig = [
         permission: 'production',
         children: [
             { id: 'prod-dashboard', title: 'Dashboard', path: PATHS.PRODUCTION.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_dashboard.view' },
-            { id: 'prod-output', title: 'Production Output Entry', path: '/production/outputs/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_output.add' },
+            { id: 'model-conversion', title: 'Model Conversion / Rework', path: '/production/conversion/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_output.add' },
             { id: 'comp-replacement', title: 'Component Replacement', path: '/production/component-replacements/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.comp_replacement.add' },
             { id: 'prod-rejection', title: 'Production Rejection', path: '/production/rejections/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rejection.add' },
             { id: 'prod-rework', title: 'Failure & Rework', path: PATHS.PRODUCTION.REWORK.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rework.view' },

@@ -1,32 +1,78 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+    ChevronLeft, 
+    Save, 
+    Plus, 
+    Trash2, 
+    Package, 
+    ClipboardList,
+    AlertTriangle,
+    CheckCircle2,
+    Info,
+    User,
+    Calendar,
+    Search
+} from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
+import SearchableSelect from '../../components/ui/SearchableSelect';
+import { Button } from '../../components/ui';
 
-const emptyComponent = () => ({ itemId: '', itemCode: '', itemName: '', damagedQty: '', replacementQty: '', reason: '' });
+const emptyComponent = () => ({ itemId: '', itemCode: '', itemName: '', damagedQty: 1, replacementQty: 1, reason: '' });
 
 export default function ComponentReplacementFormPage() {
     const navigate = useNavigate();
     const [allItems, setAllItems] = useState([]);
     const [workOrders, setWorkOrders] = useState([]);
     const [fgItems, setFgItems] = useState([]);
-    const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), workOrderId: '', workOrderNo: '', finishedItemId: '', finishedItemName: '', qtyUnderTesting: '', testedBy: '', remarks: '' });
+    const [form, setForm] = useState({ 
+        date: new Date().toISOString().slice(0, 10), 
+        referenceType: 'Work Order Based',
+        workOrderId: '', 
+        workOrderNo: '', 
+        finishedItemId: '', 
+        finishedItemName: '', 
+        qtyUnderTesting: 1, 
+        testedBy: '', 
+        remarks: '',
+        customerName: '',
+        salesInvoiceNo: '',
+        dispatchRef: '',
+        serviceRefNo: '',
+        complaintRef: '',
+        warrantyDetails: '',
+        failureDate: ''
+    });
     const [components, setComponents] = useState([emptyComponent()]);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        api.get('/items', { params: { limit: 500 } }).then(res => {
-            const items = res.data?.data?.items || res.data?.data || [];
-            setAllItems(items.filter(i => i.itemCategory === 'RAW_MATERIAL'));
-            setFgItems(items.filter(i => ['FINISHED_GOOD', 'TRADING'].includes(i.itemCategory)));
-        });
-        api.get('/production-sheets', { params: { limit: 100 } })
-            .then(res => setWorkOrders(res.data?.data?.sheets || res.data?.data || [])).catch(() => { });
+        setSaving(true);
+        // Load Raw Materials and Models
+        api.get('/items', { limit: 2000 }).then(res => {
+            const list = res.data || [];
+            setAllItems(list.filter(i => i.itemCategory === 'RAW_MATERIAL'));
+            setFgItems(list.filter(i => ['FINISHED_GOOD', 'TRADING', 'WIP'].includes(i.itemCategory) || i.isManufacturable));
+        }).catch(err => toast.error("Failed to load items"));
+
+        // Load Work Orders (WO- series)
+        api.get('/work-orders', { limit: 500 }).then(res => {
+            const list = res.data?.workOrders || [];
+            setWorkOrders(list);
+        }).catch(() => { });
+
+        setSaving(false);
     }, []);
 
     const handleCompItemChange = (idx, itemId) => {
         const item = allItems.find(i => i._id === itemId);
-        setComponents(prev => prev.map((c, i) => i === idx ? { ...c, itemId, itemCode: item?.itemCode || '', itemName: item?.itemName || '' } : c));
+        setComponents(prev => prev.map((c, i) => i === idx ? { 
+            ...c, 
+            itemId, 
+            itemCode: item?.itemCode || '', 
+            itemName: item?.itemName || '' 
+        } : c));
     };
 
     const addRow = () => setComponents(prev => [...prev, emptyComponent()]);
@@ -34,102 +80,255 @@ export default function ComponentReplacementFormPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const validComps = components.filter(c => c.itemId && c.replacementQty);
-        if (validComps.length === 0) return toast.error('Add at least one component with replacement qty');
+        
+        // Validation logic
+        if (form.referenceType === 'Work Order Based' && !form.workOrderId) {
+            return toast.error('Please select a Related Work Order');
+        }
+
+        const validComps = components.filter(c => c.itemId && c.replacementQty > 0);
+        if (validComps.length === 0) return toast.error('Add at least one component to replace');
+        
         setSaving(true);
         try {
             await api.post('/component-replacements', { ...form, components: validComps });
-            toast.success('Component Replacement entry saved!');
-            navigate('/production/component-replacements');
+            toast.success('Component Replacement saved successfully!');
+            navigate('/inventory/stock/ledger');
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to save');
+            toast.error(err.response?.data?.message || 'Failed to save entry');
         } finally { setSaving(false); }
     };
 
-    const fieldStyle = { width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, background: '#fff' };
-    const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 };
+    const sectionCard = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, marginBottom: 24, boxShadow: '0 4px 20px rgba(0,0,0,0.02)' };
+    const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 8 };
+    const inputStyle = { width: '100%', padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', transition: 'all 0.2s' };
+
+    const typeOptions = [
+        { id: 'Work Order Based', icon: <ClipboardList size={18} />, desc: 'Production-linked replacement' },
+        { id: 'Independent Replacement', icon: <Package size={18} />, desc: 'Post-production adjustment' },
+        { id: 'Service / Warranty Replacement', icon: <AlertTriangle size={18} />, desc: 'Market return / fault' }
+    ];
 
     return (
-        <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 900 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                <button onClick={() => window.confirm('Discard changes?') && navigate(-1)} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#475569' }}>← Back</button>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>Component Replacement Entry</h2>
-            </div>
-
-            <form onSubmit={handleSubmit}>
+        <div style={{ padding: '32px 24px', background: '#F6F8FC', minHeight: '100vh', fontFamily: "'Outfit', sans-serif" }}>
+            <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+                
                 {/* Header */}
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16 }}>
-                    <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#475569' }}>Entry Details</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-                        <div><label style={labelStyle}>Date *</label><input type="date" style={fieldStyle} value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required /></div>
-                        <div><label style={labelStyle}>Work Order</label>
-                            <select style={fieldStyle} value={form.workOrderId} onChange={e => {
-                                const wo = workOrders.find(w => w._id === e.target.value);
-                                setForm(p => ({ ...p, workOrderId: e.target.value, workOrderNo: wo ? (wo.sheetNo || '') : '' }));
-                            }}>
-                                <option value="">-- Select --</option>
-                                {workOrders.map(w => <option key={w._id} value={w._id}>{w.sheetNo || w.workOrderNo}</option>)}
-                            </select>
-                        </div>
-                        <div><label style={labelStyle}>Finished Item (Under Testing)</label>
-                            <select style={fieldStyle} value={form.finishedItemId} onChange={e => {
-                                const item = fgItems.find(i => i._id === e.target.value);
-                                setForm(p => ({ ...p, finishedItemId: e.target.value, finishedItemName: item?.itemName || '' }));
-                            }}>
-                                <option value="">-- Select --</option>
-                                {fgItems.map(i => <option key={i._id} value={i._id}>{i.itemCode} — {i.itemName}</option>)}
-                            </select>
-                        </div>
-                        <div><label style={labelStyle}>Qty Under Testing</label><input type="number" min="0" style={fieldStyle} value={form.qtyUnderTesting} onChange={e => setForm(p => ({ ...p, qtyUnderTesting: e.target.value }))} /></div>
-                        <div><label style={labelStyle}>Tested By</label><input style={fieldStyle} value={form.testedBy} onChange={e => setForm(p => ({ ...p, testedBy: e.target.value }))} placeholder="Technician name" /></div>
-                        <div><label style={labelStyle}>Remarks</label><input style={fieldStyle} value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} /></div>
-                    </div>
-                </div>
-
-                {/* Components Table */}
-                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#475569' }}>Component Replacement Details</h3>
-                        <button type="button" onClick={addRow} style={{ padding: '5px 14px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>+ Add Row</button>
-                    </div>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <thead><tr style={{ background: '#fef3c7' }}>
-                                {['Component (Raw Material)', 'Damaged Qty', 'Replacement Qty *', 'Reason', ''].map(h => (
-                                    <th key={h} style={{ padding: '7px 10px', textAlign: 'left', color: '#92400e', fontWeight: 600, borderBottom: '1px solid #fde68a' }}>{h}</th>
-                                ))}
-                            </tr></thead>
-                            <tbody>
-                                {components.map((comp, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                        <td style={{ padding: '5px 6px' }}>
-                                            <select style={{ ...fieldStyle, minWidth: 200 }} value={comp.itemId} onChange={e => handleCompItemChange(idx, e.target.value)} required>
-                                                <option value="">-- Select Component --</option>
-                                                {allItems.map(i => <option key={i._id} value={i._id}>{i.itemCode} — {i.itemName}</option>)}
-                                            </select>
-                                        </td>
-                                        <td style={{ padding: '5px 6px' }}><input type="number" min="0" style={{ ...fieldStyle, width: 80 }} value={comp.damagedQty} onChange={e => setComponents(prev => prev.map((c, i) => i === idx ? { ...c, damagedQty: e.target.value } : c))} /></td>
-                                        <td style={{ padding: '5px 6px' }}><input type="number" min="0.01" step="0.01" style={{ ...fieldStyle, width: 80 }} value={comp.replacementQty} onChange={e => setComponents(prev => prev.map((c, i) => i === idx ? { ...c, replacementQty: e.target.value } : c))} required /></td>
-                                        <td style={{ padding: '5px 6px' }}><input style={{ ...fieldStyle, minWidth: 120 }} value={comp.reason} onChange={e => setComponents(prev => prev.map((c, i) => i === idx ? { ...c, reason: e.target.value } : c))} placeholder="e.g. Burn, Short circuit" /></td>
-                                        <td style={{ padding: '5px 6px', textAlign: 'center' }}>{components.length > 1 && <button type="button" onClick={() => removeRow(idx)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: 12 }}>✕</button>}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div style={{ background: '#fff7ed', border: '1px solid #f97316', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#c2410c', marginBottom: 16 }}>
-                    ⚠️ Saving this entry will <strong>reduce Raw Material stock</strong> for each component by its Replacement Qty.
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => window.confirm('Discard changes?') && navigate(-1)} style={{ padding: '8px 20px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
-                    <button type="submit" disabled={saving} style={{ padding: '8px 24px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                        {saving ? 'Saving...' : '✓ Save Component Replacement'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+                    <button onClick={() => navigate(-1)} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <ChevronLeft size={20} color="#64748b" />
                     </button>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#1e293b' }}>Component Replacement</h2>
+                        <p style={{ margin: 0, fontSize: 14, color: '#64748b' }}>Track and deduct components replaced during or after production</p>
+                    </div>
                 </div>
-            </form>
+
+                <form onSubmit={handleSubmit}>
+                    
+                    {/* 1. Reference Type Selector */}
+                    <div style={sectionCard}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                            <Info size={20} color="#2563eb" />
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Select Replacement Type</h3>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                            {typeOptions.map(opt => (
+                                <div 
+                                    key={opt.id}
+                                    onClick={() => setForm(p => ({ ...p, referenceType: opt.id }))}
+                                    style={{
+                                        padding: '16px',
+                                        borderRadius: 12,
+                                        border: `2px solid ${form.referenceType === opt.id ? '#2563eb' : '#e2e8f0'}`,
+                                        background: form.referenceType === opt.id ? '#eff6ff' : '#fff',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 8
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: form.referenceType === opt.id ? '#2563eb' : '#64748b' }}>
+                                        {opt.icon}
+                                        <span style={{ fontWeight: 700, fontSize: 14 }}>{opt.id}</span>
+                                    </div>
+                                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{opt.desc}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 2. Core Header Details */}
+                    <div style={sectionCard}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                            <ClipboardList size={20} color="#2563eb" />
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Reference Details</h3>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+                            <div>
+                                <label style={labelStyle}>Entry Date</label>
+                                <input type="date" style={inputStyle} value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} required />
+                            </div>
+
+                            {form.referenceType === 'Work Order Based' ? (
+                                <div>
+                                    <label style={labelStyle}>Related Work Order</label>
+                                    <SearchableSelect 
+                                        options={workOrders.map(w => ({ 
+                                            value: w._id, 
+                                            label: `${w.woNumber} — ${w.finishedProductName || 'N/A'}` 
+                                        }))}
+                                        value={form.workOrderId}
+                                        onChange={val => {
+                                            const wo = workOrders.find(w => w._id === val);
+                                            setForm(p => ({ 
+                                                ...p, 
+                                                workOrderId: val, 
+                                                workOrderNo: wo?.woNumber || '',
+                                                finishedItemId: wo?.finishedProductId?._id || '',
+                                                finishedItemName: wo?.finishedProductName || ''
+                                            }));
+                                        }}
+                                        placeholder="Search WO..."
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label style={labelStyle}>Finished Item / Model</label>
+                                    <SearchableSelect 
+                                        options={fgItems.map(i => ({ 
+                                            value: i._id, 
+                                            label: `${i.itemCode} — ${i.itemName}` 
+                                        }))}
+                                        value={form.finishedItemId}
+                                        onChange={val => {
+                                            const item = fgItems.find(i => i._id === val);
+                                            setForm(p => ({ 
+                                                ...p, 
+                                                workOrderId: '', 
+                                                workOrderNo: '',
+                                                finishedItemId: val, 
+                                                finishedItemName: item?.itemName || '' 
+                                            }));
+                                        }}
+                                        placeholder="Select model..."
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label style={labelStyle}>Qty Under Testing</label>
+                                <input type="number" style={inputStyle} value={form.qtyUnderTesting} onChange={e => setForm(p => ({ ...p, qtyUnderTesting: e.target.value }))} placeholder="e.g. 1" />
+                            </div>
+                        </div>
+
+                        {/* Extra Fields for Independent/Service Modes */}
+                        {form.referenceType !== 'Work Order Based' && (
+                            <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px dashed #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+                                <div>
+                                    <label style={labelStyle}>Customer Name (Optional)</label>
+                                    <input style={inputStyle} value={form.customerName} onChange={e => setForm(p => ({ ...p, customerName: e.target.value }))} placeholder="Enter name..." />
+                                </div>
+                                <div>
+                                    <label style={labelStyle}>Sales Invoice / Dispatch Ref</label>
+                                    <input style={inputStyle} value={form.salesInvoiceNo} onChange={e => setForm(p => ({ ...p, salesInvoiceNo: e.target.value }))} placeholder="e.g. INV-..." />
+                                </div>
+                                {form.referenceType === 'Service / Warranty Replacement' && (
+                                    <>
+                                        <div>
+                                            <label style={labelStyle}>Service / Complaint Ref</label>
+                                            <input style={inputStyle} value={form.serviceRefNo} onChange={e => setForm(p => ({ ...p, serviceRefNo: e.target.value }))} placeholder="Complaint Ref..." />
+                                        </div>
+                                        <div style={{ gridColumn: 'span 2' }}>
+                                            <label style={labelStyle}>Warranty / Failure Details</label>
+                                            <input style={inputStyle} value={form.warrantyDetails} onChange={e => setForm(p => ({ ...p, warrantyDetails: e.target.value }))} placeholder="Explain what happened..." />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                        
+                        <div style={{ marginTop: 24 }}>
+                            <label style={labelStyle}>Global Remarks</label>
+                            <input style={inputStyle} value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} placeholder="Additional notes for traceability..." />
+                        </div>
+                    </div>
+
+                    {/* 3. Replacement Table */}
+                    <div style={sectionCard}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <Package size={20} color="#2563eb" />
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>Components to Issue</h3>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={addRow} className="btn-primary-soft">
+                                <Plus size={16} /> Add Row
+                            </Button>
+                        </div>
+
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                                        <th style={{ textAlign: 'left', padding: '12px 0', fontSize: 12, color: '#64748b', textTransform: 'uppercase', width: '40%' }}>Raw Material Component</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 0', fontSize: 12, color: '#64748b', textTransform: 'uppercase' }}>Replacement Qty</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: 12, color: '#64748b', textTransform: 'uppercase' }}>Defect Reason</th>
+                                        <th style={{ width: 44 }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {components.map((c, idx) => (
+                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '12px 0' }}>
+                                                <SearchableSelect 
+                                                    options={allItems.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                                                    value={c.itemId}
+                                                    onChange={val => handleCompItemChange(idx, val)}
+                                                    placeholder="Search component..."
+                                                />
+                                            </td>
+                                            <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                <input type="number" style={{ ...inputStyle, textAlign: 'center', width: 80, margin: '0 auto' }} value={c.replacementQty} onChange={e => setComponents(prev => prev.map((it, i) => i === idx ? { ...it, replacementQty: e.target.value } : it))} />
+                                            </td>
+                                            <td style={{ padding: '12px 8px' }}>
+                                                <input style={inputStyle} value={c.reason} onChange={e => setComponents(prev => prev.map((it, i) => i === idx ? { ...it, reason: e.target.value } : it))} placeholder="e.g. Burn, Short circuit" />
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                {components.length > 1 && (
+                                                    <button type="button" onClick={() => removeRow(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 8 }}>
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {/* Submit Bar */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 16 }}>
+                        <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={saving}>Cancel</Button>
+                        <Button type="submit" disabled={saving} style={{ background: '#2563eb', color: '#fff', borderRadius: 10, padding: '0 24px', height: 48 }}>
+                            {saving ? 'Processing...' : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Save size={18} /> Save Replacement Entry
+                                </div>
+                            )}
+                        </Button>
+                    </div>
+                </form>
+
+                <div style={{ marginTop: 24, padding: 20, borderRadius: 12, background: '#fffbeb', border: '1px solid #fcd34d', display: 'flex', gap: 16 }}>
+                    <AlertTriangle size={20} color="#d97706" />
+                    <div>
+                        <p style={{ margin: 0, fontSize: 13, color: '#92400e', fontWeight: 600 }}>Inventory Warning</p>
+                        <p style={{ margin: 0, fontSize: 12, color: '#b45309' }}>Saving this entry will automatically create consumption entries in your stock ledger for the replacement quantities. This will immediately reduce your Raw Material stock levels.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

@@ -70,15 +70,16 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
 
         const openingQty = (item.openingStock || 0) + beforeRange.reduce((s, l) => s + (l.inQty || 0) - (l.outQty || 0), 0);
 
-        const purchaseQty = inRange.filter(l => ['GRN', 'PURCHASE_INVOICE'].includes(l.transactionType)).reduce((s, l) => s + (l.inQty || 0), 0);
-        const consumedQty = inRange.filter(l => l.transactionType === 'WO_CONSUMPTION').reduce((s, l) => s + (l.outQty || 0), 0);
-        const replacementQty = inRange.filter(l => l.transactionType === 'COMPONENT_REPLACEMENT').reduce((s, l) => s + (l.outQty || 0), 0);
-        const rejectionQty = inRange.filter(l => ['SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes(l.transactionType)).reduce((s, l) => s + (l.outQty || 0), 0);
+        const purchaseQty = inRange.filter(l => ['GRN', 'PURCHASE_INVOICE'].includes((l.transactionType || '').toUpperCase().trim())).reduce((s, l) => s + (l.inQty || 0), 0);
+        const consumedQty = inRange.filter(l => ['WO_CONSUMPTION', 'MODEL_CONVERSION'].includes((l.transactionType || '').toUpperCase().trim())).reduce((s, l) => s + (l.outQty || 0), 0);
+        const replacementQty = inRange.filter(l => (l.transactionType || '').toUpperCase().trim() === 'COMPONENT_REPLACEMENT').reduce((s, l) => s + (l.outQty || 0), 0);
+        const rejectionQty = inRange.filter(l => ['SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes((l.transactionType || '').toUpperCase().trim())).reduce((s, l) => s + (l.outQty || 0), 0);
+        const returnedQty = inRange.filter(l => (l.transactionType || '').toUpperCase().trim() === 'MODEL_CONVERSION').reduce((s, l) => s + (l.inQty || 0), 0);
         
-        const otherIn = inRange.filter(l => !['GRN', 'PURCHASE_INVOICE'].includes(l.transactionType) && l.inQty > 0).reduce((s, l) => s + (l.inQty || 0), 0);
-        const otherOut = inRange.filter(l => !['WO_CONSUMPTION', 'COMPONENT_REPLACEMENT', 'SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE'].includes(l.transactionType) && l.outQty > 0).reduce((s, l) => s + (l.outQty || 0), 0);
+        const otherIn = inRange.filter(l => !['GRN', 'PURCHASE_INVOICE', 'MODEL_CONVERSION'].includes((l.transactionType || '').toUpperCase().trim()) && l.inQty > 0).reduce((s, l) => s + (l.inQty || 0), 0);
+        const otherOut = inRange.filter(l => !['WO_CONSUMPTION', 'COMPONENT_REPLACEMENT', 'SCRAP_ENTRY', 'PROD_REJECTION', 'PROD_FAILURE', 'MODEL_CONVERSION'].includes((l.transactionType || '').toUpperCase().trim()) && l.outQty > 0).reduce((s, l) => s + (l.outQty || 0), 0);
 
-        const closingQty = openingQty + purchaseQty + otherIn - consumedQty - replacementQty - rejectionQty - otherOut;
+        const closingQty = openingQty + purchaseQty + returnedQty + otherIn - consumedQty - replacementQty - rejectionQty - otherOut;
 
         return {
             itemId: item._id,
@@ -89,6 +90,7 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
             openingQty: Math.round(openingQty * 100) / 100,
             purchaseQty: Math.round(purchaseQty * 100) / 100,
             consumedQty: Math.round(consumedQty * 100) / 100,
+            returnedQty: Math.round(returnedQty * 100) / 100,
             replacementQty: Math.round(replacementQty * 100) / 100,
             rejectionQty: Math.round(rejectionQty * 100) / 100,
             adjustmentIn: Math.round(otherIn * 100) / 100,
@@ -141,6 +143,8 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
         const ledger = await StockLedger.find(ledgerMatch).lean();
 
         const productionQty = ledger.filter(l => l.transactionType === 'WO_OUTPUT').reduce((s, l) => s + (l.inQty || 0), 0);
+        const conversionIn = ledger.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.inQty || 0), 0);
+        const conversionOut = ledger.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.outQty || 0), 0);
         const salesQty = ledger.filter(l => l.transactionType === 'SALES_INVOICE').reduce((s, l) => s + (l.outQty || 0), 0);
         const replacementDispatch = ledger.filter(l => l.transactionType === 'REPLACEMENT_DISPATCH').reduce((s, l) => s + (l.outQty || 0), 0);
         const repairInward = ledger.filter(l => l.transactionType === 'REPAIR_INWARD').reduce((s, l) => s + (l.inQty || 0), 0);
@@ -148,7 +152,7 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
         const adjustmentOut = ledger.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.outQty || 0), 0);
 
         const openingQty = item.openingStock || 0;
-        const closingQty = openingQty + productionQty + repairInward + adjustmentIn - salesQty - replacementDispatch - adjustmentOut;
+        const closingQty = openingQty + productionQty + repairInward + adjustmentIn + conversionIn - salesQty - replacementDispatch - adjustmentOut - conversionOut;
 
         return {
             itemId: item._id,
@@ -158,6 +162,8 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
             uom: item.uom,
             openingQty,
             productionQty: Math.round(productionQty * 100) / 100,
+            conversionIn: Math.round(conversionIn * 100) / 100,
+            conversionOut: Math.round(conversionOut * 100) / 100,
             salesQty: Math.round(salesQty * 100) / 100,
             replacementDispatch: Math.round(replacementDispatch * 100) / 100,
             adjustmentIn: Math.round(adjustmentIn * 100) / 100,
@@ -210,6 +216,7 @@ export const getStockLedger = asyncHandler(async (req, res) => {
         REPLACEMENT_DISPATCH: 'Replacement Dispatch', FAULTY_RECEIPT: 'Faulty Receipt',
         REPAIR_INWARD: 'Repair Inward', SCRAP_ENTRY: 'Scrap', PROD_FAILURE: 'Production Failure',
         REWORK_CONSUMPTION: 'Rework Consumption', REWORK_QC_PASS: 'Rework Output',
+        MODEL_CONVERSION: 'Model Conversion / Rework',
     };
 
     const rows = entries.map(e => ({
