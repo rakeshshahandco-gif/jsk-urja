@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Save, Plus, Trash2, Calculator, ChevronLeft, Settings, FileText, Activity, AlertCircle, Printer, FileDown } from 'lucide-react';
 import { getBOM, createBOM, updateBOM, exportBOM } from '@/services/bomApi';
 import { getItems } from '@/services/itemApi';
+import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -86,6 +87,7 @@ const BOMFormPage = () => {
     });
 
     const [saving, setSaving] = useState(false);
+    const [company, setCompany] = useState({});
 
     // ── FETCH DATA & AUTO REFRESH ─────────────────────────────────────────────
     const fetchItems = () => {
@@ -109,6 +111,7 @@ const BOMFormPage = () => {
 
     useEffect(() => {
         fetchItems();
+        getCompanyProfile().then(res => setCompany(res.data || {})).catch(() => {});
         window.addEventListener('focus', fetchItems);
         return () => window.removeEventListener('focus', fetchItems);
     }, []);
@@ -318,88 +321,65 @@ const BOMFormPage = () => {
         <div style={s.page}>
             <style>{`
                 @media print {
-                    /* Hide sidebar and non-essential UI */
-                    aside, .sidebar, [style*="position: fixed"], button, select, input[type="file"], .no-print, [title*="Scroll"] {
-                        display: none !important;
-                    }
-                    /* Hide Action columns (last column in table) */
-                    th:last-child, td:last-child {
-                        display: none !important;
-                    }
-                    /* Headers should not be sticky when printing */
-                    [style*="position: sticky"] {
-                        position: relative !important;
-                        box-shadow: none !important;
-                        border-bottom: 2px solid #000 !important;
-                    }
-                    /* Ensure content fits the page */
-                    body, html, main, #root {
+                    @page { margin: 10mm; size: A4 portrait; }
+                    
+                    /* Reset everything */
+                    body, html, #root, main { 
+                        width: 100% !important;
                         height: auto !important;
+                        background: #fff !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                         overflow: visible !important;
-                        background: #fff !important;
-                        font-size: 13pt !important;
                     }
-                    div[style*="background: #f1f5f9"] {
-                        background: #fff !important;
+
+                    /* Hide screen-only UI */
+                    body * { visibility: hidden; }
+                    .no-print, [data-no-print], aside, header, .sidebar, button, input[type="file"], .no-print-col { 
+                        display: none !important; 
                     }
-                    /* Table styling for print - COLUMN LINES ONLY */
+
+                    /* Show print container */
+                    .print-view, .print-view * { visibility: visible !important; }
+                    .print-view {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100% !important;
+                        display: block !important;
+                        background: #fff !important;
+                        color: #000 !important;
+                    }
+
+                    /* Table styling */
                     table {
                         width: 100% !important;
-                        border-top: 2px solid #000 !important;
-                        border-bottom: 2px solid #000 !important;
-                        border-left: none !important;
-                        border-right: none !important;
                         border-collapse: collapse !important;
-                        font-size: 10pt !important;
-                        table-layout: auto !important;
                         margin-bottom: 20px !important;
                     }
                     th {
-                        background: #eee !important;
-                        color: #000 !important;
-                        font-size: 10pt !important;
-                        border-left: 1px solid #000 !important;
-                        border-right: 1px solid #000 !important;
-                        border-top: none !important;
-                        border-bottom: 1.5px solid #000 !important; /* Keep header separator */
+                        background: #f1f5f9 !important;
+                        border: 1px solid #000 !important;
                         padding: 6px 4px !important;
+                        font-size: 9pt !important;
+                        text-transform: uppercase !important;
+                        -webkit-print-color-adjust: exact !important;
                     }
                     td {
-                        font-size: 10pt !important;
-                        border-left: 1px solid #000 !important;
-                        border-right: 1px solid #000 !important;
-                        border-top: none !important;
-                        border-bottom: none !important;
+                        border: 1px solid #ccc !important;
                         padding: 6px 4px !important;
+                        font-size: 9pt !important;
                         word-break: break-word !important;
                     }
-                    /* Inputs/Textarea should look like text */
-                    input, select, textarea {
-                        border: none !important;
-                        background: transparent !important;
-                        padding: 0 !important;
-                        appearance: none !important;
-                        font-size: 10pt !important;
-                        color: #000 !important;
-                    }
-                    /* Ensure totals stand out */
-                    div[style*="background: linear-gradient"] {
-                        background: #f8fafc !important;
-                        color: #000 !important;
-                        border: 1px solid #e2e8f0 !important;
-                        box-shadow: none !important;
-                    }
-                    div[style*="background: linear-gradient"] span, 
-                    div[style*="background: linear-gradient"] p {
-                        color: #000 !important;
-                        opacity: 1 !important;
-                        -webkit-text-fill-color: initial !important;
-                    }
-                    /* Extra large PRODUCTION COST */
-                    div[style*="font-size: 34px"] {
-                        font-size: 38pt !important;
-                        -webkit-text-fill-color: #000 !important;
-                    }
+
+                    /* Typography */
+                    .p-title { font-size: 22pt !important; font-weight: 900 !important; }
+                    .p-label { font-size: 8pt !important; color: #666 !important; text-transform: uppercase !important; }
+                    .p-value { font-size: 11pt !important; font-weight: 700 !important; }
+                }
+
+                @media screen {
+                    .print-view { display: none !important; }
                 }
             `}</style>
             {/* ── STICKY HEADER ── */}
@@ -696,6 +676,106 @@ const BOMFormPage = () => {
                 </div>
             </div>
             <NavigationGuides />
+            {/* ── PRINT VIEW (HIDDEN ON SCREEN) ── */}
+            <div className="print-view">
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '3px solid #000', paddingBottom: 15, marginBottom: 20 }}>
+                    <div>
+                        <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4 }}>{company.companyName || 'JSK URJA'}</div>
+                        <div style={{ fontSize: 10, maxWidth: 350 }}>
+                            {company.address} {company.city} {company.state} - {company.pincode}<br />
+                            Email: {company.email} | Phone: {company.phone}
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#64748b' }}>BILL OF MATERIAL</div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>#{form.bomNumber || 'DRAFT'}</div>
+                        <div style={{ fontSize: 10, marginTop: 4 }}>Version: <strong>{form.version}</strong></div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 15, marginBottom: 25, border: '1px solid #eee', padding: 15, borderRadius: 8 }}>
+                    <div>
+                        <div className="p-label">Finished Product</div>
+                        <div className="p-value">
+                            {finishedProducts.find(p => p._id === form.finishedProductId)?.itemName || '—'}
+                            <div style={{ fontSize: 9, fontWeight: 400, color: '#666' }}>Code: {finishedProducts.find(p => p._id === form.finishedProductId)?.itemCode || '—'}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="p-label">Revision Date</div>
+                        <div className="p-value">{new Date(form.revisionDate).toLocaleDateString('en-IN')}</div>
+                    </div>
+                    <div>
+                        <div className="p-label">BOM Type</div>
+                        <div className="p-value">{form.bomType}</div>
+                    </div>
+                    <div>
+                        <div className="p-label">Prod. Quantity</div>
+                        <div className="p-value">{form.productionQuantity} {finishedProducts.find(p => p._id === form.finishedProductId)?.uom || ''}</div>
+                    </div>
+                </div>
+
+                <table style={{ width: '100%' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ width: 40 }}>#</th>
+                            <th>Item Code</th>
+                            <th>Item Name</th>
+                            <th>Type</th>
+                            <th>Qty</th>
+                            <th>UOM</th>
+                            <th>Rate</th>
+                            <th>Total</th>
+                            <th>Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {form.components.map((c, idx) => (
+                            <tr key={idx}>
+                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                <td><strong>{c.itemCode || '—'}</strong></td>
+                                <td style={{ fontSize: '8.5pt' }}>{c.itemName}</td>
+                                <td style={{ textAlign: 'center' }}>{c.componentType}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
+                                <td style={{ textAlign: 'center' }}>{c.uom}</td>
+                                <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
+                                <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {form.remarks && (
+                    <div style={{ marginBottom: 25 }}>
+                        <div className="p-label">Remarks</div>
+                        <div style={{ fontSize: 10, whiteSpace: 'pre-wrap', border: '1px solid #eee', padding: 10, borderRadius: 4 }}>{form.remarks}</div>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 40, marginBottom: 40 }}>
+                    <div style={{ border: '1px solid #000', padding: 15, minWidth: 200 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontSize: 10 }}>Raw Material Cost</span>
+                            <span style={{ fontWeight: 700 }}>₹{fmt(form.totalRawMaterialCost)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', paddingTop: 8, marginTop: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800 }}>TOTAL COST</span>
+                            <span style={{ fontSize: 13, fontWeight: 900 }}>₹{fmt(form.finalProductionCostPerUnit)}</span>
+                        </div>
+                        <div style={{ fontSize: 8, color: '#666', textAlign: 'right', marginTop: 4 }}>Per Unit Cost</div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 60, padding: '0 40px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: 150, borderTop: '1px solid #000', paddingTop: 5, fontSize: 10, fontWeight: 700 }}>PREPARED BY</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: 150, borderTop: '1px solid #000', paddingTop: 5, fontSize: 10, fontWeight: 700 }}>APPROVED BY</div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

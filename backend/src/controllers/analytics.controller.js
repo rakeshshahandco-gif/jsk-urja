@@ -7,8 +7,8 @@ const catchAsync = (fn) => (req, res, next) => {
 };
 
 const getSalesMarketingAnalytics = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['fromDate', 'toDate', 'salesperson', 'source', 'product']);
-    const analytics = await analyticsService.getSalesMarketingAnalytics(filters);
+    const filters = pick(req.query, ['fromDate', 'toDate', 'salesperson', 'source', 'product', 'fy']);
+    const analytics = await analyticsService.getSalesMarketingAnalytics(filters, req.user);
     res.send(new ApiResponse(200, analytics, 'Sales and marketing analytics fetched successfully'));
 });
 

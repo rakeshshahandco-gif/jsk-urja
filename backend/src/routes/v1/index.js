@@ -81,6 +81,7 @@ import utilsRoute from './utils.routes.js';
 import rdSampleRoute from './rdSample.routes.js';
 import weChatRoute from './weChat.routes.js';
 import analyticsRoute from './analytics.routes.js';
+import salesConversionRoute from './salesConversion.routes.js';
 import transporterRoute from './transporter.routes.js';
 import ewayBillRoute from './ewayBill.routes.js';
 
@@ -432,6 +433,10 @@ const defaultRoutes = [
   {
     path: '/analytics',
     route: analyticsRoute,
+  },
+  {
+    path: '/sales-conversion',
+    route: salesConversionRoute,
   },
   {
     path: '/transporters',

@@ -54,7 +54,8 @@ export const menuConfig = [
                 permission: 'reports',
                 children: [
                     { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.customer_master_report.view' },
-                    { id: 'report-sales-marketing', title: 'Sales & Marketing Analysis', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
+                    { id: 'report-sales-marketing', title: 'Sales & Marketing MIS', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
+                    { id: 'report-sales-conversion', title: 'Sales Conversion Analysis', path: '/mis/sales-conversion', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
                     { id: 'report-followup-tracker', title: 'Follow-up Tracker Report', path: '/reports/followups', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_report.view' },
                     { id: 'report-followup-dashboard', title: 'Follow-up Dashboard Report', path: '/reports/followup-dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_dashboard_report.view' },
                     { id: 'report-followup-task', title: 'Follow-up Task Report', path: '/reports/followup-task-report', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_task_report.view' },
@@ -197,7 +198,7 @@ export const menuConfig = [
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
 
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
-            { id: 'sales-analysis', title: 'Sales Analysis Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
+            { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
         ],
     },
     {

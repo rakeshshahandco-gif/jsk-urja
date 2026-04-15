@@ -1,0 +1,8 @@
+﻿Connecting to: mongodb://rakeshshahandco_db_user:5USOtAvVP2mOTt1w@ac-4ysb32t-shard-00-00.wsugxms.mongodb.net:27017,ac-4ysb32t-shard-00-01.wsugxms.mongodb.net:27017,ac-4ysb32t-shard-00-02.wsugxms.mongodb.net:27017/jskurja-dev?authSource=admin&replicaSet=atlas-11qxg4-shard-0&ssl=true
+Financial Years: 2
+ - 2026-2027 (ID: 69cbdeacc52dcb1bc1621e70)
+ - 2025-2026 (ID: 69cbdee7c52dcb1bc1621e91)
+Total Invoices: 43
+Invoices by financialYear field: [ { _id: '2025-2026', count: 31 }, { _id: '2026-2027', count: 12 } ]
+Total Orders: 146
+Orders by financialYear field: [ { _id: '2026-2027', count: 25 }, { _id: '2025-2026', count: 121 } ]

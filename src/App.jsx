@@ -106,6 +106,7 @@ const ProfitAndLossPage = lazy(() => import('./features/mis/ProfitAndLossPage'))
 const BalanceSheetPage = lazy(() => import('./features/mis/BalanceSheetPage'));
 const MISDashboard = lazy(() => import('./features/mis/MISDashboard'));
 const SalesMarketingDashboard = lazy(() => import('./features/mis/SalesMarketingDashboard'));
+const SalesConversionDashboard = lazy(() => import('./features/mis/SalesConversionDashboard'));
 const AssetCategoryPage = lazy(() => import('./features/fixedAssets/AssetCategoryPage'));
 import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
 import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
@@ -263,7 +264,7 @@ const AppLayout = () => {
                     key={selectedFY}
                     style={{ 
                         flex: 1, 
-                        backgroundColor: '#F9FAFB', 
+                        backgroundColor: '#F6F8FC', 
                         maxHeight: '92vh', 
                         overflow: 'auto' 
                     }}
@@ -385,6 +386,7 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
                         <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="accounts"><MISDashboard /></ProtectedRoute>} />
                         <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="accounts"><SalesMarketingDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/sales-conversion" element={<ProtectedRoute requirePermission="reports"><SalesConversionDashboard /></ProtectedRoute>} />
                         <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="accounts"><ProfitAndLossPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="accounts"><BalanceSheetPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="accounts"><TrialBalancePage /></ProtectedRoute>} />

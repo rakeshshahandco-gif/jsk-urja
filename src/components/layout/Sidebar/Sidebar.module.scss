@@ -1,23 +1,25 @@
 @import '@/styles/_variables';
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
 
+/* Redesigned Premium Light Sidebar */
 .sidebar {
-    width: 300px;
-    min-width: 300px;
-    max-width: 300px;
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
     height: 100vh;
-    background-color: $sidebar-bg;
-    border-right: 1px solid $border-color;
+    background-color: #FFFFFF;
+    border-right: 1px solid #E2E8F0;
     display: flex;
     flex-direction: column;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 50;
     font-family: 'Outfit', sans-serif;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
 
     &.collapsed {
-        width: 60px;
-        min-width: 60px;
-        max-width: 60px;
+        width: 70px;
+        min-width: 70px;
+        max-width: 70px;
 
         .brandText, .logoImage {
             display: none !important;
@@ -35,13 +37,13 @@
 }
 
 .header {
-    height: 80px;
+    height: 90px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
+    padding: 0 24px;
     position: relative;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #F1F5F9;
 
     .brand {
         display: flex;
@@ -52,17 +54,17 @@
     .logoWrapper {
         display: flex;
         align-items: center;
-        gap: 15px; // Increased gap
-        overflow: visible; // Allow logo to stand out
+        gap: 12px;
+        overflow: visible;
     }
 
     .logoImage {
-        max-height: 65px; // Larger logo
+        max-height: 48px;
         max-width: auto;
         width: auto;
         object-fit: contain;
         transition: all 0.3s ease;
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        // filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
     }
 
     .brandText {
@@ -71,78 +73,42 @@
     }
 
     .focus {
-        font-weight: 700;
-        font-size: 24px;
-        color: $sidebar-text;
-        line-height: 1;
-        letter-spacing: -0.5px;
+        font-weight: 800;
+        font-size: 20px;
+        color: #0F172A;
+        line-height: 1.1;
+        letter-spacing: -0.8px;
         position: relative;
-        padding-bottom: 4px;
 
-        &::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 40px;
-            height: 2px;
-            background: $accent-red;
-            border-radius: 2px;
+        .one {
+            color: #2563EB;
         }
-    }
-
-    .one {
-        color: $accent-red;
     }
 
     .tagline {
         font-size: 10px;
-        color: $sidebar-text;
-        font-weight: 500;
+        color: #64748B;
+        font-weight: 600;
         margin-top: 2px;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 1px;
     }
 
     .collapsedLogo {
         width: 100%;
-        display: flex;
+        display: center;
         justify-content: center;
-        font-weight: 800;
-        font-size: 22px;
-        color: $sidebar-text;
+        font-weight: 900;
+        font-size: 20px;
+        color: #2563EB;
         letter-spacing: -1px;
-    }
-
-    .toggleBtn {
-        position: absolute;
-        right: -12px;
-        top: 38px;
-        width: 24px;
-        height: 24px;
-        background: $white;
-        border: 1px solid $border-color;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 12px;
-        color: $text-secondary;
-        box-shadow: $shadow-sm;
-        z-index: 10;
-
-        &:hover {
-            background: $bg-secondary;
-            color: $accent-teal;
-        }
     }
 }
 
 .nav {
     flex: 1;
     overflow-y: auto;
-    padding: 0 16px;
+    padding: 16px 12px;
 
     &::-webkit-scrollbar {
         width: 4px;
@@ -160,12 +126,12 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
 .menuItem {
     position: relative;
-    border-radius: 6px;
+    border-radius: 12px;
     overflow: hidden;
     transition: all 0.2s ease;
 }
@@ -173,28 +139,32 @@
 .link {
     display: flex;
     align-items: center;
-    padding: 8px 12px;
+    padding: 10px 14px;
     text-decoration: none;
-    color: $sidebar-text;
+    color: #475569;
     transition: all 0.2s ease;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 14px;
+    border-radius: 10px;
 
     &:hover {
-        background-color: rgba(0, 0, 0, 0.05);
-        color: $sidebar-text;
+        background-color: #F1F5F9;
+        color: #0F172A;
+        
+        .icon {
+            color: #2563EB;
+        }
     }
 
     &.active {
-        background-color: rgba($primary, 0.1);
-        color: $primary;
-        border-radius: 6px;
-        // box-shadow: 0 2px 8px rgba($primary, 0.3);
+        background-color: #EFF6FF;
+        color: #2563EB;
+        font-weight: 700;
 
         .icon,
         .arrow {
-            color: $primary;
+            color: #2563EB;
         }
     }
 }
@@ -205,10 +175,8 @@
     align-items: center;
     justify-content: center;
     width: 20px;
-
-    // Design shows 📝 and 📄 emojis as icons usually, but we hide them if requested.
-    // However, the images show no icons usually.
-    display: none;
+    color: #94A3B8;
+    transition: color 0.2s;
 }
 
 .label {
@@ -219,8 +187,8 @@
 .arrow {
     transition: transform 0.3s ease;
     font-size: 11px;
-    color: inherit;
-    opacity: 0.7;
+    color: #94A3B8;
+    opacity: 0.8;
 
     &.expanded {
         transform: rotate(180deg);
@@ -228,73 +196,61 @@
 }
 
 .subMenuContainer {
-    background-color: #f8fafc; // Even lighter grey for sub-container
-}
-
-.subMenuHeader {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    color: $sidebar-text;
-    background-color: $white;
-    border-radius: 6px 6px 0 0;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-
-    .arrow {
-        color: $sidebar-text;
-        opacity: 1;
-    }
+    background-color: transparent;
+    padding-left: 8px;
+    margin-top: 2px;
 }
 
 .subMenu {
     list-style: none;
-    padding: 2px 0;
+    padding: 0;
     margin: 0;
+    border-left: 1.5px solid #F1F5F9;
+    margin-left: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 
     .link {
-        padding-left: 32px;
-        padding-top: 6px;
-        padding-bottom: 6px;
-        color: rgba(4, 45, 69, 0.7); // Muted $sidebar-text
-        font-size: 13px;
+        padding-left: 16px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        color: #64748B;
+        font-size: 13.5px;
         font-weight: 500;
+        background: transparent;
 
         &:hover {
-            background-color: rgba(0, 0, 0, 0.03);
-            color: $sidebar-text;
+            color: #2563EB;
+            background-color: transparent;
         }
 
         &.active {
-            background-color: rgba($primary, 0.08);
-            color: $primary;
-            font-weight: 600;
+            color: #2563EB;
+            font-weight: 700;
+            background-color: transparent;
             position: relative;
 
             &::before {
                 content: '';
                 position: absolute;
-                left: 14px;
+                left: -1.5px;
                 top: 50%;
                 transform: translateY(-50%);
-                width: 3px;
-                height: 14px;
-                background-color: $primary;
-                border-radius: 2px;
+                width: 1.5px;
+                height: 16px;
+                background-color: #2563EB;
             }
         }
     }
 
-    // Indent for 3rd level items (e.g., CRM -> Customers -> Master)
+    /* 3rd level */
     .subMenu {
+        border-left: 1px dashed #E2E8F0;
+        margin-left: 12px;
+        
         .link {
-            padding-left: 48px !important;
-            
-            &.active::before {
-                left: 30px !important;
-            }
+            padding-left: 16px;
         }
     }
 }
