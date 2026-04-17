@@ -5,6 +5,30 @@
  */
 export const PERMISSION_REGISTRY = [
     {
+        id: 'accounts',
+        name: 'Accounts',
+        submodules: [
+            { id: 'receipt_entry', name: 'Receipt Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'payment_entry', name: 'Payment Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'journal_entry', name: 'Journal Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'ledger_master', name: 'Ledger Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'admin',
+        name: 'Admin',
+        submodules: [
+            { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
+        ]
+    },
+    {
         id: 'customers',
         name: 'Customers',
         submodules: [
@@ -38,26 +62,110 @@ export const PERMISSION_REGISTRY = [
         ]
     },
     {
-        id: 'tasks',
-        name: 'Task Management',
+        id: 'production_rework',
+        name: 'Failure & Rework',
         submodules: [
             {
-                id: 'task_list',
-                name: 'Manage Tasks',
-                actions: [
-                    { id: 'view', label: 'View', type: 'boolean' },
-                    { id: 'add', label: 'Add', type: 'boolean' },
-                    { id: 'edit', label: 'Edit', type: 'boolean' },
-                    { id: 'delete', label: 'Delete', type: 'boolean' }
-                ]
+                id: 'failure_entries',
+                name: 'Production Failure Entries',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
             },
             {
-                id: 'task_groups',
-                name: 'Task Groups',
+                id: 'rework_job_cards',
+                name: 'Rework Job Cards',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }]
+            },
+            {
+                id: 'material_issues',
+                name: 'Rework Material Issues',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            },
+            {
+                id: 'rework_outputs',
+                name: 'Rework Output Entry',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            },
+            {
+                id: 'retest_confirmations',
+                name: 'Retest Confirmations',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
+            },
+            {
+                id: 'production_scrap',
+                name: 'Production Scrap',
+                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
+            }
+        ]
+    },
+    {
+        id: 'fixed_assets',
+        name: 'Fixed Assets',
+        submodules: [
+            { id: 'asset_register', name: 'Asset Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
+            { id: 'asset_categories', name: 'Asset Categories', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'asset_locations', name: 'Asset Locations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'asset_transfers', name: 'Asset Transfers', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'asset_maintenance', name: 'Asset Maintenance', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'asset_disposals', name: 'Asset Disposals', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'hr',
+        name: 'HR Management',
+        submodules: [
+            { id: 'hr_dashboard', name: 'HR Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { 
+                id: 'employee_master', 
+                name: 'Employee Master', 
                 actions: [
-                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'add', label: 'Add', type: 'boolean' }, 
+                    { id: 'edit', label: 'Edit', type: 'boolean' }, 
+                    { id: 'delete', label: 'Delete', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'shift_master', 
+                name: 'Shift Master', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
                     { id: 'manage', label: 'Manage', type: 'boolean' }
-                ]
+                ] 
+            },
+            { 
+                id: 'attendance', 
+                name: 'Attendance Management', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'add', label: 'Manual Entry', type: 'boolean' }, 
+                    { id: 'import', label: 'Machine Import', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'leave_management', 
+                name: 'Leave Management', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'apply', label: 'Apply Leave', type: 'boolean' }, 
+                    { id: 'approve', label: 'Approve Leave', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'payroll', 
+                name: 'Payroll & Salary', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'process', label: 'Process Payroll', type: 'boolean' }, 
+                    { id: 'finalize', label: 'Finalize & Lock', type: 'boolean' }
+                ] 
+            },
+            { 
+                id: 'hr_reports', 
+                name: 'HR Reports', 
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'export', label: 'Export', type: 'boolean' }
+                ] 
             }
         ]
     },
@@ -114,6 +222,36 @@ export const PERMISSION_REGISTRY = [
                 name: 'Stock Movement Ledger',
                 actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }]
             }
+        ]
+    },
+    {
+        id: 'messenger',
+        name: 'Messenger',
+        submodules: [
+            { id: 'chat', name: 'Direct Messaging', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Messages', type: 'boolean' }] },
+            { id: 'groups', name: 'Group Conversations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage Groups', type: 'boolean' }] },
+            { id: 'broadcast', name: 'Broadcast Lists', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Broadcast', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'mis',
+        name: 'MIS',
+        submodules: [
+            { id: 'dashboard', name: 'MIS Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'trial_balance', name: 'Trial Balance', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'profit_loss', name: 'Profit & Loss', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'balance_sheet', name: 'Balance Sheet', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'sales_marketing', name: 'Sales & Marketing', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'sales_conversion', name: 'Sales Conversion', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'prd',
+        name: 'Product R&D',
+        submodules: [
+            { id: 'dashboard', name: 'R&D Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'projects', name: 'Product Development Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
+            { id: 'test_parameters', name: 'Test Parameter Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
         ]
     },
     {
@@ -219,6 +357,15 @@ export const PERMISSION_REGISTRY = [
         ]
     },
     {
+        id: 'reports',
+        name: 'Reports',
+        submodules: [
+            { id: 'customer_master_report', name: 'Customer Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'followup_report', name: 'Follow-up Tracker Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'reminder_report', name: 'Open Reminders', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
+        ]
+    },
+    {
         id: 'sales',
         name: 'Sales',
         submodules: [
@@ -305,161 +452,26 @@ export const PERMISSION_REGISTRY = [
         ]
     },
     {
-        id: 'production_rework',
-        name: 'Failure & Rework',
+        id: 'tasks',
+        name: 'Task Management',
         submodules: [
             {
-                id: 'failure_entries',
-                name: 'Production Failure Entries',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
-            },
-            {
-                id: 'rework_job_cards',
-                name: 'Rework Job Cards',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }]
-            },
-            {
-                id: 'material_issues',
-                name: 'Rework Material Issues',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
-            },
-            {
-                id: 'rework_outputs',
-                name: 'Rework Output Entry',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
-            },
-            {
-                id: 'retest_confirmations',
-                name: 'Retest Confirmations',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }]
-            },
-            {
-                id: 'production_scrap',
-                name: 'Production Scrap',
-                actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }]
-            }
-        ]
-    },
-    {
-        id: 'accounts',
-        name: 'Accounts',
-        submodules: [
-            { id: 'receipt_entry', name: 'Receipt Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'payment_entry', name: 'Payment Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'journal_entry', name: 'Journal Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
-            { id: 'ledger_master', name: 'Ledger Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
-            { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'reports',
-        name: 'Reports',
-        submodules: [
-            { id: 'customer_master_report', name: 'Customer Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'followup_report', name: 'Follow-up Tracker Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'reminder_report', name: 'Open Reminders', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'admin',
-        name: 'Admin',
-        submodules: [
-            { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
-            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
-            { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
-            { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'prd',
-        name: 'Product R&D',
-        submodules: [
-            { id: 'dashboard', name: 'R&D Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
-            { id: 'projects', name: 'Product Development Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
-            { id: 'test_parameters', name: 'Test Parameter Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'fixed_assets',
-        name: 'Fixed Assets',
-        submodules: [
-            { id: 'asset_register', name: 'Asset Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }] },
-            { id: 'asset_categories', name: 'Asset Categories', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
-            { id: 'asset_locations', name: 'Asset Locations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
-            { id: 'asset_transfers', name: 'Asset Transfers', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'asset_maintenance', name: 'Asset Maintenance', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
-            { id: 'asset_disposals', name: 'Asset Disposals', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'messenger',
-        name: 'Messenger',
-        submodules: [
-            { id: 'chat', name: 'Direct Messaging', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Messages', type: 'boolean' }] },
-            { id: 'groups', name: 'Group Conversations', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage Groups', type: 'boolean' }] },
-            { id: 'broadcast', name: 'Broadcast Lists', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send Broadcast', type: 'boolean' }] }
-        ]
-    },
-    {
-        id: 'hr',
-        name: 'HR Management',
-        submodules: [
-            { id: 'hr_dashboard', name: 'HR Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
-            { 
-                id: 'employee_master', 
-                name: 'Employee Master', 
+                id: 'task_list',
+                name: 'Manage Tasks',
                 actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
-                    { id: 'add', label: 'Add', type: 'boolean' }, 
-                    { id: 'edit', label: 'Edit', type: 'boolean' }, 
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Add', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
                     { id: 'delete', label: 'Delete', type: 'boolean' }
-                ] 
+                ]
             },
-            { 
-                id: 'shift_master', 
-                name: 'Shift Master', 
+            {
+                id: 'task_groups',
+                name: 'Task Groups',
                 actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
+                    { id: 'view', label: 'View', type: 'boolean' },
                     { id: 'manage', label: 'Manage', type: 'boolean' }
-                ] 
-            },
-            { 
-                id: 'attendance', 
-                name: 'Attendance Management', 
-                actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
-                    { id: 'add', label: 'Manual Entry', type: 'boolean' }, 
-                    { id: 'import', label: 'Machine Import', type: 'boolean' }
-                ] 
-            },
-            { 
-                id: 'leave_management', 
-                name: 'Leave Management', 
-                actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
-                    { id: 'apply', label: 'Apply Leave', type: 'boolean' }, 
-                    { id: 'approve', label: 'Approve Leave', type: 'boolean' }
-                ] 
-            },
-            { 
-                id: 'payroll', 
-                name: 'Payroll & Salary', 
-                actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
-                    { id: 'process', label: 'Process Payroll', type: 'boolean' }, 
-                    { id: 'finalize', label: 'Finalize & Lock', type: 'boolean' }
-                ] 
-            },
-            { 
-                id: 'hr_reports', 
-                name: 'HR Reports', 
-                actions: [
-                    { id: 'view', label: 'View', type: 'boolean' }, 
-                    { id: 'export', label: 'Export', type: 'boolean' }
-                ] 
+                ]
             }
         ]
     }
