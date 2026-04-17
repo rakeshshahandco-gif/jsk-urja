@@ -191,16 +191,17 @@ export const createThread = asyncHandler(async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Helper: ensure a company-wide thread exists
+// Helper: ensure a company-wide thread exists and current user is in it
+// SAFETY: This ONLY touches the isCompanyWide thread — NEVER direct/private threads
 // ─────────────────────────────────────────────────────────────
 const ensureCompanyThread = async (myId) => {
     const COMPANY_THREAD_NAME = "JSK URJA TEAM";
     let thread = await MsgThread.findOne({ name: COMPANY_THREAD_NAME, isCompanyWide: true });
 
-    const allUsers = await User.find({ isActive: true }).select('_id');
-    const allUserIds = allUsers.map(u => u._id.toString());
-
     if (!thread) {
+        // Create fresh company thread and add all active users
+        const allUsers = await User.find({ isActive: true }).select('_id');
+        const allUserIds = allUsers.map(u => u._id.toString());
         thread = await MsgThread.create({
             type: 'group',
             name: COMPANY_THREAD_NAME,
@@ -210,21 +211,20 @@ const ensureCompanyThread = async (myId) => {
             createdBy: myId,
             lastMessage: { content: "Welcome to JSK URJA Official Team Chat!", sender: myId, timestamp: new Date() }
         });
-        
-        // Create initial message
         await MsgMessage.create({
             threadId: thread._id,
             sender: myId,
             content: "Welcome to JSK URJA Official Team Chat!"
         });
     } else {
-        // Update participants if new users joined
-        const currentParticipants = thread.participants.map(p => p.toString());
-        const missingUsers = allUserIds.filter(id => !currentParticipants.includes(id));
-        
-        if (missingUsers.length > 0) {
+        // Only add THIS user if they are not already a participant
+        // DO NOT pull all users — that risks leaking private chats
+        const isAlreadyParticipant = thread.participants.some(
+            p => p.toString() === myId.toString()
+        );
+        if (!isAlreadyParticipant) {
             await MsgThread.findByIdAndUpdate(thread._id, {
-                $addToSet: { participants: { $each: missingUsers } }
+                $addToSet: { participants: myId }
             });
         }
     }
@@ -241,7 +241,14 @@ export const getMyThreads = asyncHandler(async (req, res) => {
     // Ensure company-wide thread exists and user is in it
     await ensureCompanyThread(myId);
 
-    const threads = await MsgThread.find({ participants: myId, isActive: true })
+    // ── STRICT PRIVACY FILTER ──────────────────────────────────────────────────
+    // Only return threads where the current user is explicitly listed as a
+    // participant. This is the single source of truth — no overrides.
+    // ─────────────────────────────────────────────────────────────────────────
+    const threads = await MsgThread.find({
+        participants: { $elemMatch: { $eq: myId } },
+        isActive: true
+    })
         .populate('participants', 'name designation')
         .populate('lastMessage.sender', 'name')
         .sort({ 'lastMessage.timestamp': -1 });
@@ -265,11 +272,16 @@ export const getMyThreads = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 export const getThread = asyncHandler(async (req, res) => {
     const myId = req.user._id;
-    const thread = await MsgThread.findOne({ _id: req.params.id, participants: myId, isActive: true })
+    // Strictly verify current user is a participant before returning any thread data
+    const thread = await MsgThread.findOne({
+        _id: req.params.id,
+        participants: { $elemMatch: { $eq: myId } },
+        isActive: true
+    })
         .populate('participants', 'name designation department')
         .populate('createdBy', 'name');
 
-    if (!thread) throw new ApiError(404, 'Thread not found');
+    if (!thread) throw new ApiError(403, 'Access denied: you are not a participant of this thread');
     res.json(new ApiResponse(200, thread, 'Thread fetched'));
 });
 
@@ -281,9 +293,12 @@ export const getMessages = asyncHandler(async (req, res) => {
     const myId = req.user._id;
     const { page = 1, limit = 50 } = req.query;
 
-    // Verify participant
-    const thread = await MsgThread.findOne({ _id: req.params.id, participants: myId });
-    if (!thread) throw new ApiError(403, 'Not a participant of this thread');
+    // Strictly verify participant — user must be explicitly in the participants array
+    const thread = await MsgThread.findOne({
+        _id: req.params.id,
+        participants: { $elemMatch: { $eq: myId } }
+    });
+    if (!thread) throw new ApiError(403, 'Access denied: you are not a participant of this thread');
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 

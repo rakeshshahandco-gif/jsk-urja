@@ -74,6 +74,19 @@ export const MessengerProvider = ({ children }) => {
             const isMine = senderIdStr && myIdStr && senderIdStr === myIdStr;
             const activeIdStr = currentActive?._id?.toString();
 
+            // ── STRICT PRIVACY GUARD ──────────────────────────────────────────
+            // Only process this message if the current user is a participant
+            // of that thread. This prevents socket broadcasts leaking to other
+            // users who happen to be connected but are NOT in the conversation.
+            // ─────────────────────────────────────────────────────────────────
+            const isParticipant = threads.some(t => t._id?.toString() === threadIdStr) ||
+                (currentActive && activeIdStr === threadIdStr);
+
+            if (!isParticipant && !isMine) {
+                // This message does not belong to this user — silently ignore it
+                return;
+            }
+
             // Update threads list
             setThreads(prev => {
                 const index = prev.findIndex(t => t._id?.toString() === threadIdStr);

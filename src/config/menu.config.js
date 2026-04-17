@@ -54,8 +54,8 @@ export const menuConfig = [
                 permission: 'reports',
                 children: [
                     { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.customer_master_report.view' },
-                    { id: 'report-sales-marketing', title: 'Sales & Marketing MIS', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
-                    { id: 'report-sales-conversion', title: 'Sales Conversion Analysis', path: '/mis/sales-conversion', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
+                    { id: 'report-sales-marketing', title: 'Sales & Marketing MIS', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
+                    { id: 'report-sales-conversion', title: 'Sales Conversion Analysis', path: '/mis/sales-conversion', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_conversion.view' },
                     { id: 'report-followup-tracker', title: 'Follow-up Tracker Report', path: '/reports/followups', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_report.view' },
                     { id: 'report-followup-dashboard', title: 'Follow-up Dashboard Report', path: '/reports/followup-dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_dashboard_report.view' },
                     { id: 'report-followup-task', title: 'Follow-up Task Report', path: '/reports/followup-task-report', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.followup_task_report.view' },
@@ -197,7 +197,7 @@ export const menuConfig = [
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
 
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
-            { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'reports' },
+            { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
         ],
     },
     {
@@ -270,12 +270,12 @@ export const menuConfig = [
         title: 'MIS Reports',
         icon: 'AssessmentIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
-        permission: 'accounts',
+        permission: 'mis',
         children: [
-            { id: 'mis-dashboard', title: '📊 MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.trial_balance.view' },
-            { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.trial_balance.view' },
-            { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.profit_loss.view' },
-            { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.balance_sheet.view' },
+            { id: 'mis-dashboard', title: '📊 MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.dashboard.view' },
+            { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
+            { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
+            { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
         ]
     },
     {

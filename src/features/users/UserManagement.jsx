@@ -153,9 +153,36 @@ export const UserManagement = () => {
         });
     };
 
-    const getPermissionsSummary = (permissions) => {
-        if (permissions.includes('*')) return 'All Permissions';
-        return `${permissions.length} permission${permissions.length !== 1 ? 's' : ''}`;
+    const getPermissionsSummary = (user) => {
+        if (user.role?.name?.toLowerCase().includes('admin') || user.roleName === 'admin' || user.roleName === 'superadmin') return 'All Permissions';
+        
+        let count = 0;
+        // Check additionalPermissions first, otherwise fallback to role permissions (which are synced from backend)
+        const perms = Object.keys(user.additionalPermissions || {}).length > 0 
+            ? user.additionalPermissions 
+            : (user.role?.permissions || {});
+            
+        if (Array.isArray(perms)) {
+            if (perms.includes('*')) return 'All Permissions';
+            count = perms.length;
+        } else if (typeof perms === 'object' && perms !== null) {
+            Object.values(perms).forEach(module => {
+                if (typeof module === 'object' && module !== null) {
+                    Object.values(module).forEach(sub => {
+                        if (typeof sub === 'object' && sub !== null) {
+                            Object.values(sub).forEach(val => {
+                                if (val === true) count++;
+                            });
+                        } else if (sub === true) {
+                            count++;
+                        }
+                    });
+                } else if (module === true) {
+                    count++;
+                }
+            });
+        }
+        return `${count} permission${count !== 1 ? 's' : ''}`;
     };
 
     return (
@@ -218,7 +245,7 @@ export const UserManagement = () => {
                                         </span>
                                     </td>
                                     <td className={styles.permissionsCell}>
-                                        {getPermissionsSummary(user.permissions || [])}
+                                        {getPermissionsSummary(user)}
                                     </td>
                                     <td className={styles.dateCell}>{formatDate(user.lastLogin)}</td>
                                     <td>

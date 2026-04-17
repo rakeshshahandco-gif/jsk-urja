@@ -35,17 +35,12 @@ export const Sidebar = () => {
     // Filter items based on user role and permissions
     const filterItems = React.useCallback((items) => {
         return items.filter(item => {
+            // First check by permissions - if an item dictates a permission, it MUST be obeyed.
             if (item.permission) {
-                const allowed = hasPermission(item.permission);
-                if (allowed) return true;
-
-                const moduleName = item.permission.split('.')[0];
-                const hasExplicitEntry = user?.additionalPermissions && 
-                    user.additionalPermissions[moduleName] !== undefined;
-                
-                if (hasExplicitEntry) return false;
+                return hasPermission(item.permission);
             }
 
+            // Fallback for older items that only have roles but no permission mapping
             if (item.roles && item.roles.includes(userRole)) {
                 return true;
             }
