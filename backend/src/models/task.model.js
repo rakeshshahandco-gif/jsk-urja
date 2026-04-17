@@ -170,7 +170,18 @@ const taskSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Customer',
         default: null
-    }
+    },
+    updates: [
+        {
+            text: { type: String, required: true },
+            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            userName: String,
+            date: { type: Date, default: Date.now },
+            status: { type: String, default: 'OPEN' }, // OPEN, RESOLVED
+            isResolution: { type: Boolean, default: false },
+            parentId: mongoose.Schema.Types.ObjectId // Pointer to the entry being resolved
+        }
+    ]
 }, {
     timestamps: true
 });

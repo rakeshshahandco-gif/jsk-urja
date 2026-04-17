@@ -35,5 +35,6 @@ router
 router.patch('/:taskId/status', protect, validate(taskValidation.updateTaskStatus), taskController.updateTaskStatus);
 router.post('/:taskId/extend', protect, validate(taskValidation.extendTask), taskController.extendTask);
 router.post('/:taskId/close', protect, validate(taskValidation.closeTask), taskController.closeTask);
+router.post('/:taskId/updates', protect, taskController.addTaskUpdate);
 
 export default router;

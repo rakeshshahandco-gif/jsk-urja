@@ -87,7 +87,7 @@ const IconBtn = ({ onClick, title, color, bg, children }) => (
     </Tip>
 );
 
-export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit, onDelete, onViewDetails }) => {
+export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit, onDelete, onViewDetails, isPreviewMode, onTaskClick }) => {
     if (loading) {
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#6b7280', fontSize: 12, gap: 8 }}>
@@ -183,13 +183,14 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
                                 <React.Fragment key={task._id}>
                                     {header}
                                     <tr
-                                        style={{ background: '#fff' }}
+                                        style={{ background: '#fff', cursor: 'pointer' }}
                                         onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
                                         onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                                        onClick={() => onTaskClick(task)}
                                     >
                                         <td style={{ ...td, color: '#9ca3af', textAlign: 'center', fontSize: 10 }}>{idx + 1}</td>
                                         <td style={td}>
-                                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={task.title}>
+                                            <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', color: '#1e293b' }} title={task.title}>
                                                 {task.title}
                                             </div>
                                             {task.description && (

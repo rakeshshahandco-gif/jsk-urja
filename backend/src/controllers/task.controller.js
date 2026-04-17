@@ -557,3 +557,42 @@ export const extendTask = asyncHandler(async (req, res) => {
   
     res.send({ success: true, data: task });
 });
+
+export const addTaskUpdate = asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    const { text, isResolution, parentId, status } = req.body;
+
+    const task = await Task.findById(taskId);
+    if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
+
+    const updateEntry = {
+        text,
+        user: req.user.id,
+        userName: req.user.name,
+        date: new Date(),
+        status: status || 'OPEN',
+        isResolution: !!isResolution,
+        parentId: toObjectId(parentId)
+    };
+
+    // If this is a resolution, mark the parent entry as RESOLVED
+    if (isResolution && parentId) {
+        const parentIdx = task.updates.findIndex(u => u._id.toString() === parentId);
+        if (parentIdx !== -1) {
+            task.updates[parentIdx].status = 'RESOLVED';
+        }
+    }
+
+    task.updates.push(updateEntry);
+    task.updatedBy = req.user.id;
+    await task.save();
+
+    // Trigger real-time sync
+    await emitTaskUpdate(task._id, 'update', req.user.id);
+
+    res.status(httpStatus.CREATED).send({ 
+        success: true, 
+        data: task.updates[task.updates.length - 1],
+        task 
+    });
+});

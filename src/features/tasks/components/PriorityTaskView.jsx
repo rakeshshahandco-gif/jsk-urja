@@ -4,6 +4,7 @@ import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
+import { TaskUpdateDrawer } from './TaskUpdateDrawer';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertTriangle, Clock, CalendarDays, CalendarRange,
@@ -81,7 +82,7 @@ const groupTasks = (tasks) => {
 // ──────────────────────────────────────────────────────────────────────────────
 // Single compact row
 // ──────────────────────────────────────────────────────────────────────────────
-const TaskRow = ({ task, index, onExtend, onCloseTask, onEdit, onDelete, onViewDetails, rowBg }) => {
+const TaskRow = ({ task, index, onExtend, onCloseTask, onEdit, onDelete, onViewDetails, rowBg, onTaskClick }) => {
     const pb = PRIORITY_BADGE[task.priority] || { bg: '#f1f5f9', color: '#475569' };
     const sb = STATUS_BADGE[task.status] || STATUS_BADGE.OPEN;
     
@@ -93,9 +94,10 @@ const TaskRow = ({ task, index, onExtend, onCloseTask, onEdit, onDelete, onViewD
 
     return (
         <tr
-            style={{ background: rowBg, borderBottom: '1px solid #f1f5f9', fontSize: 11 }}
+            style={{ background: rowBg, borderBottom: '1px solid #f1f5f9', fontSize: 11, cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
             onMouseLeave={e => e.currentTarget.style.background = rowBg}
+            onClick={() => onTaskClick(task)}
         >
             {/* # */}
             <td style={{ ...td, color: '#9ca3af', textAlign: 'center', fontSize: 10 }}>{index + 1}</td>
@@ -234,6 +236,7 @@ const PriorityTaskView = ({ searchTerm, priorityFilter, groupFilter, assigneeFil
     const [groups, setGroups]       = useState({ overdue: [], today: [], week: [], future: [] });
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedTask, setSelectedTask]           = useState(null);
+    const [selectedTaskId, setSelectedTaskId]       = useState(null);
     
     // Manage collapsed states for each section
     const [collapsedStates, setCollapsedStates] = useState({
@@ -410,6 +413,7 @@ const PriorityTaskView = ({ searchTerm, priorityFilter, groupFilter, assigneeFil
                                                         onEdit={task => navigate(`/tasks/edit/${task._id}`)}
                                                         onDelete={handleDelete}
                                                         onViewDetails={task => navigate(`/tasks/${task._id}`)}
+                                                        onTaskClick={task => setSelectedTaskId(task._id)}
                                                     />
                                                 ))
                                             )
@@ -427,6 +431,13 @@ const PriorityTaskView = ({ searchTerm, priorityFilter, groupFilter, assigneeFil
                 isOpen={isExtendModalOpen}
                 onClose={() => setIsExtendModalOpen(false)}
                 onConfirm={handleExtendConfirm}
+            />
+
+            <TaskUpdateDrawer 
+                taskId={selectedTaskId}
+                isOpen={!!selectedTaskId}
+                onClose={() => setSelectedTaskId(null)}
+                onUpdate={fetchAll}
             />
         </div>
     );

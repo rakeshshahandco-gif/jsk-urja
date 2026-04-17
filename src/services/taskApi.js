@@ -39,6 +39,11 @@ export const deleteTask = async (id) => {
   await api.delete(`/tasks/${id}`);
 };
 
+export const addTaskUpdate = async (taskId, data) => {
+  const response = await api.post(`/tasks/${taskId}/updates`, data);
+  return response.data;
+};
+
 // ---------------------------
 // TASK MASTERS (RECURRING TEMPLATES)
 // ---------------------------

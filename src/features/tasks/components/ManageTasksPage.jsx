@@ -4,6 +4,7 @@ import { Search, RotateCcw, ChevronLeft, ChevronRight, LayoutList, Zap, Plus } f
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { ManageTasksTable } from './ManageTasksTable';
+import { TaskUpdateDrawer } from './TaskUpdateDrawer';
 import PriorityTaskView from './PriorityTaskView';
 import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
@@ -59,6 +60,7 @@ const ManageTasksPage = () => {
     const { user } = useAuth();
 
     const [viewMode, setViewMode] = useState('priority');
+    const [selectedTaskId, setSelectedTaskId] = useState(null);
     const [activeTab, setActiveTab] = useState('overdue');
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);
@@ -312,6 +314,7 @@ const ManageTasksPage = () => {
                         <ManageTasksTable
                             tasks={tasks}
                             loading={loading}
+                            onTaskClick={task => setSelectedTaskId(task._id)}
                             onExtend={task => { setSelectedTask(task); setIsExtendModalOpen(true); }}
                             onCloseTask={handleCloseTask}
                             onEdit={task => navigate(`/tasks/edit/${task._id}`)}
@@ -361,6 +364,13 @@ const ManageTasksPage = () => {
                 isOpen={isExtendModalOpen}
                 onClose={() => setIsExtendModalOpen(false)}
                 onConfirm={handleExtendConfirm}
+            />
+
+            <TaskUpdateDrawer
+                taskId={selectedTaskId}
+                isOpen={!!selectedTaskId}
+                onClose={() => setSelectedTaskId(null)}
+                onUpdate={fetchTasks}
             />
         </div>
     );
