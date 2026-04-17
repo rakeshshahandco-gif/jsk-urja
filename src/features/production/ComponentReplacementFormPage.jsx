@@ -178,7 +178,8 @@ export default function ComponentReplacementFormPage() {
                                     <SearchableSelect 
                                         options={workOrders.map(w => ({ 
                                             value: w._id, 
-                                            label: `${w.woNumber} — ${w.finishedProductName || 'N/A'}` 
+                                            label: `${w.woNumber} — ${w.finishedProductName || 'N/A'}`,
+                                            meta: `Model: ${w.finishedProductName || ''} | Status: ${w.status || ''}`
                                         }))}
                                         value={form.workOrderId}
                                         onChange={val => {
@@ -200,7 +201,8 @@ export default function ComponentReplacementFormPage() {
                                     <SearchableSelect 
                                         options={fgItems.map(i => ({ 
                                             value: i._id, 
-                                            label: `${i.itemCode} — ${i.itemName}` 
+                                            label: `${i.itemCode} — ${i.itemName}`,
+                                            meta: `${i.itemCategory} | ${i.itemGroupName || ''}`
                                         }))}
                                         value={form.finishedItemId}
                                         onChange={val => {
@@ -283,7 +285,11 @@ export default function ComponentReplacementFormPage() {
                                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '12px 0' }}>
                                                 <SearchableSelect 
-                                                    options={allItems.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                                                    options={allItems.map(i => ({ 
+                                                        value: i._id, 
+                                                        label: `${i.itemCode} — ${i.itemName}`,
+                                                        meta: `${i.itemCategory} | ${i.itemGroupName || ''}`
+                                                    }))}
                                                     value={c.itemId}
                                                     onChange={val => handleCompItemChange(idx, val)}
                                                     placeholder="Search component..."

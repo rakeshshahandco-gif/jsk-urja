@@ -6,20 +6,47 @@ import { Item } from '../models/item.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
 import { Complaint } from '../models/complaint.model.js';
 import { syncComplaintStatus } from './complaint.controller.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
+import { generateServiceSequence } from '../utils/numberingUtils.js';
 
 const generateDoNo = async () => {
-    const count = await ReplacementDispatch.countDocuments();
-    return `RDO-${String(count + 1).padStart(4, '0')}`;
+    return await generateServiceSequence(ReplacementDispatch, 'RDO-', 'doNo');
 };
 
 export const createReplacementDispatch = asyncHandler(async (req, res) => {
     const data = { ...req.body, createdBy: req.user.id };
+
+    const complaint = await Complaint.findById(data.complaintId);
+    if (!complaint) throw new ApiError(httpStatus.NOT_FOUND, 'Complaint not found');
+
+    // ── Pre-Validation ───────────────────────────────────────────────────────
+    for (const di of (data.items || [])) {
+        const compItem = complaint.items.find(ci => 
+            (di.itemId && String(ci.itemId) === String(di.itemId)) || 
+            (di.itemCode === ci.itemCode)
+        );
+
+        if (!compItem) {
+            throw new ApiError(httpStatus.BAD_REQUEST, `Item ${di.itemCode} is not part of this complaint.`);
+        }
+        
+        let available = 0;
+        if (complaint.serviceType === 'Advance Replacement') {
+            available = (compItem.qtyFaultyReported || 0) - (compItem.dispatchedQty || 0);
+        } else {
+            available = (compItem.faultyReceivedQty || 0) - (compItem.dispatchedQty || 0);
+        }
+
+        if (di.qty > available) {
+            throw new ApiError(httpStatus.BAD_REQUEST, `Quantity exceeding available balance for ${di.itemCode}. Available: ${available}, Attempted: ${di.qty}`);
+        }
+    }
+
     data.doNo = await generateDoNo();
     data.stockReduced = false;
-
     const dispatch = await ReplacementDispatch.create(data);
 
-    // ── Reduce saleable stock for each item ──────────────────────────────────
+    // ── Reduce saleable stock ────────────────────────────────────────────────
     for (const di of dispatch.items) {
         if (!di.itemId || di.qty <= 0) continue;
         const item = await Item.findById(di.itemId);
@@ -29,15 +56,12 @@ export const createReplacementDispatch = asyncHandler(async (req, res) => {
 
         await StockLedger.create({
             date: dispatch.date,
-            itemId: di.itemId,
-            itemCode: di.itemCode,
-            itemName: di.itemName,
+            itemId: di.itemId, itemCode: di.itemCode, itemName: di.itemName,
             transactionType: 'REPLACEMENT_DISPATCH',
-            referenceNo: dispatch.doNo,
-            referenceId: dispatch._id,
-            outQty: di.qty,
-            inQty: 0,
+            referenceNo: dispatch.doNo, referenceId: dispatch._id,
+            outQty: di.qty, inQty: 0,
             runningStock: item.currentStock,
+            financialYear: getFYFromDate(dispatch.date || new Date()),
             remarks: `Replacement dispatch for complaint ${dispatch.complaintNo}`,
             createdBy: req.user.id,
         });

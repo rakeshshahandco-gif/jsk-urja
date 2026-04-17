@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Truck, Save, Plus, Trash2 } from 'lucide-react';
-import { createReplacementDispatch } from '@/services/serviceApi';
-import { searchCustomers } from '@/services/customerApi';
+import { createReplacementDispatch, getComplaint } from '@/services/serviceApi';
+import { searchCustomers, getCustomer } from '@/services/customerApi';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -42,7 +42,7 @@ const ReplacementDispatchFormPage = () => {
         complaintId: searchParams.get('complaintId') || '',
         complaintNo: searchParams.get('complaintNo') || '',
         customerName: searchParams.get('customer') || '',
-        customerId: '',
+        customerId: searchParams.get('customerId') || '',
         customerCode: '',
         dispatchAddress: '',
         salesInvoiceNo: '',
@@ -61,8 +61,58 @@ const ReplacementDispatchFormPage = () => {
             if (custRef.current && !custRef.current.contains(e.target)) setShowCustDropdown(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
+
+        const formatAddr = (c) => {
+            if (!c) return '';
+            if (c.shippingAddress) return c.shippingAddress;
+            if (c.billingAddress) return c.billingAddress;
+            const parts = [c.address, c.taluka, c.city, c.district, c.state].filter(Boolean);
+            let addr = parts.join(', ');
+            if (c.pincode) addr += addr ? ` - ${c.pincode}` : c.pincode;
+            return addr;
+        };
+
+        // Fetch address if customerId is present on load
+        const cId = searchParams.get('customerId');
+        if (cId) {
+            getCustomer(cId).then(c => {
+                if (c) {
+                    setForm(prev => ({
+                        ...prev,
+                        customerCode: c.customerCode || '',
+                        dispatchAddress: formatAddr(c)
+                    }));
+                }
+            }).catch(e => console.error('Failed to fetch customer for address:', e));
+        }
+
+        // Fetch complaint details if complaintId is present
+        const complaintId = searchParams.get('complaintId');
+        if (complaintId) {
+            getComplaint(complaintId).then(cmp => {
+                if (cmp) {
+                    setForm(prev => ({
+                        ...prev,
+                        salesInvoiceNo: cmp.salesInvoiceNo || '',
+                        customerId: prev.customerId || cmp.customerId || '',
+                        items: cmp.items?.map(i => ({
+                            itemId: i.itemId || null,
+                            itemCode: i.itemCode || '',
+                            itemName: i.itemName || '',
+                            qty: Math.max(0, (i.qtyFaultyReported || 0) - (i.dispatchedQty || 0)),
+                            uom: 'NOS',
+                            maxQty: Math.max(0, (i.qtyFaultyReported || 0) - (i.dispatchedQty || 0)),
+                            reportedQty: i.qtyFaultyReported || 0,
+                            alreadyDispatched: i.dispatchedQty || 0,
+                            remark: `Replacement for faulty [Ref: ${cmp.complaintNo}]`
+                        })) || prev.items
+                    }));
+                }
+            }).catch(e => console.error('Failed to fetch complaint items:', e));
+        }
+
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [searchParams]);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
     const setItem = (i, k, v) => setForm(f => { const items = [...f.items]; items[i] = { ...items[i], [k]: v }; return { ...f, items }; });
@@ -71,7 +121,16 @@ const ReplacementDispatchFormPage = () => {
 
     // ── Customer search handlers ─────────────────────────────────────────────
     const handleCustomerSearch = (val) => {
-        setForm(f => ({ ...f, customerName: val, customerId: '', customerCode: '' }));
+        setForm(f => {
+            // Only clear ID/Code if the name has actually changed from the selected one
+            const shouldReset = val !== f.customerName;
+            return {
+                ...f,
+                customerName: val,
+                customerId: shouldReset ? '' : f.customerId,
+                customerCode: shouldReset ? '' : f.customerCode
+            };
+        });
         setCustHighlightIndex(-1);
         if (!val.trim() || val.length < 2) { setCustomerOptions([]); setShowCustDropdown(false); return; }
         setShowCustDropdown(true);
@@ -90,7 +149,7 @@ const ReplacementDispatchFormPage = () => {
             customerName: c.name,
             customerId: c.id || c._id,
             customerCode: c.customerCode || '',
-            dispatchAddress: f.dispatchAddress || c.shippingAddress || c.billingAddress || '',
+            dispatchAddress: c.shippingAddress || c.billingAddress || [c.address, c.city, c.state, c.pincode].filter(Boolean).join(', '),
         }));
         setShowCustDropdown(false);
         setCustomerOptions([]);
@@ -107,7 +166,8 @@ const ReplacementDispatchFormPage = () => {
             addToast('Replacement Dispatch created! Stock reduced.', 'success');
             navigate(`/service/replacement-dispatches/${dispatch._id}/print`);
         } catch (err) {
-            addToast(err?.response?.data?.message || 'Failed to save', 'error');
+            const msg = err?.response?.data?.message || err?.message || 'Failed to save';
+            addToast(msg, 'error');
         } finally { setSaving(false); }
     };
 
@@ -221,7 +281,21 @@ const ReplacementDispatchFormPage = () => {
                                         {['NOS', 'PCS', 'SET'].map(u => <option key={u}>{u}</option>)}
                                     </select>
                                 </td>
-                                <td style={{ padding: '4px 6px' }}><input type="number" style={{ ...f.input, width: 70, fontWeight: 700 }} value={item.qty} onChange={e => setItem(i, 'qty', Number(e.target.value))} min={1} /></td>
+                                <td style={{ padding: '4px 6px' }}>
+                                    <input 
+                                        type="number" 
+                                        style={{ ...f.input, width: 70, fontWeight: 700, borderColor: item.qty > (item.maxQty || 9999) ? '#dc2626' : '#d1d5db' }} 
+                                        value={item.qty} 
+                                        onChange={e => setItem(i, 'qty', Number(e.target.value))} 
+                                        min={1}
+                                        max={item.maxQty}
+                                    />
+                                    {item.maxQty !== undefined && (
+                                        <div style={{ fontSize: 9, color: item.qty > item.maxQty ? '#dc2626' : '#6b7280', marginTop: 2, fontWeight: 600 }}>
+                                            Max: {item.maxQty} (of {item.reportedQty})
+                                        </div>
+                                    )}
+                                </td>
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 180 }} value={item.remark} onChange={e => setItem(i, 'remark', e.target.value)} placeholder="Replacement for faulty" /></td>
                                 <td style={{ padding: '4px 6px' }}>
                                     {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ width: 26, height: 26, background: '#fee2e2', border: 'none', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} color="#dc2626" /></button>}

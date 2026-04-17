@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Save, CheckCircle, Plus, Trash2 } from 'lucide-react';
-import { createRepairedStockInward } from '@/services/serviceApi';
+import { createRepairedStockInward, getRepairJobCard } from '@/services/serviceApi';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -31,6 +31,32 @@ const RepairedStockInwardFormPage = () => {
         notes: '',
         addedBy: user?.name || '',
     });
+
+    React.useEffect(() => {
+        const jcId = searchParams.get('jobCardId');
+        if (jcId) {
+            getRepairJobCard(jcId).then(jc => {
+                if (jc) {
+                    setForm(prev => ({
+                        ...prev,
+                        items: jc.items?.filter(i => (i.repairedQty || 0) > (i.inwardedQty || 0)).map(i => {
+                            const available = Math.max(0, (i.repairedQty || 0) - (i.inwardedQty || 0));
+                            return {
+                                itemId: i.itemId || null,
+                                itemCode: i.itemCode || '',
+                                itemName: i.itemName || '',
+                                uom: i.uom || 'NOS',
+                                qtyRepaired: available,
+                                maxQty: available,
+                                qtyPassedQC: i.qcPassedQty || available,
+                                warehouse: ''
+                            };
+                        }) || prev.items
+                    }));
+                }
+            }).catch(e => console.error('Inward pull fail:', e));
+        }
+    }, [searchParams]);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
     const setItem = (i, k, v) => setForm(f => { const items = [...f.items]; items[i] = { ...items[i], [k]: v }; return { ...f, items }; });
@@ -93,7 +119,21 @@ const RepairedStockInwardFormPage = () => {
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 90, fontFamily: 'monospace' }} value={item.itemCode} onChange={e => setItem(i, 'itemCode', e.target.value)} /></td>
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 200 }} value={item.itemName} onChange={e => setItem(i, 'itemName', e.target.value)} placeholder="Item name" /></td>
                                 <td style={{ padding: '4px 6px' }}><select style={{ ...f.input, width: 70 }} value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)}>{['NOS', 'PCS', 'SET'].map(u => <option key={u}>{u}</option>)}</select></td>
-                                <td style={{ padding: '4px 6px' }}><input type="number" style={{ ...f.input, width: 80, color: '#059669', fontWeight: 700, border: '1px solid #86efac' }} value={item.qtyRepaired} onChange={e => setItem(i, 'qtyRepaired', Number(e.target.value))} min={0} /></td>
+                                <td style={{ padding: '4px 6px' }}>
+                                    <input 
+                                        type="number" 
+                                        style={{ ...f.input, width: 80, color: '#059669', fontWeight: 700, border: '1px solid #86efac', borderColor: item.qtyRepaired > (item.maxQty || 9999) ? '#dc2626' : '#86efac' }} 
+                                        value={item.qtyRepaired} 
+                                        onChange={e => setItem(i, 'qtyRepaired', Number(e.target.value))} 
+                                        min={0}
+                                        max={item.maxQty}
+                                    />
+                                    {item.maxQty !== undefined && (
+                                        <div style={{ fontSize: 9, color: item.qtyRepaired > item.maxQty ? '#dc2626' : '#6b7280', marginTop: 2, fontWeight: 600 }}>
+                                            Pending: {item.maxQty}
+                                        </div>
+                                    )}
+                                </td>
                                 <td style={{ padding: '4px 6px' }}><input type="number" style={{ ...f.input, width: 80 }} value={item.qtyPassedQC} onChange={e => setItem(i, 'qtyPassedQC', Number(e.target.value))} min={0} /></td>
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 120 }} value={item.warehouse} onChange={e => setItem(i, 'warehouse', e.target.value)} placeholder="Shelf / Location" /></td>
                                 <td style={{ padding: '4px 6px' }}>{form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ width: 26, height: 26, background: '#fee2e2', border: 'none', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} color="#dc2626" /></button>}</td>

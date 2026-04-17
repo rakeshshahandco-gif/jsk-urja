@@ -6,6 +6,7 @@ export const getComplaint = (id) => api.get(`/complaints/${id}`).then(r => r.dat
 export const createComplaint = (data) => api.post('/complaints', data).then(r => r.data.data);
 export const updateComplaint = (id, data) => api.put(`/complaints/${id}`, data).then(r => r.data.data);
 export const deleteComplaint = (id) => api.delete(`/complaints/${id}`).then(r => r.data);
+export const createServiceCreditNote = (id, data) => api.post(`/complaints/${id}/credit-note`, data).then(r => r.data);
 
 // ─── Replacement Dispatches ───────────────────────────────────────────────────
 export const getReplacementDispatches = (params = {}) => api.get('/replacement-dispatches', { params }).then(r => r.data);

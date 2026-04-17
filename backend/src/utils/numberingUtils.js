@@ -136,3 +136,26 @@ export const extractSequenceNumber = (prefix, displayNumber) => {
     const seq = parseInt(seqStr, 10);
     return isNaN(seq) ? 0 : seq;
 };
+
+/**
+ * Robust sequence generator for simple prefixed service documents (JC-, CMP-, etc.)
+ * @param {mongoose.Model} Model
+ * @param {string} prefix e.g. "JC-"
+ * @param {string} fieldName e.g. "jobCardNo"
+ */
+export const generateServiceSequence = async (Model, prefix, fieldName) => {
+    // Find the doc with the highest alphanumeric value for this field
+    // Since we pad with zeros (e.g. JC-0001), string sorting works up to 9999
+    const lastDoc = await Model.findOne({}, { [fieldName]: 1 }, { sort: { [fieldName]: -1 } });
+    
+    let nextNum = 1;
+    if (lastDoc && lastDoc[fieldName]) {
+        const parts = lastDoc[fieldName].split('-');
+        if (parts.length > 1) {
+            const lastNum = parseInt(parts[1], 10);
+            if (!isNaN(lastNum)) nextNum = lastNum + 1;
+        }
+    }
+    
+    return `${prefix}${String(nextNum).padStart(4, '0')}`;
+};

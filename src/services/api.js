@@ -32,7 +32,11 @@ api.interceptors.request.use(
             
             if (!shouldSkip) {
                 config.params = config.params || {};
-                if (!config.params.financialYear) {
+                
+                // If financialYear is explicitly 'all', remove it for backend to skip filtering
+                if (config.params.financialYear === 'all') {
+                    delete config.params.financialYear;
+                } else if (!config.params.financialYear) {
                     config.params.financialYear = selectedFY;
                 }
             }

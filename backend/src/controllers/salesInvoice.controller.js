@@ -110,8 +110,8 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const getSalesInvoices = asyncHandler(async (req, res) => {
-    const { search, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view, series } = req.query;
-    console.log(`[SalesInvoices] Fetching with filter:`, { search, paymentStatus, series, view });
+    const { search, customerId, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view, series } = req.query;
+    console.log(`[SalesInvoices] Fetching with filter:`, { search, customerId, paymentStatus, series, view });
     
     const filter = { isDeleted: { $ne: true } };
 
@@ -123,6 +123,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
 
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
+    if (customerId) filter.customerId = customerId;
 
     // Series Filter (Robust with Prefix Match)
     if (series && series !== 'All Series' && series !== '') {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Save, XCircle, Plus, Trash2 } from 'lucide-react';
-import { createScrapEntry } from '@/services/serviceApi';
+import { createScrapEntry, getRepairJobCard } from '@/services/serviceApi';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -31,6 +31,31 @@ const ScrapEntryFormPage = () => {
         notes: '',
         approvedBy: '',
     });
+
+    React.useEffect(() => {
+        const jcId = searchParams.get('jobCardId');
+        if (jcId) {
+            getRepairJobCard(jcId).then(jc => {
+                if (jc) {
+                    setForm(prev => ({
+                        ...prev,
+                        items: jc.items?.filter(i => (i.scrapQty || 0) > (i.actualScrappedQty || 0)).map(i => {
+                            const available = Math.max(0, (i.scrapQty || 0) - (i.actualScrappedQty || 0));
+                            return {
+                                itemId: i.itemId || null,
+                                itemCode: i.itemCode || '',
+                                itemName: i.itemName || '',
+                                uom: i.uom || 'NOS',
+                                qty: available,
+                                maxQty: available,
+                                reason: i.faultDescription || 'Cannot be repaired'
+                            };
+                        }) || prev.items
+                    }));
+                }
+            }).catch(e => console.error('Scrap pull fail:', e));
+        }
+    }, [searchParams]);
 
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
     const setItem = (i, k, v) => setForm(f => { const items = [...f.items]; items[i] = { ...items[i], [k]: v }; return { ...f, items }; });
@@ -93,7 +118,21 @@ const ScrapEntryFormPage = () => {
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 90, fontFamily: 'monospace' }} value={item.itemCode} onChange={e => setItem(i, 'itemCode', e.target.value)} /></td>
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 200 }} value={item.itemName} onChange={e => setItem(i, 'itemName', e.target.value)} placeholder="Item name" /></td>
                                 <td style={{ padding: '4px 6px' }}><select style={{ ...f.input, width: 70 }} value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)}>{['NOS', 'PCS', 'SET'].map(u => <option key={u}>{u}</option>)}</select></td>
-                                <td style={{ padding: '4px 6px' }}><input type="number" style={{ ...f.input, width: 80, color: '#dc2626', fontWeight: 700, border: '1px solid #fca5a5' }} value={item.qty} onChange={e => setItem(i, 'qty', Number(e.target.value))} min={0} /></td>
+                                <td style={{ padding: '4px 6px' }}>
+                                    <input 
+                                        type="number" 
+                                        style={{ ...f.input, width: 80, color: '#dc2626', fontWeight: 700, border: '1px solid #fca5a5', borderColor: item.qty > (item.maxQty || 9999) ? '#991b1b' : '#fca5a5' }} 
+                                        value={item.qty} 
+                                        onChange={e => setItem(i, 'qty', Number(e.target.value))} 
+                                        min={0}
+                                        max={item.maxQty}
+                                    />
+                                    {item.maxQty !== undefined && (
+                                        <div style={{ fontSize: 9, color: item.qty > item.maxQty ? '#dc2626' : '#991b1b', marginTop: 2, fontWeight: 600 }}>
+                                            Max Scrap: {item.maxQty}
+                                        </div>
+                                    )}
+                                </td>
                                 <td style={{ padding: '4px 6px' }}><input style={{ ...f.input, width: 220 }} value={item.reason} onChange={e => setItem(i, 'reason', e.target.value)} placeholder="Reason for scrap" /></td>
                                 <td style={{ padding: '4px 6px' }}>{form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ width: 26, height: 26, background: '#fee2e2', border: 'none', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} color="#dc2626" /></button>}</td>
                             </tr>

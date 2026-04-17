@@ -40,6 +40,7 @@ export default function ProductionRejectionFormPage() {
         // Load Models
         api.get('/items', { limit: 2000 }).then(res => {
             const list = res.data || [];
+            setAllItems(list);
             setFgItems(list.filter(i => ['FINISHED_GOOD', 'TRADING', 'WIP'].includes(i.itemCategory) || i.isManufacturable));
         }).catch(err => toast.error("Failed to load items"));
 
@@ -169,7 +170,11 @@ export default function ProductionRejectionFormPage() {
                                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '10px 6px' }}>
                                                 <SearchableSelect 
-                                                    options={allItems.map(i => ({ value: i._id, label: `${i.itemCode} — ${i.itemName}` }))}
+                                                    options={allItems.map(i => ({ 
+                                                        value: i._id, 
+                                                        label: `${i.itemCode} — ${i.itemName}`,
+                                                        meta: `${i.itemCategory} | ${i.itemGroupName || ''}`
+                                                    }))}
                                                     value={row.itemId}
                                                     onChange={val => handleItemChange(idx, val)}
                                                     placeholder="Search part..."

@@ -167,7 +167,6 @@ export const menuConfig = [
             { id: 'model-conversion', title: 'Model Conversion / Rework', path: '/production/conversion/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_output.add' },
             { id: 'comp-replacement', title: 'Component Replacement', path: '/production/component-replacements/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.comp_replacement.add' },
             { id: 'prod-rejection', title: 'Production Rejection', path: '/production/rejections/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rejection.add' },
-            { id: 'prod-rework', title: 'Failure & Rework', path: PATHS.PRODUCTION.REWORK.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.prod_rework.view' },
             { id: 'prod-planning', title: 'Production Planning / MRP', path: PATHS.PRODUCTION.PLANNING.ROOT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.production_planning.view' },
         ],
     },
@@ -210,7 +209,6 @@ export const menuConfig = [
         children: [
             { id: 'complaints', title: 'Customer Complaints', path: PATHS.SERVICE.COMPLAINTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'service.complaints.view' },
             { id: 'replacement-dashboard', title: 'Replacement Dashboard', path: PATHS.SERVICE.REPLACEMENT_DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'service.replacement_dashboard.view' },
-            { id: 'replacement-dispatches', title: 'Replacement Dispatches', path: '/service/replacement-dispatches/new', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'service.replacement_dispatches.add' },
         ],
     },
     {

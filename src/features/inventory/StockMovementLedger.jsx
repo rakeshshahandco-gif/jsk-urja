@@ -225,7 +225,6 @@ function RawMaterialSection({ onSelectItem }) {
         const saved = localStorage.getItem('inv_raw_filters');
         return saved ? JSON.parse(saved) : { dateFrom: '', dateTo: '', search: '' };
     });
-    const [summary, setSummary] = useState({ totalValue: 0, belowReorder: 0, totalItems: 0 });
  
     useEffect(() => {
         localStorage.setItem('inv_raw_filters', JSON.stringify(filters));
@@ -241,9 +240,23 @@ function RawMaterialSection({ onSelectItem }) {
             const res = await api.get('/stock/raw-material-report', params);
             const data = res.data || [];
             setRows(data);
-            setSummary({ totalItems: data.length, totalValue: data.reduce((s, r) => s + (r.stockValue || 0), 0), belowReorder: data.filter(r => r.belowReorder).length });
         } catch (e) { console.error(e); } finally { setLoading(false); }
     }, [filters]);
+
+    const filteredRows = React.useMemo(() => {
+        const s = filters.search.toLowerCase();
+        return rows.filter(r => 
+            !s || 
+            (r.itemCode || '').toLowerCase().includes(s) || 
+            (r.itemName || '').toLowerCase().includes(s)
+        );
+    }, [rows, filters.search]);
+
+    const summary = React.useMemo(() => ({
+        totalItems: filteredRows.length,
+        totalValue: filteredRows.reduce((s, r) => s + (r.stockValue || 0), 0),
+        belowReorder: filteredRows.filter(r => r.belowReorder).length
+    }), [filteredRows]);
 
     useEffect(() => { fetchReport(); }, []);
 
@@ -285,9 +298,9 @@ function RawMaterialSection({ onSelectItem }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.length === 0 ? (
+                            {filteredRows.length === 0 ? (
                                 <tr><td colSpan={13} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No raw material items found</td></tr>
-                            ) : rows.map((r, i) => (
+                            ) : filteredRows.map((r, i) => (
                                 <tr key={r.itemId} onClick={() => onSelectItem(r, '#3b82f6')}
                                     style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0', cursor: 'pointer', transition: 'all 0.1s' }}
                                     onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.transform = 'scale(1.001)'; }}
@@ -310,23 +323,19 @@ function RawMaterialSection({ onSelectItem }) {
                                 </tr>
                             ))}
                         </tbody>
-                        {rows.length > 0 && (
-                            <tfoot>
-                                <tr style={{ background: '#1e293b', color: '#fff' }}>
+                                 <tr style={{ background: '#1e293b', color: '#fff' }}>
                                     <td colSpan={4} style={{ padding: '10px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>TOTALS</td>
-                                    <td style={{ ...TDR, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(rows.reduce((s,r)=>s+(r.purchaseQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.consumedQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(rows.reduce((s,r)=>s+(r.returnedQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.replacementQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.rejectionQty||0),0))}</td>
-                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
-                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.currentStock||0),0))}</td>
+                                    <td style={{ ...TDR, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(filteredRows.reduce((s,r)=>s+(r.purchaseQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.consumedQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(filteredRows.reduce((s,r)=>s+(r.returnedQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.replacementQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.rejectionQty||0),0))}</td>
+                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
+                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.currentStock||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, color: '#4ade80', background: '#1e293b' }}>{fmtVal(summary.totalValue)}</td>
                                     <td style={{ background: '#1e293b' }}></td>
                                 </tr>
-                            </tfoot>
-                        )}
                     </table>
                 </div>
             )}
@@ -342,7 +351,6 @@ function FinishedGoodsSection({ onSelectItem }) {
         const saved = localStorage.getItem('inv_fg_filters');
         return saved ? JSON.parse(saved) : { dateFrom: '', dateTo: '', search: '' };
     });
-    const [summary, setSummary] = useState({ totalItems: 0, totalValue: 0, belowReorder: 0 });
  
     useEffect(() => {
         localStorage.setItem('inv_fg_filters', JSON.stringify(filters));
@@ -358,9 +366,23 @@ function FinishedGoodsSection({ onSelectItem }) {
             const res = await api.get('/stock/finished-goods-report', params);
             const data = res.data || [];
             setRows(data);
-            setSummary({ totalItems: data.length, totalValue: data.reduce((s, r) => s + (r.stockValue || 0), 0), belowReorder: data.filter(r => r.belowReorder).length });
         } catch (e) { console.error(e); } finally { setLoading(false); }
     }, [filters]);
+
+    const filteredRows = React.useMemo(() => {
+        const s = (filters.search || '').toLowerCase();
+        return rows.filter(r => 
+            !s || 
+            (r.itemCode || '').toLowerCase().includes(s) || 
+            (r.itemName || '').toLowerCase().includes(s)
+        );
+    }, [rows, filters.search]);
+
+    const summary = React.useMemo(() => ({
+        totalItems: filteredRows.length,
+        totalValue: filteredRows.reduce((s, r) => s + (r.stockValue || 0), 0),
+        belowReorder: filteredRows.filter(r => r.belowReorder).length
+    }), [filteredRows]);
 
     useEffect(() => { fetchReport(); }, []);
 
@@ -402,9 +424,9 @@ function FinishedGoodsSection({ onSelectItem }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.length === 0 ? (
+                            {filteredRows.length === 0 ? (
                                 <tr><td colSpan={12} style={{ textAlign: 'center', padding: 32, color: '#94a3b8' }}>No finished goods items found</td></tr>
-                            ) : rows.map((r, i) => (
+                            ) : filteredRows.map((r, i) => (
                                 <tr key={r.itemId} onClick={() => onSelectItem(r, '#8b5cf6')}
                                     style={{ background: i % 2 === 0 ? '#fff' : '#faf5ff', borderBottom: '1px solid #e2e8f0', cursor: 'pointer' }}
                                     onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
@@ -426,23 +448,19 @@ function FinishedGoodsSection({ onSelectItem }) {
                                 </tr>
                             ))}
                         </tbody>
-                        {rows.length > 0 && (
-                            <tfoot>
-                                <tr style={{ background: '#1e293b', color: '#fff' }}>
+                                 <tr style={{ background: '#1e293b', color: '#fff' }}>
                                     <td colSpan={4} style={{ padding: '10px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>TOTALS</td>
-                                    <td style={{ ...TDR, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(rows.reduce((s,r)=>s+(r.productionQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(rows.reduce((s,r)=>s+(r.conversionIn||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.salesQty||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.replacementDispatch||0),0))}</td>
-                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(rows.reduce((s,r)=>s+(r.conversionOut||0),0))}</td>
-                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
-                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(rows.reduce((s,r)=>s+(r.currentStock||0),0))}</td>
+                                    <td style={{ ...TDR, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.openingQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b', fontWeight: 700 }}>+{fmt(filteredRows.reduce((s,r)=>s+(r.productionQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#4ade80', background: '#1e293b' }}>+{fmt(filteredRows.reduce((s,r)=>s+(r.conversionIn||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fde68a', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.salesQty||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.replacementDispatch||0),0))}</td>
+                                    <td style={{ ...TDR, color: '#fca5a5', background: '#1e293b' }}>-{fmt(filteredRows.reduce((s,r)=>s+(r.conversionOut||0),0))}</td>
+                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.closingQty||0),0))}</td>
+                                    <td style={{ ...TDR, fontWeight: 800, background: '#1e293b' }}>{fmt(filteredRows.reduce((s,r)=>s+(r.currentStock||0),0))}</td>
                                     <td style={{ ...TDR, fontWeight: 800, color: '#a78bfa', background: '#1e293b' }}>₹{Number(summary.totalValue).toLocaleString('en-IN')}</td>
                                     <td style={{ background: '#1e293b' }}></td>
                                 </tr>
-                            </tfoot>
-                        )}
                     </table>
                 </div>
             )}

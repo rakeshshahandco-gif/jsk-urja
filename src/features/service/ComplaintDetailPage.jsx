@@ -7,9 +7,11 @@ import { useToast } from '@/components/ui/Toast';
 const STATUS_COLORS = {
     'Open': { bg: '#fee2e2', color: '#991b1b' },
     'Waiting Faulty Return': { bg: '#ede9fe', color: '#5b21b6' },
+    'Faulty Partially Received': { bg: '#ffedd5', color: '#9a3412' },
     'Faulty Fully Received': { bg: '#d1fae5', color: '#065f46' },
     'Replacement Sent': { bg: '#dbeafe', color: '#1e40af' },
-    'In QC': { bg: '#e0f2fe', color: '#0369a1' },
+    'Repair In Process': { bg: '#ede9fe', color: '#5b21b6' },
+    'Credit Note Issued': { bg: '#dcfce7', color: '#166534' },
     'Closed': { bg: '#f0fdf4', color: '#166534' },
 };
 
@@ -71,11 +73,11 @@ const ComplaintDetailPage = () => {
                         style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         <Edit2 size={12} /> Edit
                     </button>
-                    <button onClick={() => navigate(`/service/replacement-dispatches/new?complaintId=${id}&complaintNo=${data.complaintNo}&customer=${data.customerName}`)}
+                    <button onClick={() => navigate(`/service/replacement-dispatches/new?complaintId=${id}&complaintNo=${data.complaintNo}&customerId=${data.customerId}&customer=${data.customerName}`)}
                         style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                         <Truck size={12} /> Replacement Dispatch
                     </button>
-                    <button onClick={() => navigate(`/service/faulty-receipts/new?complaintId=${id}&complaintNo=${data.complaintNo}&customer=${data.customerName}`)}
+                    <button onClick={() => navigate(`/service/faulty-receipts/new?complaintId=${id}&complaintNo=${data.complaintNo}&customerId=${data.customerId}&customer=${data.customerName}`)}
                         style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px', background: '#d97706', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                         <Package size={12} /> Faulty Receipt
                     </button>
@@ -83,7 +85,42 @@ const ComplaintDetailPage = () => {
                         style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                         <Wrench size={12} /> Repair Job Card
                     </button>
+                    {data.serviceType === 'Credit Note' && !data.creditNoteId && (
+                        <button onClick={() => {
+                            if (window.confirm('Generate Credit Note for this complaint?')) {
+                                addToast('Please use the Credit Note form (Coming soon in full UI update)', 'info');
+                            }
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, padding: '0 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                             Credit Note
+                        </button>
+                    )}
                 </div>
+            </div>
+
+            {/* Journey Tracker */}
+            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', padding: '16px 20px', border: '1px solid #e5e7eb', borderRadius: 8, marginBottom: 14, gap: 4 }}>
+                {[
+                    { label: 'Ticket Open', active: true, done: true },
+                    { label: 'Faulty Inward', active: data.receipts?.length > 0 || data.serviceType === 'Advance Replacement', done: data.receipts?.length > 0 },
+                    { label: 'Inspection / Repair', active: data.jobCards?.length > 0, done: data.jobCards?.every(jc => ['Repaired', 'Not Repairable', 'Closed'].includes(jc.status)) && data.jobCards.length > 0 },
+                    { label: data.serviceType === 'Credit Note' ? 'Credit Note' : 'Replacement', active: data.serviceType === 'Credit Note' ? !!data.creditNoteId : data.dispatches?.length > 0, done: data.serviceType === 'Credit Note' ? !!data.creditNoteId : data.dispatches?.length > 0 },
+                    { label: 'Closure', active: data.status === 'Closed', done: data.status === 'Closed' }
+                ].map((step, idx, arr) => (
+                    <React.Fragment key={idx}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                            <div style={{ 
+                                width: 24, height: 24, borderRadius: '50%', background: step.done ? '#059669' : (step.active ? '#1d4ed8' : '#f3f4f6'),
+                                color: step.active || step.done ? '#fff' : '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800,
+                                border: step.active && !step.done ? '2px solid #93c5fd' : 'none'
+                             }}>
+                                {step.done ? <CheckCircle size={14} /> : idx + 1}
+                            </div>
+                            <div style={{ fontSize: 9, fontWeight: 700, marginTop: 4, color: step.active || step.done ? '#374151' : '#9ca3af', textTransform: 'uppercase' }}>{step.label}</div>
+                        </div>
+                        {idx < arr.length - 1 && <div style={{ height: 2, background: step.done ? '#059669' : '#e5e7eb', flex: 2, marginBottom: 14 }} />}
+                    </React.Fragment>
+                ))}
             </div>
 
             {/* Info Row */}
@@ -93,6 +130,7 @@ const ComplaintDetailPage = () => {
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>CUSTOMER</span><span style={{ fontWeight: 700 }}>{data.customerName}</span></div>
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>CONTACT</span>{data.contactPerson || '—'} {data.mobile ? `(${data.mobile})` : ''}</div>
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>DATE</span>{new Date(data.date).toLocaleDateString('en-IN')}</div>
+                        <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>SERVICE TYPE</span><span style={{ color: '#1d4ed8', fontWeight: 700 }}>{data.serviceType}</span></div>
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>INVOICE REF</span>{data.salesInvoiceNo || '—'}</div>
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>FAULT CATEGORY</span>{data.faultCategory}</div>
                         <div><span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, display: 'block' }}>WARRANTY</span>{data.warrantyStatus}</div>

@@ -112,17 +112,6 @@ import AssetLocationPage from '@/features/fixedAssets/AssetLocationPage';
 import FixedAssetMasterPage from '@/features/fixedAssets/FixedAssetMasterPage';
 import AssetDetailPage from '@/features/fixedAssets/AssetDetailPage';
 
-// Production Rework Module
-import ProductionReworkDashboard from '@/features/productionRework/ProductionReworkDashboard';
-import ProductionFailureListPage from '@/features/productionRework/ProductionFailureListPage';
-import ProductionFailureFormPage from '@/features/productionRework/ProductionFailureFormPage';
-import ReworkJobCardListPage from '@/features/productionRework/ReworkJobCardListPage';
-import ReworkJobCardListPage_fixed from '@/features/productionRework/ReworkJobCardListPage';
-import ReworkJobCardFormPage from '@/features/productionRework/ReworkJobCardFormPage';
-import ReworkMaterialIssueFormPage from '@/features/productionRework/ReworkMaterialIssueFormPage';
-import ReworkOutputFormPage from '@/features/productionRework/ReworkOutputFormPage';
-import RetestConfirmationFormPage from '@/features/productionRework/RetestConfirmationFormPage';
-import ProductionScrapFormPage from '@/features/productionRework/ProductionScrapFormPage';
 
 // Stock & Production Entry Module
 import RawMaterialStockReport from '@/features/inventory/RawMaterialStockReport';
@@ -358,16 +347,6 @@ const AppLayout = () => {
                         <Route path="/service/repair-job-cards/new" element={<ProtectedRoute requirePermission="service"><RepairJobCardFormPage /></ProtectedRoute>} />
                         <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requirePermission="service"><RepairedStockInwardFormPage /></ProtectedRoute>} />
                         <Route path="/service/scrap-entries/new" element={<ProtectedRoute requirePermission="service"><ScrapEntryFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/dashboard" element={<ProtectedRoute requirePermission="production"><ProductionReworkDashboard /></ProtectedRoute>} />
-                        <Route path="/production/rework/failures" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/failures/new" element={<ProtectedRoute requirePermission="production"><ProductionFailureFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/failures/:id" element={<ProtectedRoute requirePermission="production"><ProductionFailureListPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/job-cards" element={<ProtectedRoute requirePermission="production"><ReworkJobCardListPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/job-cards/new" element={<ProtectedRoute requirePermission="production"><ReworkJobCardFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/material-issues/new" element={<ProtectedRoute requirePermission="production"><ReworkMaterialIssueFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/outputs/new" element={<ProtectedRoute requirePermission="production"><ReworkOutputFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/retests/new" element={<ProtectedRoute requirePermission="production"><RetestConfirmationFormPage /></ProtectedRoute>} />
-                        <Route path="/production/rework/scraps/new" element={<ProtectedRoute requirePermission="production"><ProductionScrapFormPage /></ProtectedRoute>} />
                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
                         <Route path="/accounts/receipt-entry" element={<ProtectedRoute requirePermission="accounts"><ReceiptEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/payment-entry" element={<ProtectedRoute requirePermission="accounts"><PaymentEntryPage /></ProtectedRoute>} />

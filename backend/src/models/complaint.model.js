@@ -11,6 +11,14 @@ const complaintItemSchema = new mongoose.Schema({
     dispatchedQty: { type: Number, default: 0 },
     faultyReceivedQty: { type: Number, default: 0 },
     pendingReturnQty: { type: Number, default: 0 },
+    
+    // Technical / Repair Workflow tracking
+    inRepairQty: { type: Number, default: 0 },       // Total quantity targeted for repair
+    repairedQty: { type: Number, default: 0 },       // Total quantity repaired (Technical Result)
+    scrappedQty: { type: Number, default: 0 },       // Total quantity targeted for scrap (Technical Result)
+    actualScrappedQty: { type: Number, default: 0 }, // Total quantity actually scrapped (Scrap Entry done)
+    inwardedQty: { type: Number, default: 0 },       // Total quantity actually added back to stock (Inward done)
+
     complaintReason: {
         type: String,
         // enum: ['Not Working', 'Low Output', 'Flickering', 'Dimming Issue', 'Driver Failure',
@@ -58,6 +66,13 @@ const complaintSchema = new mongoose.Schema({
         default: 'Customer Complaint',
     },
     warrantyStatus: { type: String, /* enum: ['In Warranty', 'Out of Warranty', 'Unknown'], */ default: 'Unknown' },
+    serviceType: {
+        type: String,
+        // enum: ['Advance Replacement', 'Repair & Return', 'Replace After Receipt', 'Credit Note', 'Inspection Only'],
+        default: 'Advance Replacement',
+    },
+
+    creditNoteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', default: null },
 
     // Line items
     items: [complaintItemSchema],

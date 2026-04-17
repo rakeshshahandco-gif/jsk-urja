@@ -12,6 +12,8 @@ const jcItemSchema = new mongoose.Schema({
     repairedQty: { type: Number, default: 0 },
     scrapQty: { type: Number, default: 0 },
     qcPassedQty: { type: Number, default: 0 },
+    inwardedQty: { type: Number, default: 0 },
+    actualScrappedQty: { type: Number, default: 0 },
     pendingQty: { type: Number, default: 0 },
     repairResult: {
         type: String,

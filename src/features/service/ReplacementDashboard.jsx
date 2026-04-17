@@ -102,7 +102,7 @@ const ReplacementDashboard = () => {
                             <th style={th}>Complaint Details</th>
                             <th style={th}>Replacement Method</th>
                             <th style={th}>Procurement (PO)</th>
-                            <th style={th}>Receipt (GRN)</th>
+                            <th style={th}>Receipt</th>
                             <th style={th}>Dispatch (CHALLAN)</th>
                             <th style={th}>Status</th>
                             <th style={th}>Action</th>
@@ -113,33 +113,51 @@ const ReplacementDashboard = () => {
                             <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading dashboard data...</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No matching complaints found.</td></tr>
-                        ) : filtered.map(c => (
-                            <tr key={c._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                <td style={td}>
-                                    <div style={{ fontWeight: 800, color: '#1e293b' }}>{c.complaintNo}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{c.customerName}</div>
-                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Inv: {c.salesInvoiceNo || 'N/A'}</div>
-                                </td>
-                                <td style={td}>
-                                    <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '10px', color: '#475569', fontWeight: 600 }}>
-                                        {c.replacementType || 'Purchase Replace'}
-                                    </span>
-                                </td>
-                                <td style={td}>
-                                    {c.linkedPO ? (
-                                        <div style={{ color: '#2563eb', fontWeight: 600 }}>{c.linkedPO.poNumber}</div>
-                                    ) : (
-                                        <button onClick={() => navigate(`/purchase/orders/new?complaintId=${c._id}&complaintNo=${c.complaintNo}`)}
-                                            style={miniBtn('#dbeafe', '#1e40af')}>+ Link PO</button>
-                                    )}
-                                </td>
-                                <td style={td}>
-                                    {c.linkedGRN ? (
-                                        <div style={{ color: '#059669', fontWeight: 600 }}>{c.linkedGRN.grnNumber}</div>
-                                    ) : (
-                                        <span style={{ color: '#94a3b8' }}>— No GRN —</span>
-                                    )}
-                                </td>
+                        ) : filtered.map(c => {
+                            // Calculate receipt info
+                            let receiptDisplay = <span style={{ color: '#94a3b8' }}>— No GRN —</span>;
+                            if (c.linkedGRN) {
+                                receiptDisplay = <div style={{ color: '#059669', fontWeight: 600 }}>{c.linkedGRN.grnNumber}</div>;
+                            } else if (c.status === 'Faulty Fully Received') {
+                                receiptDisplay = <span style={{ color: '#059669', fontWeight: 700, background: '#ecfdf5', padding: '2px 8px', borderRadius: '10px', fontSize: '11px' }}>Recd. Fully</span>;
+                            } else if (c.status === 'Faulty Partially Received' || (c.items && c.items.some(i => i.faultyReceivedQty > 0))) {
+                                const tr = c.items?.reduce((s, i) => s + (i.qtyFaultyReported || 0), 0) || 0;
+                                const tv = c.items?.reduce((s, i) => s + (i.faultyReceivedQty || 0), 0) || 0;
+                                receiptDisplay = (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <span style={{ color: '#d97706', fontWeight: 700, background: '#fffbeb', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', width: 'fit-content' }}>
+                                            Recd. Partial
+                                        </span>
+                                        <div style={{ fontSize: '10px', color: '#94a3b8', paddingLeft: '8px' }}>{tv}/{tr} Items</div>
+                                    </div>
+                                );
+                            } else if (c.status === 'Waiting Faulty Return') {
+                                receiptDisplay = <span style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>Waiting Faulty</span>;
+                            }
+
+                            return (
+                                <tr key={c._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                    <td style={td}>
+                                        <div style={{ fontWeight: 800, color: '#1e293b' }}>{c.complaintNo}</div>
+                                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{c.customerName}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>Inv: {c.salesInvoiceNo || 'N/A'}</div>
+                                    </td>
+                                    <td style={td}>
+                                        <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '10px', color: '#475569', fontWeight: 600 }}>
+                                            {c.replacementType || 'Purchase Replace'}
+                                        </span>
+                                    </td>
+                                    <td style={td}>
+                                        {c.linkedPO ? (
+                                            <div style={{ color: '#2563eb', fontWeight: 600 }}>{c.linkedPO.poNumber}</div>
+                                        ) : (
+                                            <button onClick={() => navigate(`/purchase/orders/new?complaintId=${c._id}&complaintNo=${c.complaintNo}`)}
+                                                style={miniBtn('#dbeafe', '#1e40af')}>+ Link PO</button>
+                                        )}
+                                    </td>
+                                    <td style={td}>
+                                        {receiptDisplay}
+                                    </td>
                                 <td style={td}>
                                     {c.dispatches?.length > 0 ? (
                                         <div style={{ color: '#7c3aed', fontWeight: 600 }}>{c.dispatches[0].doNo}</div>
@@ -158,7 +176,8 @@ const ReplacementDashboard = () => {
                                     </button>
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

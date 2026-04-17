@@ -48,12 +48,13 @@ const ComplaintFormPage = () => {
         salesInvoiceNo: '', salesInvoiceDate: '', salesOrderNo: '',
         faultCategory: 'Customer Complaint',
         warrantyStatus: 'Unknown',
+        serviceType: 'Advance Replacement',
         items: [{ ...EMPTY_ITEM }],
         internalRemarks: '',
     });
 
     useEffect(() => {
-        getSalesInvoices({ limit: 200 }).then(r => setInvoices(r.data || [])).catch(() => { });
+        getSalesInvoices({ limit: 100 }).then(r => setInvoices(r.invoices || [])).catch(() => { });
         if (isEdit) {
             getComplaint(id).then(d => {
                 setForm({ ...d, date: d.date?.split('T')[0] || d.date });
@@ -99,6 +100,14 @@ const ComplaintFormPage = () => {
         }));
         setShowCustDropdown(false);
         setCustomerOptions([]);
+
+        // Fetch all invoices for this customer across all years
+        const cId = c.id || c._id;
+        if (cId) {
+            getSalesInvoices({ customerId: cId, financialYear: 'all', limit: 300 })
+                .then(r => setInvoices(r.invoices || []))
+                .catch(() => { });
+        }
     };
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -157,6 +166,11 @@ const ComplaintFormPage = () => {
                             {['In Warranty', 'Out of Warranty', 'Unknown'].map(w => <option key={w}>{w}</option>)}
                         </select>
                     </Field>
+                    <Field label="Service Type">
+                        <select style={f.sel} value={form.serviceType} onChange={e => set('serviceType', e.target.value)}>
+                            {['Advance Replacement', 'Repair & Return', 'Replace After Receipt', 'Credit Note', 'Inspection Only'].map(s => <option key={s}>{s}</option>)}
+                        </select>
+                    </Field>
                 </div>
 
                 <div style={f.sectionTitle}>Customer Details</div>
@@ -213,8 +227,31 @@ const ComplaintFormPage = () => {
                 <div style={f.sectionTitle}>Reference Documents</div>
                 <div style={f.row(3)}>
                     <Field label="Sales Invoice No.">
-                        <input style={f.input} list="inv-list" value={form.salesInvoiceNo} onChange={e => set('salesInvoiceNo', e.target.value)} placeholder="Select or type invoice no." />
-                        <datalist id="inv-list">{invoices.map(i => <option key={i._id} value={i.invoiceNo || i.siNumber} />)}</datalist>
+                        <input style={f.input} list="inv-list" value={form.salesInvoiceNo} onChange={e => {
+                            const val = e.target.value;
+                            set('salesInvoiceNo', val);
+                            const inv = invoices.find(i => (i.invoiceNumber || i.displayInvoiceNumber) === val);
+                            if (inv) {
+                                if (inv.invoiceDate) set('salesInvoiceDate', inv.invoiceDate.split('T')[0]);
+                                if (inv.soNumber) set('salesOrderNo', inv.soNumber);
+                                
+                                // Auto-fill faulty items from invoice inventory
+                                if (inv.items && inv.items.length > 0) {
+                                    const mapped = inv.items.map(ii => ({
+                                        itemCode: ii.itemCode || '',
+                                        itemName: ii.itemName || '',
+                                        uom: ii.uom || 'NOS',
+                                        qtySold: ii.qty || 0,
+                                        qtyFaultyReported: 1,
+                                        complaintReason: 'Not Working',
+                                        actionRequired: 'Replacement to be sent',
+                                        notes: ''
+                                    }));
+                                    set('items', mapped);
+                                }
+                            }
+                        }} placeholder="Select or type invoice no." />
+                        <datalist id="inv-list">{invoices.map(i => <option key={i._id} value={i.invoiceNumber || i.displayInvoiceNumber} />)}</datalist>
                     </Field>
                     <Field label="Invoice Date"><input type="date" style={f.input} value={form.salesInvoiceDate} onChange={e => set('salesInvoiceDate', e.target.value)} /></Field>
                     <Field label="Sales Order No."><input style={f.input} value={form.salesOrderNo} onChange={e => set('salesOrderNo', e.target.value)} /></Field>
