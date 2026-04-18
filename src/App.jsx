@@ -364,12 +364,12 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
-                        <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="mis"><MISDashboard /></ProtectedRoute>} />
-                        <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="mis"><SalesMarketingDashboard /></ProtectedRoute>} />
-                        <Route path="/mis/sales-conversion" element={<ProtectedRoute requirePermission="mis"><SalesConversionDashboard /></ProtectedRoute>} />
-                        <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="mis"><ProfitAndLossPage /></ProtectedRoute>} />
-                        <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="mis"><BalanceSheetPage /></ProtectedRoute>} />
-                        <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="mis"><TrialBalancePage /></ProtectedRoute>} />
+                        <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="mis.dashboard.view"><MISDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="mis.sales_marketing.view"><SalesMarketingDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/sales-conversion" element={<ProtectedRoute requirePermission="mis.sales_conversion.view"><SalesConversionDashboard /></ProtectedRoute>} />
+                        <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="mis.profit_loss.view"><ProfitAndLossPage /></ProtectedRoute>} />
+                        <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="mis.balance_sheet.view"><BalanceSheetPage /></ProtectedRoute>} />
+                        <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="mis.trial_balance.view"><TrialBalancePage /></ProtectedRoute>} />
                         <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
