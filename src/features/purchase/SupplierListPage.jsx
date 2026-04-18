@@ -5,8 +5,18 @@ import toast from 'react-hot-toast';
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
 const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
+const secTitle = { fontSize: 11, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #dbeafe', paddingBottom: 6, marginBottom: 12, marginTop: 4 };
+const lbl = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' };
 
-const EMPTY = { supplierName: '', contactPerson: '', phone: '', email: '', address: '', area: '', city: '', state: '', pincode: '', gstNumber: '', gstType: '', paymentTerms: '', remarks: '' };
+const EMPTY = {
+    supplierName: '', contactPerson: '', phone: '', email: '',
+    address: '', area: '', city: '', state: '', pincode: '',
+    gstNumber: '', gstType: '', panNumber: '',
+    openingBalance: 0, openingBalanceDrCr: 'Cr',
+    paymentTerms: '',
+    bankName: '', bankAccountNo: '', bankIfsc: '',
+    remarks: ''
+};
 
 export default function SupplierListPage() {
     const [suppliers, setSuppliers] = useState([]);
@@ -28,7 +38,7 @@ export default function SupplierListPage() {
     useEffect(() => { load(); }, [load]);
 
     const openCreate = () => setModal({ mode: 'create', data: { ...EMPTY } });
-    const openEdit = (s) => setModal({ mode: 'edit', data: { ...s } });
+    const openEdit = (s) => setModal({ mode: 'edit', data: { ...EMPTY, ...s } });
     const set = (k, v) => setModal(m => {
         const newData = { ...m.data, [k]: v };
         if (k === 'state') {
@@ -47,10 +57,10 @@ export default function SupplierListPage() {
         try {
             if (modal.mode === 'create') {
                 await createSupplier(modal.data);
-                toast.success('Supplier created!');
+                toast.success('Supplier created! Ledger under Sundry Creditors auto-created.');
             } else {
                 await updateSupplier(modal.data._id, modal.data);
-                toast.success('Supplier updated!');
+                toast.success('Supplier updated! Ledger synced.');
             }
             setModal(null); load();
         } catch (e) { toast.error(e.response?.data?.message || e.message); }
@@ -63,10 +73,10 @@ export default function SupplierListPage() {
             const res = await generateSupplierCode();
             set('supplierCode', res.supplierCode || res?.data?.supplierCode || res || '');
             toast.success('Code generated successfully');
-        } catch { 
-            toast.error('Could not generate code'); 
-        } finally { 
-            setGeneratingCode(false); 
+        } catch {
+            toast.error('Could not generate code');
+        } finally {
+            setGeneratingCode(false);
         }
     };
 
@@ -135,7 +145,7 @@ export default function SupplierListPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr>
-                            {['Code', 'Supplier Name', 'Contact', 'Phone', 'City', 'GST Type', 'Payment Terms', 'Actions'].map(h => (
+                            {['Code', 'Supplier Name', 'Contact', 'Phone', 'City', 'GST No.', 'Opening Bal.', 'Actions'].map(h => (
                                 <th key={h} style={th}>{h}</th>
                             ))}
                         </tr>
@@ -154,8 +164,12 @@ export default function SupplierListPage() {
                                 <td style={td}>{s.contactPerson || '—'}</td>
                                 <td style={td}>{s.phone || '—'}</td>
                                 <td style={td}>{s.city || '—'}</td>
-                                <td style={td}>{s.gstType || '—'}</td>
-                                <td style={td}>{s.paymentTerms || '—'}</td>
+                                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{s.gstNumber || '—'}</td>
+                                <td style={{ ...td, fontWeight: 700, color: (s.openingBalance || 0) > 0 ? '#059669' : '#6b7280' }}>
+                                    {(s.openingBalance || 0) > 0
+                                        ? `₹${Number(s.openingBalance).toLocaleString('en-IN')} ${s.openingBalanceDrCr || 'Cr'}`
+                                        : '—'}
+                                </td>
                                 <td style={td}>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <button onClick={() => openEdit(s)}
@@ -172,28 +186,31 @@ export default function SupplierListPage() {
 
             {/* Modal */}
             {modal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
-                        <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#1e293b' }}>{modal.mode === 'create' ? 'Add Supplier' : 'Edit Supplier'}</h2>
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28, width: '100%', maxWidth: 760, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+                                {modal.mode === 'create' ? '🏭 Add New Supplier' : `✎ Edit: ${modal.data.supplierName}`}
+                            </h2>
+                            <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                        </div>
+
+                        {/* ── Section 1: Basic Info ── */}
+                        <div style={secTitle}>📋 Basic Information</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
                             <div style={{ gridColumn: 'span 2' }}>
-                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Supplier Code</label>
+                                <label style={lbl}>Supplier Code</label>
                                 <div style={{ display: 'flex', gap: 4 }}>
-                                    <input 
-                                        value={modal.data.supplierCode || ''} 
-                                        onChange={e => set('supplierCode', e.target.value.toUpperCase())} 
-                                        style={{ ...inp, fontFamily: 'monospace', fontWeight: 'bold' }} 
-                                        placeholder="Leave empty to auto-generate" 
+                                    <input
+                                        value={modal.data.supplierCode || ''}
+                                        onChange={e => set('supplierCode', e.target.value.toUpperCase())}
+                                        style={{ ...inp, fontFamily: 'monospace', fontWeight: 'bold' }}
+                                        placeholder="Leave empty to auto-generate"
                                     />
                                     {modal.mode === 'create' && (
-                                        <button 
-                                            type="button" 
-                                            onClick={handleGenerateCode} 
-                                            disabled={generatingCode} 
-                                            title="Auto-generate code"
-                                            style={{ height: '36px', width: '40px', border: '1px solid #d1d5db', borderRadius: 7, background: '#f9fafb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0 }}
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: generatingCode ? 'spin 1s linear infinite' : 'none' }}>
+                                        <button type="button" onClick={handleGenerateCode} disabled={generatingCode} title="Auto-generate code"
+                                            style={{ height: '36px', width: '40px', border: '1px solid #d1d5db', borderRadius: 7, background: '#f9fafb', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0 }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
                                                 <path d="M3 3v5h5"></path>
                                             </svg>
@@ -201,90 +218,126 @@ export default function SupplierListPage() {
                                     )}
                                 </div>
                             </div>
-                            {[
-                                ['supplierName', 'Supplier Name *', 'text'],
-                                ['contactPerson', 'Contact Person', 'text'],
-                                ['phone', 'Phone', 'text'],
-                                ['email', 'Email', 'email'],
-                                ['gstNumber', 'GST Number', 'text'],
-                                ['paymentTerms', 'Payment Terms', 'text'],
-                            ].map(([k, label, type]) => (
-                                <div key={k}>
-                                    <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{label}</label>
-                                    <input type={type} value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} />
-                                </div>
-                            ))}
                             <div style={{ gridColumn: 'span 2' }}>
-                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Address / Street</label>
-                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} placeholder="Building, Street, Road..." />
+                                <label style={lbl}>Supplier Name *</label>
+                                <input value={modal.data.supplierName || ''} onChange={e => set('supplierName', e.target.value)} style={inp} placeholder="Full legal name of supplier" />
                             </div>
-                            {[
-                                ['area', 'Area / Locality'],
-                                ['city', 'City'],
-                                ['state', 'State'],
-                                ['pincode', 'Pincode'],
-                            ].map(([k, label]) => (
-                                <div key={k}>
-                                    <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>{label}</label>
-                                    <input value={modal.data[k] || ''} onChange={e => set(k, e.target.value)} style={inp} placeholder={label} list={k === 'state' ? 'state-list' : undefined} />
-                                    {k === 'state' && (
-                                        <datalist id="state-list">
-                                            <option value="Andhra Pradesh" />
-                                            <option value="Arunachal Pradesh" />
-                                            <option value="Assam" />
-                                            <option value="Bihar" />
-                                            <option value="Chhattisgarh" />
-                                            <option value="Goa" />
-                                            <option value="Gujarat" />
-                                            <option value="Haryana" />
-                                            <option value="Himachal Pradesh" />
-                                            <option value="Jharkhand" />
-                                            <option value="Karnataka" />
-                                            <option value="Kerala" />
-                                            <option value="Madhya Pradesh" />
-                                            <option value="Maharashtra" />
-                                            <option value="Manipur" />
-                                            <option value="Meghalaya" />
-                                            <option value="Mizoram" />
-                                            <option value="Nagaland" />
-                                            <option value="Odisha" />
-                                            <option value="Punjab" />
-                                            <option value="Rajasthan" />
-                                            <option value="Sikkim" />
-                                            <option value="Tamil Nadu" />
-                                            <option value="Telangana" />
-                                            <option value="Tripura" />
-                                            <option value="Uttar Pradesh" />
-                                            <option value="Uttarakhand" />
-                                            <option value="West Bengal" />
-                                            <option value="Andaman and Nicobar Islands" />
-                                            <option value="Chandigarh" />
-                                            <option value="Dadra and Nagar Haveli and Daman and Diu" />
-                                            <option value="Delhi" />
-                                            <option value="Jammu and Kashmir" />
-                                            <option value="Ladakh" />
-                                            <option value="Lakshadweep" />
-                                            <option value="Puducherry" />
-                                        </datalist>
-                                    )}
-                                </div>
-                            ))}
                             <div>
-                                <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>GST Type</label>
+                                <label style={lbl}>Contact Person</label>
+                                <input value={modal.data.contactPerson || ''} onChange={e => set('contactPerson', e.target.value)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>Phone</label>
+                                <input value={modal.data.phone || ''} onChange={e => set('phone', e.target.value)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>Email</label>
+                                <input type="email" value={modal.data.email || ''} onChange={e => set('email', e.target.value)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>Payment Terms</label>
+                                <input value={modal.data.paymentTerms || ''} onChange={e => set('paymentTerms', e.target.value)} style={inp} placeholder="e.g. Net 30" />
+                            </div>
+                        </div>
+
+                        {/* ── Section 2: Opening Balance ── */}
+                        <div style={secTitle}>💰 Opening Balance (Accounts)</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div>
+                                <label style={lbl}>Opening Balance (₹)</label>
+                                <input type="number" min="0" value={modal.data.openingBalance || 0} onChange={e => set('openingBalance', e.target.value)} style={inp} placeholder="0" />
+                            </div>
+                            <div>
+                                <label style={lbl}>Dr / Cr</label>
+                                <select value={modal.data.openingBalanceDrCr || 'Cr'} onChange={e => set('openingBalanceDrCr', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="Cr">Cr — Payable (We owe supplier)</option>
+                                    <option value="Dr">Dr — Advance Paid</option>
+                                </select>
+                            </div>
+                            <div style={{ alignSelf: 'end', paddingBottom: 4 }}>
+                                <div style={{ fontSize: 11, color: '#6b7280', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 12px' }}>
+                                    ℹ️ This sets the ledger opening balance under <strong>Sundry Creditors</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Section 3: GST & Tax ── */}
+                        <div style={secTitle}>🔰 GST & Tax Details</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div>
+                                <label style={lbl}>GST Number (GSTIN)</label>
+                                <input value={modal.data.gstNumber || ''} onChange={e => set('gstNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="22AAAAA0000A1Z5" />
+                            </div>
+                            <div>
+                                <label style={lbl}>GST Type</label>
                                 <select value={modal.data.gstType || ''} onChange={e => set('gstType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                                     <option value="">— Select —</option>
                                     <option>CGST / SGST</option>
                                     <option>IGST</option>
                                 </select>
                             </div>
+                            <div>
+                                <label style={lbl}>PAN Number</label>
+                                <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" />
+                            </div>
                         </div>
+
+                        {/* ── Section 4: Address ── */}
+                        <div style={secTitle}>📍 Address Details</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div style={{ gridColumn: 'span 2' }}>
+                                <label style={lbl}>Address / Street</label>
+                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} placeholder="Building, Street, Road..." />
+                            </div>
+                            <div>
+                                <label style={lbl}>Area / Locality</label>
+                                <input value={modal.data.area || ''} onChange={e => set('area', e.target.value)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>City</label>
+                                <input value={modal.data.city || ''} onChange={e => set('city', e.target.value)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>State</label>
+                                <input value={modal.data.state || ''} onChange={e => set('state', e.target.value)} style={inp} list="supp-state-list" />
+                                <datalist id="supp-state-list">
+                                    {['Maharashtra','Gujarat','Rajasthan','Delhi','Karnataka','Tamil Nadu','Telangana','West Bengal','Uttar Pradesh','Madhya Pradesh','Punjab','Haryana','Bihar','Andhra Pradesh','Kerala','Odisha','Chhattisgarh','Jharkhand','Assam','Goa','Jammu and Kashmir','Chandigarh','Puducherry'].map(st => <option key={st} value={st} />)}
+                                </datalist>
+                            </div>
+                            <div>
+                                <label style={lbl}>Pincode</label>
+                                <input value={modal.data.pincode || ''} onChange={e => set('pincode', e.target.value)} style={inp} />
+                            </div>
+                        </div>
+
+                        {/* ── Section 5: Bank Details ── */}
+                        <div style={secTitle}>🏦 Bank Details</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div>
+                                <label style={lbl}>Bank Name</label>
+                                <input value={modal.data.bankName || ''} onChange={e => set('bankName', e.target.value)} style={inp} placeholder="e.g. HDFC Bank" />
+                            </div>
+                            <div>
+                                <label style={lbl}>Account No.</label>
+                                <input value={modal.data.bankAccountNo || ''} onChange={e => set('bankAccountNo', e.target.value)} style={{ ...inp, fontFamily: 'monospace' }} />
+                            </div>
+                            <div>
+                                <label style={lbl}>IFSC Code</label>
+                                <input value={modal.data.bankIfsc || ''} onChange={e => set('bankIfsc', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="HDFC0001234" />
+                            </div>
+                        </div>
+
+                        {/* ── Remarks ── */}
                         <div style={{ marginBottom: 20 }}>
-                            <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Remarks</label>
+                            <label style={lbl}>Remarks</label>
                             <textarea rows={2} value={modal.data.remarks || ''} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} />
                         </div>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button onClick={() => { if (window.confirm('Discard changes?')) setModal(null); }} style={{ padding: '8px 16px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
-                            <button onClick={handleSave} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700 }}>{saving ? 'Saving...' : 'Save Supplier'}</button>
+
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
+                            <button onClick={() => { if (window.confirm('Discard changes?')) setModal(null); }} style={{ padding: '9px 20px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Cancel</button>
+                            <button onClick={handleSave} disabled={saving} style={{ padding: '9px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+                                {saving ? 'Saving...' : modal.mode === 'create' ? '✓ Create Supplier' : '✓ Update Supplier'}
+                            </button>
                         </div>
                     </div>
                 </div>

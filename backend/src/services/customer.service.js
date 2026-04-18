@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { propagateNameChange } from '../utils/namePropagator.js';
 
 /**
  * Generate a new unique customer code (e.g., CU001)
@@ -120,7 +121,8 @@ const createCustomer = async (body) => {
             referenceId: customer._id,
             referenceModel: 'Customer',
             openingBalance: customer.openingBalance || 0,
-            currentBalance: customer.openingBalance || 0
+            currentBalance: (customer.drCr === 'Cr') ? -(customer.openingBalance || 0) : (customer.openingBalance || 0),
+            drCr: customer.drCr || 'Dr'
         });
     } catch (ledgerErr) {
         logger.error('❌ Failed to create ledger for customer:', ledgerErr);
@@ -217,6 +219,11 @@ const updateCustomerById = async (customerId, updateBody) => {
     delete safeBody.restoredAt;
     delete safeBody.restoredReason;
 
+    const oldCustomer = await Customer.findById(customerId).lean();
+    if (!oldCustomer) {
+        throw new ApiError(404, 'Customer not found');
+    }
+
     const customer = await Customer.findOneAndUpdate(
         { _id: customerId, isDeleted: { $ne: true } },  // only update if NOT already deleted
         { $set: safeBody },
@@ -225,6 +232,20 @@ const updateCustomerById = async (customerId, updateBody) => {
 
     if (!customer) {
         throw new ApiError(404, 'Customer not found');
+    }
+
+    // Trigger name propagation if name changed
+    const oldName = oldCustomer.company || oldCustomer.customerName;
+    const newName = customer.company || customer.customerName;
+
+    if (oldName !== newName) {
+        // Run in background to avoid blocking the response
+        propagateNameChange({
+            id: customer._id,
+            oldName: oldName,
+            newName: newName,
+            type: 'Customer'
+        }).catch(err => logger.error('Propagate Customer Name Error:', err));
     }
 
     return customer;

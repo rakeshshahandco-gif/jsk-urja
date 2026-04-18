@@ -262,6 +262,15 @@ const customerSchema = mongoose.Schema(
             enum: ['Cash', 'Credit'],
             default: 'Credit',
         },
+        openingBalance: {
+            type: Number,
+            default: 0,
+        },
+        drCr: {
+            type: String,
+            enum: ['Dr', 'Cr'],
+            default: 'Dr',
+        },
     },
     {
         timestamps: true,

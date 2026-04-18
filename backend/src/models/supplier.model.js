@@ -21,6 +21,8 @@ const supplierSchema = new mongoose.Schema({
     bankAccountNo: { type: String, trim: true, default: '' },
     bankIfsc: { type: String, trim: true, uppercase: true, default: '' },
     isActive: { type: Boolean, default: true },
+    openingBalance: { type: Number, default: 0 },
+    openingBalanceDrCr: { type: String, enum: ['Dr', 'Cr'], default: 'Cr' },
     remarks: { type: String, trim: true, default: '' },
     // 🛡️ Soft-delete fields — supplier data is NEVER hard-deleted
     isDeleted: { type: Boolean, default: false },

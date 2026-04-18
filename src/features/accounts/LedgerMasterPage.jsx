@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, BookOpen, Search, Pencil, Trash2, X, ChevronDown, ShieldCheck, Landmark, MapPin, CreditCard, Loader2 } from 'lucide-react';
 import { getAccountGroups, getLedgers, createLedger, updateLedger, deleteLedger } from '@/services/accountApi';
+import { getSuppliers } from '@/services/purchaseApi';
 import { fetchGeocodeAddress } from '@/services/locationApi';
 import { toast } from 'react-hot-toast';
 
@@ -22,6 +23,50 @@ const EMPTY = { name: '', printName: '', alias: '', underGroup: '', openingBalan
 const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading }) => {
     const [form, setForm] = useState({ ...EMPTY, ...initial, underGroup: initial.underGroup?._id || initial.underGroup || '' });
     const [isFetchingPin, setIsFetchingPin] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    const handleSyncSupplier = async () => {
+        if (!form.name || !form.name.trim()) {
+            toast.error('Please enter a Ledger Name first');
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            const res = await getSuppliers({ search: form.name.trim(), limit: 1 });
+            const matchingSup = res.suppliers?.find(s => 
+                s.supplierName.toLowerCase().trim() === form.name.toLowerCase().trim()
+            );
+
+            if (!matchingSup) {
+                toast.error('No matching supplier found in Supplier Master with this name');
+                return;
+            }
+
+            setForm(prev => ({
+                ...prev,
+                gstin: matchingSup.gstNumber || prev.gstin,
+                pan: matchingSup.panNumber || prev.pan,
+                mobile: matchingSup.phone || prev.mobile,
+                email: matchingSup.email || prev.email,
+                contactPerson: matchingSup.contactPerson || prev.contactPerson,
+                address: matchingSup.address || prev.address,
+                city: matchingSup.city || prev.city,
+                state: matchingSup.state || prev.state,
+                pincode: matchingSup.pincode || prev.pincode,
+                bankName: matchingSup.bankName || prev.bankName,
+                accountNo: matchingSup.bankAccountNo || prev.accountNo,
+                ifsc: matchingSup.bankIfsc || prev.ifsc,
+                openingBalance: matchingSup.openingBalance || prev.openingBalance,
+                drCr: matchingSup.openingBalanceDrCr || prev.drCr,
+                gstApplicable: !!matchingSup.gstNumber
+            }));
+            toast.success('Details synced from Supplier Master!');
+        } catch (err) {
+            toast.error('Failed to sync with Supplier Master');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const handleFetchPin = async () => {
         if (!form.address || !form.address.trim()) {
@@ -80,7 +125,23 @@ const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading })
                 <div style={{ marginBottom: 20 }}>
                     <div style={s.sectionTitle}><BookOpen size={13} /> Basic Details</div>
                     <div style={{ ...grid2, ...mb }}>
-                        <div><label style={s.label}>Ledger Name *</label><input name="name" value={form.name} onChange={change} style={s.input} placeholder="e.g. ABC Trading Co." /></div>
+                        <div>
+                            <label style={s.label}>Ledger Name *</label>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <input name="name" value={form.name} onChange={change} style={s.input} placeholder="e.g. ABC Trading Co." />
+                                {groups.find(g => g._id === form.underGroup)?.name === 'Sundry Creditors' && (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSyncSupplier}
+                                        disabled={isSyncing}
+                                        title="Sync details from Supplier Master"
+                                        style={{ padding: '0 10px', height: '33px', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#166534', fontSize: 11, fontWeight: 700, gap: 4, whiteSpace: 'nowrap' }}
+                                    >
+                                        {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <span>Sync Master</span>}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                         <div><label style={s.label}>Under Group *</label>
                             <select name="underGroup" value={form.underGroup} onChange={change} style={s.select}>
                                 <option value="">— Select Group —</option>

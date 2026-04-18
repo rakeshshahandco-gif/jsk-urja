@@ -7,6 +7,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
+import { propagateNameChange } from '../utils/namePropagator.js';
 
 // Helper — resolves Sundry Creditors group _id
 const getSundryCreditorGroupId = async () => {
@@ -241,6 +242,8 @@ const supplierSchema = Joi.object({
     bankAccountNo: Joi.string().optional().allow(''),
     bankIfsc: Joi.string().optional().allow(''),
     isActive: Joi.boolean().optional(),
+    openingBalance: Joi.number().optional().default(0),
+    openingBalanceDrCr: Joi.string().valid('Dr', 'Cr').optional().default('Cr'),
     remarks: Joi.string().optional().allow(''),
 });
 
@@ -288,21 +291,44 @@ export const createSupplier = asyncHandler(async (req, res) => {
 
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
 
-    // Create Ledger under Sundry Creditors
+    // Create Ledger under Sundry Creditors — sync ALL supplier details
     try {
         const scGroupId = await getSundryCreditorGroupId();
+        const hasGst = !!(supplier.gstNumber && supplier.gstNumber.trim());
         await AccountLedger.create({
             name: supplier.supplierName,
             underGroup: scGroupId,
+            groupName: 'Sundry Creditors',
             type: 'Supplier',
+            isSupplier: true,
             referenceId: supplier._id,
             referenceModel: 'Supplier',
+            // Opening Balance — Ensure currentBalance is signed correctly (Dr=+, Cr=-)
             openingBalance: supplier.openingBalance || 0,
-            currentBalance: supplier.openingBalance || 0,
+            currentBalance: (supplier.openingBalanceDrCr === 'Cr') ? -(supplier.openingBalance || 0) : (supplier.openingBalance || 0),
+            drCr: supplier.openingBalanceDrCr || 'Cr',
+            // GST Details
+            gstApplicable: hasGst,
+            gstin: supplier.gstNumber || '',
+            pan: supplier.panNumber || '',
+            registrationType: hasGst ? 'Regular' : 'Unregistered',
+            // Contact
+            contactPerson: supplier.contactPerson || '',
+            mobile: supplier.phone || '',
+            email: supplier.email || '',
+            // Address
+            address: supplier.address || '',
+            city: supplier.city || '',
+            state: supplier.state || '',
+            pincode: supplier.pincode || '',
+            // Bank
+            bankName: supplier.bankName || '',
+            accountNo: supplier.bankAccountNo || '',
+            ifsc: supplier.bankIfsc || '',
             createdBy: req.user._id
         });
     } catch (ledgerErr) {
-        console.error('❌ Failed to create ledger for supplier:', ledgerErr);
+        console.error('❌ Failed to create ledger for supplier:', ledgerErr.message);
     }
 
     res.status(201).json(new ApiResponse(201, supplier, 'Supplier created'));
@@ -331,10 +357,69 @@ export const updateSupplier = asyncHandler(async (req, res) => {
     const { error, value } = supplierSchema.validate(req.body, { allowUnknown: true });
     if (error) throw new ApiError(400, error.details[0].message);
 
+    const oldSupplier = await Supplier.findById(req.params.id).lean();
+    if (!oldSupplier) throw new ApiError(404, 'Supplier not found');
+
     const supplier = await Supplier.findByIdAndUpdate(
         req.params.id, { ...value, updatedBy: req.user._id }, { new: true }
     );
     if (!supplier) throw new ApiError(404, 'Supplier not found');
+
+    // Sync changes to the linked AccountLedger
+    try {
+        const hasGst = !!(supplier.gstNumber && supplier.gstNumber.trim());
+        const ledgerUpdate = {
+            name: supplier.supplierName,
+            // GST Details
+            gstApplicable: hasGst,
+            gstin: supplier.gstNumber || '',
+            pan: supplier.panNumber || '',
+            // Contact
+            contactPerson: supplier.contactPerson || '',
+            mobile: supplier.phone || '',
+            email: supplier.email || '',
+            // Address
+            address: supplier.address || '',
+            city: supplier.city || '',
+            state: supplier.state || '',
+            pincode: supplier.pincode || '',
+            // Bank
+            bankName: supplier.bankName || '',
+            accountNo: supplier.bankAccountNo || '',
+            ifsc: supplier.bankIfsc || '',
+        };
+        // Calculate signed currentBalance for the update
+        const oldLedger = await AccountLedger.findOne({ referenceId: supplier._id, referenceModel: 'Supplier' });
+        if (oldLedger) {
+            const newOpBal = Number(supplier.openingBalance) || 0;
+            const newDrCr = supplier.openingBalanceDrCr || 'Cr';
+            const newSignedOpBal = (newDrCr === 'Cr') ? -newOpBal : newOpBal;
+
+            const oldSignedOpBal = (oldLedger.drCr === 'Cr') ? -oldLedger.openingBalance : oldLedger.openingBalance;
+
+            ledgerUpdate.currentBalance = (oldLedger.currentBalance || 0) - oldSignedOpBal + newSignedOpBal;
+            ledgerUpdate.openingBalance = newOpBal;
+            ledgerUpdate.drCr = newDrCr;
+        }
+
+        await AccountLedger.findOneAndUpdate(
+            { referenceId: supplier._id, referenceModel: 'Supplier' },
+            { $set: ledgerUpdate }
+        );
+    } catch (ledgerErr) {
+        console.error('⚠️ Failed to sync ledger for supplier update:', ledgerErr.message);
+    }
+
+    // Propagate name change if needed
+    if (oldSupplier.supplierName !== supplier.supplierName) {
+        propagateNameChange({
+            id: supplier._id,
+            oldName: oldSupplier.supplierName,
+            newName: supplier.supplierName,
+            type: 'Supplier'
+        }).catch(err => console.error('Propagate Supplier Name Error:', err));
+    }
+
     res.json(new ApiResponse(200, supplier, 'Supplier updated'));
 });
 

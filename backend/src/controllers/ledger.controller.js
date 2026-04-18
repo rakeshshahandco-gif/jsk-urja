@@ -36,7 +36,7 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
         date: { $lt: startDate ? new Date(startDate) : new Date(0) }
     }).lean();
 
-    let openingBalance = ledger.openingBalance || 0;
+    let openingBalance = (ledger.drCr === 'Cr') ? -(ledger.openingBalance || 0) : (ledger.openingBalance || 0);
     preEntries.forEach(e => {
         openingBalance += e.type === 'Debit' ? e.amount : -e.amount;
     });

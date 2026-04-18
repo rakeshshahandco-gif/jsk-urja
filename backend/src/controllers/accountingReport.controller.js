@@ -50,7 +50,8 @@ const getLedgerBalances = async (startDate, endDate) => {
     // Calculate closing balances
     const ledgerReports = ledgers.map(l => {
         const stats = entryBalances[l._id.toString()] || { debit: 0, credit: 0, net: 0 };
-        const closingBalance = (l.openingBalance || 0) + stats.net;
+        const signedOpeningBalance = (l.drCr === 'Cr') ? -(l.openingBalance || 0) : (l.openingBalance || 0);
+        const closingBalance = signedOpeningBalance + stats.net;
         const group = l.underGroup ? groupMap[l.underGroup.toString()] : null;
 
         return {

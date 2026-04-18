@@ -288,7 +288,22 @@ const PaymentEntryPage = () => {
         try {
             await createVoucher({ ...formData, nature: 'Payment' });
             toast.success('Payment voucher saved successfully');
-            navigate(PATHS.ACCOUNTS.VOUCHERS);
+            
+            // If linked to an invoice, just go back. If manual, ask to add another.
+            if (isFromInvoice) {
+                navigate(-1);
+            } else {
+                if (window.confirm('Voucher saved. Do you want to add another entry?')) {
+                    setFormData({
+                        ...initialFormData,
+                        voucherTypeId: formData.voucherTypeId,
+                        date: formData.date,
+                        cashBankAccountId: formData.cashBankAccountId
+                    });
+                } else {
+                    navigate(PATHS.ACCOUNTS.VOUCHER_LIST);
+                }
+            }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save payment');
         } finally {
@@ -578,7 +593,7 @@ const PaymentEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
-                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
+                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHER_LIST); }}
                             style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                         </button>
