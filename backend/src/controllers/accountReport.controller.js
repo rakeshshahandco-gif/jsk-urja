@@ -21,6 +21,7 @@ export const getSalesRegister = asyncHandler(async (req, res) => {
     const invoices = await SalesInvoice.find({ ...filter, isDeleted: false })
         .sort({ invoiceDate: -1, invoiceNumber: -1 })
         .populate('customerId', 'name')
+        .populate('seriesId', 'seriesName isEstimate gstApplicable')
         .lean();
 
     res.send(new ApiResponse(httpStatus.OK, invoices));

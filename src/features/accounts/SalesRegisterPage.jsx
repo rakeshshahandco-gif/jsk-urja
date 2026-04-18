@@ -57,7 +57,19 @@ export default function SalesRegisterPage() {
 
   useEffect(() => { fetchData(); }, [filters.from, filters.to]);
 
-  const totals = data.reduce((acc, inv) => {
+  const filteredData = React.useMemo(() => {
+    if (tab === "gstr1" || tab === "gstr3b") {
+      return data.filter(inv => {
+        if (inv.seriesId?.isEstimate === true) return false;
+        if (inv.seriesId?.gstApplicable === false) return false;
+        if (inv.gstApplicable === false) return false;
+        return true;
+      });
+    }
+    return data;
+  }, [data, tab]);
+
+  const totals = filteredData.reduce((acc, inv) => {
     acc.taxable += inv.totalTaxableAmount || inv.totalBeforeTax || 0;
     acc.tax += inv.totalTaxAmount || inv.totalGst || 0;
     acc.igst += inv.totalIgst || 0;
@@ -68,12 +80,12 @@ export default function SalesRegisterPage() {
   }, { taxable: 0, tax: 0, igst: 0, cgst: 0, sgst: 0, net: 0 });
 
   const exportCSV = () => {
-    if (!data.length) return toast.error("No data to export");
+    if (!filteredData.length) return toast.error("No data to export");
     let rows = [];
     if (tab === "gstr1") {
       rows = [
         ["GSTIN", "Receiver Name", "Invoice No.", "Invoice Date", "Invoice Value", "Place of Supply", "Taxable Value", "IGST", "CGST", "SGST"],
-        ...data.map(inv => [
+        ...filteredData.map(inv => [
           inv.customerGstin || "",
           inv.customerName,
           inv.invoiceNumber,
@@ -89,7 +101,7 @@ export default function SalesRegisterPage() {
     } else {
       rows = [
         ["Date", "Invoice No.", "Customer", "GSTIN", "Taxable Amt", "IGST", "CGST", "SGST", "Total Tax", "Net Amount"],
-        ...data.map(inv => [
+        ...filteredData.map(inv => [
           fmtDate(inv.invoiceDate),
           inv.invoiceNumber,
           inv.customerName,
@@ -114,7 +126,7 @@ export default function SalesRegisterPage() {
 
   const gstr3bGroups = () => {
     const slabs = {};
-    data.forEach(inv => {
+    filteredData.forEach(inv => {
       const isIGST = inv.gstType === "IGST";
       (inv.items || []).forEach(it => {
         const slab = getGstSlab(it.taxRate);
@@ -173,7 +185,7 @@ export default function SalesRegisterPage() {
         <div className={s.stats}>
           <div className={s.statItem}>
             <span>Invoices</span>
-            <span>{data.length}</span>
+            <span>{filteredData.length}</span>
           </div>
           <div className={s.statItem}>
             <span>Net Taxable</span>
@@ -209,7 +221,7 @@ export default function SalesRegisterPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.flatMap(inv => {
+                  {filteredData.flatMap(inv => {
                     const lineItems = tab === "register_inv" 
                       ? (inv.items || [{ itemName: "—", qty: 0, rate: 0, taxableAmount: 0, taxRate: 0 }])
                       : [{ totalTaxableAmount: inv.totalTaxableAmount || inv.totalBeforeTax }];
@@ -258,7 +270,7 @@ export default function SalesRegisterPage() {
                 </tfoot>
               </table>
             )}
-            {!loading && data.length === 0 && <div className="p-32 text-center text-slate-300 font-black uppercase tracking-widest">No Records Found</div>}
+            {!loading && filteredData.length === 0 && <div className="p-32 text-center text-slate-300 font-black uppercase tracking-widest">No Records Found</div>}
           </div>
         )}
 
