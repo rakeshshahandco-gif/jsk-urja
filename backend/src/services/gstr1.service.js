@@ -122,99 +122,102 @@ export const generateGSTR1Excel = async (filters) => {
     };
 
     invoices.forEach(inv => {
-        const isB2B = inv.customerRegistrationType === 'Registered' || inv.customerRegistrationType === 'SEZ' || inv.customerRegistrationType === 'UIN' || inv.customerRegistrationType === 'Composite';
-        const isB2CL = inv.customerRegistrationType === 'Consumer-B2CL';
+        const custRegType = inv.customerRegistrationType || inv.customerId?.gstRegistrationType;
+        const isB2B = custRegType === 'Registered' || custRegType === 'SEZ' || custRegType === 'UIN' || custRegType === 'Composite' || !!inv.gstNumber;
+        const isB2CL = custRegType === 'Consumer-B2CL' || (inv.customerRegistrationType === 'Consumer-B2CL');
         // Anything else is mapped to B2CS (Consumer, Unregistered, etc) that isn't B2CL.
 
         const invDate = formatDate(inv.invoiceDate);
         const pos = getPlaceOfSupply(inv);
 
-        inv.items.forEach(item => {
-            const rowData = {
-                gstin: inv.gstNumber || '',
-                receiver: inv.customerName,
-                invNo: inv.invoiceNumber,
-                invDate: invDate,
-                invValue: inv.roundedTotal || inv.grandTotal,
-                pos: pos,
-                rc: 'N',
-                appTax: '', // Applicable % of Tax Rate (generally blank)
-                invType: 'Regular B2B',
-                ecommerce: '',
-                rate: item.taxRate || 18,
-                taxValue: item.taxableAmount || 0,
-                cessAmount: item.cessAmount || 0
-            };
-
-            // Calculate exact tax components based on gstType
-            let igst = 0, cgst = 0, sgst = 0;
-            const taxAmt = item.taxAmount || 0;
-            if (inv.gstType === 'IGST') {
-                igst = taxAmt;
-            } else {
-                cgst = taxAmt / 2;
-                sgst = taxAmt / 2;
-            }
-
-            // HSN Aggregation
-            const hsnKey = `${item.hsnCode || 'UNKNOWN'}-${item.taxRate}`;
-            if (!hsnMap.has(hsnKey)) {
-                hsnMap.set(hsnKey, {
-                    hsn: item.hsnCode || '',
-                    desc: item.itemName || '',
-                    uqc: item.uqc || 'NOS-NUMBERS', // Snapshot used
-                    tQty: 0,
-                    tVal: 0,
-                    taxVal: 0,
-                    igst: 0,
-                    cgst: 0,
-                    sgst: 0,
-                    cess: 0
-                });
-            }
-            const hc = hsnMap.get(hsnKey);
-            hc.tQty += (item.qty || 0);
-            hc.tVal += ((item.taxableAmount || 0) + taxAmt + (item.cessAmount || 0));
-            hc.taxVal += (item.taxableAmount || 0);
-            hc.igst += igst;
-            hc.cgst += cgst;
-            hc.sgst += sgst;
-            hc.cess += (item.cessAmount || 0);
-
-            // Populate Sheets
-            if (isB2B) {
-                b2bSheet.addRow(rowData);
-            } else if (isB2CL) {
-                b2clSheet.addRow({
+        if (inv.items && Array.isArray(inv.items)) {
+            inv.items.forEach(item => {
+                const rowData = {
+                    gstin: inv.gstNumber || '',
+                    receiver: inv.customerName,
                     invNo: inv.invoiceNumber,
                     invDate: invDate,
                     invValue: inv.roundedTotal || inv.grandTotal,
                     pos: pos,
-                    appTax: '',
+                    rc: 'N',
+                    appTax: '', // Applicable % of Tax Rate (generally blank)
+                    invType: 'Regular B2B',
+                    ecommerce: '',
                     rate: item.taxRate || 18,
                     taxValue: item.taxableAmount || 0,
-                    cessAmount: item.cessAmount || 0,
-                    ecommerce: ''
-                });
-            } else {
-                // Aggregate B2CS
-                const b2csKey = `${pos}-${item.taxRate}`;
-                if (!b2csMap.has(b2csKey)) {
-                    b2csMap.set(b2csKey, {
-                        type: 'OE',
+                    cessAmount: item.cessAmount || 0
+                };
+
+                // Calculate exact tax components based on gstType
+                let igst = 0, cgst = 0, sgst = 0;
+                const taxAmt = item.taxAmount || 0;
+                if (inv.gstType === 'IGST') {
+                    igst = taxAmt;
+                } else {
+                    cgst = taxAmt / 2;
+                    sgst = taxAmt / 2;
+                }
+
+                // HSN Aggregation
+                const hsnKey = `${item.hsnCode || 'UNKNOWN'}-${item.taxRate}`;
+                if (!hsnMap.has(hsnKey)) {
+                    hsnMap.set(hsnKey, {
+                        hsn: item.hsnCode || '',
+                        desc: item.itemName || '',
+                        uqc: item.uqc || 'NOS-NUMBERS', // Snapshot used
+                        tQty: 0,
+                        tVal: 0,
+                        taxVal: 0,
+                        igst: 0,
+                        cgst: 0,
+                        sgst: 0,
+                        cess: 0
+                    });
+                }
+                const hc = hsnMap.get(hsnKey);
+                hc.tQty += (item.qty || 0);
+                hc.tVal += ((item.taxableAmount || 0) + taxAmt + (item.cessAmount || 0));
+                hc.taxVal += (item.taxableAmount || 0);
+                hc.igst += igst;
+                hc.cgst += cgst;
+                hc.sgst += sgst;
+                hc.cess += (item.cessAmount || 0);
+
+                // Populate Sheets
+                if (isB2B) {
+                    b2bSheet.addRow(rowData);
+                } else if (isB2CL) {
+                    b2clSheet.addRow({
+                        invNo: inv.invoiceNumber,
+                        invDate: invDate,
+                        invValue: inv.roundedTotal || inv.grandTotal,
                         pos: pos,
                         appTax: '',
                         rate: item.taxRate || 18,
-                        taxValue: 0,
-                        cessAmount: 0,
+                        taxValue: item.taxableAmount || 0,
+                        cessAmount: item.cessAmount || 0,
                         ecommerce: ''
                     });
+                } else {
+                    // Aggregate B2CS
+                    const b2csKey = `${pos}-${item.taxRate}`;
+                    if (!b2csMap.has(b2csKey)) {
+                        b2csMap.set(b2csKey, {
+                            type: 'OE',
+                            pos: pos,
+                            appTax: '',
+                            rate: item.taxRate || 18,
+                            taxValue: 0,
+                            cessAmount: 0,
+                            ecommerce: ''
+                        });
+                    }
+                    const bcs = b2csMap.get(b2csKey);
+                    bcs.taxValue += (item.taxableAmount || 0);
+                    bcs.cessAmount += (item.cessAmount || 0);
                 }
-                const bcs = b2csMap.get(b2csKey);
-                bcs.taxValue += (item.taxableAmount || 0);
-                bcs.cessAmount += (item.cessAmount || 0);
-            }
-        });
+            });
+        }
     });
 
     // Write B2CS

@@ -38,17 +38,50 @@ export default function SalesRegisterPage() {
     to: fyDateRange.endDate,
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await getSalesRegister(filters);
-      setData(Array.isArray(res) ? res : (res?.data || []));
-    } catch {
-      toast.error("Failed to fetch sales register");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const [downloadingExcel, setDownloadingExcel] = useState(false);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const res = await getSalesRegister(filters);
+            setData(Array.isArray(res) ? res : (res?.data || []));
+        } catch {
+            toast.error("Failed to fetch sales register");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const downloadGSTR1Excel = async () => {
+        try {
+            setDownloadingExcel(true);
+            const params = new URLSearchParams();
+            if (filters.from) params.append('dateFrom', filters.from);
+            if (filters.to) params.append('dateTo', filters.to);
+
+            // Need to import api at the top if not already imported. We'll use absolute path.
+            const { default: api } = await import('@/services/api');
+            const response = await api.get(`/reports/gstr1-export?${params.toString()}`, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `GSTR1_Returns_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            toast.success("GSTR-1 Portal Excel downloaded successfully!");
+        } catch (error) {
+            console.error('Export failed:', error);
+            toast.error('Failed to generate GSTR-1 Excel');
+        } finally {
+            setDownloadingExcel(false);
+        }
+    };
 
   // Auto-reset when FY changes
   useEffect(() => {
@@ -180,6 +213,15 @@ export default function SalesRegisterPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <FYBadge />
+          {tab === "gstr1" && (
+            <button 
+               onClick={downloadGSTR1Excel} 
+               disabled={downloadingExcel}
+               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all shadow-md"
+            >
+              <Download size={14} /> {downloadingExcel ? "Generating..." : "Download Portal Excel (.xlsx)"}
+            </button>
+          )}
           <button onClick={exportCSV} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all shadow-md">
             <Download size={14} /> Export CSV
           </button>
