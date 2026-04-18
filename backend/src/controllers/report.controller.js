@@ -2,6 +2,7 @@ import pick from '../utils/pick.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import reportService from '../services/report.service.js';
 import reminderService from '../services/reminder.service.js';
+import gstr1Service from '../services/gstr1.service.js';
 import { PurchaseOrder } from '../models/purchaseOrder.model.js';
 import { GRN } from '../models/grn.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
@@ -472,6 +473,16 @@ const getPurchaseComparisonReport = catchAsync(async (req, res) => {
     }, 'Purchase comparison report'));
 });
 
+// ── GSTR-1 Compliance Export ─────────────────────────────────────────
+const exportGSTR1Returns = catchAsync(async (req, res) => {
+    const filters = pick(req.query, ['dateFrom', 'dateTo', 'financialYear']);
+    const excelBuffer = await gstr1Service.generateGSTR1Excel(filters);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=GSTR1_Returns_${new Date().toISOString().split('T')[0]}.xlsx`);
+    res.status(200).send(excelBuffer);
+});
+
 export default {
     getCustomerReport,
     getReportOptions,
@@ -497,4 +508,5 @@ export default {
     getTaskReminderReport,
     getManageTasks,
     getPurchaseComparisonReport,
+    exportGSTR1Returns,
 };

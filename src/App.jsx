@@ -157,6 +157,7 @@ import MonthlySummaryReport from '@/features/hr/components/MonthlySummaryReport'
 import LateComingReport from '@/features/hr/components/LateComingReport';
 import MissingPunchReport from '@/features/hr/components/MissingPunchReport';
 import SalaryWorkingReport from '@/features/hr/components/SalaryWorkingReport';
+import GstrReportPage from '@/features/reports/GstrReportPage';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -281,6 +282,7 @@ const AppLayout = () => {
                         <Route path="/reports/conversation-history" element={<ProtectedRoute requirePermission="reports"><ConversationHistoryReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
+                        <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />
                         <Route path="/reports/task-reminders" element={<ProtectedRoute requirePermission="tasks"><TaskReminderReport /></ProtectedRoute>} />
                         <Route path="/task-chats" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
                         <Route path="/task-chats/:taskId" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />

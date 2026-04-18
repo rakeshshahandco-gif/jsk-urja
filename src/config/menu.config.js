@@ -276,6 +276,7 @@ export const menuConfig = [
             { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
             { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
             { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
+            { id: 'gstr1-export', title: '📄 GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
         ]
     },
     {

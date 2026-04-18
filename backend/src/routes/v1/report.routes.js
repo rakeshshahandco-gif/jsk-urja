@@ -72,4 +72,7 @@ router.get('/manage-tasks', reportController.getManageTasks);
 // Purchase Comparison Report
 router.get('/purchase-comparison', reportController.getPurchaseComparisonReport);
 
+// GSTR-1 Compliance Export
+router.get('/gstr1-export', reportController.exportGSTR1Returns);
+
 export default router;
