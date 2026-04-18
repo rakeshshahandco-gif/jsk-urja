@@ -46,6 +46,7 @@ const DEFAULT = {
     itemCode: '', itemName: '', itemGroupName: '', itemCategory: 'RAW_MATERIAL', itemType: 'OTHER', uom: 'NOS', points: '', description: '',
     openingStock: 0, currentStock: 0, faultyStock: 0, minStockLevel: 0, maxStockLevel: 0, valuationRate: 0, warehouseLocation: '', batchTracking: false, serialTracking: false,
     defaultSupplier: '', purchaseRate: 0, purchaseGst: 18, hsnCode: '', leadTimeDays: 0,
+    uqc: '', goodsOrService: 'Goods', cessRate: 0,
     sellingPrice: 0, mrp: 0, warrantyMonths: 0, salesGst: 18, productDescription: '',
     isManufacturable: false, bomLink: '', productionTimeHours: 0, machineRequired: '', qcRequired: false, stdProductionCost: 0,
     technical: { wattage: '', inputVoltage: '', outputVoltage: '', outputCurrent: '', dimmingType: '', ipRating: '', surgeProtection: '', efficiency: '' },
@@ -242,22 +243,45 @@ const ItemFormPage = () => {
                                 </select>
                             </Field>
                         </div>
-                        {/* Row 3: HSN + Status controls */}
+                        {/* Row 3: HSN/GST Info */}
                         <div style={f.row(4)}>
-                            <Field label="HSN Code">
-                                <input style={f.input} value={form.hsnCode} onChange={e => set('hsnCode', e.target.value)} placeholder="85044090" />
+                            <Field label="HSN Code (Legacy)">
+                                <input style={f.input} value={form.hsnCode} onChange={e => set('hsnCode', e.target.value)} placeholder="8504" />
                             </Field>
+                            <Field label="UQC (GSTR-1)">
+                                <select style={f.sel} value={form.uqc} onChange={e => set('uqc', e.target.value)}>
+                                    <option value="">Auto from UOM</option>
+                                    <option value="NOS-NUMBERS">NOS-NUMBERS</option>
+                                    <option value="PCS-PIECES">PCS-PIECES</option>
+                                    <option value="KGS-KILOGRAMS">KGS-KILOGRAMS</option>
+                                    <option value="MTR-METERS">MTR-METERS</option>
+                                    <option value="BOX-BOXES">BOX-BOXES</option>
+                                    <option value="SET-SETS">SET-SETS</option>
+                                    <option value="ROL-ROLLS">ROL-ROLLS</option>
+                                </select>
+                            </Field>
+                            <Field label="Goods / Service">
+                                <select style={f.sel} value={form.goodsOrService} onChange={e => {
+                                    set('goodsOrService', e.target.value);
+                                    set('isServiceItem', e.target.value === 'Service');
+                                }}>
+                                    <option value="Goods">Goods</option>
+                                    <option value="Service">Service</option>
+                                </select>
+                            </Field>
+                            <Field label="Cess Rate %">
+                                <input style={f.input} type="number" min="0" value={form.cessRate} onChange={e => num('cessRate', e.target.value)} />
+                            </Field>
+                        </div>
+                        {/* Status controls */}
+                        <div style={f.row(4)}>
                             <div>
                                 <label style={f.label}>Active</label>
                                 <Toggle value={form.isActive} onChange={v => set('isActive', v)} label={form.isActive ? 'Active' : 'Inactive'} />
                             </div>
-                            <div>
-                                <label style={f.label}>Service Item</label>
-                                <Toggle value={form.isServiceItem} onChange={v => set('isServiceItem', v)} />
-                            </div>
-                            <div>
+                            <div style={{gridColumn: 'span 2'}}>
                                 <label style={f.label}>Allow –ve Stock</label>
-                                <Toggle value={form.allowNegativeStock} onChange={v => set('allowNegativeStock', v)} />
+                                <Toggle value={form.allowNegativeStock} onChange={v => set('allowNegativeStock', v)} label={form.allowNegativeStock ? 'Allowed' : 'Not Allowed'} />
                             </div>
                         </div>
                         {/* Row 4: Description */}

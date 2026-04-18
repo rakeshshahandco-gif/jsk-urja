@@ -41,6 +41,8 @@ export default function CompanyProfilePage() {
         phone: '',
         urn: '',
         cin: '',
+        aatoBracket: '',
+        gstFilingFrequency: '',
         logoUrl: '',
         bankName: '',
         accountNo: '',
@@ -70,6 +72,8 @@ export default function CompanyProfilePage() {
                     phone: res.data.phone || '',
                     urn: res.data.urn || '',
                     cin: res.data.cin || '',
+                    aatoBracket: res.data.aatoBracket || 'Up to 5Cr',
+                    gstFilingFrequency: res.data.gstFilingFrequency || 'Monthly',
                     bankName: res.data.bankName || '',
                     accountNo: res.data.accountNo || '',
                     branchName: res.data.branchName || '',
@@ -107,6 +111,8 @@ export default function CompanyProfilePage() {
             formData.append('phone', profile.phone);
             formData.append('urn', profile.urn);
             formData.append('cin', profile.cin);
+            formData.append('aatoBracket', profile.aatoBracket);
+            formData.append('gstFilingFrequency', profile.gstFilingFrequency);
             formData.append('bankName', profile.bankName);
             formData.append('accountNo', profile.accountNo);
             formData.append('branchName', profile.branchName);
@@ -199,6 +205,23 @@ export default function CompanyProfilePage() {
                             <div>
                                 <span style={lbl}>URN / Registration Number</span>
                                 <input type="text" name="urn" value={profile.urn} onChange={handleChange} style={inp} placeholder="URN Number" />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+                            <div>
+                                <span style={lbl}>AATO Bracket (GSTR-1 Rule)</span>
+                                <select name="aatoBracket" value={profile.aatoBracket} onChange={handleChange} style={inp}>
+                                    <option value="Up to 5Cr">Up to 5 Crore (4-Digit HSN)</option>
+                                    <option value="Above 5Cr">Above 5 Crore (6-Digit HSN)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span style={lbl}>GST Filing Frequency</span>
+                                <select name="gstFilingFrequency" value={profile.gstFilingFrequency} onChange={handleChange} style={inp}>
+                                    <option value="Monthly">Monthly</option>
+                                    <option value="Quarterly">Quarterly (QRMP)</option>
+                                </select>
                             </div>
                         </div>
                     </div>

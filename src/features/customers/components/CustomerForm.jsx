@@ -418,12 +418,32 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </div>
 
                         <div className={styles['form-group']}>
-                            <label htmlFor="company">COMPANY</label>
+                            <label htmlFor="company">COMPANY (DISPLAY NAME)</label>
                             <Input
                                 id="company"
                                 {...register('company')}
-                                placeholder="Company name"
+                                placeholder="Company / Short Name"
                                 onChange={handleUppercaseChange('company')}
+                            />
+                        </div>
+
+                        <div className={styles['form-group']}>
+                            <label htmlFor="legalName">LEGAL NAME (GSTR-1)</label>
+                            <Input
+                                id="legalName"
+                                {...register('legalName')}
+                                placeholder="Exact legal name as per GST portal"
+                                onChange={handleUppercaseChange('legalName')}
+                            />
+                        </div>
+
+                        <div className={styles['form-group']}>
+                            <label htmlFor="tradeName">TRADE NAME</label>
+                            <Input
+                                id="tradeName"
+                                {...register('tradeName')}
+                                placeholder="Trade name as per GST portal"
+                                onChange={handleUppercaseChange('tradeName')}
                             />
                         </div>
 
@@ -825,7 +845,35 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 <option value="Unregistered">Unregistered</option>
                                 <option value="Composite">Composite</option>
                                 <option value="Consumer">Consumer</option>
+                                <option value="UIN">UIN Holder</option>
+                                <option value="SEZ">SEZ (With/Without Pay)</option>
+                                <option value="Export">Export</option>
                             </select>
+                        </div>
+
+                        {/* Customer Activity Type (GSTR-1 B2B/B2C logic) */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="customerActivityType">CUSTOMER ACTIVITY (GSTR-1)</label>
+                            <select
+                                id="customerActivityType"
+                                {...register('customerActivityType')}
+                                className={styles['form-select']}
+                            >
+                                <option value="">Select Activity</option>
+                                <option value="B2B">B2B (Business to Business)</option>
+                                <option value="B2C">B2C (Business to Consumer)</option>
+                            </select>
+                        </div>
+                        
+                        {/* Export Country */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="exportCountry">EXPORT COUNTRY</label>
+                            <Input
+                                id="exportCountry"
+                                {...register('exportCountry')}
+                                placeholder="If Export, enter country"
+                                onChange={handleUppercaseChange('exportCountry')}
+                            />
                         </div>
 
                         {/* Credit Period */}
