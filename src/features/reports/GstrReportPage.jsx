@@ -23,7 +23,7 @@ export default function GstrReportPage() {
             if (dateTo) params.append('dateTo', dateTo);
             if (financialYear) params.append('financialYear', financialYear);
 
-            const response = await api.get(`/v1/reports/gstr1-export?${params.toString()}`, {
+            const response = await api.get(`/reports/gstr1-export?${params.toString()}`, {
                 responseType: 'blob'
             });
 
