@@ -84,13 +84,21 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             }
         }
 
-        // 2. Map B2CL vs B2CS vs B2B
-        if (!invData.customerRegistrationType && invData.customerId) {
+        // 2. Map B2CL vs B2CS vs B2B — snapshot registration type from customer master
+        const missingRegType = !invData.customerRegistrationType 
+            || invData.customerRegistrationType === 'undefined'
+            || invData.customerRegistrationType === 'null'
+            || invData.customerRegistrationType.trim() === '';
+        if (missingRegType && invData.customerId) {
             const customerMaster = await Customer.findById(invData.customerId).session(session);
             if (customerMaster) {
                 invData.customerRegistrationType = customerMaster.gstRegistrationType || 'Consumer';
                 invData.exportCountry = customerMaster.exportCountry || '';
             }
+        }
+        // Sanitize: replace any leftover string "undefined" with empty
+        if (invData.customerRegistrationType === 'undefined' || invData.customerRegistrationType === 'null') {
+            invData.customerRegistrationType = 'Consumer';
         }
         
         const isB2C = invData.customerRegistrationType === 'Unregistered' || invData.customerRegistrationType === 'Consumer';

@@ -59,6 +59,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 gstNumber: '',
                 gstType: '',
                 gstRegistrationType: '',
+                customerActivityType: '',
+                exportCountry: '',
                 contactPersons: [
                     {
                         name: '',
@@ -106,6 +108,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             gstNumber: customerData.gstNumber || '',
             gstType: customerData.gstType || (customerData.state ? (String(customerData.state).trim().toLowerCase() === 'maharashtra' ? 'CGST / SGST' : 'IGST') : ''),
             gstRegistrationType: customerData.gstRegistrationType || (customerData.gstNumber ? 'Registered' : 'Consumer'),
+            customerActivityType: customerData.customerActivityType || '',
+            exportCountry: customerData.exportCountry || '',
             customerCode: customerData.customerCode || '',
             contactPersons: Array.isArray(customerData.contactPersons) && customerData.contactPersons.length > 0
                 ? customerData.contactPersons.map(contact => ({
