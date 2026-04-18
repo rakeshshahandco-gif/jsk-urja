@@ -3,6 +3,7 @@ import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
 import { rollbackStockLedger, recalculateStockLedger } from '../utils/stockUtils.js';
 import { Item } from '../models/item.model.js';
+import Customer from '../models/customer.model.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -55,6 +56,53 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             paymentStatus: 'Unpaid',
             numberLocked: body.status === 'Confirmed' // Auto-lock if confirmed
         };
+
+        // --- PHASE 2: GSTR-1 COMPLIANCE INJECTION ---
+        // 1. Snapshot Item UQC/HSN for Table 12
+        if (invData.items && invData.items.length > 0) {
+            let totalCessAmount = 0;
+            for (let i = 0; i < invData.items.length; i++) {
+                const itm = invData.items[i];
+                if (itm.itemId) {
+                    const masterItem = await Item.findById(itm.itemId).session(session);
+                    if (masterItem) {
+                        itm.uqc = itm.uqc || masterItem.uqc || masterItem.uom || 'NOS-NUMBERS';
+                        itm.hsnCode = itm.hsnCode || masterItem.hsnCode || '';
+                        itm.cessRate = masterItem.cessRate || 0;
+                        if(itm.cessRate > 0 && itm.taxableAmount > 0) {
+                            itm.cessAmount = Number(((itm.taxableAmount * itm.cessRate) / 100).toFixed(2));
+                            totalCessAmount += itm.cessAmount;
+                            itm.totalAmount = Number((itm.totalAmount + itm.cessAmount).toFixed(2));
+                        }
+                    }
+                }
+            }
+            if (totalCessAmount > 0) {
+                invData.totalCessAmount = Number(totalCessAmount.toFixed(2));
+                invData.grandTotal = Number((invData.grandTotal + totalCessAmount).toFixed(2));
+                invData.roundedTotal = Math.round(invData.grandTotal);
+            }
+        }
+
+        // 2. Map B2CL vs B2CS vs B2B
+        if (!invData.customerRegistrationType && invData.customerId) {
+            const customerMaster = await Customer.findById(invData.customerId).session(session);
+            if (customerMaster) {
+                invData.customerRegistrationType = customerMaster.gstRegistrationType || 'Consumer';
+                invData.exportCountry = customerMaster.exportCountry || '';
+            }
+        }
+        
+        const isB2C = invData.customerRegistrationType === 'Unregistered' || invData.customerRegistrationType === 'Consumer';
+        if (isB2C) {
+            // August 2024 Portal Amendment: B2CL threshold is ₹1,00,000 for Interstate
+            if (invData.gstType === 'IGST' && invData.grandTotal > 100000) {
+                invData.customerRegistrationType = 'Consumer-B2CL';
+            } else {
+                invData.customerRegistrationType = 'Consumer-B2CS';
+            }
+        }
+        // ---------------------------------------------
 
         const [invoice] = await SalesInvoice.create([invData], { session });
 
