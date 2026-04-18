@@ -55,6 +55,33 @@ export default function SalesRegisterPage() {
     setFilters({ from: fyDateRange.startDate, to: fyDateRange.endDate });
   }, [fyDateRange.startDate, fyDateRange.endDate]);
 
+  const handleQuickPeriodChange = (e) => {
+    const val = e.target.value;
+    if (val === 'custom') return;
+    
+    let from = fyDateRange.startDate;
+    let to = fyDateRange.endDate;
+    
+    const fyStart = new Date(fyDateRange.startDate);
+    const fyEnd = new Date(fyDateRange.endDate);
+    const year = fyStart.getFullYear();
+    const nextYear = fyEnd.getFullYear();
+
+    if (val === 'q1') { from = `${year}-04-01`; to = `${year}-06-30`; }
+    else if (val === 'q2') { from = `${year}-07-01`; to = `${year}-09-30`; }
+    else if (val === 'q3') { from = `${year}-10-01`; to = `${year}-12-31`; }
+    else if (val === 'q4') { from = `${nextYear}-01-01`; to = `${nextYear}-03-31`; }
+    else if (val.startsWith('m-')) {
+      const month = parseInt(val.split('-')[1]); 
+      const mYear = month >= 4 ? year : nextYear;
+      from = `${mYear}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(mYear, month, 0).getDate();
+      to = `${mYear}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+
+    setFilters(p => ({ ...p, from, to }));
+  };
+
   useEffect(() => { fetchData(); }, [filters.from, filters.to]);
 
   const filteredData = useMemo(() => {
@@ -174,6 +201,32 @@ export default function SalesRegisterPage() {
         <div className={s.filterGroup}>
           <label>Period Entry</label>
           <div className="flex items-center gap-3">
+            <select onChange={handleQuickPeriodChange} defaultValue="fy" className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-[11px] font-black uppercase tracking-widest text-slate-600 outline-none focus:border-teal-500 cursor-pointer shadow-sm hover:bg-slate-100 transition-colors">
+              <optgroup label="General">
+                  <option value="fy">Full Year</option>
+                  <option value="custom">Custom Range</option>
+              </optgroup>
+              <optgroup label="Quarterly">
+                  <option value="q1">Q1 (Apr-Jun)</option>
+                  <option value="q2">Q2 (Jul-Sep)</option>
+                  <option value="q3">Q3 (Oct-Dec)</option>
+                  <option value="q4">Q4 (Jan-Mar)</option>
+              </optgroup>
+              <optgroup label="Monthly">
+                  <option value="m-4">April</option>
+                  <option value="m-5">May</option>
+                  <option value="m-6">June</option>
+                  <option value="m-7">July</option>
+                  <option value="m-8">August</option>
+                  <option value="m-9">September</option>
+                  <option value="m-10">October</option>
+                  <option value="m-11">November</option>
+                  <option value="m-12">December</option>
+                  <option value="m-1">January</option>
+                  <option value="m-2">February</option>
+                  <option value="m-3">March</option>
+              </optgroup>
+            </select>
             <input type="date" value={filters.from} onChange={e => setFilters(p => ({ ...p, from: e.target.value }))} />
             <span className="text-slate-300 font-black">→</span>
             <input type="date" value={filters.to} onChange={e => setFilters(p => ({ ...p, to: e.target.value }))} />
