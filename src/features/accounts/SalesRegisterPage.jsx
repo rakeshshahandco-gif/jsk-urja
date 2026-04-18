@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui";
 import { Filter, Eye, Download } from "lucide-react";
@@ -57,7 +57,7 @@ export default function SalesRegisterPage() {
 
   useEffect(() => { fetchData(); }, [filters.from, filters.to]);
 
-  const filteredData = React.useMemo(() => {
+  const filteredData = useMemo(() => {
     if (tab === "gstr1" || tab === "gstr3b") {
       return data.filter(inv => {
         if (inv.seriesId?.isEstimate === true) return false;
