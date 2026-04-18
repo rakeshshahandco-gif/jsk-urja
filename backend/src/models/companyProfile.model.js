@@ -37,6 +37,27 @@ const companyProfileSchema = new mongoose.Schema(
             trim: true,
             default: '',
         },
+        tradeName: {  // Added for GSTR-1
+            type: String,
+            trim: true,
+            default: '',
+        },
+        gstFilingFrequency: { // Monthly / Quarterly
+            type: String,
+            enum: ['Monthly', 'Quarterly', ''],
+            default: '',
+        },
+        aatoBracket: {       // Up to 5Cr / Above 5Cr for HSN validation rules
+            type: String,
+            enum: ['Up to 5Cr', 'Above 5Cr', ''],
+            default: '',
+        },
+        defaultDocumentSeries: { // Mapping series for GSTR-1 Table 13 Documents Issued
+            taxInvoice: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+            creditNote: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+            debitNote: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+            billOfSupply: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
+        },
         panNumber: {
             type: String,
             trim: true,

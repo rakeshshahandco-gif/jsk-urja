@@ -60,7 +60,15 @@ const itemSchema = new mongoose.Schema({
     defaultSupplier: { type: String, trim: true, default: '' },
     purchaseRate: { type: Number, default: 0 },
     purchaseGst: { type: Number, default: 18 },
-    hsnCode: { type: String, trim: true, default: '' },
+    hsnCode: { type: String, trim: true, default: '' }, // Legacy, kept for backward compatibility
+    
+    // GSTR-1 Specific Fields
+    goodsOrService: { type: String, enum: ['Goods', 'Service', ''], default: 'Goods' },
+    hsnSacId: { type: mongoose.Schema.Types.ObjectId, ref: 'HsnMaster', default: null },
+    hsnDescription: { type: String, trim: true, default: '' },
+    uqc: { type: String, trim: true, default: '' },
+    cessRate: { type: Number, default: 0 },
+
     leadTimeDays: { type: Number, default: 0 },
 
     // ── 4. SALES INFORMATION ─────────────────────────────────────────────────

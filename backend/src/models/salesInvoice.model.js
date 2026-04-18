@@ -11,6 +11,8 @@ const siItemSchema = new mongoose.Schema({
     uom: { type: String, default: 'NOS' },
     qty: { type: Number, required: true, min: 0 },
     rate: { type: Number, required: true, min: 0 },
+    uqc: { type: String, default: '' }, // GSTR-1 Table 12 requirement
+    hsnSacId: { type: mongoose.Schema.Types.ObjectId, ref: 'HsnMaster' },
     discountPercent: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
     taxableAmount: { type: Number, default: 0 },   // qty * rate - discount
@@ -21,6 +23,8 @@ const siItemSchema = new mongoose.Schema({
     sgstAmount: { type: Number, default: 0 },
     igstRate: { type: Number, default: 0 },
     igstAmount: { type: Number, default: 0 },
+    cessRate: { type: Number, default: 0 },
+    cessAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
 }, { _id: true });
 
@@ -47,6 +51,8 @@ const salesInvoiceSchema = new mongoose.Schema({
     billingState: { type: String, default: '' },
     billingStateCode: { type: String, default: '' },
     customerGstin: { type: String, default: '' },
+    customerRegistrationType: { type: String, default: '' }, // Captured from Customer Master
+    exportCountry: { type: String, default: '' }, // Captured from Customer Master
     customerPhone: { type: String, default: '' },
     shippingAddress: { type: String, default: '' },
     shippingCity: { type: String, default: '' },
@@ -82,6 +88,7 @@ const salesInvoiceSchema = new mongoose.Schema({
     totalSgst: { type: Number, default: 0 },
     totalIgst: { type: Number, default: 0 },
     totalGst: { type: Number, default: 0 },
+    totalCessAmount: { type: Number, default: 0 },
 
     // Freight
     freightAmount: { type: Number, default: 0 },
@@ -111,6 +118,9 @@ const salesInvoiceSchema = new mongoose.Schema({
 
     status: { type: String, /* enum: ['Draft', 'Confirmed', 'Cancelled'], */ default: 'Draft' },
     remarks: { type: String, default: '' },
+    
+    // Parent Reference for Credit/Debit Notes
+    originalInvoiceReference: { type: mongoose.Schema.Types.ObjectId, ref: 'SalesInvoice', default: null },
 
     // Cancellation Fields
     cancelledAt: { type: Date, default: null },

@@ -10,7 +10,14 @@ const invoiceSeriesSchema = new mongoose.Schema({
     gstApplicable: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
-    isEstimate: { type: Boolean, default: false },
+    isEstimate: { type: Boolean, default: false }, // Legacy flag, mapping via documentType is preferred now
+    documentType: { 
+        type: String, 
+        enum: ['Tax Invoice', 'Credit Note', 'Debit Note', 'Bill of Supply', 'Estimate', 'Delivery Challan', ''], 
+        default: '' 
+    },
+    issuedCount: { type: Number, default: 0 },
+    cancelledCount: { type: Number, default: 0 },
     description: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });

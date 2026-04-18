@@ -7,6 +7,16 @@ const customerSchema = mongoose.Schema(
             trim: true,
             default: "",
         },
+        legalName: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        tradeName: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         contactPersons: [{
             name: {
                 type: String,
@@ -98,6 +108,31 @@ const customerSchema = mongoose.Schema(
             type: String,
             trim: true,
         },
+        billingStateCode: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        shippingAddress: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        shippingCity: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        shippingState: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        shippingStateCode: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         additionalAddress: {
             type: String,
             trim: true,
@@ -179,7 +214,22 @@ const customerSchema = mongoose.Schema(
         },
         gstRegistrationType: {
             type: String,
-            enum: ['Registered', 'Unregistered', 'Composite', 'Consumer', ''],
+            enum: ['Registered', 'Unregistered', 'Composite', 'Consumer', 'UIN', 'SEZ', 'Export', ''],
+            default: '',
+        },
+        defaultPlaceOfSupply: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        customerActivityType: {
+            type: String,
+            enum: ['B2B', 'B2C', ''],
+            default: '',
+        },
+        exportCountry: {
+            type: String,
+            trim: true,
             default: '',
         },
         isDeleted: {
