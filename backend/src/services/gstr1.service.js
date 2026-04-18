@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
+import Customer from '../models/customer.model.js';
 import mongoose from 'mongoose';
 
 const mapGSTStateCode = (stateString) => {
