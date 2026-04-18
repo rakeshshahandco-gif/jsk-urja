@@ -253,7 +253,7 @@ export default function SalesRegisterPage() {
 
       <div className="space-y-6">
         {/* ────────────────────────────── REGISTER VIEWS ────────────────────────────── */}
-        {(tab === "register_inv" || tab === "register_noinv") && (
+        {(tab === "register_inv" || tab === "register_noinv" || tab === "gstr1") && (
           <div className={s.tableContainer}>
             {loading ? <div className="p-32 text-center text-slate-300 font-black animate-pulse uppercase tracking-widest">Compiling Records...</div> : (
               <table className="w-full">
@@ -300,9 +300,9 @@ export default function SalesRegisterPage() {
                           )}
                           {tab === "register_inv" && <td className="text-right font-black tabular-nums">{it.qty} {it.uom}</td>}
                           <td className={s.amount}>₹{fmtCur(taxable)}</td>
-                          <td className={`${s.amount} text-blue-600`}>₹{fmtCur(idx === 0 && tab === "register_noinv" ? inv.totalIgst : igst)}</td>
-                          <td className={`${s.amount} text-emerald-600`}>₹{fmtCur(idx === 0 && tab === "register_noinv" ? inv.totalCgst : cgst)}</td>
-                          <td className={`${s.amount} text-orange-600`}>₹{fmtCur(idx === 0 && tab === "register_noinv" ? inv.totalSgst : sgst)}</td>
+                          <td className={`${s.amount} text-blue-600`}>₹{fmtCur(idx === 0 && (tab === "register_noinv" || tab === "gstr1") ? inv.totalIgst : igst)}</td>
+                          <td className={`${s.amount} text-emerald-600`}>₹{fmtCur(idx === 0 && (tab === "register_noinv" || tab === "gstr1") ? inv.totalCgst : cgst)}</td>
+                          <td className={`${s.amount} text-orange-600`}>₹{fmtCur(idx === 0 && (tab === "register_noinv" || tab === "gstr1") ? inv.totalSgst : sgst)}</td>
                           <td className={`${s.amount} font-black text-slate-900 border-l border-slate-50`}>{idx === 0 ? `₹${fmtCur(inv.roundedTotal || inv.grandTotal)}` : ""}</td>
                           <td className="text-center">{idx === 0 ? <button onClick={() => navigate(PATHS.SALES.INVOICE_DETAIL(inv._id))} className="text-slate-300 hover:text-teal-600 transition-colors"><Eye size={16} /></button> : ""}</td>
                         </tr>
