@@ -6,6 +6,8 @@ import { ItemGroup } from '../models/itemGroup.model.js';
 import reportService from '../services/report.service.js';
 import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
+import { GlobalRenamer } from '../utils/GlobalRenamer.js';
+import logger from '../utils/logger.js';
 
 // ── Auto-generate item code ─────────────────────────────────────────────────
 const generateItemCode = async () => {
@@ -181,9 +183,22 @@ export const updateItem = asyncHandler(async (req, res) => {
         }
     }
 
+    const oldItemName = item.itemName;
     Object.assign(item, req.body);
     item.updatedBy = req.user.id;
     await item.save();
+
+    // Propagate item name change globally
+    if (oldItemName !== item.itemName) {
+        GlobalRenamer.propagate({
+            masterType: 'ITEM',
+            id: item._id,
+            oldName: oldItemName,
+            newName: item.itemName,
+            userId: req.user.id
+        }).catch(err => logger.error('Global Propagation Error (Item):', err));
+    }
+
     res.send({ success: true, data: item });
 });
 

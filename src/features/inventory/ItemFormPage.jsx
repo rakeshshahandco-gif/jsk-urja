@@ -66,6 +66,7 @@ const ItemFormPage = () => {
     const [loading, setLoading] = useState(isEdit);
     const [saving, setSaving] = useState(false);
     const [generatingCode, setGeneratingCode] = useState(false);
+    const [originalItemName, setOriginalItemName] = useState('');
     const [itemTypes, setItemTypes] = useState([]);
     const [itemGroups, setItemGroups] = useState([]);
 
@@ -75,7 +76,10 @@ const ItemFormPage = () => {
     useEffect(() => {
         if (!isEdit) return;
         getItem(id)
-            .then(data => setForm({ ...DEFAULT, ...data, technical: { ...DEFAULT.technical, ...(data.technical || {}) } }))
+            .then(data => {
+                setForm({ ...DEFAULT, ...data, technical: { ...DEFAULT.technical, ...(data.technical || {}) } });
+                setOriginalItemName(data.itemName || '');
+            })
             .catch((err) => {
                 console.error('Load Item Error:', err);
                 addToast(err?.response?.data?.message || 'Failed to load item', 'error');
@@ -183,6 +187,12 @@ const ItemFormPage = () => {
                                 <Field label="Item Name *">
                                     <input style={f.input} value={form.itemName} onChange={e => set('itemName', e.target.value)} placeholder="12W Phase Cut Dimmable Driver" />
                                 </Field>
+                                {isEdit && originalItemName && form.itemName && originalItemName !== form.itemName && (
+                                    <div style={{ fontSize: '10px', color: '#e11d48', marginTop: '4px', background: '#fff1f2', padding: '4px 8px', borderRadius: '4px', border: '1px solid #fecdd3', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span>⚠️</span>
+                                        <span>Changing this name will update it globally in all past & future records.</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         {/* Description */}

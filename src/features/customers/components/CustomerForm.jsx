@@ -153,6 +153,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const { addToast } = useToast();
     const [generatingCode, setGeneratingCode] = useState(false);
     const [isFetchingPin, setIsFetchingPin] = useState(false);
+    const initialCompanyName = customer?.company || '';
+    const currentCompanyName = watch('company');
+    const isNameChanged = customer && initialCompanyName && currentCompanyName && initialCompanyName !== currentCompanyName;
 
     const handleFetchPin = async () => {
         const addressText = watch('address');
@@ -429,6 +432,23 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 placeholder="Company / Short Name"
                                 onChange={handleUppercaseChange('company')}
                             />
+                            {isNameChanged && (
+                                <div style={{ 
+                                    fontSize: '11px', 
+                                    color: '#e11d48', 
+                                    marginTop: '4px', 
+                                    background: '#fff1f2', 
+                                    padding: '4px 8px', 
+                                    borderRadius: '4px',
+                                    border: '1px solid #fecdd3',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}>
+                                    <span style={{ fontSize: '14px' }}>⚠️</span>
+                                    <span>Changing this name will update it globally in all past & future records.</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className={styles['form-group']}>

@@ -7,7 +7,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
-import { propagateNameChange } from '../utils/namePropagator.js';
+import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 
 // Helper — resolves Sundry Creditors group _id
 const getSundryCreditorGroupId = async () => {
@@ -410,14 +410,15 @@ export const updateSupplier = asyncHandler(async (req, res) => {
         console.error('⚠️ Failed to sync ledger for supplier update:', ledgerErr.message);
     }
 
-    // Propagate name change if needed
+    // Propagate name change globally
     if (oldSupplier.supplierName !== supplier.supplierName) {
-        propagateNameChange({
+        GlobalRenamer.propagate({
+            masterType: 'SUPPLIER',
             id: supplier._id,
             oldName: oldSupplier.supplierName,
             newName: supplier.supplierName,
-            type: 'Supplier'
-        }).catch(err => console.error('Propagate Supplier Name Error:', err));
+            userId: req.user._id
+        }).catch(err => console.error('Global Propagation Error (Supplier):', err));
     }
 
     res.json(new ApiResponse(200, supplier, 'Supplier updated'));

@@ -221,6 +221,12 @@ export default function SupplierListPage() {
                             <div style={{ gridColumn: 'span 2' }}>
                                 <label style={lbl}>Supplier Name *</label>
                                 <input value={modal.data.supplierName || ''} onChange={e => set('supplierName', e.target.value)} style={inp} placeholder="Full legal name of supplier" />
+                                {modal.mode === 'edit' && modal.data.supplierName !== suppliers.find(s => s._id === modal.data._id)?.supplierName && (
+                                    <div style={{ fontSize: '11px', color: '#e11d48', marginTop: '4px', background: '#fff1f2', padding: '6px 10px', borderRadius: '6px', border: '1px solid #fecdd3', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontSize: '14px' }}>⚠️</span>
+                                        <span>Changing this name will update it globally in all past & future records.</span>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label style={lbl}>Contact Person</label>

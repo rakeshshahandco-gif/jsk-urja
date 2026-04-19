@@ -6,7 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
-import { propagateNameChange } from '../utils/namePropagator.js';
+import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 
 /**
  * Generate a new unique customer code (e.g., CU001)
@@ -240,12 +240,13 @@ const updateCustomerById = async (customerId, updateBody) => {
 
     if (oldName !== newName) {
         // Run in background to avoid blocking the response
-        propagateNameChange({
+        GlobalRenamer.propagate({
+            masterType: 'CUSTOMER',
             id: customer._id,
             oldName: oldName,
             newName: newName,
-            type: 'Customer'
-        }).catch(err => logger.error('Propagate Customer Name Error:', err));
+            userId: customer.updatedBy
+        }).catch(err => logger.error('Global Propagation Error (Customer):', err));
     }
 
     return customer;

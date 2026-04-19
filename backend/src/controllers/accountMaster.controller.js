@@ -4,6 +4,7 @@ import { initializeAccountingMasters } from '../utils/accountInitializer.js';
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { Supplier } from '../models/supplier.model.js';
+import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 import pick from '../utils/pick.js';
 
 const initializeMasters = catchAsync(async (req, res) => {
@@ -132,11 +133,10 @@ const deleteGroup = catchAsync(async (req, res) => {
 const updateLedger = catchAsync(async (req, res) => {
     const updateData = { ...req.body };
     
-    // If opening balance or drCr is changed, we need to recalculate currentBalance
-    // Note: In a real system, we should ideally re-sum everything, but for a simple master update,
-    // we adjust the base if it changed.
+    const oldLedger = await AccountLedger.findById(req.params.id);
+    if (!oldLedger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
+
     if (Object.prototype.hasOwnProperty.call(updateData, 'openingBalance') || Object.prototype.hasOwnProperty.call(updateData, 'drCr')) {
-        const oldLedger = await AccountLedger.findById(req.params.id);
         if (oldLedger) {
             const newOpBal = Number(updateData.openingBalance ?? oldLedger.openingBalance) || 0;
             const newDrCr = updateData.drCr ?? oldLedger.drCr;
@@ -177,6 +177,17 @@ const updateLedger = catchAsync(async (req, res) => {
         } catch (err) {
             console.error('⚠️ Failed to sync Supplier from Ledger update:', err.message);
         }
+    }
+
+    // Propagate name change if needed
+    if (oldLedger.name !== ledger.name) {
+        GlobalRenamer.propagate({
+            masterType: 'LEDGER',
+            id: ledger._id,
+            oldName: oldLedger.name,
+            newName: ledger.name,
+            userId: req.user._id
+        }).catch(err => console.error('Global Propagation Error (Ledger):', err));
     }
 
     res.status(200).send(new ApiResponse(200, ledger, 'Ledger updated successfully'));
