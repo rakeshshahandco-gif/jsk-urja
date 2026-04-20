@@ -28,8 +28,33 @@ body {
 }
 
 @media print {
-  .no-print {
+  @page {
+    margin: 0;
+  }
+  
+  /* Flawless Print Reset for React/Tailwind Apps */
+  html, body, #root, #root *, .main-container {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Disable flexbox on layout wrappers because flex restricts page-breaks in PDF engines */
+  #root, 
+  #root > div, 
+  #root > div > div, 
+  #root > div > div > main {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  .no-print, .no-print * {
     display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
   }
 }
 

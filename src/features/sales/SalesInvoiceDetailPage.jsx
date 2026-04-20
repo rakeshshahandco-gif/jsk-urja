@@ -176,11 +176,11 @@ export default function SalesInvoiceDetailPage() {
             <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, color: '#000', fontSize: '10pt' }}>
                 {(() => {
                     const items = inv.items || [];
-                    const itemsPerPageFirst = 12; 
+                    const itemsPerPageFirst = 8; 
                     const itemsPerPageOthers = 20; 
                     
                     const pages = [];
-                    if (items.length <= 15) {
+                    if (items.length <= itemsPerPageFirst) {
                         pages.push(items);
                     } else {
                         pages.push(items.slice(0, itemsPerPageFirst));
