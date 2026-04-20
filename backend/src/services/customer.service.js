@@ -239,7 +239,17 @@ const updateCustomerById = async (customerId, updateBody) => {
     const newName = customer.company || customer.customerName;
 
     if (oldName !== newName) {
-        // Run in background to avoid blocking the response
+        // 1. Sync name change to linked AccountLedger
+        try {
+            await AccountLedger.findOneAndUpdate(
+                { referenceId: customer._id, referenceModel: 'Customer' },
+                { $set: { name: newName } }
+            );
+        } catch (err) {
+            logger.error('⚠️ Failed to sync AccountLedger name from Customer update:', err);
+        }
+
+        // 2. Propagate name change globally (historical docs)
         GlobalRenamer.propagate({
             masterType: 'CUSTOMER',
             id: customer._id,

@@ -5,7 +5,7 @@ const voucherTypeSchema = new mongoose.Schema({
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
     nature: {
         type: String,
-        enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Sales', 'Purchase'],
+        enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Sales', 'Purchase', 'Expense'],
         required: true
     },
     prefix: { type: String, default: '' },

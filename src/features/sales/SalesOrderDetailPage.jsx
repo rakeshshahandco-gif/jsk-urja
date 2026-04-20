@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   getSalesOrderById,
   cancelSalesOrder,
+  restoreSalesOrder,
   generateProductionSheet,
 } from "@/services/salesApi";
 import { sendOrder as sendOrderApi } from "@/services/communicationApi";
@@ -99,6 +100,17 @@ export default function SalesOrderDetailPage() {
       toast.error(e.response?.data?.message || "Failed");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!window.confirm("Are you sure you want to restore this cancelled order? Status will be set back to Confirmed.")) return;
+    try {
+      await restoreSalesOrder(id);
+      toast.success("Sales Order restored successfully");
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed to restore");
     }
   };
 
@@ -1360,6 +1372,24 @@ export default function SalesOrderDetailPage() {
                   }}
                 >
                   ✕ Cancel
+                </button>
+              )}
+              {so.status === "Cancelled" && (user?.roleName === "admin" || user?.roleName === "superadmin") && (
+                <button
+                  onClick={handleRestore}
+                  style={{
+                    padding: "9px 16px",
+                    background: "#0ea5e9",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    boxShadow: "0 2px 8px rgba(14,165,233,0.3)",
+                  }}
+                >
+                  ↺ Restore Order
                 </button>
               )}
             </div>

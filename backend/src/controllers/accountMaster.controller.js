@@ -179,6 +179,24 @@ const updateLedger = catchAsync(async (req, res) => {
         }
     }
 
+    // Sync changes back to linked Customer master
+    if (ledger.referenceId && ledger.referenceModel === 'Customer') {
+        try {
+            const CustomerModel = (await import('../models/customer.model.js')).default;
+            await CustomerModel.findByIdAndUpdate(ledger.referenceId, {
+                customerName: ledger.name,
+                company: ledger.name, // Keep company name in sync with ledger name
+                address: ledger.address || '',
+                city: ledger.city || '',
+                state: ledger.state || '',
+                pincode: ledger.pincode || '',
+                gstNumber: ledger.gstin || '',
+            });
+        } catch (err) {
+            console.error('⚠️ Failed to sync Customer from Ledger update:', err.message);
+        }
+    }
+
     // Propagate name change if needed
     if (oldLedger.name !== ledger.name) {
         GlobalRenamer.propagate({

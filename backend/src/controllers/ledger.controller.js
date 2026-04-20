@@ -130,12 +130,32 @@ export const getOutstandingBills = asyncHandler(async (req, res) => {
             isDeleted: false
         }).sort({ invoiceDate: 1 }).lean();
     } else if (ledger.type === 'Supplier') {
-        bills = await PurchaseInvoice.find({
+        const pInv = await PurchaseInvoice.find({
             supplierId: ledger.referenceId,
             paymentStatus: { $ne: 'Paid' },
             status: { $in: ['Confirmed', 'Posted'] },
             isDeleted: false
         }).sort({ invoiceDate: 1 }).lean();
+
+        const eVouchers = await Voucher.find({
+            partyId: ledger._id,
+            nature: 'Expense',
+            expenseType: 'Credit',
+            paymentStatus: { $ne: 'Paid' },
+            status: { $ne: 'Cancelled' }
+        }).sort({ date: 1 }).lean();
+
+        // Normalize Vouchers to match PurchaseInvoice structure for frontend
+        const normalizedVouchers = eVouchers.map(v => ({
+            ...v,
+            invoiceNumber: v.voucherNo,
+            invoiceDate: v.date,
+            grandTotal: v.totalAmount,
+            paidAmount: v.paidAmount || 0,
+            refModel: 'Voucher'
+        }));
+
+        bills = [...pInv, ...normalizedVouchers];
     }
 
     res.send(new ApiResponse(httpStatus.OK, bills));

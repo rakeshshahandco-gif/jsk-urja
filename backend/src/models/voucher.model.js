@@ -18,6 +18,15 @@ const voucherItemSchema = new mongoose.Schema({
     amount: { type: Number, required: true, min: 0.01 },
     type: { type: String, enum: ['Debit', 'Credit'], required: true },
     narration: { type: String, default: '' },
+    
+    // Line Level GST Fields
+    hsnCode: { type: String, default: '' },
+    gstRate: { type: Number, default: 0 },
+    taxableAmount: { type: Number, default: 0 },
+    cgstAmount: { type: Number, default: 0 },
+    sgstAmount: { type: Number, default: 0 },
+    igstAmount: { type: Number, default: 0 },
+
     adjustments: [billAdjustmentSchema],
 });
 
@@ -50,6 +59,35 @@ const voucherSchema = new mongoose.Schema({
 
     narration: { type: String, default: '' },
     status: { type: String, /* enum: ['Draft', 'Confirmed', 'Cancelled'], */ default: 'Confirmed' },
+
+    // Expense Enhancement Fields
+    expenseType: { 
+        type: String, 
+        enum: ['Cash', 'Bank', 'Credit', 'Petty Cash'],
+        default: 'Cash'
+    },
+    supplierBillNo: { type: String, default: '' },
+    supplierBillDate: { type: Date },
+    dueDate: { type: Date },
+    paymentStatus: {
+        type: String,
+        enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'],
+        default: 'Paid'
+    },
+    paidAmount: { type: Number, default: 0 },
+
+    // Header Level GST Fields
+    isGstEnabled: { type: Boolean, default: false },
+    gstType: { type: String, enum: ['CGST / SGST', 'IGST'], default: 'CGST / SGST' },
+    placeOfSupply: { type: String, default: '' },
+    supplierGstin: { type: String, default: '' },
+    totalTaxableAmount: { type: Number, default: 0 },
+    totalCgst: { type: Number, default: 0 },
+    totalSgst: { type: Number, default: 0 },
+    totalIgst: { type: Number, default: 0 },
+    totalTax: { type: Number, default: 0 },
+    roundOff: { type: Number, default: 0 },
+    grandTotal: { type: Number, default: 0 },
 
     items: [voucherItemSchema],
 

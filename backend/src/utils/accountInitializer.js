@@ -1,5 +1,6 @@
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { initializeVoucherTypes } from './voucherTypeInitializer.js';
 import logger from './logger.js';
 
 /**
@@ -258,6 +259,9 @@ const initializeAccountingMasters = async (userId) => {
             );
             logger.info(`Migrated ${migResult.modifiedCount} customer ledgers → Sundry Debtors`);
         }
+
+        // ── Initialize Voucher Types (Series) ──────────────────────────────
+        await initializeVoucherTypes(userId);
 
         return { success: true };
     } catch (error) {

@@ -398,12 +398,27 @@ export const deleteSO = asyncHandler(async (req, res) => {
 export const restoreSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.findById(req.params.id);
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
-    if (!so.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is not deleted');
 
-    so.isDeleted = false;
-    so.deletedAt = null;
-    so.deletedBy = null;
-    so.deleteReason = '';
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.roleName);
+
+    // Case 1: Restore if soft-deleted
+    if (so.isDeleted) {
+        so.isDeleted = false;
+        so.deletedAt = null;
+        so.deletedBy = null;
+        so.deleteReason = '';
+    } 
+    // Case 2: Restore if Cancelled (Admin only)
+    else if (so.status === 'Cancelled') {
+        if (!isAdmin) {
+            throw new ApiError(httpStatus.FORBIDDEN, 'Only Admins can restore cancelled sales orders');
+        }
+        so.status = 'Confirmed';
+    } 
+    else {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is neither deleted nor cancelled');
+    }
+
     so.updatedBy = req.user.id;
     await so.save();
 
@@ -412,7 +427,7 @@ export const restoreSO = asyncHandler(async (req, res) => {
         action: 'REOPEN',
         module: 'SalesOrder',
         resourceId: so._id,
-        description: `Restored Sales Order ${so.soNumber}`,
+        description: `Restored Sales Order ${so.soNumber} from ${so.status === 'Cancelled' ? 'Cancelled' : 'Deleted'} state`,
         details: { reason: req.body.reason || 'Restored by user' },
         ipAddress: req.ip,
         userAgent: req.headers['user-agent']

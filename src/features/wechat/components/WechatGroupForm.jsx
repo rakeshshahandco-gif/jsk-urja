@@ -13,7 +13,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { 
     X, Plus, Star, Users, Tag, 
     FileText, ImageIcon, Upload, Trash2, 
-    Link as LinkIcon, Building2 
+    Link as LinkIcon, Building2, User 
 } from 'lucide-react';
 
 const WechatGroupForm = ({ group, onClose, onSuccess }) => {
@@ -132,203 +132,238 @@ const WechatGroupForm = ({ group, onClose, onSuccess }) => {
     };
 
     return (
-        <Modal isOpen={true} onClose={onClose} title={group ? 'Edit WeChat Group' : 'Add WeChat Group'} width="max-w-4xl">
-            <form onSubmit={handleSubmit} className="space-y-6 max-h-[80vh] overflow-y-auto px-1">
-                <div className="flex justify-between items-center bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+        <Modal isOpen={true} onClose={onClose} width="max-w-5xl">
+            <div className="relative bg-white rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh]">
+                {/* Sticky Premium Header */}
+                <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-8 py-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                            <input 
-                                type="checkbox" 
-                                name="isFavorite" 
-                                checked={formData.isFavorite} 
-                                onChange={handleChange}
-                                className="w-5 h-5 text-yellow-500 focus:ring-yellow-500 rounded-lg border-gray-300 transition-all"
-                            />
-                            <span className="text-sm font-bold flex items-center gap-1.5 text-gray-700">
-                                <Star className={`w-5 h-5 transition-colors ${formData.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300 group-hover:text-yellow-200'}`} />
-                                Favorite Group
-                            </span>
-                        </label>
+                        <div className="bg-blue-600 p-3.5 rounded-[1.25rem] shadow-lg shadow-blue-200">
+                            <Users className="text-white w-7 h-7" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
+                                {group ? 'Edit Intelligence Group' : 'Initialize New Group'}
+                            </h2>
+                            <p className="text-sm font-bold text-slate-400 mt-1.5 uppercase tracking-widest">
+                                Global Sourcing · Team Collaboration · Category Mapping
+                            </p>
+                        </div>
                     </div>
+                    <button onClick={onClose} className="p-3 hover:bg-slate-100 rounded-2xl transition-colors text-slate-400 group">
+                        <X className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                        <section>
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Users className="w-3.5 h-3.5" /> Basic Identity
-                            </h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Group Name (Display) *</label>
-                                    <Input required name="groupName" value={formData.groupName} onChange={handleChange} placeholder="e.g. Zigbee Solutions Team" />
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 pt-6 space-y-10">
+                    {/* Status & Priority Row */}
+                    <div className="flex justify-between items-center bg-blue-50/50 p-6 rounded-[2rem] border-2 border-blue-100/50">
+                        <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    name="isFavorite" 
+                                    checked={formData.isFavorite} 
+                                    onChange={handleChange}
+                                    className="w-6 h-6 text-yellow-500 focus:ring-yellow-500 rounded-lg border-slate-300 transition-all cursor-pointer"
+                                />
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-black text-slate-700 flex items-center gap-2">
+                                        <Star className={`w-5 h-5 transition-colors ${formData.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300 group-hover:text-yellow-200'}`} />
+                                        Priority Tracking
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Mark as key sourcing group</span>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Chinese Group Name</label>
-                                        <Input name="chineseGroupName" value={formData.chineseGroupName} onChange={handleChange} placeholder="中文群组名" className="font-hindi" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">English Alias / Purpose</label>
-                                        <Input name="groupAlias" value={formData.groupAlias} onChange={handleChange} placeholder="Project Alpha Group" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Group Purpose / Category</label>
-                                    <Input name="purpose" value={formData.purpose} onChange={handleChange} placeholder="e.g. Sourcing, Technical Discussion, Logistics" />
-                                </div>
-                            </div>
-                        </section>
-
-                        <section>
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2 pt-2 border-t">
-                                <Tag className="w-3.5 h-3.5" /> Product & Business Linking
-                            </h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Product Keywords (e.g. ZT2S, DALI)</label>
-                                    <div className="flex gap-2">
-                                        <Input 
-                                            value={tempInputs.keyword} 
-                                            onChange={(e) => setTempInputs(prev => ({...prev, keyword: e.target.value}))} 
-                                            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addArrayItem('productKeywords', 'keyword'))}
-                                            placeholder="Type product name and press enter" 
-                                        />
-                                        <Button type="button" variant="outline" onClick={() => addArrayItem('productKeywords', 'keyword')}>Add</Button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {formData.productKeywords.map(kw => (
-                                            <Badge key={kw} className="bg-gray-100 text-gray-700 border-0 flex items-center gap-1">
-                                                {kw} <X className="w-3 h-3 cursor-pointer" onClick={() => removeArrayItem('productKeywords', kw)} />
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Related Companies / Suppliers</label>
-                                    <div className="flex gap-2">
-                                        <Input 
-                                            value={tempInputs.company} 
-                                            onChange={(e) => setTempInputs(prev => ({...prev, company: e.target.value}))} 
-                                            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addArrayItem('relatedCompanies', 'company'))}
-                                            placeholder="Type company and press enter" 
-                                        />
-                                        <Button type="button" variant="outline" onClick={() => addArrayItem('relatedCompanies', 'company')}>Add</Button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {formData.relatedCompanies.map(co => (
-                                            <Badge key={co} className="bg-blue-50 text-blue-700 border-blue-100 flex items-center gap-1">
-                                                <Building2 className="w-3 h-3" /> {co} <X className="w-3 h-3 cursor-pointer" onClick={() => removeArrayItem('relatedCompanies', co)} />
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+                            </label>
+                        </div>
+                        <div className="hidden md:block">
+                            <Badge className="bg-white text-blue-700 px-4 py-1.5 rounded-xl font-black border-2 border-blue-100 shadow-sm">ID: {formData.entryNo || 'NEW'}</Badge>
+                        </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <section>
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <LinkIcon className="w-3.5 h-3.5" /> Members Relationship
-                            </h3>
-                            <div className="border rounded-2xl overflow-hidden">
-                                <div className="bg-gray-50 p-2 border-b">
-                                    <p className="text-[10px] text-gray-500 px-2 italic">Select individual contacts who belong to this group</p>
-                                </div>
-                                <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
-                                    {(Array.isArray(contacts) ? contacts : []).map(contact => (
-                                        <div 
-                                            key={contact._id} 
-                                            onClick={() => toggleMember(contact._id)}
-                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                                                formData.memberIds.includes(contact._id) 
-                                                ? 'bg-green-50 border-green-200' 
-                                                : 'hover:bg-gray-50 border-transparent'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <div className={`p-1.5 rounded-lg ${formData.memberIds.includes(contact._id) ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                    <User className="w-3.5 h-3.5" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-xs font-bold text-gray-800">{contact.weChatDisplayName}</div>
-                                                    <div className="text-[10px] text-gray-400">{contact.companyName}</div>
-                                                </div>
-                                            </div>
-                                            {formData.memberIds.includes(contact._id) && <Plus className="w-3.5 h-3.5 rotate-45 text-green-600" />}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </section>
-
-                        <section>
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2 pt-2 border-t">
-                                <ImageIcon className="w-3.5 h-3.5" /> Documentation & Screenshots
-                            </h3>
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-dashed border-gray-300">
-                                <div className="flex flex-col items-center justify-center text-center">
-                                    <div className="p-3 bg-white rounded-full shadow-sm mb-2">
-                                        <Upload className={`w-6 h-6 ${uploading ? 'animate-bounce text-blue-500' : 'text-gray-400'}`} />
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                        {/* Left Column: Basic Info & Keywords */}
+                        <div className="lg:col-span-7 space-y-10">
+                            <section>
+                                <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-blue-600" /> Basic Identity
+                                </h3>
+                                <div className="space-y-6">
+                                    <div className="group">
+                                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Group Display Name *</label>
+                                        <Input required variant="lg" name="groupName" value={formData.groupName} onChange={handleChange} placeholder="e.g. Tuya Sourcing & Price Updates" className="h-16 rounded-2xl border-2 focus:ring-4 ring-blue-50" />
                                     </div>
-                                    <p className="text-xs font-bold text-gray-600 mb-1">Catalog / Reference Screenshot</p>
-                                    <p className="text-[10px] text-gray-400 mb-4 px-4">Upload price lists or chat screenshots for quick identification</p>
-                                    <input 
-                                        type="file" 
-                                        id="group-file" 
-                                        className="hidden" 
-                                        onChange={handleFileUpload} 
-                                        disabled={uploading || !group}
-                                    />
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="group">
+                                            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Chinese Name</label>
+                                            <Input variant="lg" name="chineseGroupName" value={formData.chineseGroupName} onChange={handleChange} placeholder="供应商群组" className="h-14 rounded-2xl font-hindi border-2" />
+                                        </div>
+                                        <div className="group">
+                                            <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Purpose / Alias</label>
+                                            <Input variant="lg" name="groupAlias" value={formData.groupAlias} onChange={handleChange} placeholder="Project Bluetooth" className="h-14 rounded-2xl border-2" />
+                                        </div>
+                                    </div>
+                                    <div className="group">
+                                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">Functional Category</label>
+                                        <Input variant="lg" name="purpose" value={formData.purpose} onChange={handleChange} placeholder="e.g. Technical Support, Logistics, Direct Factory" className="h-14 rounded-2xl border-2" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500" /> Intelligence Mapping
+                                </h3>
+                                <div className="space-y-6">
+                                    <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-slate-100/50">
+                                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3 px-1">Product Keywords (e.g. BT2S, Driver)</label>
+                                        <div className="flex gap-3">
+                                            <Input 
+                                                variant="lg"
+                                                className="bg-white h-14 rounded-2xl shadow-sm border-2"
+                                                value={tempInputs.keyword} 
+                                                onChange={(e) => setTempInputs(prev => ({...prev, keyword: e.target.value}))} 
+                                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addArrayItem('productKeywords', 'keyword'))}
+                                                placeholder="Enter part no. or tech and hit Add" 
+                                            />
+                                            <Button type="button" variant="outline" className="h-14 rounded-2xl px-6 font-black border-2 border-slate-200 hover:border-emerald-500 text-emerald-700" onClick={() => addArrayItem('productKeywords', 'keyword')}>Add</Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-4">
+                                            {formData.productKeywords.map(kw => (
+                                                <Badge key={kw} className="bg-emerald-600 text-white border-0 px-4 py-2 rounded-xl text-sm font-black shadow-md flex items-center gap-2 group/tag">
+                                                    {kw} <X className="w-3.5 h-3.5 cursor-pointer hover:rotate-90 transition-transform" onClick={() => removeArrayItem('productKeywords', kw)} />
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-blue-50/30 p-6 rounded-[2rem] border-2 border-blue-100/30">
+                                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3 px-1">Related Suppliers / Brands</label>
+                                        <div className="flex gap-3">
+                                            <Input 
+                                                variant="lg"
+                                                className="bg-white h-14 rounded-2xl shadow-sm border-2"
+                                                value={tempInputs.company} 
+                                                onChange={(e) => setTempInputs(prev => ({...prev, company: e.target.value}))} 
+                                                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addArrayItem('relatedCompanies', 'company'))}
+                                                placeholder="Enter factory or brand name" 
+                                            />
+                                            <Button type="button" variant="outline" className="h-14 rounded-2xl px-6 font-black border-2 border-slate-200 hover:border-blue-500 text-blue-700" onClick={() => addArrayItem('relatedCompanies', 'company')}>Add</Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-4">
+                                            {formData.relatedCompanies.map(co => (
+                                                <Badge key={co} className="bg-blue-700 text-white border-0 px-4 py-2 rounded-xl text-sm font-black shadow-md flex items-center gap-2">
+                                                    <Building2 className="w-3.5 h-3.5" /> {co} <X className="w-3.5 h-3.5 cursor-pointer hover:rotate-90 transition-transform" onClick={() => removeArrayItem('relatedCompanies', co)} />
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Right Column: Members & Attachments */}
+                        <div className="lg:col-span-5 space-y-10">
+                            <section>
+                                <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-indigo-500" /> Group Members
+                                </h3>
+                                <div className="border-2 border-slate-100 rounded-[2rem] overflow-hidden bg-white shadow-sm">
+                                    <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100">
+                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Users size={12} /> Contact Selection ({formData.memberIds.length})
+                                        </p>
+                                    </div>
+                                    <div className="max-h-[380px] overflow-y-auto p-4 space-y-2 bg-slate-50/30">
+                                        {(Array.isArray(contacts) ? contacts : []).map(contact => {
+                                            const isActive = formData.memberIds.includes(contact._id);
+                                            return (
+                                                <div 
+                                                    key={contact._id} 
+                                                    onClick={() => toggleMember(contact._id)}
+                                                    className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group/item hover:scale-[1.01] ${
+                                                        isActive 
+                                                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' 
+                                                        : 'bg-white border-transparent hover:border-blue-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`p-2.5 rounded-xl transition-colors ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400 group-hover/item:bg-blue-50 group-hover/item:text-blue-600'}`}>
+                                                            <User className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className={`text-sm font-black truncate ${isActive ? 'text-white' : 'text-slate-900'}`}>{contact.weChatDisplayName}</div>
+                                                            <div className={`text-[11px] font-bold ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{contact.companyName || 'No Company'}</div>
+                                                        </div>
+                                                    </div>
+                                                    {isActive && <div className="bg-white/20 p-1 rounded-full"><Plus className="w-4 h-4 rotate-45 text-white" /></div>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-amber-500" /> Files & Docs
+                                </h3>
+                                <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-dashed border-slate-200 flex flex-col items-center">
+                                    <div className={`p-5 rounded-full bg-white shadow-xl mb-4 ${uploading ? 'animate-pulse' : ''}`}>
+                                        <Upload className={`w-8 h-8 ${uploading ? 'text-blue-500' : 'text-slate-300'}`} />
+                                    </div>
+                                    <p className="text-sm font-black text-slate-900 mb-1">Catalog / Reference Screenshot</p>
+                                    <p className="text-xs text-slate-400 mb-6 px-10 text-center font-bold">Upload price sheets, QR codes, or group guidelines</p>
+                                    <input type="file" id="group-file" className="hidden" onChange={handleFileUpload} disabled={uploading || !group} />
                                     <Button 
                                         type="button" 
-                                        variant="outline" 
-                                        size="sm" 
+                                        className={`h-12 w-full rounded-2xl font-black ${group ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                                         disabled={!group}
                                         onClick={() => document.getElementById('group-file').click()}
                                     >
-                                        {uploading ? 'Uploading...' : (group ? 'Select File' : 'Save Group first to upload')}
+                                        {uploading ? 'Uploading...' : (group ? 'Select File to Upload' : 'Save group first to upload')}
                                     </Button>
                                 </div>
-                            </div>
-                            {group?.attachments?.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                    {group.attachments.map((file, idx) => (
-                                        <div key={idx} className="flex items-center justify-between p-2 bg-white border rounded-xl shadow-sm">
-                                            <div className="flex items-center gap-2">
-                                                <FileText className="w-4 h-4 text-blue-600" />
-                                                <span className="text-[10px] font-medium text-gray-700 truncate max-w-[150px]">{file.filename}</span>
+                                {group?.attachments?.length > 0 && (
+                                    <div className="mt-6 grid grid-cols-1 gap-3">
+                                        {group.attachments.map((file, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-4 bg-white border-2 border-slate-100 rounded-2xl shadow-sm hover:border-blue-200 transition-colors group/file">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-blue-50 rounded-xl"><FileText className="w-5 h-5 text-blue-600" /></div>
+                                                    <div className="min-w-0">
+                                                        <span className="text-sm font-black text-slate-900 truncate block max-w-[180px]">{file.filename}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Added: {format(new Date(file.uploadDate), 'dd MMM')}</span>
+                                                    </div>
+                                                </div>
+                                                <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-red-500 rounded-xl hover:bg-red-50 opacity-0 group-hover/file:opacity-100 transition-opacity"><Trash2 className="w-5 h-5" /></Button>
                                             </div>
-                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500"><X className="w-3 h-3" /></Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
-                    </div>
-                </div>
-
-                <div className="pt-4 border-t flex flex-col gap-4">
-                    <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Internal Management Notes</label>
-                        <textarea 
-                            name="notes"
-                            className="w-full border rounded-2xl p-4 text-sm bg-gray-50 focus:bg-white transition-all min-h-[100px]"
-                            value={formData.notes} 
-                            onChange={handleChange}
-                            placeholder="Add business strategy, price discussion summary, or group rules..."
-                        />
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        </div>
                     </div>
 
-                    <div className="flex justify-end gap-3">
-                        <Button type="button" variant="ghost" onClick={onClose}>Discard Changes</Button>
-                        <Button type="submit" loading={loading} className="bg-blue-600 hover:bg-blue-700 px-8 rounded-xl shadow-lg shadow-blue-100">
-                            {group ? 'Update Group' : 'Initialize Group'}
-                        </Button>
+                    <div className="pt-10 border-t-2 border-slate-100 space-y-8">
+                        <div>
+                            <label className="block text-[12px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Business Intelligence Notes</label>
+                            <textarea 
+                                name="notes"
+                                className="w-full border-2 border-slate-100 rounded-[2rem] p-6 text-base font-bold text-slate-700 bg-slate-50/50 focus:bg-white focus:border-blue-500 focus:ring-4 ring-blue-50 transition-all min-h-[140px] placeholder:text-slate-300"
+                                value={formData.notes} 
+                                onChange={handleChange}
+                                placeholder="Add business logic, sourcing strategy, group behaviors, or price negotiation context..."
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-6 pt-4">
+                            <Button type="button" variant="ghost" className="text-slate-400 font-black h-14 px-8 rounded-2xl hover:text-slate-600" onClick={onClose}>Discard Changes</Button>
+                            <Button type="submit" loading={loading} className="bg-slate-900 hover:bg-black text-white h-14 px-12 rounded-2xl font-black text-lg shadow-2xl shadow-slate-200 transition-all">
+                                {group ? 'Update Intelligence Group' : 'Initialize Strategy Group'}
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </Modal>
     );
 };

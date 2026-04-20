@@ -251,6 +251,7 @@ export const menuConfig = [
             { id: 'group-master', title: '🗂 Group Master', path: PATHS.ACCOUNTS.GROUP_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.group_master.view' },
             { id: 'ledger-master', title: 'Ledger Master', path: PATHS.ACCOUNTS.LEDGER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.ledger_master.view' },
             { id: 'financial-year-master', title: '📅 Financial Year Master', path: PATHS.ACCOUNTS.FINANCIAL_YEAR, roles: [ROLES.ADMIN], permission: 'accounts.financial_year.view' },
+            { id: 'voucher-type-master', title: '🎫 Series Master', path: PATHS.ACCOUNTS.VOUCHER_TYPE_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
             { id: 'receipt-entry', title: 'Receipt Entry', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.receipt_entry.view' },
             { id: 'payment-entry', title: 'Payment Entry', path: PATHS.ACCOUNTS.PAYMENT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.payment_entry.view' },
             { id: 'expense-entry', title: 'Expense Voucher', path: PATHS.ACCOUNTS.EXPENSE_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.expense_entry.view' },

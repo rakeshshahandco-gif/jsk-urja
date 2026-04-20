@@ -55,6 +55,8 @@ const weChatContactSchema = new mongoose.Schema({
     mobile: String,
     weChatId: String,
     email: String,
+    region: String,        // e.g. Shenzhen, Guangdong, Dongguan
+    channelName: String,   // e.g. Alibaba, 1688, Direct, WeChat Group
     productKeywords: [String],
     relatedItems: [String],
     businessCategory: String,
@@ -103,7 +105,9 @@ weChatContactSchema.index({
     chineseName: 'text', 
     companyName: 'text',
     searchKeywords: 'text',
-    shortCode: 'text'
+    shortCode: 'text',
+    region: 'text',
+    channelName: 'text'
 });
 
 const WeChatContact = mongoose.model('WeChatContact', weChatContactSchema);

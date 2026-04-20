@@ -32,4 +32,10 @@
     background-color: #e0e7ff;
     color: #3730a3;
   }
+
+  &.ghost {
+    background-color: transparent;
+    border-color: #e5e7eb;
+    color: #6b7280;
+  }
 }

@@ -10,6 +10,10 @@ router.use(protect);
 // ── Unified Search ───────────────────────────────────────────────────────────
 router.get('/search', checkPermission('wechat.contacts.view'), weChatController.searchUnified);
 
+// ── Export ──────────────────────────────────────────────────────────────────
+router.get('/export/contacts', checkPermission('wechat.contacts.view'), weChatController.exportContacts);
+router.get('/export/comparison', checkPermission('wechat.contacts.view'), weChatController.exportComparison);
+
 // ── Contacts ─────────────────────────────────────────────────────────────────
 router.route('/contacts')
     .get(checkPermission('wechat.contacts.view'), weChatController.getContacts)

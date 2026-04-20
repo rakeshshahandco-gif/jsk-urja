@@ -69,7 +69,10 @@ const VoucherTypeMasterPage = () => {
                                 { label: 'Receipt', value: 'Receipt' },
                                 { label: 'Payment', value: 'Payment' },
                                 { label: 'Contra', value: 'Contra' },
-                                { label: 'Journal', value: 'Journal' }
+                                { label: 'Journal', value: 'Journal' },
+                                { label: 'Sales', value: 'Sales' },
+                                { label: 'Purchase', value: 'Purchase' },
+                                { label: 'Expense', value: 'Expense' }
                             ]}
                         />
                     </div>

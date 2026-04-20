@@ -32,6 +32,8 @@ const accountLedgerSchema = new mongoose.Schema({
     isBillWise: { type: Boolean, default: false },
     creditPeriod: { type: Number, default: 0 }, // in days
     gstApplicable: { type: Boolean, default: false },
+    gstRate: { type: Number, default: 0 },
+    hsnCode: { type: String, trim: true },
 
     // Tax Details
     gstin: { type: String, trim: true },
