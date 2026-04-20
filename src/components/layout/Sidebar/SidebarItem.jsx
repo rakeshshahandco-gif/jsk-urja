@@ -41,6 +41,7 @@ const iconMap = {
     'AssessmentIcon': LineChart,
     'AccountBalanceIcon': Building2,
     'ChatIcon': MessageCircle,
+    'VoucherIcon': FileText,
     '💬': MessageCircle,
 };
 
