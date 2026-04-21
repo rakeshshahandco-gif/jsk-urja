@@ -66,12 +66,11 @@ export const initSocket = (server) => {
         // Client emits this when opening the WhatsApp Settings page
         socket.on('join:whatsapp', () => {
             socket.join('whatsapp_room');
-            logger.info(`[WhatsApp] Socket ${socket.id} joined whatsapp_room`);
+            logger.info(`[WhatsApp] Socket ${socket.id} (User: ${userId}) joined whatsapp_room`);
 
-            // Immediately push current status to the newly joined client
-            // Lazy import to avoid circular dependency at module load time
+            // Push this user's specific status (not the shared admin session)
             import('../services/whatsapp.service.js').then(({ default: WhatsAppService }) => {
-                const status = WhatsAppService.getStatus();
+                const status = WhatsAppService.getStatus(userId);
                 socket.emit('whatsapp:status', status);
             }).catch(() => {});
         });

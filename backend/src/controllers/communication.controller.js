@@ -268,22 +268,22 @@ const sendOrder = catchAsync(async (req, res) => {
             io.to(userRoom).emit('comm:status', { documentId: id, channel: 'WhatsApp', status: 'Sending document via WhatsApp...', code: 'SENDING' });
 
             if (sendMode === 'Group') {
-                // ── Group Mode: send by JID ──────────────────────────────────
+                // ── Group Mode: send by JID via this user's session ──────────
                 if (!groupId) {
                     throw new Error('No group selected. Please pick a group from the list.');
                 }
-                await WhatsAppService.sendDocumentToGroup({
+                await WhatsAppService.sendDocumentToGroup(req.user._id, {
                     groupId,
                     filePath: tempFilePath,
                     caption,
                     fileName,
                 });
             } else {
-                // ── Number Mode (default) ────────────────────────────────────
+                // ── Number Mode — via this user's WhatsApp session ────────────
                 if (!phone || String(phone).replace(/\D/g, '').length < 10) {
                     throw new Error('A valid 10-digit WhatsApp number is required for Direct Number mode.');
                 }
-                await WhatsAppService.sendDocument({
+                await WhatsAppService.sendDocument(req.user._id, {
                     phone,
                     filePath: tempFilePath,
                     caption,

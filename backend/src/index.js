@@ -8,6 +8,7 @@ import { initSocket } from './config/socket.js';
 import { initializeUserManagement } from './utils/userInitializer.js';
 import { startTaskCron } from './cron/taskCron.js';
 import { startReminderCron } from './cron/reminderCron.js';
+import WhatsAppService from './services/whatsapp.service.js';
 
 // Connect to Database
 let server;
@@ -33,6 +34,13 @@ connectDB().then((connected) => {
         console.log(`Server started at ${new Date().toISOString()} on port ${config.port}`);
         logger.info(`Listening to port ${config.port}`);
         logger.info(`🌐 API available at: http://localhost:${config.port}/api/v1`);
+
+        // Auto-reconnect all saved per-user WhatsApp sessions (after 5s delay for socket init)
+        setTimeout(() => {
+            WhatsAppService.initializeSavedSessions().catch(e =>
+                logger.error(`[WhatsApp] Session init error: ${e.message}`)
+            );
+        }, 5000);
     });
 }).catch((err) => {
     logger.error('Unexpected error during startup', err);
