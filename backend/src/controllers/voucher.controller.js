@@ -196,8 +196,6 @@ export const createVoucher = asyncHandler(async (req, res) => {
             createdBy: req.user.id
         });
 
-        await voucher.save({ session });
-
         // Journal Vouchers: Double Entry Mode (No header cashBankAccountId)
         if (actualNature === 'Journal') {
             let debitTotal = 0;
@@ -315,6 +313,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
             }
         }
 
+        await voucher.save({ session });
         await session.commitTransaction();
         res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, voucher, 'Voucher created successfully'));
 
