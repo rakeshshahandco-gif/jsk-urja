@@ -9,6 +9,8 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import { createEwayBillDraft } from '@/services/ewayBillApi';
+import communicationApi from '@/services/communicationApi';
+import CommunicationModal from '@/components/communication/CommunicationModal';
 import toast from 'react-hot-toast';
 
 
@@ -34,6 +36,7 @@ export default function SalesInvoiceDetailPage() {
     const [cancelling, setCancelling] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [showSeriesModal, setShowSeriesModal] = useState(false);
+    const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -45,6 +48,20 @@ export default function SalesInvoiceDetailPage() {
             setCompany(companyRes?.data || {});
         }).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
     }, [id]);
+
+    const handleSendComm = async (payload) => {
+        try {
+            await communicationApi.sendOrder({
+                ...payload,
+                id: inv._id,
+                type: 'Sales Invoice'
+            });
+            // Statuses are handled inside modal via socket
+        } catch (error) {
+            toast.error('Failed to initiate communication');
+            throw error;
+        }
+    };
 
     useEffect(() => { 
         load(); 
@@ -520,6 +537,17 @@ export default function SalesInvoiceDetailPage() {
                             >
                                 📄 Export PDF
                              </button>
+
+                            {/* Send WhatsApp Button */}
+                            {notCancelled && (
+                                <button
+                                    onClick={() => setIsCommModalOpen(true)}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#25d366', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 4px 12px rgba(37,211,102,0.3)' }}
+                                    title="Send Invoice via WhatsApp"
+                                >
+                                    <span style={{ fontSize: 16 }}>💬</span> Send WhatsApp
+                                </button>
+                            )}
 
                              {/* Restore Invoice */}
                              {!notCancelled && (

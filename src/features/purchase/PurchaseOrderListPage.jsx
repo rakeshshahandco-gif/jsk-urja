@@ -73,13 +73,13 @@ export default function PurchaseOrderListPage() {
         toast.promise(
             sendOrderApi(payload),
             {
-                loading: `Processing ${commData.channel}...`,
-                success: `Action completed! check WhatsApp window if Auto-Attach was used.`,
-                error: (err) => err.response?.data?.message || `Failed to process ${commData.channel}.`,
+                loading: `Sending ${commData.channel}...`,
+                success: `✅ ${commData.channel} sent successfully!`,
+                error: (err) => err.response?.data?.message || `Failed to send ${commData.channel}.`,
             }
         ).then(() => {
-            setIsCommModalOpen(false);
-        });
+            setIsCommModalOpen(false); // Close only on success
+        }).catch(() => {}); // Stay open on error
     };
 
     return (

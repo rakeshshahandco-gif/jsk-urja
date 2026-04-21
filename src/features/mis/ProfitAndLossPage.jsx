@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFYDateRange } from '@/contexts/FinancialYearContext';
 import { Download, Printer, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Calendar, Database } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import accountApi from '@/services/accountApi';
@@ -10,10 +11,14 @@ const ProfitAndLossPage = () => {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [expandedGroups, setExpandedGroups] = useState({});
-    const [dateRange, setDateRange] = useState({
-        startDate: moment().startOf('year').format('YYYY-MM-DD'),
-        endDate: moment().endOf('day').format('YYYY-MM-DD')
-    });
+    
+    // FY synchronization
+    const { startDate, endDate } = useFYDateRange();
+    const [dateRange, setDateRange] = useState({ startDate, endDate });
+
+    useEffect(() => {
+        setDateRange({ startDate, endDate });
+    }, [startDate, endDate]);
 
     const fetchReport = async () => {
         setLoading(true);

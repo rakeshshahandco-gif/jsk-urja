@@ -31,7 +31,7 @@ const ExpenseEntryPage = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [formData, setFormData] = useState({
+    const INITIAL_FORM_STATE = {
         voucherTypeId: '',
         expenseType: 'Cash', // Cash, Bank, Credit, Petty Cash
         date: new Date().toISOString().split('T')[0],
@@ -60,7 +60,9 @@ const ExpenseEntryPage = () => {
         items: [
             { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }
         ]
-    });
+    };
+
+    const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -305,9 +307,24 @@ const ExpenseEntryPage = () => {
                 }))
             };
 
-            await createVoucher(payload);
-            toast.success('Expense voucher saved successfully');
-            navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
+            const response = await createVoucher(payload);
+            const savedNo = response?.data?.voucherNo || 'Voucher';
+            toast.success(`${savedNo} saved successfully`);
+            
+            // STAY ON PAGE FOR FAST ENTRY (Reset but keep date and vType)
+            setFormData(prev => ({
+                ...INITIAL_FORM_STATE,
+                date: prev.date,
+                voucherTypeId: prev.voucherTypeId,
+                expenseType: prev.expenseType,
+                cashBankAccountId: prev.cashBankAccountId,
+                items: [{ id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }]
+            }));
+            
+            // If explicit close requested (optional flag)
+            if (shouldClose) {
+                navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
+            }
         } catch (error) {
             console.error('Save error:', error);
             toast.error(error.response?.data?.message || 'Failed to save expense');
@@ -315,6 +332,9 @@ const ExpenseEntryPage = () => {
             setIsSubmitting(false);
         }
     };
+
+    const handleSaveAndNew = () => handleSave(false);
+    const handleSaveAndClose = () => handleSave(true);
 
 
     return (
@@ -559,10 +579,14 @@ const ExpenseEntryPage = () => {
                             style={{ padding: '12px 28px', borderRadius: '10px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', cursor: 'pointer', fontWeight: 700 }}>
                             Discard
                         </button>
-                        <button type="button" onClick={handleSave} disabled={isSubmitting}
+                        <button type="button" onClick={handleSaveAndClose} disabled={isSubmitting}
+                            style={{ padding: '12px 28px', borderRadius: '10px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                            Save & Close
+                        </button>
+                        <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '12px 40px', borderRadius: '10px', background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#3730a3)', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 800, fontSize: '15px', boxShadow: '0 10px 15px -3px rgba(79, 70, 229, 0.3)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Posting...' : 'Post Entry'}
+                            {isSubmitting ? 'Posting...' : 'Post & New Entry'}
                         </button>
                     </div>
                 </div>

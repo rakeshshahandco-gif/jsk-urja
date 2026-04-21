@@ -6,7 +6,8 @@ import { CompanyProfile } from '../models/companyProfile.model.js';
 import WhatsAppSettings from '../models/whatsappSettings.model.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { PurchaseOrder } from '../models/purchaseOrder.model.js';
-import WhatsAppAutomationService from '../services/whatsapp.automation.js';
+import { SalesInvoice } from '../models/salesInvoice.model.js';
+import WhatsAppService from '../services/whatsapp.service.js';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -14,22 +15,45 @@ import PDFDocument from 'pdfkit';
 import { getIO } from '../config/socket.js';
 
 // ── Pure-JS PDF generator using pdfkit (no Chrome/Puppeteer needed) ──────────
-const generateOrderPDF = (order, company, type) => {
+const generateDocumentPDF = (docData, company, type) => {
     return new Promise((resolve, reject) => {
-        const doc = new PDFDocument({ margin: 40, size: 'A4' });
-        const buffers = [];
+        try {
+            console.log(`[PDF Debug] Starting generation for ${type}...`);
+            const doc = new PDFDocument({ margin: 40, size: 'A4' });
+            const buffers = [];
 
-        doc.on('data', (chunk) => buffers.push(chunk));
-        doc.on('end', () => resolve(Buffer.concat(buffers)));
-        doc.on('error', reject);
+            doc.on('data', (chunk) => buffers.push(chunk));
+            doc.on('end', () => {
+                console.log(`[PDF Debug] Successfully generated ${type} buffer.`);
+                resolve(Buffer.concat(buffers));
+            });
+            doc.on('error', (err) => {
+                console.error('[PDF Debug] Stream Error:', err);
+                reject(err);
+            });
 
         const isSOType = type === 'Sales Order';
-        const docNumber = isSOType ? order.soNumber : order.poNumber;
-        const docDate = isSOType ? order.soDate : order.poDate;
-        const partyName = isSOType
-            ? order.customerName
-            : (order.supplierName || order.supplierId?.supplierName || 'Supplier');
-        const orderItems = order.items || [];
+        const isSIType = type === 'Sales Invoice';
+        const isPOType = type === 'Purchase Order';
+
+        let docNumber = '';
+        if (isSOType) docNumber = docData.soNumber;
+        else if (isPOType) docNumber = docData.poNumber;
+        else if (isSIType) docNumber = docData.displayInvoiceNumber || docData.invoiceNumber;
+
+        let docDate = '';
+        if (isSOType) docDate = docData.soDate;
+        else if (isPOType) docDate = docData.poDate;
+        else if (isSIType) docDate = docData.invoiceDate;
+
+        let partyName = '';
+        if (isSOType || isSIType) {
+            partyName = docData.customerName;
+        } else {
+            partyName = docData.supplierName || docData.supplierId?.supplierName || 'Supplier';
+        }
+
+        const orderItems = docData.items || [];
 
         // ── Header ────────────────────────────────────────────────────────────
         doc.fontSize(20).font('Helvetica-Bold').text(company.companyName || 'JSK URJA', 40, 40);
@@ -56,10 +80,13 @@ const generateOrderPDF = (order, company, type) => {
         const partyY = 115;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#374151').text('BILL TO:', 40, partyY);
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text(partyName, 40, partyY + 12);
-        if (isSOType && order.billingAddress) {
-            doc.fontSize(9).font('Helvetica').fillColor('#555').text(order.billingAddress, 40, partyY + 26, { width: 250 });
-        } else if (!isSOType && order.supplierAddress) {
-            doc.fontSize(9).font('Helvetica').fillColor('#555').text(order.supplierAddress, 40, partyY + 26, { width: 250 });
+        
+        let partyAddress = '';
+        if (isSOType || isSIType) partyAddress = docData.billingAddress;
+        else partyAddress = docData.supplierAddress;
+
+        if (partyAddress) {
+            doc.fontSize(9).font('Helvetica').fillColor('#555').text(partyAddress, 40, partyY + 26, { width: 250 });
         }
 
         // ── Table Header ─────────────────────────────────────────────────────
@@ -97,12 +124,12 @@ const generateOrderPDF = (order, company, type) => {
             }
             const qty = item.qty || item.orderedQty || 0;
             const rate = item.rate || 0;
-            const amount = qty * rate;
+            const amount = item.taxableAmount || (qty * rate);
             doc.font('Helvetica').fontSize(9).fillColor('#374151');
             doc.text(item.hsnCode || '—', cols.hsn, rowY, { width: 55, align: 'center' });
             doc.text(`${qty} ${item.uom || ''}`, cols.qty, rowY, { width: 50, align: 'center' });
-            doc.text(`₹${rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.rate, rowY, { width: 60, align: 'right' });
-            doc.font('Helvetica-Bold').text(`₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+            doc.text(`Rs.${rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.rate, rowY, { width: 60, align: 'right' });
+            doc.font('Helvetica-Bold').text(`Rs.${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
             rowY += 20;
         });
 
@@ -112,28 +139,34 @@ const generateOrderPDF = (order, company, type) => {
         rowY += 6;
 
         const totalRows = [
-            ['Total Taxable', order.totalAmount || 0],
-            order.totalGst > 0 ? ['Total GST', order.totalGst || 0] : null,
-            order.freightAmount > 0 ? ['Freight', order.freightAmount || 0] : null,
+            ['Total Taxable', docData.totalAmount || docData.totalTaxableAmount || 0],
+            (docData.totalGst || 0) > 0 ? ['Total GST', docData.totalGst || 0] : null,
+            (docData.freightAmount || 0) > 0 ? ['Freight', docData.freightAmount || 0] : null,
         ].filter(Boolean);
 
         totalRows.forEach(([label, val]) => {
             doc.font('Helvetica').fontSize(9).fillColor('#6b7280')
                 .text(label, 380, rowY, { width: 120 });
-            doc.text(`₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+            doc.text(`Rs.${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
             rowY += 15;
         });
 
         doc.moveTo(380, rowY).lineTo(doc.page.width - 40, rowY).strokeColor('#374151').stroke();
         rowY += 5;
-        const grandTotal = order.roundedTotal || order.grandTotal || 0;
+        const grandTotal = docData.roundedTotal || docData.grandTotal || 0;
         doc.font('Helvetica-Bold').fontSize(12).fillColor('#16a34a')
             .text('GRAND TOTAL', 380, rowY, { width: 120 });
-        doc.text(`₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
+        doc.text(`Rs.${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, cols.amount, rowY, { width: 70, align: 'right' });
 
-        if (order.amountInWords) {
+        if (isSIType && docData.paymentStatus) {
             rowY += 18;
-            doc.font('Helvetica').fontSize(8).fillColor('#6b7280').text(`In Words: ${order.amountInWords}`, 40, rowY);
+            doc.font('Helvetica').fontSize(9).fillColor('#1e293b')
+                .text(`Payment Status: ${docData.paymentStatus}`, 380, rowY, { width: 150 });
+        }
+
+        if (docData.amountInWords) {
+            rowY += 18;
+            doc.font('Helvetica').fontSize(8).fillColor('#6b7280').text(`In Words: ${docData.amountInWords}`, 40, rowY);
         }
 
         // ── Footer ───────────────────────────────────────────────────────────
@@ -143,6 +176,10 @@ const generateOrderPDF = (order, company, type) => {
             .text('This is a computer generated document.', 40, footerY + 8, { align: 'center' });
 
         doc.end();
+        } catch (err) {
+            console.error('[PDF Debug] Error during generation:', err);
+            reject(err);
+        }
     });
 };
 
@@ -160,17 +197,22 @@ const sendOrder = catchAsync(async (req, res) => {
     let order;
     if (type === 'Sales Order') {
         order = await SalesOrder.findById(id);
-    } else {
+    } else if (type === 'Purchase Order') {
         order = await PurchaseOrder.findById(id);
+    } else if (type === 'Sales Invoice') {
+        order = await SalesInvoice.findById(id);
     }
 
     if (!order) {
-        return res.status(httpStatus.NOT_FOUND).send({ message: 'Order not found' });
+        return res.status(httpStatus.NOT_FOUND).send({ message: 'Document not found' });
     }
+
+    const isSOType = type === 'Sales Order';
+    const docNumber = isSOType ? order.soNumber : (type === 'Sales Invoice' ? (order.displayInvoiceNumber || order.invoiceNumber) : order.poNumber);
 
     const log = await CommunicationLog.create({
         documentType: type,
-        documentNumber: type === 'Sales Order' ? order.soNumber : order.poNumber,
+        documentNumber: docNumber,
         documentId: id,
         sentToName: recipientName,
         sentToEmail: email,
@@ -183,11 +225,17 @@ const sendOrder = catchAsync(async (req, res) => {
     });
 
     try {
-        // 1. Generate PDF using PDFKit (no browser needed)
-        const pdfBuffer = await generateOrderPDF(order, company, type);
+        console.log(`[Comm Debug] Generating ${type} PDF for doc number: ${docNumber}...`);
+        // 1. Generate PDF using PDFKit
+        const pdfBuffer = await generateDocumentPDF(order, company, type);
+        console.log(`[Comm Debug] PDF Buffer size: ${pdfBuffer.length} bytes`);
 
         const safeDocNumber = log.documentNumber.replace(/[\/\\?%*:|"<>]/g, '-');
-        const fileName = `${type === 'Sales Order' ? 'SO' : 'PO'}-${safeDocNumber}.pdf`;
+        let prefix = 'SO';
+        if (type === 'Purchase Order') prefix = 'PO';
+        else if (type === 'Sales Invoice') prefix = 'INV';
+        
+        const fileName = `${prefix}-${safeDocNumber}.pdf`;
         const tempFilePath = path.join(os.tmpdir(), fileName);
         fs.writeFileSync(tempFilePath, pdfBuffer);
 
@@ -207,39 +255,32 @@ const sendOrder = catchAsync(async (req, res) => {
             results.push('Email sent');
         }
 
-            // 2. WhatsApp Draft Preparation
-            log.status = 'Preparing WhatsApp Draft';
+            // 2. WhatsApp — send directly via Baileys (headless, no Chrome)
+            log.status = 'Sending WhatsApp';
             await log.save();
 
             const caption = message || `Please find attached ${type}: ${log.documentNumber}`;
             
-            // Early validation
+            // Validation
             if (sendMode === 'Number' && (!phone || phone.length < 10)) {
                 throw new Error('A valid 10-digit WhatsApp number is required for Direct Number mode.');
             }
-            if (sendMode === 'Group' && !groupName) {
-                throw new Error('A Group Name is required for WhatsApp Group mode.');
-            }
 
-            // Get IO for real-time updates
+            // Get IO for real-time progress updates
             const io = getIO();
             const userRoom = `user:${req.user._id.toString()}`;
 
-            await WhatsAppAutomationService.prepareDocumentDraft({
-                phone: sendMode === 'Number' ? phone : null,
-                groupName: sendMode === 'Group' ? groupName : null,
+            io.to(userRoom).emit('comm:status', { documentId: id, channel: 'WhatsApp', status: 'Sending document via WhatsApp...', code: 'SENDING' });
+
+            await WhatsAppService.sendDocument({
+                phone,
                 filePath: tempFilePath,
                 caption,
-                onStatusUpdate: (data) => {
-                    console.log(`[Socket] Status update for ${userRoom}: ${data.status} (${data.code})`);
-                    io.to(userRoom).emit('whatsapp:status', {
-                        documentId: id,
-                        channel: 'WhatsApp',
-                        ...data
-                    });
-                }
+                fileName,
             });
-            results.push('WhatsApp draft prepared in browser');
+
+            io.to(userRoom).emit('comm:status', { documentId: id, channel: 'WhatsApp', status: 'Sent successfully!', code: 'SUCCESS' });
+            results.push('WhatsApp document sent');
 
         log.status = 'Sent / Prepared';
         await log.save();
@@ -271,18 +312,26 @@ const downloadOrderPDF = catchAsync(async (req, res) => {
     let order;
     if (type === 'Sales Order') {
         order = await SalesOrder.findById(id);
-    } else {
+    } else if (type === 'Purchase Order') {
         order = await PurchaseOrder.findById(id);
+    } else if (type === 'Sales Invoice') {
+        order = await SalesInvoice.findById(id);
     }
 
     if (!order) {
         return res.status(httpStatus.NOT_FOUND).send({ message: 'Order not found' });
     }
 
-    const pdfBuffer = await generateOrderPDF(order, company, type);
-    const docNumber = type === 'Sales Order' ? order.soNumber : order.poNumber;
+    const pdfBuffer = await generateDocumentPDF(order, company, type);
+    const isSOType = type === 'Sales Order';
+    const docNumber = isSOType ? order.soNumber : (type === 'Sales Invoice' ? (order.displayInvoiceNumber || order.invoiceNumber) : order.poNumber);
     const safeDocNumber = docNumber.replace(/[\/\\?%*:|"<>]/g, '-');
-    const fileName = `${type === 'Sales Order' ? 'SO' : 'PO'}-${safeDocNumber}.pdf`;
+    
+    let prefix = 'SO';
+    if (type === 'Purchase Order') prefix = 'PO';
+    else if (type === 'Sales Invoice') prefix = 'INV';
+    
+    const fileName = `${prefix}-${safeDocNumber}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, MessageSquare, Send, X, Users, User, Loader2, ExternalLink, Wifi, WifiOff, CheckCircle2, AlertCircle } from 'lucide-react';
+import { 
+    Mail, MessageSquare, Send, X, Users, User, Loader2, ExternalLink, Wifi, 
+    WifiOff, CheckCircle2, AlertCircle, Copy, Download 
+} from 'lucide-react';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
 import { checkWhatsAppSession, connectWhatsApp } from '@/services/whatsappApi';
@@ -7,7 +10,7 @@ import { useSocket } from '@/contexts/SocketContext';
 
 export default function CommunicationModal({ isOpen, onClose, onSend, data, type }) {
     const { socket } = useSocket();
-    const [sendMode, setSendMode] = useState('Number'); // 'Number' or 'Group'
+    const [sendMode, setSendMode] = useState('Number'); // 'Number', 'Group', or 'Manual'
     const [recipientName, setRecipientName] = useState(data.recipientName || '');
     const [email, setEmail] = useState(data.email || '');
     const [phone, setPhone] = useState(data.phone || '');
@@ -98,27 +101,44 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
     // Socket Listener for WhatsApp Status
     useEffect(() => {
         if (socket && isOpen) {
+            console.log('[Socket] Initializing listener for user:', data.recipientName);
             const handleWhatsAppStatus = (update) => {
-                console.log('[Socket] WhatsApp Status Update:', update);
-                setProgressLogs(prev => [...prev, {
-                    text: update.status,
-                    code: update.code,
-                    time: new Date().toLocaleTimeString()
-                }]);
+                try {
+                    console.log('[Socket] WhatsApp Status Update:', update);
+                    setProgressLogs(prev => {
+                        // Prevent duplicates of the exact same message if arrived too fast
+                        if (prev.length > 0 && prev[prev.length - 1].text === update.status) return prev;
+                        return [...prev, {
+                            text: update.status,
+                            code: update.code,
+                            time: new Date().toLocaleTimeString()
+                        }];
+                    });
 
-                if (update.code === 'SUCCESS') {
-                    setSending(false);
-                    setStatus('Successfully Prepared!');
-                    toast.success('WhatsApp Draft Ready! Switching window...');
-                } else if (update.code === 'ERROR') {
-                    setSending(false);
-                    setStatus('Failed to prepare draft.');
-                    toast.error(update.status || 'Failed to prepare WhatsApp');
+                    if (update.code === 'SUCCESS') {
+                        setSending(false);
+                        setStatus('Successfully Prepared!');
+                        toast.success('WhatsApp Draft Ready! Switching window...');
+                        // Auto close after 3s on success
+                        setTimeout(onClose, 3000);
+                    } else if (update.code === 'ERROR') {
+                        setSending(false);
+                        setStatus('Failed to prepare draft.');
+                        toast.error(update.status || 'Failed to prepare WhatsApp');
+                    } else if (update.code === 'WAITING_FOR_USER') {
+                        setStatus('Waiting for you to pick a chat...');
+                    }
+                } catch (err) {
+                    console.error('[Socket Error]', err);
                 }
             };
 
             socket.on('whatsapp:status', handleWhatsAppStatus);
-            return () => socket.off('whatsapp:status', handleWhatsAppStatus);
+            socket.on('whatsapp-status', handleWhatsAppStatus); // Fallback for old name
+            return () => {
+                socket.off('whatsapp:status', handleWhatsAppStatus);
+                socket.off('whatsapp-status', handleWhatsAppStatus);
+            };
         }
     }, [socket, isOpen]);
 
@@ -154,6 +174,7 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
             if (sendMode === 'Group' && !groupName) {
                 return toast.error('Please enter the WhatsApp Group Name.');
             }
+            // No validation for Manual mode as user picks in WA
         } else if (chan === 'Email' && !email) {
             return toast.error('Please enter a valid email address.');
         }
@@ -186,6 +207,27 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
             setStatus('Error occurred.');
             toast.error(e.response?.data?.message || 'Failed to process request.');
             setSending(false);
+        }
+    };
+
+    const handleCopyMessage = () => {
+        navigator.clipboard.writeText(message);
+        toast.success('Message copied to clipboard!');
+    };
+
+    const handleDownloadPDF = async () => {
+        try {
+            const response = await communicationApi.downloadOrderPDF(data.id, type);
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${type.replace(' ', '_')}_${data.id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            toast.error('Failed to download PDF');
         }
     };
 
@@ -224,7 +266,7 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                 </div>
 
                 <div style={{ padding: 24, maxHeight: '80vh', overflowY: 'auto' }}>
-                    {sending && channel === 'WhatsApp' && (
+                    {(sending || progressLogs.length > 0) && channel === 'WhatsApp' && (
                         <div style={{ marginBottom: 20, background: '#0f172a', borderRadius: 12, padding: 16, color: '#94a3b8', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
                             <div style={{ fontWeight: 700, color: '#fff', marginBottom: 8, fontSize: 12, display: 'flex', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -252,21 +294,36 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
 
                     <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '12px', marginBottom: '20px' }}>
                         <div onClick={() => !sending && setSendMode('Number')} style={tabStyle(sendMode === 'Number')}>
-                            <User size={16} /> Direct Number
+                            <User size={16} /> Direct
                         </div>
                         <div onClick={() => !sending && setSendMode('Group')} style={tabStyle(sendMode === 'Group')}>
-                            <Users size={16} /> WhatsApp Group
+                            <Users size={16} /> Group
+                        </div>
+                        <div onClick={() => !sending && setSendMode('Manual')} style={tabStyle(sendMode === 'Manual')}>
+                            <ExternalLink size={16} /> Manual
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
+                    {sendMode === 'Manual' && (
+                        <div style={{ padding: 12, background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 12, marginBottom: 20, animation: 'fadeIn 0.3s' }}>
+                            <div style={{ fontSize: 13, color: '#991b1b', fontWeight: 800, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Users size={16} /> Manual Selection Mode
+                            </div>
+                            <p style={{ margin: 0, fontSize: 11, color: '#b91c1c', lineHeight: 1.4 }}>
+                                The CRM will open WhatsApp Web. Please <strong>manually select the person or group</strong> inside WhatsApp. 
+                                The system will then automatically attach the PDF and paste your message.
+                            </p>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16, opacity: sendMode === 'Manual' ? 0.5 : 1 }}>
                         <div>
                             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>Recipient Name</label>
-                            <input disabled={sending} value={recipientName} onChange={e => setRecipientName(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none', background: sending ? '#f8fafc' : '#fff' }} />
+                            <input disabled={sending || sendMode === 'Manual'} value={recipientName} onChange={e => setRecipientName(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none', background: (sending || sendMode === 'Manual') ? '#f8fafc' : '#fff' }} />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>WhatsApp No.</label>
-                            <input disabled={sending || sendMode === 'Group'} value={phone} onChange={e => setPhone(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none', background: (sending || sendMode === 'Group') ? '#f8fafc' : '#fff' }} placeholder="+91..." />
+                            <input disabled={sending || sendMode === 'Group' || sendMode === 'Manual'} value={phone} onChange={e => setPhone(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 14, outline: 'none', background: (sending || sendMode === 'Group' || sendMode === 'Manual') ? '#f8fafc' : '#fff' }} placeholder="+91..." />
                         </div>
                     </div>
 
@@ -337,6 +394,21 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                                 </div>
                             </div>
                         )}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
+                            <button 
+                                onClick={handleCopyMessage}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 12, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                <Copy size={14} /> Copy Message
+                            </button>
+                            <button 
+                                onClick={handleDownloadPDF}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 12, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                <Download size={14} /> Download PDF
+                            </button>
+                        </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 12, marginTop: 12 }}>
                             <button 

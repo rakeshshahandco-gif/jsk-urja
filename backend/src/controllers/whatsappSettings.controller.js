@@ -1,9 +1,11 @@
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync.js';
 import WhatsAppSettings from '../models/whatsappSettings.model.js';
-import WhatsAppAutomationService from '../services/whatsapp.automation.js';
+import WhatsAppService from '../services/whatsapp.service.js';
+import logger from '../utils/logger.js';
 import path from 'path';
-import fs from 'fs';
+
+// ─── Settings CRUD ────────────────────────────────────────────────────────────
 
 const getSettings = catchAsync(async (req, res) => {
     let settings = await WhatsAppSettings.findOne();
@@ -24,44 +26,65 @@ const updateSettings = catchAsync(async (req, res) => {
     res.send(settings);
 });
 
+// ─── Connection Status ────────────────────────────────────────────────────────
+
 const getSessionStatus = catchAsync(async (req, res) => {
-    const sessionDir = path.join(process.cwd(), '.whatsapp-session');
-    const profileExists = fs.existsSync(path.join(sessionDir, 'Default', 'Cookies')) ||
-        fs.existsSync(path.join(sessionDir, 'Default', 'Local Storage'));
-    res.json({ connected: profileExists, sessionDir });
+    const status = WhatsAppService.getStatus();
+    res.json(status);
 });
 
+// ─── Connect — Non-blocking ───────────────────────────────────────────────────
+// Immediately returns 200; QR code is pushed to frontend via Socket.io
 const connectWhatsApp = catchAsync(async (req, res) => {
+    // Respond immediately so the HTTP request doesn't timeout
+    res.json({ success: true, message: 'Connecting... Watch for QR code in the panel below.' });
+
+    // Start connection in background
+    WhatsAppService.connect().catch(err => {
+        logger.error(`[WhatsApp Controller] Background connect error: ${err.message}`);
+    });
+});
+
+// ─── Disconnect ───────────────────────────────────────────────────────────────
+
+const disconnectWhatsApp = catchAsync(async (req, res) => {
+    await WhatsAppService.disconnect();
+    res.json({ success: true, message: 'WhatsApp session cleared. Scan QR again to reconnect.' });
+});
+
+// ─── Get Groups / Chats ───────────────────────────────────────────────────────
+
+const getGroups = catchAsync(async (req, res) => {
     try {
-        const result = await WhatsAppAutomationService.connectAndWaitForLogin();
-        res.json({ success: true, message: result });
+        const chats = await WhatsAppService.getChats();
+        res.json(chats);
     } catch (e) {
         res.status(httpStatus.BAD_REQUEST).json({ success: false, message: e.message });
     }
 });
 
-const disconnectWhatsApp = catchAsync(async (req, res) => {
+// ─── Send Text Message ────────────────────────────────────────────────────────
+
+const sendMessage = catchAsync(async (req, res) => {
     try {
-        await WhatsAppAutomationService.disconnect();
-        // Clear session files
-        const sessionDir = path.join(process.cwd(), '.whatsapp-session');
-        if (fs.existsSync(sessionDir)) {
-            fs.rmSync(sessionDir, { recursive: true, force: true });
-        }
-        res.json({ success: true, message: 'WhatsApp session cleared. You will need to scan QR again on next use.' });
+        const result = await WhatsAppService.sendMessage(req.body);
+        res.json(result);
     } catch (e) {
-        res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ success: false, message: e.message });
+        logger.error(`[WhatsApp] Send message error: ${e.message}`);
+        res.status(httpStatus.BAD_REQUEST).json({ success: false, message: e.message });
     }
 });
 
-const getGroups = catchAsync(async (req, res) => {
-    const groups = await WhatsAppAutomationService.getChats();
-    res.json(groups);
-});
+// ─── Send Document ────────────────────────────────────────────────────────────
 
-const sendMessage = catchAsync(async (req, res) => {
-    const result = await WhatsAppAutomationService.sendMessage(req.body);
-    res.json(result);
+const sendDocument = catchAsync(async (req, res) => {
+    try {
+        const result = await WhatsAppService.sendDocument(req.body);
+        res.json(result);
+    } catch (e) {
+        logger.error(`[WhatsApp] Send document error: ${e.message}`);
+        res.status(httpStatus.BAD_REQUEST).json({ success: false, message: e.message });
+    }
 });
 
 export {
@@ -71,6 +94,6 @@ export {
     connectWhatsApp,
     disconnectWhatsApp,
     getGroups,
-    sendMessage
+    sendMessage,
+    sendDocument,
 };
-

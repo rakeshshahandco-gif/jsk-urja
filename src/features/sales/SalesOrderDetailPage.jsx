@@ -116,17 +116,17 @@ export default function SalesOrderDetailPage() {
 
   const handleSendComm = async (commData) => {
     const payload = { ...commData, id, type: "Sales Order" };
-    toast
-      .promise(sendOrderApi(payload), {
-        loading: `Preparing and sending ${commData.channel}...`,
-        success: `${commData.channel} sent successfully!`,
-        error: (err) =>
-          err.response?.data?.message || `Failed to send ${commData.channel}.`,
-      })
-      .then(() => {
-        setIsCommModalOpen(false);
-        // Optionally reload logs in the future
-      });
+    toast.promise(sendOrderApi(payload), {
+      loading: `Sending ${commData.channel}...`,
+      success: `✅ ${commData.channel} sent successfully!`,
+      error: (err) =>
+        err.response?.data?.message || `Failed to send ${commData.channel}.`,
+    }).then(() => {
+      // Close modal only on success
+      setIsCommModalOpen(false);
+    }).catch(() => {
+      // Stay open on error so user can retry
+    });
   };
 
   if (loading)

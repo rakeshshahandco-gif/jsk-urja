@@ -105,13 +105,13 @@ export default function PurchaseOrderDetailPage() {
         toast.promise(
             sendOrderApi(payload),
             {
-                loading: `Preparing and sending ${commData.channel}...`,
-                success: `${commData.channel} sent successfully!`,
+                loading: `Sending ${commData.channel}...`,
+                success: `✅ ${commData.channel} sent successfully!`,
                 error: (err) => err.response?.data?.message || `Failed to send ${commData.channel}.`,
             }
         ).then(() => {
-            setIsCommModalOpen(false);
-        });
+            setIsCommModalOpen(false); // Close only on success
+        }).catch(() => {}); // Stay open on error
     };
 
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#fff', minHeight: '100vh' }}>Loading...</div>;

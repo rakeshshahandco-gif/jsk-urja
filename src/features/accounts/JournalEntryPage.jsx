@@ -19,7 +19,7 @@ const JournalEntryPage = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [formData, setFormData] = useState({
+    const INITIAL_FORM_STATE = {
         voucherTypeId: '',
         date: new Date().toISOString().split('T')[0],
         narration: '',
@@ -27,7 +27,9 @@ const JournalEntryPage = () => {
             { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '' },
             { id: Date.now() + 1, ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '' }
         ]
-    });
+    };
+
+    const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -105,15 +107,33 @@ const JournalEntryPage = () => {
 
         setIsSubmitting(true);
         try {
-            await createVoucher({ ...formData, nature: 'Journal', totalAmount: totals.debit });
-            toast.success('Journal entry saved successfully');
-            navigate(PATHS.ACCOUNTS.VOUCHERS);
+            const response = await createVoucher({ ...formData, nature: 'Journal', totalAmount: totals.debit });
+            const savedNo = response?.data?.voucherNo || 'Voucher';
+            toast.success(`${savedNo} saved successfully`);
+            
+            // Stay on page and reset (KEEP DATE)
+            setFormData(prev => ({
+                ...INITIAL_FORM_STATE,
+                date: prev.date,
+                voucherTypeId: prev.voucherTypeId,
+                items: [
+                    { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '' },
+                    { id: Date.now() + 1, ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '' }
+                ]
+            }));
+
+            if (shouldClose) {
+                navigate(PATHS.ACCOUNTS.VOUCHERS);
+            }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save journal');
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const handleSaveAndNew = () => handleSave(false);
+    const handleSaveAndClose = () => handleSave(true);
 
     return (
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
@@ -294,13 +314,17 @@ const JournalEntryPage = () => {
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
                         <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
-                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                            Cancel
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
+                            Discard
                         </button>
-                        <button type="button" onClick={handleSave} disabled={isSubmitting || !isBalanced}
+                        <button type="button" onClick={handleSaveAndClose} disabled={isSubmitting}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+                            Save & Close
+                        </button>
+                        <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting || !isBalanced}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: (isSubmitting || !isBalanced) ? '#9ca3af' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff', border: 'none', cursor: (isSubmitting || !isBalanced) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Save Journal'}
+                            {isSubmitting ? 'Saving...' : 'Post & New Journal'}
                         </button>
                     </div>
                 </div>

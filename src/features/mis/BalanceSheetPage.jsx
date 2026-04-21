@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFYDateRange } from '@/contexts/FinancialYearContext';
 import { Download, Printer, ChevronRight, ChevronDown, Landmark, ShieldCheck, Scale, Database } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import accountApi from '@/services/accountApi';
@@ -10,7 +11,15 @@ const BalanceSheetPage = () => {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [expandedGroups, setExpandedGroups] = useState({});
-    const [reportDate, setReportDate] = useState(moment().endOf('day').format('YYYY-MM-DD'));
+    const [hideZeroBalances, setHideZeroBalances] = useState(true);
+    
+    // FY synchronization
+    const { endDate } = useFYDateRange();
+    const [reportDate, setReportDate] = useState(endDate);
+
+    useEffect(() => {
+        setReportDate(endDate);
+    }, [endDate]);
 
     const fetchReport = async () => {
         setLoading(true);
@@ -78,6 +87,10 @@ const BalanceSheetPage = () => {
                         onChange={(e) => setReportDate(e.target.value)}
                     />
                 </div>
+                <div className="flex items-center gap-2 mt-4 text-sm font-semibold text-slate-700 select-none cursor-pointer" onClick={() => setHideZeroBalances(!hideZeroBalances)}>
+                    <input type="checkbox" checked={hideZeroBalances} readOnly className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                    <span>Hide Zero Balances</span>
+                </div>
                 <Button onClick={fetchReport} className="mt-4">Apply Filters</Button>
             </div>
 
@@ -89,27 +102,39 @@ const BalanceSheetPage = () => {
                         <span className={s.label}>CREDIT BALANCE</span>
                     </div>
                     <div className={s.content}>
-                        {reportData?.liabilityGroups.map(group => (
-                            <div key={group.groupId}>
-                                <div className={s.groupRow} onClick={() => toggleGroup(group.groupId)}>
-                                    <div className={s.groupName}>
-                                        {expandedGroups[group.groupId] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                        {group.groupName}
-                                    </div>
-                                    <div className={s.amount}>{formatAmount(group.totalAbs)}</div>
-                                </div>
-                                {expandedGroups[group.groupId] && (
-                                    <div className={s.ledgerList}>
-                                        {group.ledgers.map(ledger => (
-                                            <div key={ledger.ledgerId} className={s.ledgerRow}>
-                                                <span className={s.ledgerName}>{ledger.name}</span>
-                                                <span className={s.amount}>{formatAmount(ledger.closingBalance)}</span>
+                        {reportData?.liabilityGroups
+                            .filter(group => {
+                                if (!hideZeroBalances) return true;
+                                const hasNonZeroLedgers = group.ledgers.some(l => Math.abs(l.closingBalance) > 0.001);
+                                return Math.abs(group.total) > 0.001 || hasNonZeroLedgers;
+                            })
+                            .map(group => {
+                                const visibleLedgers = hideZeroBalances 
+                                    ? group.ledgers.filter(l => Math.abs(l.closingBalance) > 0.001)
+                                    : group.ledgers;
+                                    
+                                return (
+                                    <div key={group.groupId}>
+                                        <div className={s.groupRow} onClick={() => toggleGroup(group.groupId)}>
+                                            <div className={s.groupName}>
+                                                {expandedGroups[group.groupId] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                {group.groupName}
                                             </div>
-                                        ))}
+                                            <div className={s.amount}>{formatAmount(group.totalAbs)}</div>
+                                        </div>
+                                        {expandedGroups[group.groupId] && visibleLedgers.length > 0 && (
+                                            <div className={s.ledgerList}>
+                                                {visibleLedgers.map(ledger => (
+                                                    <div key={ledger.ledgerId} className={s.ledgerRow}>
+                                                        <span className={s.ledgerName}>{ledger.name}</span>
+                                                        <span className={s.amount}>{formatAmount(ledger.closingBalance)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                );
+                            })}
 
                         {/* Current Period Profit/Loss */}
                         <div className={s.groupRow}>
@@ -129,27 +154,39 @@ const BalanceSheetPage = () => {
                         <span className={s.label}>DEBIT BALANCE</span>
                     </div>
                     <div className={s.content}>
-                        {reportData?.assetGroups.map(group => (
-                            <div key={group.groupId}>
-                                <div className={s.groupRow} onClick={() => toggleGroup(group.groupId)}>
-                                    <div className={s.groupName}>
-                                        {expandedGroups[group.groupId] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                        {group.groupName}
-                                    </div>
-                                    <div className={s.amount}>{formatAmount(group.totalAbs)}</div>
-                                </div>
-                                {expandedGroups[group.groupId] && (
-                                    <div className={s.ledgerList}>
-                                        {group.ledgers.map(ledger => (
-                                            <div key={ledger.ledgerId} className={s.ledgerRow}>
-                                                <span className={s.ledgerName}>{ledger.name}</span>
-                                                <span className={s.amount}>{formatAmount(ledger.closingBalance)}</span>
+                        {reportData?.assetGroups
+                            .filter(group => {
+                                if (!hideZeroBalances) return true;
+                                const hasNonZeroLedgers = group.ledgers.some(l => Math.abs(l.closingBalance) > 0.001);
+                                return Math.abs(group.total) > 0.001 || hasNonZeroLedgers;
+                            })
+                            .map(group => {
+                                const visibleLedgers = hideZeroBalances 
+                                    ? group.ledgers.filter(l => Math.abs(l.closingBalance) > 0.001)
+                                    : group.ledgers;
+                                    
+                                return (
+                                    <div key={group.groupId}>
+                                        <div className={s.groupRow} onClick={() => toggleGroup(group.groupId)}>
+                                            <div className={s.groupName}>
+                                                {expandedGroups[group.groupId] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                {group.groupName}
                                             </div>
-                                        ))}
+                                            <div className={s.amount}>{formatAmount(group.totalAbs)}</div>
+                                        </div>
+                                        {expandedGroups[group.groupId] && visibleLedgers.length > 0 && (
+                                            <div className={s.ledgerList}>
+                                                {visibleLedgers.map(ledger => (
+                                                    <div key={ledger.ledgerId} className={s.ledgerRow}>
+                                                        <span className={s.ledgerName}>{ledger.name}</span>
+                                                        <span className={s.amount}>{formatAmount(ledger.closingBalance)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                );
+                            })}
                     </div>
                 </div>
 

@@ -1,14 +1,6 @@
-2026/04/02-13:14:41.114 3aa8 Reusing MANIFEST C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/MANIFEST-000001
-2026/04/02-13:14:41.142 3aa8 Recovering log #9
-2026/04/02-13:14:41.163 3aa8 Reusing old log C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/000009.log 
-2026/04/02-14:00:04.343 3aa8 Level-0 table #13: started
-2026/04/02-14:00:04.461 3aa8 Level-0 table #13: 16540 bytes OK
-2026/04/02-14:00:04.552 3aa8 Delete type=0 #9
-2026/04/02-14:00:04.583 3aa8 Compacting 4@0 + 0@1 files
-2026/04/02-14:00:04.701 3aa8 Generated table #14@0: 137 keys, 15602 bytes
-2026/04/02-14:00:04.701 3aa8 Compacted 4@0 + 0@1 files => 15602 bytes
-2026/04/02-14:00:04.770 3aa8 compacted to: files[ 0 1 0 0 0 0 0 ]
-2026/04/02-14:00:04.781 3aa8 Delete type=2 #3
-2026/04/02-14:00:04.782 3aa8 Delete type=2 #7
-2026/04/02-14:00:04.782 3aa8 Delete type=2 #10
-2026/04/02-14:00:04.782 3aa8 Delete type=2 #13
+2026/04/21-13:28:00.756 47fc Reusing MANIFEST C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/04/21-13:28:00.800 47fc Recovering log #12
+2026/04/21-13:28:00.837 47fc Reusing old log C:\Users\Admin\Desktop\Project\backend\.whatsapp-session\Default\Local Storage\leveldb/000012.log 
+2026/04/21-13:31:01.880 4078 Level-0 table #17: started
+2026/04/21-13:31:02.125 4078 Level-0 table #17: 23321 bytes OK
+2026/04/21-13:31:02.283 4078 Delete type=0 #12

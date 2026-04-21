@@ -24,32 +24,28 @@ const ReceiptEntryPage = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [formData, setFormData] = useState({
+    const INITIAL_FORM_STATE = {
         voucherTypeId: '',
         date: new Date().toISOString().split('T')[0],
         cashBankAccountId: '',
-        totalAmount: location.state?.amount || 0,
-        narration: location.state?.invoiceNumber ? `Receipt against Sales Invoice ${location.state.invoiceNumber}` : '',
+        totalAmount: 0,
+        narration: '',
         instrumentType: 'Cash',
         instrumentNo: '',
         items: [
             { 
                 id: Date.now(), 
-                ledgerId: location.state?.ledgerId || '', 
-                ledgerName: location.state?.ledgerName || '', 
-                amount: location.state?.amount || 0, 
+                ledgerId: '', 
+                ledgerName: '', 
+                amount: 0, 
                 type: 'Credit', 
-                narration: location.state?.invoiceNumber ? `Against ${location.state.invoiceNumber}` : '', 
-                adjustments: location.state?.invoiceId ? [{
-                    refId: location.state.invoiceId,
-                    refNumber: location.state.invoiceNumber,
-                    amount: location.state.amount,
-                    adjustmentType: 'Against Bill',
-                    refModel: 'SalesInvoice'
-                }] : []
+                narration: '', 
+                adjustments: []
             }
         ]
-    });
+    };
+
+    const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     // Detect if launched from a Sales Invoice
     const fromInvoice = !!(location.state?.source === 'sales_invoice' || location.state?.invoiceId);
@@ -74,58 +70,33 @@ const ReceiptEntryPage = () => {
                     setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
                 }
 
-                // If launched from Invoice Detail, pre-fill details
-                const defaultCustomerId = location.state?.customerId || location.state?.ledgerId;
-                const defaultCustomerName = location.state?.customerName || location.state?.ledgerName || 'Customer';
-                const defaultAmount = location.state?.amount || 0;
-                const defaultInvoiceId = location.state?.invoiceId;
-                const defaultInvoiceNo = location.state?.invoiceNumber;
+    useEffect(() => {
+        const defaultAmount = location.state?.amount || 0;
+        const defaultInvoiceNo = location.state?.invoiceNumber;
+        const defaultInvoiceId = location.state?.invoiceId;
 
-                    if (defaultCustomerId || defaultCustomerName) {
-                        const custLedger = allLedgers.find(l => 
-                            (defaultCustomerId && (
-                                l.referenceId?.toString() === defaultCustomerId?.toString() ||
-                                l._id?.toString() === defaultCustomerId?.toString()
-                            )) || 
-                            (defaultCustomerName && (
-                                l.name?.toLowerCase() === defaultCustomerName.toLowerCase() ||
-                                l.printName?.toLowerCase() === defaultCustomerName.toLowerCase() ||
-                                l.alias?.toLowerCase() === defaultCustomerName.toLowerCase()
-                            ))
-                        );
-
-                        if (custLedger) {
-                            setFormData(prev => {
-                                const newItems = [...prev.items];
-                                if (newItems.length > 0) {
-                                    newItems[0].ledgerId = custLedger._id;
-                                    newItems[0].ledgerName = custLedger.name;
-                                    newItems[0].amount = defaultAmount;
-                                    newItems[0].narration = `Against ${defaultInvoiceNo}`;
-
-                                    if (defaultInvoiceId && defaultAmount) {
-                                        newItems[0].adjustments = [{
-                                            refId: defaultInvoiceId,
-                                            refNumber: defaultInvoiceNo,
-                                            amount: defaultAmount,
-                                            adjustmentType: 'Against Bill',
-                                            refModel: 'SalesInvoice'
-                                        }];
-                                    }
-                                }
-                                return {
-                                    ...prev,
-                                    items: newItems,
-                                    totalAmount: defaultAmount,
-                                    narration: `Receipt against Sales Invoice ${defaultInvoiceNo}`
-                                };
-                            });
-                        } else {
-                            // If automatic mapping fails, we DON'T show a blocking error yet, 
-                            // but we'll show it on Save if they haven't fixed it.
-                            console.warn(`Could not auto-map ledger for ${defaultCustomerName}`);
-                        }
-                    }
+        if (location.state?.invoiceId) {
+            setFormData(prev => ({
+                ...prev,
+                totalAmount: defaultAmount,
+                narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
+                items: [{
+                    ...prev.items[0],
+                    ledgerId: location.state?.ledgerId || '',
+                    ledgerName: location.state?.ledgerName || '',
+                    amount: defaultAmount,
+                    narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prev.items[0].narration,
+                    adjustments: defaultInvoiceId ? [{
+                        refId: defaultInvoiceId,
+                        refNumber: defaultInvoiceNo,
+                        amount: defaultAmount,
+                        adjustmentType: 'Against Bill',
+                        refModel: 'SalesInvoice'
+                    }] : []
+                }]
+            }));
+        }
+    }, [location.state]);
 
             } catch (error) {
                 toast.error('Failed to load initial data');
@@ -288,7 +259,7 @@ const ReceiptEntryPage = () => {
         });
     };
 
-    const handleSave = async () => {
+    const handleSave = async (shouldClose = false) => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
         if (formData.totalAmount <= 0) return toast.error('Entry amount must be greater than zero');
 
@@ -297,33 +268,49 @@ const ReceiptEntryPage = () => {
             if (invalidItem) return toast.error('All items must have a ledger and amount');
         }
 
-        // Validation against original invoice amount if linked
-        if (location.state?.invoiceId && location.state?.amount) {
-            const linkedItem = formData.items[0];
-            if (linkedItem.amount > location.state.amount) {
-                return toast.error(`Amount exceeding outstanding balance (${location.state.amount}). Advance receipt logic not enabled.`);
-            }
-        }
-
         const firstItem = formData.items[0];
-        if (!firstItem?.ledgerId) return toast.error('Customer ledger mapping failed. Please select ledger manually or contact admin.');
+        if (!firstItem?.ledgerId) return toast.error('Ledger selection required');
 
         setIsSubmitting(true);
         try {
-            // nature: 'Receipt' is added to ensure it's always set correctly for this page
-            await createVoucher({ 
+            const response = await createVoucher({ 
                 ...formData, 
                 nature: 'Receipt',
-                voucherType: formData.voucherTypeId // Ensure model compatibility
+                voucherType: formData.voucherTypeId 
             });
-            toast.success('Receipt saved successfully');
-            navigate(PATHS.ACCOUNTS.VOUCHERS);
+            const savedNo = response?.data?.voucherNo || 'Voucher';
+            toast.success(`${savedNo} saved successfully`);
+            
+            if (fromInvoice || shouldClose) {
+                navigate(-1);
+            } else {
+                // RESET FOR NEXT ENTRY (KEEP DATE/ACCOUNTS)
+                setFormData(prev => ({
+                    ...INITIAL_FORM_STATE,
+                    voucherTypeId: prev.voucherTypeId,
+                    date: prev.date,
+                    cashBankAccountId: prev.cashBankAccountId,
+                    instrumentType: prev.instrumentType,
+                    items: [{ 
+                        id: Date.now(), 
+                        ledgerId: '', 
+                        ledgerName: '', 
+                        amount: 0, 
+                        type: 'Credit', 
+                        narration: '', 
+                        adjustments: []
+                    }]
+                }));
+            }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save receipt');
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const handleSaveAndNew = () => handleSave(false);
+    const handleSaveAndClose = () => handleSave(true);
 
     // ── SIMPLIFIED VIEW when opened from Sales Invoice ──────────────────────
     if (fromInvoice) {
@@ -691,13 +678,17 @@ const ReceiptEntryPage = () => {
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
                         <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
-                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                            Cancel
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
+                            Discard
                         </button>
-                        <button type="button" onClick={handleSave} disabled={isSubmitting}
+                        <button type="button" onClick={handleSaveAndClose} disabled={isSubmitting}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+                            Save & Close
+                        </button>
+                        <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : '#2563eb', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Save Receipt'}
+                            {isSubmitting ? 'Saving...' : 'Post & New Receipt'}
                         </button>
                     </div>
                 </div>

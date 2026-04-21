@@ -10,13 +10,20 @@ export const updateWhatsAppSettings = async (data) => {
     return response.data;
 };
 
-export const checkWhatsAppSession = async () => {
-    const response = await api.get('/whatsapp-settings/session-status');
+export const getWhatsAppStatus = async () => {
+    const response = await api.get('/whatsapp-settings/status');
     return response.data;
 };
 
+// Kept for backward compatibility
+export const checkWhatsAppSession = async () => {
+    const response = await api.get('/whatsapp-settings/status');
+    return response.data;
+};
+
+// Non-blocking — returns immediately; QR arrives via Socket.io
 export const connectWhatsApp = async () => {
-    const response = await api.post('/whatsapp-settings/connect', {}, { timeout: 120000 });
+    const response = await api.post('/whatsapp-settings/connect', {}, { timeout: 10000 });
     return response.data;
 };
 
@@ -35,3 +42,7 @@ export const sendWhatsAppMessage = async (data) => {
     return response.data;
 };
 
+export const sendWhatsAppDocument = async (data) => {
+    const response = await api.post('/whatsapp-settings/send-document', data);
+    return response.data;
+};

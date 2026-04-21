@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useFYDateRange } from '@/contexts/FinancialYearContext';
 import { Download, Printer, Search, ShieldCheck, Scale } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import accountApi from '@/services/accountApi';
@@ -10,7 +11,14 @@ const TrialBalancePage = () => {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [reportDate, setReportDate] = useState(moment().endOf('day').format('YYYY-MM-DD'));
+    
+    // FY synchronization
+    const { endDate } = useFYDateRange();
+    const [reportDate, setReportDate] = useState(endDate);
+
+    useEffect(() => {
+        setReportDate(endDate);
+    }, [endDate]);
 
     const fetchReport = async () => {
         setLoading(true);

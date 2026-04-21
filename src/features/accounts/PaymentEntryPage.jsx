@@ -24,7 +24,7 @@ const PaymentEntryPage = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [formData, setFormData] = useState({
+    const INITIAL_FORM_STATE = {
         voucherTypeId: '',
         date: new Date().toISOString().split('T')[0],
         cashBankAccountId: '',
@@ -35,7 +35,9 @@ const PaymentEntryPage = () => {
         items: [
             { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }
         ]
-    });
+    };
+
+    const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     // Detect if launched from a Purchase Invoice
     const fromInvoice = !!(location.state?.source === 'purchase_invoice' || location.state?.invoiceId);
@@ -267,7 +269,7 @@ const PaymentEntryPage = () => {
         });
     };
 
-    const handleSave = async () => {
+    const handleSave = async (shouldClose = false) => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account to pay from');
         if (formData.totalAmount <= 0) return toast.error('Payment amount must be greater than zero');
 
@@ -286,23 +288,25 @@ const PaymentEntryPage = () => {
 
         setIsSubmitting(true);
         try {
-            await createVoucher({ ...formData, nature: 'Payment' });
-            toast.success('Payment voucher saved successfully');
+            const response = await createVoucher({ ...formData, nature: 'Payment' });
+            const savedNo = response?.data?.voucherNo || 'Voucher';
+            toast.success(`${savedNo} saved successfully`);
             
-            // If linked to an invoice, just go back. If manual, ask to add another.
-            if (isFromInvoice) {
+            // If linked to an invoice, always return back
+            if (fromInvoice || shouldClose) {
                 navigate(-1);
             } else {
-                if (window.confirm('Voucher saved. Do you want to add another entry?')) {
-                    setFormData({
-                        ...initialFormData,
-                        voucherTypeId: formData.voucherTypeId,
-                        date: formData.date,
-                        cashBankAccountId: formData.cashBankAccountId
-                    });
-                } else {
-                    navigate(PATHS.ACCOUNTS.VOUCHER_LIST);
-                }
+                // RESET FORM FOR NEXT ENTRY
+                setFormData(prev => ({
+                    ...INITIAL_FORM_STATE,
+                    voucherTypeId: prev.voucherTypeId,
+                    date: prev.date,
+                    cashBankAccountId: prev.cashBankAccountId,
+                    instrumentType: prev.instrumentType,
+                    items: [
+                        { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }
+                    ]
+                }));
             }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save payment');
@@ -310,6 +314,9 @@ const PaymentEntryPage = () => {
             setIsSubmitting(false);
         }
     };
+
+    const handleSaveAndNew = () => handleSave(false);
+    const handleSaveAndClose = () => handleSave(true);
 
     // ── SIMPLIFIED VIEW when opened from Purchase Invoice ───────────────────
     if (fromInvoice) {
@@ -594,13 +601,17 @@ const PaymentEntryPage = () => {
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
                         <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHER_LIST); }}
-                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#e2e8f0', color: '#475569', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                            Cancel
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
+                            Discard
                         </button>
-                        <button type="button" onClick={handleSave} disabled={isSubmitting}
+                        <button type="button" onClick={handleSaveAndClose} disabled={isSubmitting}
+                            style={{ padding: '10px 24px', borderRadius: '8px', background: '#fff', color: '#64748b', border: '1.5px solid #e2e8f0', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+                            Save & Close
+                        </button>
+                        <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Save Payment'}
+                            {isSubmitting ? 'Saving...' : 'Post & New Payment'}
                         </button>
                     </div>
                 </div>

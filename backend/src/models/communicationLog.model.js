@@ -8,7 +8,7 @@ const communicationLogSchema = new mongoose.Schema(
         },
         documentType: {
             type: String,
-            enum: ['Sales Order', 'Purchase Order'],
+            enum: ['Sales Order', 'Purchase Order', 'Sales Invoice'],
             required: true,
         },
         documentNumber: {
@@ -43,7 +43,7 @@ const communicationLogSchema = new mongoose.Schema(
         },
         sendMode: {
             type: String,
-            enum: ['Number', 'Group'],
+            enum: ['Number', 'Group', 'Manual', 'manual'],
             default: 'Number',
         },
         groupName: {

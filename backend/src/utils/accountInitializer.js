@@ -75,12 +75,8 @@ const initializeAccountingMasters = async (userId) => {
             { name: 'Advance to Suppliers', nature: 'Assets', parent: 'Loans & Advances (Asset)' },
             { name: 'Security Deposits', nature: 'Assets', parent: 'Loans & Advances (Asset)' },
 
-            // Tax / GST (Input) Master Group
+            // Other Input Taxes (Non-GST) Master Group
             { name: 'Input Tax', nature: 'Assets', parent: 'Current Assets' },
-            { name: 'GST Input Credit', nature: 'Assets', parent: 'Input Tax' },
-            { name: 'CGST Input', nature: 'Assets', parent: 'Input Tax' },
-            { name: 'SGST Input', nature: 'Assets', parent: 'Input Tax' },
-            { name: 'IGST Input', nature: 'Assets', parent: 'Input Tax' },
             { name: 'TDS Receivable', nature: 'Assets', parent: 'Input Tax' },
 
             // Deposits
@@ -118,12 +114,22 @@ const initializeAccountingMasters = async (userId) => {
             { name: 'ESIC Payable', nature: 'Liabilities', parent: 'Staff & Employee Payables' },
             { name: 'TDS Payable', nature: 'Liabilities', parent: 'Staff & Employee Payables' },
 
-            // GST / Tax (Output) Master Group
+            // Duties and Taxes Master Group
             { name: 'Duties & Taxes', nature: 'Liabilities', parent: 'Current Liabilities' },
-            { name: 'GST Output', nature: 'Liabilities', parent: 'Duties & Taxes' },
-            { name: 'CGST Output', nature: 'Liabilities', parent: 'Duties & Taxes' },
-            { name: 'SGST Output', nature: 'Liabilities', parent: 'Duties & Taxes' },
-            { name: 'IGST Output', nature: 'Liabilities', parent: 'Duties & Taxes' },
+            
+            // Sub-group: GST Collection (Sales side)
+            { name: 'GST Collection', nature: 'Liabilities', parent: 'Duties & Taxes' },
+            { name: 'CGST Output', nature: 'Liabilities', parent: 'GST Collection' },
+            { name: 'SGST Output', nature: 'Liabilities', parent: 'GST Collection' },
+            { name: 'IGST Output', nature: 'Liabilities', parent: 'GST Collection' },
+            { name: 'GST Output', nature: 'Liabilities', parent: 'GST Collection' },
+
+            // Sub-group: GST Input (Purchase side)
+            { name: 'GST Input', nature: 'Liabilities', parent: 'Duties & Taxes' },
+            { name: 'CGST Input', nature: 'Liabilities', parent: 'GST Input' },
+            { name: 'SGST Input', nature: 'Liabilities', parent: 'GST Input' },
+            { name: 'IGST Input', nature: 'Liabilities', parent: 'GST Input' },
+            { name: 'GST Input Credit', nature: 'Liabilities', parent: 'GST Input' },
 
             // Other Current Liabilities
             { name: 'Outstanding Expenses', nature: 'Liabilities', parent: 'Current Liabilities' },
@@ -217,12 +223,12 @@ const initializeAccountingMasters = async (userId) => {
             { name: 'HDFC Bank', group: 'Bank Accounts', type: 'Bank', isBank: true },
             { name: 'Purchase Account', group: 'Purchase Accounts', type: 'General' },
             { name: 'Sales Account', group: 'Sales Accounts', type: 'General' },
-            { name: 'CGST Output', group: 'Duties & Taxes', type: 'Tax', isTaxLedger: true },
-            { name: 'SGST Output', group: 'Duties & Taxes', type: 'Tax', isTaxLedger: true },
-            { name: 'IGST Output', group: 'Duties & Taxes', type: 'Tax', isTaxLedger: true },
-            { name: 'CGST Input', group: 'Input Tax', type: 'Tax', isTaxLedger: true },
-            { name: 'SGST Input', group: 'Input Tax', type: 'Tax', isTaxLedger: true },
-            { name: 'IGST Input', group: 'Input Tax', type: 'Tax', isTaxLedger: true },
+            { name: 'CGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
+            { name: 'SGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
+            { name: 'IGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
+            { name: 'CGST Input', group: 'GST Input', type: 'Tax', isTaxLedger: true },
+            { name: 'SGST Input', group: 'GST Input', type: 'Tax', isTaxLedger: true },
+            { name: 'IGST Input', group: 'GST Input', type: 'Tax', isTaxLedger: true },
             { name: 'Round Off', group: 'Indirect Expenses', type: 'Expense' },
             { name: 'Freight Inward', group: 'Direct Expenses', type: 'Expense' },
             { name: 'Freight & Forwarding Charges', group: 'Direct Income', type: 'Income' },

@@ -62,6 +62,24 @@ export const initSocket = (server) => {
         // Sync status on connect/reconnect
         socket.emit('messenger:sync_status', { status: 'online' });
 
+        // ── WhatsApp Room ──────────────────────────────────────────────────────
+        // Client emits this when opening the WhatsApp Settings page
+        socket.on('join:whatsapp', () => {
+            socket.join('whatsapp_room');
+            logger.info(`[WhatsApp] Socket ${socket.id} joined whatsapp_room`);
+
+            // Immediately push current status to the newly joined client
+            // Lazy import to avoid circular dependency at module load time
+            import('../services/whatsapp.service.js').then(({ default: WhatsAppService }) => {
+                const status = WhatsAppService.getStatus();
+                socket.emit('whatsapp:status', status);
+            }).catch(() => {});
+        });
+
+        socket.on('leave:whatsapp', () => {
+            socket.leave('whatsapp_room');
+        });
+
         // ── Messenger: Typing Indicators ──────────────────────────────────────
         socket.on('messenger:typing', ({ threadId, participantIds }) => {
             if (!threadId || !participantIds) return;
