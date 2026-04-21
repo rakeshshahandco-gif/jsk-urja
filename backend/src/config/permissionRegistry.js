@@ -23,9 +23,16 @@ export const PERMISSION_REGISTRY = [
         name: 'Admin',
         submodules: [
             { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
-            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
+        ]
+    },
+    {
+        id: 'whatsapp',
+        name: '💬 WhatsApp',
+        submodules: [
+            { id: 'whatsapp_settings', name: 'WhatsApp Connection & Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'connect', label: 'Connect/Disconnect', type: 'boolean' }] },
+            { id: 'whatsapp_send', name: 'Send via WhatsApp', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'send', label: 'Send', type: 'boolean' }] }
         ]
     },
     {

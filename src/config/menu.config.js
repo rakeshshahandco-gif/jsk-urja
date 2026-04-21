@@ -339,7 +339,7 @@ export const menuConfig = [
         icon: 'ChatIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         path: PATHS.SETTINGS.WHATSAPP,
-        permission: 'admin.whatsapp_settings.view',
+        permission: 'whatsapp.whatsapp_settings.view',
     },
     {
         id: 'admin',

@@ -18,6 +18,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         { id: 'sales_crm', name: 'Sales & CRM', modules: ['customers', 'sales', 'service', 'reports'] },
         { id: 'operations', name: 'Operations', modules: ['inventory', 'purchase', 'production', 'production_rework'] },
         { id: 'finance_bi', name: 'Finance & BI', modules: ['accounts', 'fixed_assets', 'mis', 'messenger'] },
+        { id: 'whatsapp_group', name: '💬 WhatsApp', modules: ['whatsapp'] },
         { id: 'admin_support', name: 'Administration & Support', modules: ['admin', 'hr', 'tasks', 'prd'] }
     ];
 

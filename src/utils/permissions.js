@@ -116,8 +116,15 @@ export const APP_MODULES = [
         name: 'Admin',
         submodules: [
             { id: 'company_profile', name: 'Company Profile', actions: ['view', 'edit'] },
-            { id: 'whatsapp_settings', name: 'WhatsApp Settings', actions: ['view', 'edit'] },
             { id: 'user_management', name: 'User Management', actions: ['view', 'manage'] }
+        ]
+    },
+    {
+        id: 'whatsapp',
+        name: '💬 WhatsApp',
+        submodules: [
+            { id: 'whatsapp_settings', name: 'WhatsApp Connection & Settings', actions: ['view', 'edit', 'connect', 'disconnect'] },
+            { id: 'whatsapp_send', name: 'Send via WhatsApp', actions: ['view', 'send'] }
         ]
     }
 ];
@@ -149,7 +156,9 @@ export const ROLE_PERMISSIONS = {
         'sales',
         'service',
         'accounts',
-        'reports'
+        'reports',
+        'admin.whatsapp_settings.view',
+        'whatsapp.whatsapp_settings.view',
     ],
     [ROLES.STAFF]: [
         'customers.customer_master.view',
