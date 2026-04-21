@@ -10,5 +10,6 @@ router.get('/sales-register', accountReportController.getSalesRegister);
 router.get('/purchase-register', accountReportController.getPurchaseRegister);
 router.get('/day-book', accountReportController.getDayBook);
 router.get('/cash-bank-book', accountReportController.getCashBankBook);
+router.get('/expense-register', accountReportController.getExpenseRegister);
 
 export default router;

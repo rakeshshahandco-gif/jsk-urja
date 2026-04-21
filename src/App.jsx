@@ -97,6 +97,7 @@ const LedgerMasterPage = lazy(() => import('./features/accounts/LedgerMasterPage
 const VoucherTypeMasterPage = lazy(() => import('./features/accounts/VoucherTypeMasterPage'));
 const SalesRegisterPage = lazy(() => import('./features/accounts/SalesRegisterPage'));
 const PurchaseRegisterPage = lazy(() => import('./features/accounts/PurchaseRegisterPage'));
+const ExpenseRegisterPage = lazy(() => import('./features/accounts/ExpenseRegisterPage'));
 const FinancialYearMasterPage = lazy(() => import('./features/accounts/FinancialYearMasterPage.jsx'));
 const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
 const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
@@ -364,6 +365,7 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/ledger" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/sales-register" element={<ProtectedRoute requirePermission="accounts"><SalesRegisterPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/purchase-register" element={<ProtectedRoute requirePermission="accounts"><PurchaseRegisterPage /></ProtectedRoute>} />
+                        <Route path="/accounts/reports/expense-register" element={<ProtectedRoute requirePermission="accounts"><ExpenseRegisterPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/day-book" element={<ProtectedRoute requirePermission="accounts"><DayBookPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />

@@ -101,3 +101,33 @@ export const getCashBankBook = asyncHandler(async (req, res) => {
 
     res.send(new ApiResponse(httpStatus.OK, vouchers));
 });
+
+/**
+ * Expense Register: All expense vouchers with payment status
+ */
+export const getExpenseRegister = asyncHandler(async (req, res) => {
+    const { from, to, paymentStatus, expenseType } = req.query;
+    const filter = { nature: 'Expense' };
+
+    if (from || to) {
+        filter.date = {};
+        if (from) filter.date.$gte = new Date(from);
+        if (to) filter.date.$lte = new Date(to);
+    }
+
+    if (paymentStatus) {
+        filter.paymentStatus = paymentStatus;
+    }
+
+    if (expenseType) {
+        filter.expenseType = expenseType;
+    }
+
+    const vouchers = await Voucher.find(filter)
+        .sort({ date: -1, voucherNo: -1 })
+        .populate('partyId', 'name')
+        .populate('items.ledgerId', 'name')
+        .lean();
+
+    res.send(new ApiResponse(httpStatus.OK, vouchers));
+});

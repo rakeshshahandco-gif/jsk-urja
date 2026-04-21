@@ -94,6 +94,9 @@ export const getDayBook = (params = {}) =>
 export const getCashBankBook = (params = {}) =>
     apiClient.get('/accounts/reports/cash-bank-book', { params }).then(r => r.data.data);
 
+export const getExpenseRegister = (params = {}) =>
+    apiClient.get('/accounts/reports/expense-register', { params }).then(r => r.data.data);
+
 const accountApi = {
     getAccountGroups,
     createAccountGroup,
@@ -118,6 +121,7 @@ const accountApi = {
     getPurchaseRegister,
     getDayBook,
     getCashBankBook,
+    getExpenseRegister,
     getProfitAndLoss: (params) => apiClient.get('/accounting/reports/profit-loss', { params }).then(r => r.data.data),
     getBalanceSheet: (params) => apiClient.get('/accounting/reports/balance-sheet', { params }).then(r => r.data.data),
     getTrialBalance: (params) => apiClient.get('/accounting/reports/trial-balance', { params }).then(r => r.data.data),

@@ -106,6 +106,7 @@ export const PATHS = {
         LEDGER_REPORT: '/accounts/reports/ledger',
         SALES_REGISTER: '/accounts/reports/sales-register',
         PURCHASE_REGISTER: '/accounts/reports/purchase-register',
+        EXPENSE_REGISTER: '/accounts/reports/expense-register',
         DAY_BOOK: '/accounts/reports/day-book',
         CASH_BOOK: '/accounts/reports/cash-book',
         BANK_BOOK: '/accounts/reports/bank-book',
