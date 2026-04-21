@@ -334,6 +334,14 @@ export const menuConfig = [
         ],
     },
     {
+        id: 'whatsapp',
+        title: '💬 WhatsApp',
+        icon: 'ChatIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER],
+        path: PATHS.SETTINGS.WHATSAPP,
+        permission: 'admin.whatsapp_settings.view',
+    },
+    {
         id: 'admin',
         title: 'Admin',
         icon: 'SettingsIcon',
@@ -341,7 +349,6 @@ export const menuConfig = [
         permission: 'admin',
         children: [
             { id: 'company-profile', title: 'Company Profile', path: PATHS.SETTINGS.COMPANY_PROFILE, roles: [ROLES.ADMIN], permission: 'admin.company_profile.view' },
-            { id: 'whatsapp-settings', title: 'WhatsApp Settings', path: PATHS.SETTINGS.WHATSAPP, roles: [ROLES.ADMIN], permission: 'admin.whatsapp_settings.view' },
             { id: 'user-management', title: 'User Management', path: '/admin/users', roles: [ROLES.ADMIN], permission: 'admin.user_management.view' },
             { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', roles: [ROLES.ADMIN], permission: 'admin' },
         ],

@@ -56,8 +56,8 @@ const disconnectWhatsApp = catchAsync(async (req, res) => {
 
 const getGroups = catchAsync(async (req, res) => {
     try {
-        const chats = await WhatsAppService.getChats();
-        res.json(chats);
+        const groups = await WhatsAppService.getGroups();
+        res.json({ success: true, groups });
     } catch (e) {
         res.status(httpStatus.BAD_REQUEST).json({ success: false, message: e.message });
     }

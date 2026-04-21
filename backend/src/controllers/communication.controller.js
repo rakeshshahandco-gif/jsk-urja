@@ -185,7 +185,7 @@ const generateDocumentPDF = (docData, company, type) => {
 
 // ── Main send handler ─────────────────────────────────────────────────────────
 const sendOrder = catchAsync(async (req, res) => {
-    const { type, id, channel, recipientName, email, phone, sendMode, groupName, subject, message } = req.body;
+    const { type, id, channel, recipientName, email, phone, sendMode, groupName, groupId, subject, message } = req.body;
 
     // Fetch Settings
     let settings = await WhatsAppSettings.findOne();
@@ -255,16 +255,11 @@ const sendOrder = catchAsync(async (req, res) => {
             results.push('Email sent');
         }
 
-            // 2. WhatsApp — send directly via Baileys (headless, no Chrome)
+        // 2. WhatsApp — send directly via Baileys (headless, no Chrome)
             log.status = 'Sending WhatsApp';
             await log.save();
 
             const caption = message || `Please find attached ${type}: ${log.documentNumber}`;
-            
-            // Validation
-            if (sendMode === 'Number' && (!phone || phone.length < 10)) {
-                throw new Error('A valid 10-digit WhatsApp number is required for Direct Number mode.');
-            }
 
             // Get IO for real-time progress updates
             const io = getIO();
@@ -272,15 +267,33 @@ const sendOrder = catchAsync(async (req, res) => {
 
             io.to(userRoom).emit('comm:status', { documentId: id, channel: 'WhatsApp', status: 'Sending document via WhatsApp...', code: 'SENDING' });
 
-            await WhatsAppService.sendDocument({
-                phone,
-                filePath: tempFilePath,
-                caption,
-                fileName,
-            });
+            if (sendMode === 'Group') {
+                // ── Group Mode: send by JID ──────────────────────────────────
+                if (!groupId) {
+                    throw new Error('No group selected. Please pick a group from the list.');
+                }
+                await WhatsAppService.sendDocumentToGroup({
+                    groupId,
+                    filePath: tempFilePath,
+                    caption,
+                    fileName,
+                });
+            } else {
+                // ── Number Mode (default) ────────────────────────────────────
+                if (!phone || String(phone).replace(/\D/g, '').length < 10) {
+                    throw new Error('A valid 10-digit WhatsApp number is required for Direct Number mode.');
+                }
+                await WhatsAppService.sendDocument({
+                    phone,
+                    filePath: tempFilePath,
+                    caption,
+                    fileName,
+                });
+            }
 
             io.to(userRoom).emit('comm:status', { documentId: id, channel: 'WhatsApp', status: 'Sent successfully!', code: 'SUCCESS' });
             results.push('WhatsApp document sent');
+
 
         log.status = 'Sent / Prepared';
         await log.save();

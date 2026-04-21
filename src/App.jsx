@@ -274,7 +274,9 @@ const AppLayout = () => {
                         <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
 
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
-                        <Route path="/settings/whatsapp" element={<ProtectedRoute requirePermission="admin.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
+                        <Route path="/whatsapp" element={<ProtectedRoute requirePermission="admin.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
+                        {/* Legacy redirect for old URL */}
+                        <Route path="/settings/whatsapp" element={<Navigate to="/whatsapp" replace />} />
                         <Route path="/reports/customer-master" element={<ProtectedRoute requirePermission="reports.customer_master_report.view"><CustomerMasterReport /></ProtectedRoute>} />
                         <Route path="/reports/followups" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowUpTrackerReport /></ProtectedRoute>} />
                         <Route path="/reports/reminders" element={<ProtectedRoute requirePermission="reports"><ReminderReport /></ProtectedRoute>} />

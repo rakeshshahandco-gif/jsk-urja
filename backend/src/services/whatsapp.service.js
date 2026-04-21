@@ -288,11 +288,48 @@ class WhatsAppService {
         return { success: true };
     }
 
-    // ─── Get chats/contacts list (simplified) ─────────────────────────────────
-    async getChats() {
+    // ─── Get WhatsApp Groups from Baileys ─────────────────────────────────────
+    async getGroups() {
         this._assertConnected();
-        // Baileys automatically loads chats on connection — this is a simplified response
-        return [];
+        try {
+            logger.info('[WhatsApp] Fetching groups via groupFetchAllParticipating...');
+            const groupMap = await this.sock.groupFetchAllParticipating();
+            // groupMap is { [jid]: GroupMetadata }
+            const groups = Object.values(groupMap).map(g => ({
+                id: g.id,           // e.g. "1234567890-12345678@g.us"
+                name: g.subject,    // Group display name
+                participants: g.participants?.length || 0,
+            })).sort((a, b) => a.name.localeCompare(b.name));
+            logger.info(`[WhatsApp] Found ${groups.length} groups.`);
+            return groups;
+        } catch (e) {
+            logger.error(`[WhatsApp] getGroups error: ${e.message}`);
+            throw new Error(`Failed to fetch groups: ${e.message}`);
+        }
+    }
+
+    // ─── Send Document to Group by JID ────────────────────────────────────────
+    async sendDocumentToGroup({ groupId, filePath, caption = '', fileName }) {
+        this._assertConnected();
+
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+
+        const fileBuffer = fs.readFileSync(filePath);
+        const resolvedName = fileName || path.basename(filePath);
+        const mimetype = filePath.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+
+        logger.info(`[WhatsApp] Sending document "${resolvedName}" to group ${groupId}`);
+
+        await this.sock.sendMessage(groupId, {
+            document: fileBuffer,
+            fileName: resolvedName,
+            mimetype,
+            caption,
+        });
+
+        return { success: true };
     }
 }
 

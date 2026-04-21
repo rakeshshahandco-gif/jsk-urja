@@ -20,7 +20,7 @@ export const PATHS = {
     },
     SETTINGS: {
         COMPANY_PROFILE: '/company-profile',
-        WHATSAPP: '/settings/whatsapp',
+        WHATSAPP: '/whatsapp',
     },
     GROUPS: {
         ROOT: '/groups',

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     Mail, MessageSquare, Send, X, Users, User, Loader2, ExternalLink, Wifi, 
-    WifiOff, CheckCircle2, AlertCircle, Copy, Download 
+    WifiOff, CheckCircle2, AlertCircle, Copy, Download, Search
 } from 'lucide-react';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
-import { checkWhatsAppSession, connectWhatsApp } from '@/services/whatsappApi';
+import { checkWhatsAppSession, connectWhatsApp, getWhatsAppGroups } from '@/services/whatsappApi';
 import { useSocket } from '@/contexts/SocketContext';
 
 export default function CommunicationModal({ isOpen, onClose, onSend, data, type }) {
@@ -14,7 +14,13 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
     const [recipientName, setRecipientName] = useState(data.recipientName || '');
     const [email, setEmail] = useState(data.email || '');
     const [phone, setPhone] = useState(data.phone || '');
-    const [groupName, setGroupName] = useState('');
+    // Group state
+    const [groupId, setGroupId] = useState('');       // JID like "xxx@g.us"
+    const [groupName, setGroupName] = useState('');   // Display name
+    const [groups, setGroups] = useState([]);          // All groups from Baileys
+    const [groupSearch, setGroupSearch] = useState('');
+    const [groupsLoading, setGroupsLoading] = useState(false);
+    const [groupsError, setGroupsError] = useState('');
     const [subject, setSubject] = useState(data.subject || `${type} from JSK URJA`);
     const [sending, setSending] = useState(false);
     const [status, setStatus] = useState('');
@@ -191,7 +197,8 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                 email, 
                 phone, 
                 sendMode, 
-                groupName, 
+                groupName,
+                groupId,   // JID for group sending
                 subject, 
                 message 
             });
@@ -296,7 +303,23 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                         <div onClick={() => !sending && setSendMode('Number')} style={tabStyle(sendMode === 'Number')}>
                             <User size={16} /> Direct
                         </div>
-                        <div onClick={() => !sending && setSendMode('Group')} style={tabStyle(sendMode === 'Group')}>
+                        <div onClick={async () => {
+                            if (sending) return;
+                            setSendMode('Group');
+                            // Fetch groups when tab is selected
+                            if (groups.length === 0) {
+                                setGroupsLoading(true);
+                                setGroupsError('');
+                                try {
+                                    const res = await getWhatsAppGroups();
+                                    setGroups(res.groups || []);
+                                } catch (e) {
+                                    setGroupsError(e.response?.data?.message || 'Failed to load groups. Is WhatsApp connected?');
+                                } finally {
+                                    setGroupsLoading(false);
+                                }
+                            }
+                        }} style={tabStyle(sendMode === 'Group')}>
                             <Users size={16} /> Group
                         </div>
                         <div onClick={() => !sending && setSendMode('Manual')} style={tabStyle(sendMode === 'Manual')}>
@@ -305,16 +328,71 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                     </div>
 
                     {sendMode === 'Manual' && (
-                        <div style={{ padding: 12, background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: 12, marginBottom: 20, animation: 'fadeIn 0.3s' }}>
-                            <div style={{ fontSize: 13, color: '#991b1b', fontWeight: 800, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Users size={16} /> Manual Selection Mode
+                        <div style={{ marginBottom: 20, animation: 'fadeIn 0.3s' }}>
+                            {/* Step instructions */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                                {[
+                                    { n: '1', text: 'Click the button below — it will download the PDF and open WhatsApp Web together.' },
+                                    { n: '2', text: 'In WhatsApp Web, search for the person or group you want to send to.' },
+                                    { n: '3', text: 'Attach the downloaded PDF and paste the message from the box below.' },
+                                ].map(step => (
+                                    <div key={step.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                        <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#25d366', color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                                            {step.n}
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{step.text}</p>
+                                    </div>
+                                ))}
                             </div>
-                            <p style={{ margin: 0, fontSize: 11, color: '#b91c1c', lineHeight: 1.4 }}>
-                                The CRM will open WhatsApp Web. Please <strong>manually select the person or group</strong> inside WhatsApp. 
-                                The system will then automatically attach the PDF and paste your message.
+
+                            {/* Action Button */}
+                            <button
+                                onClick={async () => {
+                                    // 1. Download PDF
+                                    try {
+                                        const response = await api.get('/communication/download-pdf', {
+                                            params: { type, id: data.id || data._id },
+                                            responseType: 'blob'
+                                        });
+                                        const url = window.URL.createObjectURL(new Blob([response.data]));
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.setAttribute('download', `${type === 'Sales Order' ? 'SO' : type === 'Purchase Order' ? 'PO' : 'INV'}-${data.number}.pdf`);
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        link.remove();
+                                    } catch (e) {
+                                        toast.error('Failed to download PDF. Please try again.');
+                                        return;
+                                    }
+
+                                    // 2. Open WhatsApp Web in new tab with message pre-filled
+                                    const waMessage = encodeURIComponent(message);
+                                    window.open(`https://web.whatsapp.com/`, '_blank');
+                                    
+                                    toast.success('📎 PDF downloaded! Select your contact or group in WhatsApp Web and attach the PDF.', { duration: 6000 });
+                                    onClose();
+                                }}
+                                style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    gap: 10, padding: '16px', background: '#25d366', color: '#fff',
+                                    border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer',
+                                    fontSize: 15, boxShadow: '0 8px 20px -4px rgba(37,211,102,0.4)',
+                                    transition: 'all 0.2s',
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                            >
+                                <ExternalLink size={20} />
+                                Download PDF &amp; Open WhatsApp Web
+                            </button>
+
+                            <p style={{ margin: '10px 0 0', fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+                                WhatsApp Web will open in a new tab. Copy the message below &amp; attach the downloaded PDF.
                             </p>
                         </div>
                     )}
+
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16, opacity: sendMode === 'Manual' ? 0.5 : 1 }}>
                         <div>
@@ -334,17 +412,79 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
 
                     {sendMode === 'Group' && (
                         <div style={{ marginBottom: 16, animation: 'fadeIn 0.2s' }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>WhatsApp Group Name</label>
-                            <div style={{ position: 'relative' }}>
-                                <Users size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                <input 
-                                    disabled={sending}
-                                    value={groupName} 
-                                    onChange={e => setGroupName(e.target.value)} 
-                                    style={{ width: '100%', padding: '12px 12px 12px 40px', borderRadius: 10, border: '1px solid #7c3aed', background: '#f5f3ff', fontSize: 14, outline: 'none', fontWeight: 600 }} 
-                                    placeholder="Type EXACT group name..." 
-                                />
-                            </div>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>Select WhatsApp Group</label>
+
+                            {groupsLoading && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#7c3aed', fontSize: 13, padding: '10px 0' }}>
+                                    <Loader2 size={16} className="animate-spin" /> Loading your WhatsApp groups...
+                                </div>
+                            )}
+
+                            {groupsError && (
+                                <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, color: '#dc2626', fontSize: 12, marginBottom: 10 }}>
+                                    ⚠ {groupsError}
+                                    <button onClick={async () => {
+                                        setGroupsLoading(true); setGroupsError('');
+                                        try { const r = await getWhatsAppGroups(); setGroups(r.groups || []); }
+                                        catch(e) { setGroupsError(e.response?.data?.message || 'Failed'); }
+                                        finally { setGroupsLoading(false); }
+                                    }} style={{ marginLeft: 8, color: '#7c3aed', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>Retry</button>
+                                </div>
+                            )}
+
+                            {!groupsLoading && groups.length > 0 && (
+                                <>
+                                    {/* Search box */}
+                                    <div style={{ position: 'relative', marginBottom: 8 }}>
+                                        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            value={groupSearch}
+                                            onChange={e => setGroupSearch(e.target.value)}
+                                            placeholder={`Search ${groups.length} groups...`}
+                                            style={{ width: '100%', padding: '9px 12px 9px 32px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+
+                                    {/* Group list */}
+                                    <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff' }}>
+                                        {groups
+                                            .filter(g => g.name.toLowerCase().includes(groupSearch.toLowerCase()))
+                                            .map(g => (
+                                                <div
+                                                    key={g.id}
+                                                    onClick={() => { setGroupId(g.id); setGroupName(g.name); }}
+                                                    style={{
+                                                        padding: '10px 14px', cursor: 'pointer', fontSize: 13,
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                        borderBottom: '1px solid #f3f4f6',
+                                                        background: groupId === g.id ? '#f5f3ff' : 'transparent',
+                                                        color: groupId === g.id ? '#7c3aed' : '#374151',
+                                                        fontWeight: groupId === g.id ? 700 : 400,
+                                                        transition: 'background 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => { if (groupId !== g.id) e.currentTarget.style.background = '#f8fafc'; }}
+                                                    onMouseLeave={e => { if (groupId !== g.id) e.currentTarget.style.background = 'transparent'; }}
+                                                >
+                                                    <span>👥 {g.name}</span>
+                                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{g.participants} members</span>
+                                                </div>
+                                            ))}
+                                        {groups.filter(g => g.name.toLowerCase().includes(groupSearch.toLowerCase())).length === 0 && (
+                                            <div style={{ padding: 16, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>No groups match "{groupSearch}"</div>
+                                        )}
+                                    </div>
+
+                                    {groupId && (
+                                        <div style={{ marginTop: 8, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 700 }}>
+                                            ✓ Selected: {groupName}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {!groupsLoading && !groupsError && groups.length === 0 && (
+                                <div style={{ padding: 12, color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>No groups found. Make sure WhatsApp is connected.</div>
+                            )}
                         </div>
                     )}
 
