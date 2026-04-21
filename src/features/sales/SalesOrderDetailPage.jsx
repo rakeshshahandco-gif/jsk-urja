@@ -1397,7 +1397,7 @@ export default function SalesOrderDetailPage() {
                   ✏️ Edit
                 </button>
               )}
-              {notCancelled && (
+              {notCancelled && (user?.roleName === "admin" || user?.roleName === "superadmin") && (
                 <button
                   onClick={handleCancel}
                   disabled={cancelling}

@@ -838,6 +838,24 @@ export default function SalesInvoiceDetailPage() {
                 </div>
             )}
 
+            {/* Communication Modal (WhatsApp/Email) */}
+            <CommunicationModal 
+                isOpen={isCommModalOpen}
+                onClose={() => setIsCommModalOpen(false)}
+                onSend={handleSendComm}
+                type="Sales Invoice"
+                data={{
+                    id: inv._id,
+                    number: inv.displayInvoiceNumber || inv.invoiceNumber,
+                    recipientName: inv.customerName,
+                    phone: inv.customerPhone || '',
+                    email: inv.customerEmail || '',
+                    total: inv.roundedTotal || inv.grandTotal,
+                    items: inv.items,
+                    customerId: inv.customerId?._id || inv.customerId
+                }}
+            />
+
             {/* Print Styles */}
             <style>{`
                 @media print {

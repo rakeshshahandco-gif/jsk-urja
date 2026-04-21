@@ -207,15 +207,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     }
 
     if (req.query.financialYear) {
-        filter.$and = filter.$and || [];
-        filter.$and.push({
-            $or: [
-                { financialYear: req.query.financialYear },
-                { financialYear: { $exists: false } },
-                { financialYear: null },
-                { financialYear: '' }
-            ]
-        });
+        filter.financialYear = req.query.financialYear;
     }
 
     if (search) {

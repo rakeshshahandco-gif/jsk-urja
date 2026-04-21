@@ -20,6 +20,13 @@ const accountLedgerSchema = new mongoose.Schema({
         default: 'General'
     },
 
+    // New 2026: Expense Classification
+    expenseCategory: {
+        type: String,
+        enum: ['Fixed', 'Variable', null],
+        default: null
+    },
+
     // Reference to existing entities (if any)
     referenceId: { type: mongoose.Schema.Types.ObjectId, refPath: 'referenceModel', default: null },
     referenceModel: { type: String, enum: ['Customer', 'Supplier', 'CashBankAccount', null], default: null },

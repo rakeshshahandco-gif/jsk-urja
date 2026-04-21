@@ -572,7 +572,7 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
                                             const url = window.URL.createObjectURL(new Blob([response.data]));
                                             const link = document.createElement('a');
                                             link.href = url;
-                                            link.setAttribute('download', `${type === 'Sales Order' ? 'SO' : 'PO'}-${data.number}.pdf`);
+                                            link.setAttribute('download', `${type === 'Sales Order' ? 'SO' : type === 'Purchase Order' ? 'PO' : 'INV'}-${data.number}.pdf`);
                                             document.body.appendChild(link);
                                             link.click();
                                             link.remove();

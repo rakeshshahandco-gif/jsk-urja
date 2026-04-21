@@ -354,7 +354,13 @@ const PaymentEntryPage = () => {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Payment Date</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{formData.date}</span>
+                                <input 
+                                    type="date" 
+                                    name="date" 
+                                    value={formData.date} 
+                                    onChange={handleHeaderChange} 
+                                    style={{ ...inp, width: 'auto', padding: '4px 8px', borderColor: '#4f46e5' }} 
+                                />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Narration</span>
@@ -448,19 +454,13 @@ const PaymentEntryPage = () => {
                             </div>
                             <div>
                                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Voucher Date *</span>
-                                {location.state?.invoiceId ? (
-                                    <div style={{ ...inp, background: '#f1f5f9', fontWeight: 700, borderColor: '#cbd5e1', color: '#475569' }}>
-                                       {formData.date}
-                                    </div>
-                                ) : (
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        value={formData.date}
-                                        onChange={handleHeaderChange}
-                                        style={inp}
-                                    />
-                                )}
+                                <input
+                                    type="date"
+                                    name="date"
+                                    value={formData.date}
+                                    onChange={handleHeaderChange}
+                                    style={inp}
+                                />
                             </div>
                             <div style={{ gridColumn: 'span 2' }}>
                                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Paid From (Cash/Bank Account) *</span>

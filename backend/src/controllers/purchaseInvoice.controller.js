@@ -406,13 +406,7 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
     if (status) query.status = status;
     if (flowType) query.flowType = flowType;
     if (req.query.financialYear) {
-        query.$or = query.$or || [];
-        query.$or.push(
-            { financialYear: req.query.financialYear },
-            { financialYear: { $exists: false } },
-            { financialYear: null },
-            { financialYear: '' }
-        );
+        query.financialYear = req.query.financialYear;
     }
     if (search) query.$or = [
         { invoiceNumber: { $regex: search, $options: 'i' } },

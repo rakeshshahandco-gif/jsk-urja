@@ -13,7 +13,7 @@ const s = {
     sectionTitle: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '2px solid #dbeafe', paddingBottom: 8, marginBottom: 14 },
 };
 
-export const EMPTY = { name: '', printName: '', alias: '', underGroup: '', openingBalance: 0, drCr: 'Dr', creditPeriod: 0, isBillWise: false, gstApplicable: false, gstRate: 0, hsnCode: '', gstin: '', pan: '', registrationType: 'Regular', mobile: '', email: '', address: '', city: '', state: '', pincode: '', bankName: '', accountNo: '', ifsc: '' };
+export const EMPTY = { name: '', printName: '', alias: '', underGroup: '', expenseCategory: 'Variable', openingBalance: 0, drCr: 'Dr', creditPeriod: 0, isBillWise: false, gstApplicable: false, gstRate: 0, hsnCode: '', gstin: '', pan: '', registrationType: 'Regular', mobile: '', email: '', address: '', city: '', state: '', pincode: '', bankName: '', accountNo: '', ifsc: '' };
 
 const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading }) => {
     const [form, setForm] = useState({ ...EMPTY, ...initial, underGroup: initial.underGroup?._id || initial.underGroup || '' });
@@ -157,6 +157,32 @@ const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading })
                             </select>
                         </div>
                     </div>
+
+                    {nature === 'Expenses' && (
+                        <div style={{ ...mb, background: '#f8fafc', padding: '12px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                            <label style={s.label}>Expense Category (Fixed vs Variable)</label>
+                            <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                                {['Fixed', 'Variable'].map(cat => (
+                                    <label key={cat} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 15px', background: form.expenseCategory === cat ? '#eff6ff' : '#fff', border: `1.5px solid ${form.expenseCategory === cat ? '#3b82f6' : '#e5e7eb'}`, borderRadius: 8, cursor: 'pointer', transition: 'all 0.2s', boxShadow: form.expenseCategory === cat ? '0 2px 4px rgba(59,130,246,0.1)' : 'none' }}>
+                                        <input 
+                                            type="radio" 
+                                            name="expenseCategory" 
+                                            value={cat} 
+                                            checked={form.expenseCategory === cat} 
+                                            onChange={change} 
+                                            style={{ cursor: 'pointer', width: 16, height: 16 }}
+                                        />
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: form.expenseCategory === cat ? '#1e40af' : '#374151' }}>{cat} Expense</span>
+                                            <span style={{ fontSize: 10, color: form.expenseCategory === cat ? '#60a5fa' : '#94a3b8' }}>
+                                                {cat === 'Fixed' ? 'Rent, Salary, etc.' : 'Materials, Commission, etc.'}
+                                            </span>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div style={{ ...grid2, ...mb }}>
                         <div><label style={s.label}>Print Name</label><input name="printName" value={form.printName} onChange={change} style={s.input} placeholder="Same as name if blank" /></div>
                         <div><label style={s.label}>Alias</label><input name="alias" value={form.alias} onChange={change} style={s.input} /></div>

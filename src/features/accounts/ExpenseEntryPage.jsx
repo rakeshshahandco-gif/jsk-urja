@@ -282,7 +282,7 @@ const ExpenseEntryPage = () => {
         });
     };
 
-    const handleSave = async () => {
+    const handleSave = async (shouldClose = false) => {
         // Validation
         if (!formData.partyId && !formData.cashBankAccountId) {
             return toast.error('Please select an Account or Party (where the expense is paid from or booked to)');

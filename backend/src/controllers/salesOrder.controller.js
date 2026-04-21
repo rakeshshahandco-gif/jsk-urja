@@ -358,9 +358,26 @@ export const generateProductionSheet = asyncHandler(async (req, res) => {
 export const cancelSO = asyncHandler(async (req, res) => {
     const so = await SalesOrder.findById(req.params.id);
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+
+    const isAdmin = ['admin', 'superadmin'].includes(req.user.roleName);
+    if (!isAdmin) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only Admins can cancel Sales Orders');
+    }
+
     so.status = 'Cancelled';
     so.updatedBy = req.user.id;
     await so.save();
+
+    await AuditLog.create({
+        user: req.user.id,
+        action: 'CANCEL',
+        module: 'SalesOrder',
+        resourceId: so._id,
+        description: `Cancelled Sales Order ${so.soNumber}`,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+    });
+
     res.json({ success: true, data: so });
 });
 
