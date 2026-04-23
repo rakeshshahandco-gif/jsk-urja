@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
 export const LoginScreen = () => {
-  const { login } = useAuth();
+  const { login, testRemoteConnection } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -89,6 +89,21 @@ export const LoginScreen = () => {
               }
             </TouchableOpacity>
 
+            <TouchableOpacity 
+              style={styles.testBtn} 
+              onPress={async () => {
+                setLoading(true);
+                const info = await testRemoteConnection();
+                setLoading(false);
+                Alert.alert(
+                  info.success ? 'System Online ✅' : 'Network Problem ❌',
+                  `${info.message}\n\n${info.details || info.data || ''}`
+                );
+              }}
+            >
+              <Text style={styles.testBtnText}>TEST CONNECTION</Text>
+            </TouchableOpacity>
+
             <Text style={styles.hint}>
               Use the same credentials as your CRM desktop login
             </Text>
@@ -149,6 +164,15 @@ const styles = StyleSheet.create({
   },
   loginBtnDisabled: { opacity: 0.7 },
   loginBtnText: { color: COLORS.white, fontSize: FONT.md, fontWeight: FONT.bold, letterSpacing: 1 },
+  testBtn: {
+    marginTop: SPACING.base,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+    borderRadius: RADIUS.md,
+  },
+  testBtnText: { color: COLORS.primary, fontSize: FONT.xs, fontWeight: FONT.bold },
   hint: { textAlign: 'center', fontSize: FONT.xs, color: COLORS.gray400, marginTop: SPACING.base },
   footer: { textAlign: 'center', fontSize: FONT.xs, color: COLORS.white + '80', paddingTop: SPACING.xl },
 });

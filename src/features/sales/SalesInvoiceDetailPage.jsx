@@ -229,34 +229,41 @@ export default function SalesInvoiceDetailPage() {
                                 </div>
 
                                 {isFirstPage ? (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                                        <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                                            <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: `${company.logoHeight || 60}px`, maxWidth: '150px', objectFit: 'contain' }} />
-                                            <div>
-                                                <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px' }}>{company.companyName}</div>
-                                                <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '400px' }}>
-                                                    {company.address}, {company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})<br />
-                                                    {company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}<br />
-                                                    {gstApplicable && company.gstNumber && <span><strong>GSTIN: {company.gstNumber}</strong> | </span>}
-                                                    {company.panNumber && <span>PAN: {company.panNumber}</span>}<br />
-                                                    {company.cin && <span>CIN: {company.cin} | </span>}
-                                                    {company.urn && <span>MSME/URN: {company.urn}</span>}
+                                    <div style={{ border: '1px solid #000', padding: '10px', marginBottom: '15px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
+                                                <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: `${company.logoHeight || 75}px`, maxWidth: '160px', objectFit: 'contain' }} />
+                                                <div>
+                                                    <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px', color: '#000' }}>{company.companyName}</div>
+                                                    <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '450px' }}>
+                                                        <div style={{ fontWeight: 600 }}>{company.address}</div>
+                                                        <div>{company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})</div>
+                                                        <div>{company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}</div>
+                                                        <div style={{ marginTop: '3px', fontWeight: 600 }}>
+                                                            {gstApplicable && company.gstNumber && <span>GSTIN: {company.gstNumber} | </span>}
+                                                            {company.panNumber && <span>PAN: {company.panNumber}</span>}
+                                                        </div>
+                                                        {company.cin && <span>CIN: {company.cin} | </span>}
+                                                        {company.urn && <span>MSME/URN: {company.urn}</span>}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: '16pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '2px 10px', display: 'inline-block', marginBottom: '5px' }}>
-                                                {gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE'}
+                                            <div style={{ textAlign: 'right', minWidth: '150px' }}>
+                                                <div style={{ fontSize: '13pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '4px 12px', display: 'inline-block', marginBottom: '8px', textTransform: 'uppercase' }}>
+                                                    {gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE'}
+                                                </div>
+                                                <div style={{ fontSize: '10pt', fontWeight: 800 }}>Invoice No: {inv.invoiceNumber}</div>
+                                                <div style={{ fontSize: '10pt', fontWeight: 700 }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
                                             </div>
-                                            <div style={{ fontSize: '10pt', fontWeight: 700 }}>Invoice No: {inv.invoiceNumber}</div>
-                                            <div style={{ fontSize: '10pt', fontWeight: 600 }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
-                                        <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName}</div>
-                                        <div style={{ textAlign: 'right', fontSize: '9pt' }}>
-                                            <strong>Invoice No:</strong> {inv.invoiceNumber} | <strong>Date:</strong> {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}
+                                    <div style={{ border: '1px solid #000', padding: '10px', marginBottom: '15px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName}</div>
+                                            <div style={{ textAlign: 'right', fontSize: '9pt' }}>
+                                                <strong>Invoice No:</strong> {inv.invoiceNumber} | <strong>Date:</strong> {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -429,14 +436,15 @@ export default function SalesInvoiceDetailPage() {
                                             <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{inv.amountInWords}</span>
                                         </div>
 
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderTop: 'none', height: '90px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderTop: 'none', minHeight: '100px' }}>
                                             <div style={{ borderRight: '1px solid #000', padding: '8px', fontSize: '8pt', position: 'relative' }}>
-                                                <div style={{ fontWeight: 900, marginBottom: '4px' }}>Receiver&apos;s Signature:</div>
-                                                <div style={{ position: 'absolute', bottom: '8px', left: '8px', fontSize: '7pt', color: '#666' }}>Checked and Received in Good Condition</div>
+                                                <div style={{ fontWeight: 900, marginBottom: '6px', textDecoration: 'underline' }}>Receiver&apos;s Signature:</div>
+                                                <div style={{ position: 'absolute', bottom: '8px', left: '8px', fontSize: '7pt', color: '#444', fontStyle: 'italic' }}>Verified and Received in Good Condition</div>
                                             </div>
-                                            <div style={{ padding: '8px', textAlign: 'center', position: 'relative' }}>
-                                                <div style={{ fontSize: '9pt', fontWeight: 800 }}>For {company.companyName}</div>
-                                                <div style={{ position: 'absolute', bottom: '8px', left: 0, right: 0, fontSize: '9pt', fontWeight: 900 }}>Authorized Signatory</div>
+                                            <div style={{ padding: '0', textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
+                                                <div style={{ fontSize: '9pt', fontWeight: 900, padding: '8px', borderBottom: '1px dashed #ccc' }}>For {company.companyName}</div>
+                                                <div style={{ flex: 1 }}></div>
+                                                <div style={{ padding: '8px', fontSize: '9pt', fontWeight: 900, textTransform: 'uppercase' }}>Authorized Signatory</div>
                                             </div>
                                         </div>
                                     </div>

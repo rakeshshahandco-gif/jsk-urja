@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { authApi } from '../api/auth.api';
+import apiClient from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -43,24 +44,28 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       const normalizedUsername = username.trim().toLowerCase();
-      const res = await authApi.login(normalizedUsername, password);
       
-      // SUPER SEARCH: Scan every possible property for the token
+      // authApi.login returns response.data — which is the full ApiResponse object:
+      // { statusCode: 200, data: { ...user, token: "jwt..." }, message: "Login successful" }
+      const apiResponse = await authApi.login(normalizedUsername, password);
+      
+      console.log('=== LOGIN RESPONSE ===');
+      console.log('Keys:', Object.keys(apiResponse || {}));
+      
+      // DIRECT extraction — token is inside the 'data' envelope
       const newToken = 
-        res?.token || 
-        res?.data?.token || 
-        res?.tokens?.access?.token || // Standard for some boilerplates
-        res?.data?.tokens?.access?.token ||
-        res?.accessToken;
+        apiResponse?.data?.token ||      // ← CONFIRMED correct path
+        apiResponse?.token ||            // fallback if envelope is stripped
+        apiResponse?.data?.accessToken ||
+        apiResponse?.accessToken;
 
-      // Extract user data
-      const userData = res?.data?._id ? res.data : (res?._id ? res : (res?.data || res));
+      // User data is inside the 'data' envelope
+      const userData = apiResponse?.data || apiResponse;
 
       if (!newToken) {
-        // Construct a helpful error message with response snippet
-        const responseSnippet = JSON.stringify(res).substring(0, 100);
-        console.error('Login Debug Info:', responseSnippet);
-        throw new Error(`Server response missing token. (Data: ${responseSnippet}...)`);
+        const responseSnippet = JSON.stringify(apiResponse).substring(0, 200);
+        console.error('Token not found. Full response:', responseSnippet);
+        throw new Error(`Server response missing token.\n\nFull data: ${responseSnippet}`);
       }
 
       setToken(newToken);
@@ -104,8 +109,38 @@ export const AuthProvider = ({ children }) => {
     return false;
   };
 
+  const testRemoteConnection = async () => {
+    try {
+      const startTime = Date.now();
+      // Test the heartbeat endpoint
+      const response = await apiClient.get('/health');
+      const duration = Date.now() - startTime;
+      return { 
+        success: true, 
+        message: `Connection OK! Server replied in ${duration}ms.`,
+        data: JSON.stringify(response.data)
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: `Connection Failed: ${error.message}`,
+        details: error.response ? `Status: ${error.response.status}` : 'No response from server'
+      };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, hasPermission }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        logout,
+        hasPermission,
+        testRemoteConnection,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
