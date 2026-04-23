@@ -83,12 +83,39 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
             runningBalance -= entry.amount;
         }
         
-        const vId = entry.voucherId.toString();
-        const oppositeName = oppositeNamesByVoucher[vId]?.join(', ') || 'Various Accounts';
+        const vId = entry.voucherId?.toString();
+        let oppositeName = oppositeNamesByVoucher[vId]?.join(', ') || 'Various Accounts';
         
+        // --- CUSTOM MODERNIZATION RULES ---
+        // 1. Simplify Details to just "PURCHASES" or "SALES"
+        if (oppositeName.toLowerCase().includes('purchase account')) {
+            oppositeName = 'PURCHASES';
+        } else if (oppositeName.toLowerCase().includes('sales account')) {
+            oppositeName = 'SALES';
+        }
+
+        // 2. Clean up Voucher Number (PI -> BILL NO, SI -> INV NO)
+        let vNo = entry.voucherNumber || entry.voucherNo || '';
+        if (vNo.startsWith('PI-')) {
+            vNo = vNo.replace('PI-', 'BILL NO: ');
+        } else if (vNo.startsWith('SI-')) {
+            vNo = vNo.replace('SI-', 'INV NO: ');
+        }
+
+        // 3. Remove redundant Narrations
+        let narration = entry.narration || '-';
+        const upperNar = narration.toUpperCase();
+        if (upperNar.includes('PURCHASED FROM') || upperNar.includes('SOLD TO')) {
+            narration = '-';
+        }
+        // ---------------------------------
+
         return {
             ...entry,
             oppositeName,
+            voucherNumber: vNo,
+            voucherNo: vNo,
+            narration,
             runningBalance
         };
     });

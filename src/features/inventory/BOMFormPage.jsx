@@ -295,11 +295,24 @@ const BOMFormPage = () => {
         try {
             setIsDownloading(true);
             const data = await downloadBOMPDF(id, includeCost);
+            
+            // Check if the response is actually an error JSON hidden in a blob
+            if (data instanceof Blob && data.type === 'application/json') {
+                const text = await data.text();
+                try {
+                    const err = JSON.parse(text);
+                    addToast(err.message || 'Server error generating PDF', 'error');
+                } catch (e) {
+                    addToast('Failed to generate PDF document', 'error');
+                }
+                return;
+            }
+
             const blob = new Blob([data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `BOM_${form.bomNumber}_${includeCost ? 'Full' : 'Specification'}.pdf`;
+            a.download = `BOM_${form.bomNumber || 'Detail'}_${includeCost ? 'Full' : 'Specification'}.pdf`;
             a.click();
             addToast('PDF downloaded successfully', 'success');
         } catch (error) {

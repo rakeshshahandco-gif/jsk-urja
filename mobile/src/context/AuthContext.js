@@ -42,11 +42,26 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const res = await authApi.login(username, password);
-      const payload = res?.data || res;
-      const { token: newToken, ...userData } = payload;
+      const normalizedUsername = username.trim().toLowerCase();
+      const res = await authApi.login(normalizedUsername, password);
+      
+      // SUPER SEARCH: Scan every possible property for the token
+      const newToken = 
+        res?.token || 
+        res?.data?.token || 
+        res?.tokens?.access?.token || // Standard for some boilerplates
+        res?.data?.tokens?.access?.token ||
+        res?.accessToken;
 
-      if (!newToken) throw new Error('No token received');
+      // Extract user data
+      const userData = res?.data?._id ? res.data : (res?._id ? res : (res?.data || res));
+
+      if (!newToken) {
+        // Construct a helpful error message with response snippet
+        const responseSnippet = JSON.stringify(res).substring(0, 100);
+        console.error('Login Debug Info:', responseSnippet);
+        throw new Error(`Server response missing token. (Data: ${responseSnippet}...)`);
+      }
 
       setToken(newToken);
       setUser(userData);

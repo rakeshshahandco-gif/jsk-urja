@@ -1,0 +1,160 @@
+{
+  "ledgerId": "69c238d04630f0dab9b54974",
+  "voucherIds": [
+    "69d7985ad7ee6e5a795d5937",
+    "69dcbb7d9c7aa1fab171e556",
+    "69dcc2da9c7aa1fab171fb1b",
+    "69e34297007d4e95af3b6b74",
+    "69e3440c007d4e95af3b6f53",
+    "69e3485c007d4e95af3b7297"
+  ],
+  "relatedEntriesCount": 23,
+  "relatedEntries": [
+    {
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
+    },
+    {
+      "vId": "69dcbb7d9c7aa1fab171e556",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69dcbb7d9c7aa1fab171e556",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69dcbb7d9c7aa1fab171e556",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69dcc2da9c7aa1fab171fb1b",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69dcc2da9c7aa1fab171fb1b",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69dcc2da9c7aa1fab171fb1b",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69dcc2da9c7aa1fab171fb1b",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
+    },
+    {
+      "vId": "69e34297007d4e95af3b6b74",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69e34297007d4e95af3b6b74",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69e34297007d4e95af3b6b74",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69e34297007d4e95af3b6b74",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
+    },
+    {
+      "vId": "69e3440c007d4e95af3b6f53",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69e3440c007d4e95af3b6f53",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69e3440c007d4e95af3b6f53",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69e3440c007d4e95af3b6f53",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
+    },
+    {
+      "vId": "69e3485c007d4e95af3b7297",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "69e3485c007d4e95af3b7297",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "69e3485c007d4e95af3b7297",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "69e3485c007d4e95af3b7297",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
+    }
+  ],
+  "oppositeNamesByVoucher": {
+    "69d7985ad7ee6e5a795d5937": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
+    ],
+    "69dcbb7d9c7aa1fab171e556": [
+      "Sales Account",
+      "Freight & Forwarding Charges"
+    ],
+    "69dcc2da9c7aa1fab171fb1b": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
+    ],
+    "69e34297007d4e95af3b6b74": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
+    ],
+    "69e3440c007d4e95af3b6f53": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
+    ],
+    "69e3485c007d4e95af3b7297": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
+    ]
+  }
+}

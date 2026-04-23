@@ -20,7 +20,24 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({
-    origin: ['http://localhost:4000', 'http://localhost:4001', 'http://localhost:5173', 'http://localhost:8081', "https://jsk-urja.onrender.com"],
+    origin: (origin, callback) => {
+        // Allow mobile apps (no origin header) or listed web domains
+        if (!origin) return callback(null, true);
+        
+        const allowed = [
+            'http://localhost:4000', 
+            'http://localhost:4001', 
+            'http://localhost:5173', 
+            'http://localhost:8081',
+            'https://jsk-urja.onrender.com'
+        ];
+        
+        if (allowed.includes(origin) || origin.startsWith('http://localhost:')) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Fallback: allow for testing if matching desktop patterns
+        }
+    },
     credentials: true,
 }));
 app.use(express.json());

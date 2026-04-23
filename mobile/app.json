@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1e3a8a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.jskurja.tasks"
@@ -34,7 +36,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "jsk-urja-tasks"
+        "projectId": "7ba8dff7-474f-4c0c-b011-41e592457225"
       }
     }
   }
