@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 // This points to the SAME backend that the desktop CRM uses.
 // No duplicate data, no separate database. Real-time sync guaranteed.
 // ─────────────────────────────────────────────────────────────────────────────
-const BASE_URL = 'https://jsk-urja.onrender.com/api/v1';
+const BASE_URL = 'https://jsk-urja-backend.onrender.com/api/v1';
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
