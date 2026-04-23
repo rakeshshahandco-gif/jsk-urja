@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 export const TaskExtendModal = ({ task, onSuccess, onCancel }) => {
     const { register, handleSubmit, formState: { errors } } = useForm({
         defaultValues: {
-            newDueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : '',
+            newDueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '',
             reason: ''
         }
     });
@@ -39,7 +39,7 @@ export const TaskExtendModal = ({ task, onSuccess, onCancel }) => {
             <div>
                 <label className="block text-sm font-medium mb-1">New Due Date *</label>
                 <Input
-                    type="datetime-local"
+                    type="date"
                     {...register('newDueDate', { required: 'Please select a new date' })}
                 />
                 {errors.newDueDate && <span className="text-red-500 text-xs">{errors.newDueDate.message}</span>}

@@ -5,6 +5,8 @@ import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
 import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
+import PDFService from '../services/pdf.service.js';
+import { CompanyProfile } from '../models/companyProfile.model.js';
 
 // ── CREATE ────────────────────────────────────────────────────────────────────
 export const createBOM = asyncHandler(async (req, res) => {
@@ -106,6 +108,27 @@ export const deleteBOM = asyncHandler(async (req, res) => {
     if (!bom) throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
     await bom.deleteOne();
     res.send({ success: true, message: 'BOM deleted successfully' });
+});
+
+// ── DOWNLOAD PDF ─────────────────────────────────────────────────────────────
+export const downloadBOMPDF = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const includeCost = req.query.includeCost !== 'false';
+
+    const [bom, company] = await Promise.all([
+        BOM.findById(id).populate('finishedProductId components.itemId'),
+        CompanyProfile.findOne()
+    ]);
+
+    if (!bom) throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
+    if (!company) throw new ApiError(httpStatus.NOT_FOUND, 'Company profile not found');
+
+    const pdfBuffer = await PDFService.generateBOMPDF(bom, company, includeCost);
+
+    const fileName = `${bom.bomNumber}_${includeCost ? 'Full' : 'Specification'}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdfBuffer);
 });
 
 // ── EXPORT TEMPLATE ──────────────────────────────────────────────────────────

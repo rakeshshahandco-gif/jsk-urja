@@ -45,15 +45,16 @@ const SHOW_MORE_DEFAULT = 10;
 
 const sortTasks = (tasks) =>
     [...tasks].sort((a, b) => {
-        const pa = PRIORITY_ORDER[a?.priority] ?? 99;
-        const pb = PRIORITY_ORDER[b?.priority] ?? 99;
-        if (pa !== pb) return pa - pb;
         const da = a?.dueDate ? new Date(a.dueDate) : new Date('9999-01-01');
         const db = b?.dueDate ? new Date(b.dueDate) : new Date('9999-01-01');
-        // Handle invalid dates
         const ta = isNaN(da.getTime()) ? 9999999999999 : da.getTime();
         const tb = isNaN(db.getTime()) ? 9999999999999 : db.getTime();
-        return ta - tb;
+
+        if (ta !== tb) return ta - tb;
+
+        const pa = PRIORITY_ORDER[a?.priority] ?? 99;
+        const pb = PRIORITY_ORDER[b?.priority] ?? 99;
+        return pa - pb;
     });
 
 const groupTasks = (tasks) => {
@@ -131,9 +132,6 @@ const TaskRow = ({ task, index, onExtend, onCloseTask, onEdit, onDelete, onViewD
                 {due ? (
                     <div style={{ lineHeight: 1.3 }}>
                         <div style={{ fontWeight: 600, color: isPast(startOfDay(due)) && task.status !== 'COMPLETED' ? '#dc2626' : '#1e293b', whiteSpace: 'nowrap' }}>{dueDate}</div>
-                        <div style={{ fontSize: 10, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Clock3 size={9} />{dueTime}
-                        </div>
                     </div>
                 ) : <span style={{ color: '#9ca3af' }}>—</span>}
             </td>
@@ -179,7 +177,7 @@ const td = { padding: '4px 8px', verticalAlign: 'middle', color: '#374151', bord
 
 const ActionBtn = ({ onClick, title, clr, bg, children }) => (
     <button
-        onClick={onClick}
+        onClick={(e) => { e.stopPropagation(); onClick(e); }}
         title={title}
         style={{
             width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

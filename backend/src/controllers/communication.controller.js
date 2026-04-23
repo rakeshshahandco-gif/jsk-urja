@@ -29,11 +29,11 @@ const sendOrder = catchAsync(async (req, res) => {
 
     let order;
     if (type === 'Sales Order') {
-        order = await SalesOrder.findById(id);
+        order = await SalesOrder.findById(id).populate('seriesId').populate('createdBy');
     } else if (type === 'Purchase Order') {
-        order = await PurchaseOrder.findById(id);
+        order = await PurchaseOrder.findById(id).populate('supplierId').populate('createdBy');
     } else if (type === 'Sales Invoice') {
-        order = await SalesInvoice.findById(id);
+        order = await SalesInvoice.findById(id).populate('seriesId').populate('createdBy');
     }
 
     if (!order) {
@@ -161,9 +161,9 @@ const downloadOrderPDF = catchAsync(async (req, res) => {
     if (type === 'Sales Order') {
         order = await SalesOrder.findById(id);
     } else if (type === 'Purchase Order') {
-        order = await PurchaseOrder.findById(id);
+        order = await PurchaseOrder.findById(id).populate('supplierId').populate('createdBy');
     } else if (type === 'Sales Invoice') {
-        order = await SalesInvoice.findById(id);
+        order = await SalesInvoice.findById(id).populate('seriesId').populate('createdBy');
     }
 
     if (!order) {

@@ -76,13 +76,10 @@ export default function PurchaseOrderDetailPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', {
+    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+        year: 'numeric'
     }) : '—';
 
     const handleGRNSubmit = async () => {

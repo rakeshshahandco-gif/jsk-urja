@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, Plus, Trash2, Calculator, ChevronLeft, Settings, FileText, Activity, AlertCircle, Printer, FileDown } from 'lucide-react';
-import { getBOM, createBOM, updateBOM, exportBOM } from '@/services/bomApi';
+import { Save, Plus, Trash2, Calculator, ChevronLeft, Settings, FileText, Activity, AlertCircle, Printer, FileDown, EyeOff } from 'lucide-react';
+import { getBOM, createBOM, updateBOM, exportBOM, downloadBOMPDF } from '@/services/bomApi';
 import { getItems } from '@/services/itemApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
@@ -71,6 +71,8 @@ const BOMFormPage = () => {
     const isEdit = Boolean(id);
 
     const [loading, setLoading] = useState(isEdit);
+    const [showCostInPrint, setShowCostInPrint] = useState(true);
+    const [isDownloading, setIsDownloading] = useState(false);
     const [items, setItems] = useState([]);
     const [finishedProducts, setFinishedProducts] = useState([]);
 
@@ -289,8 +291,30 @@ const BOMFormPage = () => {
         }
     };
 
-    const handlePrint = () => {
-        window.print();
+    const handleDownloadPDF = async (includeCost) => {
+        try {
+            setIsDownloading(true);
+            const data = await downloadBOMPDF(id, includeCost);
+            const blob = new Blob([data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `BOM_${form.bomNumber}_${includeCost ? 'Full' : 'Specification'}.pdf`;
+            a.click();
+            addToast('PDF downloaded successfully', 'success');
+        } catch (error) {
+            console.error('PDF generation error:', error);
+            addToast('PDF generation failed', 'error');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const handlePrintRequest = (withCost) => {
+        setShowCostInPrint(withCost);
+        setTimeout(() => {
+            window.print();
+        }, 150);
     };
 
     const handleExport = async () => {
@@ -396,14 +420,35 @@ const BOMFormPage = () => {
                 <div style={s.headerBtns}>
                     <button className="no-print" style={s.cancelBtn} onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.INVENTORY.BOM.ROOT); }}>Cancel</button>
                     {isEdit && (
-                        <>
-                            <button className="no-print" onClick={handlePrint} style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff' }}>
-                                <Printer size={16} /> Print
-                            </button>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            {/* PDF Options */}
+                            <div style={{ position: 'relative', display: 'flex' }}>
+                                <button className="no-print" onClick={() => handleDownloadPDF(true)} disabled={isDownloading} title="Download Full PDF with costing"
+                                    style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff', borderRight: 'none', borderRadius: '9px 0 0 9px', padding: '9px 12px' }}>
+                                    <FileText size={16} /> PDF
+                                </button>
+                                <button className="no-print" onClick={() => handleDownloadPDF(false)} disabled={isDownloading} title="Download Technical Specification (No Cost)"
+                                    style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', background: '#fff', borderRadius: '0 9px 9px 0', padding: '9px 8px' }}>
+                                    <EyeOff size={15} />
+                                </button>
+                            </div>
+
+                            {/* Print Options */}
+                            <div style={{ position: 'relative', display: 'flex' }}>
+                                <button className="no-print" onClick={() => handlePrintRequest(true)} title="Print Full BOM"
+                                    style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff', borderRight: 'none', borderRadius: '9px 0 0 9px', padding: '9px 12px' }}>
+                                    <Printer size={16} /> Print
+                                </button>
+                                <button className="no-print" onClick={() => handlePrintRequest(false)} title="Print Specification Only"
+                                    style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', background: '#fff', borderRadius: '0 9px 9px 0', padding: '9px 8px' }}>
+                                    <EyeOff size={15} />
+                                </button>
+                            </div>
+
                             <button className="no-print" onClick={handleExport} style={{ ...s.cancelBtn, display: 'flex', alignItems: 'center', gap: 6, background: '#fff' }}>
-                                <FileDown size={16} /> Export Excel
+                                <FileDown size={16} /> Excel
                             </button>
-                        </>
+                        </div>
                     )}
                     <button className="no-print" style={s.saveBtn} onClick={onSubmit}>
                         <Save size={16} /> Save BOM
@@ -684,17 +729,20 @@ const BOMFormPage = () => {
                         <div style={{ fontSize: 10, maxWidth: 350 }}>
                             {company.address} {company.city} {company.state} - {company.pincode}<br />
                             Email: {company.email} | Phone: {company.phone}
+                            {company.gstNumber && <div><strong>GSTIN: {company.gstNumber}</strong></div>}
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: '#64748b' }}>BILL OF MATERIAL</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
+                            {showCostInPrint ? 'Bill of Material' : 'BOM Specification'}
+                        </div>
                         <div style={{ fontSize: 14, fontWeight: 700 }}>#{form.bomNumber || 'DRAFT'}</div>
                         <div style={{ fontSize: 10, marginTop: 4 }}>Version: <strong>{form.version}</strong></div>
                     </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 15, marginBottom: 25, border: '1px solid #eee', padding: 15, borderRadius: 8 }}>
-                    <div>
+                    <div style={{ gridColumn: 'span 2' }}>
                         <div className="p-label">Finished Product</div>
                         <div className="p-value">
                             {finishedProducts.find(p => p._id === form.finishedProductId)?.itemName || '—'}
@@ -713,19 +761,27 @@ const BOMFormPage = () => {
                         <div className="p-label">Prod. Quantity</div>
                         <div className="p-value">{form.productionQuantity} {finishedProducts.find(p => p._id === form.finishedProductId)?.uom || ''}</div>
                     </div>
+                    <div>
+                        <div className="p-label">Status</div>
+                        <div className="p-value">{form.status}</div>
+                    </div>
                 </div>
 
                 <table style={{ width: '100%' }}>
                     <thead>
                         <tr>
                             <th style={{ width: 40 }}>#</th>
-                            <th>Item Code</th>
-                            <th>Item Name</th>
+                            <th>Description</th>
                             <th>Type</th>
                             <th>Qty</th>
                             <th>UOM</th>
-                            <th>Rate</th>
-                            <th>Total</th>
+                            {showCostInPrint && (
+                                <>
+                                    <th>Rate</th>
+                                    <th>Total</th>
+                                </>
+                            )}
+                            <th>PTS</th>
                             <th>Remark</th>
                         </tr>
                     </thead>
@@ -733,13 +789,20 @@ const BOMFormPage = () => {
                         {form.components.map((c, idx) => (
                             <tr key={idx}>
                                 <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                                <td><strong>{c.itemCode || '—'}</strong></td>
-                                <td style={{ fontSize: '8.5pt' }}>{c.itemName}</td>
+                                <td>
+                                    <strong>{c.itemCode || '—'}</strong>
+                                    <div style={{ fontSize: '8pt', color: '#444' }}>{c.itemName}</div>
+                                </td>
                                 <td style={{ textAlign: 'center' }}>{c.componentType}</td>
                                 <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
                                 <td style={{ textAlign: 'center' }}>{c.uom}</td>
-                                <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
+                                {showCostInPrint && (
+                                    <>
+                                        <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
+                                        <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
+                                    </>
+                                )}
+                                <td style={{ textAlign: 'center' }}>{c.points}</td>
                                 <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
                             </tr>
                         ))}
@@ -747,33 +810,49 @@ const BOMFormPage = () => {
                 </table>
 
                 {form.remarks && (
-                    <div style={{ marginBottom: 25 }}>
-                        <div className="p-label">Remarks</div>
-                        <div style={{ fontSize: 10, whiteSpace: 'pre-wrap', border: '1px solid #eee', padding: 10, borderRadius: 4 }}>{form.remarks}</div>
+                    <div style={{ marginBottom: 25, marginTop: 20 }}>
+                        <div className="p-label">Remarks / Instructions</div>
+                        <div style={{ fontSize: 10, whiteSpace: 'pre-wrap', border: '1px solid #eee', padding: 10, borderRadius: 4, fontStyle: 'italic' }}>{form.remarks}</div>
                     </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 40, marginBottom: 40 }}>
-                    <div style={{ border: '1px solid #000', padding: 15, minWidth: 200 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ fontSize: 10 }}>Raw Material Cost</span>
-                            <span style={{ fontWeight: 700 }}>₹{fmt(form.totalRawMaterialCost)}</span>
+                {showCostInPrint ? (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 40, marginBottom: 40, marginTop: 20 }}>
+                        <div style={{ border: '1px solid #000', padding: 15, minWidth: 260 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
+                                <span>Raw Material Cost</span>
+                                <span>₹{fmt(form.totalRawMaterialCost)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
+                                <span>Labour Component</span>
+                                <span>₹{fmt(form.totalPointsLabourCost)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #000', paddingTop: 10, marginTop: 10 }}>
+                                <span style={{ fontSize: 11, fontWeight: 900 }}>FINAL UNIT COST</span>
+                                <span style={{ fontSize: 15, fontWeight: 950 }}>₹{fmt(form.finalProductionCostPerUnit)}</span>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #eee', paddingTop: 8, marginTop: 8 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800 }}>TOTAL COST</span>
-                            <span style={{ fontSize: 13, fontWeight: 900 }}>₹{fmt(form.finalProductionCostPerUnit)}</span>
-                        </div>
-                        <div style={{ fontSize: 8, color: '#666', textAlign: 'right', marginTop: 4 }}>Per Unit Cost</div>
+                    </div>
+                ) : (
+                    <div style={{ border: '1px dashed #ccc', padding: 20, textAlign: 'center', marginTop: 20, color: '#999', fontSize: 11, fontWeight: 700 }}>
+                        TECHNICAL SPECIFICATION VERSION (COSTING DETAILS EXCLUDED)
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 80, padding: '0 40px' }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: 140, borderTop: '1px solid #000', paddingTop: 5, fontSize: 9, fontWeight: 800 }}>PREPARED BY</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: 140, borderTop: '1px solid #000', paddingTop: 5, fontSize: 9, fontWeight: 800 }}>PRODUCTION HEAD</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ width: 140, borderTop: '1px solid #000', paddingTop: 5, fontSize: 9, fontWeight: 800 }}>AUTHORIZED BY</div>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 60, padding: '0 40px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ width: 150, borderTop: '1px solid #000', paddingTop: 5, fontSize: 10, fontWeight: 700 }}>PREPARED BY</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ width: 150, borderTop: '1px solid #000', paddingTop: 5, fontSize: 10, fontWeight: 700 }}>APPROVED BY</div>
-                    </div>
+                <div style={{ position: 'absolute', bottom: 10, width: 'calc(100% - 24mm)', textAlign: 'center', fontSize: 8, color: '#999', borderTop: '1px solid #eee', paddingTop: 10 }}>
+                    Computer Generated Specification Document. Page 1 of 1
                 </div>
             </div>
         </div>

@@ -67,6 +67,10 @@ export const calculateNextDueDate = (task) => {
             nextDate.setMonth(nextDate.getMonth() + 3 * interval);
             break;
 
+        case 'EVERY_15_DAYS':
+            nextDate.setDate(nextDate.getDate() + 15 * interval);
+            break;
+
         case 'YEARLY':
             nextDate.setFullYear(nextDate.getFullYear() + interval);
             break;

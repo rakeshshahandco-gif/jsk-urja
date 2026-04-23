@@ -14,6 +14,7 @@ import styles from './TaskForm.module.scss';
 import clsx from 'clsx';
 
 export const TaskForm = ({ task, onSuccess, onCancel }) => {
+    console.log("TaskForm v1.1 - Every 15 Days included");
     const { openModal, closeModal } = useModal();
     const { register, handleSubmit, watch, control, setValue, formState: { errors } } = useForm({
         defaultValues: task ? {
@@ -23,7 +24,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             assignedGroupId: task.assignedGroupId?._id || task.assignedGroupId || '',
             taskCategoryId: task.taskCategoryId?._id || task.taskCategoryId || '',
             assigneeIds: task.assigneeIds ? task.assigneeIds.map(u => u._id || u.id || u) : [],
-            dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : null,
+            dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : null,
             recurrence: {
                 enabled: task.recurrence?.enabled || !!task.taskMasterId || false,
                 frequency: task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency || 'MONTHLY',
@@ -273,9 +274,9 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
             {/* ── ROW 3: Due Date | Recurring toggle | Frequency | Interval ── */}
             <div className={clsx(styles.row, styles.fourCols)}>
                 <div className={styles.field}>
-                    <label className={styles.label}>Due Date & Time *</label>
+                    <label className={styles.label}>Due Date *</label>
                     <input
-                        type="datetime-local"
+                        type="date"
                         className={styles.input}
                         {...register('dueDate', { required: 'Due date required' })}
                     />
@@ -298,6 +299,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
                             <select className={styles.select} {...register('recurrence.frequency')}>
                                 <option value="DAILY">Daily</option>
                                 <option value="WEEKLY">Weekly</option>
+                                <option value="EVERY_15_DAYS">Every 15 Days</option>
                                 <option value="MONTHLY">Monthly</option>
                                 <option value="EVERY_2_MONTHS">Every 2 Months</option>
                                 <option value="EVERY_6_MONTHS">Every 6 Months</option>

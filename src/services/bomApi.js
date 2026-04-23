@@ -48,3 +48,11 @@ export const exportBOM = async (id) => {
     const response = await api.get(`/boms/${id}/export`, { responseType: 'blob' });
     return response.data;
 };
+
+export const downloadBOMPDF = async (id, includeCost = true) => {
+    const response = await api.get(`/boms/${id}/pdf`, { 
+        params: { includeCost },
+        responseType: 'blob' 
+    });
+    return response.data;
+};

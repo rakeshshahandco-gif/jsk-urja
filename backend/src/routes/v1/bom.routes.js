@@ -27,5 +27,6 @@ router
     .delete(validate(bomValidation.deleteBOM), bomController.deleteBOM);
 
 router.get('/:id/export', validate(bomValidation.getBOM), bomController.exportBOMToExcel);
+router.get('/:id/pdf', validate(bomValidation.getBOM), bomController.downloadBOMPDF);
 
 export default router;

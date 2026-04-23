@@ -16,11 +16,11 @@ import {
     Search as SearchIcon,
     Filter as FilterIcon,
     Upload,
-    FileDown,
     FileText,
-    Save
+    Save,
+    EyeOff
 } from 'lucide-react';
-import { getBOMs, deleteBOM, exportBOMTemplate, importBOMsExcel, exportBOMList } from '@/services/bomApi';
+import { getBOMs, deleteBOM, exportBOMTemplate, importBOMsExcel, exportBOMList, downloadBOMPDF } from '@/services/bomApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
 
@@ -157,6 +157,21 @@ const BOMPage = () => {
         } finally {
             setIsImporting(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDownloadPDF = async (id, bomNumber, includeCost) => {
+        try {
+            const data = await downloadBOMPDF(id, includeCost);
+            const blob = new Blob([data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${bomNumber}_${includeCost ? 'Full' : 'Specification'}.pdf`;
+            a.click();
+            addToast(`PDF ${includeCost ? 'Full' : 'Specification'} downloaded`, 'success');
+        } catch (error) {
+            addToast('PDF generation failed', 'error');
         }
     };
 
@@ -311,6 +326,20 @@ const BOMPage = () => {
                                     </td>
                                     <td style={{ ...s.td, textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                            <button
+                                                style={{ ...s.actionBtn, color: '#2563eb', gap: 4, padding: '6px 8px' }}
+                                                onClick={(e) => { e.stopPropagation(); handleDownloadPDF(bom._id, bom.bomNumber, true); }}
+                                                title="Full PDF (With Cost)"
+                                            >
+                                                <FileText size={14} />
+                                            </button>
+                                            <button
+                                                style={{ ...s.actionBtn, color: '#64748b', padding: '6px 8px' }}
+                                                onClick={(e) => { e.stopPropagation(); handleDownloadPDF(bom._id, bom.bomNumber, false); }}
+                                                title="Technical PDF (No Cost)"
+                                            >
+                                                <EyeOff size={14} />
+                                            </button>
                                             <button
                                                 style={{ ...s.actionBtn, color: '#64748b' }}
                                                 onClick={(e) => { e.stopPropagation(); navigate(PATHS.INVENTORY.BOM.EDIT(bom._id)); }}

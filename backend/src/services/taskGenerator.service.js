@@ -1,7 +1,7 @@
 import { Task } from '../models/task.model.js';
 import { TaskMaster } from '../models/taskMaster.model.js';
 import { calculateNextDueDate } from '../utils/recurrence.js';
-
+import { emitTaskUpdate } from './socketEvent.service.js';
 /**
  * Generates the next task instance for a given TaskMaster.
  * This is designed to be idempotent and safe to call multiple times.
@@ -24,13 +24,14 @@ export const generateTaskFromMaster = async (masterId, forceNow = new Date()) =>
         // 2. Check if an OPEN task for this master and this due date already exists
         // This prevents double generation if both completion and cron trigger.
         // We check for tasks with the same master and due date that are not CANCELLED.
+        const dueStart = new Date(dueDate);
+        dueStart.setHours(0, 0, 0, 0);
+        const dueEnd = new Date(dueDate);
+        dueEnd.setHours(23, 59, 59, 999);
         const existingTask = await Task.findOne({
-            taskMasterId: master._id,
-            dueDate: { 
-                $gte: new Date(dueDate).setHours(0,0,0,0), 
-                $lte: new Date(dueDate).setHours(23,59,59,999) 
-            },
-            status: { $ne: 'CANCELLED' }
+          taskMasterId: master._id,
+          dueDate: { $gte: dueStart, $lte: dueEnd },
+          status: { $ne: 'CANCELLED' }
         });
 
         if (existingTask && existingTask.status === 'OPEN') {
@@ -55,11 +56,20 @@ export const generateTaskFromMaster = async (masterId, forceNow = new Date()) =>
         });
 
         // 4. Calculate the NEXT run date for the template
-        const nextDate = calculateNextDueDate({
-            isRecurring: true,
-            recurrence: master.recurrence,
-            dueDate: dueDate
-        });
+        // If interval is 0 or negative, treat as a one‑off task and deactivate the master
+        if (master.recurrence.interval <= 0) {
+            console.log(`⚠️ Interval is ${master.recurrence.interval}; disabling further recurrence for master ${master.title}`);
+            master.isActive = false;
+            await master.save();
+            // No next run date – we still return the created task instance
+            var nextDate = null;
+        } else {
+            var nextDate = calculateNextDueDate({
+                isRecurring: true,
+                recurrence: master.recurrence,
+                dueDate: dueDate
+            });
+        }
 
         // 5. Update the master
         master.lastGeneratedAt = now;

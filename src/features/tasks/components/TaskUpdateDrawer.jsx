@@ -91,8 +91,8 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
         try {
             await closeTask(taskId);
             addToast('Task completed successfully.', 'success');
-            loadTask();
             if (onUpdate) onUpdate();
+            onClose(); // Auto-close original screen/drawer
         } catch (err) {
             addToast('Failed to close task.', 'error');
         }

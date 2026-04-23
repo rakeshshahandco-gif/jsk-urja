@@ -61,7 +61,7 @@ const Menu = ({ task, onEdit, onDelete, onViewDetails }) => {
     );
     return (
         <div ref={ref} style={{ position: 'relative' }}>
-            <button onClick={() => setOpen(o => !o)} title="More"
+            <button onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }} title="More"
                 style={{ width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 4, background: '#f8f9fa', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
                 <MoreHorizontal size={13} />
             </button>
@@ -80,7 +80,7 @@ const Menu = ({ task, onEdit, onDelete, onViewDetails }) => {
 // Icon action button
 const IconBtn = ({ onClick, title, color, bg, children }) => (
     <Tip label={title}>
-        <button onClick={onClick}
+        <button onClick={(e) => { e.stopPropagation(); onClick(e); }}
             style={{ width: 24, height: 24, border: `1px solid ${color}20`, borderRadius: 4, background: bg, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
             {children}
         </button>
@@ -208,7 +208,6 @@ export const ManageTasksTable = ({ tasks, loading, onExtend, onCloseTask, onEdit
                                             {due ? (
                                                 <div style={{ lineHeight: 1.3 }}>
                                                     <div style={{ fontWeight: 600, color: overdue ? '#dc2626' : '#1e293b', whiteSpace: 'nowrap' }}>{format(due, 'dd/MM/yy')}</div>
-                                                    <div style={{ fontSize: 10, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 2 }}><Clock3 size={9} />{format(due, 'HH:mm')}</div>
                                                 </div>
                                             ) : <span style={{ color: '#9ca3af' }}>—</span>}
                                         </td>

@@ -93,7 +93,7 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
 
     const formatDate = (date) => {
         if (!date) return 'No date';
-        return new Date(date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
     const handleClose = async () => {
@@ -144,8 +144,11 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
                                 {task.title}
                             </h3>
                             {task.recurrence?.enabled && (
-                                <span className="p-1 rounded bg-purple-50 text-purple-600" title="Recurring Task">
-                                    <Repeat size={14} />
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100" title="Recurring Task">
+                                    <Repeat size={12} />
+                                    <span className="text-[9px] font-black uppercase tracking-tighter">
+                                        {task.recurrence.frequency?.replace(/_/g, ' ')}
+                                    </span>
                                 </span>
                             )}
                         </div>

@@ -17,8 +17,8 @@ const createTask = {
         dueDate: Joi.date().required(),
         recurrence: Joi.object().keys({
             enabled: Joi.boolean().default(false),
-            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
-            interval: Joi.number().integer().min(1).default(1),
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            interval: Joi.number().integer().min(0).default(1),
             recurrenceSeriesId: Joi.string().allow(null, '').optional(),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT').default('NEVER'),
             recurrenceEndDate: Joi.date().allow(null).optional(),
@@ -77,7 +77,7 @@ const updateTask = {
         group: Joi.string().allow(null, ''),
         recurrence: Joi.object().keys({
             enabled: Joi.boolean(),
-            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
             interval: Joi.number().integer().min(1),
             recurrenceSeriesId: Joi.string().allow(null, ''),
             recurrenceEndType: Joi.string().valid('NEVER', 'DATE', 'ON_COUNT'),
@@ -107,7 +107,7 @@ const createTaskMaster = {
         assignedTo: Joi.string().allow(null, '').custom(objectId),
         group: Joi.string().allow(null, '').custom(objectId),
         recurrence: Joi.object().keys({
-            frequency: Joi.string().required().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            frequency: Joi.string().required().valid('DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
             interval: Joi.number().integer().min(1).default(1),
             startDate: Joi.date().default(Date.now),
             endType: Joi.string().valid('NEVER', 'AFTER_COUNT', 'ON_DATE').default('NEVER'),
@@ -140,7 +140,7 @@ const updateTaskMaster = {
         assignedTo: Joi.string().allow(null, '').custom(objectId),
         group: Joi.string().allow(null, '').custom(objectId),
         recurrence: Joi.object().keys({
-            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
+            frequency: Joi.string().valid('DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'),
             interval: Joi.number().integer().min(1),
             startDate: Joi.date(),
             endType: Joi.string().valid('NEVER', 'AFTER_COUNT', 'ON_DATE'),
