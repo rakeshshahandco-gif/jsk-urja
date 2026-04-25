@@ -497,7 +497,10 @@ const WechatListPage = () => {
                                         color: 'text-purple-600 bg-purple-50' 
                                     },
                                 ].map((f, i) => (
-                                    <div key={i} className="text-left p-10 rounded-[3rem] bg-white border border-slate-100 shadow-sm hover:shadow-2xl hover:border-emerald-200 transition-all duration-500 group">
+                                    <div key={i} 
+                                        onClick={() => toast(`Select a supplier from the left panel to access ${f.label}`, { icon: '👈', duration: 4000 })}
+                                        className="cursor-pointer text-left p-10 rounded-[3rem] bg-white border border-slate-100 shadow-sm hover:shadow-2xl hover:border-emerald-200 transition-all duration-500 group"
+                                    >
                                         <div className={`p-5 rounded-2xl inline-flex mb-8 transition-transform group-hover:rotate-12 ${f.color}`}>{f.icon}</div>
                                         <p className="text-base font-black text-slate-900 mb-2">{f.label}</p>
                                         <p className="text-xs font-bold text-slate-400 leading-relaxed uppercase tracking-tight">{f.desc}</p>
