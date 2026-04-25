@@ -81,11 +81,33 @@ const ReceiptEntryPage = () => {
 
     // Effect for handling incoming state (e.g. from Sales Invoice)
     useEffect(() => {
-        if (!location.state?.invoiceId) return;
+        if (!location.state?.invoiceId && !location.state?.customerId) return;
 
         const defaultAmount = location.state?.amount || 0;
         const defaultInvoiceNo = location.state?.invoiceNumber;
         const defaultInvoiceId = location.state?.invoiceId;
+        const customerId = location.state?.customerId;
+        const customerName = location.state?.customerName;
+
+        // Try to find the correct ledger in our loaded list
+        let targetLedgerId = location.state?.ledgerId || '';
+        let targetLedgerName = location.state?.ledgerName || '';
+
+        if (!targetLedgerId && ledgers.length > 0) {
+            // Match by referenceId (CustomerId)
+            const matchedByRef = ledgers.find(l => l.referenceId === customerId);
+            if (matchedByRef) {
+                targetLedgerId = matchedByRef._id;
+                targetLedgerName = matchedByRef.name;
+            } else {
+                // Match by name
+                const matchedByName = ledgers.find(l => l.name?.toLowerCase() === customerName?.toLowerCase());
+                if (matchedByName) {
+                    targetLedgerId = matchedByName._id;
+                    targetLedgerName = matchedByName.name;
+                }
+            }
+        }
 
         setFormData(prev => ({
             ...prev,
@@ -93,8 +115,8 @@ const ReceiptEntryPage = () => {
             narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
             items: [{
                 ...prev.items[0],
-                ledgerId: location.state?.ledgerId || '',
-                ledgerName: location.state?.ledgerName || '',
+                ledgerId: targetLedgerId,
+                ledgerName: targetLedgerName,
                 amount: defaultAmount,
                 narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prev.items[0].narration,
                 adjustments: defaultInvoiceId ? [{
@@ -350,23 +372,21 @@ const ReceiptEntryPage = () => {
                             {/* Customer */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Customer / Party</span>
-                                <div style={{ width: 240 }}>
-                                    <SearchableSelect
-                                        options={ledgers.map(l => ({ value: l._id, label: l.name }))}
-                                        value={formData.items[0]?.ledgerId || ''}
-                                        onChange={(val) => {
-                                            const selected = ledgers.find(l => l._id === val);
-                                            setFormData(prev => {
-                                                const newItems = [...prev.items];
-                                                if (newItems.length > 0) {
-                                                    newItems[0].ledgerId = val;
-                                                    newItems[0].ledgerName = selected?.name || '';
-                                                }
-                                                return { ...prev, items: newItems };
-                                            });
-                                        }}
-                                        placeholder="Select Customer Ledger"
-                                    />
+                                <div style={{ 
+                                    width: 240, 
+                                    padding: '8px 12px', 
+                                    background: '#f0fdf4', 
+                                    border: '1px solid #86efac', 
+                                    borderRadius: 7, 
+                                    fontSize: 14, 
+                                    fontWeight: 700, 
+                                    color: '#166534',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <span>{custName}</span>
+                                    <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Linked</span>
                                 </div>
                             </div>
                             {/* Amount */}
