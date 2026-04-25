@@ -95,13 +95,13 @@ const ReceiptEntryPage = () => {
 
         if (!targetLedgerId && ledgers.length > 0) {
             // Match by referenceId (CustomerId)
-            const matchedByRef = ledgers.find(l => l.referenceId === customerId);
+            const matchedByRef = ledgers.find(l => l.referenceId?.toString() == customerId?.toString());
             if (matchedByRef) {
                 targetLedgerId = matchedByRef._id;
                 targetLedgerName = matchedByRef.name;
             } else {
                 // Match by name
-                const matchedByName = ledgers.find(l => l.name?.toLowerCase() === customerName?.toLowerCase());
+                const matchedByName = ledgers.find(l => l.name?.trim().toLowerCase() === customerName?.trim().toLowerCase());
                 if (matchedByName) {
                     targetLedgerId = matchedByName._id;
                     targetLedgerName = matchedByName.name;
