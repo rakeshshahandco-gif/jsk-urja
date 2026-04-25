@@ -6,6 +6,7 @@ import { AccountLedger } from '../models/accountLedger.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { Voucher } from '../models/voucher.model.js';
 
 export const getLedgers = asyncHandler(async (req, res) => {
     const { group, type, search } = req.query;
@@ -62,6 +63,11 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
         }
     });
 
+    // Fetch voucher natures for editing support
+    const vouchers = await Voucher.find({ _id: { $in: voucherIds } }).select('nature').session(null).lean();
+    const natureMap = {};
+    vouchers.forEach(v => { natureMap[v._id.toString()] = v.nature; });
+
     try {
         import('fs').then(fs => {
             fs.writeFileSync('debug_ledger.json', JSON.stringify({
@@ -115,6 +121,7 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
             oppositeName,
             voucherNumber: vNo,
             voucherNo: vNo,
+            voucherNature: natureMap[vId] || '',
             narration,
             runningBalance
         };

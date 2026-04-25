@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Input, SearchableSelect } from '@/components/ui';
-import { Printer, FileText, ArrowDownLeft, ArrowUpRight, Trash2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Printer, FileText, ArrowDownLeft, ArrowUpRight, Trash2, ArrowUpCircle, ArrowDownCircle, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getLedgers, getLedgerStatement, cancelVoucher } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
@@ -65,6 +65,20 @@ const LedgerReportPage = ({ defaultType = null }) => {
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to delete transaction');
         }
+    };
+
+    const handleEdit = (entry) => {
+        const id = entry.voucherId;
+        const nature = entry.voucherNature || '';
+        
+        let path = '';
+        if (nature === 'Receipt') path = `/accounts/receipt-entry/edit/${id}`;
+        else if (nature === 'Payment') path = `/accounts/payment-entry/edit/${id}`;
+        else if (nature === 'Expense') path = `/accounts/expense-entry/edit/${id}`;
+        else if (nature === 'Journal') path = `/accounts/journal-entry/edit/${id}`;
+        
+        if (path) navigate(path);
+        else toast.error('Edit not supported for this entry type');
     };
 
     const cur = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
@@ -213,13 +227,22 @@ const LedgerReportPage = ({ defaultType = null }) => {
                                         </td>
                                         <td className="text-center">
                                             {entry.voucherId && entry.type !== 'Opening' && (
-                                                <button
-                                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-md"
-                                                    onClick={() => handleCancelVoucher(entry.voucherId, entry.voucherNumber || entry.voucherNo)}
-                                                    title="Delete Transaction"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <button
+                                                        className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors rounded-md"
+                                                        onClick={() => handleEdit(entry)}
+                                                        title="Edit Transaction"
+                                                    >
+                                                        <Pencil size={16} />
+                                                    </button>
+                                                    <button
+                                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-md"
+                                                        onClick={() => handleCancelVoucher(entry.voucherId, entry.voucherNumber || entry.voucherNo)}
+                                                        title="Delete Transaction"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>
