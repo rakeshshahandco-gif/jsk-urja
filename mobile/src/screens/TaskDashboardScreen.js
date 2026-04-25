@@ -16,15 +16,22 @@ const TABS = [
   { id: 'today', label: 'Today', emoji: '🟡', color: COLORS.today },
   { id: 'week', label: '7 Days', emoji: '🔵', color: COLORS.upcoming7 },
   { id: 'future', label: 'Future', emoji: '🟢', color: COLORS.upcomingMore },
+  { id: 'history', label: 'History', emoji: '📁', color: COLORS.gray500 },
 ];
 
 const categorize = (tasks) => {
   const now = new Date();
   const in7 = addDays(now, 7);
-  const result = { overdue: [], today: [], week: [], future: [] };
+  const result = { overdue: [], today: [], week: [], future: [], history: [] };
 
   tasks.forEach(task => {
-    if (task.status === 'Closed' || task.status === 'Concluded') return;
+    // If task is finished, move to history
+    const status = (task.status || '').toUpperCase();
+    if (['COMPLETED', 'CLOSED', 'CONCLUDED'].includes(status)) {
+        result.history.push(task);
+        return;
+    }
+
     const raw = task.nextDueDate || task.dueDate;
     if (!raw) { result.future.push(task); return; }
     const d = typeof raw === 'string' ? parseISO(raw) : new Date(raw);
@@ -40,15 +47,16 @@ export const TaskDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('overdue');
   const [allTasks, setAllTasks] = useState([]);
-  const [categorized, setCategorized] = useState({ overdue: [], today: [], week: [], future: [] });
+  const [categorized, setCategorized] = useState({ overdue: [], today: [], week: [], future: [], history: [] });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
 
+
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await tasksApi.getTasks({ limit: 500 });
-      const tasks = res?.data?.tasks || res?.data || res?.tasks || [];
+      const res = await tasksApi.getTasks({ limit: 1000 });
+      const tasks = res?.results || res?.data?.tasks || res?.tasks || res?.data || (Array.isArray(res) ? res : []);
       setAllTasks(tasks);
       setCategorized(categorize(tasks));
     } catch (e) {
@@ -64,11 +72,15 @@ export const TaskDashboardScreen = ({ navigation }) => {
   const onRefresh = () => { setRefreshing(true); fetchTasks(); };
 
   const displayTasks = (categorized[activeTab] || []).filter(t => {
+    if (!t) return false;
+
+    // 1. Search Filter
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       (t.title || t.name || '').toLowerCase().includes(q) ||
-      (t.group?.name || t.group || '').toLowerCase().includes(q)
+      (t.group?.name || t.group || '').toLowerCase().includes(q) ||
+      (t.customerName || '').toLowerCase().includes(q)
     );
   });
 
@@ -84,6 +96,21 @@ export const TaskDashboardScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
           <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+
+
+      {/* Quick Actions Bar */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: COLORS.secondary + '15'}]} onPress={() => navigation.navigate('CreateInvoice')}>
+          <Text style={[styles.quickBtnText, {color: COLORS.secondary}]}>🧾 +Invoice</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: COLORS.primary + '15'}]} onPress={() => navigation.navigate('CreateOrder')}>
+          <Text style={[styles.quickBtnText, {color: COLORS.primary}]}>📝 +Order</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: '#25D36615'}]} onPress={() => navigation.navigate('CreateCustomer')}>
+          <Text style={[styles.quickBtnText, {color: '#128C7E'}]}>👤 +Customer</Text>
         </TouchableOpacity>
       </View>
 
@@ -175,6 +202,54 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: FONT.sm, color: COLORS.white + 'BB', marginTop: 2 },
   logoutBtn: { backgroundColor: COLORS.white + '20', borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 6 },
   logoutText: { color: COLORS.white, fontSize: FONT.sm, fontWeight: FONT.semibold },
+  typeRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    padding: SPACING.base,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray100,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.gray50,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.gray200,
+  },
+  typeBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  typeBtnText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: COLORS.gray600,
+  },
+  typeBtnTextActive: {
+    color: COLORS.white,
+  },
+  moduleCenter: { 
+    flexDirection: 'row', 
+    backgroundColor: COLORS.white, 
+    paddingVertical: SPACING.md, 
+    paddingHorizontal: SPACING.base,
+    gap: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray100,
+  },
+  moduleBtn: { alignItems: 'center', flex: 1 },
+  moduleIcon: { 
+    width: 44, height: 44, borderRadius: RADIUS.md, 
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+    ...SHADOW.sm,
+  },
+  moduleLabel: { fontSize: 10, fontWeight: FONT.bold, color: COLORS.gray600 },
+  quickActions: { flexDirection: 'row', gap: 8, paddingHorizontal: SPACING.base, paddingBottom: SPACING.sm, backgroundColor: COLORS.white },
+  quickBtn: { flex: 1, paddingVertical: 8, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  quickBtnText: { fontSize: 11, fontWeight: 'bold' },
   tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, ...SHADOW.card },
   tab: {
     flex: 1, alignItems: 'center', justifyContent: 'center',

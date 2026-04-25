@@ -11,25 +11,33 @@ import { useAuth } from '../context/AuthContext';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+const MODES = [
+  { value: 'SELF', label: 'Self' },
+  { value: 'SINGLE', label: 'Single User' },
+  { value: 'MULTI', label: 'Multiple Users' },
+  { value: 'ALL', label: 'All Users' },
+];
 
-const PickerModal = ({ label, options, value, onSelect }) => (
+const MultiPicker = ({ label, options, selectedValues, onToggle }) => (
   <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.optionRow}>
-        {options.map(opt => (
+    <View style={styles.chipGrid}>
+      {options.map(opt => {
+        const val = opt.value || opt;
+        const isSelected = Array.isArray(selectedValues) ? selectedValues.includes(val) : selectedValues === val;
+        return (
           <TouchableOpacity
-            key={opt.value || opt}
-            style={[styles.optionChip, value === (opt.value || opt) && styles.optionChipActive]}
-            onPress={() => onSelect(opt.value || opt)}
+            key={val}
+            style={[styles.optionChip, isSelected && styles.optionChipActive]}
+            onPress={() => onToggle(val)}
           >
-            <Text style={[styles.optionChipText, value === (opt.value || opt) && styles.optionChipTextActive]}>
+            <Text style={[styles.optionChipText, isSelected && styles.optionChipTextActive]}>
               {opt.label || opt}
             </Text>
           </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+        );
+      })}
+    </View>
   </View>
 );
 
@@ -43,11 +51,17 @@ export const TaskCreateScreen = ({ navigation }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [groupId, setGroupId] = useState('');
-  const [assignedTo, setAssignedTo] = useState(user?._id || '');
+  const [assignMode, setAssignMode] = useState('SELF');
+  const [assigneeIds, setAssigneeIds] = useState([user?._id]);
   const [priority, setPriority] = useState('MEDIUM');
   const [dueDate, setDueDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceConfig, setRecurrenceConfig] = useState({
+    frequency: 'MONTHLY',
+    interval: '1',
+    endType: 'NEVER'
+  });
 
   useEffect(() => {
     const load = async () => {
@@ -73,25 +87,59 @@ export const TaskCreateScreen = ({ navigation }) => {
     load();
   }, []);
 
+  const toggleAssignee = (id) => {
+    if (assignMode === 'SINGLE' || assignMode === 'SELF') {
+      setAssigneeIds([id]);
+    } else {
+      setAssigneeIds(prev => 
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      );
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim()) { Alert.alert('Required', 'Task name is required.'); return; }
     if (!groupId) { Alert.alert('Required', 'Please select a group.'); return; }
-    if (!assignedTo) { Alert.alert('Required', 'Please select who to assign.'); return; }
+    
+    if (assignMode !== 'ALL' && (!assigneeIds || assigneeIds.length === 0)) {
+       Alert.alert('Required', 'At least one assignee is required.');
+       return;
+    }
 
     setSaving(true);
     try {
-      await tasksApi.createTask({
-        title: title.trim(),
-        description: description.trim(),
-        group: groupId,
-        assignedTo,
-        priority,
-        dueDate: dueDate.toISOString(),
-        nextDueDate: dueDate.toISOString(),
-      });
-      Alert.alert('✅ Task Created', 'Task created successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      if (isRecurring) {
+        await tasksApi.createTaskMaster({
+          title: title.trim(),
+          description: description.trim(),
+          category: groupId, // Note: mobile uses same ID for group/category contextually
+          priority,
+          assignedTo: (assignMode === 'SINGLE' || assignMode === 'SELF') ? assigneeIds[0] : null,
+          group: groupId,
+          recurrence: {
+            frequency: recurrenceConfig.frequency,
+            interval: parseInt(recurrenceConfig.interval) || 1,
+            startDate: dueDate.toISOString(),
+            endType: recurrenceConfig.endType,
+          },
+        });
+        Alert.alert('✅ Template Created', 'Recurring task template created successfully!', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        await tasksApi.createTask({
+          title: title.trim(),
+          description: description.trim(),
+          groupId,
+          assignmentMode: assignMode,
+          assigneeIds: assignMode === 'ALL' ? [] : assigneeIds,
+          priority,
+          dueDate: dueDate.toISOString(),
+        });
+        Alert.alert('✅ Task Created', 'Task created successfully!', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (e) {
       Alert.alert('Error', e.response?.data?.message || e.message || 'Failed to create task');
     } finally {
@@ -147,40 +195,49 @@ export const TaskCreateScreen = ({ navigation }) => {
             </View>
 
             {/* Priority */}
-            <PickerModal
+            <MultiPicker
               label="Priority *"
               options={PRIORITIES}
-              value={priority}
-              onSelect={setPriority}
+              selectedValues={priority}
+              onToggle={setPriority}
             />
 
             {/* Group */}
-            <PickerModal
+            <MultiPicker
               label="Group *"
               options={groups}
-              value={groupId}
-              onSelect={setGroupId}
+              selectedValues={groupId}
+              onToggle={setGroupId}
             />
 
-            {/* Assign To */}
-            <PickerModal
-              label="Assign To *"
-              options={users}
-              value={assignedTo}
-              onSelect={setAssignedTo}
+            {/* Assignment Mode */}
+            <MultiPicker
+              label="Assignment Mode *"
+              options={MODES}
+              selectedValues={assignMode}
+              onToggle={(m) => {
+                setAssignMode(m);
+                if (m === 'SELF') setAssigneeIds([user?._id]);
+                else if (m === 'ALL') setAssigneeIds([]);
+              }}
             />
+
+            {/* Assign To Users */}
+            {(assignMode === 'SINGLE' || assignMode === 'MULTI') && (
+              <MultiPicker
+                label={assignMode === 'SINGLE' ? "Assign To *" : "Assign To (Multiple) *"}
+                options={users}
+                selectedValues={assigneeIds}
+                onToggle={toggleAssignee}
+              />
+            )}
 
             {/* Due Date */}
             <View style={styles.field}>
-              <Text style={styles.label}>Due Date & Time *</Text>
-              <View style={styles.dateRow}>
-                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
-                  <Text style={styles.dateBtnText}>📅 {format(dueDate, 'dd MMM yyyy')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
-                  <Text style={styles.dateBtnText}>🕐 {format(dueDate, 'HH:mm')}</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.label}>Due Date *</Text>
+              <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.dateBtnText}>📅 {format(dueDate, 'dd MMM yyyy')}</Text>
+              </TouchableOpacity>
             </View>
 
             {showDatePicker && (
@@ -191,14 +248,79 @@ export const TaskCreateScreen = ({ navigation }) => {
                 onChange={(e, d) => { setShowDatePicker(false); if (d) setDueDate(d); }}
               />
             )}
-            {showTimePicker && (
-              <DateTimePicker
-                value={dueDate}
-                mode="time"
-                display="default"
-                onChange={(e, d) => { setShowTimePicker(false); if (d) setDueDate(d); }}
-              />
-            )}
+
+            {/* Recurring Options */}
+            <View style={[styles.field, { marginTop: SPACING.sm }]}>
+              <TouchableOpacity 
+                style={styles.recurringOption} 
+                onPress={() => setIsRecurring(!isRecurring)}
+              >
+                <View style={[styles.checkbox, isRecurring && styles.checkboxActive]}>
+                  {isRecurring && <Text style={styles.checkboxTick}>✓</Text>}
+                </View>
+                <View>
+                  <Text style={styles.recurringLabel}>Recurring Task</Text>
+                  <Text style={styles.recurringSub}>Automatically create next task</Text>
+                </View>
+              </TouchableOpacity>
+
+              {isRecurring && (
+                <View style={{ marginTop: SPACING.md, gap: SPACING.sm, paddingLeft: 8, borderLeftWidth: 2, borderColor: COLORS.primary + '40' }}>
+                  <Text style={styles.label}>Frequency</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                    {['DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'].map(f => (
+                      <TouchableOpacity 
+                        key={f}
+                        style={[styles.optionChip, { marginRight: 8 }, recurrenceConfig.frequency === f && styles.optionChipActive]}
+                        onPress={() => setRecurrenceConfig(p => ({ ...p, frequency: f }))}
+                      >
+                        <Text style={[styles.optionChipText, recurrenceConfig.frequency === f && styles.optionChipTextActive]}>
+                          {f.replace(/_/g, ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  <Text style={[styles.label, { marginTop: 8 }]}>Every X (Interval)</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric" 
+                    value={recurrenceConfig.interval} 
+                    onChangeText={(t) => setRecurrenceConfig(p => ({ ...p, interval: t }))} 
+                  />
+                  
+                  <Text style={[styles.label, { marginTop: 8 }]}>End Rule</Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {['NEVER', 'DATE', 'ON_COUNT'].map(e => (
+                      <TouchableOpacity 
+                        key={e}
+                        style={[styles.optionChip, recurrenceConfig.endType === e && styles.optionChipActive]}
+                        onPress={() => setRecurrenceConfig(p => ({ ...p, endType: e }))}
+                      >
+                        <Text style={[styles.optionChipText, recurrenceConfig.endType === e && styles.optionChipTextActive]}>
+                          {e.replace('_', ' ')}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Large Clear Save Button at Bottom */}
+          <View style={{ paddingHorizontal: SPACING.base, marginBottom: 20 }}>
+            <TouchableOpacity 
+              style={[styles.bottomSaveBtn, saving && { opacity: 0.7 }]} 
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.bottomSaveText}>SAVE TASK</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={{ height: 40 }} />
@@ -229,6 +351,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.sm,
     fontSize: FONT.base, color: COLORS.gray900, backgroundColor: COLORS.gray50,
   },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: SPACING.xs },
   optionRow: { flexDirection: 'row', gap: 8, paddingVertical: SPACING.xs },
   optionChip: {
     paddingHorizontal: SPACING.base, paddingVertical: SPACING.xs,
@@ -245,4 +368,29 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary + '08',
   },
   dateBtnText: { fontSize: FONT.sm, color: COLORS.primary, fontWeight: FONT.bold },
+  recurringOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  checkbox: { 
+    width: 24, height: 24, borderRadius: 6, borderWidth: 2, 
+    borderColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' 
+  },
+  checkboxActive: { backgroundColor: COLORS.primary },
+  checkboxTick: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
+  recurringLabel: { fontSize: FONT.base, fontWeight: FONT.bold, color: COLORS.gray900 },
+  recurringSub: { fontSize: FONT.xs, color: COLORS.gray500 },
+  bottomSaveBtn: {
+    backgroundColor: COLORS.primary,
+    height: 56,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.strong,
+    borderWidth: 2,
+    borderColor: COLORS.accent,
+  },
+  bottomSaveText: {
+    color: COLORS.white,
+    fontSize: FONT.md,
+    fontWeight: 'bold',
+    letterSpacing: 1.2,
+  },
 });

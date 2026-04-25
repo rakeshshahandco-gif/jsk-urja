@@ -100,7 +100,7 @@ export const TaskDetailScreen = ({ route, navigation }) => {
     if (!date) return '—';
     try {
       const d = typeof date === 'string' ? parseISO(date) : new Date(date);
-      return format(d, 'dd MMM yyyy HH:mm');
+      return format(d, 'dd MMM yyyy');
     } catch { return '—'; }
   };
 
@@ -133,6 +133,12 @@ export const TaskDetailScreen = ({ route, navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Details</Text>
             <InfoRow label="Due Date" value={formatDate(task.nextDueDate || task.dueDate)} />
+            {(task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency) && (
+              <InfoRow 
+                label="Recurrence" 
+                value={`${(task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency).replace(/_/g, ' ')} (Every ${task.recurrence?.interval || task.taskMasterId?.recurrence?.interval || 1})`} 
+              />
+            )}
             <InfoRow label="Assigned To" value={task.assignedTo?.name || task.assignedTo} />
             <InfoRow label="Created By" value={task.createdBy?.name || task.createdBy} />
             <InfoRow label="Group" value={task.group?.name || task.group} />

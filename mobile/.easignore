@@ -1,0 +1,12 @@
+# Block all heavy folders
+node_modules/
+**/node_modules/**
+.expo/
+**/ .expo/**
+dist/
+build/
+android/
+ios/
+
+# Block git
+.git/

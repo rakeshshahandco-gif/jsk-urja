@@ -22,6 +22,12 @@ export const tasksApi = {
     return response.data;
   },
 
+  // Create new recurring task master
+  createTaskMaster: async (masterData) => {
+    const response = await apiClient.post('/tasks/masters', masterData);
+    return response.data;
+  },
+
   // Update task fields
   updateTask: async (taskId, updateData) => {
     const response = await apiClient.patch(`/tasks/${taskId}`, updateData);
@@ -29,8 +35,8 @@ export const tasksApi = {
   },
 
   // Add a text update/note to a task
-  addUpdate: async (taskId, note) => {
-    const response = await apiClient.post(`/tasks/${taskId}/updates`, { note });
+  addUpdate: async (taskId, text) => {
+    const response = await apiClient.post(`/tasks/${taskId}/updates`, { text });
     return response.data;
   },
 

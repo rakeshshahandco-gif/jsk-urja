@@ -1,0 +1,7 @@
+# Master ignore for EAS
+mobile/node_modules/
+mobile/.expo/
+node_modules/
+.expo/
+**/node_modules/**
+**/ .expo/**

@@ -1,9 +1,6 @@
+mobile/node_modules/
+mobile/.expo/
 node_modules/
-dist/
-.env
-backend/.env
-backend/node_modules/
-backend/.whatsapp-session/
-*.log
-backend/*.log
-.DS_Store
+.expo/
+**/node_modules/**
+**/ .expo/**

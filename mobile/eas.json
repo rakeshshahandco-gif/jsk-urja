@@ -3,19 +3,31 @@
     "version": ">= 12.0.0"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal",
+    "local": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "package": "com.jskurja.crm.local"
+      },
+      "env": {
+        "APP_ENV": "local"
+      }
+    },
+    "staging": {
+      "android": {
+        "buildType": "apk",
+        "package": "com.jskurja.crm.staging"
+      },
+      "env": {
+        "APP_ENV": "staging"
       }
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "package": "com.jskurja.crm"
+      },
+      "env": {
+        "APP_ENV": "production"
       }
     }
   },

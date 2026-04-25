@@ -4,6 +4,7 @@ export const COLORS = {
   primaryLight: '#3b82f6',
   primaryDark: '#1e40af',
   accent: '#f59e0b',        // Amber
+  secondary: '#f59e0b',     // Secondary matches accent
   success: '#10b981',
   danger: '#ef4444',
   warning: '#f59e0b',
@@ -50,8 +51,10 @@ export const FONT = {
   lg: 19,
   xl: 22,
   xxl: 26,
+  extraBold: '800',
   bold: '700',
   semibold: '600',
+  medium: '500',
   regular: '400',
 };
 
@@ -80,6 +83,13 @@ export const SHADOW = {
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
   },
   strong: {
     shadowColor: '#1e3a8a',

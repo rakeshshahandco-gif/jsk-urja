@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import ENV from '../config/env';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
 export const LoginScreen = () => {
@@ -104,6 +105,11 @@ export const LoginScreen = () => {
               <Text style={styles.testBtnText}>TEST CONNECTION</Text>
             </TouchableOpacity>
 
+            <View style={styles.envBadge}>
+              <Text style={styles.envText}>v{ENV.version} • {ENV.envName}</Text>
+              <Text style={styles.serverText}>{ENV.apiUrl}</Text>
+            </View>
+
             <Text style={styles.hint}>
               Use the same credentials as your CRM desktop login
             </Text>
@@ -174,5 +180,16 @@ const styles = StyleSheet.create({
   },
   testBtnText: { color: COLORS.primary, fontSize: FONT.xs, fontWeight: FONT.bold },
   hint: { textAlign: 'center', fontSize: FONT.xs, color: COLORS.gray400, marginTop: SPACING.base },
+  envBadge: {
+    marginTop: SPACING.lg,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.gray50,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.gray100,
+  },
+  envText: { fontSize: 10, fontWeight: 'bold', color: COLORS.gray500, marginBottom: 2 },
+  serverText: { fontSize: 9, color: COLORS.primary, opacity: 0.7 },
   footer: { textAlign: 'center', fontSize: FONT.xs, color: COLORS.white + '80', paddingTop: SPACING.xl },
 });
