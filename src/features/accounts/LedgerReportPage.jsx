@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, SearchableSelect } from '@/components/ui';
 import { Printer, FileText, ArrowDownLeft, ArrowUpRight, Trash2, ArrowUpCircle, ArrowDownCircle, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getLedgers, getLedgerStatement, cancelVoucher } from '@/services/accountApi';
+import { getLedgers, getLedgerStatement, cancelVoucher, getVoucher } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
 import { useFYDateRange } from '@/contexts/FinancialYearContext';
 import FYBadge from '@/components/ui/FYBadge';
@@ -67,9 +67,25 @@ const LedgerReportPage = ({ defaultType = null }) => {
         }
     };
 
-    const handleEdit = (entry) => {
+    const handleEdit = async (entry) => {
         const id = entry.voucherId;
-        const nature = entry.voucherNature || '';
+        let nature = entry.voucherNature;
+        
+        // Fallback heuristics if nature is missing from backend response
+        if (!nature) {
+            const vNo = entry.voucherNumber || entry.voucherNo || '';
+            if (vNo.includes('REC')) nature = 'Receipt';
+            else if (vNo.includes('PAY')) nature = 'Payment';
+            else if (vNo.includes('EXP')) nature = 'Expense';
+            else if (vNo.includes('JOU')) nature = 'Journal';
+            else {
+                // Fetch from API as a last resort
+                try {
+                    const v = await getVoucher(id);
+                    if (v && v.nature) nature = v.nature;
+                } catch(e) {}
+            }
+        }
         
         let path = '';
         if (nature === 'Receipt') path = `/accounts/receipt-entry/edit/${id}`;

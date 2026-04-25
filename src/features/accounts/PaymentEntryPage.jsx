@@ -314,6 +314,7 @@ const PaymentEntryPage = () => {
                         { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }
                     ]
                 }));
+                }
             }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save payment');

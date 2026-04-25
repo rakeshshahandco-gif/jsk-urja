@@ -161,6 +161,7 @@ const JournalEntryPage = () => {
             if (shouldClose) {
                 navigate(PATHS.ACCOUNTS.VOUCHERS);
             }
+            }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save journal');
         } finally {
