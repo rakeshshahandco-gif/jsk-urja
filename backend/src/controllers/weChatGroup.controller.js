@@ -1,6 +1,9 @@
 import httpStatus from 'http-status';
 import { WeChatGroup } from '../models/weChatGroup.model.js';
 import { WeChatGroupMember } from '../models/weChatGroupMember.model.js';
+import { WeChatProduct } from '../models/weChatProduct.model.js';
+import { WeChatContact } from '../models/weChatContact.model.js';
+import { WeChatPriceRecord } from '../models/weChatPriceRecord.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -122,4 +125,134 @@ export const removeGroupMember = asyncHandler(async (req, res) => {
     const { membershipId } = req.params;
     await WeChatGroupMember.findByIdAndDelete(membershipId);
     res.send(new ApiResponse(httpStatus.OK, null, 'Group member removed'));
+});
+
+// --- Bulk Save / Deep Create Group ---
+
+export const createGroupDeep = asyncHandler(async (req, res) => {
+    const { groupDetails, productRates, members } = req.body;
+
+    // 1. Save Group
+    if (!groupDetails.entryNo) {
+        groupDetails.entryNo = await generateGroupNo();
+    }
+    
+    let group;
+    if (groupDetails._id) {
+        group = await WeChatGroup.findByIdAndUpdate(groupDetails._id, groupDetails, { new: true });
+    } else {
+        group = await WeChatGroup.create({
+            ...groupDetails,
+            createdBy: req.user._id
+        });
+    }
+
+    // 2. Process Members (Sync to Contact Master)
+    const memberIdMap = {}; // Map temp ID or WeChat ID to MongoDB ID
+    
+    for (const member of (members || [])) {
+        let contact;
+        // Search by WeChat ID if available, or try to find existing by Mobile
+        if (member.weChatId) {
+            contact = await WeChatContact.findOne({ weChatId: member.weChatId });
+        } else if (member.mobile) {
+            contact = await WeChatContact.findOne({ mobile: member.mobile });
+        }
+
+        if (contact) {
+            // Update existing contact with any new info
+            contact = await WeChatContact.findByIdAndUpdate(contact._id, member, { new: true });
+        } else {
+            // Create new contact
+            const lastContact = await WeChatContact.findOne().sort({ createdAt: -1 });
+            let nextNum = 1;
+            if (lastContact && lastContact.entryNo) {
+                const match = lastContact.entryNo.match(/WCC-(\d+)/);
+                if (match) nextNum = parseInt(match[1]) + 1;
+            }
+            const entryNo = `WCC-${String(nextNum).padStart(4, '0')}`;
+            
+            contact = await WeChatContact.create({
+                ...member,
+                entryNo,
+                createdBy: req.user._id
+            });
+        }
+
+        memberIdMap[member.tempId || member.weChatId || member.weChatDisplayName] = contact._id;
+
+        // Ensure member is linked to group
+        const existingMembership = await WeChatGroupMember.findOne({ groupId: group._id, contactId: contact._id });
+        if (!existingMembership) {
+            await WeChatGroupMember.create({
+                groupId: group._id,
+                contactId: contact._id,
+                roleInGroup: member.role || 'Unknown',
+                isMainDealingPerson: member.isMainContact || false,
+                remarks: member.remarks,
+                addedBy: req.user._id
+            });
+        }
+    }
+
+    // 3. Process Products & Price Records
+    for (const rate of (productRates || [])) {
+        let product;
+        if (rate.productId) {
+            product = await WeChatProduct.findById(rate.productId);
+        } else {
+            // Try to find by partNumber
+            product = await WeChatProduct.findOne({ partNumber: rate.partNumber });
+        }
+
+        if (!product) {
+            // Create new product
+            product = await WeChatProduct.create({
+                productName: rate.productName,
+                chineseProductName: rate.chineseProductName,
+                category: rate.productCategory,
+                brandName: rate.brandName,
+                modelNo: rate.modelNo,
+                specification: rate.specification,
+                partNumber: rate.partNumber,
+                createdBy: req.user._id
+            });
+        } else {
+            // Update product details if provided
+            await WeChatProduct.findByIdAndUpdate(product._id, {
+                chineseProductName: rate.chineseProductName || product.chineseProductName,
+                category: rate.productCategory || product.category,
+                brandName: rate.brandName || product.brandName,
+                modelNo: rate.modelNo || product.modelNo,
+                specification: rate.specification || product.specification
+            });
+        }
+
+        // Create Price Record (Quotation)
+        // Map quotedByMember to contactId
+        const contactId = memberIdMap[rate.quotedByMember] || null;
+        
+        await WeChatPriceRecord.create({
+            productId: product._id,
+            groupId: group._id,
+            contactId: contactId,
+            partNumber: product.partNumber,
+            productCategory: product.category,
+            productName: product.productName,
+            brandName: product.brandName,
+            modelNo: product.modelNo,
+            price: rate.rateRMB || 0,
+            currency: rate.currency || 'RMB',
+            moq: rate.moq || 0,
+            samplePrice: rate.sampleRateRMB || 0,
+            bulkPrice: rate.bulkRateRMB || 0,
+            leadTimeDays: rate.leadTime || 0,
+            remarks: rate.remarks,
+            quotationDate: rate.quotationDate || new Date(),
+            source: 'group_chat',
+            recordedBy: req.user._id
+        });
+    }
+
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, group, 'Group saved successfully with products and members synced'));
 });

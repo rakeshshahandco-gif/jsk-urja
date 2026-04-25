@@ -44,6 +44,19 @@ const weChatProductSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    brandName: {
+        type: String,
+        trim: true
+    },
+    modelNo: {
+        type: String,
+        trim: true,
+        index: true
+    },
+    specification: {
+        type: String,
+        trim: true
+    },
     partNumber: {
         type: String,
         trim: true,
@@ -84,6 +97,8 @@ weChatProductSchema.index({
     chineseProductName: 'text',
     partNumber: 'text',
     altPartNumbers: 'text',
+    brandName: 'text',
+    modelNo: 'text',
     description: 'text',
     technicalSpec: 'text',
     application: 'text'

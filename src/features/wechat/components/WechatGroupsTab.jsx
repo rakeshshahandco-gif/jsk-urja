@@ -1,25 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users, Shield, MessageSquare, ChevronRight, Package, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getWeChatGroups, createWeChatGroup } from '../../../services/weChatApi';
+import { getWeChatGroups } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/Input';
 
 const WechatGroupsTab = ({ onSelectGroup }) => {
+    const navigate = useNavigate();
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [newGroup, setNewGroup] = useState({
-        groupName: '',
-        chineseGroupName: '',
-        groupAlias: '',
-        groupCreatedBy: '',
-        purpose: '',
-        category: '',
-        groupSource: 'WeChat'
-    });
 
     useEffect(() => {
         fetchGroups();
@@ -37,18 +28,6 @@ const WechatGroupsTab = ({ onSelectGroup }) => {
         }
     };
 
-    const handleCreateGroup = async (e) => {
-        e.preventDefault();
-        try {
-            await createWeChatGroup(newGroup);
-            toast.success('Group created successfully');
-            setShowAddModal(false);
-            fetchGroups();
-        } catch (err) {
-            toast.error('Failed to create group');
-        }
-    };
-
     return (
         <div className="p-8 h-full flex flex-col gap-6 overflow-hidden">
             {/* Header */}
@@ -57,8 +36,8 @@ const WechatGroupsTab = ({ onSelectGroup }) => {
                     <h2 className="text-2xl font-black text-slate-800 tracking-tight">WeChat Groups</h2>
                     <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Track multi-member supplier groups and technical chats</p>
                 </div>
-                <Button onClick={() => setShowAddModal(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 px-6 shadow-lg shadow-emerald-100">
-                    <Plus size={20} /> New Group
+                <Button onClick={() => navigate('/china-supplier/groups/new')} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 px-6 shadow-lg shadow-emerald-100">
+                    <Plus size={20} /> New Group (Deep Sync)
                 </Button>
             </div>
 
@@ -134,40 +113,6 @@ const WechatGroupsTab = ({ onSelectGroup }) => {
                     </div>
                 )}
             </div>
-
-            {/* Add Group Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <form onSubmit={handleCreateGroup} className="bg-white rounded-[3rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-10 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="text-3xl font-black text-slate-800">Create WeChat Group</h3>
-                            <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Organize multi-supplier communication channels</p>
-                        </div>
-                        <div className="p-10 space-y-6">
-                            <Input 
-                                label="Group Name *" 
-                                value={newGroup.groupName} 
-                                onChange={e => setNewGroup({...newGroup, groupName: e.target.value})}
-                                placeholder="Exact name as seen on WeChat" 
-                                required 
-                            />
-                            <div className="grid grid-cols-2 gap-6">
-                                <Input label="English Alias / Short Name" value={newGroup.groupAlias} onChange={e => setNewGroup({...newGroup, groupAlias: e.target.value})} placeholder="e.g. Tuya Tech Support" />
-                                <Input label="Chinese Group Name" value={newGroup.chineseGroupName} onChange={e => setNewGroup({...newGroup, chineseGroupName: e.target.value})} placeholder="e.g. 涂鸦技术交流群" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-6">
-                                <Input label="Related Product / Category" value={newGroup.category} onChange={e => setNewGroup({...newGroup, category: e.target.value})} placeholder="e.g. Zigbee Modules" />
-                                <Input label="Group Created By" value={newGroup.groupCreatedBy} onChange={e => setNewGroup({...newGroup, groupCreatedBy: e.target.value})} placeholder="Person name" />
-                            </div>
-                            <Input label="Group Purpose / Remarks" value={newGroup.purpose} onChange={e => setNewGroup({...newGroup, purpose: e.target.value})} placeholder="e.g. Daily pricing and technical updates" />
-                        </div>
-                        <div className="p-10 bg-slate-50 flex justify-end gap-4">
-                            <Button type="button" variant="ghost" onClick={() => setShowAddModal(false)} className="font-bold text-slate-400">Cancel</Button>
-                            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl px-10 font-black shadow-xl shadow-emerald-100">Establish Group</Button>
-                        </div>
-                    </form>
-                </div>
-            )}
         </div>
     );
 };

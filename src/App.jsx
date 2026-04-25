@@ -141,6 +141,7 @@ const RdComparisonPage = lazy(() => import('./features/rdSamples/pages/RdCompari
 
 // WeChat Module
 const WechatListPage = lazy(() => import('./features/wechat/pages/WechatListPage'));
+const WechatGroupCreatePage = lazy(() => import('./features/wechat/pages/WechatGroupCreatePage'));
 
 // HR Module
 import ShiftList from '@/features/hr/components/ShiftMaster/ShiftList';
@@ -415,6 +416,7 @@ const AppLayout = () => {
 
                         {/* WeChat Module */}
                         <Route path="/wechat/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/wechat/groups/new" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
 
                         {/* China Supplier / WeChat Contacts Module */}
                         <Route path="/china-supplier" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
@@ -422,6 +424,7 @@ const AppLayout = () => {
                         <Route path="/china-supplier/products" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/groups" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/groups/new" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
                         <Route path="/china-supplier/prices" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/samples" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/reports" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />

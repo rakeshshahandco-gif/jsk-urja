@@ -43,6 +43,8 @@ router.route('/contacts/:contactId')
 router.route('/groups')
     .post(groupController.createGroup)
     .get(groupController.getGroups);
+router.route('/groups/deep')
+    .post(groupController.createGroupDeep);
 router.route('/groups/:groupId')
     .get(groupController.getGroup)
     .put(groupController.updateGroup)

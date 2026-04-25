@@ -61,7 +61,7 @@ const weChatContactSchema = new mongoose.Schema({
         enum: ['Owner', 'Sales', 'Technical', 'Export', 'Unknown', 'Other'],
         default: 'Unknown'
     },
-    language: {
+    communicationLanguage: {
         type: String,
         enum: ['Chinese', 'English', 'Other'],
         default: 'Chinese'

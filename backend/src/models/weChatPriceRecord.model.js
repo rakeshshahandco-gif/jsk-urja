@@ -38,6 +38,8 @@ const weChatPriceRecordSchema = new mongoose.Schema({
     partNumber: { type: String, trim: true, index: true },
     productCategory: { type: String, trim: true },
     productName: { type: String, trim: true },
+    brandName: { type: String, trim: true },
+    modelNo: { type: String, trim: true, index: true },
 
     // Price Details
     price: { type: Number, required: true },

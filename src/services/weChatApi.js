@@ -1,4 +1,5 @@
 import api from './api';
+export { api };
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
 export const getWeChatContacts = (query) => api.get('/wechat/contacts', { params: query });
