@@ -1,48 +1,94 @@
 import express from 'express';
-import * as weChatController from '../../controllers/weChat.controller.js';
-import { protect, checkPermission } from '../../middlewares/auth.middleware.js';
+import { protect } from '../../middlewares/auth.middleware.js';
+import * as contactController from '../../controllers/weChatContact.controller.js';
+import * as groupController from '../../controllers/weChatGroup.controller.js';
+import * as productController from '../../controllers/weChatProduct.controller.js';
+import * as priceController from '../../controllers/weChatPriceRecord.controller.js';
+import * as sampleController from '../../controllers/weChatSample.controller.js';
+import * as followUpController from '../../controllers/weChatFollowUp.controller.js';
+import * as searchController from '../../controllers/weChatSearch.controller.js';
+import * as exportController from '../../controllers/weChatExport.controller.js';
+import * as importController from '../../controllers/weChatImport.controller.js';
+import * as dashboardController from '../../controllers/weChatDashboard.controller.js';
+import multer from 'multer';
 import { prdUpload } from '../../middlewares/prdUpload.middleware.js';
 
+const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
-
 router.use(protect);
 
-// ── Unified Search ───────────────────────────────────────────────────────────
-router.get('/search', checkPermission('wechat.contacts.view'), weChatController.searchUnified);
+// Dashboard
+router.get('/dashboard', dashboardController.getDashboardStats);
 
-// ── Export ──────────────────────────────────────────────────────────────────
-router.get('/export/contacts', checkPermission('wechat.contacts.view'), weChatController.exportContacts);
-router.get('/export/comparison', checkPermission('wechat.contacts.view'), weChatController.exportComparison);
+// Global Search
+router.get('/search', searchController.globalSearch);
 
-// ── Contacts ─────────────────────────────────────────────────────────────────
+// Exports
+router.get('/export/contacts', exportController.exportContacts);
+router.get('/export/prices', exportController.exportPriceComparison);
+
+// Imports
+router.post('/import/contacts', upload.single('file'), importController.importContacts);
+
+// Contacts
 router.route('/contacts')
-    .get(checkPermission('wechat.contacts.view'), weChatController.getContacts)
-    .post(checkPermission('wechat.contacts.manage'), weChatController.createContact);
-
+    .post(contactController.createContact)
+    .get(contactController.getContacts);
 router.route('/contacts/:contactId')
-    .get(checkPermission('wechat.contacts.view'), weChatController.getContact)
-    .patch(checkPermission('wechat.contacts.manage'), weChatController.updateContact)
-    .delete(checkPermission('wechat.contacts.delete'), weChatController.deleteContact);
+    .get(contactController.getContact)
+    .put(contactController.updateContact)
+    .delete(contactController.deleteContact);
 
-router.post('/contacts/:contactId/notes', checkPermission('wechat.contacts.notes'), weChatController.addNoteToContact);
-
-// ── Groups ───────────────────────────────────────────────────────────────────
+// Groups
 router.route('/groups')
-    .get(checkPermission('wechat.contacts.view'), weChatController.getGroups)
-    .post(checkPermission('wechat.contacts.manage'), weChatController.createGroup);
-
+    .post(groupController.createGroup)
+    .get(groupController.getGroups);
 router.route('/groups/:groupId')
-    .get(checkPermission('wechat.contacts.view'), weChatController.getGroup)
-    .patch(checkPermission('wechat.contacts.manage'), weChatController.updateGroup)
-    .delete(checkPermission('wechat.contacts.delete'), weChatController.deleteGroup);
+    .get(groupController.getGroup)
+    .put(groupController.updateGroup)
+    .delete(groupController.deleteGroup);
 
-router.post('/groups/:groupId/notes', checkPermission('wechat.contacts.notes'), weChatController.addNoteToGroup);
+// Group Members
+router.route('/groups/:groupId/members')
+    .post(groupController.addGroupMember);
+router.route('/groups/members/:membershipId')
+    .put(groupController.updateGroupMember)
+    .delete(groupController.removeGroupMember);
 
-// ── Attachments ──────────────────────────────────────────────────────────────
-router.post('/attachments/:targetType/:targetId', 
-    checkPermission('wechat.contacts.manage'), 
-    prdUpload.single('file'), 
-    weChatController.uploadAttachment
-);
+// Products
+router.route('/products')
+    .post(productController.createProduct)
+    .get(productController.getProducts);
+router.route('/products/:productId')
+    .get(productController.getProduct)
+    .put(productController.updateProduct)
+    .delete(productController.deleteProduct);
+
+// Prices
+router.route('/products/:productId/prices')
+    .get(priceController.getProductPrices);
+router.route('/prices')
+    .post(priceController.createPriceRecord)
+    .get(priceController.getPrices);
+router.route('/prices/:priceId')
+    .put(priceController.updatePriceRecord)
+    .delete(priceController.deletePriceRecord);
+
+// Samples
+router.route('/samples')
+    .post(sampleController.createSample)
+    .get(sampleController.getSamples);
+router.route('/samples/:sampleId')
+    .get(sampleController.getSample)
+    .put(sampleController.updateSample)
+    .delete(sampleController.deleteSample);
+
+// Follow-Ups
+router.route('/followups')
+    .post(followUpController.createFollowUp)
+    .get(followUpController.getFollowUps);
+router.route('/followups/:followUpId')
+    .put(followUpController.updateFollowUp)
+    .delete(followUpController.deleteFollowUp);
 
 export default router;

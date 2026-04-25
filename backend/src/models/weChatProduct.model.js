@@ -16,22 +16,25 @@ const attachmentSchema = new mongoose.Schema({
 });
 
 const weChatProductSchema = new mongoose.Schema({
-    // Link to supplier contact
-    contactId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'WeChatContact',
-        required: true,
+    // This is now a standalone master product, not tied to a single contact
+    // Products have many suppliers, managed via WeChatPriceRecord
+    
+    // Product Identity
+    productName: {
+        type: String,
+        trim: true,
+        required: true
+    },
+    productCode: {
+        type: String,
+        trim: true,
         index: true
     },
-    // Optional link to group (if discovered in a group)
-    groupId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'WeChatGroup',
-        default: null
+    chineseProductName: {
+        type: String,
+        trim: true
     },
-
-    // Product Identity
-    productCategory: {
+    category: {
         type: String,
         trim: true,
         index: true
@@ -50,17 +53,16 @@ const weChatProductSchema = new mongoose.Schema({
     altPartNumbers: [String], // Alternate / old part codes
 
     // Technical Details
-    brand: { type: String, trim: true },
-    specification: { type: String, trim: true }, // Short technical description
+    description: { type: String, trim: true },
+    technicalSpec: { type: String, trim: true },
+    application: { type: String, trim: true },
     
-    // Commercial Terms
-    moq: { type: Number, default: 0 },
-    leadTimeDays: { type: Number, default: 0 },
-    currency: { type: String, default: 'RMB' },
-
-    // Latest price snapshot (denormalized for quick display — full history in WeChatPriceRecord)
-    latestPrice: { type: Number, default: null },
-    latestPriceDate: { type: Date, default: null },
+    // Status
+    status: {
+        type: String,
+        enum: ['New', 'Under R&D', 'Sample Ordered', 'Approved', 'Rejected', 'Regular Purchase', 'Discontinued'],
+        default: 'New'
+    },
 
     // Status
     isActive: { type: Boolean, default: true },
@@ -76,12 +78,15 @@ const weChatProductSchema = new mongoose.Schema({
 
 // Full-text search indexes
 weChatProductSchema.index({
-    productCategory: 'text',
+    category: 'text',
     productName: 'text',
+    productCode: 'text',
+    chineseProductName: 'text',
     partNumber: 'text',
     altPartNumbers: 'text',
-    brand: 'text',
-    specification: 'text'
+    description: 'text',
+    technicalSpec: 'text',
+    application: 'text'
 });
 
 const WeChatProduct = mongoose.model('WeChatProduct', weChatProductSchema);

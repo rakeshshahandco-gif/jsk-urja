@@ -27,19 +27,18 @@ const weChatGroupSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    groupCreatedBy: String,
     purpose: String,
-    category: String, // e.g., "Supplier Group", "Technolgoy Group"
-    
-    // Searchable items
-    productKeywords: [String],
-    relatedItems: [String],
-    relatedCompanies: [String],
+    category: String,
+    groupSource: {
+        type: String,
+        enum: ['WeChat', 'Other'],
+        default: 'WeChat'
+    },
+    remarks: String,
     
     // Relationships
-    memberIds: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'WeChatContact'
-    }],
+    // Note: Members are mapped using WeChatGroupMember join collection for role management
     
     // Attachments & Documentation
     attachments: [{
@@ -50,8 +49,8 @@ const weChatGroupSchema = new mongoose.Schema({
         notes: String,
         type: { 
             type: String, 
-            enum: ['Catalog', 'Price List', 'Screenshot', 'Manual', 'Other'],
-            default: 'Other'
+            enum: ['Group Screenshot', 'Other'],
+            default: 'Group Screenshot'
         },
         uploadDate: { type: Date, default: Date.now },
         uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
@@ -83,9 +82,7 @@ weChatGroupSchema.index({
     groupAlias: 'text', 
     chineseGroupName: 'text', 
     purpose: 'text',
-    productKeywords: 'text',
-    relatedItems: 'text',
-    relatedCompanies: 'text'
+    remarks: 'text'
 });
 
 const WeChatGroup = mongoose.model('WeChatGroup', weChatGroupSchema);

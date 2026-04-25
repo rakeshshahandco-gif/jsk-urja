@@ -81,9 +81,6 @@ import adminRoute from './admin.routes.js';
 import utilsRoute from './utils.routes.js';
 import rdSampleRoute from './rdSample.routes.js';
 import weChatRoute from './weChat.routes.js';
-import weChatProductRoute from './weChatProduct.routes.js';
-import weChatPriceRoute from './weChatPriceRecord.routes.js';
-import weChatChatRoute from './weChatChat.routes.js';
 import analyticsRoute from './analytics.routes.js';
 import salesConversionRoute from './salesConversion.routes.js';
 import transporterRoute from './transporter.routes.js';
@@ -438,19 +435,7 @@ const defaultRoutes = [
         path: '/wechat',
         route: weChatRoute,
     },
-    // ── WeChat Intelligence Module (new) ──────────────────────────────────────
-    {
-        path: '/wechat/products',
-        route: weChatProductRoute,
-    },
-    {
-        path: '/wechat/prices',
-        route: weChatPriceRoute,
-    },
-    {
-        path: '/wechat/chats',
-        route: weChatChatRoute,
-    },
+
   {
     path: '/analytics',
     route: analyticsRoute,

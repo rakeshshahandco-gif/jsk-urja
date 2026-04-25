@@ -41,15 +41,31 @@ const weChatPriceRecordSchema = new mongoose.Schema({
 
     // Price Details
     price: { type: Number, required: true },
-    currency: { type: String, default: 'RMB' },
+    currency: { 
+        type: String, 
+        enum: ['RMB', 'USD', 'INR', 'Other'],
+        default: 'RMB' 
+    },
     moq: { type: Number, default: 0 },
+    samplePrice: { type: Number, default: 0 },
+    bulkPrice: { type: Number, default: 0 },
+    priceValidityDate: { type: Date },
     leadTimeDays: { type: Number, default: 0 },
+    paymentTerms: { type: String, trim: true },
+    shippingTerms: { type: String, trim: true },
+    warrantyNotes: { type: String, trim: true },
+    technicalRemarks: { type: String, trim: true },
 
     // Meta
     source: {
         type: String,
         enum: ['group_chat', 'individual_chat', 'manual', 'quotation_file'],
         default: 'manual'
+    },
+    status: {
+        type: String,
+        enum: ['Best Price', 'Negotiation', 'Sample Ordered', 'Rejected', 'Approved Supplier', 'Pending'],
+        default: 'Pending'
     },
     quotationDate: { type: Date, default: Date.now },
     remarks: { type: String },

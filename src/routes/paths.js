@@ -140,6 +140,16 @@ export const PATHS = {
         ROOT: '/wechat',
         CONTACTS: '/wechat/contacts',
     },
+    CHINA_SUPPLIER: {
+        ROOT: '/china-supplier',
+        DASHBOARD: '/china-supplier/dashboard',
+        PRODUCTS: '/china-supplier/products',
+        CONTACTS: '/china-supplier/contacts',
+        GROUPS: '/china-supplier/groups',
+        PRICES: '/china-supplier/prices',
+        SAMPLES: '/china-supplier/samples',
+        REPORTS: '/china-supplier/reports',
+    },
     EWAY_BILL: {
         ROOT: '/eway-bills',
         LIST: '/eway-bills/list',

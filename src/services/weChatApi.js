@@ -1,57 +1,55 @@
 import api from './api';
 
-// ── Unified Search & Export ──────────────────────────────────────────────────
-export const searchWeChatUnified = (query) => api.get('/wechat/search', { params: query });
-export const exportWeChatContacts = (query) => api.get('/wechat/export/contacts', { params: query, responseType: 'blob' });
-export const exportWeChatComparison = (query) => api.get('/wechat/export/comparison', { params: query, responseType: 'blob' });
-
 // ── Contacts ─────────────────────────────────────────────────────────────────
 export const getWeChatContacts = (query) => api.get('/wechat/contacts', { params: query });
 export const getWeChatContact = (id) => api.get(`/wechat/contacts/${id}`);
 export const createWeChatContact = (data) => api.post('/wechat/contacts', data);
-export const updateWeChatContact = (id, data) => api.patch(`/wechat/contacts/${id}`, data);
+export const updateWeChatContact = (id, data) => api.put(`/wechat/contacts/${id}`, data);
 export const deleteWeChatContact = (id) => api.delete(`/wechat/contacts/${id}`);
-export const addWeChatContactNote = (id, data) => api.post(`/wechat/contacts/${id}/notes`, data);
 
 // ── Groups ───────────────────────────────────────────────────────────────────
 export const getWeChatGroups = (query) => api.get('/wechat/groups', { params: query });
 export const getWeChatGroup = (id) => api.get(`/wechat/groups/${id}`);
 export const createWeChatGroup = (data) => api.post('/wechat/groups', data);
-export const updateWeChatGroup = (id, data) => api.patch(`/wechat/groups/${id}`, data);
+export const updateWeChatGroup = (id, data) => api.put(`/wechat/groups/${id}`, data);
 export const deleteWeChatGroup = (id) => api.delete(`/wechat/groups/${id}`);
-export const addWeChatGroupNote = (id, data) => api.post(`/wechat/groups/${id}/notes`, data);
 
-// ── Attachments ──────────────────────────────────────────────────────────────
-export const uploadWeChatAttachment = (targetType, targetId, formData) => 
-    api.post(`/wechat/attachments/${targetType}/${targetId}`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
+// ── Group Members ────────────────────────────────────────────────────────────
+export const addWeChatGroupMember = (groupId, data) => api.post(`/wechat/groups/${groupId}/members`, data);
+export const updateWeChatGroupMember = (membershipId, data) => api.put(`/wechat/groups/members/${membershipId}`, data);
+export const removeWeChatGroupMember = (membershipId) => api.delete(`/wechat/groups/members/${membershipId}`);
 
-// ── Products (Supplier Part / Product Mapping) ────────────────────────────────
-export const getWeChatProducts = (params) => api.get('/wechat/products', { params });
+// ── Products (R&D Product Master) ────────────────────────────────────────────
+export const getWeChatProducts = (query) => api.get('/wechat/products', { params: query });
 export const getWeChatProduct = (id) => api.get(`/wechat/products/${id}`);
 export const createWeChatProduct = (data) => api.post('/wechat/products', data);
-export const updateWeChatProduct = (id, data) => api.patch(`/wechat/products/${id}`, data);
+export const updateWeChatProduct = (id, data) => api.put(`/wechat/products/${id}`, data);
 export const deleteWeChatProduct = (id) => api.delete(`/wechat/products/${id}`);
-export const uploadWeChatProductAttachment = (productId, formData) =>
-    api.post(`/wechat/products/${productId}/attachments`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
 
-// KEY: Cross-supplier comparison for same part number
-export const compareWeChatProducts = (params) => api.get('/wechat/products/compare', { params });
-
-// ── Price Records (Immutable Price History) ───────────────────────────────────
-export const getWeChatPrices = (params) => api.get('/wechat/prices', { params });
+// ── Price Records (Supplier Matrix) ──────────────────────────────────────────
+export const getWeChatPrices = (query) => api.get('/wechat/prices', { params: query });
+export const getWeChatProductPrices = (productId) => api.get(`/wechat/products/${productId}/prices`);
 export const addWeChatPriceRecord = (data) => api.post('/wechat/prices', data);
+export const createWeChatPriceRecord = (data) => api.post('/wechat/prices', data);
+export const updateWeChatPriceRecord = (id, data) => api.put(`/wechat/prices/${id}`, data);
 export const deleteWeChatPriceRecord = (id) => api.delete(`/wechat/prices/${id}`);
-export const getWeChatPriceTrend = (params) => api.get('/wechat/prices/trend', { params });
 
-// ── Chat / Communication History ─────────────────────────────────────────────
-export const getWeChatChats = (params) => api.get('/wechat/chats', { params });
-export const addWeChatChat = (data) => api.post('/wechat/chats', data);
-export const deleteWeChatChat = (id) => api.delete(`/wechat/chats/${id}`);
-export const uploadWeChatChatAttachment = (chatId, formData) =>
-    api.post(`/wechat/chats/${chatId}/attachments`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
+// ── Search & Utils ────────────────────────────────────────────────────────────
+export const getWeChatDashboardStats = () => api.get('/wechat/dashboard');
+export const globalWeChatSearch = (q) => api.get('/wechat/search', { params: { q } });
+export const exportWeChatContacts = () => api.get('/wechat/export/contacts', { responseType: 'blob' });
+export const exportWeChatPrices = (productId) => api.get('/wechat/export/prices', { params: { productId }, responseType: 'blob' });
+export const importWeChatContacts = (formData) => api.post('/wechat/import/contacts', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+// ── Samples ──────────────────────────────────────────────────────────────────
+export const getWeChatSamples = (query) => api.get('/wechat/samples', { params: query });
+export const getWeChatSample = (id) => api.get(`/wechat/samples/${id}`);
+export const createWeChatSample = (data) => api.post('/wechat/samples', data);
+export const updateWeChatSample = (id, data) => api.put(`/wechat/samples/${id}`, data);
+export const deleteWeChatSample = (id) => api.delete(`/wechat/samples/${id}`);
+
+// ── Follow Ups / Notes ───────────────────────────────────────────────────────
+export const getWeChatFollowUps = (query) => api.get('/wechat/followups', { params: query });
+export const createWeChatFollowUp = (data) => api.post('/wechat/followups', data);
+export const updateWeChatFollowUp = (id, data) => api.put(`/wechat/followups/${id}`, data);
+export const deleteWeChatFollowUp = (id) => api.delete(`/wechat/followups/${id}`);

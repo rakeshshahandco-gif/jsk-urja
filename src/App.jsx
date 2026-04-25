@@ -416,6 +416,16 @@ const AppLayout = () => {
                         {/* WeChat Module */}
                         <Route path="/wechat/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
 
+                        {/* China Supplier / WeChat Contacts Module */}
+                        <Route path="/china-supplier" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/dashboard" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/products" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/groups" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/prices" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/samples" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/reports" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
+
                         <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
 
 

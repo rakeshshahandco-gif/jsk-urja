@@ -49,18 +49,29 @@ const weChatContactSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    contactPersonName: String, // Individual name if company contact
+    contactPersonName: String,
     country: String,
     city: String,
     mobile: String,
+    whatsapp: String,
     weChatId: String,
     email: String,
-    region: String,        // e.g. Shenzhen, Guangdong, Dongguan
-    channelName: String,   // e.g. Alibaba, 1688, Direct, WeChat Group
-    productKeywords: [String],
-    relatedItems: [String],
-    businessCategory: String,
-    supplierType: String,
+    role: {
+        type: String,
+        enum: ['Owner', 'Sales', 'Technical', 'Export', 'Unknown', 'Other'],
+        default: 'Unknown'
+    },
+    language: {
+        type: String,
+        enum: ['Chinese', 'English', 'Other'],
+        default: 'Chinese'
+    },
+    source: {
+        type: String,
+        enum: ['WeChat', 'Alibaba', 'Made-in-China', 'Reference', 'Exhibition', 'Other'],
+        default: 'Other'
+    },
+    remarks: String,
     
     // Relationships
     groupIds: [{
@@ -76,7 +87,7 @@ const weChatContactSchema = new mongoose.Schema({
         size: Number,
         type: { 
             type: String, 
-            enum: ['Catalog', 'Price List', 'Screenshot', 'Manual', 'Other'],
+            enum: ['Profile Screenshot', 'Business Card', 'Other'],
             default: 'Other'
         },
         uploadDate: { type: Date, default: Date.now }
@@ -106,8 +117,9 @@ weChatContactSchema.index({
     companyName: 'text',
     searchKeywords: 'text',
     shortCode: 'text',
-    region: 'text',
-    channelName: 'text'
+    country: 'text',
+    city: 'text',
+    remarks: 'text'
 });
 
 const WeChatContact = mongoose.model('WeChatContact', weChatContactSchema);
