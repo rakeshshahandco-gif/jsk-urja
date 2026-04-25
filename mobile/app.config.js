@@ -16,6 +16,7 @@ export default ({ config }) => {
   return {
     ...config,
     name: names[env],
+    slug: 'jsk-urja-tasks',
     android: {
       ...config.android,
       package: packages[env],
