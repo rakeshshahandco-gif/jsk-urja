@@ -8,11 +8,11 @@ import {
 } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers, getAccountGroups,
-    createVoucher, createLedger
+    createVoucher, createLedger, getVoucher, updateVoucher
 } from '@/services/accountApi';
 import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -30,6 +30,8 @@ const ExpenseEntryPage = () => {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { id } = useParams();
+    const isEdit = !!id;
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -93,6 +95,39 @@ const ExpenseEntryPage = () => {
         };
         fetchData();
     }, []);
+
+    // Effect for loading existing voucher data in edit mode
+    useEffect(() => {
+        if (isEdit && ledgers.length > 0) {
+            const fetchVoucherData = async () => {
+                try {
+                    const response = await getVoucher(id);
+                    if (!response) throw new Error('Voucher not found');
+                    
+                    setFormData({
+                        ...response,
+                        date: response.date ? new Date(response.date).toISOString().split('T')[0] : '',
+                        supplierBillDate: response.supplierBillDate ? new Date(response.supplierBillDate).toISOString().split('T')[0] : '',
+                        dueDate: response.dueDate ? new Date(response.dueDate).toISOString().split('T')[0] : '',
+                        voucherTypeId: response.voucherType?._id || response.voucherType,
+                        cashBankAccountId: response.cashBankAccountId?._id || response.cashBankAccountId,
+                        partyId: response.partyId?._id || response.partyId,
+                        items: response.items.map(item => ({
+                            ...item,
+                            id: item._id || Date.now() + Math.random(),
+                            ledgerId: item.ledgerId?._id || item.ledgerId,
+                            ledgerName: item.ledgerId?.name || item.ledgerName
+                        }))
+                    });
+                } catch (error) {
+                    console.error('FetchVoucher Error:', error);
+                    toast.error('Failed to load expense for editing');
+                    navigate(PATHS.ACCOUNTS.VOUCHERS);
+                }
+            };
+            fetchVoucherData();
+        }
+    }, [id, isEdit, ledgers.length]);
 
     // Helper for Real-time Totals
     const calculateTotals = (items, isGst, gstType) => {
@@ -307,23 +342,29 @@ const ExpenseEntryPage = () => {
                 }))
             };
 
-            const response = await createVoucher(payload);
-            const savedNo = response?.data?.voucherNo || 'Voucher';
-            toast.success(`${savedNo} saved successfully`);
-            
-            // STAY ON PAGE FOR FAST ENTRY (Reset but keep date and vType)
-            setFormData(prev => ({
-                ...INITIAL_FORM_STATE,
-                date: prev.date,
-                voucherTypeId: prev.voucherTypeId,
-                expenseType: prev.expenseType,
-                cashBankAccountId: prev.cashBankAccountId,
-                items: [{ id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }]
-            }));
-            
-            // If explicit close requested (optional flag)
-            if (shouldClose) {
-                navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
+            if (isEdit) {
+                await updateVoucher(id, payload);
+                toast.success('Expense updated successfully');
+                navigate(PATHS.ACCOUNTS.VOUCHERS);
+            } else {
+                const response = await createVoucher(payload);
+                const savedNo = response?.data?.voucherNo || 'Voucher';
+                toast.success(`${savedNo} saved successfully`);
+                
+                // STAY ON PAGE FOR FAST ENTRY (Reset but keep date and vType)
+                setFormData(prev => ({
+                    ...INITIAL_FORM_STATE,
+                    date: prev.date,
+                    voucherTypeId: prev.voucherTypeId,
+                    expenseType: prev.expenseType,
+                    cashBankAccountId: prev.cashBankAccountId,
+                    items: [{ id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }]
+                }));
+                
+                // If explicit close requested (optional flag)
+                if (shouldClose) {
+                    navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
+                }
             }
         } catch (error) {
             console.error('Save error:', error);
@@ -347,7 +388,7 @@ const ExpenseEntryPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
                         <h1 style={{ margin: '0 0 4px', fontSize: '26px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>
-                            💸 Expense Voucher
+                            💸 {isEdit ? 'Edit Expense' : 'Expense Voucher'}
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record business expenses with optional GST Input Credit</p>
                     </div>
@@ -586,7 +627,7 @@ const ExpenseEntryPage = () => {
                         <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '12px 40px', borderRadius: '10px', background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#3730a3)', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 800, fontSize: '15px', boxShadow: '0 10px 15px -3px rgba(79, 70, 229, 0.3)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Posting...' : 'Post & New Entry'}
+                            {isSubmitting ? 'Posting...' : (isEdit ? 'Update Expense' : 'Post & New Entry')}
                         </button>
                     </div>
                 </div>

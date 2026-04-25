@@ -60,6 +60,9 @@ export const getVoucher = (id) =>
 export const createVoucher = (data) =>
     apiClient.post('/vouchers', data).then(r => r.data.data);
 
+export const updateVoucher = (id, data) =>
+    apiClient.patch(`/vouchers/${id}`, data).then(r => r.data.data);
+
 export const cancelVoucher = (id) =>
     apiClient.post(`/vouchers/${id}/cancel`).then(r => r.data);
 
@@ -111,6 +114,7 @@ const accountApi = {
     getVouchers,
     getVoucher,
     createVoucher,
+    updateVoucher,
     cancelVoucher,
     getLedgerReport,
     getLedgerStatement,

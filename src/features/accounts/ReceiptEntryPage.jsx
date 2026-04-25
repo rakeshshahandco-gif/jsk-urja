@@ -5,10 +5,10 @@ import {
 import { Plus, Trash2, Save, Layers } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers,
-    getOutstandingBills, createVoucher
+    getOutstandingBills, createVoucher, getVoucher, updateVoucher
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -23,6 +23,8 @@ const ReceiptEntryPage = () => {
     const [ledgers, setLedgers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { id } = useParams();
+    const isEdit = !!id;
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -79,6 +81,36 @@ const ReceiptEntryPage = () => {
         fetchData();
     }, []);
 
+    // Effect for loading existing voucher data in edit mode
+    useEffect(() => {
+        if (isEdit && ledgers.length > 0) {
+            const fetchVoucherData = async () => {
+                try {
+                    const response = await getVoucher(id);
+                    if (!response) throw new Error('Voucher not found');
+                    
+                    setFormData({
+                        ...response,
+                        date: response.date ? new Date(response.date).toISOString().split('T')[0] : '',
+                        voucherTypeId: response.voucherType?._id || response.voucherType,
+                        cashBankAccountId: response.cashBankAccountId?._id || response.cashBankAccountId,
+                        items: response.items.map(item => ({
+                            ...item,
+                            id: item._id || Date.now() + Math.random(),
+                            ledgerId: item.ledgerId?._id || item.ledgerId,
+                            ledgerName: item.ledgerId?.name || item.ledgerName
+                        }))
+                    });
+                } catch (error) {
+                    console.error('FetchVoucher Error:', error);
+                    toast.error('Failed to load voucher for editing');
+                    navigate(PATHS.ACCOUNTS.VOUCHERS);
+                }
+            };
+            fetchVoucherData();
+        }
+    }, [id, isEdit, ledgers.length]);
+
     // Effect for handling incoming state (e.g. from Sales Invoice)
     useEffect(() => {
         if (!location.state?.invoiceId && !location.state?.customerId) return;
@@ -93,20 +125,30 @@ const ReceiptEntryPage = () => {
         let targetLedgerId = location.state?.ledgerId || '';
         let targetLedgerName = location.state?.ledgerName || '';
 
-        if (!targetLedgerId && ledgers.length > 0) {
-            // Match by referenceId (CustomerId)
-            const matchedByRef = ledgers.find(l => l.referenceId?.toString() == customerId?.toString());
+        if (!targetLedgerId && ledgers.length > 0 && customerId) {
+            // Match by referenceId (CustomerId) and ensure it's a Customer ledger
+            const matchedByRef = ledgers.find(l => 
+                l.referenceId?.toString() === customerId?.toString() && 
+                l.referenceModel === 'Customer'
+            );
+
             if (matchedByRef) {
                 targetLedgerId = matchedByRef._id;
                 targetLedgerName = matchedByRef.name;
             } else {
-                // Match by name
-                const matchedByName = ledgers.find(l => l.name?.trim().toLowerCase() === customerName?.trim().toLowerCase());
+                // Match by name as secondary fallback
+                const matchedByName = ledgers.find(l => 
+                    l.name?.trim().toLowerCase() === customerName?.trim().toLowerCase()
+                );
                 if (matchedByName) {
                     targetLedgerId = matchedByName._id;
                     targetLedgerName = matchedByName.name;
                 }
             }
+        }
+
+        if (fromInvoice && !targetLedgerId && ledgers.length > 0) {
+            toast.error(`Accounting Ledger for "${customerName}" not found. Please ensure the customer is properly linked to a ledger.`, { duration: 5000 });
         }
 
         setFormData(prev => ({
@@ -296,34 +338,43 @@ const ReceiptEntryPage = () => {
 
         setIsSubmitting(true);
         try {
-            const response = await createVoucher({ 
-                ...formData, 
-                nature: 'Receipt',
-                voucherType: formData.voucherTypeId 
-            });
-            const savedNo = response?.data?.voucherNo || 'Voucher';
-            toast.success(`${savedNo} saved successfully`);
-            
-            if (fromInvoice || shouldClose) {
-                navigate(-1);
+            if (isEdit) {
+                await updateVoucher(id, { 
+                    ...formData, 
+                    nature: 'Receipt'
+                });
+                toast.success(`Voucher updated successfully`);
+                navigate(PATHS.ACCOUNTS.VOUCHERS);
             } else {
-                // RESET FOR NEXT ENTRY (KEEP DATE/ACCOUNTS)
-                setFormData(prev => ({
-                    ...INITIAL_FORM_STATE,
-                    voucherTypeId: prev.voucherTypeId,
-                    date: prev.date,
-                    cashBankAccountId: prev.cashBankAccountId,
-                    instrumentType: prev.instrumentType,
-                    items: [{ 
-                        id: Date.now(), 
-                        ledgerId: '', 
-                        ledgerName: '', 
-                        amount: 0, 
-                        type: 'Credit', 
-                        narration: '', 
-                        adjustments: []
-                    }]
-                }));
+                const response = await createVoucher({ 
+                    ...formData, 
+                    nature: 'Receipt',
+                    voucherType: formData.voucherTypeId 
+                });
+                const savedNo = response?.data?.voucherNo || 'Voucher';
+                toast.success(`${savedNo} saved successfully`);
+                
+                if (fromInvoice || shouldClose) {
+                    navigate(-1);
+                } else {
+                    // RESET FOR NEXT ENTRY (KEEP DATE/ACCOUNTS)
+                    setFormData(prev => ({
+                        ...INITIAL_FORM_STATE,
+                        voucherTypeId: prev.voucherTypeId,
+                        date: prev.date,
+                        cashBankAccountId: prev.cashBankAccountId,
+                        instrumentType: prev.instrumentType,
+                        items: [{ 
+                            id: Date.now(), 
+                            ledgerId: '', 
+                            ledgerName: '', 
+                            amount: 0, 
+                            type: 'Credit', 
+                            narration: '', 
+                            adjustments: []
+                        }]
+                    }));
+                }
             }
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save receipt');
@@ -351,7 +402,7 @@ const ReceiptEntryPage = () => {
                             onClick={() => navigate(-1)}
                             style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}
                         >← Back to Invoice</button>
-                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Record Payment</h1>
+                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{isEdit ? 'Edit Payment' : 'Record Payment'}</h1>
                         <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Confirm payment details and select account</p>
                     </div>
 
@@ -386,7 +437,11 @@ const ReceiptEntryPage = () => {
                                     alignItems: 'center'
                                 }}>
                                     <span>{custName}</span>
-                                    <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Linked</span>
+                                    {formData.items[0]?.ledgerId ? (
+                                        <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Linked</span>
+                                    ) : (
+                                        <span style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase', fontWeight: 800 }}>Not Linked</span>
+                                    )}
                                 </div>
                             </div>
                             {/* Amount */}
@@ -497,7 +552,7 @@ const ReceiptEntryPage = () => {
                             disabled={isSubmitting || loading}
                             style={{ flex: 2, padding: '13px', border: 'none', borderRadius: 9, background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#0d9488,#0891b2)', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 12px rgba(13,148,136,0.35)' }}
                         >
-                            {isSubmitting ? 'Saving...' : `💳  Save Receipt  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                            {isSubmitting ? 'Saving...' : (isEdit ? `💳  Update Receipt  ₹${amount.toLocaleString('en-IN')}` : `💳  Save Receipt  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`)}
                         </button>
                     </div>
                 </div>
@@ -516,7 +571,7 @@ const ReceiptEntryPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
                         <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-                            🧾 Receipt Entry
+                            🧾 {isEdit ? 'Edit Receipt' : 'Receipt Entry'}
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record money received from customers or other sources</p>
                     </div>
@@ -709,7 +764,7 @@ const ReceiptEntryPage = () => {
                         <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : '#2563eb', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Post & New Receipt'}
+                            {isSubmitting ? 'Saving...' : (isEdit ? 'Update Receipt' : 'Post & New Receipt')}
                         </button>
                     </div>
                 </div>

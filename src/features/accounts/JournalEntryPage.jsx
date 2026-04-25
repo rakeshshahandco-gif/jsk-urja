@@ -4,10 +4,10 @@ import {
 } from '@/components/ui';
 import { Plus, Trash2, Save, BookOpen, AlertCircle } from 'lucide-react';
 import {
-    getVoucherTypes, getLedgers, createVoucher
+    getVoucherTypes, getLedgers, createVoucher, getVoucher, updateVoucher
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
@@ -18,6 +18,8 @@ const JournalEntryPage = () => {
     const [ledgers, setLedgers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { id } = useParams();
+    const isEdit = !!id;
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -52,6 +54,35 @@ const JournalEntryPage = () => {
         };
         fetchData();
     }, []);
+
+    // Load voucher for editing
+    useEffect(() => {
+        if (isEdit && ledgers.length > 0) {
+            const fetchVoucherData = async () => {
+                try {
+                    const response = await getVoucher(id);
+                    if (!response) throw new Error('Voucher not found');
+                    
+                    setFormData({
+                        ...response,
+                        date: response.date ? new Date(response.date).toISOString().split('T')[0] : '',
+                        voucherTypeId: response.voucherType?._id || response.voucherType,
+                        items: response.items.map(item => ({
+                            ...item,
+                            id: item._id || Date.now() + Math.random(),
+                            ledgerId: item.ledgerId?._id || item.ledgerId,
+                            ledgerName: item.ledgerId?.name || item.ledgerName
+                        }))
+                    });
+                } catch (error) {
+                    console.error('FetchVoucher Error:', error);
+                    toast.error('Failed to load voucher for editing');
+                    navigate(PATHS.ACCOUNTS.VOUCHERS);
+                }
+            };
+            fetchVoucherData();
+        }
+    }, [id, isEdit, ledgers.length]);
 
     const totals = formData.items.reduce((acc, item) => {
         if (item.type === 'Debit') acc.debit += (item.amount || 0);
@@ -107,15 +138,20 @@ const JournalEntryPage = () => {
 
         setIsSubmitting(true);
         try {
-            const response = await createVoucher({ ...formData, nature: 'Journal', totalAmount: totals.debit });
-            const savedNo = response?.data?.voucherNo || 'Voucher';
-            toast.success(`${savedNo} saved successfully`);
-            
-            // Stay on page and reset (KEEP DATE)
-            setFormData(prev => ({
-                ...INITIAL_FORM_STATE,
-                date: prev.date,
-                voucherTypeId: prev.voucherTypeId,
+            if (isEdit) {
+                await updateVoucher(id, { ...formData, nature: 'Journal', totalAmount: totals.debit });
+                toast.success('Journal updated successfully');
+                navigate(PATHS.ACCOUNTS.VOUCHERS);
+            } else {
+                const response = await createVoucher({ ...formData, nature: 'Journal', totalAmount: totals.debit });
+                const savedNo = response?.data?.voucherNo || 'Voucher';
+                toast.success(`${savedNo} saved successfully`);
+                
+                // Stay on page and reset (KEEP DATE)
+                setFormData(prev => ({
+                    ...INITIAL_FORM_STATE,
+                    date: prev.date,
+                    voucherTypeId: prev.voucherTypeId,
                 items: [
                     { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '' },
                     { id: Date.now() + 1, ledgerId: '', ledgerName: '', amount: 0, type: 'Credit', narration: '' }
@@ -145,7 +181,7 @@ const JournalEntryPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
                         <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-                            ⚖️ Journal Voucher
+                            ⚖️ {isEdit ? 'Edit Journal' : 'Journal Voucher'}
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Double-entry adjustments (Total Dr must equal Total Cr)</p>
                     </div>
@@ -324,7 +360,7 @@ const JournalEntryPage = () => {
                         <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting || !isBalanced}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: (isSubmitting || !isBalanced) ? '#9ca3af' : 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff', border: 'none', cursor: (isSubmitting || !isBalanced) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Post & New Journal'}
+                            {isSubmitting ? 'Saving...' : (isEdit ? 'Update Journal' : 'Post & New Journal')}
                         </button>
                     </div>
                 </div>

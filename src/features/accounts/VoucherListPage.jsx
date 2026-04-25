@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Button, Select, useModal
 } from "@/components/ui";
-import { Search, Calendar, XCircle, Eye, Printer, Receipt, CreditCard, Wallet, Landmark, Info, Tag, Layers } from "lucide-react";
+import { Search, Calendar, XCircle, Eye, Printer, Receipt, CreditCard, Wallet, Landmark, Info, Tag, Layers, Pencil } from "lucide-react";
 import { getVouchers, cancelVoucher } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
 import { useFYDateRange } from "@/contexts/FinancialYearContext";
@@ -137,6 +138,7 @@ const VoucherDetail = ({ voucher }) => {
 }
 
 const VoucherListPage = () => {
+    const navigate = useNavigate();
     const fyDateRange = useFYDateRange();
     const { openModal } = useModal();
     const [vouchers, setVouchers] = useState([]);
@@ -184,6 +186,20 @@ const VoucherListPage = () => {
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to cancel voucher');
         }
+    };
+
+    const handleEdit = (v) => {
+        if (v.status === 'Cancelled') return toast.error('Cannot edit a cancelled voucher');
+        
+        let path = '';
+        const nature = v.nature;
+        if (nature === 'Receipt') path = `/accounts/receipt-entry/edit/${v._id}`;
+        else if (nature === 'Payment') path = `/accounts/payment-entry/edit/${v._id}`;
+        else if (nature === 'Expense') path = `/accounts/expense-entry/edit/${v._id}`;
+        else if (nature === 'Journal') path = `/accounts/journal-entry/edit/${v._id}`;
+        
+        if (path) navigate(path);
+        else toast.error('Edit not supported for this voucher type yet');
     };
 
     const StatusBadge = ({ status }) => {
@@ -275,13 +291,22 @@ const VoucherListPage = () => {
                                                 <Eye size={18} />
                                             </button>
                                             {v.status !== 'Cancelled' && (
-                                                <button
-                                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                                                    onClick={() => handleCancel(v._id)}
-                                                    title="Cancel Voucher"
-                                                >
-                                                    <XCircle size={18} />
-                                                </button>
+                                                <>
+                                                    <button
+                                                        className="p-2 text-slate-300 hover:text-amber-500 transition-colors"
+                                                        onClick={() => handleEdit(v)}
+                                                        title="Edit Voucher"
+                                                    >
+                                                        <Pencil size={18} />
+                                                    </button>
+                                                    <button
+                                                        className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                                        onClick={() => handleCancel(v._id)}
+                                                        title="Cancel Voucher"
+                                                    >
+                                                        <XCircle size={18} />
+                                                    </button>
+                                                </>
                                             )}
                                         </div>
                                     </td>

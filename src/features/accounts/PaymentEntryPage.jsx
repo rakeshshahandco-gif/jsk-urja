@@ -5,10 +5,10 @@ import {
 import { Plus, Trash2, Save, Layers } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers,
-    getOutstandingBills, createVoucher
+    getOutstandingBills, createVoucher, getVoucher, updateVoucher
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
@@ -23,6 +23,8 @@ const PaymentEntryPage = () => {
     const [ledgers, setLedgers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { id } = useParams();
+    const isEdit = !!id;
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -288,14 +290,19 @@ const PaymentEntryPage = () => {
 
         setIsSubmitting(true);
         try {
-            const response = await createVoucher({ ...formData, nature: 'Payment' });
-            const savedNo = response?.data?.voucherNo || 'Voucher';
-            toast.success(`${savedNo} saved successfully`);
-            
-            // If linked to an invoice, always return back
-            if (fromInvoice || shouldClose) {
-                navigate(-1);
+            if (isEdit) {
+                await updateVoucher(id, { ...formData, nature: 'Payment' });
+                toast.success('Voucher updated successfully');
+                navigate(PATHS.ACCOUNTS.VOUCHERS);
             } else {
+                const response = await createVoucher({ ...formData, nature: 'Payment' });
+                const savedNo = response?.data?.voucherNo || 'Voucher';
+                toast.success(`${savedNo} saved successfully`);
+                
+                // If linked to an invoice, always return back
+                if (fromInvoice || shouldClose) {
+                    navigate(-1);
+                } else {
                 // RESET FORM FOR NEXT ENTRY
                 setFormData(prev => ({
                     ...INITIAL_FORM_STATE,
@@ -424,7 +431,7 @@ const PaymentEntryPage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <div>
                         <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-                            💸 Payment Entry
+                            💸 {isEdit ? 'Edit Payment' : 'Payment Entry'}
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record money paid to suppliers or for expenses</p>
                     </div>
@@ -611,7 +618,7 @@ const PaymentEntryPage = () => {
                         <button type="button" onClick={handleSaveAndNew} disabled={isSubmitting}
                             style={{ padding: '10px 28px', borderRadius: '8px', background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#4f46e5,#7c3aed)', color: '#fff', border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <Save size={18} />
-                            {isSubmitting ? 'Saving...' : 'Post & New Payment'}
+                            {isSubmitting ? 'Saving...' : (isEdit ? 'Update Payment' : 'Post & New Payment')}
                         </button>
                     </div>
                 </div>

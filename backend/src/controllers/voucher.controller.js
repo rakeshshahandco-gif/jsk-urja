@@ -429,3 +429,178 @@ export const cancelVoucher = asyncHandler(async (req, res) => {
         session.endSession();
     }
 });
+
+export const updateVoucher = asyncHandler(async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const oldVoucher = await Voucher.findById(id).session(session);
+        if (!oldVoucher) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher not found');
+        if (oldVoucher.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot edit a cancelled voucher');
+
+        // 1. REVERSE OLD IMPACTS (Same as Cancel)
+        const entries = await LedgerEntry.find({ voucherId: oldVoucher._id }).session(session);
+        for (const entry of entries) {
+            const ledger = await AccountLedger.findById(entry.ledgerId).session(session);
+            if (ledger) {
+                const reverseChange = entry.type === 'Debit' ? -entry.amount : entry.amount;
+                ledger.currentBalance += reverseChange;
+                await ledger.save({ session });
+            }
+
+            if (entry.cashBankAccountId) {
+                const cbAcc = await CashBankAccount.findById(entry.cashBankAccountId).session(session);
+                if (cbAcc) {
+                    const reverseChange = entry.type === 'Debit' ? -entry.amount : entry.amount;
+                    cbAcc.currentBalance += reverseChange;
+                    await cbAcc.save({ session });
+                }
+            }
+        }
+        await LedgerEntry.deleteMany({ voucherId: oldVoucher._id }).session(session);
+
+        for (const item of oldVoucher.items) {
+            for (const adj of item.adjustments) {
+                if (adj.adjustmentType === 'Against Bill') {
+                    if (oldVoucher.nature === 'Receipt') {
+                        const invoice = await SalesInvoice.findById(adj.refId).session(session);
+                        if (invoice) {
+                            invoice.paidAmount -= adj.amount;
+                            if (invoice.paidAmount <= 0) invoice.paymentStatus = 'Unpaid';
+                            else invoice.paymentStatus = 'Partially Paid';
+                            // Remove from payments log if applicable (optional but cleaner)
+                            invoice.payments = invoice.payments.filter(p => p.reference !== oldVoucher.voucherNo);
+                            await invoice.save({ session });
+                        }
+                    } else if (oldVoucher.nature === 'Payment') {
+                        const pi = await PurchaseInvoice.findById(adj.refId).session(session);
+                        if (pi) {
+                            pi.paidAmount -= adj.amount;
+                            if (pi.paidAmount <= 0) pi.paymentStatus = 'Unpaid';
+                            else pi.paymentStatus = 'Partially Paid';
+                            await pi.save({ session });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. APPLY NEW DATA
+        const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
+        const fy = req.body.financialYear || getFYFromDate(date || new Date());
+        const voucherNo = oldVoucher.voucherNo; // Keep existing number
+
+        const vType = await VoucherType.findById(voucherTypeId || oldVoucher.voucherType).session(session);
+        const actualNature = vType?.nature || nature || oldVoucher.nature;
+
+        // Update the document fields
+        Object.assign(oldVoucher, req.body, {
+            voucherNo,
+            financialYear: fy,
+            voucherType: vType?._id || oldVoucher.voucherType,
+            nature: actualNature,
+            voucherTypeName: vType?.name || oldVoucher.voucherTypeName,
+            updatedBy: req.user.id,
+            status: 'Confirmed' // Ensure it's active
+        });
+
+        // 3. RE-POST NEW IMPACTS (Same as Create)
+        if (actualNature === 'Journal') {
+            let debitTotal = 0;
+            let creditTotal = 0;
+            for (const item of items) {
+                if (item.type === 'Debit') debitTotal += item.amount;
+                else creditTotal += item.amount;
+
+                await postToLedger({
+                    voucherId: oldVoucher._id, voucherNo, date,
+                    ledgerId: item.ledgerId, amount: item.amount,
+                    type: item.type,
+                    narration: item.narration || narration,
+                    financialYear: fy
+                }, session);
+            }
+            if (Math.abs(debitTotal - creditTotal) > 0.01) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Journal entries must be balanced (Total Dr = Total Cr)');
+            }
+        } else {
+            let mainLedgerId;
+            let mainEntryType = 'Debit';
+            let isCreditExpense = actualNature === 'Expense' && req.body.expenseType === 'Credit';
+            let isGstEnabled = actualNature === 'Expense' && req.body.isGstEnabled;
+            let processingTotal = totalAmount;
+
+            if (isGstEnabled) {
+                const gstResult = calculateVoucherGstTotals(items, req.body.gstType);
+                Object.assign(oldVoucher, gstResult);
+                processingTotal = gstResult.grandTotal;
+                oldVoucher.items = gstResult.updatedItems;
+            }
+
+            if (isCreditExpense) {
+                if (!req.body.partyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Supplier ledger (partyId) is required for Credit Expense');
+                mainLedgerId = req.body.partyId;
+                mainEntryType = 'Credit';
+                oldVoucher.paymentStatus = 'Unpaid';
+                oldVoucher.paidAmount = 0;
+            } else {
+                if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required');
+                const mainLedger = await AccountLedger.findOne({ referenceId: cashBankAccountId }).session(session);
+                if (!mainLedger) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found');
+                mainLedgerId = mainLedger._id;
+                oldVoucher.paymentStatus = 'Paid';
+                oldVoucher.paidAmount = processingTotal;
+                if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
+                else if (actualNature === 'Contra') mainEntryType = req.body.headerType || 'Debit';
+            }
+
+            await postToLedger({
+                voucherId: oldVoucher._id, voucherNo, date,
+                ledgerId: mainLedgerId, amount: processingTotal,
+                type: mainEntryType,
+                narration: narration || `Main entry for ${voucherNo}`,
+                cashBankAccountId: isCreditExpense ? null : cashBankAccountId,
+                financialYear: fy
+            }, session);
+
+            for (const item of oldVoucher.items) {
+                await postToLedger({
+                    voucherId: oldVoucher._id, voucherNo, date,
+                    ledgerId: item.ledgerId, amount: isGstEnabled ? item.taxableAmount : item.amount,
+                    type: item.type,
+                    narration: item.narration || narration,
+                    financialYear: fy
+                }, session);
+
+                if (item.adjustments && item.adjustments.length > 0) {
+                    for (const adj of item.adjustments) {
+                        await adjustBill(adj, actualNature, voucherNo, date, session);
+                    }
+                }
+            }
+
+            if (isGstEnabled) {
+                const cgstLedger = await AccountLedger.findOne({ name: 'CGST Input' }).session(session);
+                const sgstLedger = await AccountLedger.findOne({ name: 'SGST Input' }).session(session);
+                const igstLedger = await AccountLedger.findOne({ name: 'IGST Input' }).session(session);
+                const roundOffLedger = await AccountLedger.findOne({ name: 'Round Off' }).session(session);
+                if (oldVoucher.totalCgst > 0 && cgstLedger) await postToLedger({ voucherId: oldVoucher._id, voucherNo, date, ledgerId: cgstLedger._id, amount: oldVoucher.totalCgst, type: 'Debit', narration: 'Input CGST', financialYear: fy }, session);
+                if (oldVoucher.totalSgst > 0 && sgstLedger) await postToLedger({ voucherId: oldVoucher._id, voucherNo, date, ledgerId: sgstLedger._id, amount: oldVoucher.totalSgst, type: 'Debit', narration: 'Input SGST', financialYear: fy }, session);
+                if (oldVoucher.totalIgst > 0 && igstLedger) await postToLedger({ voucherId: oldVoucher._id, voucherNo, date, ledgerId: igstLedger._id, amount: oldVoucher.totalIgst, type: 'Debit', narration: 'Input IGST', financialYear: fy }, session);
+                if (oldVoucher.roundOff !== 0 && roundOffLedger) await postToLedger({ voucherId: oldVoucher._id, voucherNo, date, ledgerId: roundOffLedger._id, amount: Math.abs(oldVoucher.roundOff), type: oldVoucher.roundOff > 0 ? 'Debit' : 'Credit', narration: 'Round Off', financialYear: fy }, session);
+            }
+        }
+
+        await oldVoucher.save({ session });
+        await session.commitTransaction();
+        res.send(new ApiResponse(httpStatus.OK, oldVoucher, 'Voucher updated successfully'));
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});

@@ -11,7 +11,8 @@ router.route('/')
     .get(controller.getVouchers);
 
 router.route('/:id')
-    .get(controller.getVoucher);
+    .get(controller.getVoucher)
+    .patch(controller.updateVoucher);
 
 router.post('/:id/cancel', controller.cancelVoucher);
 
