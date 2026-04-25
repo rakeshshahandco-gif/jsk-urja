@@ -70,6 +70,27 @@ export const taskGroupsApi = {
     const response = await apiClient.get('/task-groups/my');
     return response.data;
   },
+  // Create a new group
+  createGroup: async (groupData) => {
+    const response = await apiClient.post('/task-groups', groupData);
+    return response.data;
+  },
+};
+
+export const taskCategoriesApi = {
+  // Get all task categories
+  getCategories: async () => {
+    const response = await apiClient.get('/task-categories');
+    return response.data;
+  },
+};
+
+export const teamsApi = {
+  // Get all teams / assignable groups
+  getTeams: async () => {
+    const response = await apiClient.get('/groups'); // Desktop uses /groups for 'teams'
+    return response.data;
+  },
 };
 
 export const usersApi = {

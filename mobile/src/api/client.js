@@ -1,7 +1,6 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
-
 import ENV from '../config/env';
+import { storage } from '../utils/storage';
 
 const BASE_URL = ENV.apiUrl;
 
@@ -17,12 +16,12 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await SecureStore.getItemAsync('auth_token');
+      const token = await storage.getItem('auth_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (e) {
-      console.warn('Could not read token from SecureStore:', e.message);
+      console.warn('Could not read token from storage:', e.message);
     }
     return config;
   },
@@ -34,9 +33,9 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('auth_token');
-      await SecureStore.deleteItemAsync('auth_user');
-      // AuthContext will re-check and redirect to login
+      await storage.removeItem('auth_token');
+      await storage.removeItem('auth_user');
+      // AuthContext will re-check and redirect to login on next action
     }
     return Promise.reject(error);
   }

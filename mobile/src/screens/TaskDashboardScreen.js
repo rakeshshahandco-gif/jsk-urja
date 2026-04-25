@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, SectionList, TouchableOpacity, StyleSheet,
   ActivityIndicator, RefreshControl, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,57 +8,68 @@ import { isPast, isToday, isWithinInterval, addDays, parseISO } from 'date-fns';
 import { tasksApi } from '../api/tasks.api';
 import { useAuth } from '../context/AuthContext';
 import { TaskCard } from '../components/TaskCard';
-import { EmptyState } from '../components/EmptyState';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
-const TABS = [
-  { id: 'overdue', label: 'Overdue', emoji: '🔴', color: COLORS.overdue },
-  { id: 'today', label: 'Today', emoji: '🟡', color: COLORS.today },
-  { id: 'week', label: '7 Days', emoji: '🔵', color: COLORS.upcoming7 },
-  { id: 'future', label: 'Future', emoji: '🟢', color: COLORS.upcomingMore },
-  { id: 'history', label: 'History', emoji: '📁', color: COLORS.gray500 },
-];
-
-const categorize = (tasks) => {
+const categorizeToSections = (tasks) => {
   const now = new Date();
   const in7 = addDays(now, 7);
-  const result = { overdue: [], today: [], week: [], future: [], history: [] };
+  
+  const sections = [
+    { title: 'OVERDUE', data: [], color: '#991b1b', bg: '#fee2e2', count: 0 },
+    { title: 'TODAY', data: [], color: '#9a3412', bg: '#ffedd5', count: 0 },
+    { title: 'UPCOMING (Within 7 Days)', data: [], color: '#854d0e', bg: '#fef9c3', count: 0 },
+    { title: 'UPCOMING (Above 7 Days)', data: [], color: '#1e40af', bg: '#dbeafe', count: 0 },
+  ];
 
   tasks.forEach(task => {
-    // If task is finished, move to history
+    // Skip finished tasks for the dashboard view
     const status = (task.status || '').toUpperCase();
-    if (['COMPLETED', 'CLOSED', 'CONCLUDED'].includes(status)) {
-        result.history.push(task);
-        return;
-    }
+    if (['COMPLETED', 'CLOSED', 'CONCLUDED'].includes(status)) return;
 
     const raw = task.nextDueDate || task.dueDate;
-    if (!raw) { result.future.push(task); return; }
+    if (!raw) { sections[3].data.push(task); return; }
+    
     const d = typeof raw === 'string' ? parseISO(raw) : new Date(raw);
-    if (isPast(d) && !isToday(d)) result.overdue.push(task);
-    else if (isToday(d)) result.today.push(task);
-    else if (isWithinInterval(d, { start: now, end: in7 })) result.week.push(task);
-    else result.future.push(task);
+    
+    if (isPast(d) && !isToday(d)) {
+      sections[0].data.push(task);
+      sections[0].count++;
+    } else if (isToday(d)) {
+      sections[1].data.push(task);
+      sections[1].count++;
+    } else if (isWithinInterval(d, { start: now, end: in7 })) {
+      sections[2].data.push(task);
+      sections[2].count++;
+    } else {
+      sections[3].data.push(task);
+      sections[3].count++;
+    }
   });
-  return result;
+
+  return sections.filter(s => s.data.length > 0 || s.title === 'TODAY'); // Keep TODAY even if empty
 };
 
 export const TaskDashboardScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('overdue');
-  const [allTasks, setAllTasks] = useState([]);
-  const [categorized, setCategorized] = useState({ overdue: [], today: [], week: [], future: [], history: [] });
+  const [sections, setSections] = useState([]);
+  const [summary, setSummary] = useState({ overdue: 0, today: 0, upcoming: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-
 
   const fetchTasks = useCallback(async () => {
     try {
       const res = await tasksApi.getTasks({ limit: 1000 });
       const tasks = res?.results || res?.data?.tasks || res?.tasks || res?.data || (Array.isArray(res) ? res : []);
-      setAllTasks(tasks);
-      setCategorized(categorize(tasks));
+      const processed = categorizeToSections(tasks);
+      setSections(processed);
+      
+      // Update summary counts
+      setSummary({
+        overdue: processed[0]?.count || 0,
+        today: processed[1]?.count || 0,
+        upcoming: (processed[2]?.count || 0) + (processed[3]?.count || 0)
+      });
     } catch (e) {
       console.error('Task fetch error:', e.message);
     } finally {
@@ -71,210 +82,137 @@ export const TaskDashboardScreen = ({ navigation }) => {
 
   const onRefresh = () => { setRefreshing(true); fetchTasks(); };
 
-  const displayTasks = (categorized[activeTab] || []).filter(t => {
-    if (!t) return false;
-
-    // 1. Search Filter
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      (t.title || t.name || '').toLowerCase().includes(q) ||
-      (t.group?.name || t.group || '').toLowerCase().includes(q) ||
-      (t.customerName || '').toLowerCase().includes(q)
-    );
-  });
+  const filteredSections = sections.map(section => ({
+    ...section,
+    data: section.data.filter(t => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        (t.title || t.name || '').toLowerCase().includes(q) ||
+        (t.group?.name || t.group || '').toLowerCase().includes(q) ||
+        (t.customerName || '').toLowerCase().includes(q)
+      );
+    })
+  })).filter(s => s.data.length > 0 || s.title === 'TODAY');
 
   const userName = user?.name || user?.username || 'User';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Top Header - White Background */}
+      <View style={styles.topHeader}>
         <View>
-          <Text style={styles.greeting}>Hello, {userName.split(' ')[0]} 👋</Text>
-          <Text style={styles.subtitle}>Task Management</Text>
+          <Text style={styles.headerTitle}>Manage Tasks</Text>
+          <Text style={styles.headerSubtitle}>Assign and follow up your business tasks</Text>
         </View>
-        <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('CreateTask')}>
+          <Text style={styles.newBtnText}>+ New Task</Text>
         </TouchableOpacity>
       </View>
 
-
-
-      {/* Quick Actions Bar */}
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: COLORS.secondary + '15'}]} onPress={() => navigation.navigate('CreateInvoice')}>
-          <Text style={[styles.quickBtnText, {color: COLORS.secondary}]}>🧾 +Invoice</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: COLORS.primary + '15'}]} onPress={() => navigation.navigate('CreateOrder')}>
-          <Text style={[styles.quickBtnText, {color: COLORS.primary}]}>📝 +Order</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.quickBtn, {backgroundColor: '#25D36615'}]} onPress={() => navigation.navigate('CreateCustomer')}>
-          <Text style={[styles.quickBtnText, {color: '#128C7E'}]}>👤 +Customer</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
-        {TABS.map(tab => {
-          const count = categorized[tab.id]?.length || 0;
-          const isActive = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tab, isActive && { borderBottomColor: tab.color, borderBottomWidth: 3 }]}
-              onPress={() => setActiveTab(tab.id)}
-            >
-              <Text style={styles.tabEmoji}>{tab.emoji}</Text>
-              <Text style={[styles.tabLabel, isActive && { color: tab.color, fontWeight: FONT.bold }]}>
-                {tab.label}
-              </Text>
-              {count > 0 && (
-                <View style={[styles.badge, { backgroundColor: tab.color }]}>
-                  <Text style={styles.badgeText}>{count}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchRow}>
+      {/* Filter Bar - Greyish */}
+      <View style={styles.filterBar}>
         <TextInput
           style={styles.searchInput}
-          placeholder="🔍 Search tasks..."
+          placeholder="Search task name, group..."
           placeholderTextColor={COLORS.gray400}
           value={search}
           onChangeText={setSearch}
         />
-        <TouchableOpacity
-          style={styles.newBtn}
-          onPress={() => navigation.navigate('CreateTask')}
-        >
-          <Text style={styles.newBtnText}>+ New</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Task List */}
+      {/* Summary Status Bar - Mirrors Desktop Dots */}
+      <View style={styles.summaryBar}>
+        <View style={styles.summaryItem}>
+          <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />
+          <Text style={styles.summaryLabel}>OVERDUE: <Text style={{ fontWeight: 'bold' }}>{summary.overdue}</Text></Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />
+          <Text style={styles.summaryLabel}>TODAY: <Text style={{ fontWeight: 'bold' }}>{summary.today}</Text></Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <View style={[styles.dot, { backgroundColor: '#3b82f6' }]} />
+          <Text style={styles.summaryLabel}>UPCOMING: <Text style={{ fontWeight: 'bold' }}>{summary.upcoming}</Text></Text>
+        </View>
+      </View>
+
+      {/* Sectioned Task List */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading tasks...</Text>
         </View>
       ) : (
-        <FlatList
-          data={displayTasks}
-          keyExtractor={(item) => item._id || Math.random().toString()}
+        <SectionList
+          sections={filteredSections}
+          keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
             <TaskCard
               task={item}
               onPress={(task) => navigation.navigate('TaskDetail', { task })}
             />
           )}
+          renderSectionHeader={({ section: { title, color, bg, data } }) => (
+            <View style={[styles.sectionHeader, { backgroundColor: bg }]}>
+               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
+                  <View style={[styles.countBadge, { backgroundColor: color }]}>
+                     <Text style={styles.countText}>{data.length}</Text>
+                  </View>
+               </View>
+            </View>
+          )}
+          stickySectionHeadersEnabled={true}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
+          contentContainerStyle={{ paddingBottom: 100 }}
           ListEmptyComponent={
-            <EmptyState
-              icon={activeTab === 'overdue' ? '✅' : '📋'}
-              message={`No ${TABS.find(t => t.id === activeTab)?.label} tasks`}
-              subtext="Pull down to refresh"
-            />
+             <View style={{ padding: 40, alignItems: 'center' }}>
+                <Text style={{ color: COLORS.gray400 }}>No tasks found matching your filters.</Text>
+             </View>
           }
-          contentContainerStyle={{ paddingBottom: 80, flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Floating Action Menu Placeholder or Footer */}
+      <View style={styles.footer}>
+         <TouchableOpacity onPress={logout}>
+            <Text style={{ color: COLORS.gray400, fontSize: 10 }}>Logged in as {userName} (Logout)</Text>
+         </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.base,
-    paddingVertical: SPACING.md,
+  safe: { flex: 1, backgroundColor: COLORS.white },
+  topHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,
+    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.gray100,
   },
-  greeting: { fontSize: FONT.md, fontWeight: FONT.bold, color: COLORS.white },
-  subtitle: { fontSize: FONT.sm, color: COLORS.white + 'BB', marginTop: 2 },
-  logoutBtn: { backgroundColor: COLORS.white + '20', borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 6 },
-  logoutText: { color: COLORS.white, fontSize: FONT.sm, fontWeight: FONT.semibold },
-  typeRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.white,
-    padding: SPACING.base,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray100,
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.gray50,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-  },
-  typeBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  typeBtnText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: COLORS.gray600,
-  },
-  typeBtnTextActive: {
-    color: COLORS.white,
-  },
-  moduleCenter: { 
-    flexDirection: 'row', 
-    backgroundColor: COLORS.white, 
-    paddingVertical: SPACING.md, 
-    paddingHorizontal: SPACING.base,
-    gap: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray100,
-  },
-  moduleBtn: { alignItems: 'center', flex: 1 },
-  moduleIcon: { 
-    width: 44, height: 44, borderRadius: RADIUS.md, 
-    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
-    ...SHADOW.sm,
-  },
-  moduleLabel: { fontSize: 10, fontWeight: FONT.bold, color: COLORS.gray600 },
-  quickActions: { flexDirection: 'row', gap: 8, paddingHorizontal: SPACING.base, paddingBottom: SPACING.sm, backgroundColor: COLORS.white },
-  quickBtn: { flex: 1, paddingVertical: 8, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
-  quickBtnText: { fontSize: 11, fontWeight: 'bold' },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, ...SHADOW.card },
-  tab: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: SPACING.sm, position: 'relative',
-    borderBottomWidth: 3, borderBottomColor: 'transparent',
-  },
-  tabEmoji: { fontSize: 16, marginBottom: 2 },
-  tabLabel: { fontSize: FONT.xs, color: COLORS.gray500, fontWeight: FONT.semibold },
-  badge: {
-    position: 'absolute', top: 4, right: 6,
-    minWidth: 18, height: 18, borderRadius: 9,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
-  },
-  badgeText: { color: COLORS.white, fontSize: 10, fontWeight: FONT.bold },
-  searchRow: { flexDirection: 'row', padding: SPACING.base, gap: SPACING.sm, backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.gray900 },
+  headerSubtitle: { fontSize: 10, color: COLORS.gray400, marginTop: 2 },
+  newBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.md },
+  newBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12 },
+  filterBar: { padding: SPACING.base, backgroundColor: '#f9fafb', borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
   searchInput: {
-    flex: 1, height: 42, backgroundColor: COLORS.gray50, borderWidth: 1.5,
-    borderColor: COLORS.gray200, borderRadius: RADIUS.pill, paddingHorizontal: SPACING.base,
-    fontSize: FONT.sm, color: COLORS.gray900,
+    height: 40, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200,
+    borderRadius: RADIUS.md, paddingHorizontal: 12, fontSize: 14,
   },
-  newBtn: {
-    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.base, alignItems: 'center', justifyContent: 'center',
+  summaryBar: {
+    flexDirection: 'row', paddingHorizontal: SPACING.base, paddingVertical: 10,
+    gap: 15, borderBottomWidth: 1, borderBottomColor: COLORS.gray100,
   },
-  newBtnText: { color: COLORS.white, fontSize: FONT.sm, fontWeight: FONT.bold },
+  summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  summaryLabel: { fontSize: 10, color: COLORS.gray600 },
+  sectionHeader: {
+    paddingHorizontal: SPACING.base, paddingVertical: 6,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  sectionTitle: { fontSize: 11, fontWeight: 'bold' },
+  countBadge: { marginLeft: 8, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  countText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: SPACING.sm, color: COLORS.gray400, fontSize: FONT.sm },
+  footer: { position: 'absolute', bottom: 10, width: '100%', alignItems: 'center' },
 });

@@ -58,16 +58,23 @@ export const createTaskMaster = asyncHandler(async (req, res) => {
         description: master.description,
         taskCategoryId: master.category,
         priority: master.priority,
-        // Correctly handle SELF vs specifically assigned users
-        assigneeIds: master.assignedTo ? [master.assignedTo] : [req.user.id],
-        assignmentMode: master.assignedTo ? 'SINGLE' : 'SELF',
-        groupId: master.group, // [MANDATORY] Correct mapping to TaskGroup ID
+        assigneeIds: master.assignmentMode === 'SELF' ? [req.user.id] : (master.assigneeIds || []),
+        assignmentMode: master.assignmentMode || 'SELF',
+        groupId: master.group, 
         dueDate: initialDueDate,
         status: 'OPEN',
         taskMasterId: master._id,
         amount: master.defaultAmount || 0,
+        billNumber: master.defaultBillNumber || '',
+        referenceNumber: master.defaultReferenceNumber || '',
+        remarks: master.defaultRemarks || '',
         createdBy: req.user.id
     });
+
+    // [REAL-TIME] Broadcast the first instance immediately
+    await emitTaskUpdate(taskInstance._id, 'create', req.user.id).catch(err => 
+        console.error('Failed to emit socket for first recurring instance:', err)
+    );
 
     // Calculate the NEXT run date for the Template itself
     const nextDate = calculateNextDueDate({
@@ -482,6 +489,31 @@ export const closeTask = asyncHandler(async (req, res) => {
     generateTaskFromMaster(task.taskMasterId).catch(err => 
       console.error(`Auto-generation failed for master ${task.taskMasterId} on task closure:`, err)
     );
+  } else if (task.recurrence && task.recurrence.enabled) {
+    // [LEGACY/AD-HOC] Handle recurrence directly on the task if no master exists
+    const nextDueDate = calculateNextDueDate(task);
+    if (nextDueDate) {
+      const nextTaskData = {
+        ...task.toObject(),
+        _id: undefined,
+        dueDate: nextDueDate,
+        status: 'OPEN',
+        completedAt: undefined,
+        closedAt: undefined,
+        closedBy: undefined,
+        updatedBy: undefined,
+        extensionHistory: [],
+        updates: [],
+        recurrence: {
+          ...task.recurrence,
+          occurrenceCount: (task.recurrence.occurrenceCount || 1) + 1
+        },
+        previousTaskId: task._id
+      };
+      const nextTask = new Task(nextTaskData);
+      await nextTask.save();
+      await emitTaskUpdate(nextTask._id, 'create', req.user.id);
+    }
   }
 
   res.send({ success: true, data: task });

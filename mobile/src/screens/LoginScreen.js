@@ -41,6 +41,7 @@ export const LoginScreen = () => {
               <Text style={styles.logoText}>JSK</Text>
             </View>
             <Text style={styles.brand}>JSK URJA</Text>
+            <Text style={{ fontSize: 20, color: 'red', fontWeight: 'bold' }}>[MOBILE APK TEST MODE]</Text>
             <Text style={styles.subtitle}>Task Management</Text>
           </View>
 
@@ -90,6 +91,11 @@ export const LoginScreen = () => {
               }
             </TouchableOpacity>
 
+            <View style={styles.envBadge}>
+              <Text style={styles.envText}>v{ENV.version} • {ENV.envName}</Text>
+              <Text style={styles.serverText}>{ENV.apiUrl}</Text>
+            </View>
+
             <TouchableOpacity 
               style={styles.testBtn} 
               onPress={async () => {
@@ -104,11 +110,6 @@ export const LoginScreen = () => {
             >
               <Text style={styles.testBtnText}>TEST CONNECTION</Text>
             </TouchableOpacity>
-
-            <View style={styles.envBadge}>
-              <Text style={styles.envText}>v{ENV.version} • {ENV.envName}</Text>
-              <Text style={styles.serverText}>{ENV.apiUrl}</Text>
-            </View>
 
             <Text style={styles.hint}>
               Use the same credentials as your CRM desktop login
@@ -181,13 +182,14 @@ const styles = StyleSheet.create({
   testBtnText: { color: COLORS.primary, fontSize: FONT.xs, fontWeight: FONT.bold },
   hint: { textAlign: 'center', fontSize: FONT.xs, color: COLORS.gray400, marginTop: SPACING.base },
   envBadge: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.base,
+    marginBottom: SPACING.sm,
     padding: SPACING.sm,
-    backgroundColor: COLORS.gray50,
+    backgroundColor: COLORS.primary + '08',
     borderRadius: RADIUS.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.gray100,
+    borderColor: COLORS.primary + '20',
   },
   envText: { fontSize: 10, fontWeight: 'bold', color: COLORS.gray500, marginBottom: 2 },
   serverText: { fontSize: 9, color: COLORS.primary, opacity: 0.7 },

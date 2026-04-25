@@ -69,43 +69,44 @@ const ReceiptEntryPage = () => {
                 if (cbAccs.length > 0) {
                     setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
                 }
-
-    useEffect(() => {
-        const defaultAmount = location.state?.amount || 0;
-        const defaultInvoiceNo = location.state?.invoiceNumber;
-        const defaultInvoiceId = location.state?.invoiceId;
-
-        if (location.state?.invoiceId) {
-            setFormData(prev => ({
-                ...prev,
-                totalAmount: defaultAmount,
-                narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
-                items: [{
-                    ...prev.items[0],
-                    ledgerId: location.state?.ledgerId || '',
-                    ledgerName: location.state?.ledgerName || '',
-                    amount: defaultAmount,
-                    narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prev.items[0].narration,
-                    adjustments: defaultInvoiceId ? [{
-                        refId: defaultInvoiceId,
-                        refNumber: defaultInvoiceNo,
-                        amount: defaultAmount,
-                        adjustmentType: 'Against Bill',
-                        refModel: 'SalesInvoice'
-                    }] : []
-                }]
-            }));
-        }
-    }, [location.state]);
-
             } catch (error) {
+                console.error('FetchData Error:', error);
                 toast.error('Failed to load initial data');
             } finally {
                 setLoading(false);
             }
         };
         fetchData();
-    }, [location.state]);
+    }, []);
+
+    // Effect for handling incoming state (e.g. from Sales Invoice)
+    useEffect(() => {
+        if (!location.state?.invoiceId) return;
+
+        const defaultAmount = location.state?.amount || 0;
+        const defaultInvoiceNo = location.state?.invoiceNumber;
+        const defaultInvoiceId = location.state?.invoiceId;
+
+        setFormData(prev => ({
+            ...prev,
+            totalAmount: defaultAmount,
+            narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
+            items: [{
+                ...prev.items[0],
+                ledgerId: location.state?.ledgerId || '',
+                ledgerName: location.state?.ledgerName || '',
+                amount: defaultAmount,
+                narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prev.items[0].narration,
+                adjustments: defaultInvoiceId ? [{
+                    refId: defaultInvoiceId,
+                    refNumber: defaultInvoiceNo,
+                    amount: defaultAmount,
+                    adjustmentType: 'Against Bill',
+                    refModel: 'SalesInvoice'
+                }] : []
+            }]
+        }));
+    }, [location.state, ledgers]);
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;

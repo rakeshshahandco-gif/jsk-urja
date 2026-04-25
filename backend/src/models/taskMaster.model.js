@@ -14,23 +14,23 @@ const taskMasterSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'TaskCategory'
     },
-    priority: {
+    assignmentMode: {
         type: String,
-        // enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
-        default: 'MEDIUM'
+        enum: ['SELF', 'SINGLE', 'MULTI', 'ALL', 'GROUP'],
+        default: 'SELF'
     },
-    assignedTo: {
+    assigneeIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    },
+    }],
     group: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Group'
+        ref: 'TaskGroup'
     },
     recurrence: {
         frequency: {
             type: String,
-            // enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
+            // enum: ['DAILY', 'WEEKLY', 'EVERY_15_DAYS', 'MONTHLY', 'EVERY_2_MONTHS', 'EVERY_6_MONTHS', 'QUARTERLY', 'YEARLY'],
             required: true
         },
         interval: {
@@ -52,6 +52,18 @@ const taskMasterSchema = new mongoose.Schema({
     defaultAmount: {
         type: Number,
         default: 0
+    },
+    defaultBillNumber: {
+        type: String,
+        trim: true
+    },
+    defaultReferenceNumber: {
+        type: String,
+        trim: true
+    },
+    defaultRemarks: {
+        type: String,
+        trim: true
     },
     isActive: {
         type: Boolean,

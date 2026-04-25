@@ -5,8 +5,7 @@
   "build": {
     "local": {
       "android": {
-        "buildType": "apk",
-        "package": "com.jskurja.crm.local"
+        "buildType": "apk"
       },
       "env": {
         "APP_ENV": "local"
@@ -14,8 +13,7 @@
     },
     "staging": {
       "android": {
-        "buildType": "apk",
-        "package": "com.jskurja.crm.staging"
+        "buildType": "apk"
       },
       "env": {
         "APP_ENV": "staging"
@@ -23,8 +21,7 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle",
-        "package": "com.jskurja.crm"
+        "buildType": "app-bundle"
       },
       "env": {
         "APP_ENV": "production"

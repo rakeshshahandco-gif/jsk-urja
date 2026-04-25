@@ -45,13 +45,16 @@ export const generateTaskFromMaster = async (masterId, forceNow = new Date()) =>
             description: master.description,
             taskCategoryId: master.category,
             priority: master.priority,
-            assigneeIds: master.assignedTo ? [master.assignedTo] : [master.createdBy],
-            assignmentMode: master.assignedTo ? 'SINGLE' : 'SELF',
+            assigneeIds: master.assignmentMode === 'SELF' ? [master.createdBy] : (master.assigneeIds || []),
+            assignmentMode: master.assignmentMode || 'SELF',
             groupId: master.group,
             dueDate: dueDate,
             status: 'OPEN',
             taskMasterId: master._id,
             amount: master.defaultAmount || 0,
+            billNumber: master.defaultBillNumber || '',
+            referenceNumber: master.defaultReferenceNumber || '',
+            remarks: master.defaultRemarks || '',
             createdBy: master.createdBy || 'SYSTEM'
         });
 
@@ -77,10 +80,11 @@ export const generateTaskFromMaster = async (masterId, forceNow = new Date()) =>
 
         // 6. Handle end-of-series rules
         if (nextDate) {
-            if (master.recurrence.endType === 'ON_DATE' && nextDate > master.recurrence.endDate) {
+            const endType = master.recurrence.endType || 'NEVER';
+            if ((endType === 'ON_DATE' || endType === 'DATE') && nextDate > master.recurrence.endDate) {
                 master.isActive = false;
             }
-            if (master.recurrence.endType === 'AFTER_COUNT') {
+            if (endType === 'AFTER_COUNT' || endType === 'ON_COUNT') {
                 const instanceCount = await Task.countDocuments({ taskMasterId: master._id });
                 if (instanceCount >= master.recurrence.occurrenceCount) {
                     master.isActive = false;

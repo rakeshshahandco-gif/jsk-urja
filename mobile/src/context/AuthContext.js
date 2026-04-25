@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { authApi } from '../api/auth.api';
 import apiClient from '../api/client';
+import { storage } from '../utils/storage';
 
 const AuthContext = createContext(null);
 
@@ -10,12 +10,12 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // On app start, restore session from SecureStore
+  // On app start, restore session from storage
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync('auth_token');
-        const storedUser = await SecureStore.getItemAsync('auth_user');
+        const storedToken = await storage.getItem('auth_token');
+        const storedUser = await storage.getItem('auth_user');
         if (storedToken && storedUser) {
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
             const freshUser = res?.data || res;
             if (freshUser?._id) {
               setUser(freshUser);
-              await SecureStore.setItemAsync('auth_user', JSON.stringify(freshUser));
+              await storage.setItem('auth_user', JSON.stringify(freshUser));
             }
           } catch {
             // Token expired — force logout
@@ -44,35 +44,25 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       const normalizedUsername = username.trim().toLowerCase();
-      
-      // authApi.login returns response.data — which is the full ApiResponse object:
-      // { statusCode: 200, data: { ...user, token: "jwt..." }, message: "Login successful" }
       const apiResponse = await authApi.login(normalizedUsername, password);
       
-      console.log('=== LOGIN RESPONSE ===');
-      console.log('Keys:', Object.keys(apiResponse || {}));
-      
-      // DIRECT extraction — token is inside the 'data' envelope
       const newToken = 
-        apiResponse?.data?.token ||      // ← CONFIRMED correct path
-        apiResponse?.token ||            // fallback if envelope is stripped
+        apiResponse?.data?.token || 
+        apiResponse?.token || 
         apiResponse?.data?.accessToken ||
         apiResponse?.accessToken;
 
-      // User data is inside the 'data' envelope
       const userData = apiResponse?.data || apiResponse;
 
       if (!newToken) {
-        const responseSnippet = JSON.stringify(apiResponse).substring(0, 200);
-        console.error('Token not found. Full response:', responseSnippet);
-        throw new Error(`Server response missing token.\n\nFull data: ${responseSnippet}`);
+        throw new Error('Server response missing token.');
       }
 
       setToken(newToken);
       setUser(userData);
 
-      await SecureStore.setItemAsync('auth_token', newToken);
-      await SecureStore.setItemAsync('auth_user', JSON.stringify(userData));
+      await storage.setItem('auth_token', newToken);
+      await storage.setItem('auth_user', JSON.stringify(userData));
 
       return { success: true };
     } catch (error) {
@@ -84,8 +74,8 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setUser(null);
     setToken(null);
-    await SecureStore.deleteItemAsync('auth_token');
-    await SecureStore.deleteItemAsync('auth_user');
+    await storage.removeItem('auth_token');
+    await storage.removeItem('auth_user');
   };
 
   const hasPermission = (permission) => {
