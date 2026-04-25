@@ -71,12 +71,20 @@ const PaymentEntryPage = () => {
                 const defaultInvoiceId = location.state?.invoiceId;
                 const defaultInvoiceNo = location.state?.invoiceNumber;
 
+                let suppLedger = null;
+
                 if (defaultSupplierId) {
-                    const suppLedger = allLedgers.find(l => 
+                    suppLedger = allLedgers.find(l => 
                         (l.referenceId?.toString() === defaultSupplierId?.toString() && l.referenceModel === 'Supplier') || 
                         l._id?.toString() === defaultSupplierId?.toString()
                     );
-                    if (suppLedger) {
+                }
+                
+                if (!suppLedger && defaultSupplierName) {
+                    suppLedger = allLedgers.find(l => l.name?.trim().toLowerCase() === defaultSupplierName?.trim().toLowerCase());
+                }
+
+                if (suppLedger) {
                         setFormData(prev => {
                             const newItems = [...prev.items];
                             newItems[0].ledgerId = suppLedger._id;
@@ -102,10 +110,9 @@ const PaymentEntryPage = () => {
                                 narration: `Payment against Purchase Invoice ${defaultInvoiceNo}`
                             };
                         });
-                    } else {
+                    } else if (defaultSupplierId || defaultSupplierName) {
                         toast.error(`Supplier ledger for "${defaultSupplierName}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
                     }
-                }
 
             } catch (error) {
                 toast.error('Failed to load initial data');

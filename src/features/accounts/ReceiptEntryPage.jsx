@@ -125,17 +125,20 @@ const ReceiptEntryPage = () => {
         let targetLedgerId = location.state?.ledgerId || '';
         let targetLedgerName = location.state?.ledgerName || '';
 
-        if (!targetLedgerId && ledgers.length > 0 && customerId) {
+        if (!targetLedgerId && ledgers.length > 0) {
             // Match by referenceId (CustomerId) and ensure it's a Customer ledger
-            const matchedByRef = ledgers.find(l => 
-                l.referenceId?.toString() === customerId?.toString() && 
-                l.referenceModel === 'Customer'
-            );
+            let matchedByRef = null;
+            if (customerId) {
+                matchedByRef = ledgers.find(l => 
+                    l.referenceId?.toString() === customerId?.toString() && 
+                    l.referenceModel === 'Customer'
+                );
+            }
 
             if (matchedByRef) {
                 targetLedgerId = matchedByRef._id;
                 targetLedgerName = matchedByRef.name;
-            } else {
+            } else if (customerName) {
                 // Match by name as secondary fallback
                 const matchedByName = ledgers.find(l => 
                     l.name?.trim().toLowerCase() === customerName?.trim().toLowerCase()
