@@ -1,12 +1,12 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { Calendar, Phone, MessageCircle, Clock, CheckCircle, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, BrandedLoader } from '@/components/ui';
 import styles from '../CustomerMasterReport.module.scss'; // Reusing styles
 
 export const ReminderTable = ({ reminders, onChangeDate, onCloseTask, loading }) => {
     if (loading) {
-        return <div className="p-8 text-center">Loading reminders...</div>;
+        return <div className="p-12 text-center"><BrandedLoader size={100} /></div>;
     }
 
     if (!reminders || reminders.length === 0) {

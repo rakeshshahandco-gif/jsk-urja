@@ -7,6 +7,7 @@ import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
 
@@ -269,7 +270,7 @@ export default function PurchaseOrderFormPage() {
                 <h1 style={{ margin: '0 0 24px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
                     {isEdit ? '✎ Edit Purchase Order' : '🛒 New Purchase Order'}
                 </h1>
-                {loading ? <div style={{ color: '#64748b', padding: 40, textAlign: 'center' }}>Loading order data...</div> : (
+                {loading ? <BrandedLoader size={120} /> : (
 
                     <form onSubmit={handleSubmit} style={{ pointerEvents: saving ? 'none' : 'auto', opacity: saving ? 0.7 : 1 }}>
                         <fieldset disabled={saving} style={{ border: 'none', padding: 0, margin: 0 }}>

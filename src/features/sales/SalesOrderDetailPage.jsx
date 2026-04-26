@@ -13,6 +13,7 @@ import { PATHS } from "@/routes/paths";
 import toast from "react-hot-toast";
 import CommunicationModal from "@/components/communication/CommunicationModal";
 import { Mail, MessageSquare, Send } from "lucide-react";
+import { BrandedLoader } from "@/components/ui";
 
 const STATUS_COLORS = {
   Draft: { color: "#64748b", bg: "#f1f5f9", border: "#e2e8f0" },
@@ -130,20 +131,7 @@ export default function SalesOrderDetailPage() {
   };
 
   if (loading)
-    return (
-      <div
-        style={{
-          padding: 60,
-          textAlign: "center",
-          color: "#9ca3af",
-          background: "#f8f9fa",
-          minHeight: "100vh",
-          fontFamily: "'Inter',sans-serif",
-        }}
-      >
-        Loading...
-      </div>
-    );
+    return <BrandedLoader size={120} />;
   if (!so)
     return (
       <div

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getBankBook } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui';
 
 const BANK_MODES = ['', 'UPI', 'Cheque', 'Net Banking', 'NEFT/RTGS/IMPS', 'Card', 'Other'];
 const MODE_ICONS = { UPI: '📱', Cheque: '🏦', 'Net Banking': '🌐', 'NEFT/RTGS/IMPS': '⚡', Card: '💳', Other: '🔖' };
@@ -68,7 +69,7 @@ export default function BankBookPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading...</td></tr>
+                            <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}><BrandedLoader size={80} /></td></tr>
                         ) : data.entries.length === 0 ? (
                             <tr><td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No bank entries in selected period.</td></tr>
                         ) : data.entries.map((e, i) => {

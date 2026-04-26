@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../config/api';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const fmt = (n) => Number(n || 0).toFixed(2);
 const fmtVal = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 });
@@ -153,7 +154,7 @@ function ItemDetailPage({ item, accentColor, onBack }) {
 
                 {/* Main transaction table */}
                 {loading ? (
-                    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: 60, textAlign: 'center', color: '#94a3b8' }}>Loading transactions...</div>
+                    <BrandedLoader size={100} />
                 ) : displayed.length === 0 ? (
                     <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: 60, textAlign: 'center', color: '#94a3b8' }}>
                         {rows.length === 0 ? 'No transactions found for this item' : 'No transactions match the selected filter'}
@@ -287,7 +288,7 @@ function RawMaterialSection({ onSelectItem }) {
                 <button onClick={() => setFilters({ dateFrom: '', dateTo: '', search: '' })} style={{ padding: '6px 12px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Reset</button>
             </div>
 
-            {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading...</div> : (
+            {loading ? <BrandedLoader size={100} /> : (
                 <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
@@ -413,7 +414,7 @@ function FinishedGoodsSection({ onSelectItem }) {
                 <button onClick={() => setFilters({ dateFrom: '', dateTo: '', search: '' })} style={{ padding: '6px 12px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>Reset</button>
             </div>
 
-            {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading...</div> : (
+            {loading ? <BrandedLoader size={100} /> : (
                 <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
@@ -549,7 +550,7 @@ function LedgerSection() {
                 </div>
             </div>
 
-            {loading ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading...</div>
+            {loading ? <BrandedLoader size={100} />
                 : rows.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
                         {selectedItemId ? 'No transactions found' : 'Select an item to view ledger'}

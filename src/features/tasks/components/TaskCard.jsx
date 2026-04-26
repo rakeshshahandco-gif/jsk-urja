@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, User, Users, CheckCircle, Clock, MoreVertical, Repeat, ListCheck } from 'lucide-react';
 import { closeTask, getTaskGroup } from '@/services/taskApi';
-import { Button, useModal } from '@/components/ui';
+import { Button, useModal, BrandedLoader } from '@/components/ui';
 import { TaskExtendModal } from './TaskExtendModal';
 import toast from 'react-hot-toast';
 
@@ -16,7 +16,7 @@ const GroupDetailModal = ({ groupId, onRefresh, onClose }) => {
         }).catch(() => toast.error('Failed to load group'));
     }, [groupId]);
 
-    if (loading) return <div className="p-10 text-center animate-pulse font-bold text-gray-400">Loading group details...</div>;
+    if (loading) return <div className="p-10 text-center"><BrandedLoader size={60} /></div>;
 
     const { group, tasks, progress } = data;
 
@@ -223,7 +223,7 @@ export const TaskCard = ({ task, onEdit, onDelete, onRefresh }) => {
                             <p className="font-medium text-gray-400 uppercase text-[9px]">Assignee</p>
                             <p className="font-bold text-gray-700 truncate w-32">
                                 {task.assignmentMode === 'ALL' ? 'All Users' :
-                                    task.assignmentMode === 'GROUP' ? (task.assignedGroupId?.name || 'Loading...') :
+                                    task.assignmentMode === 'GROUP' ? (task.assignedGroupId?.name || <BrandedLoader size={12} inline />) :
                                         (task.assigneeIds?.map(u => u.name).join(', ') || 'Unassigned')}
                             </p>
                         </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdDesigns, createPrdDesign, updatePrdDesign, deletePrdDesign } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { Plus, Edit, Trash2, Download, Upload } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdDesignTab.module.scss';
 import clsx from 'clsx';
@@ -198,7 +199,7 @@ const PrdDesignTab = ({ projectId }) => {
             </div>
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : designs.length === 0 ? (
                 <div className={styles.emptyState}>No designs logged yet.</div>
             ) : (

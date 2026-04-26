@@ -12,6 +12,7 @@ import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload, Download
 import styles from './CustomerList.module.scss';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 export const CustomerList = () => {
     const { openModal, closeModal } = useModal();
@@ -259,13 +260,9 @@ export const CustomerList = () => {
 
             {/* Content Section */}
             <div className={styles.tableSection}>
-                {loading && (
-                    <div className={styles.loadingState}>
-                        <p className={styles.mainText}>Loading customers...</p>
-                    </div>
-                )}
-
-                {error && (
+                {loading ? (
+                    <TableSkeleton rows={10} cols={8} />
+                ) : error ? (
                     <div className={styles.errorState}>
                         <p className={styles.title}>{error}</p>
                         <p className={styles.message}>Please check if the backend server is running and accessible.</p>
@@ -273,19 +270,15 @@ export const CustomerList = () => {
                             Retry Loading
                         </Button>
                     </div>
-                )}
-
-                {!loading && !error && (
-                    <>
-                        {customers.length === 0 ? (
-                            <div className={styles.emptyState}>
-                                <p className={styles.mainText}>No customers found</p>
-                                <p className={styles.subText}>
-                                    {searchTerm || statusFilter ? 'Try adjusting your filters' : 'Click "Add Customer" to get started'}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className={styles.tableWrapper}>
+                ) : customers.length === 0 ? (
+                    <div className={styles.emptyState}>
+                        <p className={styles.mainText}>No customers found</p>
+                        <p className={styles.subText}>
+                            {searchTerm || statusFilter ? 'Try adjusting your filters' : 'Click "Add Customer" to get started'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className={styles.tableWrapper}>
                                 <table className={styles.table}>
                                     <thead>
                                         <tr>
@@ -383,8 +376,6 @@ export const CustomerList = () => {
                                 </table>
                             </div>
                         )}
-                    </>
-                )}
             </div>
 
             {/* Pagination */}

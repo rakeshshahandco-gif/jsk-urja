@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { getWeChatProducts, createWeChatProduct } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 import { Input } from '../../../components/ui/Input';
 
 const CATEGORIES = ['Zigbee', 'Bluetooth', 'WiFi', 'Enclosure', 'Relay', 'Sensor', 'Power Supply', 'Other'];
@@ -96,7 +97,7 @@ const WechatProductsTab = ({ onSelectProduct }) => {
             {/* Product Grid/List */}
             <div className="flex-1 overflow-auto custom-scrollbar pr-2">
                 {loading ? (
-                    <div className="flex items-center justify-center h-64 text-slate-400 font-bold">Loading products...</div>
+                    <div className="flex items-center justify-center h-64"><BrandedLoader size={100} /></div>
                 ) : products.length === 0 ? (
                     <div className="bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 h-64 flex flex-col items-center justify-center text-slate-400">
                         <Package size={48} className="mb-4 opacity-20" />

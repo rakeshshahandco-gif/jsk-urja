@@ -12,6 +12,7 @@ export default function SearchableSelect({
     dark = false,
     noOptionsMessage = null,
     onKeyDown: parentOnKeyDown,
+    renderOption,
     ...props
 }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -37,7 +38,7 @@ export default function SearchableSelect({
     };
 
     // Position tracking for dropdown to prevent clipping from table overflow
-    const [dropdownStyle, setDropdownStyle] = useState({});
+
 
     // Update search term when outside value prop changes
     useEffect(() => {
@@ -77,31 +78,12 @@ export default function SearchableSelect({
     }, [searchTerm, options]);
 
     // Calculate dropdown positions to avoid clipping
-    const updateDropdownPosition = () => {
-        if (wrapperRef.current && isOpen) {
-            const rect = wrapperRef.current.getBoundingClientRect();
-            setDropdownStyle({
-                position: 'fixed',
-                top: rect.bottom + 2,
-                left: rect.left,
-                width: rect.width,
-                maxHeight: '280px',
-                zIndex: 9999,
-            });
-        }
-    };
+
 
     useEffect(() => {
         if (isOpen) {
-            updateDropdownPosition();
-            window.addEventListener('scroll', updateDropdownPosition, true);
-            window.addEventListener('resize', updateDropdownPosition);
             setActiveIndex(-1);
         }
-        return () => {
-            window.removeEventListener('scroll', updateDropdownPosition, true);
-            window.removeEventListener('resize', updateDropdownPosition);
-        };
     }, [isOpen]);
 
     useEffect(() => {
@@ -260,9 +242,19 @@ export default function SearchableSelect({
                 <div
                     ref={listRef}
                     style={{
-                        ...dropdownStyle, background: theme.bg, border: `1px solid ${theme.border}`,
-                        borderRadius: '8px', boxShadow: dark ? '0 10px 15px -3px rgba(0, 0, 0, 0.5)' : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                        overflow: 'hidden', display: 'flex', flexDirection: 'column'
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        width: 'max(100%, 600px)',
+                        marginTop: '4px',
+                        zIndex: 9999,
+                        background: theme.bg, 
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: '10px', 
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden', 
+                        display: 'flex', 
+                        flexDirection: 'column'
                     }}
                 >
                     <div style={{ overflowY: 'auto', maxHeight: '240px' }}>
@@ -284,8 +276,12 @@ export default function SearchableSelect({
                                     }}
                                     onMouseOver={() => setActiveIndex(idx)}
                                 >
-                                    <div style={{ fontWeight: 600 }}>{opt.label}</div>
-                                    {opt.meta && <div style={{ fontSize: '10px', color: theme.muted, marginTop: '2px' }}>{opt.meta}</div>}
+                                    {renderOption ? renderOption(opt) : (
+                                        <>
+                                            <div style={{ fontWeight: 600 }}>{opt.label}</div>
+                                            {opt.meta && <div style={{ fontSize: '10px', color: theme.muted, marginTop: '2px' }}>{opt.meta}</div>}
+                                        </>
+                                    )}
                                 </div>
                             ))
                         )}

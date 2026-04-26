@@ -3,7 +3,7 @@ import {
     LayoutGrid, Calendar, CalendarDays, TriangleAlert, CheckSquare,
     Search, Loader2, AlertCircle, RefreshCw, Filter
 } from 'lucide-react';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input, Select, BrandedLoader } from '@/components/ui';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { TaskReportTable } from './components/TaskReportTable';
@@ -232,8 +232,7 @@ const TaskReminderReport = () => {
             <div className={styles.reportContent} style={{ minHeight: 400 }}>
                 {loading ? (
                     <div className={styles.loaderContainer}>
-                        <Loader2 className={styles.spinner} />
-                        <p>Loading your tasks...</p>
+                        <BrandedLoader size={120} />
                     </div>
                 ) : (
                     <TaskReportTable

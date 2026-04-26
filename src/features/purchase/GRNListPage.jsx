@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getGRNs, deleteGRN, restoreGRN } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const INV_STATUS_COLORS = {
     'Open': { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
@@ -109,7 +110,7 @@ export default function GRNListPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 40 }}><BrandedLoader size={80} /></td></tr>
                         ) : grns.length === 0 ? (
                             <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} GRNs yet.</td></tr>
                         ) : grns.map((grn) => {

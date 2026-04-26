@@ -12,7 +12,7 @@ import { createEwayBillDraft } from '@/services/ewayBillApi';
 import communicationApi from '@/services/communicationApi';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import toast from 'react-hot-toast';
-
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const PAY_COLORS = {
     Unpaid: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -172,10 +172,7 @@ export default function SalesInvoiceDetailPage() {
         }
     };
 
-
-
-
-    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!inv) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Invoice not found.</div>;
 
     const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS.Unpaid;

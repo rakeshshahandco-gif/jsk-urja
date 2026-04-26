@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import { sendOrder as sendOrderApi } from '@/services/communicationApi';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 
 const STATUS_COLORS = {
@@ -166,20 +167,21 @@ export default function SalesOrderListPage() {
 
             {/* Table */}
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                        <tr>
-                            {['SO Number', 'Date', 'Customer', 'Items', 'Grand Total', 'Payment', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={th}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
-                        ) : orders.length === 0 ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} sales orders found.</td></tr>
-                        ) : orders.map((so) => {
+                {loading ? (
+                    <TableSkeleton rows={10} cols={8} />
+                ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                            <tr>
+                                {['SO Number', 'Date', 'Customer', 'Items', 'Grand Total', 'Payment', 'Status', 'Actions'].map(h => (
+                                    <th key={h} style={th}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {orders.length === 0 ? (
+                                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} sales orders found.</td></tr>
+                            ) : orders.map((so) => {
                             const sc = STATUS_COLORS[so.status] || STATUS_COLORS.Draft;
                             const isDeleted = so.isDeleted;
                             return (
@@ -239,6 +241,7 @@ export default function SalesOrderListPage() {
                         })}
                     </tbody>
                 </table>
+                )}
             </div>
 
             {selectedOrder && (

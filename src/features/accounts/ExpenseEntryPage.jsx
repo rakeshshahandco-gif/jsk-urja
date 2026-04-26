@@ -433,6 +433,22 @@ const ExpenseEntryPage = () => {
                                     options={combinedHeaderAccounts}
                                     value={formData.cashBankAccountId || formData.partyId}
                                     onChange={handleAccountChange}
+                                    renderOption={(opt) => (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px 0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{opt.label.split(' (')[0]}</span>
+                                                <span style={{ fontSize: '10px', background: opt.isCB ? '#eef2ff' : '#fef2f2', color: opt.isCB ? '#4f46e5' : '#dc2626', padding: '1px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                    {opt.isCB ? 'CASH/BANK' : 'SUPPLIER'}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                <span>{opt.type} Mode</span>
+                                                <span style={{ fontWeight: 800, color: (opt.balance || 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                                                    ₹{Math.abs(opt.balance || 0).toLocaleString('en-IN')} {(opt.balance || 0) >= 0 ? 'Dr' : 'Cr'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                     placeholder="Search Cash/Bank or Supplier..."
                                     onCreateNew={(term) => handleQuickCreateLedger(term, 'header')}
                                 />
@@ -501,8 +517,27 @@ const ExpenseEntryPage = () => {
                                                         ['Expense', 'Income'].includes(l.type) || 
                                                         l.groupName?.toLowerCase().includes('expenses') || 
                                                         l.groupName?.toLowerCase().includes('income') ||
-                                                        !['Cash', 'Bank', 'Customer', 'Supplier'].includes(l.type) // Fallback: show general ledgers
-                                                    ).map(l => ({ label: l.name, value: l._id }))}
+                                                        !['Cash', 'Bank', 'Customer', 'Supplier'].includes(l.type)
+                                                    ).map(l => ({ 
+                                                        label: l.name, 
+                                                        value: l._id,
+                                                        group: l.groupName || 'General',
+                                                        balance: l.currentBalance || 0
+                                                    }))}
+                                                    renderOption={(opt) => (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px 0' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
+                                                                <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>{opt.group}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                                <span>Expense Head</span>
+                                                                <span style={{ fontWeight: 800, color: opt.balance >= 0 ? '#10b981' : '#ef4444' }}>
+                                                                    ₹{Math.abs(opt.balance).toLocaleString('en-IN')} {opt.balance >= 0 ? 'Dr' : 'Cr'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     value={item.ledgerId}
                                                     onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
                                                     placeholder="Select Expense..."

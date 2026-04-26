@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getFixedAssets, createFixedAsset, updateFixedAsset, getAssetCategories, getAssetLocations, exportFixedAssetTemplate, importFixedAssetsExcel } from '@/services/fixedAssetApi';
 import { getSuppliers } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
-import { SearchableSelect } from '@/components/ui';
+import { SearchableSelect, BrandedLoader } from '@/components/ui';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
@@ -128,8 +128,8 @@ export default function FixedAssetMasterPage() {
                         style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
                         📥 Template
                     </button>
-                    <label style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'inline-block' }}>
-                        {importing ? '⏳ Importing...' : '📤 Import Excel'}
+                    <label style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#374151', border: '1px solid #d1d5db', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {importing ? <><BrandedLoader size={18} inline /> Importing...</> : '📤 Import Excel'}
                         <input type="file" accept=".xlsx, .xls" onChange={handleImport} style={{ display: 'none' }} disabled={importing} />
                     </label>
                     <button onClick={() => setModal({ mode: 'create', data: { ...EMPTY } })}
@@ -150,7 +150,7 @@ export default function FixedAssetMasterPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 60, textAlign: 'center' }}><BrandedLoader size={100} /></td></tr>
                         ) : assets.length === 0 ? (
                             <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No assets found.</td></tr>
                         ) : assets.map(a => (

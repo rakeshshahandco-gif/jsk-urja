@@ -25,6 +25,8 @@ const Field = ({ label, children, span }) => (
 
 const EMPTY_ITEM = { itemCode: '', itemName: '', uom: 'NOS', qtySold: 0, qtyFaultyReported: 1, complaintReason: 'Not Working', actionRequired: 'Replacement to be sent', notes: '' };
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
 const ComplaintFormPage = () => {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -165,7 +167,7 @@ const ComplaintFormPage = () => {
         } finally { setSaving(false); }
     };
 
-    if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
 
     return (
         <div style={{ padding: '10px 16px', background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10 }}>

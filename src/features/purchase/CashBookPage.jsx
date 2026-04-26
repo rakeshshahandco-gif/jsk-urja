@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getCashBook } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui';
 
 export default function CashBookPage() {
     const today = new Date().toISOString().split('T')[0];
@@ -52,7 +53,7 @@ export default function CashBookPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading...</td></tr>
+                            <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}><BrandedLoader size={80} /></td></tr>
                         ) : data.entries.length === 0 ? (
                             <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>No cash entries in selected period.</td></tr>
                         ) : data.entries.map((e, i) => (

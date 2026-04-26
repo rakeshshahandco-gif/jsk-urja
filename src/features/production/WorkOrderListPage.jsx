@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getWorkOrders, deleteWorkOrder, releaseWorkOrder } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 const STATUS_COLORS = {
     'Draft': { bg: '#f1f5f9', text: '#64748b', border: '#cbd5e1' },
@@ -132,7 +133,7 @@ export default function WorkOrderListPage() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>Loading...</div>
+                <TableSkeleton rows={6} cols={1} />
             ) : wos.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 80, color: '#9ca3af' }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>

@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { getWeChatGroups, api } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 
 const WechatGroupsTab = ({ onSelectGroup }) => {
     const navigate = useNavigate();
@@ -72,7 +73,7 @@ const WechatGroupsTab = ({ onSelectGroup }) => {
             {/* Groups Grid */}
             <div className="flex-1 overflow-auto custom-scrollbar pr-2">
                 {loading ? (
-                    <div className="flex items-center justify-center h-64 text-slate-400 font-bold animate-pulse">Loading groups...</div>
+                    <div className="flex items-center justify-center h-64"><BrandedLoader size={100} /></div>
                 ) : groups.length === 0 ? (
                     <div className="bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 h-64 flex flex-col items-center justify-center text-slate-400">
                         <Users size={48} className="mb-4 opacity-20" />

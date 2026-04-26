@@ -962,8 +962,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     <Button type="button" variant="outline" onClick={() => window.confirm('Discard changes?') && onCancel()} disabled={isSubmitting}>
                         CANCEL
                     </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? 'SAVING...' : customer ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER'}
+                    <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting}>
+                        {customer ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER'}
                     </Button>
                 </div>
             </form >

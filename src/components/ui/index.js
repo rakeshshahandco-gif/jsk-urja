@@ -10,3 +10,4 @@ export * from './Card';
 export * from './Table';
 export { default as SearchableSelect } from './SearchableSelect';
 export * from './Tabs';
+export * from './BrandedLoading';

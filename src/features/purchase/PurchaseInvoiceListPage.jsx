@@ -4,6 +4,7 @@ import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { getPurchaseInvoices, deletePurchaseInvoice, restorePurchaseInvoice } from '@/services/purchaseApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const PAY_COLORS = {
     'Unpaid': { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -120,7 +121,7 @@ export default function PurchaseInvoiceListPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 40 }}><BrandedLoader size={80} /></td></tr>
                         ) : invoices.length === 0 ? (
                             <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices yet.</td></tr>
                         ) : invoices.map((inv) => {

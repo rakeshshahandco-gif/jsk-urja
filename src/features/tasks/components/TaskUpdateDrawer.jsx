@@ -3,6 +3,7 @@ import { X, Save, Clock3, CheckCircle, RotateCcw } from 'lucide-react';
 import { getTask, addTaskUpdate, extendTask, closeTask } from '@/services/taskApi';
 import { useToast } from '@/components/ui/Toast';
 import { format } from 'date-fns';
+import { BrandedLoader } from '@/components/ui';
 
 export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
     const { addToast } = useToast();
@@ -124,7 +125,7 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
                             {isCompleted ? 'Task Completed' : 'Task Progress Update'}
                         </div>
                         <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#1e293b', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isCompleted ? 'line-through' : 'none' }}>
-                            {task?.title || (loading ? 'Loading...' : 'Task Details')}
+                            {task?.title || (loading ? <BrandedLoader size={16} inline /> : 'Task Details')}
                         </h2>
                     </div>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 5 }}><X size={20} /></button>
@@ -133,7 +134,7 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
                 {/* Body */}
                 <div style={s.body}>
                     {loading ? (
-                        <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 0' }}>Loading history...</div>
+                        <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 0' }}><BrandedLoader size={80} /></div>
                     ) : (
                         <>
                             {!isCompleted && !isExtending && (

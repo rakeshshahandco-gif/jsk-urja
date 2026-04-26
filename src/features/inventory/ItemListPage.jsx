@@ -6,6 +6,7 @@ import { getItemTypes } from '@/services/itemTypeApi';
 import { getItemGroups } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const CATEGORIES = [
     { value: '', label: 'All Categories' },
@@ -364,10 +365,7 @@ const ItemListPage = () => {
             {/* Table */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 {loading ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, gap: 8, color: '#6b7280', fontSize: 12 }}>
-                        <div style={{ width: 16, height: 16, border: '2px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                        Loading items...
-                    </div>
+                    <BrandedLoader size={100} />
                 ) : items.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 180, color: '#9ca3af', gap: 8 }}>
                         <Package size={32} style={{ opacity: 0.3 }} />

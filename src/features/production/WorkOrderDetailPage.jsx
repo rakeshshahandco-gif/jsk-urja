@@ -35,6 +35,9 @@ const inp = {
     borderRadius: '6px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box',
 };
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
+
 export default function WorkOrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -59,7 +62,7 @@ export default function WorkOrderDetailPage() {
         finally { setSaving(false); }
     };
 
-    if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b', background: '#f8f9fa', minHeight: '100vh' }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
 
     const handlePrintProductionSheet = () => {

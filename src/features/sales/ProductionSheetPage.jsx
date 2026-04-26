@@ -13,6 +13,8 @@ const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4f6
 const STATUS_OPTS = ['Pending', 'In Testing', 'Ready', 'Dispatched'];
 const STATUS_COLORS = { Pending: '#d97706', 'In Testing': '#2563eb', Ready: '#16a34a', Dispatched: '#059669' };
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
 export default function ProductionSheetPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -84,7 +86,7 @@ export default function ProductionSheetPage() {
     const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
     const fmtDT = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
 
-    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!ps) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Production Sheet not found.</div>;
 
     const sc = STATUS_COLORS[ps.status] || '#9ca3af';

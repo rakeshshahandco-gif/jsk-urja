@@ -4,6 +4,8 @@ import { getReplacementDispatch } from '@/services/serviceApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { Printer, ChevronLeft } from 'lucide-react';
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
 const ReplacementDispatchPrintPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -18,7 +20,7 @@ const ReplacementDispatchPrintPage = () => {
 
     const handlePrint = () => window.print();
 
-    if (!doc) return <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</div>;
+    if (!doc) return <BrandedLoader size={120} />;
 
     const totalQty = doc.items?.reduce((s, i) => s + i.qty, 0) || 0;
 

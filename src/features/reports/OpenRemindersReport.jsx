@@ -3,7 +3,7 @@ import {
     Calendar, CalendarDays, TriangleAlert, CheckSquare,
     Search, Loader2, AlertCircle
 } from 'lucide-react';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, BrandedLoader } from '@/components/ui';
 import { getOpenRemindersReport } from '@/services/reportApi'; // reportApi calls backend
 import { useModal } from '@/components/ui/Modal';
 import { CloseReminderModal } from './components/CloseReminderModal';
@@ -195,8 +195,7 @@ export const OpenRemindersReport = () => {
             <div className={styles.reportContent}>
                 {loading ? (
                     <div className={styles.loaderContainer}>
-                        <Loader2 className={styles.spinner} />
-                        <p>Loading reminders...</p>
+                        <BrandedLoader size={120} />
                     </div>
                 ) : reminders.length === 0 ? (
                     <div className={styles.emptyState}>

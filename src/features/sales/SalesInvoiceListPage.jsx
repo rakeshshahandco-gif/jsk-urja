@@ -6,6 +6,7 @@ import { PATHS } from '@/routes/paths';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { Trash2 } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 const PAY_COLORS = {
     'Unpaid': { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -144,20 +145,21 @@ export default function SalesInvoiceListPage() {
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                        <tr>
-                            {['Invoice No', 'Series', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Status', 'Payment', 'Actions'].map(h => (
-                                <th key={h} style={h === 'Invoice No' ? { ...th, width: '120px' } : th}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
-                        ) : invoices.length === 0 ? (
-                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices found.</td></tr>
-                        ) : invoices
+                {loading ? (
+                    <TableSkeleton rows={10} cols={9} />
+                ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                            <tr>
+                                {['Invoice No', 'Series', 'Date', 'Customer', 'SO Ref', 'Grand Total', 'Status', 'Payment', 'Actions'].map(h => (
+                                    <th key={h} style={h === 'Invoice No' ? { ...th, width: '120px' } : th}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {invoices.length === 0 ? (
+                                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices found.</td></tr>
+                            ) : invoices
                             .filter(inv => {
                                 if (!seriesFilter) return true;
                                 const selectedSrs = seriesOptions.find(s => s._id === seriesFilter);
@@ -232,6 +234,7 @@ export default function SalesInvoiceListPage() {
                         })}
                     </tbody>
                 </table>
+                )}
             </div>
         </div>
     );

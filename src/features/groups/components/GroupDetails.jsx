@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom'; // Fixed import (was router-dom)
 import { getGroup, addMember, removeMember } from '@/services/groupApi';
 import { userService } from '@/services/user.service';
-import { Button, Input, Select } from '@/components/ui'; // Assuming Select exists
+import { Button, Input, Select, BrandedLoader } from '@/components/ui'; // Assuming Select exists
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { Trash2, UserPlus, ArrowLeft } from 'lucide-react';
@@ -77,7 +77,7 @@ export const GroupDetails = () => {
         }
     };
 
-    if (loading) return <div className="p-6">Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!group) return <div className="p-6">Group not found</div>;
 
     // Admin check removed, all users can manage members

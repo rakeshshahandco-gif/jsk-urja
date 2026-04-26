@@ -5,6 +5,7 @@ import { getItem, createItem, updateItem, generateItemCode } from '@/services/it
 import { getItemTypes } from '@/services/itemTypeApi';
 import { getItemGroups } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 // ── Shared compact style helpers ─────────────────────────────────────────────
 const f = {
@@ -126,9 +127,7 @@ const ItemFormPage = () => {
     };
 
     if (loading) return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#6b7280', gap: 8, fontSize: 12 }}>
-            <div style={{ width: 16, height: 16, border: '2px solid #e5e7eb', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} /> Loading...
-        </div>
+        <BrandedLoader size={120} />
     );
 
     return (

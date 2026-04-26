@@ -268,7 +268,29 @@ const JournalEntryPage = () => {
                                             </td>
                                             <td style={{ padding: '10px' }}>
                                                 <SearchableSelect
-                                                    options={ledgers.map(l => ({ label: l.name, value: l._id }))}
+                                                    options={ledgers.map(l => ({ 
+                                                        label: l.name, 
+                                                        value: l._id, 
+                                                        group: l.groupName || l.accountGroupName || 'General',
+                                                        balance: l.currentBalance || 0,
+                                                        gst: l.gstNumber,
+                                                        phone: l.phone,
+                                                        type: l.type 
+                                                    }))}
+                                                    renderOption={(opt) => (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px 0' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
+                                                                <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>{opt.group}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                                <span>{opt.gst ? `GST: ${opt.gst}` : (opt.phone ? `📞 ${opt.phone}` : 'No details')}</span>
+                                                                <span style={{ fontWeight: 800, color: opt.balance >= 0 ? '#10b981' : '#ef4444' }}>
+                                                                    ₹{Math.abs(opt.balance).toLocaleString('en-IN')} {opt.balance >= 0 ? 'Dr' : 'Cr'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     value={item.ledgerId}
                                                     onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
                                                     placeholder="Search ledger..."

@@ -3,6 +3,7 @@ import { useToast } from '@/components/ui/Toast';
 import { getCustomers, getConversationHistory } from '@/services/customerApi';
 import { Search, Phone, MessageSquare, User, Loader2, MessageCircle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { BrandedLoader } from '@/components/ui';
 import styles from './CustomerMasterReport.module.scss';
 
 // Local debounce utility
@@ -185,7 +186,7 @@ const ConversationHistoryReport = () => {
                     <div style={{ flex: 1, overflowY: 'auto' }}>
                         {loadingCustomers ? (
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-                                <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+                                <BrandedLoader size={60} />
                             </div>
                         ) : (
                             <>
@@ -249,7 +250,7 @@ const ConversationHistoryReport = () => {
                             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#f9fafb' }}>
                                 {loadingHistory ? (
                                     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-                                        <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+                                        <BrandedLoader size={100} />
                                     </div>
                                 ) : history.length === 0 ? (
                                     <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af', background: '#fff', borderRadius: 8, border: '1px solid #e5e7eb' }}>

@@ -41,6 +41,13 @@ const LedgerReportPage = ({ defaultType = null }) => {
         fetchLedgers();
     }, []);
 
+    // Auto-fetch statement when ledger is selected
+    useEffect(() => {
+        if (selectedLedgerId) {
+            handleFetchStatement();
+        }
+    }, [selectedLedgerId]);
+
     const handleFetchStatement = async () => {
         if (!selectedLedgerId) return toast.error('Select a ledger first');
         setLoading(true);
@@ -142,7 +149,29 @@ const LedgerReportPage = ({ defaultType = null }) => {
                 <div className={s.filterGroup}>
                     <label>Account / Ledger</label>
                     <SearchableSelect
-                        options={filteredLedgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                        options={filteredLedgers.map(l => ({ 
+                            label: l.name, 
+                            value: l._id, 
+                            group: l.groupName || l.accountGroupName || 'General',
+                            balance: l.currentBalance || 0,
+                            gst: l.gstNumber,
+                            phone: l.phone,
+                            type: l.type 
+                        }))}
+                        renderOption={(opt) => (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px 0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
+                                    <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>{opt.group}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#64748b' }}>
+                                    <span>{opt.gst ? `GST: ${opt.gst}` : (opt.phone ? `📞 ${opt.phone}` : 'No details')}</span>
+                                    <span style={{ fontWeight: 800, color: opt.balance >= 0 ? '#10b981' : '#ef4444' }}>
+                                        ₹{Math.abs(opt.balance).toLocaleString('en-IN')} {opt.balance >= 0 ? 'Dr' : 'Cr'}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         value={selectedLedgerId}
                         onChange={setSelectedLedgerId}
                         placeholder="Search accounts..."
@@ -156,8 +185,8 @@ const LedgerReportPage = ({ defaultType = null }) => {
                         <Input type="date" className={s.dateInput} value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
                     </div>
                 </div>
-                <Button onClick={handleFetchStatement} disabled={loading} className="w-full h-11 font-black text-sm uppercase tracking-wide">
-                    {loading ? 'Fetching...' : 'View Statement'}
+                <Button onClick={handleFetchStatement} isLoading={loading} className="w-full h-11 font-black text-sm uppercase tracking-wide">
+                    View Statement
                 </Button>
             </div>
 

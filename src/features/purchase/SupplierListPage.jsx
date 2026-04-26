@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate, generateSupplierCode } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
@@ -152,7 +153,7 @@ export default function SupplierListPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 40 }}><BrandedLoader size={80} /></td></tr>
                         ) : suppliers.length === 0 ? (
                             <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No suppliers found. Click &quot;Add Supplier&quot; to get started.</td></tr>
                         ) : suppliers.map((s) => (

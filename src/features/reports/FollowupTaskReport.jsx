@@ -4,6 +4,7 @@ import { Button, Input, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { Search, Download, Calendar, ArrowRight, User } from 'lucide-react';
 import { format } from 'date-fns';
+import { BrandedLoader } from '@/components/ui';
 import { apiClient as api } from '@/lib/apiClient';
 import { getCustomers } from '@/services/customerApi';
 
@@ -209,7 +210,7 @@ const FollowupTaskReport = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading && <tr><td colSpan="4" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading data...</td></tr>}
+                                {loading && <tr><td colSpan="4" style={{ padding: 40, textAlign: 'center' }}><BrandedLoader size={100} /></td></tr>}
                                 {!loading && data.length === 0 && <tr><td colSpan="4" style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>No records found for the selected filters.</td></tr>}
                                 {data.map((row, idx) => (
                                     <tr
@@ -328,7 +329,7 @@ const FollowupTaskReport = () => {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#f8fafc', fontSize: 13 }}>
-                            {loading ? 'Loading report details...' : 'Select a customer and click "View Report"'}
+                            {loading ? <BrandedLoader size={120} /> : 'Select a customer and click "View Report"'}
                         </div>
                     )}
                 </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Layers, Plus, Pencil, Trash2, Check, X, Search } from 'lucide-react';
 import { getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const BLANK = { name: '', code: '', description: '' };
 
@@ -177,10 +178,7 @@ const ItemGroupPage = () => {
             {/* Table */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
                 {loading ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 8, color: '#6b7280', fontSize: 12 }}>
-                        <div style={{ width: 14, height: 14, border: '2px solid #e5e7eb', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                        Loading…
-                    </div>
+                    <BrandedLoader size={80} />
                 ) : groups.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, gap: 8, color: '#9ca3af' }}>
                         <Layers size={28} style={{ opacity: 0.3 }} />

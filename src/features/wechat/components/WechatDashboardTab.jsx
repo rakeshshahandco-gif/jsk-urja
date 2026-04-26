@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Package, Users, FlaskConical, Bell, TrendingUp, Globe, Search } from 'lucide-react';
 import { getWeChatDashboardStats } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 
 const WechatDashboardTab = ({ onNavigate }) => {
     const [stats, setStats] = useState({
@@ -35,6 +36,8 @@ const WechatDashboardTab = ({ onNavigate }) => {
         { id: 'samples', title: 'Pending Samples', value: stats.pendingSamples, icon: FlaskConical, color: 'text-purple-600', bg: 'bg-purple-50' },
         { id: 'reminders', title: 'Follow-ups Due', value: stats.followUpsDue, icon: Bell, color: 'text-amber-600', bg: 'bg-amber-50' },
     ];
+
+    if (loading) return <div className="h-full flex items-center justify-center bg-slate-50/30"><BrandedLoader size={120} /></div>;
 
     return (
         <div className="h-full p-10 overflow-auto custom-scrollbar bg-slate-50/30">

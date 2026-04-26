@@ -11,6 +11,7 @@ import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Modal } from '../../../components/ui/Modal';
 import { Badge } from '../../../components/ui/Badge';
+import { BrandedLoader } from '@/components/ui';
 import { 
     X, Plus, Star, MessageCircle, Building2, 
     Globe, Phone, Mail, Tag, Layout, 
@@ -453,7 +454,12 @@ const WechatContactForm = ({ contact, onClose, onSuccess }) => {
                                     <input type="file" id="contact-screenshot" className="hidden" onChange={handleFileUpload} disabled={uploading || !contact} />
                                     <Upload className={`w-10 h-10 mx-auto mb-4 ${uploading ? 'animate-bounce text-emerald-600' : 'text-emerald-400'}`} />
                                     <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Upload Chat Proof</p>
-                                    {uploading && <p className="text-[10px] text-emerald-600 font-bold mt-2 animate-pulse">Uploading...</p>}
+                                    {uploading && (
+                                        <div className="flex flex-col items-center gap-2 mt-4">
+                                            <BrandedLoader size={30} inline />
+                                            <p className="text-[10px] text-emerald-600 font-bold animate-pulse uppercase">Syncing Data...</p>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="mt-6 space-y-3">
                                     {contact?.attachments?.filter(a => a.type === 'Screenshot').map((file, idx) => (
@@ -520,9 +526,9 @@ const WechatContactForm = ({ contact, onClose, onSuccess }) => {
                                     <button 
                                         type="submit" 
                                         disabled={loading}
-                                        className="flex-1 px-14 py-6 rounded-[2rem] bg-emerald-600 text-white text-sm font-black uppercase tracking-widest shadow-2xl shadow-emerald-950 hover:bg-emerald-500 active:scale-[0.98] transition-all disabled:opacity-50"
+                                        className="flex-1 px-14 py-6 rounded-[2rem] bg-emerald-600 text-white text-sm font-black uppercase tracking-widest shadow-2xl shadow-emerald-950 hover:bg-emerald-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {loading ? 'Processing...' : (contact ? 'Push Profile Update' : 'Establish Business Link')}
+                                        {loading ? <BrandedLoader size={20} /> : (contact ? 'Push Profile Update' : 'Establish Business Link')}
                                     </button>
                                 </div>
                             </div>

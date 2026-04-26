@@ -117,14 +117,11 @@
     width: 100%;
 }
 
-// Loading Spinner (Simple CSS spinner)
-.spinner {
-    width: 1em;
-    height: 1em;
-    border: 2px solid currentColor;
-    border-right-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.75s linear infinite;
+// Loading Loader
+.buttonLoader {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 @keyframes spin {

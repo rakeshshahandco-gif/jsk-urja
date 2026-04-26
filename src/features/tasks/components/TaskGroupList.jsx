@@ -11,6 +11,8 @@ import { Users, Search, Plus, Edit2, Trash2 } from 'lucide-react';
 import styles from './TaskGroupList.module.scss';
 import clsx from 'clsx';
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
 export const TaskGroupList = () => {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export const TaskGroupList = () => {
         }
     };
 
-    if (loading) return <div className={styles.container}><div style={{ color: '#94a3b8' }}>Loading...</div></div>;
+    if (loading) return <BrandedLoader size={120} />;
 
     return (
         <div className={styles.container}>

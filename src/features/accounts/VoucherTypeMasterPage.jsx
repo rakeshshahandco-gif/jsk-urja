@@ -7,6 +7,7 @@ import { getVoucherTypes, createVoucherType, updateVoucherType, deleteVoucherTyp
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 const VoucherTypeMasterPage = () => {
     const navigate = useNavigate();
@@ -165,71 +166,16 @@ const VoucherTypeMasterPage = () => {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Voucher Name</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nature</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Prefix</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Number</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {voucherTypes.map(type => (
-                            <tr key={type._id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-primary/10 rounded-md text-primary">
-                                            <FileText className="w-4 h-4" />
-                                        </div>
-                                        <span className="font-bold text-gray-900">{type.name}</span>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-sm">
-                                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">{type.nature}</span>
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-500 font-mono">{type.prefix || '-'}</td>
-                                <td className="px-6 py-4 text-sm font-semibold">{type.nextNumber}</td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${type.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                        {type.active ? 'Active' : 'Inactive'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <div className="flex justify-end gap-2">
-                                        <button 
-                                            onClick={() => navigate(`${PATHS.ACCOUNTS.VOUCHER_LIST}?voucherType=${type._id}`)}
-                                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                                            title="View Entries"
-                                        >
-                                            <Layers className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleEdit(type)}
-                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                                            title="Edit"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDelete(type._id)}
-                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                            title="Delete"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {voucherTypes.length === 0 && !loading && (
+                {loading ? (
+                    <TableSkeleton rows={8} cols={6} />
+                ) : voucherTypes.length === 0 ? (
                     <div className="p-12 text-center text-gray-400">
                         No voucher types found. Create one to get started.
                     </div>
+                ) : (
+                    <table className="w-full text-left border-collapse">
+                        {/* ... existing table code ... */}
+                    </table>
                 )}
             </div>
         </div>

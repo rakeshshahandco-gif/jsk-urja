@@ -18,257 +18,188 @@ import { FinancialYear } from '../models/financialYear.model.js';
 const getSalesMarketingAnalytics = async (filters, user) => {
     const { fromDate, toDate, salesperson, source, product, fy } = filters;
 
-    // 1. Build Base Match for Customers/Leads
-    const customerMatch = { isDeleted: { $ne: true }, status: 'lead' };
-    
-    // A. Financial Year logic
-    let startDate = fromDate ? new Date(fromDate) : null;
-    let endDate = toDate ? new Date(toDate) : null;
+    // Normalize dates
+    let rangeStart = fromDate ? moment(fromDate).startOf('day').toDate() : moment().subtract(30, 'days').startOf('day').toDate();
+    let rangeEnd = toDate ? moment(toDate).endOf('day').toDate() : moment().endOf('day').toDate();
 
     if (fy) {
         const fyData = await FinancialYear.findById(fy);
         if (fyData) {
-            if (!startDate || startDate < fyData.startDate) startDate = fyData.startDate;
-            if (!endDate || endDate > fyData.endDate) endDate = fyData.endDate;
+            if (!rangeStart || rangeStart < fyData.startDate) rangeStart = fyData.startDate;
+            if (!rangeEnd || rangeEnd > fyData.endDate) rangeEnd = fyData.endDate;
         }
     }
 
-    if (startDate || endDate) {
-        customerMatch.leadDate = {};
-        if (startDate) customerMatch.leadDate.$gte = startDate;
-        if (endDate) customerMatch.leadDate.$lte = endDate;
-    }
-
-    // B. Security / Role based filtering
-    // Admin/SuperAdmin sees everything unless a specific salesperson is selected
-    // Salesperson sees ONLY their data
+    // Security & Filters
     const isAdmin = ['admin', 'superadmin'].includes(user.role?.toLowerCase());
+    const customerFilter = { isDeleted: { $ne: true } };
     if (!isAdmin) {
-        customerMatch.assignedSalesperson = new mongoose.Types.ObjectId(user._id);
+        customerFilter.assignedSalesperson = new mongoose.Types.ObjectId(user._id);
     } else if (salesperson) {
-        customerMatch.assignedSalesperson = new mongoose.Types.ObjectId(salesperson);
+        customerFilter.assignedSalesperson = new mongoose.Types.ObjectId(salesperson);
     }
+    if (source) customerFilter.leadSource = source;
+    if (product) customerFilter.interestedProducts = { $in: [product] };
 
-    if (source) customerMatch.leadSource = source;
-    if (product) customerMatch.interestedProducts = { $in: [product] };
+    // 1. Get Matching Customer IDs
+    const matchingCustomers = await Customer.find(customerFilter, { _id: 1 }).lean();
+    const customerIds = matchingCustomers.map(c => c._id);
 
-    // 2. Comprehensive Aggregation Pipeline
-    const analyticsFacet = await Customer.aggregate([
-        { $match: customerMatch },
-        {
-            $lookup: {
-                from: 'conversations',
-                localField: '_id',
-                foreignField: 'customerId',
-                as: 'conversations'
+    // 2. Fetch Metrics in Parallel
+    const [
+        leadsCount,
+        contactedCount,
+        qualifiedCount,
+        invoicesData,
+        ordersData,
+        lostCount,
+        overdueCount,
+        trendsData,
+        sourceWise,
+        salespersonWise
+    ] = await Promise.all([
+        Customer.countDocuments({ 
+            _id: { $in: customerIds }, 
+            status: 'lead', 
+            leadDate: { $gte: rangeStart, $lte: rangeEnd } 
+        }),
+        Conversation.distinct('customerId', {
+            customerId: { $in: customerIds },
+            createdAt: { $gte: rangeStart, $lte: rangeEnd }
+        }).then(res => res.length),
+        Promise.all([
+            SalesOrder.distinct('customerId', { customerId: { $in: customerIds }, soDate: { $gte: rangeStart, $lte: rangeEnd } }),
+            SalesInvoice.distinct('customerId', { customerId: { $in: customerIds }, invoiceDate: { $gte: rangeStart, $lte: rangeEnd } })
+        ]).then(([so, si]) => new Set([...so, ...si]).size),
+        SalesInvoice.aggregate([
+            { $match: { customerId: { $in: customerIds }, isDeleted: { $ne: true }, status: { $ne: 'Cancelled' }, invoiceDate: { $gte: rangeStart, $lte: rangeEnd } } },
+            { $group: { _id: null, count: { $sum: 1 }, value: { $sum: '$grandTotal' } } }
+        ]).then(res => res[0] || { count: 0, value: 0 }),
+        SalesOrder.aggregate([
+            { $match: { customerId: { $in: customerIds }, isDeleted: { $ne: true }, soDate: { $gte: rangeStart, $lte: rangeEnd } } },
+            { 
+                $group: { 
+                    _id: null, 
+                    totalOrders: { $sum: { $cond: [{ $ne: ['$orderCategory', 'Sample'] }, 1, 0] } },
+                    totalSamples: { $sum: { $cond: [{ $eq: ['$orderCategory', 'Sample'] }, 1, 0] } },
+                    sampleToSoCount: { $sum: { $cond: [{ $and: [{ $eq: ['$orderCategory', 'Sample'] }, { $ne: ['$invoiceId', null] }] }, 1, 0] } }
+                } 
             }
-        },
-        {
-            $lookup: {
-                from: 'salesorders',
-                localField: '_id',
-                foreignField: 'customerId',
-                as: 'orders'
-            }
-        },
+        ]).then(res => res[0] || { totalOrders: 0, totalSamples: 0, sampleToSoCount: 0 }),
+        Customer.countDocuments({ 
+            _id: { $in: customerIds }, 
+            leadStage: 'Lost', 
+            updatedAt: { $gte: rangeStart, $lte: rangeEnd }
+        }),
+        Followup.countDocuments({
+            customerId: { $in: customerIds },
+            isClosed: false,
+            reminderDate: { $lt: new Date() }
+        }),
+        Promise.all([
+            Customer.aggregate([
+                { $match: { _id: { $in: customerIds }, status: 'lead', leadDate: { $gte: rangeStart, $lte: rangeEnd } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$leadDate' } }, count: { $sum: 1 } } }
+            ]),
+            SalesInvoice.aggregate([
+                { $match: { customerId: { $in: customerIds }, isDeleted: { $ne: true }, status: { $ne: 'Cancelled' }, invoiceDate: { $gte: rangeStart, $lte: rangeEnd } } },
+                { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$invoiceDate' } }, value: { $sum: '$grandTotal' } } }
+            ])
+        ]).then(([leads, sales]) => {
+            const map = {};
+            leads.forEach(l => map[l._id] = { leads: l.count, salesValue: 0 });
+            sales.forEach(s => {
+                if (!map[s._id]) map[s._id] = { leads: 0, salesValue: 0 };
+                map[s._id].salesValue = s.value;
+            });
+            return Object.keys(map).sort().map(k => ({ _id: k, ...map[k] }));
+        }),
+        Customer.aggregate([
+            { $match: { _id: { $in: customerIds }, status: 'lead', leadDate: { $gte: rangeStart, $lte: rangeEnd } } },
+            { $group: { _id: { $ifNull: ['$leadSource', 'Unknown'] }, count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]),
+        SalesInvoice.aggregate([
+            { $match: { customerId: { $in: customerIds }, isDeleted: { $ne: true }, status: { $ne: 'Cancelled' }, invoiceDate: { $gte: rangeStart, $lte: rangeEnd } } },
+            {
+                $lookup: {
+                    from: 'customers',
+                    localField: 'customerId',
+                    foreignField: '_id',
+                    as: 'customer'
+                }
+            },
+            { $unwind: '$customer' },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'customer.assignedSalesperson',
+                    foreignField: '_id',
+                    as: 'salesperson'
+                }
+            },
+            { $unwind: { path: '$salesperson', preserveNullAndEmptyArrays: true } },
+            {
+                $group: {
+                    _id: { $ifNull: ['$salesperson.name', 'Unassigned'] },
+                    salesValue: { $sum: '$grandTotal' },
+                    invoices: { $sum: 1 }
+                }
+            },
+            { $sort: { salesValue: -1 } }
+        ])
+    ]);
+
+    // Lead-to-Cash Cycle Calculation
+    const cycleData = await Customer.aggregate([
+        { $match: { _id: { $in: customerIds }, leadDate: { $exists: true } } },
         {
             $lookup: {
                 from: 'salesinvoices',
-                localField: '_id',
-                foreignField: 'customerId',
-                as: 'invoices'
+                let: { cid: '$_id' },
+                pipeline: [
+                    { $match: { $expr: { $eq: ['$customerId', '$$cid'] }, isDeleted: { $ne: true } } },
+                    { $sort: { invoiceDate: 1 } },
+                    { $limit: 1 }
+                ],
+                as: 'firstInvoice'
             }
         },
-        {
-            $lookup: {
-                from: 'reminders',
-                localField: '_id',
-                foreignField: 'customerId',
-                as: 'reminders'
-            }
-        },
-        {
-            $lookup: {
-                from: 'users',
-                localField: 'assignedSalesperson',
-                foreignField: '_id',
-                as: 'salespersonInfo'
-            }
-        },
-        { $unwind: { path: '$salespersonInfo', preserveNullAndEmptyArrays: true } },
+        { $unwind: '$firstInvoice' },
         {
             $project: {
-                _id: 1,
-                customerName: 1,
-                leadSource: 1,
-                leadStage: 1,
-                lostReason: 1,
-                interestedProducts: 1,
-                leadDate: 1,
-                salespersonName: { $ifNull: ['$salespersonInfo.name', 'Unassigned'] },
-                
-                // Stage indicators
-                hasFollowup: { $gt: [{ $size: '$conversations' }, 0] },
-                hasSample: {
-                    $gt: [{ $size: { $filter: { input: '$orders', as: 'o', cond: { $eq: ['$$o.orderCategory', 'Sample'] } } } }, 0]
-                },
-                hasOrder: {
-                    $gt: [{ $size: { $filter: { input: '$orders', as: 'o', cond: { $ne: ['$$o.orderCategory', 'Sample'] } } } }, 0]
-                },
-                hasInvoice: { $gt: [{ $size: '$invoices' }, 0] },
-                
-                // Values
-                orderValue: { $sum: '$orders.grandTotal' },
-                invoiceValue: { $sum: '$invoices.grandTotal' },
-                
-                // Calculation dates
-                firstInvoiceDate: { $min: '$invoices.invoiceDate' },
-                
-                // Reminder status
-                reminders: 1
+                diff: { $divide: [{ $subtract: ['$firstInvoice.invoiceDate', '$leadDate'] }, 1000 * 60 * 60 * 24] }
             }
         },
-        {
-            $facet: {
-                // KPI Summary
-                summary: [
-                    {
-                        $group: {
-                            _id: null,
-                            totalLeads: { $sum: 1 },
-                            contacted: { $sum: { $cond: [{ $or: ['$hasFollowup', '$hasSample', '$hasOrder', '$hasInvoice'] }, 1, 0] } },
-                            qualified: { $sum: { $cond: [{ $or: ['$hasSample', '$hasOrder', '$hasInvoice'] }, 1, 0] } },
-                            samples: { $sum: { $cond: ['$hasSample', 1, 0] } },
-                            orders: { $sum: { $cond: ['$hasOrder', 1, 0] } },
-                            invoices: { $sum: { $cond: ['$hasInvoice', 1, 0] } },
-                            salesValue: { $sum: { $cond: [{ $gt: ['$invoiceValue', 0] }, '$invoiceValue', '$orderValue'] } },
-                            totalLeadToCashDays: {
-                                $sum: {
-                                    $cond: [
-                                        { $and: ['$firstInvoiceDate', '$leadDate'] },
-                                        { $divide: [{ $subtract: ['$firstInvoiceDate', '$leadDate'] }, 1000 * 60 * 60 * 24] },
-                                        0
-                                    ]
-                                }
-                            },
-                            cashCount: { $sum: { $cond: [{ $and: ['$firstInvoiceDate', '$leadDate'] }, 1, 0] } },
-                            lostLeads: { $sum: { $cond: [{ $eq: ['$leadStage', 'Lost'] }, 1, 0] } },
-                            sampleToSoCount: { 
-                                $sum: { $cond: [{ $and: ['$hasSample', '$hasOrder'] }, 1, 0] } 
-                            }
-                        }
-                    }
-                ],
-                // Lead & Sales Trends
-                trends: [
-                    {
-                        $group: {
-                            _id: { $dateToString: { format: '%Y-%m-%d', date: '$leadDate' } },
-                            leads: { $sum: 1 },
-                            salesValue: { $sum: { $cond: [{ $gt: ['$invoiceValue', 0] }, '$invoiceValue', '$orderValue'] } }
-                        }
-                    },
-                    { $sort: { _id: 1 } }
-                ],
-                // Salesperson Matrix
-                salespersonPerformance: [
-                    {
-                        $group: {
-                            _id: '$salespersonName',
-                            leads: { $sum: 1 },
-                            qualified: { $sum: { $cond: [{ $or: ['$hasSample', '$hasOrder', '$hasInvoice'] }, 1, 0] } },
-                            orders: { $sum: { $cond: ['$hasOrder', 1, 0] } },
-                            invoices: { $sum: { $cond: ['$hasInvoice', 1, 0] } },
-                            salesValue: { $sum: { $cond: [{ $gt: ['$invoiceValue', 0] }, '$invoiceValue', '$orderValue'] } }
-                        }
-                    },
-                    { $sort: { salesValue: -1 } }
-                ],
-                // Lead Source Analysis
-                sourceDistribution: [
-                    {
-                        $group: {
-                            _id: { $ifNull: ['$leadSource', 'Unknown'] },
-                            count: { $sum: 1 },
-                            sales: { $sum: { $cond: [{ $gt: ['$invoiceValue', 0] }, '$invoiceValue', '$orderValue'] } }
-                        }
-                    },
-                    { $sort: { count: -1 } }
-                ],
-                // Lost Reason Analysis
-                lostAnalysis: [
-                    { $match: { leadStage: 'Lost' } },
-                    {
-                        $group: {
-                            _id: { $ifNull: ['$lostReason', 'Other'] },
-                            count: { $sum: 1 }
-                        }
-                    },
-                    { $sort: { count: -1 } }
-                ],
-                // Follow-up status analysis
-                followupAnalysis: [
-                    { $unwind: '$reminders' },
-                    {
-                        $group: {
-                            _id: {
-                                $cond: [
-                                    { $eq: ['$reminders.isClosed', true] }, 'Completed',
-                                    {
-                                        $cond: [
-                                            { $lt: ['$reminders.reminderDate', new Date()] }, 'Overdue',
-                                            { 
-                                                $cond: [
-                                                    { $eq: [{ $dateToString: { format: '%Y-%m-%d', date: '$reminders.reminderDate' } }, { $dateToString: { format: '%Y-%m-%d', date: new Date() } }] }, 'Due Today',
-                                                    'Pending'
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            count: { $sum: 1 }
-                        }
-                    }
-                ],
-                // Overdue Total KPI (Distinct leads with overdue)
-                overdueTotal: [
-                    { $unwind: '$reminders' },
-                    { $match: { 'reminders.isClosed': false, 'reminders.reminderDate': { $lt: new Date() } } },
-                    { $group: { _id: '$_id' } },
-                    { $count: 'count' }
-                ]
-            }
-        }
+        { $group: { _id: null, avg: { $avg: '$diff' }, count: { $sum: 1 } } }
     ]);
 
-    const result = analyticsFacet[0];
-    const summaryData = result.summary[0] || {
-        totalLeads: 0, contacted: 0, qualified: 0, samples: 0,
-        orders: 0, invoices: 0, salesValue: 0, lostLeads: 0, totalLeadToCashDays: 0, cashCount: 0, sampleToSoCount: 0
-    };
-
-    // Lead-to-Cash Calculation
-    const leadToCashDays = summaryData.cashCount > 0 ? (summaryData.totalLeadToCashDays / summaryData.cashCount).toFixed(1) : 0;
-    const conversionRate = summaryData.totalLeads > 0 ? ((summaryData.invoices / summaryData.totalLeads) * 100).toFixed(1) : 0;
-    const sampleToSoRate = summaryData.samples > 0 ? ((summaryData.sampleToSoCount / summaryData.samples) * 100).toFixed(1) : 0;
+    const leadToCashDays = cycleData[0] ? cycleData[0].avg.toFixed(1) : 0;
+    const conversionRate = leadsCount > 0 ? ((invoicesData.count / leadsCount) * 100).toFixed(1) : 0;
+    const sampleToSoRate = ordersData.totalSamples > 0 ? ((ordersData.sampleToSoCount / ordersData.totalSamples) * 100).toFixed(1) : 0;
 
     return {
         summary: {
-            ...summaryData,
+            totalLeads: leadsCount,
+            contacted: contactedCount,
+            qualified: qualifiedCount,
+            samples: ordersData.totalSamples,
+            orders: ordersData.totalOrders,
+            invoices: invoicesData.count,
+            salesValue: invoicesData.value,
             leadToCashDays,
             conversionRate,
             sampleToSoRate,
-            overdueFollowups: result.overdueTotal[0]?.count || 0
+            lostLeads: lostCount,
+            overdueFollowups: overdueCount
         },
-        trends: result.trends,
-        salespersonPerformance: result.salespersonPerformance,
-        sourceDistribution: result.sourceDistribution,
-        lostAnalysis: result.lostAnalysis,
-        followupAnalysis: result.followupAnalysis || []
+        trends: trendsData,
+        salespersonPerformance: salespersonWise,
+        sourceDistribution: sourceWise,
+        lostAnalysis: [],
+        followupAnalysis: []
     };
 };
-
 /**
  * Query detailed lead report with pagination
  */

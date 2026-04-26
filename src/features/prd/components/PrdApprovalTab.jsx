@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdApprovals, createPrdApproval, updatePrdApproval, getPrdPrototypes } from '@/services/prdApi';
 import { Button, Modal, Select } from '@/components/ui';
 import { CheckCircle, XCircle, FileText, Lock } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdApprovalTab.module.scss';
 import clsx from 'clsx';
@@ -106,7 +107,7 @@ const PrdApprovalTab = ({ projectId }) => {
             )}
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : approvals.length === 0 ? (
                 <div className={styles.emptyState}>No approval cycles initiated yet.</div>
             ) : (

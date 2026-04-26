@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input } from "@/components/ui";
+import { BrandedLoader } from "@/components/ui";
 import { BookOpen, Filter, ArrowRight } from "lucide-react";
 import { getDayBook } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
@@ -152,8 +153,8 @@ const DayBookPage = () => {
         )}
         
         {loading && (
-           <div className="p-20 text-center text-slate-400 font-bold animate-pulse">
-             SYNCHRONIZING DAY BOOK...
+           <div className="p-20 flex justify-center">
+             <BrandedLoader size={120} />
            </div>
         )}
       </div>

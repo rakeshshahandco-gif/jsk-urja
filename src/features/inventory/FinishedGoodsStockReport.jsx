@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../config/api';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const fmt = (n) => Number(n || 0).toFixed(2);
 
@@ -65,7 +66,7 @@ export default function FinishedGoodsStockReport() {
             </div>
 
             {loading ? (
-                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading...</div>
+                <BrandedLoader size={100} />
             ) : (
                 <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

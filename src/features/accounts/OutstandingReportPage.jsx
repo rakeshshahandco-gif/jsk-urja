@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Download, User, ArrowRight, TrendingUp } from "lucide-react";
+import { BrandedLoader } from "@/components/ui";
 import { getOutstandingSummary } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
 import { Select } from "@/components/ui";
@@ -121,7 +122,7 @@ const OutstandingReportPage = () => {
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr><td colSpan={4} className="text-center py-20 text-slate-300 font-black uppercase tracking-widest animate-pulse">Analyzing Ledgers...</td></tr>
+                                    <tr><td colSpan={4} className="text-center py-20"><div className="flex justify-center"><BrandedLoader size={100} /></div></td></tr>
                                 ) : filteredData.map((item, idx) => (
                                     <tr key={idx}>
                                         <td>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdIssues, createPrdIssue, updatePrdIssue, deletePrdIssue, getPrdTestReports, getPrdChangeLogs } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { Plus, Edit, Trash2, Download, AlertTriangle, Upload } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdIssueTab.module.scss';
 import clsx from 'clsx';
@@ -252,7 +253,7 @@ const PrdIssueTab = ({ projectId }) => {
             </div>
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : issues.length === 0 ? (
                 <div className={styles.emptyState}>No issues logged yet. All clean!</div>
             ) : (

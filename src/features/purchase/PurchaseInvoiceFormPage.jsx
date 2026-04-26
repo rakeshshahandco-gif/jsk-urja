@@ -12,6 +12,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 
 
 const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
@@ -553,7 +554,7 @@ export default function PurchaseInvoiceFormPage() {
                 <h1 style={{ margin: '0 0 20px', fontSize: '22px', fontWeight: 700 }}>
                     {isEdit ? '✎ Edit Purchase Invoice' : '🧾 New Purchase Invoice'}
                 </h1>
-                {loading ? <div style={{ color: '#94a3b8' }}>Loading invoice data...</div> : (
+                {loading ? <BrandedLoader size={120} /> : (
                     <>
                         {isEdit ? (
                             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '12px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -630,7 +631,7 @@ export default function PurchaseInvoiceFormPage() {
                                                 <option value="">— Select PO —</option>
                                                 {poList.map(po => <option key={po._id} value={po._id}>{po.poNumber} ({po.status})</option>)}
                                             </select>
-                                            {loadingRef && <span style={{ fontSize: '11px', color: '#64748b' }}>Loading...</span>}
+                                            {loadingRef && <BrandedLoader size={20} />}
                                         </div>
                                     )}
                                     {needGRN && (
@@ -640,7 +641,7 @@ export default function PurchaseInvoiceFormPage() {
                                                 <option value="">— Select GRN —</option>
                                                 {grnList.map(g => <option key={g._id} value={g._id}>{g.grnNumber} | {g.invoiceStatus}</option>)}
                                             </select>
-                                            {loadingRef && <span style={{ fontSize: '11px', color: '#64748b' }}>Loading...</span>}
+                                            {loadingRef && <BrandedLoader size={20} />}
                                         </div>
                                     )}
                                     <div style={{ padding: '12px', background: '#f8f9fa', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -682,7 +683,7 @@ export default function PurchaseInvoiceFormPage() {
                             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                                     <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                                        Items {loadingRef ? '(loading...)' : ''}
+                                        Items {loadingRef ? <BrandedLoader size={20} inline /> : ''}
                                     </h3>
                                     {isManual && <button type="button" onClick={addRow} style={{ padding: '6px 14px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>+ Add Row</button>}
                                 </div>

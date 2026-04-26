@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tag, Plus, Pencil, Trash2, Check, X, Zap } from 'lucide-react';
 import { getItemTypes, createItemType, updateItemType, deleteItemType } from '@/services/itemTypeApi';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const BLANK = { name: '', code: '', description: '', isElectrical: false };
 
@@ -162,10 +163,7 @@ const ItemTypePage = () => {
             {/* Table */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flex: 1 }}>
                 {loading ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 8, color: '#6b7280', fontSize: 12 }}>
-                        <div style={{ width: 14, height: 14, border: '2px solid #e5e7eb', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                        Loading…
-                    </div>
+                    <BrandedLoader size={80} />
                 ) : types.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, gap: 8, color: '#9ca3af' }}>
                         <Tag size={28} style={{ opacity: 0.3 }} />

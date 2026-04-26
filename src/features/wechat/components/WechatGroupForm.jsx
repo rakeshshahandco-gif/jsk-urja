@@ -10,6 +10,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Modal } from '../../../components/ui/Modal';
 import { Badge } from '../../../components/ui/Badge';
+import { BrandedLoader } from '@/components/ui';
 import { 
     X, Plus, Star, Users, Tag, 
     FileText, ImageIcon, Upload, Trash2, 
@@ -317,10 +318,16 @@ const WechatGroupForm = ({ group, onClose, onSuccess }) => {
                                     <Button 
                                         type="button" 
                                         className={`h-12 w-full rounded-2xl font-black ${group ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                                        disabled={!group}
+                                        disabled={!group || uploading}
                                         onClick={() => document.getElementById('group-file').click()}
                                     >
-                                        {uploading ? 'Uploading...' : (group ? 'Select File to Upload' : 'Save group first to upload')}
+                                        <div className="flex items-center justify-center gap-3">
+                                             {uploading ? (
+                                                 <BrandedLoader size={20} />
+                                             ) : (
+                                                 <span>{group ? 'Select File to Upload' : 'Save group first to upload'}</span>
+                                             )}
+                                         </div>
                                     </Button>
                                 </div>
                                 {group?.attachments?.length > 0 && (
@@ -357,7 +364,7 @@ const WechatGroupForm = ({ group, onClose, onSuccess }) => {
 
                         <div className="flex items-center justify-end gap-6 pt-4">
                             <Button type="button" variant="ghost" className="text-slate-400 font-black h-14 px-8 rounded-2xl hover:text-slate-600" onClick={onClose}>Discard Changes</Button>
-                            <Button type="submit" loading={loading} className="bg-slate-900 hover:bg-black text-white h-14 px-12 rounded-2xl font-black text-lg shadow-2xl shadow-slate-200 transition-all">
+                            <Button type="submit" isLoading={loading} className="bg-slate-900 hover:bg-black text-white h-14 px-12 rounded-2xl font-black text-lg shadow-2xl shadow-slate-200 transition-all">
                                 {group ? 'Update Intelligence Group' : 'Initialize Strategy Group'}
                             </Button>
                         </div>

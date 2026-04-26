@@ -9,6 +9,7 @@ import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -34,6 +35,7 @@ export default function SalesOrderFormPage() {
     const { id } = useParams();
     const isEdit = Boolean(id);
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(isEdit);
     const [form, setForm] = useState({
         customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
         customerCode: '',
@@ -199,7 +201,8 @@ export default function SalesOrderFormPage() {
                     customerPODate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
                     items: so.items?.length ? so.items : [BLANK_ITEM()],
                 });
-            }).catch(() => toast.error('Failed to load SO'));
+            }).catch(() => toast.error('Failed to load SO'))
+            .finally(() => setLoading(false));
         } else {
             setForm({
                 customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
@@ -337,6 +340,8 @@ export default function SalesOrderFormPage() {
             </div>
 
             <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
+                {loading ? <BrandedLoader size={120} /> : (
+                <>
                 {form.status && form.status !== 'Draft' && (
                     <div style={{ background: '#ecfdf5', color: '#065f46', padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13, border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 18 }}>🔒</span>
@@ -632,6 +637,8 @@ export default function SalesOrderFormPage() {
                         </button>
                     )}
                 </div>
+                </>
+                )}
             </div>
 
 

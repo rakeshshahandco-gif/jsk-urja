@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdPrototypes, createPrdPrototype, updatePrdPrototype, deletePrdPrototype } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { Plus, Edit, Trash2 } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdPrototypeTab.module.scss';
 import clsx from 'clsx';
@@ -146,7 +147,7 @@ const PrdPrototypeTab = ({ projectId }) => {
             </div>
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : prototypes.length === 0 ? (
                 <div className={styles.emptyState}>No prototype builds logged yet.</div>
             ) : (

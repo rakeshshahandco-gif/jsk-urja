@@ -9,13 +9,14 @@ const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7,
 const sel = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', background: '#f9fafb' };
 
 
+import { BrandedLoader } from '@/components/ui';
+
 export default function TransporterListPage() {
     const [list, setList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState({ transporterName: '', transporterId: '', type: 'Transporter', phone: '', email: '' });
-
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -98,7 +99,7 @@ export default function TransporterListPage() {
             )}
 
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                {loading ? <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div> : (
+                {loading ? <BrandedLoader size={120} /> : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr>

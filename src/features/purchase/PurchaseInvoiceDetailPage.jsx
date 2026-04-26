@@ -19,6 +19,8 @@ const PAY_COLORS = {
 };
 const MODE_ICONS = { Cash: '💵', UPI: '📱', Cheque: '🏦', 'Net Banking': '🌐', 'NEFT/RTGS/IMPS': '⚡', Card: '💳', Other: '🔖' };
 
+import { BrandedLoader } from '@/components/ui';
+
 export default function PurchaseInvoiceDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -86,7 +88,7 @@ export default function PurchaseInvoiceDetailPage() {
     }) : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} `;
 
-    if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!inv) return <div style={{ padding: '40px', textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>Invoice not found.</div>;
 
     // ── Compute live payment totals from payments array (overrides stale DB field) ──

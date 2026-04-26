@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAuthData, clearAuthData } from '../utils/auth';
+import { useLoadingStore } from '../store/useLoadingStore';
 
 import { env } from '../config/env';
 
@@ -13,23 +14,31 @@ export const apiClient = axios.create({
 // Request interceptor: Attach Auth Token
 apiClient.interceptors.request.use(
     (config) => {
+        useLoadingStore.getState().startLoading();
         const authData = getAuthData();
         if (authData && authData.token) {
             config.headers.Authorization = `Bearer ${authData.token}`;
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        useLoadingStore.getState().stopLoading();
+        return Promise.reject(error);
+    }
 );
 
 // Response interceptor: Handle 401 and Retries
 apiClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        useLoadingStore.getState().stopLoading();
+        return response;
+    },
     async (error) => {
         const { config, response } = error;
 
         // 1. Handle 401 (Unauthorized)
         if (response && response.status === 401) {
+            useLoadingStore.getState().stopLoading();
             clearAuthData();
             return Promise.reject(error);
         }
@@ -49,6 +58,7 @@ apiClient.interceptors.response.use(
             return apiClient(config);
         }
 
+        useLoadingStore.getState().stopLoading();
         return Promise.reject(error);
     }
 );

@@ -2,16 +2,12 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import styles from '../CustomerMasterReport.module.scss';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }) => {
     const navigate = useNavigate();
     if (loading) {
-        return (
-            <div className={styles.loaderContainer}>
-                <div className={styles.spinner}></div>
-                <p>Loading follow-up records...</p>
-            </div>
-        );
+        return <TableSkeleton rows={15} cols={11} />;
     }
 
     if (data.length === 0) {

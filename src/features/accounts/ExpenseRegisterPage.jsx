@@ -4,6 +4,7 @@ import { Button } from "@/components/ui";
 import { Filter, Eye, Download } from "lucide-react";
 import { getExpenseRegister } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
+import { BrandedLoader } from "@/components/ui";
 import { PATHS } from "@/routes/paths";
 import { useFYDateRange } from "@/contexts/FinancialYearContext";
 import FYBadge from "@/components/ui/FYBadge";
@@ -151,7 +152,7 @@ export default function ExpenseRegisterPage() {
             </div>
 
             <div className={s.tableContainer}>
-                {loading ? <div className="p-32 text-center text-slate-300 font-black animate-pulse uppercase tracking-widest">Loading Expenses...</div> : (
+                {loading ? <div className="p-32 flex justify-center"><BrandedLoader size={120} /></div> : (
                     <table className="w-full">
                         <thead>
                             <tr>

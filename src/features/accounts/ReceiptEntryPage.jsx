@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Button, Input, Select, useModal, SearchableSelect
+    Button, Input, Select, useModal, SearchableSelect, BrandedLoader
 } from '@/components/ui';
+import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
 import { Plus, Trash2, Save, Layers } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers,
@@ -389,6 +390,8 @@ const ReceiptEntryPage = () => {
     const handleSaveAndNew = () => handleSave(false);
     const handleSaveAndClose = () => handleSave(true);
 
+    if (loading) return <BrandedModuleLoader />;
+
     // ── SIMPLIFIED VIEW when opened from Sales Invoice ──────────────────────
     if (fromInvoice) {
         const invNo = location.state?.invoiceNumber || '—';
@@ -680,12 +683,34 @@ const ReceiptEntryPage = () => {
                                             <td style={{ padding: '10px' }}>
                                                 {(location.state?.source === 'sales_invoice' || location.state?.customerId) && index === 0 ? (
                                                     <div style={{ ...inp, background: '#f0fdf4', borderColor: '#86efac', color: '#166534', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <span>{item.ledgerName || (loading ? 'Loading...' : 'Not Linked')}</span>
+                                                        <span>{item.ledgerName || (loading ? <BrandedLoader size={16} inline /> : 'Not Linked')}</span>
                                                         <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Locked</span>
                                                     </div>
                                                 ) : (
                                                     <SearchableSelect
-                                                        options={ledgers.map(l => ({ label: l.name, value: l._id, type: l.type }))}
+                                                        options={ledgers.map(l => ({ 
+                                                            label: l.name, 
+                                                            value: l._id, 
+                                                            group: l.groupName || l.accountGroupName || 'General',
+                                                            balance: l.currentBalance || 0,
+                                                            gst: l.gstNumber,
+                                                            phone: l.phone,
+                                                            type: l.type 
+                                                        }))}
+                                                        renderOption={(opt) => (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '2px 0' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
+                                                                    <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>{opt.group}</span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                                    <span>{opt.gst ? `GST: ${opt.gst}` : (opt.phone ? `📞 ${opt.phone}` : 'No details')}</span>
+                                                                    <span style={{ fontWeight: 800, color: opt.balance >= 0 ? '#10b981' : '#ef4444' }}>
+                                                                        ₹{Math.abs(opt.balance).toLocaleString('en-IN')} {opt.balance >= 0 ? 'Dr' : 'Cr'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         value={item.ledgerId}
                                                         onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
                                                         placeholder="Search ledger..."

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPurchaseComparisonReport, getSuppliers } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui';
 import styles from './CustomerMasterReport.module.scss';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -95,8 +96,8 @@ export default function PurchaseComparisonReportPage() {
                         <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>To Date</div>
                         <input type="date" value={filters.dateTo} onChange={e => setF('dateTo', e.target.value)} style={inp} />
                     </div>
-                    <button onClick={load} disabled={loading} style={{ height: 34, padding: '0 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13, opacity: loading ? 0.7 : 1 }}>
-                        {loading ? 'Loading...' : 'Apply Filters'}
+                    <button onClick={load} disabled={loading} style={{ height: 34, padding: '0 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13, opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {loading ? <BrandedLoader size={20} inline /> : 'Apply Filters'}
                     </button>
                 </div>
 
@@ -127,7 +128,7 @@ export default function PurchaseComparisonReportPage() {
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr><td colSpan={12} style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
+                                    <tr><td colSpan={12} style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}><BrandedLoader size={80} /></td></tr>
                                 ) : rows.length === 0 ? (
                                     <tr><td colSpan={12} style={{ padding: 48, textAlign: 'center', color: '#9ca3af' }}>
                                         No data found for the selected filters.

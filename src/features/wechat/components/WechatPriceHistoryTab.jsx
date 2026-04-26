@@ -5,6 +5,7 @@ import { getWeChatPrices, addWeChatPriceRecord, deleteWeChatPriceRecord, getWeCh
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 import { format } from 'date-fns';
 
 const SOURCE_LABELS = {
@@ -94,7 +95,7 @@ const WechatPriceHistoryTab = ({ contactId }) => {
         ? prices.filter(p => p.productId?._id === filterProduct || p.productId === filterProduct)
         : prices;
 
-    if (loading) return <div className="flex items-center justify-center py-16 text-slate-400"><div className="animate-spin rounded-full border-2 border-emerald-600 border-t-transparent w-8 h-8 mr-3" /> Loading prices...</div>;
+    if (loading) return <div className="flex items-center justify-center py-16"><BrandedLoader size={100} /></div>;
 
     return (
         <div className="space-y-6">

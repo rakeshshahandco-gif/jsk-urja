@@ -8,6 +8,7 @@ import { getVouchers, cancelVoucher } from "@/services/accountApi";
 import { toast } from "react-hot-toast";
 import { useFYDateRange } from "@/contexts/FinancialYearContext";
 import FYBadge from "@/components/ui/FYBadge";
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 import s from "./VoucherListPage.module.scss";
 
 const VoucherDetail = ({ voucher }) => {
@@ -251,7 +252,9 @@ const VoucherListPage = () => {
             </div>
 
             <div className={s.tableContainer}>
-                {loading ? <div className="p-32 text-center text-slate-300 font-black animate-pulse uppercase tracking-widest">Reconstructing Audit Trail...</div> : (
+                {loading ? (
+                    <TableSkeleton rows={12} cols={5} />
+                ) : (
                     <table className="w-full">
                         <thead>
                             <tr>

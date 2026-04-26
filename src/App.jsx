@@ -1,5 +1,5 @@
 // Version: 1.0.9 - Deploy: 2026-04-25T15:48:00Z
-import { useState, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
@@ -174,10 +174,24 @@ import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
 import './styles/main.scss';
+import { BrandedSplashScreen, BrandedModuleLoader, BrandedLoader } from '@/components/ui/BrandedLoading';
 
 import { Toaster } from 'react-hot-toast';
 
 function App() {
+    const [showSplash, setShowSplash] = useState(true);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowSplash(false);
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    if (showSplash) {
+        return <BrandedSplashScreen />;
+    }
+
     return (
         <BrowserRouter>
             <AuthProvider>
@@ -194,8 +208,9 @@ function App() {
                                         style: { zIndex: 99999 }
                                     }}
                                 />
+                                <BrandedModuleLoader />
                                 <ModalProvider>
-                                    <Suspense fallback={<div className="flex items-center justify-center h-screen font-bold text-gray-400">Loading Module...</div>}>
+                                    <Suspense fallback={<BrandedLoader size={120} />}>
                                         <Routes>
                                             {/* Public routes - Login, Forgot Password, Reset Password */}
                                             <Route path="/login" element={<LoginPage />} />

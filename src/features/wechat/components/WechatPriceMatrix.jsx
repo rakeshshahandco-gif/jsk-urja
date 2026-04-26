@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getWeChatPrices } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { DollarSign, Package, Clock, TrendingDown, Users } from 'lucide-react';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 
 const WechatPriceMatrix = ({ productId }) => {
     const [prices, setPrices] = useState([]);
@@ -24,7 +25,7 @@ const WechatPriceMatrix = ({ productId }) => {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-400 font-bold">Generating Matrix...</div>;
+    if (loading) return <div className="p-16 flex justify-center"><BrandedLoader size={120} /></div>;
     if (prices.length === 0) return <div className="p-8 text-center text-slate-400 font-bold bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">No quotation data available for comparison.</div>;
 
     return (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdTestReports, createPrdTestReport, getTestParameters, getPrdPrototypes, deletePrdTestReport } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { Plus, Edit, Trash2, Download, Upload, CheckCircle, XCircle } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdTestingTab.module.scss';
 import clsx from 'clsx';
@@ -410,7 +411,7 @@ const PrdTestingTab = ({ projectId, projectCategory }) => {
             </div>
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : reports.length === 0 ? (
                 <div className={styles.emptyState}>No test reports logged yet for this project.</div>
             ) : (

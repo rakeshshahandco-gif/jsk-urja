@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPrdChangeLogs, createPrdChangeLog, updatePrdChangeLog, deletePrdChangeLog, getPrdTestReports } from '@/services/prdApi';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import { Plus, Edit, Trash2, Download, Shuffle, Upload } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import toast from 'react-hot-toast';
 import styles from './PrdChangeLogTab.module.scss';
 import clsx from 'clsx';
@@ -237,7 +238,7 @@ const PrdChangeLogTab = ({ projectId }) => {
             </div>
 
             {loading ? (
-                <div className={styles.loader}>Loading...</div>
+                <div className={styles.loader}><BrandedLoader size={80} /></div>
             ) : changeLogs.length === 0 ? (
                 <div className={styles.emptyState}>No engineering changes recorded yet.</div>
             ) : (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { Search, Filter, Phone, MessageSquare, Calendar, Download, AlertCircle, Loader2, User, Building, CheckCircle } from 'lucide-react';
+import { BrandedLoader } from '@/components/ui';
 import { format } from 'date-fns';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { apiClient as api } from '@/lib/apiClient';
@@ -274,7 +275,7 @@ const FollowupDashboardReport = () => {
 
                 <div style={s.listWrap}>
                     {loadingTasks ? (
-                        <div style={s.emptyState}><Loader2 className="animate-spin" size={24} /></div>
+                        <div style={s.emptyState}><BrandedLoader size={60} /></div>
                     ) : tasks.length === 0 ? (
                         <div style={s.emptyState}>No open tasks found.</div>
                     ) : (
@@ -321,7 +322,7 @@ const FollowupDashboardReport = () => {
                         </div>
                     </div>
                 ) : loadingDetail ? (
-                    <div style={s.emptyState}><Loader2 className="animate-spin text-blue-500" size={32} /></div>
+                    <div style={s.emptyState}><BrandedLoader size={120} /></div>
                 ) : !customerData ? (
                     <div style={s.emptyState}>Failed to load data</div>
                 ) : (

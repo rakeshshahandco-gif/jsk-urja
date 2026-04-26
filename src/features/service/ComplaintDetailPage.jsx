@@ -33,6 +33,8 @@ const Section = ({ icon: Icon, title, color, children }) => (
     </div>
 );
 
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
 const ComplaintDetailPage = () => {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -46,7 +48,7 @@ const ComplaintDetailPage = () => {
             .catch(() => { addToast('Failed to load', 'error'); setLoading(false); });
     }, [id]);
 
-    if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!data) return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>Complaint not found</div>;
 
     const totalFaulty = data.items?.reduce((s, i) => s + i.qtyFaultyReported, 0) || 0;

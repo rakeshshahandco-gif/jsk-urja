@@ -3,7 +3,7 @@ import { FilterPanel } from './components/FilterPanel';
 import { ReportTable } from './components/ReportTable';
 import { getCustomerReport, getReportOptions, exportCustomerReportBlob } from '@/services/reportApi';
 import { ChevronLeft, ChevronRight, Loader2, FileSpreadsheet, FileText, Download } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, BrandedLoader } from '@/components/ui';
 import styles from './CustomerMasterReport.module.scss';
 
 export const CustomerMasterReport = () => {
@@ -209,8 +209,7 @@ export const CustomerMasterReport = () => {
 
                 {loading ? (
                     <div className={styles.loaderContainer}>
-                        <Loader2 className={styles.spinner} />
-                        <p>Loading report data...</p>
+                        <BrandedLoader size={120} />
                     </div>
                 ) : (
                     <>

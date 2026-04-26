@@ -23,6 +23,7 @@ import {
 import { getBOMs, deleteBOM, exportBOMTemplate, importBOMsExcel, exportBOMList, downloadBOMPDF } from '@/services/bomApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedLoader } from '@/components/ui';
 
 const s = {
     page: { background: '#f8fafc', minHeight: '100vh', fontFamily: "'Inter', system-ui, sans-serif", color: '#1e293b' },
@@ -271,11 +272,9 @@ const BOMPage = () => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                Array(5).fill(0).map((_, i) => (
-                                    <tr key={i}>
-                                        <td colSpan="8" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Loading BOM records...</td>
-                                    </tr>
-                                ))
+                                <tr>
+                                    <td colSpan="8" style={{ padding: '40px' }}><BrandedLoader size={120} /></td>
+                                </tr>
                             ) : boms.length === 0 ? (
                                 <tr>
                                     <td colSpan="8" style={{ padding: '80px 24px', textAlign: 'center', color: '#94a3b8' }}>

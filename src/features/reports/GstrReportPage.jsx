@@ -112,7 +112,7 @@ export default function GstrReportPage() {
                 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                     <Button 
                         onClick={handleDownload} 
-                        disabled={downloading}
+                        isLoading={downloading}
                         style={{ 
                             background: downloading ? '#e2e8f0' : 'linear-gradient(135deg, #2563eb, #4f46e5)', 
                             color: downloading ? '#94a3b8' : '#fff',
@@ -128,7 +128,7 @@ export default function GstrReportPage() {
                         }}
                     >
                         <Download size={20} />
-                        {downloading ? 'Compiling Engine Export...' : 'Download GSTR-1 Excel Utility'}
+                        Download GSTR-1 Excel Utility
                     </Button>
                 </div>
             </Card>

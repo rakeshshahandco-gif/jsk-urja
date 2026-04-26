@@ -164,7 +164,7 @@ const EmployeeForm = () => {
         }
     };
 
-    if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
 
     return (
         <div style={{ padding: '20px', background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '16px' }}>

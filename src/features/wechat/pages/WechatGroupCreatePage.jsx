@@ -10,6 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
+import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 import { 
     api 
 } from '../../../services/weChatApi';
@@ -205,10 +206,7 @@ const WechatGroupCreatePage = () => {
     if (fetching) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <div className="text-center space-y-4">
-                    <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                    <p className="font-black text-slate-400 uppercase tracking-widest text-sm">Synchronizing Intelligence...</p>
-                </div>
+                <BrandedLoader size={120} />
             </div>
         );
     }
@@ -244,9 +242,9 @@ const WechatGroupCreatePage = () => {
                         <Button 
                             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black px-8 py-6 flex items-center gap-3 shadow-xl shadow-emerald-100 transition-all active:scale-95"
                             onClick={handleSave}
-                            disabled={loading}
+                            isLoading={loading}
                         >
-                            {loading ? 'Processing...' : <><Save size={20} /> {groupId ? 'Update & Sync Records' : 'Finalize & Sync All Records'}</>}
+                            <Save size={20} /> {groupId ? 'Update & Sync Records' : 'Finalize & Sync All Records'}
                         </Button>
                     </div>
                 </div>
@@ -703,9 +701,9 @@ const WechatGroupCreatePage = () => {
                     <Button 
                         className="bg-slate-900 hover:bg-black text-white rounded-xl font-black px-12 py-6 shadow-xl shadow-slate-100 transition-all active:scale-95"
                         onClick={handleSave}
-                        disabled={loading}
+                        isLoading={loading}
                     >
-                        {loading ? 'Processing Deep Save...' : 'Sync All Master Data'}
+                        Sync All Master Data
                     </Button>
                 </div>
             </div>

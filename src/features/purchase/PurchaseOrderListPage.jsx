@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown, MessageSquare } from 'lucide-react';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import { sendOrder as sendOrderApi } from '@/services/communicationApi';
+import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 
 const STATUS_COLORS = {
@@ -128,20 +129,21 @@ export default function PurchaseOrderListPage() {
 
             {/* Table */}
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                        <tr>
-                            {['PO No', 'Date', 'Supplier', 'Items', 'Grand Total', 'Expected Delivery', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={th}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading...</td></tr>
-                        ) : pos.length === 0 ? (
-                            <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} purchase orders found.</td></tr>
-                        ) : pos.map((po) => {
+                {loading ? (
+                    <TableSkeleton rows={10} cols={8} />
+                ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                            <tr>
+                                {['PO No', 'Date', 'Supplier', 'Items', 'Grand Total', 'Expected Delivery', 'Status', 'Actions'].map(h => (
+                                    <th key={h} style={th}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pos.length === 0 ? (
+                                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} purchase orders found.</td></tr>
+                            ) : pos.map((po) => {
                             const sc = STATUS_COLORS[po.status] || STATUS_COLORS['Draft'];
                             const isDeleted = po.isDeleted;
                             return (
@@ -197,6 +199,7 @@ export default function PurchaseOrderListPage() {
                         })}
                     </tbody>
                 </table>
+                )}
             </div>
 
             {selectedOrder && (

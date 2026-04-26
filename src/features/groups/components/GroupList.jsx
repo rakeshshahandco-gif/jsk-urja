@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { getGroups, createGroup, deleteGroup } from '@/services/groupApi'; // Absolute import
-import { Button, Input, useModal } from '@/components/ui'; // Assuming these exist
+import { Button, Input, useModal, BrandedLoader } from '@/components/ui'; // Assuming these exist
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -59,7 +59,7 @@ export const GroupList = () => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
 
     return (
         <div className="p-6 bg-[#0f172a] min-h-screen text-[#f1f5f9]">

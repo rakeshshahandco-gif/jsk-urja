@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Plus, Eye, Search, Filter } from 'lucide-react';
 import { getComplaints } from '@/services/serviceApi';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const STATUS_COLORS = {
     'Open': { bg: '#fee2e2', color: '#991b1b' },
@@ -90,7 +91,7 @@ const ComplaintListPage = () => {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading...</td></tr>
+                            <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40 }}><BrandedLoader size={80} /></td></tr>
                         ) : data.length === 0 ? (
                             <tr><td colSpan={11} style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No complaints found. <button onClick={() => navigate('/service/complaints/new')} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Create one →</button></td></tr>
                         ) : data.map((c, i) => {

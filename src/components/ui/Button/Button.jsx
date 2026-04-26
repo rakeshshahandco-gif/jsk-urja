@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 import clsx from 'clsx';
 import styles from './Button.module.scss';
 import PropTypes from 'prop-types';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 export const Button = forwardRef(({
     children,
@@ -36,7 +37,7 @@ export const Button = forwardRef(({
             disabled={disabled || isLoading}
             {...props}
         >
-            {isLoading && <span className={styles.spinner} aria-hidden="true" />}
+            {isLoading && <BrandedLoader size={20} className={styles.buttonLoader} inline={true} />}
 
             {!isLoading && startIcon && <span className={styles.startIcon}>{startIcon}</span>}
 

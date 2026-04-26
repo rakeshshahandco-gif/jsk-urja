@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getInvoiceSeries, createInvoiceSeries, updateInvoiceSeries, deleteInvoiceSeries } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui';
 
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 
@@ -104,7 +105,7 @@ export default function InvoiceSeriesPage() {
             </div>
 
             <div style={{ padding: 28 }}>
-                {loading ? <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af' }}>Loading...</div> : (
+                {loading ? <BrandedLoader size={120} /> : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
                         {series.length === 0 && (
                             <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: '#9ca3af', background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb' }}>

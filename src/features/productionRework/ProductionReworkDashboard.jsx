@@ -14,6 +14,7 @@ import { PATHS } from '@/routes/paths';
 import { getFailures, getJobCards } from '@/services/productionReworkApi';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui';
+import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
 
 const ProductionReworkDashboard = () => {
     const navigate = useNavigate();
@@ -85,7 +86,7 @@ const ProductionReworkDashboard = () => {
         </div>
     );
 
-    if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div>;
+    if (loading) return <BrandedModuleLoader />;
 
     return (
         <div style={{ padding: '24px 28px', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>

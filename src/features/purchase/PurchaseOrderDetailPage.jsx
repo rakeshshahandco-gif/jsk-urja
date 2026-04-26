@@ -9,7 +9,7 @@ import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { Printer, FileText, ChevronLeft, Package, Trash2, Edit, Send, MessageSquare, Mail } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, BrandedLoader } from '@/components/ui';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 
 const STATUS_COLORS = {
@@ -111,7 +111,7 @@ export default function PurchaseOrderDetailPage() {
         }).catch(() => {}); // Stay open on error
     };
 
-    if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#9ca3af', background: '#fff', minHeight: '100vh' }}>Loading...</div>;
+    if (loading) return <BrandedLoader size={120} />;
     if (!po) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#fff', minHeight: '100vh' }}>PO not found</div>;
 
     const sc = STATUS_COLORS[po.status] || STATUS_COLORS['Draft'];
