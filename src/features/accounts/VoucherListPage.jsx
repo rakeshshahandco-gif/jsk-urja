@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     Button, Select, useModal
 } from "@/components/ui";
@@ -139,6 +139,7 @@ const VoucherDetail = ({ voucher }) => {
 
 const VoucherListPage = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const fyDateRange = useFYDateRange();
     const { openModal } = useModal();
     const [vouchers, setVouchers] = useState([]);
@@ -146,7 +147,7 @@ const VoucherListPage = () => {
     const [filters, setFilters] = useState({
         startDate: fyDateRange.startDate,
         endDate: fyDateRange.endDate,
-        voucherType: '',
+        voucherType: searchParams.get('voucherType') || '',
         search: ''
     });
 

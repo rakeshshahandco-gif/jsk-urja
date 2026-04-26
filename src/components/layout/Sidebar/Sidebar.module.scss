@@ -33,6 +33,36 @@
         .collapsedLogo {
             display: flex;
         }
+
+        .icon {
+            margin-right: 0;
+        }
+    }
+
+    &.hoverOpen {
+        width: 280px;
+        min-width: 280px;
+        max-width: 280px;
+        box-shadow: 12px 0 48px rgba(0, 0, 0, 0.15);
+        background-color: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(8px);
+
+        .brandText, .logoImage {
+            display: flex !important;
+        }
+
+        .header {
+            justify-content: flex-start;
+            padding: 0 24px;
+        }
+
+        .collapsedLogo {
+            display: none;
+        }
+        
+        .icon {
+            margin-right: 12px;
+        }
     }
 }
 
@@ -96,12 +126,27 @@
 
     .collapsedLogo {
         width: 100%;
-        display: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
-        font-weight: 900;
-        font-size: 20px;
-        color: #2563EB;
-        letter-spacing: -1px;
+        text-align: center;
+        line-height: 1;
+
+        .juText {
+            font-weight: 900;
+            font-size: 20px;
+            color: #2563EB;
+            letter-spacing: -1px;
+        }
+
+        .collapsedTagline {
+            font-size: 8px;
+            font-weight: 800;
+            color: #64748B;
+            margin-top: 1px;
+            letter-spacing: 0px;
+        }
     }
 }
 
@@ -252,5 +297,39 @@
         .link {
             padding-left: 16px;
         }
+    }
+}
+
+.footer {
+    padding: 16px;
+    border-top: 1px solid #F1F5F9;
+}
+
+.collapseBtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    color: #64748B;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+
+    &:hover {
+        background: #F1F5F9;
+        color: #0F172A;
+        border-color: #CBD5E1;
+    }
+
+    span {
+        white-space: nowrap;
     }
 }

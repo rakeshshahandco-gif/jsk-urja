@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
     Button, Input, Select, useModal
 } from '@/components/ui';
-import { Plus, Edit2, Trash2, FileText, Hash } from 'lucide-react';
-import { getVoucherTypes, createVoucherType } from '@/services/accountApi';
+import { Plus, Edit2, Trash2, FileText, Hash, Layers } from 'lucide-react';
+import { getVoucherTypes, createVoucherType, updateVoucherType, deleteVoucherType } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 
 const VoucherTypeMasterPage = () => {
+    const navigate = useNavigate();
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [loading, setLoading] = useState(false);
     const { openModal, closeModal } = useModal();
@@ -27,29 +30,48 @@ const VoucherTypeMasterPage = () => {
         fetchVoucherTypes();
     }, []);
 
-    const handleSave = async (data) => {
+    const handleSave = async (data, isEdit = false, id = null) => {
         try {
-            await createVoucherType(data);
-            toast.success('Voucher Type created');
+            if (isEdit) {
+                await updateVoucherType(id, data);
+                toast.success('Voucher Type updated');
+            } else {
+                await createVoucherType(data);
+                toast.success('Voucher Type created');
+            }
             fetchVoucherTypes();
             closeModal();
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to create voucher type');
+            toast.error(error.response?.data?.message || `Failed to ${isEdit ? 'update' : 'create'} voucher type`);
         }
     };
 
-    const VoucherTypeForm = () => {
-        const [formData, setFormData] = useState({
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this voucher type?')) return;
+        try {
+            await deleteVoucherType(id);
+            toast.success('Voucher Type deleted');
+            fetchVoucherTypes();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to delete voucher type');
+        }
+    };
+
+    const VoucherTypeForm = ({ initialData = null }) => {
+        const [formData, setFormData] = useState(initialData || {
             name: '',
             nature: 'Receipt',
             prefix: '',
             startingNumber: 1,
-            remarks: ''
+            remarks: '',
+            active: true
         });
 
+        const isEdit = !!initialData;
+
         const handleChange = (e) => {
-            const { name, value } = e.target;
-            setFormData(prev => ({ ...prev, [name]: value }));
+            const { name, value, type, checked } = e.target;
+            setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
         };
 
         return (
@@ -94,9 +116,23 @@ const VoucherTypeMasterPage = () => {
                     <Input name="remarks" value={formData.remarks} onChange={handleChange} />
                 </div>
 
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="checkbox" 
+                        id="active" 
+                        name="active" 
+                        checked={formData.active} 
+                        onChange={handleChange}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="active" className="text-sm font-medium">Active Status</label>
+                </div>
+
                 <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                    <Button onClick={() => handleSave(formData)}>Create Type</Button>
+                    <Button onClick={() => handleSave(formData, isEdit, initialData?._id)}>
+                        {isEdit ? 'Update Type' : 'Create Type'}
+                    </Button>
                 </div>
             </div>
         );
@@ -106,6 +142,13 @@ const VoucherTypeMasterPage = () => {
         openModal({
             title: 'Add Voucher Type',
             content: <VoucherTypeForm />
+        });
+    };
+
+    const handleEdit = (type) => {
+        openModal({
+            title: 'Edit Voucher Type',
+            content: <VoucherTypeForm initialData={type} />
         });
     };
 
@@ -130,6 +173,7 @@ const VoucherTypeMasterPage = () => {
                             <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Prefix</th>
                             <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Number</th>
                             <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -153,10 +197,40 @@ const VoucherTypeMasterPage = () => {
                                         {type.active ? 'Active' : 'Inactive'}
                                     </span>
                                 </td>
+                                <td className="px-6 py-4 text-right">
+                                    <div className="flex justify-end gap-2">
+                                        <button 
+                                            onClick={() => navigate(`${PATHS.ACCOUNTS.VOUCHER_LIST}?voucherType=${type._id}`)}
+                                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                            title="View Entries"
+                                        >
+                                            <Layers className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleEdit(type)}
+                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                            title="Edit"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDelete(type._id)}
+                                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
+                {voucherTypes.length === 0 && !loading && (
+                    <div className="p-12 text-center text-gray-400">
+                        No voucher types found. Create one to get started.
+                    </div>
+                )}
             </div>
         </div>
     );

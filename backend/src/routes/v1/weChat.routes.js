@@ -45,6 +45,8 @@ router.route('/groups')
     .get(groupController.getGroups);
 router.route('/groups/deep')
     .post(groupController.createGroupDeep);
+router.route('/groups/:groupId/deep')
+    .get(groupController.getGroupDeep);
 router.route('/groups/:groupId')
     .get(groupController.getGroup)
     .put(groupController.updateGroup)

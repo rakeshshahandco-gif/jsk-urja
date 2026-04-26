@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { Button, Input, Select, ModalProvider, useModal } from '@/components/ui';
+import { SidebarProvider, useSidebar } from './context/SidebarContext';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { CustomerList } from '@/features/customers/components';
 import { AddCustomerPage } from '@/features/customers/components/AddCustomerPage';
@@ -226,9 +227,11 @@ function App() {
                                             {/* Pages with sidebar and header */}
                                             <Route path="*" element={
                                                 <ProtectedRoute>
-                                                    <ErrorBoundary>
-                                                        <AppLayout />
-                                                    </ErrorBoundary>
+                                                    <SidebarProvider>
+                                                        <ErrorBoundary>
+                                                            <AppLayout />
+                                                        </ErrorBoundary>
+                                                    </SidebarProvider>
                                                 </ProtectedRoute>
                                             } />
                                         </Routes>
@@ -248,11 +251,18 @@ function App() {
 // Separate layout component to handle route-specific logic
 const AppLayout = () => {
     const { selectedFY } = useFinancialYear();
+    const { isCollapsed, isHoverOpen } = useSidebar();
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
             <Sidebar />
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+            <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                flex: 1, 
+                minWidth: 0,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}>
                 <Header />
                 <main 
                     key={selectedFY}
@@ -417,6 +427,7 @@ const AppLayout = () => {
                         {/* WeChat Module */}
                         <Route path="/wechat/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/wechat/groups/new" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
+                        <Route path="/wechat/groups/edit/:groupId" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
 
                         {/* China Supplier / WeChat Contacts Module */}
                         <Route path="/china-supplier" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
@@ -425,6 +436,7 @@ const AppLayout = () => {
                         <Route path="/china-supplier/contacts" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/groups" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/groups/new" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
+                        <Route path="/china-supplier/groups/edit/:groupId" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatGroupCreatePage /></ProtectedRoute>} />
                         <Route path="/china-supplier/prices" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/samples" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
                         <Route path="/china-supplier/reports" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />

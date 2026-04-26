@@ -82,7 +82,7 @@ export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle:
 
     if (hasChildren) {
         return (
-            <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })}>
+            <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })} title={collapsed ? item.title : ''}>
                 <div
                     className={clsx(styles.link, {
                         [styles.active]: isChildActive,
@@ -93,7 +93,7 @@ export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle:
                     <span className={styles.icon}>
                         <IconRenderer name={item.icon} title={item.title} />
                     </span>
-                    <span className={styles.label}>{item.title}</span>
+                    {!collapsed && <span className={styles.label}>{item.title}</span>}
                     {!collapsed && (
                         <span className={clsx(styles.arrow, { [styles.expanded]: isOpen })}>
                             <ChevronDown size={14} strokeWidth={3} />
@@ -113,7 +113,7 @@ export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle:
     }
 
     return (
-        <li className={styles.menuItem}>
+        <li className={styles.menuItem} title={collapsed ? item.title : ''}>
             <NavLink
                 to={item.path}
                 className={({ isActive }) => clsx(styles.link, { [styles.active]: isActive })}
@@ -121,7 +121,7 @@ export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle:
                 <span className={styles.icon}>
                     <IconRenderer name={item.icon} title={item.title} />
                 </span>
-                <span className={styles.label}>{item.title}</span>
+                {!collapsed && <span className={styles.label}>{item.title}</span>}
             </NavLink>
         </li>
     );

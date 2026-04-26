@@ -6,20 +6,20 @@ import {
     Info, DollarSign, Globe, Layers
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { 
-    getWeChatProducts, 
-    getWeChatContacts, 
     api 
 } from '../../../services/weChatApi';
 
 const WechatGroupCreatePage = () => {
     const navigate = useNavigate();
+    const { groupId } = useParams();
     const [activeTab, setActiveTab] = useState('group');
     const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(false);
 
     // --- State: Group Details ---
     const [groupDetails, setGroupDetails] = useState({
@@ -32,6 +32,29 @@ const WechatGroupCreatePage = () => {
         isActive: true,
         remarks: ''
     });
+
+    // --- Fetch Group Data for Editing ---
+    useEffect(() => {
+        if (groupId) {
+            fetchGroupData();
+        }
+    }, [groupId]);
+
+    const fetchGroupData = async () => {
+        try {
+            setFetching(true);
+            const response = await api.get(`/wechat/groups/${groupId}/deep`);
+            const { groupDetails: gd, productRates: pr, members: mb } = response.data.data;
+            
+            setGroupDetails(gd);
+            setProductRates(pr.length > 0 ? pr : [{ id: Date.now() }]);
+            setMembers(mb.length > 0 ? mb : [{ id: Date.now() + 1 }]);
+        } catch (err) {
+            toast.error('Failed to load group details');
+        } finally {
+            setFetching(false);
+        }
+    };
 
     // --- State: Product Rates ---
     const [productRates, setProductRates] = useState([{
@@ -154,15 +177,41 @@ const WechatGroupCreatePage = () => {
                 members
             };
 
-            const response = await api.post('/wechat/groups/deep', payload);
-            toast.success('WeChat Group created and all records synced!');
-            navigate('/wechat'); // Redirect back to list
+            await api.post('/wechat/groups/deep', payload);
+            toast.success(groupId ? 'WeChat Group updated successfully!' : 'WeChat Group created and all records synced!');
+            navigate('/wechat');
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to save group');
         } finally {
             setLoading(false);
         }
     };
+
+    const handleDelete = async () => {
+        if (!window.confirm('Are you sure you want to delete this group and all its related price records? This cannot be undone.')) return;
+        
+        try {
+            setLoading(true);
+            await api.delete(`/wechat/groups/${groupId}`);
+            toast.success('Group deleted successfully');
+            navigate('/wechat');
+        } catch (err) {
+            toast.error('Failed to delete group');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (fetching) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-center space-y-4">
+                    <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p className="font-black text-slate-400 uppercase tracking-widest text-sm">Synchronizing Intelligence...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -174,18 +223,30 @@ const WechatGroupCreatePage = () => {
                             <ArrowLeft size={24} />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Create WeChat Group Intelligence</h1>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                                {groupId ? 'Update WeChat Group Intelligence' : 'Create WeChat Group Intelligence'}
+                            </h1>
                             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Deep synchronization of group, products, and members</p>
                         </div>
                     </div>
                     <div className="flex gap-4">
+                        {groupId && (
+                            <Button 
+                                variant="ghost" 
+                                className="rounded-xl font-bold px-6 text-red-500 hover:bg-red-50" 
+                                onClick={handleDelete}
+                                disabled={loading}
+                            >
+                                <Trash2 size={20} className="mr-2" /> Delete Group
+                            </Button>
+                        )}
                         <Button variant="ghost" className="rounded-xl font-bold px-6" onClick={() => navigate(-1)}>Discard</Button>
                         <Button 
                             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black px-8 py-6 flex items-center gap-3 shadow-xl shadow-emerald-100 transition-all active:scale-95"
                             onClick={handleSave}
                             disabled={loading}
                         >
-                            {loading ? 'Processing...' : <><Save size={20} /> Finalize & Sync All Records</>}
+                            {loading ? 'Processing...' : <><Save size={20} /> {groupId ? 'Update & Sync Records' : 'Finalize & Sync All Records'}</>}
                         </Button>
                     </div>
                 </div>

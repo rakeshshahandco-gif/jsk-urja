@@ -4,6 +4,8 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { VoucherType } from '../models/voucherType.model.js';
 
+import { Voucher } from '../models/voucher.model.js';
+
 export const createVoucherType = asyncHandler(async (req, res) => {
     const existing = await VoucherType.findOne({ name: req.body.name });
     if (existing) throw new ApiError(httpStatus.BAD_REQUEST, 'Voucher type name already exists');
@@ -42,6 +44,10 @@ export const deleteVoucherType = asyncHandler(async (req, res) => {
     if (!type) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
 
     // Check if any vouchers exist
+    const hasVouchers = await Voucher.exists({ voucherType: req.params.id });
+    if (hasVouchers) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot delete voucher type because entries have already been made using this type.');
+    }
 
     await type.deleteOne();
     res.send(new ApiResponse(httpStatus.OK, null, 'Voucher type deleted successfully'));

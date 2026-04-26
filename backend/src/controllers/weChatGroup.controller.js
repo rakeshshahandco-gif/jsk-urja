@@ -83,7 +83,8 @@ export const updateGroup = asyncHandler(async (req, res) => {
 export const deleteGroup = asyncHandler(async (req, res) => {
     await WeChatGroup.findByIdAndDelete(req.params.groupId);
     await WeChatGroupMember.deleteMany({ groupId: req.params.groupId });
-    res.send(new ApiResponse(httpStatus.OK, null, 'Group deleted'));
+    await WeChatPriceRecord.deleteMany({ groupId: req.params.groupId });
+    res.send(new ApiResponse(httpStatus.OK, null, 'Group and all related records deleted'));
 });
 
 // --- Group Members API ---
@@ -127,6 +128,39 @@ export const removeGroupMember = asyncHandler(async (req, res) => {
     res.send(new ApiResponse(httpStatus.OK, null, 'Group member removed'));
 });
 
+// --- Deep Fetch for Editing ---
+
+export const getGroupDeep = asyncHandler(async (req, res) => {
+    const group = await WeChatGroup.findById(req.params.groupId);
+    if (!group) throw new ApiError(httpStatus.NOT_FOUND, 'Group not found');
+
+    const members = await WeChatGroupMember.find({ groupId: group._id }).populate('contactId');
+    const rates = await WeChatPriceRecord.find({ groupId: group._id }).populate('productId').populate('contactId');
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        groupDetails: group,
+        members: members.map(m => ({
+            ...m.contactId?.toObject(),
+            role: m.roleInGroup,
+            isMainContact: m.isMainDealingPerson,
+            remarks: m.remarks,
+            membershipId: m._id
+        })),
+        productRates: rates.map(r => ({
+            ...r.toObject(),
+            productId: r.productId?._id,
+            productName: r.productName,
+            partNumber: r.partNumber,
+            quotedByMember: r.contactId?.weChatDisplayName || '',
+            rateRMB: r.price,
+            sampleRateRMB: r.samplePrice,
+            bulkRateRMB: r.bulkPrice,
+            leadTime: r.leadTimeDays,
+            quotationDate: r.quotationDate ? r.quotationDate.toISOString().split('T')[0] : ''
+        }))
+    }));
+});
+
 // --- Bulk Save / Deep Create Group ---
 
 export const createGroupDeep = asyncHandler(async (req, res) => {
@@ -140,6 +174,9 @@ export const createGroupDeep = asyncHandler(async (req, res) => {
     let group;
     if (groupDetails._id) {
         group = await WeChatGroup.findByIdAndUpdate(groupDetails._id, groupDetails, { new: true });
+        // Clear existing related records for this group to ensure clean update
+        await WeChatGroupMember.deleteMany({ groupId: group._id });
+        await WeChatPriceRecord.deleteMany({ groupId: group._id });
     } else {
         group = await WeChatGroup.create({
             ...groupDetails,
@@ -229,29 +266,30 @@ export const createGroupDeep = asyncHandler(async (req, res) => {
         }
 
         // Create Price Record (Quotation)
-        // Map quotedByMember to contactId
-        const contactId = memberIdMap[rate.quotedByMember] || null;
+        const contactId = memberIdMap[rate.quotedByMember] || memberIdMap[rate.contactId];
         
-        await WeChatPriceRecord.create({
-            productId: product._id,
-            groupId: group._id,
-            contactId: contactId,
-            partNumber: product.partNumber,
-            productCategory: product.category,
-            productName: product.productName,
-            brandName: product.brandName,
-            modelNo: product.modelNo,
-            price: rate.rateRMB || 0,
-            currency: rate.currency || 'RMB',
-            moq: rate.moq || 0,
-            samplePrice: rate.sampleRateRMB || 0,
-            bulkPrice: rate.bulkRateRMB || 0,
-            leadTimeDays: rate.leadTime || 0,
-            remarks: rate.remarks,
-            quotationDate: rate.quotationDate || new Date(),
-            source: 'group_chat',
-            recordedBy: req.user._id
-        });
+        if (contactId) {
+            await WeChatPriceRecord.create({
+                productId: product._id,
+                groupId: group._id,
+                contactId: contactId,
+                partNumber: product.partNumber,
+                productCategory: product.category,
+                productName: product.productName,
+                brandName: product.brandName,
+                modelNo: product.modelNo,
+                price: rate.rateRMB || 0,
+                currency: rate.currency || 'RMB',
+                moq: rate.moq || 0,
+                samplePrice: rate.sampleRateRMB || 0,
+                bulkPrice: rate.bulkRateRMB || 0,
+                leadTimeDays: rate.leadTime || 0,
+                remarks: rate.remarks,
+                quotationDate: rate.quotationDate || new Date(),
+                source: 'group_chat',
+                recordedBy: req.user._id
+            });
+        }
     }
 
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, group, 'Group saved successfully with products and members synced'));

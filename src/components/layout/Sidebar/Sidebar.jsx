@@ -4,10 +4,14 @@ import { menuConfig, ROLES } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarItem } from './SidebarItem';
 import { getCompanyProfile } from '@/services/settingsApi';
+import { useSidebar } from '@/context/SidebarContext';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import styles from './Sidebar.module.scss';
+import clsx from 'clsx';
 
 export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
+    const { isCollapsed, isHoverOpen, setIsHovered, toggleSidebar } = useSidebar();
     const location = useLocation();
     const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || ROLES.VIEWER;
 
@@ -29,22 +33,19 @@ export const Sidebar = () => {
     }, []);
 
     const handleToggle = (id) => {
+        if (isCollapsed && !isHoverOpen) return; // Prevent expansion in collapsed mode
         setExpandedMenuId(prevId => prevId === id ? null : id);
     };
 
     // Filter items based on user role and permissions
     const filterItems = React.useCallback((items) => {
         return items.filter(item => {
-            // First check by permissions - if an item dictates a permission, it MUST be obeyed.
             if (item.permission) {
                 return hasPermission(item.permission);
             }
-
-            // Fallback for older items that only have roles but no permission mapping
             if (item.roles && item.roles.includes(userRole)) {
                 return true;
             }
-
             return false;
         }).map(item => {
             if (item.children) {
@@ -62,7 +63,6 @@ export const Sidebar = () => {
         filterItems(menuConfig),
     [filterItems]);
 
-    // Initial state based on current location
     useEffect(() => {
         const isItemActive = (it) => {
             if (it.path && location.pathname.startsWith(it.path)) return true;
@@ -74,17 +74,26 @@ export const Sidebar = () => {
         if (activeParent) {
             setExpandedMenuId(activeParent.id);
         }
-        // Only run on mount or when URL changes
     }, [location.pathname]);
+
     const isMessenger = location.pathname.startsWith('/messenger');
 
-    return (
-        <aside className={`${styles.sidebar} ${isMessenger ? styles.collapsed : ''} no-print`}>
+    // Effective state for rendering labels
+    const showingFull = !isCollapsed || isHoverOpen;
 
+    return (
+        <aside 
+            className={clsx(styles.sidebar, {
+                [styles.collapsed]: isCollapsed && !isHoverOpen,
+                [styles.hoverOpen]: isHoverOpen
+            }, 'no-print')}
+            onMouseEnter={() => isCollapsed && setIsHovered(true)}
+            onMouseLeave={() => isCollapsed && setIsHovered(false)}
+        >
             <div className={styles.header}>
                 <div className={styles.brand}>
                     <div className={styles.logoWrapper}>
-                        {logoUrl && !logoUrl.toLowerCase().endsWith('.pdf') && (
+                        {logoUrl && showingFull && !logoUrl.toLowerCase().endsWith('.pdf') && (
                             <img
                                 src={logoUrl}
                                 alt="Logo"
@@ -94,10 +103,17 @@ export const Sidebar = () => {
                                 onError={() => setLogoUrl(null)}
                             />
                         )}
-                        <div className={styles.brandText}>
-                            <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
-                            <span className={styles.tagline}>CRM Application</span>
-                        </div>
+                        {showingFull ? (
+                            <div className={styles.brandText}>
+                                <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
+                                <span className={styles.tagline}>CRM/ERP</span>
+                            </div>
+                        ) : (
+                            <div className={styles.collapsedLogo} title="JSK URJA CRM/ERP">
+                                <div className={styles.juText}>JU</div>
+                                <div className={styles.collapsedTagline}>CRM/ERP</div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -108,6 +124,7 @@ export const Sidebar = () => {
                         <SidebarItem
                             key={item.id}
                             item={item}
+                            collapsed={!showingFull}
                             isOpen={expandedMenuId === item.id}
                             onToggle={() => handleToggle(item.id)}
                         />
@@ -115,7 +132,15 @@ export const Sidebar = () => {
                 </ul>
             </nav>
 
-            {/* Footer / User Profile could go here using same pattern */}
+            <div className={styles.footer}>
+                <button 
+                    onClick={toggleSidebar}
+                    className={styles.collapseBtn}
+                    title={isCollapsed ? "Expand Menu" : "Collapse Menu"}
+                >
+                    {isCollapsed && !isHoverOpen ? <ChevronRight size={20} /> : <div className="flex items-center gap-2"><ChevronLeft size={20} /> <span>Collapse</span></div>}
+                </button>
+            </div>
         </aside>
     );
 };

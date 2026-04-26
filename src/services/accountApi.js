@@ -49,6 +49,12 @@ export const getVoucherTypes = (params = {}) =>
 export const createVoucherType = (data) =>
     apiClient.post('/voucher-types', data).then(r => r.data.data);
 
+export const updateVoucherType = (id, data) =>
+    apiClient.put(`/voucher-types/${id}`, data).then(r => r.data.data);
+
+export const deleteVoucherType = (id) =>
+    apiClient.delete(`/voucher-types/${id}`).then(r => r.data);
+
 // ── Vouchers ─────────────────────────────────────────────────────────────────
 
 export const getVouchers = (params = {}) =>
@@ -111,6 +117,8 @@ const accountApi = {
     updateCashBankAccount,
     getVoucherTypes,
     createVoucherType,
+    updateVoucherType,
+    deleteVoucherType,
     getVouchers,
     getVoucher,
     createVoucher,

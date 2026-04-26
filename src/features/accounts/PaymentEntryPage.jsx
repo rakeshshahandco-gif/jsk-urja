@@ -66,7 +66,7 @@ const PaymentEntryPage = () => {
 
                 // If launched from Invoice Detail, pre-fill details
                 const defaultSupplierId = location.state?.supplierId;
-                const defaultSupplierName = location.state?.supplierName || 'Supplier';
+                const defaultSupplierName = location.state?.supplierName;
                 const defaultAmount = location.state?.amount || 0;
                 const defaultInvoiceId = location.state?.invoiceId;
                 const defaultInvoiceNo = location.state?.invoiceNumber;
@@ -111,7 +111,7 @@ const PaymentEntryPage = () => {
                             };
                         });
                     } else if (defaultSupplierId || defaultSupplierName) {
-                        toast.error(`Supplier ledger for "${defaultSupplierName}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
+                        toast.error(`Supplier ledger for "${defaultSupplierName || 'Supplier'}" is not mapped. Please create or link ledger first.`, { duration: 6000 });
                     }
 
             } catch (error) {
