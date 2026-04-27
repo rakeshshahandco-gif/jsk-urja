@@ -73,108 +73,106 @@ const MISDashboard = () => {
                     Welcome to the Management Information System. This dashboard provides a high-level overview of your company's financial health, drawing real-time data from the general ledger.
                 </p>
                 
-                <div className={s.dashboardGrid}>
-                    {/* Card 1: Profitability */}
-                    <div className={`${s.misCard} ${s.green}`} onClick={() => navigate('/mis/reports/pl')}>
-                        <div className={s.cardHeader}>
-                            <div className={s.iconBox}><TrendingUp size={28} /></div>
-                            <div className="text-right">
-                                <div className={s.title}>Performance</div>
-                                <div className={s.name}>Profit & Loss</div>
+                <div className={s.mainGrid}>
+                    {/* Card 1: Performance */}
+                    <div className={s.topCard} onClick={() => navigate('/mis/reports/pl')}>
+                        <div className={s.tag}>Performance</div>
+                        <div className={s.contentWrapper}>
+                            <div className={`${s.iconWrapper} ${s.bgGreen}`}><TrendingUp size={32} /></div>
+                            <div className={s.details}>
+                                <div className={s.cardTitle}>Profit & Loss</div>
+                                <div className={s.metrics}>
+                                    <div className={s.metric}>
+                                        <span className={s.mLabel}>Net Profit</span>
+                                        <span className={s.mValue}>{formatAmount(stats.pnL?.netProfit)}</span>
+                                    </div>
+                                    <div className={s.metric}>
+                                        <span className={s.mLabel}>Margin</span>
+                                        <span className={s.mValueGreen}>
+                                            {(( (stats.pnL?.grossProfit || 0) / (stats.pnL?.tradingIncome || 1)) * 100).toFixed(1)}%
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className={s.stats}>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Net Profit</span>
-                                <span className={s.value}>{formatAmount(stats.pnL?.netProfit)}</span>
-                            </div>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Gross Margin</span>
-                                <span className="text-emerald-600 font-bold text-xs">
-                                     {(( (stats.pnL?.grossProfit || 0) / (stats.pnL?.tradingIncome || 1)) * 100).toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
-                        <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                             View Details <ArrowUpRight size={14} />
-                        </div>
-                    </div>
-
-                    {/* Card 2: Financial Position */}
-                    <div className={`${s.misCard} ${s.blue}`} onClick={() => navigate('/mis/reports/bs')}>
-                        <div className={s.cardHeader}>
-                            <div className={s.iconBox}><Database size={28} /></div>
-                            <div className="text-right">
-                                <div className={s.title}>Solvency</div>
-                                <div className={s.name}>Balance Sheet</div>
-                            </div>
-                        </div>
-                        <div className={s.stats}>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Total Assets</span>
-                                <span className={s.value}>{formatAmount(stats.bs?.totalAssets)}</span>
-                            </div>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Working Capital</span>
-                                <span className="text-blue-600 font-bold text-xs">
-                                    Healthy Position
-                                </span>
-                            </div>
-                        </div>
-                        <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                             Check Solvency <ArrowUpRight size={14} />
+                        <div className={s.footer}>
+                            View Performance <ArrowUpRight size={14} />
                         </div>
                     </div>
 
-                    {/* Card 3: Data Integrity */}
-                    <div className={`${s.misCard} ${s.purple}`} onClick={() => navigate('/mis/reports/tb')}>
-                        <div className={s.cardHeader}>
-                            <div className={s.iconBox}>
-                                {stats.tb?.isTallied ? <ShieldCheck size={28} /> : <Scale size={28} />}
-                            </div>
-                            <div className="text-right">
-                                <div className={s.title}>Integrity</div>
-                                <div className={s.name}>Trial Balance</div>
-                            </div>
-                        </div>
-                        <div className={s.stats}>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Reconciliation</span>
-                                <span className={stats.tb?.isTallied ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
-                                    {stats.tb?.isTallied ? "Balanced" : "Unbalanced"}
-                                </span>
-                            </div>
-                            <div className={s.statItem}>
-                                <span className={s.label}>Total Postings</span>
-                                <span className={s.value}>{stats.tb?.ledgers.length} Ledgers</span>
+                    {/* Card 2: Solvency */}
+                    <div className={s.topCard} onClick={() => navigate('/mis/reports/bs')}>
+                        <div className={s.tag}>Solvency</div>
+                        <div className={s.contentWrapper}>
+                            <div className={`${s.iconWrapper} ${s.bgBlue}`}><Database size={32} /></div>
+                            <div className={s.details}>
+                                <div className={s.cardTitle}>Balance Sheet</div>
+                                <div className={s.metrics}>
+                                    <div className={s.metric}>
+                                        <span className={s.mLabel}>Total Assets</span>
+                                        <span className={s.mValue}>{formatAmount(stats.bs?.totalAssets)}</span>
+                                    </div>
+                                    <div className={s.metric}>
+                                        <span className={s.mLabel}>Status</span>
+                                        <span className={s.mValueBlue}>Healthy</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                             Audit Books <ArrowUpRight size={14} />
+                        <div className={s.footer}>
+                            Check Solvency <ArrowUpRight size={14} />
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-6">
-                     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="bg-indigo-50 text-indigo-500 p-3 rounded-xl"><BarChart3 size={20} /></div>
+                {/* Card 3: Large Integrity Card */}
+                <div className={s.largeCard} onClick={() => navigate('/mis/reports/tb')}>
+                    <div className={s.tag}>Integrity</div>
+                    <div className={s.contentWrapper}>
+                        <div className={`${s.iconWrapper} ${s.bgPurple}`}>
+                            {stats.tb?.isTallied ? <ShieldCheck size={36} /> : <Scale size={36} />}
+                        </div>
+                        <div className={s.details}>
+                            <div className={s.cardTitle}>Trial Balance</div>
+                            <div className={s.metrics}>
+                                <div className={s.metric}>
+                                    <span className={s.mLabel}>Reconciliation</span>
+                                    <span className={stats.tb?.isTallied ? s.mValueGreen : s.mValueRed}>
+                                        {stats.tb?.isTallied ? "Balanced" : "Unbalanced"}
+                                    </span>
+                                </div>
+                                <div className={s.metric}>
+                                    <span className={s.mLabel}>Total Postings</span>
+                                    <span className={s.mValue}>{stats.tb?.ledgers.length} Ledgers</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className={s.footer}>
+                        Audit Books <ArrowUpRight size={14} />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div className={s.statusCard}>
+                        <div className={`${s.smallIcon} ${s.bgIndigo}`}><BarChart3 size={20} /></div>
                         <div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue Status</div>
-                            <div className="text-sm font-bold">Consolidated View</div>
+                            <div className={s.sLabel}>Revenue Status</div>
+                            <div className={s.sValue}>Consolidated View</div>
                         </div>
                      </div>
-                     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="bg-amber-50 text-amber-500 p-3 rounded-xl"><PieChart size={20} /></div>
+                     <div className={s.statusCard}>
+                        <div className={`${s.smallIcon} ${s.bgAmber}`}><PieChart size={20} /></div>
                         <div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expense Ratio</div>
-                            <div className="text-sm font-bold">Within Budget</div>
+                            <div className={s.sLabel}>Expense Ratio</div>
+                            <div className={s.sValue}>Within Budget</div>
                         </div>
                      </div>
-                     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-                        <div className="bg-slate-50 text-slate-500 p-3 rounded-xl"><FileText size={20} /></div>
+                     <div className={s.statusCard}>
+                        <div className={`${s.smallIcon} ${s.bgSlate}`}><FileText size={20} /></div>
                         <div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Auditor Access</div>
-                            <div className="text-sm font-bold">Standard Role</div>
+                            <div className={s.sLabel}>Auditor Access</div>
+                            <div className={s.sValue}>Standard Role</div>
                         </div>
                      </div>
                 </div>

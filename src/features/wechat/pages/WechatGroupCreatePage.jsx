@@ -376,7 +376,7 @@ const WechatGroupCreatePage = () => {
                                         <tr className="bg-slate-900 text-white">
                                             <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Product Identity</th>
                                             <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Specifications</th>
-                                            <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Quoted Rates (RMB)</th>
+                                            <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Quoted Rates</th>
                                             <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Logistics</th>
                                             <th className="p-6 text-[10px] font-black uppercase tracking-widest border-r border-slate-800 whitespace-nowrap">Source</th>
                                             <th className="p-6 text-[10px] font-black uppercase tracking-widest">Action</th>
@@ -431,8 +431,20 @@ const WechatGroupCreatePage = () => {
                                                         />
                                                     </div>
                                                 </td>
-                                                <td className="p-6 border-r border-slate-50 min-w-[220px]">
+                                                <td className="p-6 border-r border-slate-50 min-w-[240px]">
                                                     <div className="space-y-3 bg-emerald-50/30 p-4 rounded-2xl border border-emerald-100/50">
+                                                        <div className="flex items-center justify-between mb-1 border-b border-emerald-100/50 pb-2">
+                                                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Pricing</span>
+                                                            <select 
+                                                                value={rate.currency}
+                                                                onChange={(e) => updateProductRow(rate.id, 'currency', e.target.value)}
+                                                                className="text-[10px] font-black bg-white border border-emerald-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-500 transition-all cursor-pointer shadow-sm"
+                                                            >
+                                                                <option value="RMB">RMB (¥)</option>
+                                                                <option value="INR">INR (₹)</option>
+                                                                <option value="USD">USD ($)</option>
+                                                            </select>
+                                                        </div>
                                                         <div className="flex items-center gap-2">
                                                             <label className="text-[9px] font-black text-emerald-600 uppercase w-16">Unit Rate</label>
                                                             <Input 
