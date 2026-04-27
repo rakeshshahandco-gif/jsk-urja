@@ -4,20 +4,24 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const test = async () => {
+const testGenerator = async () => {
     try {
         await mongoose.connect(process.env.MONGODB_URL);
         console.log('Connected to MongoDB');
-        const groups = await WeChatGroup.find({}, { entryNo: 1, groupName: 1 }).sort({ createdAt: -1 });
-        console.log('All Groups:', JSON.stringify(groups, null, 2));
         
         const lastGroup = await WeChatGroup.findOne().sort({ createdAt: -1 });
-        console.log('Last Group:', JSON.stringify(lastGroup, null, 2));
+        console.log('Last Group EntryNo:', lastGroup ? lastGroup.entryNo : 'NONE');
         
+        let nextNum = 1;
         if (lastGroup && lastGroup.entryNo) {
-            const match = lastGroup.entryNo.match(/WCG-(\d+)/);
+            const match = lastGroup.entryNo.match(/(\d+)$/);
             console.log('Regex Match:', match);
+            if (match) {
+                nextNum = parseInt(match[1]) + 1;
+            }
         }
+        const generated = `WCG-${String(nextNum).padStart(4, '0')}`;
+        console.log('Generated ID:', generated);
         
         process.exit(0);
     } catch (err) {
@@ -26,4 +30,4 @@ const test = async () => {
     }
 };
 
-test();
+testGenerator();

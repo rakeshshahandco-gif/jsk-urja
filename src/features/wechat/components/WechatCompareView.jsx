@@ -2,25 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { ArrowUpDown, Star, Building2, Users, MessageSquare, FileText, TrendingDown, X, Download, Package, Tag, Clock } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { toast } from 'react-hot-toast';
-import { compareWeChatProducts, exportWeChatComparison } from '../../../services/weChatApi';
+import { compareWeChatProducts, exportWeChatComparison, getWeChatProductPrices } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { format } from 'date-fns';
 
-const WechatCompareView = ({ partNumber, productCategory, onClose }) => {
+const WechatCompareView = ({ partNumber, productCategory, productId, onClose }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('price'); // 'price' | 'date' | 'supplier'
 
     useEffect(() => {
         fetchComparison();
-    }, [partNumber, productCategory]);
+    }, [partNumber, productCategory, productId]);
 
     const fetchComparison = async () => {
         try {
             setLoading(true);
-            const res = await compareWeChatProducts({ partNumber, productCategory });
-            setData(res.data?.data);
+            let res;
+            if (productId) {
+                res = await getWeChatProductPrices(productId);
+                // Standardize format: backend returns { product, prices }
+                setData({
+                    results: res.data?.data?.prices || [],
+                    totalSuppliers: res.data?.data?.prices?.length || 0
+                });
+            } else {
+                res = await compareWeChatProducts({ partNumber, productCategory });
+                setData(res.data?.data);
+            }
         } catch { toast.error('Failed to load comparison'); }
         finally { setLoading(false); }
     };
@@ -28,7 +38,7 @@ const WechatCompareView = ({ partNumber, productCategory, onClose }) => {
     const handleExportComparison = async () => {
         try {
             toast.loading('Generating report...', { id: 'exporting_comp' });
-            const res = await exportWeChatComparison({ partNumber, productCategory });
+            const res = await exportWeChatComparison({ productId, partNumber, productCategory });
             
             const url = window.URL.createObjectURL(new Blob([res.data]));
             const link = document.createElement('a');
@@ -45,24 +55,34 @@ const WechatCompareView = ({ partNumber, productCategory, onClose }) => {
     const getSortedResults = () => {
         if (!data?.results) return [];
         const results = [...data.results];
+        
+        // Find best price first to tag it
+        const validPrices = results.map(r => r.price).filter(p => p != null && p > 0);
+        const minPrice = validPrices.length > 0 ? Math.min(...validPrices) : null;
+
+        const resultsWithBest = results.map(r => ({
+            ...r,
+            isBestPrice: minPrice !== null && r.price === minPrice
+        }));
+
         if (sortBy === 'price') {
-            return results.sort((a, b) => (a.latestPrice ?? Infinity) - (b.latestPrice ?? Infinity));
+            return resultsWithBest.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
         }
         if (sortBy === 'date') {
-            return results.sort((a, b) => {
-                const aDate = a.lastChat?.chatDate || a.latestPriceRecord?.quotationDate || a.updatedAt;
-                const bDate = b.lastChat?.chatDate || b.latestPriceRecord?.quotationDate || b.updatedAt;
+            return resultsWithBest.sort((a, b) => {
+                const aDate = a.quotationDate || a.updatedAt;
+                const bDate = b.quotationDate || b.updatedAt;
                 return new Date(bDate) - new Date(aDate);
             });
         }
         if (sortBy === 'supplier') {
-            return results.sort((a, b) => {
+            return resultsWithBest.sort((a, b) => {
                 const aName = a.contactId?.weChatDisplayName || a.contactId?.companyName || '';
                 const bName = b.contactId?.weChatDisplayName || b.contactId?.companyName || '';
                 return aName.localeCompare(bName);
             });
         }
-        return results;
+        return resultsWithBest;
     };
 
     if (loading) {
@@ -202,13 +222,13 @@ const WechatCompareView = ({ partNumber, productCategory, onClose }) => {
 
                                     {/* Price */}
                                     <td className="px-8 py-6 text-right">
-                                        {item.latestPrice != null ? (
+                                        {item.price != null ? (
                                             <div className="flex flex-col items-end">
                                                 <span className={cn(
                                                     "font-black text-3xl tracking-tighter",
                                                     item.isBestPrice ? "text-emerald-700" : "text-slate-900"
                                                 )}>
-                                                    {item.latestPrice.toFixed(4)}
+                                                    {item.price.toFixed(4)}
                                                 </span>
                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Net Base Cost</p>
                                             </div>
@@ -284,15 +304,15 @@ const WechatCompareView = ({ partNumber, productCategory, onClose }) => {
                     {[
                         { 
                             label: 'Optimized Market Entry', 
-                            value: results.find(r => r.isBestPrice)?.latestPrice?.toFixed(4), 
+                            value: results.find(r => r.isBestPrice)?.price?.toFixed(4), 
                             currency: results.find(r => r.isBestPrice)?.currency, 
                             color: 'from-emerald-600 to-emerald-800 shadow-emerald-200/50',
                             icon: <TrendingDown size={28} />
                         },
                         { 
                             label: 'Market Ceiling Value', 
-                            value: results.filter(r => r.latestPrice != null).slice(-1)[0]?.latestPrice?.toFixed(4), 
-                            currency: results.filter(r => r.latestPrice != null).slice(-1)[0]?.currency, 
+                            value: results.filter(r => r.price != null).slice(-1)[0]?.price?.toFixed(4), 
+                            currency: results.filter(r => r.price != null).slice(-1)[0]?.currency, 
                             color: 'from-slate-800 to-slate-900 shadow-slate-300/50',
                             icon: <ArrowUpDown size={28} />
                         },

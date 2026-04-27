@@ -12,7 +12,7 @@ const CATEGORIES = [
     { value: '', label: 'All Categories' },
     { value: 'RAW_MATERIAL', label: 'Raw Material' },
     { value: 'WIP', label: 'WIP / Semi-Finished' },
-    { value: 'FINISHED_GOOD', label: 'Finished Good' },
+    { value: 'FINISHED_GOOD', label: 'Finished Goods' },
     { value: 'TRADING', label: 'Trading Item' },
     { value: 'CONSUMABLE', label: 'Consumable' },
 ];
@@ -42,7 +42,7 @@ const catColors = {
 };
 
 const catLabel = {
-    RAW_MATERIAL: 'Raw Matl', WIP: 'WIP', FINISHED_GOOD: 'Finished',
+    RAW_MATERIAL: 'Raw Matl', WIP: 'WIP', FINISHED_GOOD: 'Finished Goods',
     TRADING: 'Trading', CONSUMABLE: 'Consumable'
 };
 
@@ -119,14 +119,19 @@ const ItemListPage = () => {
                 setTypes([{ value: '', label: 'All Types' }, ...dynamicTypes]);
             }
         }).catch(err => console.error('Failed to fetch item types', err));
+    }, []);
 
-        getItemGroups().then(data => {
+    useEffect(() => {
+        // Re-fetch groups when category filter changes to show only relevant groups
+        getItemGroups({ category: catFilter || undefined }).then(data => {
             if (data && data.length > 0) {
                 const dynamicGroups = data.map(g => ({ value: g.name, label: g.name }));
                 setGroups([{ value: '', label: 'All Groups' }, ...dynamicGroups]);
+            } else {
+                setGroups([{ value: '', label: 'All Groups' }]);
             }
         }).catch(err => console.error('Failed to fetch item groups', err));
-    }, []);
+    }, [catFilter]);
 
     const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setGroupFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setLimit(25); setPage(1); };
 

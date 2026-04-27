@@ -159,23 +159,13 @@ export default function SalesInvoiceFormPage() {
     const [allItems, setAllItems] = useState([]);
 
     useEffect(() => {
-        // Pre-load items
-        getItems({ limit: 5000 }).then(res => {
+        // Pre-load all active items (inclusive of all saleable categories)
+        getItems({ limit: 5000, active: true }).then(res => {
             const list = res?.data || res?.results || res || [];
             if (Array.isArray(list)) {
-                const filtered = list.filter(i => {
-                    const cat = (i.itemCategory || '').trim().toUpperCase();
-                    const type = (i.itemType || '').trim().toUpperCase();
-                    const group = (i.itemGroupName || '').trim().toUpperCase();
-
-                    const isFinishedCat = cat.includes('FINISHED') || cat.includes('FG');
-                    const isFinishedType = type.includes('PRODUCT') || type.includes('MANUFACTUR') || type.includes('FINISHED');
-                    const isFinishedGroup = group.includes('FINISHED');
-                    const isManufacturable = i.isManufacturable === true || i.isManufacturable === 'true';
-
-                    return isFinishedCat || isFinishedType || isFinishedGroup || isManufacturable;
-                });
-                setAllItems(filtered);
+                // Sort by creation date descending to show new items first
+                const sorted = [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                setAllItems(sorted);
             }
         }).catch(e => console.error('Error loading items:', e));
     }, []);
@@ -500,7 +490,7 @@ export default function SalesInvoiceFormPage() {
 
                 {/* Production Details */}
                 <Section title="Production Details">
-                    <div style={{ overflowX: 'auto' }}>
+                    <div style={{ position: 'relative' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead>
                                 <tr>
@@ -513,7 +503,11 @@ export default function SalesInvoiceFormPage() {
                                         <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
                                         <td style={{ ...td, minWidth: 140 }}>
                                             <SearchableSelect
-                                                options={allItems.map(it => ({ value: it._id, label: it.itemCode, meta: it.itemName }))}
+                                                options={allItems.map(it => ({ 
+                                                    value: it._id, 
+                                                    label: `${it.itemCode} — ${it.itemName || ''}`, 
+                                                    meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}` 
+                                                }))}
                                                 value={item.itemId}
                                                 onChange={v => handleItemSelect(v, i)}
                                                 onKeyDown={(e) => handleRowKeyDown(e, i, 1)}

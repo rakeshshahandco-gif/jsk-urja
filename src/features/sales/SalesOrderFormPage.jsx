@@ -67,16 +67,24 @@ export default function SalesOrderFormPage() {
         };
         document.addEventListener('mousedown', handleClickOutside);
 
-        // Pre-load items
-        getItems({ limit: 5000 }).then(res => {
+        // Pre-load items: ALL items in 'Finished Goods' category for Sales Orders
+        // This includes all groups like Drivers, Dimmers, etc. as long as category is Finished Goods
+        getItems({ limit: 5000, active: true, itemCategory: 'FINISHED_GOOD' }).then(res => {
             const list = res?.data || res?.results || res || [];
             if (Array.isArray(list)) {
-                const filtered = list.filter(i => {
-                    return i.itemCategory === 'FINISHED_GOOD';
-                });
-                setAllItems(filtered);
+                // Strict category filtering to include all finished goods variations
+                const finishedVariations = ['FINISHED_GOOD', 'FINISHED', 'FINISHED GOOD', 'FINISHED GOODS'];
+                const filtered = list.filter(i => 
+                    finishedVariations.includes((i.itemCategory || '').trim().toUpperCase())
+                );
+                // Sort by creation date descending to show new items first
+                const sorted = [...filtered].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                setAllItems(sorted);
             }
-        }).catch(e => console.error('Error loading items:', e));
+        }).catch(e => {
+            console.error('❌ [SalesOrder] Error loading items:', e);
+            toast.error('Failed to load items list');
+        });
 
         getStickers().then(res => {
             if (Array.isArray(res)) setStickerOptions(res.map(s => s.name));
@@ -514,7 +522,7 @@ export default function SalesOrderFormPage() {
                 </Section>
 
                 <Section title="Production Details">
-                    <div style={{ overflowX: 'auto' }}>
+                    <div style={{ position: 'relative' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead><tr>
                                 {['Sr', 'Item Code *', 'Description', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : 'auto' }}>{h}</th>)}
@@ -527,7 +535,11 @@ export default function SalesOrderFormPage() {
                                             <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
                                             <td style={{ ...td, minWidth: 140 }}>
                                                 <SearchableSelect
-                                                    options={allItems.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                    options={allItems.map(it => ({ 
+                                                        value: it._id, 
+                                                        label: `${it.itemCode} — ${it.itemName || ''}`, 
+                                                        meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}`
+                                                    }))}
                                                     value={item.itemId}
                                                     onChange={v => handleItemSelect(v, i)}
                                                     onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
@@ -536,10 +548,10 @@ export default function SalesOrderFormPage() {
                                                     placeholder="Item Code..."
                                                     noOptionsMessage={
                                                         <div style={{ padding: '8px', color: '#64748b' }}>
-                                                            No saleable products found.
+                                                            {allItems.length === 0 ? "Loading products..." : "No matching items found."}
                                                             <br />
-                                                            <span style={{ fontSize: '11px' }}>
-                                                                Check <strong>Finished Good</strong> or <strong>Manufacturable</strong> status in Item Master.
+                                                            <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 600 }}>
+                                                                Only items with category <strong>Finished Goods</strong> are allowed in Sales Orders.
                                                             </span>
                                                         </div>
                                                     }

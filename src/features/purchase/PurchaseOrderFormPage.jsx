@@ -83,7 +83,9 @@ export default function PurchaseOrderFormPage() {
                 setSuppliers(supData.suppliers || []);
                 if (Array.isArray(stickRes)) setStickerOptions(stickRes.map(s => s.name));
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
-                setItems(itemsList);
+                // Sort by latest created first
+                const sorted = [...itemsList].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+                setItems(sorted);
 
                 if (isEdit) {
                     const po = await getPurchaseOrderById(id);
@@ -350,7 +352,7 @@ export default function PurchaseOrderFormPage() {
                                 <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</h2>
                                 <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Row</button>
                             </div>
-                            <div style={{ overflowX: 'auto' }}>
+                            <div style={{ position: 'relative' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', color: '#64748b' }}>
@@ -367,7 +369,11 @@ export default function PurchaseOrderFormPage() {
                                                     <td style={{ padding: '8px 10px', color: '#475569', width: '30px' }}>{i + 1}</td>
                                                     <td style={{ padding: '8px 10px', minWidth: '200px' }}>
                                                         <SearchableSelect
-                                                            options={items.map(it => ({ value: it._id, label: it.itemName, meta: it.itemCode }))}
+                                                            options={items.map(it => ({ 
+                                                                value: it._id, 
+                                                                label: `${it.itemCode} — ${it.itemName || ''}`, 
+                                                                meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}` 
+                                                            }))}
                                                             value={item.itemId}
                                                             onChange={v => setItem(i, 'itemId', v)}
                                                             onKeyDown={(e) => handleRowKeyDown(e, i, 1)}

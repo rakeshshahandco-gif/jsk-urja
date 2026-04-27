@@ -13,7 +13,8 @@ const generateGroupNo = async () => {
     const lastGroup = await WeChatGroup.findOne().sort({ createdAt: -1 });
     let nextNum = 1;
     if (lastGroup && lastGroup.entryNo) {
-        const match = lastGroup.entryNo.match(/WCG-(\d+)/);
+        // Robust regex to find the last sequence of digits, handling "DEMO" or other prefixes
+        const match = lastGroup.entryNo.match(/(\d+)$/);
         if (match) {
             nextNum = parseInt(match[1]) + 1;
         }
@@ -155,6 +156,10 @@ export const getGroupDeep = asyncHandler(async (req, res) => {
             rateRMB: r.price,
             sampleRateRMB: r.samplePrice,
             bulkRateRMB: r.bulkPrice,
+            exchangeRate: r.exchangeRate || 1,
+            freightPercent: r.freightPercent || 0,
+            freightPerUnit: r.freightPerUnit || 0,
+            landingCost: r.landingCost || 0,
             leadTime: r.leadTimeDays,
             quotationDate: r.quotationDate ? r.quotationDate.toISOString().split('T')[0] : ''
         }))
@@ -204,7 +209,7 @@ export const createGroupDeep = asyncHandler(async (req, res) => {
             const lastContact = await WeChatContact.findOne().sort({ createdAt: -1 });
             let nextNum = 1;
             if (lastContact && lastContact.entryNo) {
-                const match = lastContact.entryNo.match(/WCC-(\d+)/);
+                const match = lastContact.entryNo.match(/(\d+)$/);
                 if (match) nextNum = parseInt(match[1]) + 1;
             }
             const entryNo = `WCC-${String(nextNum).padStart(4, '0')}`;
@@ -266,30 +271,40 @@ export const createGroupDeep = asyncHandler(async (req, res) => {
         }
 
         // Create Price Record (Quotation)
-        const contactId = memberIdMap[rate.quotedByMember] || memberIdMap[rate.contactId];
-        
-        if (contactId) {
-            await WeChatPriceRecord.create({
-                productId: product._id,
-                groupId: group._id,
-                contactId: contactId,
-                partNumber: product.partNumber,
-                productCategory: product.category,
-                productName: product.productName,
-                brandName: product.brandName,
-                modelNo: product.modelNo,
-                price: rate.rateRMB || 0,
-                currency: rate.currency || 'RMB',
-                moq: rate.moq || 0,
-                samplePrice: rate.sampleRateRMB || 0,
-                bulkPrice: rate.bulkRateRMB || 0,
-                leadTimeDays: rate.leadTime || 0,
-                remarks: rate.remarks,
-                quotationDate: rate.quotationDate || new Date(),
-                source: 'group_chat',
-                recordedBy: req.user._id
-            });
-        }
+        // contactId is optional — group-level prices don't need a specific quoted contact
+        const contactId = memberIdMap[rate.quotedByMember] || memberIdMap[rate.contactId] || null;
+
+        // Skip rows with no product name and no price (truly empty rows)
+        if (!rate.productName && !rate.rateRMB) continue;
+
+        await WeChatPriceRecord.create({
+            productId: product._id,
+            groupId: group._id,
+            contactId: contactId,           // null if no specific member quoted this
+            partNumber: product.partNumber,
+            productCategory: product.category,
+            productName: product.productName,
+            brandName: product.brandName,
+            modelNo: product.modelNo,
+            price: rate.rateRMB || 0,
+            currency: rate.currency || 'RMB',
+            moq: rate.moq || 0,
+            samplePrice: rate.sampleRateRMB || 0,
+            bulkPrice: rate.bulkRateRMB || 0,
+            leadTimeDays: rate.leadTime || 0,
+            remarks: rate.remarks,
+            quotationDate: rate.quotationDate || new Date(),
+            exchangeRate: parseFloat(rate.exchangeRate) || 1,
+            freightPercent: parseFloat(rate.freightPercent) || 0,
+            // freightPerUnit = absolute INR freight = baseINR * freightPercent/100
+            freightPerUnit: (() => {
+                const base = (parseFloat(rate.rateRMB) || 0) * (parseFloat(rate.exchangeRate) || 1);
+                return Number((base * ((parseFloat(rate.freightPercent) || 0) / 100)).toFixed(5));
+            })(),
+            landingCost: parseFloat(rate.landingCost) || 0,
+            source: 'group_chat',
+            recordedBy: req.user._id
+        });
     }
 
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, group, 'Group saved successfully with products and members synced'));

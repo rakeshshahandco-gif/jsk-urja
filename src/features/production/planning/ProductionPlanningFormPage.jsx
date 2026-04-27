@@ -68,7 +68,11 @@ const ProductLineRow = ({ row, idx, products, onChange, onRemove, onKeyDown }) =
         <td style={{ padding: '10px 12px', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>{idx + 1}</td>
         <td style={{ padding: '8px 12px', minWidth: 280 }}>
             <SearchableSelect
-                options={products}
+                options={products.map(p => ({
+                    value: p.value,
+                    label: p.label,
+                    meta: `${p.code} ${p.name}`
+                }))}
                 value={row.finishedProductId}
                 onKeyDown={(e) => onKeyDown(e, idx, 0)}
                 data-row={idx}
@@ -235,7 +239,7 @@ export default function ProductionPlanningFormPage() {
                         });
                     }
                 });
-                setProducts(Array.from(productMap.values()));
+                setProducts(Array.from(productMap.values()).sort((a, b) => b.code.localeCompare(a.code)));
             } catch { toast.error('Failed to load products'); }
         };
         fetchProducts();
@@ -563,7 +567,7 @@ export default function ProductionPlanningFormPage() {
                         }}
                     >+ Add Product Line</button>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ position: 'relative' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
                         <thead>
                             <tr style={{ background: '#f1f5f9' }}>

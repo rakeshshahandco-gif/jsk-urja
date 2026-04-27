@@ -12,6 +12,19 @@ export const getItemGroups = asyncHandler(async (req, res) => {
     
     if (isActive !== undefined) filter.isActive = isActive === 'true';
     
+    if (req.query.category) {
+        // Find groups that actually have items in this category
+        const cats = [req.query.category];
+        if (req.query.category === 'FINISHED_GOOD') {
+            cats.push('FINISHED', 'Finished Good', 'Finished Goods');
+        }
+        const usedGroups = await Item.distinct('itemGroupName', { 
+            itemCategory: { $in: cats },
+            isActive: true 
+        });
+        filter.name = { $in: usedGroups };
+    }
+    
     if (search) {
         filter.$or = [
             { name: { $regex: search, $options: 'i' } },

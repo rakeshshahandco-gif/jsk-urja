@@ -206,7 +206,7 @@ const ItemFormPage = () => {
                                 <select style={f.sel} value={form.itemCategory} onChange={e => set('itemCategory', e.target.value)}>
                                     <option value="RAW_MATERIAL">Raw Material</option>
                                     <option value="WIP">WIP / Semi-Finished</option>
-                                    <option value="FINISHED_GOOD">Finished Good</option>
+                                    <option value="FINISHED_GOOD">Finished Goods</option>
                                     <option value="TRADING">Trading Item</option>
                                     <option value="CONSUMABLE">Consumable</option>
                                 </select>

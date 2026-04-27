@@ -11,7 +11,8 @@ const generateWeChatNo = async () => {
     const lastContact = await WeChatContact.findOne().sort({ createdAt: -1 });
     let nextNum = 1;
     if (lastContact && lastContact.entryNo) {
-        const match = lastContact.entryNo.match(/WCC-(\d+)/);
+        // Robust regex to find the last sequence of digits, handling "DEMO" or other prefixes
+        const match = lastContact.entryNo.match(/(\d+)$/);
         if (match) {
             nextNum = parseInt(match[1]) + 1;
         }

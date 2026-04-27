@@ -40,6 +40,8 @@ export const getWeChatDashboardStats = () => api.get('/wechat/dashboard');
 export const globalWeChatSearch = (q) => api.get('/wechat/search', { params: { q } });
 export const exportWeChatContacts = () => api.get('/wechat/export/contacts', { responseType: 'blob' });
 export const exportWeChatPrices = (productId) => api.get('/wechat/export/prices', { params: { productId }, responseType: 'blob' });
+export const exportWeChatComparison = (query) => api.get('/wechat/export/prices', { params: query, responseType: 'blob' });
+export const compareWeChatProducts = (query) => api.get('/wechat/prices', { params: query });
 export const importWeChatContacts = (formData) => api.post('/wechat/import/contacts', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
 // ── Samples ──────────────────────────────────────────────────────────────────

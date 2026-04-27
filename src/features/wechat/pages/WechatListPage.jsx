@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
     LayoutDashboard, Package, Users, Users2, 
     LineChart, FlaskConical, FileBarChart, Globe 
@@ -9,13 +10,33 @@ import WechatProductsTab from '../components/WechatProductsTab';
 import WechatContactsTab from '../components/WechatContactsTab';
 import WechatGroupsTab from '../components/WechatGroupsTab';
 import WechatSamplesTab from '../components/WechatSamplesTab';
+import WechatPricesTab from '../components/WechatPricesTab';
 import WechatProductDetailsPage from './WechatProductDetailsPage';
 
 const WechatLayout = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('dashboard');
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [selectedContact, setSelectedContact] = useState(null);
     const [selectedGroup, setSelectedGroup] = useState(null);
+
+    // Sync tab with URL on load and URL change
+    useEffect(() => {
+        const path = location.pathname;
+        if (path.includes('/groups')) setActiveTab('groups');
+        else if (path.includes('/contacts')) setActiveTab('contacts');
+        else if (path.includes('/products')) setActiveTab('products');
+        else if (path.includes('/prices')) setActiveTab('prices');
+        else if (path.includes('/samples')) setActiveTab('samples');
+        else if (path.includes('/reports')) setActiveTab('reports');
+        else setActiveTab('dashboard');
+    }, [location]);
+
+    const handleTabChange = (id) => {
+        setActiveTab(id);
+        navigate(`/china-supplier/${id === 'dashboard' ? '' : id}`);
+    };
 
     const navigation = [
         { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
@@ -33,14 +54,14 @@ const WechatLayout = () => {
         }
 
         switch (activeTab) {
-            case 'dashboard': return <WechatDashboardTab onNavigate={setActiveTab} />;
+            case 'dashboard': return <WechatDashboardTab onNavigate={handleTabChange} />;
             case 'products': return <WechatProductsTab onSelectProduct={setSelectedProduct} />;
             case 'contacts': return <WechatContactsTab onSelectContact={setSelectedContact} />;
             case 'groups': return <WechatGroupsTab onSelectGroup={setSelectedGroup} />;
-            case 'prices': return <div className="p-8"><h2 className="text-2xl font-bold text-slate-800">Global Price Comparison</h2><p className="text-slate-500 mt-2">Select a product to compare suppliers side-by-side.</p></div>;
+            case 'prices': return <WechatPricesTab />;
             case 'samples': return <WechatSamplesTab />;
             case 'reports': return <div className="p-8"><h2 className="text-2xl font-bold">Reports (WIP)</h2></div>;
-            default: return <WechatDashboardTab onNavigate={setActiveTab} />;
+            default: return <WechatDashboardTab onNavigate={handleTabChange} />;
         }
     };
 
@@ -60,7 +81,7 @@ const WechatLayout = () => {
                     {navigation.map((item) => (
                         <button
                             key={item.id}
-                            onClick={() => setActiveTab(item.id)}
+                            onClick={() => handleTabChange(item.id)}
                             className={cn(
                                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200",
                                 activeTab === item.id 

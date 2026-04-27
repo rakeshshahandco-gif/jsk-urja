@@ -76,7 +76,13 @@ export const getItems = asyncHandler(async (req, res) => {
     console.log('GET /items full query:', JSON.stringify(req.query, null, 2));
 
     const filter = {};
-    if (itemCategory) filter.itemCategory = itemCategory;
+    if (itemCategory) {
+        if (itemCategory === 'FINISHED_GOOD') {
+            filter.itemCategory = { $in: ['FINISHED_GOOD', 'FINISHED', 'Finished Good', 'Finished Goods'] };
+        } else {
+            filter.itemCategory = itemCategory;
+        }
+    }
     if (itemType) filter.itemType = itemType;
     if (itemGroupName) filter.itemGroupName = itemGroupName;
     if (isActive !== undefined) filter.isActive = isActive === 'true';

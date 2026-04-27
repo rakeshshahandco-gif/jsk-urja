@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X, Plus } from 'lucide-react';
 
 export default function SearchableSelect({
@@ -37,7 +38,7 @@ export default function SearchableSelect({
         divider: dark ? '#1e293b' : '#f1f5f9'
     };
 
-    // Position tracking for dropdown to prevent clipping from table overflow
+    const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
 
     // Update search term when outside value prop changes
@@ -50,34 +51,58 @@ export default function SearchableSelect({
 
     // Advanced search logic with prioritization
     const filteredOptions = useMemo(() => {
-        if (!searchTerm.trim()) return options.slice(0, 200); // Show first 200 when empty
+        if (!searchTerm.trim()) return options.slice(0, 200);
 
-        const term = searchTerm.trim().toLowerCase();
+        const terms = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
-        // Priority 1: Label starts with term
         const priority1 = [];
-        // Priority 2: Meta (like Item Code) starts with term
         const priority2 = [];
-        // Priority 3: Contains term
         const priority3 = [];
 
         options.forEach(opt => {
             const label = opt.label.toLowerCase();
             const meta = (opt.meta || '').toLowerCase();
 
-            if (label.startsWith(term)) {
+            // Check if all search words are present in label or meta
+            const isMatch = terms.every(t => label.includes(t) || meta.includes(t));
+            if (!isMatch) return;
+
+            // Prioritize exact start matches
+            const fullTerm = searchTerm.trim().toLowerCase();
+            if (label.startsWith(fullTerm)) {
                 priority1.push(opt);
-            } else if (meta && meta.startsWith(term)) {
+            } else if (meta && meta.startsWith(fullTerm)) {
                 priority2.push(opt);
-            } else if (label.includes(term) || (meta && meta.includes(term))) {
+            } else {
                 priority3.push(opt);
             }
         });
 
-        return [...priority1, ...priority2, ...priority3].slice(0, 100); // Limit to 100 for performance
+        return [...priority1, ...priority2, ...priority3].slice(0, 100);
     }, [searchTerm, options]);
 
-    // Calculate dropdown positions to avoid clipping
+    const updatePos = () => {
+        if (wrapperRef.current && isOpen) {
+            const rect = wrapperRef.current.getBoundingClientRect();
+            setDropdownPos({
+                top: rect.bottom + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: Math.max(rect.width, 350)
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            updatePos();
+            window.addEventListener('scroll', updatePos, true);
+            window.addEventListener('resize', updatePos);
+        }
+        return () => {
+            window.removeEventListener('scroll', updatePos, true);
+            window.removeEventListener('resize', updatePos);
+        };
+    }, [isOpen]);
 
 
     useEffect(() => {
@@ -238,26 +263,28 @@ export default function SearchableSelect({
                 </div>
             </div>
 
-            {isOpen && (
+            {isOpen && createPortal(
                 <div
                     ref={listRef}
                     style={{
                         position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        width: 'max(100%, 600px)',
+                        top: dropdownPos.top,
+                        left: dropdownPos.left,
+                        width: dropdownPos.width,
                         marginTop: '4px',
-                        zIndex: 9999,
+                        zIndex: 100000,
                         background: theme.bg, 
                         border: `1px solid ${theme.border}`,
                         borderRadius: '10px', 
                         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
                         overflow: 'hidden', 
                         display: 'flex', 
-                        flexDirection: 'column'
+                        flexDirection: 'column',
+                        pointerEvents: 'auto'
                     }}
+                    onMouseDown={e => e.stopPropagation()} // Prevent closing when clicking dropdown scrollbar
                 >
-                    <div style={{ overflowY: 'auto', maxHeight: '240px' }}>
+                    <div style={{ overflowY: 'auto', maxHeight: '280px' }}>
                         {filteredOptions.length === 0 ? (
                             <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: theme.muted }}>
                                 {noOptionsMessage ? noOptionsMessage : `No items found ${searchTerm ? `for "${searchTerm}"` : ''}`}
@@ -301,7 +328,8 @@ export default function SearchableSelect({
                             <Plus size={14} /> Create new item &quot;{searchTerm}&quot;
                         </div>
                     )}
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

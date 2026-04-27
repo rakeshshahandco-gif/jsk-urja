@@ -19,7 +19,8 @@ const weChatPriceRecordSchema = new mongoose.Schema({
     contactId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'WeChatContact',
-        required: true,
+        required: false,   // Optional — group-level prices may not have a specific contact
+        default: null,
         index: true
     },
     productId: {
@@ -57,6 +58,13 @@ const weChatPriceRecordSchema = new mongoose.Schema({
     shippingTerms: { type: String, trim: true },
     warrantyNotes: { type: String, trim: true },
     technicalRemarks: { type: String, trim: true },
+
+    // Landing Cost Calculations (INR)
+    // Formula: landingCost = (rateRMB × exchangeRate) × (1 + freightPercent/100)
+    exchangeRate: { type: Number, default: 1 },
+    freightPercent: { type: Number, default: 0 },   // e.g. 25 means 25%
+    freightPerUnit: { type: Number, default: 0 },    // kept for legacy / computed value
+    landingCost: { type: Number, default: 0 },
 
     // Meta
     source: {
