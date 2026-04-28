@@ -8,6 +8,7 @@ import { getWeChatDashboardStats, globalWeChatSearch } from '../../../services/w
 import { Badge } from '../../../components/ui/Badge';
 import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 import { useNavigate } from 'react-router-dom';
+import LinkGroupModal from './LinkGroupModal';
 
 // ── debounce helper ──────────────────────────────────────────────────────────
 function useDebounce(value, delay = 350) {
@@ -38,6 +39,10 @@ const WechatDashboardTab = ({ onNavigate }) => {
     const debouncedQuery              = useDebounce(query, 350);
     const inputRef                    = useRef(null);
 
+    // --- Linking Modal State ---
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+    const [linkModalData, setLinkModalData] = useState({ product: null, keyword: '' });
+
     // ── fetch dashboard stats ─────────────────────────────────────────────────
     useEffect(() => {
         (async () => {
@@ -61,6 +66,47 @@ const WechatDashboardTab = ({ onNavigate }) => {
             finally { setSearching(false); }
         })();
     }, [debouncedQuery]);
+
+    const handleGoToGroups = (product) => {
+        // 1. Check for directly linked groups (new relationship)
+        const linkedGroups = product.wechatGroupIds || [];
+        
+        if (linkedGroups.length === 1) {
+            const gid = linkedGroups[0]._id || linkedGroups[0];
+            navigate(`/china-supplier/groups/edit/${gid}`);
+            return;
+        } 
+        
+        if (linkedGroups.length > 1) {
+            // Show filtered list of groups for this product
+            navigate(`/china-supplier/groups?search=${encodeURIComponent(product.productName)}`);
+            return;
+        }
+
+        // 2. Fallback: If product has price records, we can find groups from there
+        const groupsFromRates = results?.prices?.filter(r => (r.productId?._id || r.productId) === product._id).map(r => r.groupId) || [];
+        const uniqueGroupIds = [...new Set(groupsFromRates.map(g => g?._id || g))].filter(Boolean);
+
+        if (uniqueGroupIds.length === 1) {
+            navigate(`/china-supplier/groups/edit/${uniqueGroupIds[0]}`);
+            return;
+        } else if (uniqueGroupIds.length > 1) {
+            navigate(`/china-supplier/groups?search=${encodeURIComponent(product.productName)}`);
+            return;
+        }
+
+        // 3. Fallback to current search results matching groups
+        const matchingGroupsFromSearch = results?.groups || [];
+        if (matchingGroupsFromSearch.length === 1) {
+            navigate(`/china-supplier/groups/edit/${matchingGroupsFromSearch[0]._id}`);
+        } else if (matchingGroupsFromSearch.length > 1) {
+            navigate(`/china-supplier/groups?search=${encodeURIComponent(query)}`);
+        } else {
+            // 4. No linked or matching groups - show professional modal
+            setLinkModalData({ product, keyword: query });
+            setIsLinkModalOpen(true);
+        }
+    };
 
     const clearSearch = () => { setQuery(''); setResults(null); inputRef.current?.focus(); };
 
@@ -269,7 +315,7 @@ const WechatDashboardTab = ({ onNavigate }) => {
                                                         <div className="px-5 py-5 flex items-center justify-between">
                                                             <p className="text-[11px] text-slate-400 font-bold italic">No supplier quotes recorded for this product yet.</p>
                                                             <button
-                                                                onClick={() => onNavigate('groups')}
+                                                                onClick={() => handleGoToGroups(p)}
                                                                 className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1"
                                                             >
                                                                 Go to Groups <ChevronRight size={11} />
@@ -417,6 +463,27 @@ const WechatDashboardTab = ({ onNavigate }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Link Intelligence Modal */}
+            {linkModalData.product && (
+                <LinkGroupModal 
+                    isOpen={isLinkModalOpen}
+                    onClose={() => setIsLinkModalOpen(false)}
+                    product={linkModalData.product}
+                    keyword={linkModalData.keyword}
+                    onLinked={() => {
+                        // Refresh search to see updated links
+                        if (debouncedQuery) {
+                            (async () => {
+                                setSearching(true);
+                                const res = await globalWeChatSearch(debouncedQuery.trim());
+                                setResults(res.data?.data || { products: [], contacts: [], groups: [], prices: [] });
+                                setSearching(false);
+                            })();
+                        }
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -40,6 +40,8 @@ router.route('/contacts/:contactId')
     .delete(contactController.deleteContact);
 
 // Groups
+router.post('/groups/link-intelligence', groupController.linkIntelligence);
+router.post('/intelligence/link-existing-group', groupController.linkIntelligence); // Alias as per user request
 router.route('/groups')
     .post(groupController.createGroup)
     .get(groupController.getGroups);

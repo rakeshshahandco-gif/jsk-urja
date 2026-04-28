@@ -32,6 +32,18 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         let displayInvoiceNumber = body.displayInvoiceNumber || '';
 
         if (!invoiceNumber && body.seriesId) {
+            const seriesDoc = await InvoiceSeries.findById(body.seriesId).session(session);
+            if (!seriesDoc) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice series not found');
+
+            // --- STRICT RULE: Estimate series cannot have GST ---
+            if (seriesDoc.isEstimate === true || seriesDoc.documentType === 'Estimate') {
+                if (body.gstApplicable === true) {
+                    throw new ApiError(httpStatus.BAD_REQUEST, 'Estimate document is a non-GST document and cannot be included in GSTR-1 or GSTR-3B.');
+                }
+                // Force it just in case frontend sent it as true but no tax was calculated
+                invData.gstApplicable = false;
+            }
+
             const numbering = await getNextNumberFromSeries(SalesInvoice, body.seriesId, fy, session);
             if (numbering) {
                 sequenceNumber = numbering.sequenceNumber;
@@ -89,18 +101,44 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             || invData.customerRegistrationType === 'undefined'
             || invData.customerRegistrationType === 'null'
             || invData.customerRegistrationType.trim() === '';
-        if (missingRegType && invData.customerId) {
+            
+        const missingPos = !invData.placeOfSupply || invData.placeOfSupply.trim() === '';
+
+        if ((missingRegType || missingPos) && invData.customerId) {
             const customerMaster = await Customer.findById(invData.customerId).session(session);
             if (customerMaster) {
-                invData.customerRegistrationType = customerMaster.gstRegistrationType || 'Consumer';
-                invData.exportCountry = customerMaster.exportCountry || '';
+                if (missingRegType) {
+                    invData.customerRegistrationType = customerMaster.gstRegistrationType || 'Consumer';
+                    invData.exportCountry = customerMaster.exportCountry || '';
+                }
+                
+                if (missingPos) {
+                    if (customerMaster.defaultPlaceOfSupply && customerMaster.defaultPlaceOfSupply.trim()) {
+                        invData.placeOfSupply = customerMaster.defaultPlaceOfSupply.trim();
+                    } else if (customerMaster.gstNumber && customerMaster.gstNumber.trim().length >= 2) {
+                        const code = customerMaster.gstNumber.substring(0, 2);
+                        const stateMap = {
+                            '01': 'Jammu and Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh', '05': 'Uttarakhand', '06': 'Haryana',
+                            '07': 'Delhi', '08': 'Rajasthan', '09': 'Uttar Pradesh', '10': 'Bihar', '11': 'Sikkim', '12': 'Arunachal Pradesh',
+                            '13': 'Nagaland', '14': 'Manipur', '15': 'Mizoram', '16': 'Tripura', '17': 'Meghalaya', '18': 'Assam',
+                            '19': 'West Bengal', '20': 'Jharkhand', '21': 'Odisha', '22': 'Chhattisgarh', '23': 'Madhya Pradesh', '24': 'Gujarat',
+                            '25': 'Daman and Diu', '26': 'Dadra and Nagar Haveli and Daman and Diu', '27': 'Maharashtra', '29': 'Karnataka', '30': 'Goa',
+                            '31': 'Lakshadweep', '32': 'Kerala', '33': 'Tamil Nadu', '34': 'Puducherry', '35': 'Andaman and Nicobar Islands',
+                            '36': 'Telangana', '37': 'Andhra Pradesh', '38': 'Ladakh', '97': 'Other Territory'
+                        };
+                        const stateName = stateMap[code] || customerMaster.state || '';
+                        invData.placeOfSupply = stateName ? `${code}-${stateName}` : code;
+                    } else if (customerMaster.billingStateCode && customerMaster.state) {
+                        invData.placeOfSupply = `${customerMaster.billingStateCode}-${customerMaster.state}`;
+                    }
+                }
             }
         }
-        // Sanitize: replace any leftover string "undefined" with empty
-        if (invData.customerRegistrationType === 'undefined' || invData.customerRegistrationType === 'null') {
-            invData.customerRegistrationType = 'Consumer';
+        // Sanitize: ensure soId and other ObjectIds are valid or null
+        if (invData.soId === "" || invData.soId === "null" || invData.soId === "undefined") {
+            delete invData.soId;
         }
-        
+
         const isB2C = invData.customerRegistrationType === 'Unregistered' || invData.customerRegistrationType === 'Consumer';
         if (isB2C) {
             // August 2024 Portal Amendment: B2CL threshold is ₹1,00,000 for Interstate
@@ -913,6 +951,14 @@ export const changeInvoiceSeries = asyncHandler(async (req, res) => {
         const targetSeries = await InvoiceSeries.findById(targetSeriesId).session(session);
         if (!targetSeries) throw new ApiError(httpStatus.NOT_FOUND, 'Target series not found');
 
+        // --- STRICT RULE: Estimate series cannot have GST ---
+        if (targetSeries.isEstimate === true || targetSeries.documentType === 'Estimate') {
+            if (inv.gstApplicable === true) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'STRICT RULE: Cannot move a GST-applicable invoice to an Estimate series. Please disable GST on the invoice first or cancel it.');
+            }
+            inv.gstApplicable = false;
+        }
+
         const oldNumber = inv.displayInvoiceNumber || inv.invoiceNumber;
         
         // Determine sequence number
@@ -1089,6 +1135,107 @@ export const bulkLockInvoices = asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
         res.json({ success: true, message: `Successfully ${lock ? 'locked' : 'unlocked'} ${ids.length} invoices.` });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+/**
+ * ADMIN ONLY: GST Correction Mode
+ * Safely update missing or incorrect GST compliance fields without touching commercial data.
+ */
+export const updateGstDetails = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { 
+        placeOfSupply, billingStateCode, gstType, reverseCharge, 
+        customerRegistrationType, ecommerceGstin, 
+        exportType, portCode, shippingBillNo, shippingBillDate, 
+        items, reason 
+    } = req.body;
+
+    if (!reason || reason.trim() === '') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'A reason for correction is required for the Audit Log.');
+    }
+
+    if (!placeOfSupply || placeOfSupply.trim() === '') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Place of Supply cannot be blank.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const inv = await SalesInvoice.findById(id).session(session);
+        if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+
+        // Estimate Check
+        if (inv.seriesId) {
+            const seriesDoc = await InvoiceSeries.findById(inv.seriesId).session(session);
+            if (seriesDoc && (seriesDoc.isEstimate || seriesDoc.documentType === 'Estimate' || !seriesDoc.gstApplicable)) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'GST details cannot be updated on an Estimate document.');
+            }
+        }
+
+        // Snapshot old state for audit log
+        const oldState = {
+            placeOfSupply: inv.placeOfSupply,
+            billingStateCode: inv.billingStateCode,
+            gstType: inv.gstType,
+            reverseCharge: inv.reverseCharge,
+            customerRegistrationType: inv.customerRegistrationType,
+            ecommerceGstin: inv.ecommerceGstin,
+            exportType: inv.exportType,
+            portCode: inv.portCode,
+            shippingBillNo: inv.shippingBillNo,
+            shippingBillDate: inv.shippingBillDate,
+            items: inv.items ? inv.items.map(it => ({ id: it._id, hsnCode: it.hsnCode, uqc: it.uqc })) : []
+        };
+
+        // Update fields safely
+        if (placeOfSupply !== undefined) inv.placeOfSupply = placeOfSupply;
+        if (billingStateCode !== undefined) inv.billingStateCode = billingStateCode;
+        if (gstType !== undefined) inv.gstType = gstType;
+        if (reverseCharge !== undefined) inv.reverseCharge = reverseCharge;
+        if (customerRegistrationType !== undefined) inv.customerRegistrationType = customerRegistrationType;
+        if (ecommerceGstin !== undefined) inv.ecommerceGstin = ecommerceGstin;
+        
+        if (exportType !== undefined) inv.exportType = exportType;
+        if (portCode !== undefined) inv.portCode = portCode;
+        if (shippingBillNo !== undefined) inv.shippingBillNo = shippingBillNo;
+        if (shippingBillDate !== undefined) inv.shippingBillDate = shippingBillDate;
+
+        // Update Item-level GST compliance fields safely
+        if (items && Array.isArray(items) && inv.items && inv.items.length > 0) {
+            for (const updatedItem of items) {
+                const existingItem = inv.items.id(updatedItem._id);
+                if (existingItem) {
+                    if (updatedItem.hsnCode !== undefined) existingItem.hsnCode = updatedItem.hsnCode;
+                    if (updatedItem.uqc !== undefined) existingItem.uqc = updatedItem.uqc;
+                }
+            }
+        }
+
+        inv.updatedBy = req.user.id;
+        await inv.save({ session });
+
+        // Audit Logging
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'UPDATE',
+            module: 'SalesInvoice',
+            resourceId: inv._id,
+            description: `Admin updated GST compliance fields for Invoice ${inv.invoiceNumber}.`,
+            details: { reason, oldState, newState: req.body },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent']
+        }], { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: 'GST Return Details safely updated.', data: inv });
+
     } catch (error) {
         await session.abortTransaction();
         throw error;

@@ -68,6 +68,9 @@ const WechatCompareView = ({ partNumber, productCategory, productId, onClose }) 
         if (sortBy === 'price') {
             return resultsWithBest.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
         }
+        if (sortBy === 'landingCost') {
+            return resultsWithBest.sort((a, b) => (a.landingCost ?? Infinity) - (b.landingCost ?? Infinity));
+        }
         if (sortBy === 'date') {
             return resultsWithBest.sort((a, b) => {
                 const aDate = a.quotationDate || a.updatedAt;
@@ -141,13 +144,13 @@ const WechatCompareView = ({ partNumber, productCategory, productId, onClose }) 
                     </div>
                     <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-[1.5rem] border-2 border-slate-200">
                          <span className="text-[10px] font-black uppercase text-slate-400 px-3">Filter Logic:</span>
-                        {['price', 'date', 'supplier'].map(s => (
+                        {['price', 'landingCost', 'date', 'supplier'].map(s => (
                             <button
                                 key={s}
                                 onClick={() => setSortBy(s)}
                                 className={`text-xs px-6 py-2.5 capitalize font-black transition-all rounded-xl border-2 ${sortBy === s ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
                             >
-                                {s}
+                                {s === 'landingCost' ? 'Landed (INR)' : s}
                             </button>
                         ))}
                     </div>
@@ -170,7 +173,8 @@ const WechatCompareView = ({ partNumber, productCategory, productId, onClose }) 
                         <thead>
                             <tr className="bg-slate-900 text-white border-b-4 border-emerald-600">
                                 <th className="text-left px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">SUPPLIER IDENTITY NODE</th>
-                                <th className="text-right px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">OPTIMIZED QUOTATION</th>
+                                <th className="text-right px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">UNIT PRICE</th>
+                                <th className="text-right px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24 text-emerald-400">LANDING COST (INR)</th>
                                 <th className="text-center px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">CURRENCY UNIT</th>
                                 <th className="text-center px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">MOQ LIMIT</th>
                                 <th className="text-center px-8 py-8 text-[11px] font-black uppercase tracking-[0.25em] h-24">LEAD CYCLE</th>
@@ -224,17 +228,30 @@ const WechatCompareView = ({ partNumber, productCategory, productId, onClose }) 
                                     <td className="px-8 py-6 text-right">
                                         {item.price != null ? (
                                             <div className="flex flex-col items-end">
-                                                <span className={cn(
-                                                    "font-black text-3xl tracking-tighter",
-                                                    item.isBestPrice ? "text-emerald-700" : "text-slate-900"
-                                                )}>
+                                                <span className="font-black text-xl text-slate-700 tracking-tighter">
                                                     {item.price.toFixed(4)}
                                                 </span>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Net Base Cost</p>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <span className="text-[8px] font-black text-slate-400 border border-slate-200 px-1 rounded uppercase">Ex: {item.exchangeRate || 1}</span>
+                                                    <span className="text-[8px] font-black text-slate-400 border border-slate-200 px-1 rounded uppercase">Fr: {item.freightPercent || 0}%</span>
+                                                </div>
                                             </div>
                                         ) : (
-                                            <span className="text-slate-300 text-sm font-black uppercase tracking-widest">Pricing Pending</span>
+                                            <span className="text-slate-300 text-sm font-black uppercase tracking-widest">Pending</span>
                                         )}
+                                    </td>
+
+                                    {/* Landing Cost */}
+                                    <td className="px-8 py-6 text-right bg-emerald-50/20">
+                                        <div className="flex flex-col items-end">
+                                            <span className={cn(
+                                                "font-black text-3xl tracking-tighter",
+                                                item.isBestPrice ? "text-emerald-700" : "text-emerald-600"
+                                            )}>
+                                                ₹{(item.landingCost || 0).toFixed(2)}
+                                            </span>
+                                            <p className="text-[9px] font-black text-emerald-600/60 uppercase tracking-widest mt-1">Landed Total</p>
+                                        </div>
                                     </td>
 
                                     {/* Currency */}

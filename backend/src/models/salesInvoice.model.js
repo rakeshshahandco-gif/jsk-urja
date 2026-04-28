@@ -75,6 +75,8 @@ const salesInvoiceSchema = new mongoose.Schema({
     gstApplicable: { type: Boolean, default: true },
     placeOfSupply: { type: String, default: '' },
     reverseCharge: { type: Boolean, default: false },
+    invoiceType: { type: String, enum: ['Regular', 'SEZ', 'Deemed Export', ''], default: 'Regular' }, // GSTR-1 B2B
+    ecommerceGstin: { type: String, default: '', trim: true }, // GSTR-1: E-Commerce GSTIN
 
     // Items
     items: [siItemSchema],

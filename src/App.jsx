@@ -72,6 +72,7 @@ import EwayBillListPage from '@/features/eway-bill/EwayBillListPage';
 import EwayBillDraftPage from '@/features/eway-bill/EwayBillDraftPage';
 import TransporterListPage from '@/features/transporters/TransporterListPage';
 import DiagnosticDashboard from '@/features/admin/diagnostics/DiagnosticDashboard';
+import BackupRestorePage from '@/features/admin/backup/BackupRestorePage';
 
 
 
@@ -300,6 +301,7 @@ const AppLayout = () => {
                         <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
                         <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/backups" element={<ProtectedRoute requireRole="admin"><BackupRestorePage /></ProtectedRoute>} />
 
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />

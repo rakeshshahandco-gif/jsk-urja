@@ -26,7 +26,9 @@ export const getProducts = asyncHandler(async (req, res) => {
             { productCode: searchRegex },
             { chineseProductName: searchRegex },
             { category: searchRegex },
-            { partNumber: searchRegex }
+            { partNumber: searchRegex },
+            { inventoryItemCode: searchRegex },
+            { inventoryItemName: searchRegex }
         ];
     }
 
@@ -35,7 +37,7 @@ export const getProducts = asyncHandler(async (req, res) => {
 });
 
 export const getProduct = asyncHandler(async (req, res) => {
-    const product = await WeChatProduct.findById(req.params.productId);
+    const product = await WeChatProduct.findById(req.params.productId).populate('wechatGroupIds', 'groupName groupAlias chineseGroupName');
     if (!product) throw new ApiError(httpStatus.NOT_FOUND, 'Product not found');
     res.send(new ApiResponse(httpStatus.OK, product));
 });

@@ -1,6 +1,9 @@
 import httpStatus from 'http-status';
 import { WeChatPriceRecord } from '../models/weChatPriceRecord.model.js';
 import { WeChatProduct } from '../models/weChatProduct.model.js';
+import { WeChatGroup } from '../models/weChatGroup.model.js';
+import { WeChatContact } from '../models/weChatContact.model.js';
+import { WeChatGroupMember } from '../models/weChatGroupMember.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -14,8 +17,48 @@ export const createPriceRecord = asyncHandler(async (req, res) => {
         ...req.body,
         recordedBy: req.user._id
     });
+
+    // --- AUTO-LINK RULE: Link Product <-> Group <-> Members ---
+    if (req.body.groupId) {
+        const { productId, groupId, contactId } = req.body;
+
+        // A. Link Product to Group
+        await WeChatProduct.findByIdAndUpdate(productId, {
+            $addToSet: { wechatGroupIds: groupId }
+        });
+
+        // B. Link Group to Product
+        await WeChatGroup.findByIdAndUpdate(groupId, {
+            $addToSet: { productIds: productId }
+        });
+
+        // C. Link all Group Members to this Product
+        const groupMembers = await WeChatGroupMember.find({ groupId });
+        const memberContactIds = groupMembers.map(m => m.contactId).filter(id => id);
+
+        if (memberContactIds.length > 0) {
+            // Link Product to these Contacts
+            await WeChatProduct.findByIdAndUpdate(productId, {
+                $addToSet: { wechatContactIds: { $each: memberContactIds } }
+            });
+
+            // Link these Contacts to the Product
+            await WeChatContact.updateMany(
+                { _id: { $in: memberContactIds } },
+                { $addToSet: { productIds: productId, groupIds: groupId } }
+            );
+        }
+    } else if (req.body.contactId) {
+        // Just link product to contact if no group
+        await WeChatProduct.findByIdAndUpdate(req.body.productId, {
+            $addToSet: { wechatContactIds: req.body.contactId }
+        });
+        await WeChatContact.findByIdAndUpdate(req.body.contactId, {
+            $addToSet: { productIds: req.body.productId }
+        });
+    }
     
-    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, priceRecord, 'Price recorded successfully'));
+    res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, priceRecord, 'Price recorded successfully with auto-intelligence linking'));
 });
 
 // GET /api/v1/wechat/products/:productId/prices

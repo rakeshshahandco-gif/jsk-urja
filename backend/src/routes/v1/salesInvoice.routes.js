@@ -29,6 +29,7 @@ router.route('/:id')
 
 router.post('/:id/cancel', authorize('admin', 'superadmin'), siCtrl.cancelSalesInvoice);
 router.post('/:id/restore', authorize('admin', 'superadmin'), siCtrl.restoreSalesInvoice);
+router.post('/:id/gst-correction', authorize('admin', 'superadmin'), siCtrl.updateGstDetails);
 router.post('/:id/record-payment', siCtrl.recordPayment);
 
 export default router;

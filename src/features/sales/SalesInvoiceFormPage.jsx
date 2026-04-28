@@ -50,6 +50,7 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
         padLength: 5,
         gstApplicable: true,
         isDefault: false,
+        documentType: 'Tax Invoice'
     });
 
     if (!isOpen) return null;
@@ -93,6 +94,26 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
                         <input type="checkbox" checked={data.gstApplicable} onChange={e => setData(p => ({ ...p, gstApplicable: e.target.checked }))} style={{ width: 16, height: 16 }} />
                         <span style={{ fontWeight: 600 }}>GST Applicable (Enabled by default)</span>
                     </label>
+                    <Field label="Document Type *" style={{ gridColumn: 'span 2' }}>
+                        <select 
+                            value={data.documentType} 
+                            onChange={e => {
+                                const val = e.target.value;
+                                setData(p => ({ 
+                                    ...p, 
+                                    documentType: val, 
+                                    gstApplicable: val === 'Estimate' ? false : p.gstApplicable 
+                                }));
+                            }} 
+                            style={{ ...inp, fontWeight: 700 }}
+                        >
+                            <option value="Tax Invoice">Tax Invoice</option>
+                            <option value="Estimate">Estimate (Non-GST)</option>
+                            <option value="Credit Note">Credit Note</option>
+                            <option value="Debit Note">Debit Note</option>
+                            <option value="Delivery Challan">Delivery Challan</option>
+                        </select>
+                    </Field>
                 </div>
                 <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                     <button onClick={() => { if (window.confirm('Discard changes?')) onClose(); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
@@ -341,8 +362,14 @@ export default function SalesInvoiceFormPage() {
     };
 
     const handleSubmit = async () => {
-
         if (!form.seriesId) return toast.error('⚠️ Please select an Invoice Series. The invoice number is generated from the selected series.');
+        
+        const selectedSeries = seriesList.find(s => s._id === form.seriesId);
+        const isEstimate = selectedSeries?.isEstimate === true || selectedSeries?.documentType === 'Estimate';
+        if (isEstimate && form.gstApplicable === true) {
+            return toast.error('Estimate document is non-GST document and cannot be included in GSTR-1 or GSTR-3B. Please disable GST or use a Tax Invoice series.');
+        }
+
         if (!form.customerName) return toast.error('Customer name is required');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
@@ -399,7 +426,9 @@ export default function SalesInvoiceFormPage() {
             <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <button onClick={() => navigate(PATHS.SALES.INVOICES)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Invoices</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>🧾 New GST Tax Invoice</h1>
+                    <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
+                        {form.gstApplicable ? '🧾 New GST Tax Invoice' : '📄 New Estimate / Non-GST Document'}
+                    </h1>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
                         <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
@@ -417,7 +446,9 @@ export default function SalesInvoiceFormPage() {
                             <select value={form.seriesId} onChange={async e => {
                                 const val = e.target.value;
                                 const selected = seriesList.find(s => s._id === val);
-                                const isGst = selected ? (selected.gstApplicable !== false) : true;
+                                const isEstimate = selected?.isEstimate === true || selected?.documentType === 'Estimate';
+                                const isGst = isEstimate ? false : (selected ? (selected.gstApplicable !== false) : true);
+                                
                                 await fetchPreviewNo(val);
                                 setForm(p => ({
                                     ...p,
@@ -429,6 +460,7 @@ export default function SalesInvoiceFormPage() {
                                     })),
                                     freightGstRate: isGst ? (p.freightGstRate || 18) : 0
                                 }));
+                                if (isEstimate) toast.success('Estimate series selected. GST automatically disabled.', { icon: 'ℹ️' });
                             }}
                                 style={{ ...inp, cursor: 'pointer', fontWeight: 700, fontSize: 14, borderColor: !form.seriesId ? '#fca5a5' : '#1e293b' }}
                             >
@@ -437,6 +469,14 @@ export default function SalesInvoiceFormPage() {
                             </select>
                             <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 35, background: '#f8fafc', border: '1px solid #1e293b', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Add Series">＋</button>
                         </div>
+                        {(() => {
+                            const s = seriesList.find(x => x._id === form.seriesId);
+                            return (s?.isEstimate === true || s?.documentType === 'Estimate') && (
+                                <div style={{ marginTop: 6, fontSize: 10, color: '#f59e0b', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    ⚠️ Non-GST Document (Excluded from Returns)
+                                </div>
+                            );
+                        })()}
                         {previewInvoiceNo && (
                             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <div style={{ fontSize: 18, fontWeight: 900, color: '#0d9488', fontFamily: 'monospace', background: '#f0fdfa', border: '2px solid #0d9488', padding: '6px 14px', borderRadius: 8, display: 'inline-block', boxShadow: '0 2px 4px rgba(13,148,136,0.1)' }}>

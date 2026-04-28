@@ -14,6 +14,7 @@ const TABS = [
   { key: "register_noinv", label: "Register (Without Inventory)" },
   { key: "gstr1", label: "GSTR-1" },
   { key: "gstr3b", label: "GSTR-3B Summary" },
+  { key: "excluded", label: "Excluded / Non-GST" },
 ];
 
 const fmtCur = (n) => (n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
@@ -120,10 +121,17 @@ export default function SalesRegisterPage() {
   const filteredData = useMemo(() => {
     if (tab === "gstr1" || tab === "gstr3b") {
       return data.filter(inv => {
-        if (inv.seriesId?.isEstimate === true) return false;
+        const isEstimate = inv.seriesId?.isEstimate === true || inv.seriesId?.documentType === 'Estimate';
+        if (isEstimate) return false;
         if (inv.seriesId?.gstApplicable === false) return false;
         if (inv.gstApplicable === false) return false;
         return true;
+      });
+    }
+    if (tab === "excluded") {
+      return data.filter(inv => {
+        const isEstimate = inv.seriesId?.isEstimate === true || inv.seriesId?.documentType === 'Estimate';
+        return isEstimate || inv.seriesId?.gstApplicable === false || inv.gstApplicable === false;
       });
     }
     return data;
@@ -294,8 +302,24 @@ export default function SalesRegisterPage() {
       </div>
 
       <div className="space-y-6">
+        {/* Warning for GSTR Tabs */}
+        {(tab === "gstr1" || tab === "gstr3b") && (
+          <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <Filter className="h-5 w-5 text-amber-400" aria-hidden="true" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-amber-700 font-bold uppercase tracking-wide">
+                  GSTR Reporting Mode: All Estimate series and non-GST documents are automatically excluded from the totals below.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ────────────────────────────── REGISTER VIEWS ────────────────────────────── */}
-        {(tab === "register_inv" || tab === "register_noinv" || tab === "gstr1") && (
+        {(tab === "register_inv" || tab === "register_noinv" || tab === "gstr1" || tab === "excluded") && (
           <div className={s.tableContainer}>
             {loading ? <div className="p-32 text-center text-slate-300 font-black animate-pulse uppercase tracking-widest">Compiling Records...</div> : (
               <table className="w-full">

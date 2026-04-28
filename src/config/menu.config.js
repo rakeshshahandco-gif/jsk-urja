@@ -358,6 +358,7 @@ export const menuConfig = [
             { id: 'company-profile', title: 'Company Profile', path: PATHS.SETTINGS.COMPANY_PROFILE, roles: [ROLES.ADMIN], permission: 'admin.company_profile.view' },
             { id: 'user-management', title: 'User Management', path: '/admin/users', roles: [ROLES.ADMIN], permission: 'admin.user_management.view' },
             { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', roles: [ROLES.ADMIN], permission: 'admin' },
+            { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', roles: [ROLES.ADMIN], permission: 'admin' },
         ],
     },
 ];

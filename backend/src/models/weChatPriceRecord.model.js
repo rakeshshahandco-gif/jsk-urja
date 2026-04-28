@@ -83,6 +83,26 @@ const weChatPriceRecordSchema = new mongoose.Schema({
     // Supporting documents
     attachments: [attachmentSchema],
 
+    // Inventory Linking (Optional)
+    sourceType: {
+        type: String,
+        enum: ['inventory', 'manual'],
+        default: 'manual'
+    },
+    inventoryItemId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Item'
+    },
+    inventoryItemCode: String,
+    inventoryItemName: String,
+    inventoryItemGroup: String,
+    inventoryItemGroupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ItemGroup'
+    },
+    hsnCode: String,
+    uom: String,
+
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, {
     timestamps: true

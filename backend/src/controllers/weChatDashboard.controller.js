@@ -13,7 +13,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         WeChatContact.countDocuments(),
         WeChatGroup.countDocuments(),
         WeChatSample.countDocuments({ testingStatus: { $in: ['Pending', 'Under Testing'] } }),
-        Task.countDocuments({ status: 'OPEN', description: /WeChat Follow-up/ })
+        Task.countDocuments({ status: 'OPEN', description: /WeChat Follow-up/i })
     ]);
 
     res.send(new ApiResponse(httpStatus.OK, {

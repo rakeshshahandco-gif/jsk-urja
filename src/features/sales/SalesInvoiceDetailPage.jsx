@@ -11,6 +11,7 @@ import { PATHS } from '@/routes/paths';
 import { createEwayBillDraft } from '@/services/ewayBillApi';
 import communicationApi from '@/services/communicationApi';
 import CommunicationModal from '@/components/communication/CommunicationModal';
+import GstCorrectionModal from './components/GstCorrectionModal';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
@@ -36,6 +37,7 @@ export default function SalesInvoiceDetailPage() {
     const [cancelling, setCancelling] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [showSeriesModal, setShowSeriesModal] = useState(false);
+    const [showGstModal, setShowGstModal] = useState(false);
     const [isCommModalOpen, setIsCommModalOpen] = useState(false);
 
     const load = useCallback(() => {
@@ -519,6 +521,14 @@ export default function SalesInvoiceDetailPage() {
                                      >
                                          🔄 Resequence Series
                                      </button>
+                                     {!isEstimate && notCancelled && (
+                                         <button
+                                             onClick={() => setShowGstModal(true)}
+                                             style={{ padding: '9px 18px', borderRadius: 8, background: '#d97706', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                         >
+                                             ✏️ Edit GST Return Details
+                                         </button>
+                                     )}
                                  </>
                              )}
                             {/* Print Button */}
@@ -844,22 +854,34 @@ export default function SalesInvoiceDetailPage() {
             )}
 
             {/* Communication Modal (WhatsApp/Email) */}
-            <CommunicationModal 
-                isOpen={isCommModalOpen}
-                onClose={() => setIsCommModalOpen(false)}
-                onSend={handleSendComm}
-                type="Sales Invoice"
-                data={{
-                    id: inv._id,
-                    number: inv.displayInvoiceNumber || inv.invoiceNumber,
-                    recipientName: inv.customerName,
-                    phone: inv.customerPhone || '',
-                    email: inv.customerEmail || '',
-                    total: inv.roundedTotal || inv.grandTotal,
-                    items: inv.items,
-                    customerId: inv.customerId?._id || inv.customerId
-                }}
-            />
+            {isCommModalOpen && (
+                <CommunicationModal
+                    isOpen={isCommModalOpen}
+                    onClose={() => setIsCommModalOpen(false)}
+                    customer={{
+                        name: inv.customerName,
+                        phone: inv.customerPhone || inv.customerId?.phone,
+                        email: inv.customerEmail || inv.customerId?.email
+                    }}
+                    document={{
+                        number: inv.displayInvoiceNumber || inv.invoiceNumber,
+                        date: new Date(inv.invoiceDate).toLocaleDateString('en-GB'),
+                        amount: (inv.roundedTotal || inv.grandTotal),
+                        type: 'Sales Invoice',
+                        publicUrl: `${window.location.origin}/documents/invoice/${inv._id}`
+                    }}
+                    onSend={handleSendComm}
+                />
+            )}
+
+            {/* Admin GST Correction Modal */}
+            {showGstModal && (
+                <GstCorrectionModal 
+                    inv={inv} 
+                    onClose={() => setShowGstModal(false)} 
+                    onSuccess={() => { setShowGstModal(false); load(); }} 
+                />
+            )}
 
             {/* Print Styles */}
             <style>{`

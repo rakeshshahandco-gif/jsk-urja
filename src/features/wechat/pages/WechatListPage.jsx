@@ -11,6 +11,7 @@ import WechatContactsTab from '../components/WechatContactsTab';
 import WechatGroupsTab from '../components/WechatGroupsTab';
 import WechatSamplesTab from '../components/WechatSamplesTab';
 import WechatPricesTab from '../components/WechatPricesTab';
+import WechatReportsTab from '../components/WechatReportsTab';
 import WechatProductDetailsPage from './WechatProductDetailsPage';
 
 const WechatLayout = () => {
@@ -60,7 +61,7 @@ const WechatLayout = () => {
             case 'groups': return <WechatGroupsTab onSelectGroup={setSelectedGroup} />;
             case 'prices': return <WechatPricesTab />;
             case 'samples': return <WechatSamplesTab />;
-            case 'reports': return <div className="p-8"><h2 className="text-2xl font-bold">Reports (WIP)</h2></div>;
+            case 'reports': return <WechatReportsTab />;
             default: return <WechatDashboardTab onNavigate={handleTabChange} />;
         }
     };

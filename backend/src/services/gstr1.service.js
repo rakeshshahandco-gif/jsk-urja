@@ -305,8 +305,20 @@ export const generateGSTR1Excel = async (filters) => {
         const allSeriesInvoices = await SalesInvoice.aggregate([
             { $match: { ...query, isDeleted: { $ne: true } } },
             {
+                $lookup: {
+                    from: 'invoiceseries',
+                    localField: 'seriesId',
+                    foreignField: '_id',
+                    as: 'series'
+                }
+            },
+            { $unwind: '$series' },
+            { $match: { 'series.isEstimate': { $ne: true }, 'series.gstApplicable': { $ne: false } } },
+            {
                 $group: {
                     _id: '$seriesId',
+                    seriesName: { $first: '$series.seriesName' },
+                    prefix: { $first: '$series.prefix' },
                     count: { $sum: 1 },
                     minInv: { $min: '$invoiceNumber' },
                     maxInv: { $max: '$invoiceNumber' },

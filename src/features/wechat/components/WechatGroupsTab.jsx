@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, Shield, MessageSquare, ChevronRight, Package, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Plus, Search, Users, Shield, MessageSquare, ChevronRight, Package, Image as ImageIcon, Trash2, Edit2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getWeChatGroups, api } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
@@ -9,18 +9,27 @@ import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 
 const WechatGroupsTab = ({ onSelectGroup }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    
+    // Parse search param from URL
+    const queryParams = new URLSearchParams(location.search);
+    const initialSearch = queryParams.get('search') || '';
+
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(initialSearch);
 
     useEffect(() => {
-        fetchGroups();
-    }, []);
+        const queryParams = new URLSearchParams(location.search);
+        const s = queryParams.get('search') || '';
+        setSearchTerm(s);
+        fetchGroups(s);
+    }, [location.search]);
 
-    const fetchGroups = async () => {
+    const fetchGroups = async (s) => {
         try {
             setLoading(true);
-            const res = await getWeChatGroups({ search: searchTerm });
+            const res = await getWeChatGroups({ search: s || searchTerm });
             setGroups(res.data?.data || []);
         } catch (err) {
             toast.error('Failed to load groups');
@@ -90,13 +99,15 @@ const WechatGroupsTab = ({ onSelectGroup }) => {
                                 <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0 flex gap-2">
                                     <button 
                                         onClick={(e) => { e.stopPropagation(); navigate(`/china-supplier/groups/edit/${group._id}`); }}
-                                        className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                        title="Edit Group Sync"
                                     >
-                                        <ChevronRight size={18} />
+                                        <Edit2 size={18} />
                                     </button>
                                     <button 
                                         onClick={(e) => handleDeleteGroup(e, group._id)}
                                         className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                        title="Delete Group"
                                     >
                                         <Trash2 size={18} />
                                     </button>

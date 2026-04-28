@@ -15,7 +15,7 @@ export const globalSearch = asyncHandler(async (req, res) => {
     const searchRegex = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
 
     // Parallel search across collections
-    let [products, contacts, groups, prices] = await Promise.all([
+    let [products, contacts, initialGroups, prices] = await Promise.all([
         WeChatProduct.find({
             $or: [
                 { productName: searchRegex },
@@ -23,11 +23,14 @@ export const globalSearch = asyncHandler(async (req, res) => {
                 { chineseProductName: searchRegex },
                 { category: searchRegex },
                 { partNumber: searchRegex },
+                { altPartNumbers: searchRegex },
                 { brandName: searchRegex },
                 { modelNo: searchRegex },
-                { description: searchRegex }
+                { description: searchRegex },
+                { inventoryItemCode: searchRegex },
+                { inventoryItemName: searchRegex }
             ]
-        }).limit(20),
+        }).limit(20).populate('wechatGroupIds', 'groupName groupAlias chineseGroupName'),
 
         WeChatContact.find({
             $or: [
@@ -47,9 +50,10 @@ export const globalSearch = asyncHandler(async (req, res) => {
                 { groupAlias: searchRegex },
                 { chineseGroupName: searchRegex },
                 { purpose: searchRegex },
-                { groupCreatedBy: searchRegex }
+                { groupCreatedBy: searchRegex },
+                { productKeywords: searchRegex }
             ]
-        }).limit(20),
+        }).limit(20).populate('productIds', 'productName partNumber category'),
 
         WeChatPriceRecord.find({
             $or: [
@@ -68,6 +72,19 @@ export const globalSearch = asyncHandler(async (req, res) => {
         .sort('-quotationDate')
         .limit(50)
     ]);
+
+    // INTELLIGENCE LINKING: If products were found, find all groups they belong to
+    // and merge them into the groups result
+    let groups = [...initialGroups];
+    if (products.length > 0) {
+        const productIds = products.map(p => p._id);
+        const autoLinkedGroups = await WeChatGroup.find({
+            productIds: { $in: productIds },
+            _id: { $nin: initialGroups.map(g => g._id) } // Avoid duplicates
+        }).limit(10).populate('productIds', 'productName partNumber category');
+        
+        groups = [...groups, ...autoLinkedGroups];
+    }
 
     // For products, also fetch ALL related prices even if they don't match the search term
     // (Requested: "When I search product... show product-wise rates from each group")

@@ -85,6 +85,8 @@ import analyticsRoute from './analytics.routes.js';
 import salesConversionRoute from './salesConversion.routes.js';
 import transporterRoute from './transporter.routes.js';
 import ewayBillRoute from './ewayBill.routes.js';
+import gstReportRoute from './gstReport.routes.js';
+import backupRoute from './backup.routes.js';
 
 
 
@@ -100,6 +102,10 @@ const defaultRoutes = [
     {
         path: '/admin',
         route: adminRoute,
+    },
+    {
+        path: '/backups',
+        route: backupRoute,
     },
     {
         path: '/production-planning',
@@ -420,10 +426,6 @@ const defaultRoutes = [
         route: fyRoute,
     },
     {
-        path: '/admin',
-        route: adminRoute,
-    },
-    {
         path: '/utils',
         route: utilsRoute,
     },
@@ -433,6 +435,10 @@ const defaultRoutes = [
     },
     {
         path: '/wechat',
+        route: weChatRoute,
+    },
+    {
+        path: '/china-supplier',
         route: weChatRoute,
     },
 
@@ -452,6 +458,11 @@ const defaultRoutes = [
     path: '/eway-bills',
     route: ewayBillRoute,
   },
+  // ── GST Reports ──────────────────────────────────────────────────────────
+  {
+    path: '/gst-reports',
+    route: gstReportRoute,
+  },
 ];
 
 
@@ -461,4 +472,5 @@ defaultRoutes.forEach((route) => {
     router.use(route.path, route.route);
 });
 
+export { weChatRoute };
 export default router;

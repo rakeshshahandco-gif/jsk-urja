@@ -44,8 +44,15 @@ export const cancelSalesInvoice = (id) =>
 export const deleteSalesInvoice = (id, data) =>
     apiClient.delete(`/sales-invoices/${id}`, { data }).then(r => r.data);
 
-export const restoreSalesInvoice = (id, data) =>
-    apiClient.post(`/sales-invoices/${id}/restore`, data).then(r => r.data);
+export const restoreSalesInvoice = async (id) => {
+    const response = await apiClient.post(`/sales-invoices/${id}/restore`);
+    return response.data;
+};
+
+export const updateInvoiceGstDetails = async (id, payload) => {
+    const response = await apiClient.post(`/sales-invoices/${id}/gst-correction`, payload);
+    return response.data;
+};
 
 export const recordSalesPayment = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/record-payment`, data).then(r => r.data);

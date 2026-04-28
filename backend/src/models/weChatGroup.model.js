@@ -38,7 +38,11 @@ const weChatGroupSchema = new mongoose.Schema({
     remarks: String,
     
     // Relationships
-    // Note: Members are mapped using WeChatGroupMember join collection for role management
+    productIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WeChatProduct'
+    }],
+    productKeywords: [String], // Tags for quick intelligence linking
     
     // Attachments & Documentation
     attachments: [{

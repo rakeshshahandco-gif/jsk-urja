@@ -68,7 +68,7 @@ const weChatContactSchema = new mongoose.Schema({
     },
     source: {
         type: String,
-        enum: ['WeChat', 'Alibaba', 'Made-in-China', 'Reference', 'Exhibition', 'Other'],
+        enum: ['WeChat', 'Alibaba', 'Made-in-China', 'Reference', 'Exhibition', 'Group', 'Other'],
         default: 'Other'
     },
     remarks: String,
@@ -77,6 +77,10 @@ const weChatContactSchema = new mongoose.Schema({
     groupIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'WeChatGroup'
+    }],
+    productIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WeChatProduct'
     }],
 
     notes: String,

@@ -84,6 +84,34 @@ const weChatProductSchema = new mongoose.Schema({
     // Attachments (catalogue, spec sheet, product image)
     attachments: [attachmentSchema],
 
+    // Links to WeChat Groups for sourcing intel
+    wechatGroupIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WeChatGroup'
+    }],
+    wechatContactIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'WeChatContact'
+    }],
+
+    // Inventory Linking (Optional)
+    sourceType: {
+        type: String,
+        enum: ['inventory', 'manual'],
+        default: 'manual'
+    },
+    inventoryItemId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Item'
+    },
+    inventoryItemCode: String,
+    inventoryItemName: String,
+    inventoryItemGroup: String,
+    inventoryItemGroupId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ItemGroup'
+    },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, {
     timestamps: true

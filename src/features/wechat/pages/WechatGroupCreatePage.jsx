@@ -3,14 +3,15 @@ import {
     Save, X, Plus, Trash2, Search, 
     Package, Users, FileText, Camera,
     ArrowLeft, CheckCircle2, AlertCircle,
-    Info, DollarSign, Globe, Layers
+    Info, DollarSign, Globe, Layers, ChevronDown, Tag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { BrandedLoader } from '../../../components/ui/BrandedLoading';
+import SearchableSelect from '../../../components/ui/SearchableSelect';
 import { 
     api 
 } from '../../../services/weChatApi';
@@ -33,18 +34,93 @@ const WechatGroupCreatePage = () => {
         isActive: true,
         remarks: '',
         location: '',
-        address: ''
+        address: '',
+        productIds: [],
+        productKeywords: []
     });
 
     // --- Fetch Group Data for Editing ---
     const [liveRates, setLiveRates] = useState({ CNY: null, USD: null });
 
+    const [itemGroups, setItemGroups] = useState([]);
+    const [rowItems, setRowItems] = useState({}); // { [rowId]: items[] }
+
     useEffect(() => {
         if (groupId) {
             fetchGroupData();
+        } else if (location.state?.autoFill) {
+            const { productName, productId, keywords } = location.state.autoFill;
+            setGroupDetails(prev => ({
+                ...prev,
+                groupName: prev.groupName || `${productName} Sourcing Group`,
+                productIds: productId ? [productId] : [],
+                productKeywords: keywords || []
+            }));
+            
+            if (productName) {
+                setProductRates([{
+                    ...productRates[0],
+                    productName,
+                    productId: productId || '',
+                    partNumber: keywords && keywords.length > 0 ? keywords[0] : ''
+                }]);
+            }
         }
         fetchLiveRates();
-    }, [groupId]);
+        fetchAvailableProducts();
+        fetchItemGroups();
+    }, [groupId, location.state]);
+
+    const fetchItemGroups = async () => {
+        try {
+            const res = await api.get('/item-groups');
+            setItemGroups(res.data?.data || []);
+        } catch (err) { console.error('Failed to load item groups'); }
+    };
+
+    const fetchItemsForGroup = async (rowId, groupName) => {
+        try {
+            const res = await api.get('/items', { params: { itemGroupName: groupName, limit: 100 } });
+            setRowItems(prev => ({ ...prev, [rowId]: res.data?.data || [] }));
+        } catch (err) { console.error('Failed to load items for group'); }
+    };
+
+    const searchAllItems = async (rowId, q) => {
+        if (!q || q.length < 2) return;
+        try {
+            const res = await api.get('/items', { params: { search: q, limit: 50 } });
+            setRowItems(prev => ({ ...prev, [rowId]: res.data?.data || [] }));
+        } catch (err) { console.error('Item search failed'); }
+    };
+
+    const [availableProducts, setAvailableProducts] = useState([]);
+    const fetchAvailableProducts = async () => {
+        try {
+            const res = await api.get('/wechat/products');
+            setAvailableProducts(res.data?.data || []);
+        } catch (err) { console.error('Failed to load products'); }
+    };
+    
+    const [keywordInput, setKeywordInput] = useState('');
+    const addKeyword = (e) => {
+        if (e.key === 'Enter' && keywordInput.trim()) {
+            e.preventDefault();
+            if (!groupDetails.productKeywords.includes(keywordInput.trim())) {
+                setGroupDetails({
+                    ...groupDetails,
+                    productKeywords: [...groupDetails.productKeywords, keywordInput.trim()]
+                });
+            }
+            setKeywordInput('');
+        }
+    };
+
+    const removeKeyword = (kw) => {
+        setGroupDetails({
+            ...groupDetails,
+            productKeywords: groupDetails.productKeywords.filter(k => k !== kw)
+        });
+    };
 
     const fetchLiveRates = async () => {
         try {
@@ -53,16 +129,66 @@ const WechatGroupCreatePage = () => {
         } catch (err) { console.error('Live rate fetch failed', err); }
     };
 
+    const handleSelectGroup = (rowId, groupName) => {
+        const group = itemGroups.find(g => g.name === groupName);
+        setProductRates(prev => prev.map(row => {
+            if (row.id === rowId) {
+                return {
+                    ...row,
+                    productName: groupName,
+                    inventoryItemGroupId: group?._id,
+                    inventoryItemGroupName: groupName,
+                    // Clear item link if group changes? User might prefer it.
+                    inventoryItemId: null,
+                    inventoryItemCode: '',
+                    inventoryItemName: '',
+                };
+            }
+            return row;
+        }));
+        // Fetch items for this group to populate Part No dropdown
+        fetchItemsForGroup(rowId, groupName);
+    };
+
+    const handleSelectInventoryItem = (rowId, item) => {
+        setProductRates(prev => prev.map(row => {
+            if (row.id === rowId) {
+                return {
+                    ...row,
+                    productName: item.itemGroupName || row.productName,
+                    partNumber: item.itemName,
+                    productCategory: item.itemCategory || row.productCategory,
+                    uom: item.uom || row.uom,
+                    hsnCode: item.hsnCode || row.hsnCode,
+                    sourceType: 'inventory',
+                    inventoryItemId: item._id,
+                    inventoryItemCode: item.itemCode,
+                    inventoryItemName: item.itemName,
+                    inventoryItemGroupId: item.itemGroupId,
+                    inventoryItemGroupName: item.itemGroupName,
+                };
+            }
+            return row;
+        }));
+    };
+
     const fetchGroupData = async () => {
         try {
             setFetching(true);
             const response = await api.get(`/wechat/groups/${groupId}/deep`);
             const { groupDetails: gd, productRates: pr, members: mb } = response.data.data;
             
-            setGroupDetails(gd);
+            setGroupDetails({
+                ...gd,
+                productIds: gd.productIds || [],
+                productKeywords: gd.productKeywords || []
+            });
+            const productRatesArray = Array.isArray(pr) ? pr : [];
+            const membersArray = Array.isArray(mb) ? mb : [];
+
             // Normalize loaded rates to ensure all fields exist (backwards compat)
-            const normalizedRates = pr.length > 0 
-                ? pr.map(r => ({
+            const normalizedRates = productRatesArray.length > 0 
+                ? productRatesArray.map(r => ({
                     ...r,
                     id: r._id || r.id || Date.now() + Math.random(),
                     freightPercent: r.freightPercent ?? 0,
@@ -70,8 +196,12 @@ const WechatGroupCreatePage = () => {
                     landingCost: r.landingCost ?? 0,
                 }))
                 : [{ id: Date.now(), currency: 'RMB', exchangeRate: 1, freightPercent: 0, landingCost: 0 }];
+            
             setProductRates(normalizedRates);
-            setMembers(mb.length > 0 ? mb.map(m => ({ ...m, id: m._id || m.id || Date.now() + Math.random() })) : [{ id: Date.now() + 1 }]);
+            setMembers(membersArray.length > 0 
+                ? membersArray.map(m => ({ ...m, id: m._id || m.id || Date.now() + Math.random() })) 
+                : [{ id: Date.now() + 1, weChatDisplayName: '', role: 'Unknown' }]
+            );
         } catch (err) {
             toast.error('Failed to load group details');
         } finally {
@@ -92,14 +222,24 @@ const WechatGroupCreatePage = () => {
         sampleRateRMB: '',
         bulkRateRMB: '',
         currency: 'RMB',
-        exchangeRate: 1,
+        exchangeRate: localStorage.getItem('lastWeChatExchangeRate') || 1,
         freightPercent: 0,
         landingCost: 0,
         moq: '',
         leadTime: '',
         quotedByMember: '', 
         quotationDate: new Date().toISOString().split('T')[0],
-        remarks: ''
+        remarks: '',
+        
+        // Inventory Links
+        sourceType: 'manual',
+        inventoryItemId: null,
+        inventoryItemCode: '',
+        inventoryItemName: '',
+        inventoryItemGroupId: null,
+        inventoryItemGroupName: '',
+        hsnCode: '',
+        uom: ''
     }]);
 
     // --- State: Members ---
@@ -116,7 +256,7 @@ const WechatGroupCreatePage = () => {
         role: 'Unknown',
         isMainContact: false,
         language: 'Chinese',
-        source: 'Group',
+        source: 'WeChat',
         remarks: '',
         location: '',
         address: ''
@@ -143,14 +283,22 @@ const WechatGroupCreatePage = () => {
             sampleRateRMB: '',
             bulkRateRMB: '',
             currency: 'RMB',
-            exchangeRate: 1,
+            exchangeRate: localStorage.getItem('lastWeChatExchangeRate') || 1,
             freightPercent: 0,
             landingCost: 0,
             moq: '',
             leadTime: '',
             quotedByMember: '',
             quotationDate: new Date().toISOString().split('T')[0],
-            remarks: ''
+            remarks: '',
+            sourceType: 'manual',
+            inventoryItemId: null,
+            inventoryItemCode: '',
+            inventoryItemName: '',
+            inventoryItemGroupId: null,
+            inventoryItemGroupName: '',
+            hsnCode: '',
+            uom: ''
         }]);
     };
 
@@ -163,15 +311,20 @@ const WechatGroupCreatePage = () => {
         setProductRates(productRates.map(row => {
             if (row.id === id) {
                 const updatedRow = { ...row, [field]: value };
-                // Recalculate landing cost when any pricing field changes
-                if (['rateRMB', 'exchangeRate', 'freightPercent'].includes(field)) {
-                    const rate    = parseFloat(updatedRow.rateRMB)       || 0;
-                    const exch    = parseFloat(updatedRow.exchangeRate)   || 0;
+                
+                // Persistence: Save last exchange rate used
+                if (field === 'exchangeRate') {
+                    localStorage.setItem('lastWeChatExchangeRate', value);
+                }
+
+                if (field === 'rateRMB' || field === 'exchangeRate' || field === 'freightPercent') {
+                    const rate = parseFloat(updatedRow.rateRMB) || 0;
+                    const exch = parseFloat(updatedRow.exchangeRate) || 1;
                     const freight = parseFloat(updatedRow.freightPercent) || 0;
-                    // baseINR = rate × exchangeRate
-                    // landingCost = baseINR × (1 + freight%/100)
-                    const baseINR = rate * exch;
-                    updatedRow.landingCost = Number((baseINR * (1 + freight / 100)).toFixed(5));
+                    
+                    const inrBase = rate * exch;
+                    const landing = inrBase * (1 + (freight / 100));
+                    updatedRow.landingCost = Number(landing.toFixed(2));
                 }
                 return updatedRow;
             }
@@ -182,6 +335,7 @@ const WechatGroupCreatePage = () => {
     const applyGlobalExchangeRate = (rate) => {
         const parsedRate = parseFloat(rate) || 0;
         if (parsedRate <= 0) return;
+        localStorage.setItem('lastWeChatExchangeRate', rate);
         setProductRates(productRates.map(row => {
             const unitRate = parseFloat(row.rateRMB)       || 0;
             const freight  = parseFloat(row.freightPercent) || 0;
@@ -209,7 +363,7 @@ const WechatGroupCreatePage = () => {
             role: 'Unknown',
             isMainContact: false,
             language: 'Chinese',
-            source: 'Group',
+            source: 'WeChat',
             remarks: '',
             location: '',
             address: ''
@@ -233,12 +387,25 @@ const WechatGroupCreatePage = () => {
             return;
         }
 
+        // Validate Product Rates
+        for (let i = 0; i < productRates.length; i++) {
+            const rate = productRates[i];
+            // If it's a valid row (has product name or price)
+            if (rate.productName || rate.rateRMB) {
+                if (!rate.productName) {
+                    toast.error(`Row ${i + 1}: Product Name is required`);
+                    setActiveTab('products');
+                    return;
+                }
+            }
+        }
+
         try {
             setLoading(true);
             const payload = {
                 groupDetails,
-                productRates,
-                members
+                productRates: productRates.filter(r => r.productName || r.rateRMB || r.partNumber),
+                members: members.filter(m => m.weChatDisplayName)
             };
 
             await api.post('/wechat/groups/deep', payload);
@@ -342,6 +509,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Group Name *</label>
                                         <Input 
+                                            name="groupName"
                                             placeholder="e.g. ZT2S Zigbee Technical Support" 
                                             value={groupDetails.groupName}
                                             onChange={(e) => setGroupDetails({...groupDetails, groupName: e.target.value})}
@@ -351,6 +519,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Chinese Name</label>
                                         <Input 
+                                            name="chineseGroupName"
                                             placeholder="e.g. ZT2S技术支持群" 
                                             value={groupDetails.chineseGroupName}
                                             onChange={(e) => setGroupDetails({...groupDetails, chineseGroupName: e.target.value})}
@@ -360,6 +529,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">English Alias / Short Name</label>
                                         <Input 
+                                            name="groupAlias"
                                             placeholder="e.g. ZT2S Tech" 
                                             value={groupDetails.groupAlias}
                                             onChange={(e) => setGroupDetails({...groupDetails, groupAlias: e.target.value})}
@@ -369,6 +539,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Created By</label>
                                         <Input 
+                                            name="groupCreatedBy"
                                             placeholder="Person who initiated group" 
                                             value={groupDetails.groupCreatedBy}
                                             onChange={(e) => setGroupDetails({...groupDetails, groupCreatedBy: e.target.value})}
@@ -380,6 +551,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Location / City</label>
                                         <Input 
+                                            name="location"
                                             placeholder="e.g. Guzhen, Zhongshan" 
                                             value={groupDetails.location}
                                             onChange={(e) => setGroupDetails({...groupDetails, location: e.target.value})}
@@ -389,6 +561,7 @@ const WechatGroupCreatePage = () => {
                                     <div className="space-y-2">
                                         <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Address</label>
                                         <Input 
+                                            name="address"
                                             placeholder="Detailed factory/office address" 
                                             value={groupDetails.address}
                                             onChange={(e) => setGroupDetails({...groupDetails, address: e.target.value})}
@@ -405,6 +578,68 @@ const WechatGroupCreatePage = () => {
                                         onChange={(e) => setGroupDetails({...groupDetails, purpose: e.target.value})}
                                         className="w-full p-6 rounded-[2rem] border-2 border-slate-100 font-bold focus:border-emerald-500 outline-none transition-all resize-none"
                                     />
+                                </div>
+
+                                {/* Linking Intelligence */}
+                                <div className="pt-8 border-t border-slate-100 space-y-8">
+                                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500" /> Link Intelligence (Products & Tags)
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-4">
+                                            <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Linked Product Master(s)</label>
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                {(groupDetails.productIds || []).map(pid => {
+                                                    const p = availableProducts.find(ap => ap._id === pid);
+                                                    return (
+                                                        <Badge key={pid} className="bg-blue-50 text-blue-700 border-0 py-1.5 px-3 rounded-xl flex items-center gap-2">
+                                                            <Package size={12} /> {p?.productName} {p?.partNumber ? `(${p.partNumber})` : ''}
+                                                            <button onClick={() => setGroupDetails({...groupDetails, productIds: groupDetails.productIds.filter(id => id !== pid)})} className="hover:text-red-500">
+                                                                <X size={12} />
+                                                            </button>
+                                                        </Badge>
+                                                    );
+                                                })}
+                                            </div>
+                                            <select 
+                                                className="w-full h-14 bg-white border-2 border-slate-100 rounded-2xl px-4 font-bold outline-none focus:border-blue-500"
+                                                onChange={(e) => {
+                                                    if (e.target.value && !groupDetails.productIds.includes(e.target.value)) {
+                                                        setGroupDetails({...groupDetails, productIds: [...groupDetails.productIds, e.target.value]});
+                                                    }
+                                                }}
+                                                value=""
+                                            >
+                                                <option value="">+ Add Product Link...</option>
+                                                {availableProducts.map(p => (
+                                                    <option key={p._id} value={p._id}>{p.productName} {p.partNumber ? `(${p.partNumber})` : ''}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Intelligence Keywords / Tags</label>
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                {(groupDetails.productKeywords || []).map(kw => (
+                                                    <Badge key={kw} className="bg-slate-100 text-slate-700 border-0 py-1.5 px-3 rounded-xl flex items-center gap-2">
+                                                        <Tag size={12} /> {kw}
+                                                        <button onClick={() => removeKeyword(kw)} className="hover:text-red-500">
+                                                            <X size={12} />
+                                                        </button>
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                            <Input 
+                                                placeholder="Type keyword and press Enter (e.g. 4N65)"
+                                                value={keywordInput}
+                                                onChange={(e) => setKeywordInput(e.target.value)}
+                                                onKeyDown={addKeyword}
+                                                className="h-14 rounded-2xl border-2 border-slate-100 font-bold focus:border-blue-500 transition-all"
+                                            />
+                                            <p className="text-[10px] font-bold text-slate-400 italic">Keywords help in quick search & automated group mapping.</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div className="space-y-8">
@@ -465,6 +700,7 @@ const WechatGroupCreatePage = () => {
                                                     placeholder="e.g. 14.5"
                                                     className="w-24 h-8 text-[11px] font-bold border-2 border-white rounded-lg px-2 focus:border-emerald-500 outline-none transition-all shadow-sm"
                                                     id="globalExchInput"
+                                                    defaultValue={localStorage.getItem('lastWeChatExchangeRate') || ''}
                                                     onBlur={(e) => applyGlobalExchangeRate(e.target.value)}
                                                 />
                                                 {liveRates.CNY && (
@@ -500,39 +736,100 @@ const WechatGroupCreatePage = () => {
                                     <tbody className="divide-y divide-slate-100">
                                         {productRates.map((rate, index) => (
                                             <tr key={rate.id} className="group hover:bg-slate-50/50 transition-all">
-                                                <td className="p-6 border-r border-slate-50 min-w-[280px]">
+                                                <td className="p-6 border-r border-slate-50 min-w-[320px]">
                                                     <div className="space-y-4">
-                                                        <Input 
-                                                            placeholder="Product Name *" 
-                                                            value={rate.productName}
-                                                            onChange={(e) => updateProductRow(rate.id, 'productName', e.target.value)}
-                                                            className="h-10 text-sm font-black rounded-xl border-slate-100"
-                                                        />
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <Input 
-                                                                placeholder="Part No." 
-                                                                value={rate.partNumber}
-                                                                onChange={(e) => updateProductRow(rate.id, 'partNumber', e.target.value)}
-                                                                className="h-9 text-[11px] font-bold rounded-lg"
+                                                        <div className="space-y-1">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Product Name / Group *</label>
+                                                            <SearchableSelect 
+                                                                options={itemGroups.map(g => ({ value: g.name, label: g.name }))}
+                                                                value={rate.productName}
+                                                                onChange={(val) => handleSelectGroup(rate.id, val)}
+                                                                placeholder="Select Item Group..."
+                                                                style={{ width: '100%' }}
                                                             />
+                                                            {/* Hidden fallback to allow manual entry if needed or just let SearchableSelect handle it if I update it */}
+                                                            {(!rate.productName || !itemGroups.some(g => g.name === rate.productName)) && (
+                                                                <Input 
+                                                                    name={`productName_${rate.id}`}
+                                                                    placeholder="Or type manual product name..."
+                                                                    value={rate.productName}
+                                                                    onChange={(e) => updateProductRow(rate.id, 'productName', e.target.value)}
+                                                                    className="h-9 text-[11px] font-bold mt-1"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-cols-1 gap-2 pt-2 border-t border-slate-50">
+                                                            <div className="space-y-1">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Part No / Item Name</label>
+                                                                <SearchableSelect 
+                                                                    options={(rowItems[rate.id] || []).map(item => ({
+                                                                        value: item._id,
+                                                                        label: item.itemName,
+                                                                        meta: `${item.itemCode}${item.hsnCode ? ` | HSN: ${item.hsnCode}` : ''}`
+                                                                    }))}
+                                                                    value={rate.inventoryItemId}
+                                                                    onChange={(val, opt) => {
+                                                                        const item = (rowItems[rate.id] || []).find(i => i._id === val);
+                                                                        if (item) handleSelectInventoryItem(rate.id, item);
+                                                                    }}
+                                                                    placeholder="Search Item Master..."
+                                                                    style={{ width: '100%' }}
+                                                                    onFocus={() => {
+                                                                        if (!rowItems[rate.id]) {
+                                                                            if (rate.productName) fetchItemsForGroup(rate.id, rate.productName);
+                                                                            else searchAllItems(rate.id, rate.partNumber || ' ');
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                {/* Manual Part No input */}
+                                                                <Input 
+                                                                    name={`partNumber_${rate.id}`}
+                                                                    placeholder="Manual Part No." 
+                                                                    value={rate.partNumber}
+                                                                    onChange={(e) => updateProductRow(rate.id, 'partNumber', e.target.value)}
+                                                                    className="h-9 text-[11px] font-bold mt-1"
+                                                                />
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div className="space-y-1">
+                                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Category</label>
+                                                                    <Input 
+                                                                        name={`category_${rate.id}`}
+                                                                        placeholder="Category" 
+                                                                        value={rate.productCategory}
+                                                                        onChange={(e) => updateProductRow(rate.id, 'productCategory', e.target.value)}
+                                                                        className="h-9 text-[11px] font-bold"
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">UOM</label>
+                                                                    <Input 
+                                                                        name={`uom_${rate.id}`}
+                                                                        placeholder="UOM" 
+                                                                        value={rate.uom}
+                                                                        onChange={(e) => updateProductRow(rate.id, 'uom', e.target.value)}
+                                                                        className="h-9 text-[11px] font-bold"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Brand Name</label>
                                                             <Input 
-                                                                placeholder="Category" 
-                                                                value={rate.productCategory}
-                                                                onChange={(e) => updateProductRow(rate.id, 'productCategory', e.target.value)}
-                                                                className="h-9 text-[11px] font-bold rounded-lg"
+                                                                name={`brandName_${rate.id}`}
+                                                                placeholder="Brand Name" 
+                                                                value={rate.brandName}
+                                                                onChange={(e) => updateProductRow(rate.id, 'brandName', e.target.value)}
+                                                                className="h-9 text-[11px] font-bold"
                                                             />
                                                         </div>
-                                                        <Input 
-                                                            placeholder="Brand Name" 
-                                                            value={rate.brandName}
-                                                            onChange={(e) => updateProductRow(rate.id, 'brandName', e.target.value)}
-                                                            className="h-9 text-[11px] font-bold rounded-lg"
-                                                        />
                                                     </div>
                                                 </td>
                                                 <td className="p-6 border-r border-slate-50 min-w-[240px]">
                                                     <div className="space-y-4">
                                                         <Input 
+                                                            name={`modelNo_${rate.id}`}
                                                             placeholder="Model No." 
                                                             value={rate.modelNo}
                                                             onChange={(e) => updateProductRow(rate.id, 'modelNo', e.target.value)}
@@ -563,6 +860,7 @@ const WechatGroupCreatePage = () => {
                                                         <div className="flex items-center gap-2">
                                                             <label className="text-[9px] font-black text-emerald-600 uppercase w-16">Unit Rate</label>
                                                             <Input 
+                                                                name={`rateRMB_${rate.id}`}
                                                                 type="number"
                                                                 value={rate.rateRMB}
                                                                 onChange={(e) => updateProductRow(rate.id, 'rateRMB', e.target.value)}
@@ -572,19 +870,21 @@ const WechatGroupCreatePage = () => {
                                                         <div className="flex items-center gap-2">
                                                             <label className="text-[9px] font-black text-slate-500 uppercase w-16">Sample</label>
                                                             <Input 
+                                                                name={`sampleRateRMB_${rate.id}`}
                                                                 type="number"
                                                                 value={rate.sampleRateRMB}
                                                                 onChange={(e) => updateProductRow(rate.id, 'sampleRateRMB', e.target.value)}
-                                                                className="h-9 text-[11px] font-bold rounded-lg"
+                                                                className="h-9 text-[11px] font-bold rounded-lg border-emerald-200"
                                                             />
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <label className="text-[9px] font-black text-slate-500 uppercase w-16">Bulk</label>
                                                             <Input 
+                                                                name={`bulkRateRMB_${rate.id}`}
                                                                 type="number"
                                                                 value={rate.bulkRateRMB}
                                                                 onChange={(e) => updateProductRow(rate.id, 'bulkRateRMB', e.target.value)}
-                                                                className="h-9 text-[11px] font-bold rounded-lg"
+                                                                className="h-9 text-[11px] font-bold rounded-lg border-emerald-200"
                                                             />
                                                         </div>
                                                     </div>
@@ -722,6 +1022,7 @@ const WechatGroupCreatePage = () => {
                                                 <td className="p-6 border-r border-slate-50 min-w-[280px]">
                                                     <div className="space-y-4">
                                                         <Input 
+                                                            name="weChatDisplayName"
                                                             placeholder="WeChat Display Name *" 
                                                             value={member.weChatDisplayName}
                                                             onChange={(e) => updateMemberRow(member.id, 'weChatDisplayName', e.target.value)}
@@ -729,12 +1030,14 @@ const WechatGroupCreatePage = () => {
                                                         />
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <Input 
+                                                                name={`chineseName_${member.id}`}
                                                                 placeholder="Chinese Name" 
                                                                 value={member.chineseName}
                                                                 onChange={(e) => updateMemberRow(member.id, 'chineseName', e.target.value)}
                                                                 className="h-9 text-[11px] font-bold rounded-lg font-chinese"
                                                             />
                                                             <Input 
+                                                                name={`englishName_${member.id}`}
                                                                 placeholder="English Name" 
                                                                 value={member.englishName}
                                                                 onChange={(e) => updateMemberRow(member.id, 'englishName', e.target.value)}
@@ -742,6 +1045,7 @@ const WechatGroupCreatePage = () => {
                                                             />
                                                         </div>
                                                         <Input 
+                                                            name={`companyName_${member.id}`}
                                                             placeholder="Company Name" 
                                                             value={member.companyName}
                                                             onChange={(e) => updateMemberRow(member.id, 'companyName', e.target.value)}
@@ -752,18 +1056,21 @@ const WechatGroupCreatePage = () => {
                                                 <td className="p-6 border-r border-slate-50 min-w-[220px]">
                                                     <div className="space-y-4">
                                                         <Input 
+                                                            name={`weChatId_${member.id}`}
                                                             placeholder="WeChat ID" 
                                                             value={member.weChatId}
                                                             onChange={(e) => updateMemberRow(member.id, 'weChatId', e.target.value)}
                                                             className="h-9 text-[11px] font-black text-blue-600 rounded-lg bg-blue-50/30 border-blue-100"
                                                         />
                                                         <Input 
+                                                            name={`mobile_${member.id}`}
                                                             placeholder="Mobile No." 
                                                             value={member.mobile}
                                                             onChange={(e) => updateMemberRow(member.id, 'mobile', e.target.value)}
                                                             className="h-9 text-[11px] font-bold rounded-lg"
                                                         />
                                                         <Input 
+                                                            name={`whatsapp_${member.id}`}
                                                             placeholder="WhatsApp No." 
                                                             value={member.whatsapp}
                                                             onChange={(e) => updateMemberRow(member.id, 'whatsapp', e.target.value)}
@@ -774,6 +1081,7 @@ const WechatGroupCreatePage = () => {
                                                 <td className="p-6 border-r border-slate-50 min-w-[220px]">
                                                     <div className="space-y-4">
                                                         <Input 
+                                                            name={`location_${member.id}`}
                                                             placeholder="City / Province" 
                                                             value={member.location}
                                                             onChange={(e) => updateMemberRow(member.id, 'location', e.target.value)}
@@ -875,7 +1183,9 @@ const WechatGroupCreatePage = () => {
                             <Info size={20} />
                         </div>
                         <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Creation Mode</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                {groupId ? 'Intelligence Update Mode' : 'Active Creation Mode'}
+                            </p>
                             <p className="text-sm font-bold text-slate-700">Multi-Entity Sync Protocol Active</p>
                         </div>
                     </div>

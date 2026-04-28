@@ -45,6 +45,15 @@ const discoverRoutes = () => {
     }
 };
 
+import Customer from '../models/customer.model.js';
+import { Item } from '../models/item.model.js';
+import { SalesOrder } from '../models/salesOrder.model.js';
+import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { PurchaseOrder } from '../models/purchaseOrder.model.js';
+import { Task } from '../models/task.model.js';
+import { WeChatGroup } from '../models/weChatGroup.model.js';
+import { StockLedger } from '../models/stockLedger.model.js';
+
 export const getSystemDiscovery = asyncHandler(async (req, res) => {
     const models = getModels();
     const backendRoutes = discoverRoutes();
@@ -56,9 +65,45 @@ export const getSystemDiscovery = asyncHandler(async (req, res) => {
     } catch (e) {}
 
     // Check DB status
-
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    const dbName = mongoose.connection.name || 'Unknown';
+    const environment = process.env.NODE_ENV === 'production' ? 'Production' : 'Local Development';
     
+    let dbCounts = {};
+    if (mongoose.connection.readyState === 1) {
+        try {
+            const modelsToCount = [
+                { key: 'Customer', model: 'Customer' },
+                { key: 'Item', model: 'Item' },
+                { key: 'SalesOrder', model: 'SalesOrder' },
+                { key: 'SalesInvoice', model: 'SalesInvoice' },
+                { key: 'PurchaseOrder', model: 'PurchaseOrder' },
+                { key: 'Task', model: 'Task' },
+                { key: 'ChinaSourcingGroup', model: 'WeChatGroup' },
+                { key: 'StockLedger', model: 'StockLedger' },
+                { key: 'User', model: 'User' },
+                { key: 'AccountMaster', model: 'AccountMaster' }
+            ];
+
+            const countResults = await Promise.all(
+                modelsToCount.map(async (m) => {
+                    try {
+                        const count = await mongoose.model(m.model).countDocuments();
+                        return { key: m.key, count };
+                    } catch (err) {
+                        return { key: m.key, count: 0 };
+                    }
+                })
+            );
+
+            countResults.forEach(res => {
+                dbCounts[res.key] = res.count;
+            });
+        } catch (e) {
+            console.error('Failed to get DB counts', e);
+        }
+    }
+
     // Basic system info
     const systemInfo = {
         version: pkg.version || '1.0.0',
@@ -66,7 +111,11 @@ export const getSystemDiscovery = asyncHandler(async (req, res) => {
         platform: process.platform,
         uptime: Math.floor(process.uptime()),
         memoryUsage: process.memoryUsage(),
-        database: dbStatus
+        database: dbStatus,
+        databaseName: dbName,
+        databaseCounts: dbCounts,
+        environment: environment,
+        safetyStatus: dbStatus === 'Connected' ? 'Safe' : 'Critical'
     };
 
     res.json({

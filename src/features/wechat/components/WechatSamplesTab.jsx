@@ -6,6 +6,9 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { BrandedLoader } from '../../../components/ui/BrandedLoading';
 import { Input } from '../../../components/ui/Input';
+import SearchableSelect from '../../../components/ui/SearchableSelect';
+import { api } from '../../../services/weChatApi';
+import { User } from 'lucide-react';
 
 const TESTING_STATUSES = ['Pending', 'Under Testing', 'Approved', 'Failed', 'Hold'];
 
@@ -23,12 +26,30 @@ const WechatSamplesTab = ({ onSelectSample }) => {
         currency: 'RMB',
         courierName: '',
         trackingNumber: '',
-        testingStatus: 'Pending'
+        testingStatus: 'Pending',
+        remarks: ''
     });
+
+    const [availableProducts, setAvailableProducts] = useState([]);
+    const [availableContacts, setAvailableContacts] = useState([]);
 
     useEffect(() => {
         fetchSamples();
+        fetchDropdownData();
     }, []);
+
+    const fetchDropdownData = async () => {
+        try {
+            const [prodRes, contRes] = await Promise.all([
+                api.get('/wechat/products'),
+                api.get('/wechat/contacts')
+            ]);
+            setAvailableProducts(prodRes.data?.data || []);
+            setAvailableContacts(contRes.data?.data || []);
+        } catch (err) {
+            console.error('Failed to load dropdown data', err);
+        }
+    };
 
     const fetchSamples = async () => {
         try {
@@ -37,6 +58,38 @@ const WechatSamplesTab = ({ onSelectSample }) => {
             setSamples(res.data?.data || []);
         } catch (err) {
             toast.error('Failed to load samples');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSaveSample = async () => {
+        if (!newSample.productId || !newSample.contactId) {
+            toast.error('Product and Supplier are required');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await createWeChatSample(newSample);
+            toast.success('Sample recorded successfully');
+            setShowAddModal(false);
+            fetchSamples();
+            // Reset form
+            setNewSample({
+                productId: '',
+                contactId: '',
+                orderedDate: new Date().toISOString().split('T')[0],
+                quantity: 1,
+                samplePrice: 0,
+                currency: 'RMB',
+                courierName: '',
+                trackingNumber: '',
+                testingStatus: 'Pending',
+                remarks: ''
+            });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to save sample');
         } finally {
             setLoading(false);
         }
@@ -145,14 +198,104 @@ const WechatSamplesTab = ({ onSelectSample }) => {
                 )}
             </div>
 
-            {/* Add Sample Modal (Simplified for now) */}
+            {/* Add Sample Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 duration-200">
-                        <h3 className="text-2xl font-black text-slate-800 mb-6">Record New Sample</h3>
-                        <p className="text-slate-500 font-bold mb-8 italic">"Select product and supplier from the full interface to record details."</p>
-                        <div className="flex justify-end">
-                            <Button onClick={() => setShowAddModal(false)} className="bg-slate-900 text-white rounded-xl px-8 font-black">Close</Button>
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-2xl p-10 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800">Record R&D Sample</h3>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Order tracking and testing status</p>
+                            </div>
+                            <button onClick={() => setShowAddModal(false)} className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400">
+                                <XCircle size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Product Identity *</label>
+                                <SearchableSelect 
+                                    options={availableProducts.map(p => ({ value: p._id, label: p.productName, meta: p.partNumber }))}
+                                    value={newSample.productId}
+                                    onChange={(val) => setNewSample({...newSample, productId: val})}
+                                    placeholder="Select Product..."
+                                    style={{ height: '56px' }}
+                                />
+                            </div>
+
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Supplier / Contact *</label>
+                                <SearchableSelect 
+                                    options={availableContacts.map(c => ({ value: c._id, label: c.weChatDisplayName, meta: c.companyName }))}
+                                    value={newSample.contactId}
+                                    onChange={(val) => setNewSample({...newSample, contactId: val})}
+                                    placeholder="Select Supplier..."
+                                    style={{ height: '56px' }}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Ordered Date</label>
+                                <Input 
+                                    type="date"
+                                    value={newSample.orderedDate}
+                                    onChange={(e) => setNewSample({...newSample, orderedDate: e.target.value})}
+                                    className="h-14 rounded-2xl border-2 border-slate-100 font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Quantity</label>
+                                <Input 
+                                    type="number"
+                                    value={newSample.quantity}
+                                    onChange={(e) => setNewSample({...newSample, quantity: e.target.value})}
+                                    className="h-14 rounded-2xl border-2 border-slate-100 font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Courier Name</label>
+                                <Input 
+                                    placeholder="SF Express, DHL, etc."
+                                    value={newSample.courierName}
+                                    onChange={(e) => setNewSample({...newSample, courierName: e.target.value})}
+                                    className="h-14 rounded-2xl border-2 border-slate-100 font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Tracking Number</label>
+                                <Input 
+                                    placeholder="Tracking ID"
+                                    value={newSample.trackingNumber}
+                                    onChange={(e) => setNewSample({...newSample, trackingNumber: e.target.value})}
+                                    className="h-14 rounded-2xl border-2 border-slate-100 font-bold"
+                                />
+                            </div>
+
+                            <div className="space-y-2 col-span-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Internal Remarks</label>
+                                <textarea 
+                                    rows={3}
+                                    placeholder="Testing parameters, priority, etc."
+                                    value={newSample.remarks}
+                                    onChange={(e) => setNewSample({...newSample, remarks: e.target.value})}
+                                    className="w-full p-4 rounded-2xl border-2 border-slate-100 font-bold focus:border-purple-500 outline-none transition-all resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-4 mt-10">
+                            <Button variant="ghost" onClick={() => setShowAddModal(false)} className="rounded-xl px-8 font-bold">Cancel</Button>
+                            <Button 
+                                onClick={handleSaveSample} 
+                                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl px-12 h-14 font-black shadow-xl shadow-purple-100"
+                                isLoading={loading}
+                            >
+                                Save Sample Record
+                            </Button>
                         </div>
                     </div>
                 </div>

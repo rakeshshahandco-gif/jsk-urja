@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, User, Phone, MessageSquare, Building2, ChevronRight, Globe, Download, Mail } from 'lucide-react';
+import { Plus, Search, User, Phone, MessageSquare, Building2, ChevronRight, Globe, Download, Mail, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { getWeChatContacts, createWeChatContact } from '../../../services/weChatApi';
+import { getWeChatContacts, createWeChatContact, updateWeChatContact, deleteWeChatContact, api } from '../../../services/weChatApi';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
@@ -14,6 +14,8 @@ const WechatContactsTab = ({ onSelectContact }) => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingId, setEditingId] = useState(null);
     const [newContact, setNewContact] = useState({
         weChatDisplayName: '',
         contactPersonName: '',
@@ -45,15 +47,70 @@ const WechatContactsTab = ({ onSelectContact }) => {
         }
     };
 
-    const handleCreateContact = async (e) => {
-        e.preventDefault();
+    const handleEditContact = (contact) => {
+        setEditingId(contact._id);
+        setIsEditing(true);
+        setNewContact({
+            weChatDisplayName: contact.weChatDisplayName || '',
+            contactPersonName: contact.contactPersonName || '',
+            chineseName: contact.chineseName || '',
+            englishName: contact.englishName || '',
+            weChatId: contact.weChatId || '',
+            mobile: contact.mobile || '',
+            whatsapp: contact.whatsapp || '',
+            email: contact.email || '',
+            companyName: contact.companyName || '',
+            role: contact.role || 'Sales',
+            source: contact.source || 'WeChat',
+            language: contact.language || 'Chinese'
+        });
+        setShowAddModal(true);
+    };
+
+    const handleDeleteContact = async (e, id) => {
+        e.stopPropagation();
+        if (!window.confirm('Are you sure you want to delete this contact?')) return;
+        
         try {
-            await createWeChatContact(newContact);
-            toast.success('Contact created successfully');
-            setShowAddModal(false);
+            await api.delete(`/wechat/contacts/${id}`);
+            toast.success('Contact deleted successfully');
             fetchContacts();
         } catch (err) {
-            toast.error('Failed to create contact');
+            toast.error('Failed to delete contact');
+        }
+    };
+
+    const handleSubmitContact = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                await api.put(`/wechat/contacts/${editingId}`, newContact);
+                toast.success('Contact updated successfully');
+            } else {
+                await api.post('/wechat/contacts', newContact);
+                toast.success('Contact created successfully');
+            }
+            setShowAddModal(false);
+            setIsEditing(false);
+            setEditingId(null);
+            fetchContacts();
+            // Reset form
+            setNewContact({
+                weChatDisplayName: '',
+                contactPersonName: '',
+                chineseName: '',
+                englishName: '',
+                weChatId: '',
+                mobile: '',
+                whatsapp: '',
+                email: '',
+                companyName: '',
+                role: 'Sales',
+                source: 'WeChat',
+                language: 'Chinese'
+            });
+        } catch (err) {
+            toast.error(isEditing ? 'Failed to update contact' : 'Failed to create contact');
         }
     };
 
@@ -69,7 +126,28 @@ const WechatContactsTab = ({ onSelectContact }) => {
                     <Button variant="outline" className="rounded-xl border-2 font-bold flex items-center gap-2">
                         <Download size={18} /> Import
                     </Button>
-                    <Button onClick={() => setShowAddModal(true)} className="bg-slate-900 hover:bg-black text-white rounded-xl font-bold flex items-center gap-2 px-6 shadow-lg shadow-slate-200">
+                    <Button 
+                        onClick={() => {
+                            setIsEditing(false);
+                            setEditingId(null);
+                            setNewContact({
+                                weChatDisplayName: '',
+                                contactPersonName: '',
+                                chineseName: '',
+                                englishName: '',
+                                weChatId: '',
+                                mobile: '',
+                                whatsapp: '',
+                                email: '',
+                                companyName: '',
+                                role: 'Sales',
+                                source: 'WeChat',
+                                language: 'Chinese'
+                            });
+                            setShowAddModal(true);
+                        }} 
+                        className="bg-slate-900 hover:bg-black text-white rounded-xl font-bold flex items-center gap-2 px-6 shadow-lg shadow-slate-200"
+                    >
                         <Plus size={20} /> Add Contact
                     </Button>
                 </div>
@@ -108,8 +186,21 @@ const WechatContactsTab = ({ onSelectContact }) => {
                                 onClick={() => onSelectContact(contact)}
                                 className="bg-white border border-slate-200 rounded-[2rem] p-6 hover:shadow-xl hover:border-slate-400 transition-all cursor-pointer group relative overflow-hidden"
                             >
-                                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <ChevronRight className="text-slate-400" />
+                                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleEditContact(contact); }}
+                                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                        title="Edit Contact"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => handleDeleteContact(e, contact._id)}
+                                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                        title="Delete Contact"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 font-black text-xl">
@@ -149,10 +240,10 @@ const WechatContactsTab = ({ onSelectContact }) => {
             {/* Add Contact Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <form onSubmit={handleCreateContact} className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                    <form onSubmit={handleSubmitContact} className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="p-8 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="text-2xl font-black text-slate-800">New Supplier Contact</h3>
-                            <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">Register WeChat ID or Phone for tracking</p>
+                            <h3 className="text-2xl font-black text-slate-800">{isEditing ? 'Update Supplier Contact' : 'New Supplier Contact'}</h3>
+                            <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">{isEditing ? 'Modify individual profile details' : 'Register WeChat ID or Phone for tracking'}</p>
                         </div>
                         <div className="p-8 grid grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
                             <div className="col-span-2">
@@ -194,7 +285,9 @@ const WechatContactsTab = ({ onSelectContact }) => {
                         </div>
                         <div className="p-8 bg-slate-50 flex justify-end gap-4">
                             <Button type="button" variant="ghost" onClick={() => setShowAddModal(false)} className="font-bold">Cancel</Button>
-                            <Button type="submit" className="bg-slate-900 hover:bg-black text-white rounded-xl px-8 font-black shadow-lg shadow-slate-200">Register Contact</Button>
+                            <Button type="submit" className="bg-slate-900 hover:bg-black text-white rounded-xl px-8 font-black shadow-lg shadow-slate-200">
+                                {isEditing ? 'Save Changes' : 'Register Contact'}
+                            </Button>
                         </div>
                     </form>
                 </div>
