@@ -62,8 +62,24 @@ function isInterState(inv) {
   if (!posCode) {
     posCode = inv.billingStateCode || (inv.customerGstin || '').substring(0, 2);
   }
-  if (!posCode) return false; // Default to intra-state if unknown
+  if (!posCode) return false;
   return posCode !== OUR_STATE_CODE;
+}
+
+/**
+ * Robustly derives numeric sequence number from invoice object.
+ * Checks sequenceNumber field first, then parses numeric suffix from invoiceNumber.
+ */
+function getInvoiceSequence(inv) {
+  if (inv.sequenceNumber !== undefined && inv.sequenceNumber !== null && inv.sequenceNumber > 0) {
+    return Number(inv.sequenceNumber);
+  }
+  if (!inv.invoiceNumber) return 0;
+  // Handle 26-27/01, 26-27/010, etc. extract last numeric part
+  const parts = inv.invoiceNumber.split(/[/|-]/);
+  const lastPart = parts[parts.length - 1];
+  const num = parseInt(lastPart.replace(/\D/g, ''), 10);
+  return isNaN(num) ? 0 : num;
 }
 
 function isEstimateSeries(series) {
@@ -192,8 +208,11 @@ async function fetchInvoicesForPeriod(startDate, endDate) {
       { documentType: 'Estimate' },
       { gstApplicable: false },
     ]
-  }).select('_id');
-  const estimateSeriesIds = estimateSeries.map(s => s._id);
+  }).lean();
+  const estimateSeriesIds = [
+    ...estimateSeries.map(s => s._id),
+    ...estimateSeries.map(s => s._id.toString())
+  ];
 
   const query = {
     $or: [
@@ -227,7 +246,10 @@ async function fetchCancelledInvoicesForPeriod(startDate, endDate) {
       { gstApplicable: false },
     ]
   }).select('_id');
-  const estimateSeriesIds = estimateSeries.map(s => s._id);
+  const estimateSeriesIds = [
+    ...estimateSeries.map(s => s._id),
+    ...estimateSeries.map(s => s._id.toString())
+  ];
 
   const query = {
     $or: [
@@ -479,29 +501,51 @@ function buildHSNSummary(invoices, filterFn) {
   }));
 }
 
+/**
+ * Build Document Summary (Table 13)
+ * Calculated from all GST Tax Invoice documents for selected period and series.
+ */
 async function buildDocsSummary(startDate, endDate) {
-  // Get all GST-applicable series for the period
-  const allSeries = await InvoiceSeries.find({}).lean();
-  const gstSeries = allSeries.filter(s => !isEstimateSeries(s));
-
   const rows = [];
-  for (const series of gstSeries) {
+  const seriesList = await InvoiceSeries.find({ 
+    isEstimate: { $ne: true }, 
+    gstApplicable: { $ne: false },
+    documentType: { $nin: ['Estimate'] }
+  }).lean();
+
+  // Use robust date query similar to fetchInvoicesForPeriod
+  const dateQuery = {
+    $or: [
+      { invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+      {
+        $expr: {
+          $and: [
+            { $gte: ["$invoiceDate", String(startDate)] },
+            { $lte: ["$invoiceDate", String(endDate) + 'T23:59:59.999Z'] }
+          ]
+        }
+      }
+    ]
+  };
+
+  for (const series of seriesList) {
     // Find all invoices (including cancelled) for this series in the period
-    const allInvs = await SalesInvoice.find({
-      seriesId: series._id,
-      invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    const allInvs = await SalesInvoice.collection.find({
+      seriesId: { $in: [series._id, series._id.toString()] },
+      ...dateQuery,
       isDeleted: { $ne: true },
-    }).select('sequenceNumber status').lean();
+    }).project({ invoiceNumber: 1, sequenceNumber: 1, status: 1 }).toArray();
 
     if (allInvs.length === 0) continue;
 
-    const seqNums = allInvs.map(i => i.sequenceNumber).filter(n => n > 0);
+    // Use robust sequence detection
+    const seqNums = allInvs.map(i => getInvoiceSequence(i)).filter(n => n > 0);
     if (seqNums.length === 0) continue;
 
-    const from = Math.min(...seqNums);
-    const to = Math.max(...seqNums);
-    const total = to - from + 1;
-    const cancelled = allInvs.filter(i => i.status === 'Cancelled').length;
+    const minSeq = Math.min(...seqNums);
+    const maxSeq = Math.max(...seqNums);
+    const total = maxSeq - minSeq + 1;
+    const cancelledCount = allInvs.filter(i => i.status === 'Cancelled').length;
 
     let docType = 'Invoices for outward supply';
     if (series.documentType === 'Credit Note') docType = 'Credit Note';
@@ -509,16 +553,18 @@ async function buildDocsSummary(startDate, endDate) {
     else if (series.documentType === 'Bill of Supply') docType = 'Bill of Supply';
     else if (series.documentType === 'Delivery Challan') docType = 'Delivery Challan';
 
-    const fromNum = `${series.prefix || ''}${String(from).padStart(series.padLength || 5, '0')}`;
-    const toNum = `${series.prefix || ''}${String(to).padStart(series.padLength || 5, '0')}`;
+    // Construct From/To strings based on prefix and min/max seq
+    const prefix = series.prefix || '';
+    const fromNum = `${prefix}${String(minSeq).padStart(series.padLength || 0, '0')}`;
+    const toNum = `${prefix}${String(maxSeq).padStart(series.padLength || 0, '0')}`;
 
     rows.push({
       'Nature of Document': docType,
       'Sr. No. From': fromNum,
       'Sr. No. To': toNum,
       'Total Number': total,
-      'Cancelled': cancelled,
-      'Net Issued': total - cancelled,
+      'Cancelled': cancelledCount,
+      'Net Issued': total - cancelledCount,
     });
   }
   return rows;
@@ -639,6 +685,21 @@ function addSheetWithData(workbook, sheetName, columns, data) {
 
 export async function generateGSTR1Data(startDate, endDate) {
   const invoices = await fetchInvoicesForPeriod(startDate, endDate);
+  
+  // Numeric Sorting: Ensure 26-27/05 follows 26-27/04 and precedes 26-27/06
+  const sortFn = (a, b) => {
+    // Primary sort by date
+    const dateA = new Date(a.invoiceDate).getTime();
+    const dateB = new Date(b.invoiceDate).getTime();
+    if (dateA !== dateB) return dateA - dateB;
+    
+    // Secondary sort by numeric sequence
+    const seqA = getInvoiceSequence(a);
+    const seqB = getInvoiceSequence(b);
+    return seqA - seqB;
+  };
+  invoices.sort(sortFn);
+
   const company = await CompanyProfile.findOne().lean();
 
   const b2b = buildB2B(invoices);
@@ -670,7 +731,46 @@ export async function generateGSTR1Data(startDate, endDate) {
 
 export async function validateGSTR1(startDate, endDate) {
   const invoices = await fetchInvoicesForPeriod(startDate, endDate);
-  return validateInvoices(invoices);
+  const baseErrors = validateInvoices(invoices);
+
+  // Cross-check: Ensure all invoices in B2B/B2C are covered in Document Summary
+  const docs = await buildDocsSummary(startDate, endDate);
+  const docErrors = [];
+
+  for (const inv of invoices) {
+    const invSeq = getInvoiceSequence(inv);
+    let foundInSummary = false;
+    
+    // Check if invoice sequence falls within any range in docs summary
+    for (const docRow of docs) {
+      // Extract numeric suffix from range strings
+      const fromParts = docRow['Sr. No. From'].split(/[/|-]/);
+      const fromSeq = parseInt(fromParts[fromParts.length - 1].replace(/\D/g, ''), 10);
+      
+      const toParts = docRow['Sr. No. To'].split(/[/|-]/);
+      const toSeq = parseInt(toParts[toParts.length - 1].replace(/\D/g, ''), 10);
+      
+      if (invSeq >= fromSeq && invSeq <= toSeq) {
+        foundInSummary = true;
+        break;
+      }
+    }
+
+    if (!foundInSummary) {
+      docErrors.push({
+        documentType: 'Sales Invoice',
+        invoiceNo: inv.invoiceNumber,
+        date: formatDate(inv.invoiceDate),
+        customerName: inv.customerName,
+        errorType: 'Summary Mismatch',
+        severity: 'Blocking Error',
+        message: `Invoice exists in GSTR-1 data but missing from Document Summary (Table 13).`,
+        suggestedFix: 'Ensure invoice sequence number and series are correctly set.'
+      });
+    }
+  }
+
+  return [...baseErrors, ...docErrors];
 }
 
 export async function generateGSTR1Excel(startDate, endDate) {
