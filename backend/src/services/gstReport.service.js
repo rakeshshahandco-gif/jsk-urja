@@ -32,9 +32,14 @@ const STATE_CODE_MAP = {
   '97': 'Other Territory',
 };
 
-function placeOfSupplyLabel(stateCode) {
-  if (!stateCode) return '';
-  const code = String(stateCode).padStart(2, '0');
+function placeOfSupplyLabel(stateCode, inv = {}) {
+  let code = String(stateCode || '').padStart(2, '0');
+  if (code === '00' || !STATE_CODE_MAP[code]) {
+    // Fallback to billing state code or gstin
+    code = String(inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').padStart(2, '0');
+  }
+  if (code === '00') return '';
+  
   const name = STATE_CODE_MAP[code] || '';
   return name ? `${code}-${name}` : code;
 }
@@ -53,7 +58,11 @@ function isRegistered(inv) {
 }
 
 function isInterState(inv) {
-  const posCode = (inv.placeOfSupply || '').substring(0, 2);
+  let posCode = (inv.placeOfSupply || '').substring(0, 2);
+  if (!posCode) {
+    posCode = inv.billingStateCode || (inv.customerGstin || '').substring(0, 2);
+  }
+  if (!posCode) return false; // Default to intra-state if unknown
   return posCode !== OUR_STATE_CODE;
 }
 
@@ -63,6 +72,113 @@ function isEstimateSeries(series) {
   if (series.documentType === 'Estimate') return true;
   if (series.gstApplicable === false) return true;
   return false;
+}
+
+/**
+ * Robustly groups invoice amounts by GST rate, including freight.
+ * Supports multiple field names for legacy/mismatched records and calculates
+ * missing values from item details or falls back to invoice summary.
+ */
+function getRateGroups(inv) {
+  const groups = {};
+  const isInter = isInterState(inv);
+
+  // 1. Items
+  let totalItemsTaxable = 0;
+  for (const item of (inv.items || [])) {
+    const rate = Number(item.gstRate ?? item.gstPercent ?? 18);
+    if (!groups[rate]) {
+      groups[rate] = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+    }
+    
+    // Support multiple field names for taxable amount
+    let taxable = item.taxableAmount ?? item.taxableValue ?? item.taxableAmt ?? 0;
+    
+    // Fallback: Calculate from qty/rate if fields are missing/zero
+    if (taxable === 0 && (item.qty > 0 && item.rate > 0)) {
+      const base = item.qty * item.rate;
+      const disc = item.discountAmount || ((item.discountPercent || 0) / 100 * base);
+      taxable = base - disc;
+    }
+    
+    groups[rate].taxableValue += taxable;
+    totalItemsTaxable += taxable;
+
+    // Use specific tax fields or split total tax if missing
+    let igst = item.igstAmount ?? item.igstAmt ?? (isInter ? (item.taxAmount ?? item.taxAmt ?? 0) : 0);
+    let cgst = item.cgstAmount ?? item.cgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
+    let sgst = item.sgstAmount ?? item.sgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
+
+    // If tax fields are STILL 0 but rate and taxable > 0, calculate them
+    if (rate > 0 && taxable > 0 && igst === 0 && cgst === 0 && sgst === 0) {
+      if (isInter) igst = (taxable * rate / 100);
+      else {
+        cgst = (taxable * rate / 200);
+        sgst = (taxable * rate / 200);
+      }
+    }
+
+    groups[rate].igst += igst;
+    groups[rate].cgst += cgst;
+    groups[rate].sgst += sgst;
+    groups[rate].cess += item.cessAmount ?? item.cessAmt ?? 0;
+  }
+
+  // 2. Freight / Shipping
+  let fAmount = inv.freightAmount ?? inv.shippingAmount ?? inv.shippingCharges ?? 0;
+  if (fAmount > 0) {
+    const fRate = Number(inv.freightGstRate ?? inv.shippingGstRate ?? 0);
+    if (!groups[fRate]) {
+      groups[fRate] = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+    }
+    groups[fRate].taxableValue += fAmount;
+    
+    let fGst = inv.freightGstAmount ?? inv.shippingGstAmount ?? 0;
+    
+    // If freight GST is 0 but rate > 0, calculate it
+    if (fGst === 0 && fRate > 0) {
+      fGst = (fAmount * fRate / 100);
+    }
+
+    if (isInter) {
+      groups[fRate].igst += fGst;
+    } else {
+      groups[fRate].cgst += fGst / 2;
+      groups[fRate].sgst += fGst / 2;
+    }
+  }
+
+  // 3. Robust Fallback: If total taxable from items+freight is significantly 
+  // different from the invoice-level summary field, trust the summary.
+  const totalFromGroups = Object.values(groups).reduce((sum, g) => sum + g.taxableValue, 0);
+  const summaryTaxable = inv.totalTaxableAmount ?? inv.taxableValue ?? inv.taxableAmount ?? inv.subTotal ?? 0;
+
+  // If items failed to pull but summary exists, or if summary is > than our sum
+  if (summaryTaxable > totalFromGroups + 0.1) {
+    // If item-level sums were 0, we'll assign the whole summary to the first found rate (or 18%)
+    if (totalFromGroups < 0.1) {
+      const fallbackRate = (inv.items && inv.items[0] && (inv.items[0].gstRate || inv.items[0].gstPercent)) || 18;
+      if (!groups[fallbackRate]) {
+        groups[fallbackRate] = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+      }
+      groups[fallbackRate].taxableValue = summaryTaxable;
+      groups[fallbackRate].igst = inv.totalIgst ?? (isInter ? (inv.totalGst || 0) : 0);
+      groups[fallbackRate].cgst = inv.totalCgst ?? (!isInter ? ((inv.totalGst || 0) / 2) : 0);
+      groups[fallbackRate].sgst = inv.totalSgst ?? (!isInter ? ((inv.totalGst || 0) / 2) : 0);
+      
+      // Final attempt to calculate tax from summary if still zero
+      if (fallbackRate > 0 && groups[fallbackRate].taxableValue > 0 && 
+          groups[fallbackRate].igst === 0 && groups[fallbackRate].cgst === 0 && groups[fallbackRate].sgst === 0) {
+        if (isInter) groups[fallbackRate].igst = (summaryTaxable * fallbackRate / 100);
+        else {
+          groups[fallbackRate].cgst = (summaryTaxable * fallbackRate / 200);
+          groups[fallbackRate].sgst = (summaryTaxable * fallbackRate / 200);
+        }
+      }
+    }
+  }
+
+  return groups;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -80,7 +196,17 @@ async function fetchInvoicesForPeriod(startDate, endDate) {
   const estimateSeriesIds = estimateSeries.map(s => s._id);
 
   const query = {
-    invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    $or: [
+      { invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+      {
+        $expr: {
+          $and: [
+            { $gte: ["$invoiceDate", String(startDate)] },
+            { $lte: ["$invoiceDate", String(endDate) + 'T23:59:59.999Z'] }
+          ]
+        }
+      }
+    ],
     isDeleted: { $ne: true },
     status: { $ne: 'Cancelled' },
   };
@@ -89,7 +215,8 @@ async function fetchInvoicesForPeriod(startDate, endDate) {
     query.seriesId = { $nin: estimateSeriesIds };
   }
 
-  return SalesInvoice.find(query).sort({ invoiceDate: 1 }).lean();
+  // Using direct collection to bypass Mongoose schema casting (since some dates are strings in local DB)
+  return SalesInvoice.collection.find(query).sort({ invoiceDate: 1 }).toArray();
 }
 
 async function fetchCancelledInvoicesForPeriod(startDate, endDate) {
@@ -103,14 +230,24 @@ async function fetchCancelledInvoicesForPeriod(startDate, endDate) {
   const estimateSeriesIds = estimateSeries.map(s => s._id);
 
   const query = {
-    invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    $or: [
+      { invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+      {
+        $expr: {
+          $and: [
+            { $gte: ["$invoiceDate", String(startDate)] },
+            { $lte: ["$invoiceDate", String(endDate) + 'T23:59:59.999Z'] }
+          ]
+        }
+      }
+    ],
     status: 'Cancelled',
     isDeleted: { $ne: true },
   };
   if (estimateSeriesIds.length > 0) {
     query.seriesId = { $nin: estimateSeriesIds };
   }
-  return SalesInvoice.find(query).select('invoiceNumber sequenceNumber seriesId').lean();
+  return SalesInvoice.collection.find(query).project({ invoiceNumber: 1, sequenceNumber: 1, seriesId: 1 }).toArray();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -122,22 +259,9 @@ function buildB2B(invoices) {
   const b2bInvoices = invoices.filter(inv => isRegistered(inv));
 
   for (const inv of b2bInvoices) {
-    const posCode = (inv.placeOfSupply || '').substring(0, 2);
-    const isInter = posCode !== OUR_STATE_CODE;
-
-    // Group items by GST rate
-    const rateGroups = {};
-    for (const item of (inv.items || [])) {
-      const rate = item.gstRate || 0;
-      if (!rateGroups[rate]) {
-        rateGroups[rate] = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
-      }
-      rateGroups[rate].taxableValue += item.taxableAmount || 0;
-      rateGroups[rate].igst += item.igstAmount || 0;
-      rateGroups[rate].cgst += item.cgstAmount || 0;
-      rateGroups[rate].sgst += item.sgstAmount || 0;
-      rateGroups[rate].cess += item.cessAmount || 0;
-    }
+    const posCode = (inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').substring(0, 2);
+    const isInter = isInterState(inv);
+    const rateGroups = getRateGroups(inv);
 
     for (const [rate, totals] of Object.entries(rateGroups)) {
       rows.push({
@@ -145,8 +269,8 @@ function buildB2B(invoices) {
         'Receiver Name': inv.customerName || '',
         'Invoice Number': inv.invoiceNumber || '',
         'Invoice date': formatDate(inv.invoiceDate),
-        'Invoice Value': Number((inv.grandTotal || 0).toFixed(2)),
-        'Place Of Supply': placeOfSupplyLabel(posCode),
+        'Invoice Value': Number((inv.grandTotal || inv.roundedTotal || 0).toFixed(2)),
+        'Place Of Supply': placeOfSupplyLabel(posCode, inv),
         'Reverse Charge': inv.reverseCharge ? 'Y' : 'N',
         'Applicable % of Tax Rate': '',
         'Invoice Type': inv.invoiceType || 'Regular',
@@ -168,29 +292,19 @@ function buildB2CL(invoices) {
   const b2clInvoices = invoices.filter(inv =>
     !isRegistered(inv) &&
     isInterState(inv) &&
-    (inv.grandTotal || 0) > B2CL_THRESHOLD
+    (inv.grandTotal || inv.roundedTotal || 0) > B2CL_THRESHOLD
   );
 
   for (const inv of b2clInvoices) {
-    const posCode = (inv.placeOfSupply || '').substring(0, 2);
-
-    const rateGroups = {};
-    for (const item of (inv.items || [])) {
-      const rate = item.gstRate || 0;
-      if (!rateGroups[rate]) {
-        rateGroups[rate] = { taxableValue: 0, igst: 0, cess: 0 };
-      }
-      rateGroups[rate].taxableValue += item.taxableAmount || 0;
-      rateGroups[rate].igst += item.igstAmount || 0;
-      rateGroups[rate].cess += item.cessAmount || 0;
-    }
+    const posCode = (inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').substring(0, 2);
+    const rateGroups = getRateGroups(inv);
 
     for (const [rate, totals] of Object.entries(rateGroups)) {
       rows.push({
         'Invoice Number': inv.invoiceNumber || '',
         'Invoice date': formatDate(inv.invoiceDate),
-        'Invoice Value': Number((inv.grandTotal || 0).toFixed(2)),
-        'Place Of Supply': placeOfSupplyLabel(posCode),
+        'Invoice Value': Number((inv.grandTotal || inv.roundedTotal || 0).toFixed(2)),
+        'Place Of Supply': placeOfSupplyLabel(posCode, inv),
         'Applicable % of Tax Rate': '',
         'Rate': Number(rate),
         'Taxable Value': Number(totals.taxableValue.toFixed(2)),
@@ -204,26 +318,26 @@ function buildB2CL(invoices) {
 }
 
 function buildB2CS(invoices) {
-  // B2CS = all intra-state unregistered + inter-state unregistered ≤ ₹1 Lakh
+  // B2CS = all intra-state unregistered + inter-state unregistered ≤ B2CL_THRESHOLD
   const b2csInvoices = invoices.filter(inv => {
     if (isRegistered(inv)) return false;
-    if (isInterState(inv) && (inv.grandTotal || 0) > B2CL_THRESHOLD) return false;
+    if (isInterState(inv) && (inv.grandTotal || inv.roundedTotal || 0) > B2CL_THRESHOLD) return false;
     return true;
   });
 
-  // Group by: Type (OE = outward / export, not relevant here), Place of Supply, Rate
+  // Group by: Place of Supply, Rate
   const groups = {};
   for (const inv of b2csInvoices) {
-    const posCode = (inv.placeOfSupply || '').substring(0, 2);
-    const isInter = posCode !== OUR_STATE_CODE;
+    const posCode = (inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').substring(0, 2);
+    const isInter = isInterState(inv);
+    const rateGroups = getRateGroups(inv);
 
-    for (const item of (inv.items || [])) {
-      const rate = item.gstRate || 0;
+    for (const [rate, totals] of Object.entries(rateGroups)) {
       const key = `${posCode}|${rate}`;
       if (!groups[key]) {
         groups[key] = {
           posCode,
-          rate,
+          rate: Number(rate),
           taxableValue: 0,
           igst: 0,
           cgst: 0,
@@ -232,17 +346,17 @@ function buildB2CS(invoices) {
           isInter,
         };
       }
-      groups[key].taxableValue += item.taxableAmount || 0;
-      groups[key].igst += item.igstAmount || 0;
-      groups[key].cgst += item.cgstAmount || 0;
-      groups[key].sgst += item.sgstAmount || 0;
-      groups[key].cess += item.cessAmount || 0;
+      groups[key].taxableValue += totals.taxableValue;
+      groups[key].igst += totals.igst;
+      groups[key].cgst += totals.cgst;
+      groups[key].sgst += totals.sgst;
+      groups[key].cess += totals.cess;
     }
   }
 
   return Object.values(groups).map(g => ({
     'Type': 'OE',
-    'Place Of Supply': placeOfSupplyLabel(g.posCode),
+    'Place Of Supply': placeOfSupplyLabel(g.posCode, { billingStateCode: g.posCode }),
     'Applicable % of Tax Rate': '',
     'Rate': g.rate,
     'Taxable Value': Number(g.taxableValue.toFixed(2)),
@@ -259,17 +373,24 @@ function buildHSNSummary(invoices, filterFn) {
   const hsnGroups = {};
 
   for (const inv of filtered) {
+    const posCode = (inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').substring(0, 2);
+    const isInter = isInterState(inv);
+    const rateGroups = getRateGroups(inv);
+
+    // HSN grouping still requires item-level detail for HSN codes.
+    // If freight is involved, we might need to attribute it to an HSN.
+    // Usually, freight is added to the highest value item's HSN or reported separately.
+    // Here we'll attribute it to the first item's HSN for simplicity, or 9965 (Freight HSN).
+
     for (const item of (inv.items || [])) {
-      const hsn = item.hsnCode || '';
-      const rate = item.gstRate || 0;
+      const hsn = item.hsnCode || '99';
+      const rate = Number(item.gstRate ?? item.gstPercent ?? 18);
       const key = `${hsn}|${rate}`;
-      const posCode = (inv.placeOfSupply || '').substring(0, 2);
-      const isInter = posCode !== OUR_STATE_CODE;
 
       if (!hsnGroups[key]) {
         hsnGroups[key] = {
           hsn,
-          description: item.itemName || '',
+          description: item.itemName || 'Goods/Services',
           uqc: item.uqc || item.uom || 'NOS',
           totalQty: 0,
           totalValue: 0,
@@ -281,13 +402,65 @@ function buildHSNSummary(invoices, filterFn) {
           cess: 0,
         };
       }
+      
+      let taxable = item.taxableAmount ?? item.taxableValue ?? item.taxableAmt ?? 0;
+      // Fallback: qty * rate
+      if (taxable === 0 && item.qty > 0 && item.rate > 0) {
+        const base = item.qty * item.rate;
+        const disc = item.discountAmount || ((item.discountPercent || 0) / 100 * base);
+        taxable = base - disc;
+      }
+
+      let igst = item.igstAmount ?? item.igstAmt ?? (isInter ? (item.taxAmount ?? item.taxAmt ?? 0) : 0);
+      let cgst = item.cgstAmount ?? item.cgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
+      let sgst = item.sgstAmount ?? item.sgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
+
+      // Recalculate if missing
+      if (rate > 0 && taxable > 0 && igst === 0 && cgst === 0 && sgst === 0) {
+        if (isInter) igst = (taxable * rate / 100);
+        else {
+          cgst = (taxable * rate / 200);
+          sgst = (taxable * rate / 200);
+        }
+      }
+
+      const cess = item.cessAmount ?? item.cessAmt ?? 0;
+
       hsnGroups[key].totalQty += item.qty || 0;
-      hsnGroups[key].totalValue += item.totalAmount || 0;
-      hsnGroups[key].taxableValue += item.taxableAmount || 0;
-      hsnGroups[key].igst += isInter ? (item.igstAmount || 0) : 0;
-      hsnGroups[key].cgst += !isInter ? (item.cgstAmount || 0) : 0;
-      hsnGroups[key].sgst += !isInter ? (item.sgstAmount || 0) : 0;
-      hsnGroups[key].cess += item.cessAmount || 0;
+      hsnGroups[key].totalValue += (taxable + igst + cgst + sgst + cess);
+      hsnGroups[key].taxableValue += taxable;
+      hsnGroups[key].igst += igst;
+      hsnGroups[key].cgst += cgst;
+      hsnGroups[key].sgst += sgst;
+      hsnGroups[key].cess += cess;
+    }
+
+    // Add freight to HSN summary (using 9965 for Freight)
+    let fAmount = inv.freightAmount ?? inv.shippingAmount ?? inv.shippingCharges ?? 0;
+    if (fAmount > 0) {
+      const hsn = '9965';
+      const fRate = Number(inv.freightGstRate ?? inv.shippingGstRate ?? 0);
+      const key = `${hsn}|${fRate}`;
+      if (!hsnGroups[key]) {
+        hsnGroups[key] = {
+          hsn, description: 'Freight / Shipping', uqc: 'OTH-OTHERS',
+          totalQty: 0, totalValue: 0, rate: fRate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0
+        };
+      }
+      
+      let fGst = inv.freightGstAmount ?? inv.shippingGstAmount ?? 0;
+      if (fGst === 0 && fRate > 0) {
+        fGst = (fAmount * fRate / 100);
+      }
+
+      hsnGroups[key].totalValue += (fAmount + fGst);
+      hsnGroups[key].taxableValue += fAmount;
+      if (isInter) {
+        hsnGroups[key].igst += fGst;
+      } else {
+        hsnGroups[key].cgst += fGst / 2;
+        hsnGroups[key].sgst += fGst / 2;
+      }
     }
   }
 
@@ -427,9 +600,19 @@ function validateInvoices(invoices) {
       errors.push({ ...base, errorType: 'Invalid E-Commerce GSTIN', severity: 'Warning', message: `E-Commerce GSTIN "${inv.ecommerceGstin}" is invalid`, suggestedFix: 'Correct or remove the E-Commerce GSTIN' });
     }
 
-    // 9. Missing taxable value
-    if (!inv.totalTaxableAmount && inv.totalTaxableAmount !== 0) {
-      errors.push({ ...base, errorType: 'Missing Taxable Value', severity: 'Blocking Error', message: 'Invoice has no taxable amount', suggestedFix: 'Recalculate invoice totals' });
+    // 9. Missing taxable value (Only for GST-applicable invoices)
+    const rateGroups = getRateGroups(inv);
+    const calculatedTaxable = Object.values(rateGroups).reduce((sum, g) => sum + g.taxableValue, 0);
+    const invoiceValue = inv.grandTotal || inv.roundedTotal || 0;
+
+    if (inv.gstApplicable !== false && invoiceValue > 0 && calculatedTaxable === 0) {
+      errors.push({
+        ...base,
+        errorType: 'Missing Taxable Value',
+        severity: 'Blocking Error',
+        message: `Taxable value/GST amount not found for invoice no. ${inv.invoiceNumber}`,
+        suggestedFix: 'Recalculate invoice totals or check item taxable amounts. Ensure items have rate, qty, and GST percentage.'
+      });
     }
   }
 
