@@ -23,6 +23,7 @@ export default function InvoiceSeriesPage() {
         isDefault: false, 
         isEstimate: false, 
         description: '',
+        documentType: '',
         resetSequence: false
     });
     const [saving, setSaving] = useState(false);
@@ -48,6 +49,7 @@ export default function InvoiceSeriesPage() {
             isDefault: false, 
             isEstimate: false,
             description: '',
+            documentType: '',
             resetSequence: false
         }); 
         setShowModal(true); 
@@ -64,6 +66,7 @@ export default function InvoiceSeriesPage() {
             isDefault: !!s.isDefault,
             isEstimate: !!s.isEstimate,
             description: s.description || '',
+            documentType: s.documentType || '',
             resetSequence: false
         });
         setShowModal(true);
@@ -124,6 +127,7 @@ export default function InvoiceSeriesPage() {
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Start: <strong>{s.startNumber}</strong> · Pad: <strong>{s.padLength}</strong> digits</div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Last Used: <strong style={{ color: s.currentNumber > 0 ? '#374151' : '#9ca3af' }}>{s.currentNumber > 0 ? `${s.prefix}${String(s.currentNumber).padStart(s.padLength, '0')}` : 'None yet'}</strong></div>
                                 <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Tax Mode: <strong style={{ color: s.gstApplicable ? '#0d9488' : '#7c3aed' }}>{s.gstApplicable ? 'GST Invoicing' : 'Without GST'}</strong></div>
+                                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>Type: <strong style={{ color: '#374151' }}>{s.documentType || 'Regular'}</strong></div>
                                 <div style={{ fontSize: 13, color: s.isActive ? '#16a34a' : '#dc2626', fontWeight: 600, marginBottom: 12 }}>{s.isActive ? '● Active' : '○ Inactive'}</div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <button onClick={() => openEdit(s)} style={{ flex: 1, padding: '7px 0', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', color: '#374151', fontWeight: 600, fontSize: 12 }}>Edit</button>
@@ -175,6 +179,18 @@ export default function InvoiceSeriesPage() {
                             <div>
                                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Description</label>
                                 <textarea value={form.description} onChange={e => f('description', e.target.value)} style={{ ...inp, height: 60, resize: 'vertical' }} />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Document Type</label>
+                                <select value={form.documentType} onChange={e => f('documentType', e.target.value)} style={inp}>
+                                    <option value="">Select Type</option>
+                                    <option value="Tax Invoice">Tax Invoice</option>
+                                    <option value="Credit Note">Credit Note</option>
+                                    <option value="Debit Note">Debit Note</option>
+                                    <option value="Bill of Supply">Bill of Supply</option>
+                                    <option value="Estimate">Estimate</option>
+                                    <option value="Delivery Challan">Delivery Challan</option>
+                                </select>
                             </div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 20px' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>

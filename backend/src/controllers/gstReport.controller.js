@@ -2,7 +2,8 @@
  * GSTR-1 Report Controller
  * Endpoints: preview, validate, generate Excel download
  */
-import { generateGSTR1Data, validateGSTR1, generateGSTR1Excel } from '../services/gstReport.service.js';
+import { generateGSTR1Data, validateGSTR1, generateGSTR1Excel, generateGSTR3BData, reconcileGSTR1vs3B } from '../services/gstReport.service.js';
+import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import Customer from '../models/customer.model.js';
@@ -207,3 +208,87 @@ export async function syncMissingPos(req, res) {
   }
 }
 
+/**
+ * GET /api/v1/gst-reports/gstr3b-summary
+ * Query: startDate, endDate (YYYY-MM-DD)
+ */
+export async function getGSTR3BSummary(req, res) {
+  try {
+    let { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    }
+
+    const data = await generateGSTR3BData(startDate, endDate);
+    const reconciliation = await reconcileGSTR1vs3B(startDate, endDate);
+    
+    res.json({ success: true, data, reconciliation });
+  } catch (error) {
+    console.error('[GSTR3B] Summary error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * POST /api/v1/gst-reports/gstr3b-adjustment
+ * Save or update manual adjustments for a period
+ */
+export async function saveGSTR3BAdjustment(req, res) {
+  try {
+    const { financialYear, month, ...adjustments } = req.body;
+    
+    if (!financialYear || !month) {
+      return res.status(400).json({ success: false, message: 'Financial Year and Month are required' });
+    }
+
+    let adj = await Gstr3bAdjustment.findOne({ financialYear, month });
+    
+    const oldValues = adj ? adj.toObject() : {};
+    
+    if (!adj) {
+      adj = new Gstr3bAdjustment({ financialYear, month });
+    }
+
+    // Update fields
+    if (adjustments.table4) adj.table4 = adjustments.table4;
+    if (adjustments.table5) adj.table5 = adjustments.table5;
+    if (adjustments.table51) adj.table51 = adjustments.table51;
+    if (adjustments.table61) adj.table61 = adjustments.table61;
+    if (adjustments.remarks) adj.remarks = adjustments.remarks;
+
+    // Audit Log
+    adj.auditLog.push({
+      action: oldValues._id ? 'UPDATE' : 'CREATE',
+      performedBy: req.user.id,
+      timestamp: new Date(),
+      oldValues: oldValues,
+      newValues: adjustments,
+      reason: req.body.reason || 'Manual Adjustment'
+    });
+
+    await adj.save();
+    res.json({ success: true, data: adj });
+  } catch (error) {
+    console.error('[GSTR3B] Save adjustment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * GET /api/v1/gst-reports/gstr3b-adjustment
+ */
+export async function getGSTR3BAdjustment(req, res) {
+  try {
+    const { financialYear, month } = req.query;
+    if (!financialYear || !month) {
+      return res.status(400).json({ success: false, message: 'Financial Year and Month are required' });
+    }
+    const data = await Gstr3bAdjustment.findOne({ financialYear, month }).lean();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}

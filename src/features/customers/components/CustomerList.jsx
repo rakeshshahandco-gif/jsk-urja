@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, useModal } from '@/components/ui';
@@ -18,13 +19,18 @@ export const CustomerList = () => {
     const { openModal, closeModal } = useModal();
     const navigate = useNavigate();
 
-    // State management
+    // Persistent Filter State
+    const { filters, setFilter, resetFilters } = useFilterPersistence('crm-customers', {
+        searchTerm: '',
+        statusFilter: '',
+        currentPage: 1
+    });
+
+    const { searchTerm, statusFilter, currentPage } = filters;
+
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalResults, setTotalResults] = useState(0);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -175,13 +181,13 @@ export const CustomerList = () => {
     };
 
     const handleSearch = (e) => {
-        setSearchTerm(e.target.value);
-        setCurrentPage(1); // Reset to first page on search
+        setFilter('searchTerm', e.target.value);
+        setFilter('currentPage', 1);
     };
 
     const handleStatusFilter = (e) => {
-        setStatusFilter(e.target.value);
-        setCurrentPage(1); // Reset to first page on filter
+        setFilter('statusFilter', e.target.value);
+        setFilter('currentPage', 1);
     };
 
     const getPrimaryContact = (contactPersons) => {
@@ -256,6 +262,14 @@ export const CustomerList = () => {
                     <option value="running_low">Running Low</option>
                     <option value="inactive">Inactive</option>
                 </select>
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={resetFilters}
+                    style={{ color: '#64748b', fontSize: '12px', marginLeft: 'auto' }}
+                >
+                    Reset Filters
+                </Button>
             </div>
 
             {/* Content Section */}

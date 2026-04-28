@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload, ArrowUp, ArrowDown, FileDown, FileText } from 'lucide-react';
 import { getItems, deleteItem, exportItemsExcel, exportItemsPDF, importItemsExcel, exportItemTemplate } from '@/services/itemApi';
@@ -62,24 +63,26 @@ const ItemListPage = () => {
     const [loading, setLoading] = useState(true);
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
-    const [search, setSearch] = useState('');
-    const [catFilter, setCatFilter] = useState('');
-    const [typeFilter, setTypeFilter] = useState('');
-    const [groupFilter, setGroupFilter] = useState('');
-    const [activeFilter, setActiveFilter] = useState('true');
-    const [sortBy, setSortBy] = useState('itemCode:asc');
-    const [page, setPage] = useState(1);
-    const [meta, setMeta] = useState({ total: 0, pages: 1 });
-    const [limit, setLimit] = useState(() => {
-        const savedLimit = localStorage.getItem('itemMasterLimit');
-        return savedLimit ? parseInt(savedLimit, 10) : 25;
+
+    // Persistent Filter State
+    const { filters, setFilter, resetFilters } = useFilterPersistence('inventory-items', {
+        search: '',
+        catFilter: '',
+        typeFilter: '',
+        groupFilter: '',
+        activeFilter: 'true',
+        sortBy: 'itemCode:asc',
+        page: 1,
+        limit: 25
     });
+
+    const { search, catFilter, typeFilter, groupFilter, activeFilter, sortBy, page, limit } = filters;
+    const [meta, setMeta] = useState({ total: 0, pages: 1 });
 
     const handleLimitChange = (e) => {
         const newLimit = parseInt(e.target.value);
-        setLimit(newLimit);
-        setPage(1);
-        localStorage.setItem('itemMasterLimit', newLimit);
+        setFilter('limit', newLimit);
+        setFilter('page', 1);
     };
 
     const load = useCallback(async () => {
@@ -328,23 +331,23 @@ const ItemListPage = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
                     <Search size={11} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input style={s.inp} placeholder="Search code, name, HSN…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+                    <input style={s.inp} placeholder="Search code, name, HSN…" value={search} onChange={e => { setFilter('search', e.target.value); setFilter('page', 1); }} />
                 </div>
-                <select style={s.sel} value={catFilter} onChange={e => { setCatFilter(e.target.value); setPage(1); }}>
+                <select style={s.sel} value={catFilter} onChange={e => { setFilter('catFilter', e.target.value); setFilter('page', 1); }}>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
-                <select style={s.sel} value={groupFilter} onChange={e => { setGroupFilter(e.target.value); setPage(1); }}>
+                <select style={s.sel} value={groupFilter} onChange={e => { setFilter('groupFilter', e.target.value); setFilter('page', 1); }}>
                     {groups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
                 </select>
-                <select style={s.sel} value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1); }}>
+                <select style={s.sel} value={typeFilter} onChange={e => { setFilter('typeFilter', e.target.value); setFilter('page', 1); }}>
                     {types.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
-                <select style={s.sel} value={activeFilter} onChange={e => { setActiveFilter(e.target.value); setPage(1); }}>
+                <select style={s.sel} value={activeFilter} onChange={e => { setFilter('activeFilter', e.target.value); setFilter('page', 1); }}>
                     <option value="true">Active</option>
                     <option value="false">Inactive</option>
                     <option value="">All Status</option>
                 </select>
-                <select style={s.sel} value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }}>
+                <select style={s.sel} value={sortBy} onChange={e => { setFilter('sortBy', e.target.value); setFilter('page', 1); }}>
                     <option value="itemCode:asc">Sort: Item Code (A-Z)</option>
                     <option value="itemName:asc">Sort: Item Name (A-Z)</option>
                     <option value="itemGroupName:asc">Sort: Group (A-Z)</option>
@@ -352,6 +355,13 @@ const ItemListPage = () => {
                     <option value="valuationRate:desc">Sort: Rate (High-Low)</option>
                     <option value="valuationRate:asc">Sort: Rate (Low-High)</option>
                 </select>
+
+                <button 
+                    onClick={resetFilters}
+                    style={{ ...s.sel, backgroundImage: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 700, width: 'auto', padding: '0 12px', minWidth: 'unset' }}
+                >
+                    <RotateCcw size={12} style={{ marginRight: 4 }} /> Reset
+                </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                     <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Show:</span>
                     <select style={{ ...s.sel, width: 65, minWidth: 'auto', paddingRight: 20 }} value={limit} onChange={handleLimitChange}>

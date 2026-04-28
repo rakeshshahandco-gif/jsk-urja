@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { Search, RotateCcw, ChevronLeft, ChevronRight, LayoutList, Zap, Plus } from 'lucide-react';
 import { apiClient as api } from '@/lib/apiClient';
@@ -59,22 +60,33 @@ const ManageTasksPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    const [viewMode, setViewMode] = useState('priority');
-    const [selectedTaskId, setSelectedTaskId] = useState(null);
-    const [activeTab, setActiveTab] = useState('overdue');
+    // Persistent Filter State
+    const { filters, setFilter, resetFilters } = useFilterPersistence('crm-tasks', {
+        viewMode: 'priority',
+        activeTab: 'overdue',
+        searchTerm: '',
+        priorityFilter: '',
+        groupFilter: '',
+        assigneeFilter: '',
+        createdByFilter: '',
+        dateFrom: '',
+        dateTo: '',
+        page: 1,
+        limit: 25
+    });
+
+    const { 
+        viewMode, activeTab, searchTerm, priorityFilter, groupFilter, 
+        assigneeFilter, createdByFilter, dateFrom, dateTo, page, limit 
+    } = filters;
+
     const [loading, setLoading] = useState(true);
     const [tasks, setTasks] = useState([]);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [priorityFilter, setPriorityFilter] = useState('');
-    const [groupFilter, setGroupFilter] = useState('');
-    const [assigneeFilter, setAssigneeFilter] = useState('');
-    const [createdByFilter, setCreatedByFilter] = useState('');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
-    const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0 });
+    const [total, setTotal] = useState(0);
     const [options, setOptions] = useState({ taskGroups: [], users: [] });
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
+    const [selectedTaskId, setSelectedTaskId] = useState(null);
 
     useEffect(() => {
         // Load users from report options
@@ -97,7 +109,7 @@ const ManageTasksPage = () => {
         try {
             const tab = TABS.find(t => t.id === activeTab)?.api || 'ALL';
             const params = {
-                page: pagination.page, limit: pagination.limit,
+                page, limit,
                 tab,
                 search: searchTerm || undefined,
                 priority: priorityFilter || undefined,
@@ -109,14 +121,14 @@ const ManageTasksPage = () => {
             };
             const res = await api.get('/reports/manage-tasks', { params });
             setTasks(res.data.data || []);
-            setPagination(p => ({ ...p, total: res.data.meta?.total || 0 }));
+            setTotal(res.data.meta?.total || 0);
         } catch {
             addToast('Failed to load tasks.', 'error');
             setTasks([]);
         } finally {
             setLoading(false);
         }
-    }, [activeTab, pagination.page, pagination.limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo]);
+    }, [activeTab, page, limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo, addToast]);
 
     useEffect(() => {
         if (viewMode === 'existing') {
@@ -129,14 +141,14 @@ const ManageTasksPage = () => {
             setTasks(prev => {
                 if (prev.find(t => t._id === payload.recordId)) return prev;
                 // Since data is now fully populated from backend, we can add it directly
-                return [payload.data, ...prev].slice(0, pagination.limit);
+                return [payload.data, ...prev].slice(0, limit);
             });
-            setPagination(p => ({ ...p, total: p.total + 1 }));
+            setTotal(p => p + 1);
         } else if (payload.action === 'update' || payload.action === 'assigned') {
             setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
         } else if (payload.action === 'delete') {
             setTasks(prev => prev.filter(t => t._id !== payload.recordId));
-            setPagination(p => ({ ...p, total: Math.max(0, p.total - 1) }));
+            setTotal(p => Math.max(0, p - 1));
         }
     });
 
@@ -151,13 +163,7 @@ const ManageTasksPage = () => {
         return () => socket.off('connect', handleReconnect);
     }, [socket, fetchTasks]);
 
-    const resetFilters = () => {
-        setSearchTerm(''); setPriorityFilter(''); setGroupFilter('');
-        setAssigneeFilter(''); setCreatedByFilter(''); setDateFrom(''); setDateTo('');
-        setPagination(p => ({ ...p, page: 1 }));
-    };
-
-    const handleTab = (id) => { setActiveTab(id); setPagination(p => ({ ...p, page: 1 })); };
+    const handleTab = (id) => { setFilter('activeTab', id); setFilter('page', 1); };
 
     const handleExtendConfirm = async (taskId, data) => {
         try { await extendTask(taskId, data); addToast('Task extended!', 'success'); fetchTasks(); }
@@ -176,7 +182,7 @@ const ManageTasksPage = () => {
         catch { addToast('Failed to delete task.', 'error'); }
     };
 
-    const totalPages = Math.ceil(pagination.total / pagination.limit) || 1;
+    const totalPages = Math.ceil(total / limit) || 1;
 
     return (
         <div style={{ padding: '16px 20px', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -192,7 +198,7 @@ const ManageTasksPage = () => {
                         return (
                             <button
                                 key={vm.id}
-                                onClick={() => setViewMode(vm.id)}
+                                onClick={() => setFilter('viewMode', vm.id)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 5,
                                     padding: '4px 12px', fontSize: 11, fontWeight: 700,
@@ -216,7 +222,7 @@ const ManageTasksPage = () => {
                         {TABS.map(t => (
                             <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
                                 {t.label}
-                                {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{pagination.total}</span>}
+                                {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{total}</span>}
                             </button>
                         ))}
                     </div>
@@ -241,26 +247,26 @@ const ManageTasksPage = () => {
 
             {/* ── LINE 2: Filters (shared for both views) ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <select style={s.sel} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
+                <select style={s.sel} value={groupFilter} onChange={e => setFilter('groupFilter', e.target.value)}>
                     <option value="">All Groups</option>
                     {options.taskGroups.map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
                 </select>
 
                 {user?.role === 'admin' && (
-                    <select style={s.sel} value={assigneeFilter} onChange={e => setAssigneeFilter(e.target.value)}>
+                    <select style={s.sel} value={assigneeFilter} onChange={e => setFilter('assigneeFilter', e.target.value)}>
                         <option value="">All Assignees</option>
                         {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
                     </select>
                 )}
 
                 {user?.role === 'admin' && (
-                    <select style={s.sel} value={createdByFilter} onChange={e => setCreatedByFilter(e.target.value)}>
+                    <select style={s.sel} value={createdByFilter} onChange={e => setFilter('createdByFilter', e.target.value)}>
                         <option value="">All Creators</option>
                         {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
                     </select>
                 )}
 
-                <select style={s.sel} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+                <select style={s.sel} value={priorityFilter} onChange={e => setFilter('priorityFilter', e.target.value)}>
                     <option value="">All Priority</option>
                     <option value="LOW">Low</option>
                     <option value="MEDIUM">Medium</option>
@@ -271,9 +277,9 @@ const ManageTasksPage = () => {
 
                 {viewMode === 'existing' && (
                     <>
-                        <input type="date" style={s.inp} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="From date" />
+                        <input type="date" style={s.inp} value={dateFrom} onChange={e => setFilter('dateFrom', e.target.value)} title="From date" />
                         <span style={{ fontSize: 10, color: '#9ca3af' }}>–</span>
-                        <input type="date" style={s.inp} value={dateTo} onChange={e => setDateTo(e.target.value)} title="To date" />
+                        <input type="date" style={s.inp} value={dateTo} onChange={e => setFilter('dateTo', e.target.value)} title="To date" />
                     </>
                 )}
 
@@ -283,7 +289,7 @@ const ManageTasksPage = () => {
                         style={{ ...s.inp, width: '100%', paddingLeft: 20 }}
                         placeholder="Search..."
                         value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
+                        onChange={e => setFilter('searchTerm', e.target.value)}
                     />
                 </div>
 

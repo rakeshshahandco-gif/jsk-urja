@@ -80,6 +80,10 @@ export const PATHS = {
         INVOICE_CLEANUP: '/sales/invoice-cleanup',
         RESEQUENCE_TOOL: '/sales/invoice-resequence',
         BULK_RENUMBER: '/sales/bulk-renumber',
+        CREDIT_NOTES: '/sales/credit-notes',
+        DEBIT_NOTES: '/sales/debit-notes',
+        CREDIT_NOTE_DETAIL: (id) => `/sales/credit-notes/${id}`,
+        DEBIT_NOTE_DETAIL: (id) => `/sales/debit-notes/${id}`,
     },
     SERVICE: {
         COMPLAINTS: '/service/complaints',

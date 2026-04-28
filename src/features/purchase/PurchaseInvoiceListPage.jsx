@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 import { useNavigate } from 'react-router-dom';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { getPurchaseInvoices, deletePurchaseInvoice, restorePurchaseInvoice } from '@/services/purchaseApi';
@@ -25,10 +26,17 @@ export default function PurchaseInvoiceListPage() {
     const navigate = useNavigate();
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [payFilter, setPayFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [viewMode, setViewMode] = useState('all'); // all, active, archived
+    
+    // Persistent Filter State
+    const { filters, setFilter, resetFilters } = useFilterPersistence('purchase-invoices', {
+        search: '',
+        payFilter: '',
+        statusFilter: '',
+        viewMode: 'all'
+    });
+    
+    const { search, payFilter, statusFilter, viewMode } = filters;
+    
     const { selectedFY } = useFinancialYear();
 
     const load = useCallback(() => {
@@ -75,39 +83,42 @@ export default function PurchaseInvoiceListPage() {
 
             {/* Visibility Filters */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#e2e8f0', padding: 4, borderRadius: 10, width: 'fit-content' }}>
-                <button onClick={() => setViewMode('all')}
+                <button onClick={() => setFilter('viewMode', 'all')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'all' ? '#fff' : 'transparent', color: viewMode === 'all' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     All Invoices
                 </button>
-                <button onClick={() => setViewMode('active')}
+                <button onClick={() => setFilter('viewMode', 'active')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'active' ? '#fff' : 'transparent', color: viewMode === 'active' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'active' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     Only Active
                 </button>
-                <button onClick={() => setViewMode('archived')}
+                <button onClick={() => setFilter('viewMode', 'archived')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'archived' ? '#fff' : 'transparent', color: viewMode === 'archived' ? '#dc2626' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'archived' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     Deleted
                 </button>
             </div>
 
             <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <input placeholder="Search invoice / supplier..." value={search} onChange={e => setSearch(e.target.value)}
+                <input placeholder="Search invoice / supplier..." value={search} onChange={e => setFilter('search', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: 260 }} />
-                <select value={payFilter} onChange={e => setPayFilter(e.target.value)}
+                <select value={payFilter} onChange={e => setFilter('payFilter', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Payment Status</option>
                     {['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
                 </select>
-                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                <select value={statusFilter} onChange={e => setFilter('statusFilter', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Statuses</option>
                     {['Draft', 'Confirmed', 'Posted', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
                 </select>
 
-                {viewMode === 'archived' && (
-                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', padding: '4px 10px', borderRadius: 6, border: '1px solid #fca5a5' }}>
-                        🛡️ ARCHIVE VIEW
-                    </span>
-                )}
+                <button onClick={resetFilters}
+                    style={{ 
+                        padding: '7px 14px', borderRadius: 7, background: '#f1f5f9', color: '#64748b', 
+                        border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                        marginLeft: 'auto'
+                    }}>
+                    Reset Filters
+                </button>
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>

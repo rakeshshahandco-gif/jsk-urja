@@ -68,6 +68,10 @@ import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import InvoiceCleanupPage from '@/features/sales/InvoiceCleanupPage';
 import ResequenceTool from '@/features/sales/ResequenceTool';
 import BulkInvoiceRenumber from '@/features/sales/BulkInvoiceRenumber';
+import CreditNoteListPage from '@/features/sales/pages/CreditNoteListPage';
+import DebitNoteListPage from '@/features/sales/pages/DebitNoteListPage';
+import CreditDebitNoteFormPage from '@/features/sales/pages/CreditDebitNoteFormPage';
+import CreditDebitNoteDetailPage from '@/features/sales/pages/CreditDebitNoteDetailPage';
 import EwayBillListPage from '@/features/eway-bill/EwayBillListPage';
 import EwayBillDraftPage from '@/features/eway-bill/EwayBillDraftPage';
 import TransporterListPage from '@/features/transporters/TransporterListPage';
@@ -163,6 +167,7 @@ import LateComingReport from '@/features/hr/components/LateComingReport';
 import MissingPunchReport from '@/features/hr/components/MissingPunchReport';
 import SalaryWorkingReport from '@/features/hr/components/SalaryWorkingReport';
 import GstrReportPage from '@/features/reports/GstrReportPage';
+import Gstr3bReportPage from '@/features/reports/Gstr3bReportPage';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -315,6 +320,7 @@ const AppLayout = () => {
                         <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
                         <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />
+                        <Route path="/reports/gstr3b" element={<ProtectedRoute requirePermission="admin.company_profile.view"><Gstr3bReportPage /></ProtectedRoute>} />
                         <Route path="/reports/task-reminders" element={<ProtectedRoute requirePermission="tasks"><TaskReminderReport /></ProtectedRoute>} />
                         <Route path="/task-chats" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
                         <Route path="/task-chats/:taskId" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
@@ -361,6 +367,14 @@ const AppLayout = () => {
                         <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
+                        <Route path="/sales/credit-notes" element={<ProtectedRoute requirePermission="sales"><CreditNoteListPage /></ProtectedRoute>} />
+                        <Route path="/sales/debit-notes" element={<ProtectedRoute requirePermission="sales"><DebitNoteListPage /></ProtectedRoute>} />
+                        <Route path="/sales/credit-notes/new" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/debit-notes/new" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/credit-notes/edit/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/debit-notes/edit/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/sales/credit-notes/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
+                        <Route path="/sales/debit-notes/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.INVOICE_SERIES} element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.BULK_RENUMBER} element={<ProtectedRoute requireRole="admin"><BulkInvoiceRenumber /></ProtectedRoute>} />

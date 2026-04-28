@@ -1,5 +1,6 @@
 import express from 'express';
 import productionPlanningRoute from './productionPlanning.routes.js';
+import creditDebitNoteRoute from './creditDebitNote.routes.js';
 import authRoute from './auth.routes.js';
 import userRoute from './user.routes.js';
 import customerRoute from './customer.routes.js';
@@ -214,6 +215,10 @@ const defaultRoutes = [
     {
         path: '/sales-invoices',
         route: salesInvoiceRoute,
+    },
+    {
+        path: '/credit-debit-notes',
+        route: creditDebitNoteRoute,
     },
     {
         path: '/invoice-series',

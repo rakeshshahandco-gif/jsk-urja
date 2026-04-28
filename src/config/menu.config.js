@@ -195,6 +195,8 @@ export const menuConfig = [
             { id: 'eway-bills', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'logistics-master', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
+            { id: 'credit-notes', title: 'Credit Notes', path: PATHS.SALES.CREDIT_NOTES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
+            { id: 'debit-notes', title: 'Debit Notes', path: PATHS.SALES.DEBIT_NOTES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
 
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
             { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
@@ -288,6 +290,7 @@ export const menuConfig = [
             { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
             { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
             { id: 'gstr1-export', title: '📄 GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gstr3b-compliance', title: '📊 GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
         ]
     },
     {

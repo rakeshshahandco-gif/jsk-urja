@@ -136,6 +136,7 @@ export default function GstrReportPage() {
   const [validation, setValidation] = useState(null);
   const [preview, setPreview] = useState(null);
   const [missingPosList, setMissingPosList] = useState(null);
+  const [gstr3bSummary, setGstr3bSummary] = useState(null);
 
 
   const range = fyToRange(fy, month);
@@ -201,6 +202,20 @@ export default function GstrReportPage() {
       toast.success('Preview loaded');
     } catch (e) {
       toast.error('Preview failed: ' + (e?.response?.data?.message || e.message));
+    } finally {
+      setLoading(l => ({ ...l, preview: false }));
+    }
+  }
+
+  async function handleGSTR3B() {
+    if (!range) return toast.error('Select FY and Month first');
+    setLoading(l => ({ ...l, preview: true }));
+    try {
+      const { data } = await api.get('/gst-reports/gstr3b-summary', { params: range });
+      setGstr3bSummary(data.data);
+      toast.success('GSTR-3B Summary loaded');
+    } catch (e) {
+      toast.error('GSTR-3B failed: ' + (e?.response?.data?.message || e.message));
     } finally {
       setLoading(l => ({ ...l, preview: false }));
     }
@@ -397,6 +412,21 @@ export default function GstrReportPage() {
           </button>
 
           <button
+            onClick={handleGSTR3B}
+            disabled={loading.preview}
+            style={{
+              background: loading.preview ? '#e2e8f0' : 'linear-gradient(135deg,#0d9488,#0f766e)',
+              color: loading.preview ? '#94a3b8' : '#fff',
+              border: 'none', borderRadius: '8px', padding: '11px 20px',
+              fontSize: '14px', fontWeight: 600, cursor: loading.preview ? 'wait' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}
+          >
+            {loading.preview ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle size={16} />}
+            GSTR-3B Summary
+          </button>
+
+          <button
             onClick={handleDownload}
             disabled={loading.download || (validation && blockingCount > 0)}
             title={validation && blockingCount > 0 ? 'Fix blocking errors before download' : ''}
@@ -481,6 +511,7 @@ export default function GstrReportPage() {
             <SummaryCard title="HSN B2B" value={preview.summary?.hsnB2BCount || 0} color="#16a34a" icon="📊" />
             <SummaryCard title="HSN B2C" value={preview.summary?.hsnB2CCount || 0} color="#d97706" icon="📈" />
             <SummaryCard title="Docs Series" value={preview.summary?.docsCount || 0} color="#dc2626" icon="📄" />
+            <SummaryCard title="CN/DN Rows" value={(preview.summary?.cdnrCount || 0) + (preview.summary?.cdnurCount || 0)} color="#db2777" icon="📜" />
           </div>
 
           {/* Sheet Tables */}
@@ -488,6 +519,16 @@ export default function GstrReportPage() {
             title="B2B – Registered Customers"
             data={preview.b2b}
             columns={['GSTIN/UIN of Recipient', 'Receiver Name', 'Invoice Number', 'Invoice date', 'Invoice Value', 'Place Of Supply', 'Rate', 'Taxable Value', 'Central Tax', 'State/UT Tax', 'Integrated Tax']}
+          />
+          <SheetPreviewTable
+            title="CDNR – Credit/Debit Notes (Registered)"
+            data={preview.cdnr}
+            columns={['GSTIN/UIN of Recipient', 'Receiver Name', 'Note Number', 'Note date', 'Note Type', 'Invoice Number', 'Invoice date', 'Note Value', 'Place Of Supply', 'Rate', 'Taxable Value', 'Integrated Tax', 'Central Tax', 'State/UT Tax']}
+          />
+          <SheetPreviewTable
+            title="CDNUR – Credit/Debit Notes (Unregistered)"
+            data={preview.cdnur}
+            columns={['Note Type', 'Note Number', 'Note date', 'Invoice Type', 'Invoice Number', 'Invoice date', 'Note Value', 'Place Of Supply', 'Rate', 'Taxable Value', 'Integrated Tax']}
           />
           <SheetPreviewTable
             title="B2CL – Inter-State Unregistered > ₹1 Lakh"
@@ -514,6 +555,58 @@ export default function GstrReportPage() {
             data={preview.docs}
             columns={['Nature of Document', 'Sr. No. From', 'Sr. No. To', 'Total Number', 'Cancelled', 'Net Issued']}
           />
+        </div>
+      )}
+
+      {/* GSTR-3B Summary */}
+      {gstr3bSummary && (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px 28px', marginTop: '24px', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b', margin: '0 0 20px 0' }}>
+            📊 GSTR-3B Liability Summary (Table 3.1)
+          </h3>
+          <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#475569' }}>Nature of Supplies</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#475569' }}>Total Taxable Value</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#475569' }}>Integrated Tax</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#475569' }}>Central Tax</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#475569' }}>State/UT Tax</th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#475569' }}>Cess</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>(a) Outward taxable supplies (other than zero rated, nil rated and exempted)</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.taxableValue)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.igst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.cgst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.sgst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.cess)}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>(b) Outward taxable supplies (zero rated)</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.taxableValue)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.igst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>—</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>—</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.cess)}</td>
+                </tr>
+                <tr style={{ background: '#f0fdf4' }}>
+                  <td style={{ padding: '12px', fontWeight: 700, color: '#166534' }}>Net Total Liability</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.taxableValue + gstr3bSummary.outwardZeroRated.taxableValue)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.igst + gstr3bSummary.outwardZeroRated.igst)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.cgst)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.sgst)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.cess + gstr3bSummary.outwardZeroRated.cess)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: '14px', fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
+            * Note: These values include net adjustments for Credit Notes (-) and Debit Notes (+). Use these values for Table 3.1 of GSTR-3B.
+          </div>
         </div>
       )}
 

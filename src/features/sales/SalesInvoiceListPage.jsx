@@ -20,6 +20,8 @@ const STATUS_COLORS = {
     'Draft': { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
 };
 
+import { useFilterPersistence } from '@/hooks/useFilterPersistence';
+
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
 const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
@@ -28,12 +30,17 @@ export default function SalesInvoiceListPage() {
     const { hasRole } = useAuth();
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [payFilter, setPayFilter] = useState('');
-    const [seriesFilter, setSeriesFilter] = useState('');
     const [seriesOptions, setSeriesOptions] = useState([]);
-    const [includeDeleted, setIncludeDeleted] = useState(true);
-    const [viewMode, setViewMode] = useState('all'); // all, active, deleted
+    
+    // Persistent Filter State
+    const { filters, setFilter, resetFilters } = useFilterPersistence('sales-invoices', {
+        search: '',
+        payFilter: '',
+        seriesFilter: '',
+        viewMode: 'all'
+    });
+    
+    const { search, payFilter, seriesFilter, viewMode } = filters;
 
     const load = useCallback(() => {
         setLoading(true);
@@ -108,41 +115,46 @@ export default function SalesInvoiceListPage() {
             </div>
 
             {/* Visibility Filters */}
+            {/* Visibility Filters */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#e2e8f0', padding: 4, borderRadius: 10, width: 'fit-content' }}>
-                <button onClick={() => setViewMode('all')}
+                <button onClick={() => setFilter('viewMode', 'all')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'all' ? '#fff' : 'transparent', color: viewMode === 'all' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     All Invoices
                 </button>
-                <button onClick={() => setViewMode('active')}
+                <button onClick={() => setFilter('viewMode', 'active')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'active' ? '#fff' : 'transparent', color: viewMode === 'active' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'active' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     Only Active
                 </button>
-                <button onClick={() => setViewMode('archived')}
+                <button onClick={() => setFilter('viewMode', 'archived')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'archived' ? '#fff' : 'transparent', color: viewMode === 'archived' ? '#dc2626' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'archived' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                     Deleted
                 </button>
             </div>
 
             <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <input placeholder="Search invoice / customer..." value={search} onChange={e => setSearch(e.target.value)}
+                <input placeholder="Search invoice / customer..." value={search} onChange={e => setFilter('search', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: 260 }} />
-                <select value={seriesFilter} onChange={e => setSeriesFilter(e.target.value)}
+                <select value={seriesFilter} onChange={e => setFilter('seriesFilter', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Series</option>
                     {seriesOptions.map(s => <option key={s._id} value={s._id}>{s.seriesName}</option>)}
                 </select>
-                <select value={payFilter} onChange={e => setPayFilter(e.target.value)}
+                <select value={payFilter} onChange={e => setFilter('payFilter', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Payment Status</option>
                     {['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
                 </select>
 
-                {viewMode === 'archived' && (
-                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fef2f2', padding: '4px 10px', borderRadius: 6, border: '1px solid #fca5a5' }}>
-                        🛡️ ARCHIVE VIEW
-                    </span>
-                )}
+                <button onClick={resetFilters}
+                    style={{ 
+                        padding: '7px 14px', borderRadius: 7, background: '#f1f5f9', color: '#64748b', 
+                        border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                        marginLeft: 'auto'
+                    }}>
+                    Reset Filters
+                </button>
             </div>
+
 
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                 {loading ? (

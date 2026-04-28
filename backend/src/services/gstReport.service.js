@@ -4,9 +4,12 @@
  * Matches GST portal / offline tool upload format
  */
 import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { CreditDebitNote } from '../models/creditDebitNote.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { CompanyProfile } from '../models/companyProfile.model.js';
 import Customer from '../models/customer.model.js';
+import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
 import ExcelJS from 'exceljs';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -272,6 +275,25 @@ async function fetchCancelledInvoicesForPeriod(startDate, endDate) {
   return SalesInvoice.collection.find(query).project({ invoiceNumber: 1, sequenceNumber: 1, seriesId: 1 }).toArray();
 }
 
+async function fetchCreditDebitNotesForPeriod(startDate, endDate) {
+  const query = {
+    $or: [
+      { noteDate: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+      {
+        $expr: {
+          $and: [
+            { $gte: ["$noteDate", String(startDate)] },
+            { $lte: ["$noteDate", String(endDate) + 'T23:59:59.999Z'] }
+          ]
+        }
+      }
+    ],
+    status: 'Final',
+    isDeleted: { $ne: true }
+  };
+  return CreditDebitNote.collection.find(query).toArray();
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Sheet Builders
 // ──────────────────────────────────────────────────────────────────────────────
@@ -390,21 +412,80 @@ function buildB2CS(invoices) {
   }));
 }
 
-function buildHSNSummary(invoices, filterFn) {
-  const filtered = invoices.filter(filterFn);
+function buildCDNR(notes) {
+  const rows = [];
+  const registeredNotes = notes.filter(n => isRegistered(n));
+
+  for (const n of registeredNotes) {
+    const posCode = (n.placeOfSupply || '').substring(0, 2);
+    const isInter = isInterState(n);
+    const rateGroups = getRateGroups(n);
+
+    for (const [rate, totals] of Object.entries(rateGroups)) {
+      rows.push({
+        'GSTIN/UIN of Recipient': n.customerGstin || '',
+        'Receiver Name': n.customerName || '',
+        'Note Number': n.noteNumber || '',
+        'Note Date': formatDate(n.noteDate),
+        'Note Type': n.noteType === 'Credit Note' ? 'C' : 'D',
+        'Place Of Supply': placeOfSupplyLabel(posCode, n),
+        'Reverse Charge': n.reverseCharge ? 'Y' : 'N',
+        'Note Supply Type': n.noteSupplyType || 'Regular',
+        'Note Value': Number((n.grandTotal || 0).toFixed(2)),
+        'Applicable % of Tax Rate': '',
+        'Rate': Number(rate),
+        'Taxable Value': Number(totals.taxableValue.toFixed(2)),
+        'Cess Amount': Number(totals.cess.toFixed(2)),
+        'Integrated Tax': isInter ? Number(totals.igst.toFixed(2)) : 0,
+        'Central Tax': !isInter ? Number(totals.cgst.toFixed(2)) : 0,
+        'State/UT Tax': !isInter ? Number(totals.sgst.toFixed(2)) : 0,
+      });
+    }
+  }
+  return rows;
+}
+
+function buildCDNUR(notes) {
+  const rows = [];
+  // CDNUR is for B2CL (unregistered inter-state > 1L) and Exports
+  const cdnurNotes = notes.filter(n => 
+    !isRegistered(n) && (
+      (isInterState(n) && (n.grandTotal || 0) > B2CL_THRESHOLD) ||
+      n.noteSupplyType === 'Export'
+    )
+  );
+
+  for (const n of cdnurNotes) {
+    const posCode = (n.placeOfSupply || '').substring(0, 2);
+    const rateGroups = getRateGroups(n);
+
+    for (const [rate, totals] of Object.entries(rateGroups)) {
+      rows.push({
+        'Type': n.noteSupplyType === 'Export' ? 'Exp w/o Pay' : 'B2CL',
+        'Note Number': n.noteNumber || '',
+        'Note Date': formatDate(n.noteDate),
+        'Note Type': n.noteType === 'Credit Note' ? 'C' : 'D',
+        'Place Of Supply': placeOfSupplyLabel(posCode, n),
+        'Note Value': Number((n.grandTotal || 0).toFixed(2)),
+        'Applicable % of Tax Rate': '',
+        'Rate': Number(rate),
+        'Taxable Value': Number(totals.taxableValue.toFixed(2)),
+        'Cess Amount': Number(totals.cess.toFixed(2)),
+        'Integrated Tax': Number(totals.igst.toFixed(2)),
+      });
+    }
+  }
+  return rows;
+}
+
+function buildHSNSummary(invoices, filterFn, notes = []) {
+  const filteredInvoices = invoices.filter(filterFn);
+  const filteredNotes = notes.filter(filterFn);
   const hsnGroups = {};
 
-  for (const inv of filtered) {
-    const posCode = (inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || '').substring(0, 2);
-    const isInter = isInterState(inv);
-    const rateGroups = getRateGroups(inv);
-
-    // HSN grouping still requires item-level detail for HSN codes.
-    // If freight is involved, we might need to attribute it to an HSN.
-    // Usually, freight is added to the highest value item's HSN or reported separately.
-    // Here we'll attribute it to the first item's HSN for simplicity, or 9965 (Freight HSN).
-
-    for (const item of (inv.items || [])) {
+  const processDoc = (doc, multiplier) => {
+    const isInter = isInterState(doc);
+    for (const item of (doc.items || [])) {
       const hsn = item.hsnCode || '99';
       const rate = Number(item.gstRate ?? item.gstPercent ?? 18);
       const key = `${hsn}|${rate}`;
@@ -425,20 +506,21 @@ function buildHSNSummary(invoices, filterFn) {
         };
       }
       
-      let taxable = item.taxableAmount ?? item.taxableValue ?? item.taxableAmt ?? 0;
-      // Fallback: qty * rate
+      const qty = (item.qty || 0) * multiplier;
+      let taxable = (item.taxableAmount ?? item.taxableValue ?? item.taxableAmt ?? 0) * multiplier;
+      
+      // Fallback
       if (taxable === 0 && item.qty > 0 && item.rate > 0) {
         const base = item.qty * item.rate;
         const disc = item.discountAmount || ((item.discountPercent || 0) / 100 * base);
-        taxable = base - disc;
+        taxable = (base - disc) * multiplier;
       }
 
-      let igst = item.igstAmount ?? item.igstAmt ?? (isInter ? (item.taxAmount ?? item.taxAmt ?? 0) : 0);
-      let cgst = item.cgstAmount ?? item.cgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
-      let sgst = item.sgstAmount ?? item.sgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0);
+      let igst = (item.igstAmount ?? item.igstAmt ?? (isInter ? (item.taxAmount ?? item.taxAmt ?? 0) : 0)) * multiplier;
+      let cgst = (item.cgstAmount ?? item.cgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0)) * multiplier;
+      let sgst = (item.sgstAmount ?? item.sgstAmt ?? (!isInter ? ((item.taxAmount ?? item.taxAmt ?? 0) / 2) : 0)) * multiplier;
 
-      // Recalculate if missing
-      if (rate > 0 && taxable > 0 && igst === 0 && cgst === 0 && sgst === 0) {
+      if (rate > 0 && taxable !== 0 && igst === 0 && cgst === 0 && sgst === 0) {
         if (isInter) igst = (taxable * rate / 100);
         else {
           cgst = (taxable * rate / 200);
@@ -446,22 +528,23 @@ function buildHSNSummary(invoices, filterFn) {
         }
       }
 
-      const cess = item.cessAmount ?? item.cessAmt ?? 0;
+      const cess = (item.cessAmount ?? item.cessAmt ?? 0) * multiplier;
+      const totalValue = taxable + igst + cgst + sgst + cess;
 
-      hsnGroups[key].totalQty += item.qty || 0;
-      hsnGroups[key].totalValue += (taxable + igst + cgst + sgst + cess);
+      hsnGroups[key].totalQty += qty;
       hsnGroups[key].taxableValue += taxable;
       hsnGroups[key].igst += igst;
       hsnGroups[key].cgst += cgst;
       hsnGroups[key].sgst += sgst;
       hsnGroups[key].cess += cess;
+      hsnGroups[key].totalValue += totalValue;
     }
 
-    // Add freight to HSN summary (using 9965 for Freight)
-    let fAmount = inv.freightAmount ?? inv.shippingAmount ?? inv.shippingCharges ?? 0;
-    if (fAmount > 0) {
+    // Freight
+    let fAmount = (doc.freightAmount ?? doc.shippingAmount ?? doc.shippingCharges ?? 0) * multiplier;
+    if (fAmount !== 0) {
       const hsn = '9965';
-      const fRate = Number(inv.freightGstRate ?? inv.shippingGstRate ?? 0);
+      const fRate = Number(doc.freightGstRate ?? doc.shippingGstRate ?? 0);
       const key = `${hsn}|${fRate}`;
       if (!hsnGroups[key]) {
         hsnGroups[key] = {
@@ -469,28 +552,30 @@ function buildHSNSummary(invoices, filterFn) {
           totalQty: 0, totalValue: 0, rate: fRate, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0
         };
       }
-      
-      let fGst = inv.freightGstAmount ?? inv.shippingGstAmount ?? 0;
-      if (fGst === 0 && fRate > 0) {
-        fGst = (fAmount * fRate / 100);
-      }
+      let fGst = (doc.freightGstAmount ?? doc.shippingGstAmount ?? 0) * multiplier;
+      if (fGst === 0 && fRate > 0) fGst = (fAmount * fRate / 100);
 
-      hsnGroups[key].totalValue += (fAmount + fGst);
       hsnGroups[key].taxableValue += fAmount;
-      if (isInter) {
-        hsnGroups[key].igst += fGst;
-      } else {
+      hsnGroups[key].totalValue += (fAmount + fGst);
+      if (isInter) hsnGroups[key].igst += fGst;
+      else {
         hsnGroups[key].cgst += fGst / 2;
         hsnGroups[key].sgst += fGst / 2;
       }
     }
+  };
+
+  for (const inv of filteredInvoices) processDoc(inv, 1);
+  for (const note of filteredNotes) {
+    const multiplier = note.noteType === 'Credit Note' ? -1 : 1;
+    processDoc(note, multiplier);
   }
 
   return Object.values(hsnGroups).map(g => ({
     'HSN': g.hsn,
     'Description': g.description,
     'UQC': g.uqc,
-    'Total Quantity': g.totalQty,
+    'Total Quantity': Number(g.totalQty.toFixed(2)),
     'Total Value': Number(g.totalValue.toFixed(2)),
     'Rate': g.rate,
     'Taxable Value': Number(g.taxableValue.toFixed(2)),
@@ -529,23 +614,54 @@ async function buildDocsSummary(startDate, endDate) {
   };
 
   for (const series of seriesList) {
-    // Find all invoices (including cancelled) for this series in the period
-    const allInvs = await SalesInvoice.collection.find({
+    const isNote = ['Credit Note', 'Debit Note'].includes(series.documentType);
+    const Collection = isNote ? CreditDebitNote.collection : SalesInvoice.collection;
+    const dateField = isNote ? 'noteDate' : 'invoiceDate';
+
+    const dateQuery = {
+      $or: [
+        { [dateField]: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+        {
+          $expr: {
+            $and: [
+              { $gte: [`$${dateField}`, String(startDate)] },
+              { $lte: [`$${dateField}`, String(endDate) + 'T23:59:59.999Z'] }
+            ]
+          }
+        }
+      ]
+    };
+
+    // Find all documents (including cancelled) for this series in the period
+    const allDocs = await Collection.find({
       seriesId: { $in: [series._id, series._id.toString()] },
       ...dateQuery,
       isDeleted: { $ne: true },
-    }).project({ invoiceNumber: 1, sequenceNumber: 1, status: 1 }).toArray();
+    }).project({ 
+      invoiceNumber: 1, 
+      noteNumber: 1, 
+      sequenceNumber: 1, 
+      status: 1 
+    }).toArray();
 
-    if (allInvs.length === 0) continue;
+    if (allDocs.length === 0) continue;
 
     // Use robust sequence detection
-    const seqNums = allInvs.map(i => getInvoiceSequence(i)).filter(n => n > 0);
+    const seqNums = allDocs.map(i => {
+      if (i.sequenceNumber && i.sequenceNumber > 0) return i.sequenceNumber;
+      const numStr = i.noteNumber || i.invoiceNumber || '';
+      const parts = numStr.split(/[/|-]/);
+      const lastPart = parts[parts.length - 1];
+      const num = parseInt(lastPart.replace(/\D/g, ''), 10);
+      return isNaN(num) ? 0 : num;
+    }).filter(n => n > 0);
+    
     if (seqNums.length === 0) continue;
 
     const minSeq = Math.min(...seqNums);
     const maxSeq = Math.max(...seqNums);
     const total = maxSeq - minSeq + 1;
-    const cancelledCount = allInvs.filter(i => i.status === 'Cancelled').length;
+    const cancelledCount = allDocs.filter(i => i.status === 'Cancelled').length;
 
     let docType = 'Invoices for outward supply';
     if (series.documentType === 'Credit Note') docType = 'Credit Note';
@@ -684,7 +800,10 @@ function addSheetWithData(workbook, sheetName, columns, data) {
 }
 
 export async function generateGSTR1Data(startDate, endDate) {
-  const invoices = await fetchInvoicesForPeriod(startDate, endDate);
+  const [invoices, notes] = await Promise.all([
+    fetchInvoicesForPeriod(startDate, endDate),
+    fetchCreditDebitNotesForPeriod(startDate, endDate)
+  ]);
   
   // Numeric Sorting: Ensure 26-27/05 follows 26-27/04 and precedes 26-27/06
   const sortFn = (a, b) => {
@@ -705,9 +824,11 @@ export async function generateGSTR1Data(startDate, endDate) {
   const b2b = buildB2B(invoices);
   const b2cl = buildB2CL(invoices);
   const b2cs = buildB2CS(invoices);
-  const hsnB2B = buildHSNSummary(invoices, inv => isRegistered(inv));
-  const hsnB2C = buildHSNSummary(invoices, inv => !isRegistered(inv));
-  const docs = await buildDocsSummary(startDate, endDate);
+  const cdnr = buildCDNR(notes);
+  const cdnur = buildCDNUR(notes);
+  const hsnB2B = buildHSNSummary(invoices, inv => isRegistered(inv), notes);
+  const hsnB2C = buildHSNSummary(invoices, inv => !isRegistered(inv), notes);
+  const docs = await buildDocsSummary(startDate, endDate, invoices, notes);
 
   return {
     company,
@@ -716,6 +837,8 @@ export async function generateGSTR1Data(startDate, endDate) {
       b2bCount: b2b.length,
       b2clCount: b2cl.length,
       b2csCount: b2cs.length,
+      cdnrCount: cdnr.length,
+      cdnurCount: cdnur.length,
       hsnB2BCount: hsnB2B.length,
       hsnB2CCount: hsnB2C.length,
       docsCount: docs.length,
@@ -723,18 +846,255 @@ export async function generateGSTR1Data(startDate, endDate) {
     b2b,
     b2cl,
     b2cs,
+    cdnr,
+    cdnur,
     hsnB2B,
     hsnB2C,
     docs,
   };
 }
 
-export async function validateGSTR1(startDate, endDate) {
-  const invoices = await fetchInvoicesForPeriod(startDate, endDate);
-  const baseErrors = validateInvoices(invoices);
+/**
+ * Table 3.2 - Inter-state supplies to unregistered persons
+ */
+function buildTable32(invoices, notes) {
+  const posGroups = {}; // key: posCode
 
-  // Cross-check: Ensure all invoices in B2B/B2C are covered in Document Summary
-  const docs = await buildDocsSummary(startDate, endDate);
+  const process = (doc, multiplier) => {
+    if (isRegistered(doc)) return;
+    if (!isInterState(doc)) return;
+    
+    const posCode = (doc.placeOfSupply || '').substring(0, 2);
+    if (!posCode) return;
+
+    if (!posGroups[posCode]) {
+      posGroups[posCode] = { posCode, taxableValue: 0, igst: 0 };
+    }
+
+    const rateGroups = getRateGroups(doc);
+    for (const totals of Object.values(rateGroups)) {
+      posGroups[posCode].taxableValue += totals.taxableValue * multiplier;
+      posGroups[posCode].igst += totals.igst * multiplier;
+    }
+  };
+
+  for (const inv of invoices) process(inv, 1);
+  for (const note of notes) {
+    const multiplier = note.noteType === 'Credit Note' ? -1 : 1;
+    process(note, multiplier);
+  }
+
+  return Object.values(posGroups).map(g => ({
+    placeOfSupply: placeOfSupplyLabel(g.posCode, { billingStateCode: g.posCode }),
+    taxableValue: Number(g.taxableValue.toFixed(2)),
+    igst: Number(g.igst.toFixed(2))
+  })).filter(g => g.taxableValue !== 0);
+}
+
+async function fetchPurchaseInvoicesForPeriod(startDate, endDate) {
+  const query = {
+    $or: [
+      { invoiceDate: { $gte: new Date(startDate), $lte: new Date(endDate) } },
+      {
+        $expr: {
+          $and: [
+            { $gte: ["$invoiceDate", String(startDate)] },
+            { $lte: ["$invoiceDate", String(endDate) + 'T23:59:59.999Z'] }
+          ]
+        }
+      }
+    ],
+    status: { $ne: 'Cancelled' },
+    isDeleted: { $ne: true }
+  };
+  return PurchaseInvoice.find(query).lean();
+}
+
+export async function generateGSTR3BData(startDate, endDate) {
+  const [invoices, notes, purchases] = await Promise.all([
+    fetchInvoicesForPeriod(startDate, endDate),
+    fetchCreditDebitNotesForPeriod(startDate, endDate),
+    fetchPurchaseInvoicesForPeriod(startDate, endDate)
+  ]);
+
+  // Get adjustments for the period
+  const month = new Date(startDate).getMonth() + 1;
+  const monthStr = String(month).padStart(2, '0');
+  const fy = getFinancialYear(new Date(startDate));
+  const adjustment = await Gstr3bAdjustment.findOne({ financialYear: fy, month: monthStr }).lean();
+
+  const summary = {
+    table31: {
+      outwardTaxable: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 },
+      outwardZeroRated: { taxableValue: 0, igst: 0, cess: 0 },
+      outwardNilExempt: { taxableValue: 0 },
+      inwardReverseCharge: { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 },
+      nonGstOutward: { taxableValue: 0 }
+    },
+    table32: buildTable32(invoices, notes),
+    table4: {
+      itcAvailable: {
+        importGoods: { igst: 0, cess: 0 },
+        importServices: { igst: 0, cess: 0 },
+        inwardRcm: { igst: 0, cgst: 0, sgst: 0, cess: 0 },
+        inwardIsd: { igst: 0, cgst: 0, sgst: 0, cess: 0 },
+        allOtherItc: { igst: 0, cgst: 0, sgst: 0, cess: 0 }
+      },
+      itcReversed: {
+        rule38_42_43: { igst: 0, cgst: 0, sgst: 0, cess: 0 },
+        others: { igst: 0, cgst: 0, sgst: 0, cess: 0 }
+      },
+      otherDetails: {
+        itcReclaimed: { igst: 0, cgst: 0, sgst: 0, cess: 0 },
+        ineligible16_4: { igst: 0, cgst: 0, sgst: 0, cess: 0 }
+      }
+    },
+    table5: {
+      exemptNil: { interState: 0, intraState: 0 },
+      nonGst: { interState: 0, intraState: 0 }
+    },
+    table51: { interest: 0, lateFee: 0 },
+    table61: { cashPaid: { igst: 0, cgst: 0, sgst: 0, cess: 0 } }
+  };
+
+  // 3.1 Outward supplies logic
+  const processOutward = (doc, multiplier) => {
+    const rateGroups = getRateGroups(doc);
+    for (const [rate, totals] of Object.entries(rateGroups)) {
+      if (doc.noteSupplyType === 'Export' || doc.exportCountry) {
+        summary.table31.outwardZeroRated.taxableValue += totals.taxableValue * multiplier;
+        summary.table31.outwardZeroRated.igst += totals.igst * multiplier;
+        summary.table31.outwardZeroRated.cess += totals.cess * multiplier;
+      } else if (Number(rate) === 0) {
+        summary.table31.outwardNilExempt.taxableValue += totals.taxableValue * multiplier;
+      } else {
+        summary.table31.outwardTaxable.taxableValue += totals.taxableValue * multiplier;
+        summary.table31.outwardTaxable.igst += totals.igst * multiplier;
+        summary.table31.outwardTaxable.cgst += totals.cgst * multiplier;
+        summary.table31.outwardTaxable.sgst += totals.sgst * multiplier;
+        summary.table31.outwardTaxable.cess += totals.cess * multiplier;
+      }
+    }
+  };
+
+  for (const inv of invoices) processOutward(inv, 1);
+  for (const note of notes) {
+    const multiplier = note.noteType === 'Credit Note' ? -1 : 1;
+    processOutward(note, multiplier);
+  }
+
+  // 3.1(d) Inward RCM & Table 4 ITC from Purchase Invoices
+  for (const pi of purchases) {
+    if (pi.reverseCharge) {
+      summary.table31.inwardReverseCharge.taxableValue += pi.totalTaxableAmount || 0;
+      summary.table31.inwardReverseCharge.igst += pi.totalIgst || 0;
+      summary.table31.inwardReverseCharge.cgst += pi.totalCgst || 0;
+      summary.table31.inwardReverseCharge.sgst += pi.totalSgst || 0;
+      
+      // Auto-populate Table 4(A)(3)
+      summary.table4.itcAvailable.inwardRcm.igst += pi.totalIgst || 0;
+      summary.table4.itcAvailable.inwardRcm.cgst += pi.totalCgst || 0;
+      summary.table4.itcAvailable.inwardRcm.sgst += pi.totalSgst || 0;
+    } else {
+      // Regular ITC - Table 4(A)(5)
+      summary.table4.itcAvailable.allOtherItc.igst += pi.totalIgst || 0;
+      summary.table4.itcAvailable.allOtherItc.cgst += pi.totalCgst || 0;
+      summary.table4.itcAvailable.allOtherItc.sgst += pi.totalSgst || 0;
+    }
+  }
+
+  // Apply Manual Adjustments
+  if (adjustment) {
+    const applyAdj = (target, adj) => {
+      if (!adj) return;
+      if (adj.taxableValue) target.taxableValue = (target.taxableValue || 0) + adj.taxableValue;
+      if (adj.integratedTax) target.igst = (target.igst || 0) + adj.integratedTax;
+      if (adj.centralTax) target.cgst = (target.cgst || 0) + adj.centralTax;
+      if (adj.stateUtTax) target.sgst = (target.sgst || 0) + adj.stateUtTax;
+      if (adj.cess) target.cess = (target.cess || 0) + adj.cess;
+    };
+
+    const t4 = adjustment.table4;
+    if (t4) {
+      applyAdj(summary.table4.itcAvailable.importGoods, t4.importGoods);
+      applyAdj(summary.table4.itcAvailable.importServices, t4.importServices);
+      applyAdj(summary.table4.itcAvailable.inwardRcm, t4.inwardRcm);
+      applyAdj(summary.table4.itcAvailable.inwardIsd, t4.inwardIsd);
+      applyAdj(summary.table4.itcAvailable.allOtherItc, t4.allOtherItc);
+      applyAdj(summary.table4.itcReversed.rule38_42_43, t4.itcReversedRule38_42_43);
+      applyAdj(summary.table4.itcReversed.others, t4.itcReversedOthers);
+      applyAdj(summary.table4.otherDetails.itcReclaimed, t4.itcReclaimed);
+      applyAdj(summary.table4.otherDetails.ineligible16_4, t4.ineligibleItc16_4);
+    }
+
+    if (adjustment.table5) {
+      summary.table5.exemptNil.interState += adjustment.table5.compositionExemptNil.interState || 0;
+      summary.table5.exemptNil.intraState += adjustment.table5.compositionExemptNil.intraState || 0;
+      summary.table5.nonGst.interState += adjustment.table5.nonGst.interState || 0;
+      summary.table5.nonGst.intraState += adjustment.table5.nonGst.intraState || 0;
+    }
+
+    if (adjustment.table51) {
+      summary.table51.interest = (adjustment.table51.interest?.integratedTax || 0) + (adjustment.table51.interest?.centralTax || 0) + (adjustment.table51.interest?.stateUtTax || 0);
+      summary.table51.lateFee = (adjustment.table51.lateFee?.centralTax || 0) + (adjustment.table51.lateFee?.stateUtTax || 0);
+    }
+  }
+
+  // Rounding
+  const deepRound = (obj) => {
+    for (const key in obj) {
+      if (typeof obj[key] === 'number') obj[key] = Number(obj[key].toFixed(2));
+      else if (typeof obj[key] === 'object' && obj[key] !== null) deepRound(obj[key]);
+    }
+  };
+  deepRound(summary);
+
+  return summary;
+}
+
+export async function reconcileGSTR1vs3B(startDate, endDate) {
+  const g1 = await generateGSTR1Data(startDate, endDate);
+  const g3b = await generateGSTR3BData(startDate, endDate);
+
+  const g1Outward = {
+    taxableValue: (g1.summary.b2bTaxable || 0) + (g1.summary.b2clTaxable || 0) + (g1.summary.b2csTaxable || 0),
+    igst: (g1.summary.b2bIgst || 0) + (g1.summary.b2clIgst || 0) + (g1.summary.b2csIgst || 0),
+    cgst: (g1.summary.b2bCgst || 0) + (g1.summary.b2csCgst || 0),
+    sgst: (g1.summary.b2bSgst || 0) + (g1.summary.b2csSgst || 0),
+  };
+
+  // Need to calculate these correctly if summary fields are missing
+  const sum = (arr, key) => arr.reduce((acc, row) => acc + (parseFloat(row[key]) || 0), 0);
+  
+  g1Outward.taxableValue = sum(g1.b2b, 'Taxable Value') + sum(g1.b2cl, 'Taxable Value') + sum(g1.b2cs, 'Taxable Value') + sum(g1.cdnr, 'Taxable Value') + sum(g1.cdnur, 'Taxable Value');
+  g1Outward.igst = sum(g1.b2b, 'Integrated Tax') + sum(g1.b2cl, 'Integrated Tax') + sum(g1.b2cs, 'Integrated Tax') + sum(g1.cdnr, 'Integrated Tax') + sum(g1.cdnur, 'Integrated Tax');
+  g1Outward.cgst = sum(g1.b2b, 'Central Tax') + sum(g1.b2cs, 'Central Tax') + sum(g1.cdnr, 'Central Tax');
+  g1Outward.sgst = sum(g1.b2b, 'State/UT Tax') + sum(g1.b2cs, 'State/UT Tax') + sum(g1.cdnr, 'State/UT Tax');
+
+  const g3bOutward = g3b.table31.outwardTaxable;
+
+  return {
+    gstr1: g1Outward,
+    gstr3b: g3bOutward,
+    difference: {
+      taxableValue: g1Outward.taxableValue - g3bOutward.taxableValue,
+      igst: g1Outward.igst - g3bOutward.igst,
+      cgst: g1Outward.cgst - g3bOutward.cgst,
+      sgst: g1Outward.sgst - g3bOutward.sgst,
+    }
+  };
+}
+
+export async function validateGSTR1(startDate, endDate) {
+  const [invoices, notes] = await Promise.all([
+    fetchInvoicesForPeriod(startDate, endDate),
+    fetchCreditDebitNotesForPeriod(startDate, endDate)
+  ]);
+  const baseErrors = validateInvoices(invoices);
+  const noteErrors = validateInvoices(notes); // Reuse validation for notes as well
+
+  // Cross-check: Ensure all docs are covered in Document Summary
+  const docs = await buildDocsSummary(startDate, endDate, invoices, notes);
   const docErrors = [];
 
   for (const inv of invoices) {
@@ -770,7 +1130,7 @@ export async function validateGSTR1(startDate, endDate) {
     }
   }
 
-  return [...baseErrors, ...docErrors];
+  return [...baseErrors, ...noteErrors, ...docErrors];
 }
 
 export async function generateGSTR1Excel(startDate, endDate) {
@@ -798,7 +1158,18 @@ export async function generateGSTR1Excel(startDate, endDate) {
   addSheetWithData(workbook, 'b2cs', b2csCols, data.b2cs);
 
   // Empty sheets matching the template
-  const emptySheets = ['exp', 'cdnr', 'cdnur', 'exemp', 'at', 'atadj'];
+  const cdnrCols = ['GSTIN/UIN of Recipient', 'Receiver Name', 'Note Number', 'Note Date',
+    'Note Type', 'Place Of Supply', 'Reverse Charge', 'Note Supply Type',
+    'Note Value', 'Applicable % of Tax Rate', 'Rate', 'Taxable Value', 'Cess Amount',
+    'Integrated Tax', 'Central Tax', 'State/UT Tax'];
+  addSheetWithData(workbook, 'cdnr', cdnrCols, data.cdnr);
+
+  const cdnurCols = ['Type', 'Note Number', 'Note Date', 'Note Type', 'Place Of Supply',
+    'Note Value', 'Applicable % of Tax Rate', 'Rate', 'Taxable Value', 'Cess Amount',
+    'Integrated Tax'];
+  addSheetWithData(workbook, 'cdnur', cdnurCols, data.cdnur);
+
+  const emptySheets = ['exp', 'exemp', 'at', 'atadj'];
   for (const name of emptySheets) {
     workbook.addWorksheet(name);
   }
