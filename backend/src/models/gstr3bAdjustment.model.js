@@ -48,6 +48,27 @@ const gstr3bAdjustmentSchema = new mongoose.Schema({
         cashPaid: { type: adjustmentEntrySchema, default: () => ({}) },
     },
 
+    // Opening Balances from GSTN
+    openingBalance: {
+        creditLedger: { type: adjustmentEntrySchema, default: () => ({}) },
+        cashLedger: {
+            integratedTax: { type: Number, default: 0 },
+            centralTax: { type: Number, default: 0 },
+            stateUtTax: { type: Number, default: 0 },
+            cess: { type: Number, default: 0 },
+            interest: { type: Number, default: 0 },
+            lateFee: { type: Number, default: 0 },
+            penalty: { type: Number, default: 0 },
+        }
+    },
+
+    // Manual Adjustments / Overrides
+    manualAdjustments: {
+        itcAdjustment: { type: adjustmentEntrySchema, default: () => ({}) },
+        itcReversal: { type: adjustmentEntrySchema, default: () => ({}) },
+        rcmLiability: { type: adjustmentEntrySchema, default: () => ({}) },
+    },
+
     remarks: { type: String, default: '' },
     
     auditLog: [{

@@ -181,6 +181,7 @@ export const menuConfig = [
             { id: 'purchase-orders', title: 'Purchase Orders', path: PATHS.PURCHASE.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_orders.view' },
             { id: 'grn', title: 'Goods Receipt (GRN)', path: PATHS.PURCHASE.GRN, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.grn.view' },
             { id: 'purchase-invoices', title: 'Purchase Invoices', path: PATHS.PURCHASE.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_invoices.view' },
+            { id: 'consumable-cost-report', title: 'Consumable Cost Analysis', path: '/reports/consumable-cost', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_invoices.view' },
         ],
     },
     {

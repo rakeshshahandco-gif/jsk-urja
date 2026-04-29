@@ -13,6 +13,7 @@ export const PATHS = {
     REPORTS: {
         ROOT: '/reports',
         CUSTOMER_MASTER: '/reports/customer-master',
+        CONSUMABLE_COST: '/reports/consumable-cost',
     },
     AUTH: {
         LOGIN: '/auth/login',

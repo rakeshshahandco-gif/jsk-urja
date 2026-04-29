@@ -32,23 +32,28 @@ export default function PurchaseInvoiceListPage() {
         search: '',
         payFilter: '',
         statusFilter: '',
+        consumableFilter: 'all',
         viewMode: 'all'
     });
     
-    const { search, payFilter, statusFilter, viewMode } = filters;
+    const { search, payFilter, statusFilter, consumableFilter, viewMode } = filters;
     
     const { selectedFY } = useFinancialYear();
 
     const load = useCallback(() => {
         setLoading(true);
-        getPurchaseInvoices({ search, paymentStatus: payFilter, status: statusFilter, view: viewMode, includeDeleted: true, limit: 100, financialYear: selectedFY })
+        const params = { search, paymentStatus: payFilter, status: statusFilter, view: viewMode, includeDeleted: true, limit: 100, financialYear: selectedFY };
+        if (consumableFilter === 'consumable') params.isConsumable = true;
+        if (consumableFilter === 'stock') params.isConsumable = false;
+
+        getPurchaseInvoices(params)
             .then(d => setInvoices(d.invoices || []))
             .catch((err) => {
                 console.error('[PurchaseInvoiceList] Error loading invoices:', err);
                 toast.error('Failed to load invoices');
             })
             .finally(() => setLoading(false));
-    }, [search, payFilter, statusFilter, viewMode, selectedFY]);
+    }, [search, payFilter, statusFilter, consumableFilter, viewMode, selectedFY]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -110,6 +115,12 @@ export default function PurchaseInvoiceListPage() {
                     <option value="">All Statuses</option>
                     {['Draft', 'Confirmed', 'Posted', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
                 </select>
+                <select value={consumableFilter} onChange={e => setFilter('consumableFilter', e.target.value)}
+                    style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+                    <option value="all">Stock & Consumables</option>
+                    <option value="stock">Stock Only</option>
+                    <option value="consumable">Consumables Only</option>
+                </select>
 
                 <button onClick={resetFilters}
                     style={{ 
@@ -143,7 +154,16 @@ export default function PurchaseInvoiceListPage() {
                                     onClick={() => navigate(PATHS.PURCHASE.INVOICE_DETAIL(inv._id))}
                                     onMouseEnter={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : '#f8f9fa'}
                                     onMouseLeave={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : 'transparent'}>
-                                    <td style={{ ...td, color: isDeleted ? '#94a3b8' : '#2563eb', fontWeight: 700, textDecoration: isDeleted ? 'line-through' : 'none' }}>{inv.invoiceNumber}</td>
+                                    <td style={td}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <span style={{ color: isDeleted ? '#94a3b8' : '#2563eb', fontWeight: 700, textDecoration: isDeleted ? 'line-through' : 'none' }}>{inv.invoiceNumber}</span>
+                                            {inv.isConsumable && (
+                                                <span style={{ fontSize: '9px', fontWeight: 800, background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fcd34d', width: 'fit-content' }}>
+                                                    CONSUMABLE
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td style={td}>{fmt(inv.invoiceDate)}</td>
                                     <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{inv.supplierName}</td>
                                     <td style={{ ...td, color: '#64748b' }}>{inv.poNumber || inv.grnNumber || '—'}</td>

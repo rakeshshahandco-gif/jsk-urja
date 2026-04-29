@@ -1050,7 +1050,136 @@ export async function generateGSTR3BData(startDate, endDate) {
   };
   deepRound(summary);
 
+  // 6. GST Payable Summary / Net Tax Payable
+  const liability = {
+      igst: (summary.table31.outwardTaxable.igst || 0) + (summary.table31.outwardZeroRated.igst || 0) + (summary.table31.inwardReverseCharge.igst || 0),
+      cgst: (summary.table31.outwardTaxable.cgst || 0) + (summary.table31.inwardReverseCharge.cgst || 0),
+      sgst: (summary.table31.outwardTaxable.sgst || 0) + (summary.table31.inwardReverseCharge.sgst || 0),
+      cess: (summary.table31.outwardTaxable.cess || 0) + (summary.table31.outwardZeroRated.cess || 0) + (summary.table31.inwardReverseCharge.cess || 0)
+  };
+
+  const availableItc = {
+      igst: (summary.table4.itcAvailable.allOtherItc.igst || 0) + (summary.table4.itcAvailable.inwardRcm.igst || 0) + (summary.table4.itcAvailable.importGoods.igst || 0) + (summary.table4.itcAvailable.importServices.igst || 0) - (summary.table4.itcReversed.rule38_42_43.igst || 0) - (summary.table4.itcReversed.others.igst || 0),
+      cgst: (summary.table4.itcAvailable.allOtherItc.cgst || 0) + (summary.table4.itcAvailable.inwardRcm.cgst || 0) - (summary.table4.itcReversed.rule38_42_43.cgst || 0) - (summary.table4.itcReversed.others.cgst || 0),
+      sgst: (summary.table4.itcAvailable.allOtherItc.sgst || 0) + (summary.table4.itcAvailable.inwardRcm.sgst || 0) - (summary.table4.itcReversed.rule38_42_43.sgst || 0) - (summary.table4.itcReversed.others.sgst || 0),
+      cess: (summary.table4.itcAvailable.allOtherItc.cess || 0) + (summary.table4.itcAvailable.inwardRcm.cess || 0) - (summary.table4.itcReversed.rule38_42_43.cess || 0) - (summary.table4.itcReversed.others.cess || 0),
+  };
+
+  const openingCredit = adjustment?.openingBalance?.creditLedger || {};
+  const utilization = calculateItcUtilization(liability, availableItc, openingCredit);
+
+  // Cash ledger utilization
+  const openingCash = adjustment?.openingBalance?.cashLedger || {};
+  const netCashPayable = {
+      igst: Math.max(0, utilization.remainingLiability.igst - (openingCash.integratedTax || 0)),
+      cgst: Math.max(0, utilization.remainingLiability.cgst - (openingCash.centralTax || 0)),
+      sgst: Math.max(0, utilization.remainingLiability.sgst - (openingCash.stateUtTax || 0)),
+      cess: Math.max(0, utilization.remainingLiability.cess - (openingCash.cess || 0)),
+      interest: Math.max(0, (summary.table51.interest || 0) - (openingCash.interest || 0)),
+      lateFee: Math.max(0, (summary.table51.lateFee || 0) - (openingCash.lateFee || 0))
+  };
+
+  summary.payableSummary = {
+      liability,
+      availableItc,
+      openingCredit,
+      openingCash,
+      utilization: utilization.utilized,
+      closingCredit: utilization.remainingCredit,
+      netCashPayable,
+      closingCash: {
+          integratedTax: Math.max(0, (openingCash.integratedTax || 0) - utilization.remainingLiability.igst),
+          centralTax: Math.max(0, (openingCash.centralTax || 0) - utilization.remainingLiability.cgst),
+          stateUtTax: Math.max(0, (openingCash.stateUtTax || 0) - utilization.remainingLiability.sgst),
+          cess: Math.max(0, (openingCash.cess || 0) - utilization.remainingLiability.cess),
+          interest: Math.max(0, (openingCash.interest || 0) - (summary.table51.interest || 0)),
+          lateFee: Math.max(0, (openingCash.lateFee || 0) - (summary.table51.lateFee || 0))
+      }
+  };
+
+  deepRound(summary.payableSummary);
   return summary;
+}
+
+/**
+ * ITC Utilization Rules:
+ * 1. IGST ITC: First for IGST, then CGST/SGST.
+ * 2. CGST ITC: First for CGST, then IGST. (Blocked for SGST)
+ * 3. SGST ITC: First for SGST, then IGST. (Blocked for CGST)
+ * 4. Cess ITC: Only for Cess.
+ */
+export function calculateItcUtilization(liability, availableItc, openingCredit = {}) {
+    const itc = {
+        igst: (availableItc.igst || 0) + (openingCredit.integratedTax || 0),
+        cgst: (availableItc.cgst || 0) + (openingCredit.centralTax || 0),
+        sgst: (availableItc.sgst || 0) + (openingCredit.stateUtTax || 0),
+        cess: (availableItc.cess || 0) + (openingCredit.cess || 0),
+    };
+
+    const liab = { ...liability };
+    const utilized = {
+        igst: { igst: 0, cgst: 0, sgst: 0 },
+        cgst: { cgst: 0, igst: 0 },
+        sgst: { sgst: 0, igst: 0 },
+        cess: { cess: 0 }
+    };
+
+    // 1. Utilize IGST ITC
+    let useIgst_Igst = Math.min(itc.igst, liab.igst);
+    utilized.igst.igst = useIgst_Igst;
+    itc.igst -= useIgst_Igst;
+    liab.igst -= useIgst_Igst;
+
+    if (itc.igst > 0) {
+        let useIgst_Cgst = Math.min(itc.igst, liab.cgst);
+        utilized.igst.cgst = useIgst_Cgst;
+        itc.igst -= useIgst_Cgst;
+        liab.cgst -= useIgst_Cgst;
+    }
+    if (itc.igst > 0) {
+        let useIgst_Sgst = Math.min(itc.igst, liab.sgst);
+        utilized.igst.sgst = useIgst_Sgst;
+        itc.igst -= useIgst_Sgst;
+        liab.sgst -= useIgst_Sgst;
+    }
+
+    // 2. Utilize CGST ITC
+    let useCgst_Cgst = Math.min(itc.cgst, liab.cgst);
+    utilized.cgst.cgst = useCgst_Cgst;
+    itc.cgst -= useCgst_Cgst;
+    liab.cgst -= useCgst_Cgst;
+
+    if (itc.cgst > 0) {
+        let useCgst_Igst = Math.min(itc.cgst, liab.igst);
+        utilized.cgst.igst = useCgst_Igst;
+        itc.cgst -= useCgst_Igst;
+        liab.igst -= useCgst_Igst;
+    }
+
+    // 3. Utilize SGST ITC
+    let useSgst_Sgst = Math.min(itc.sgst, liab.sgst);
+    utilized.sgst.sgst = useSgst_Sgst;
+    itc.sgst -= useSgst_Sgst;
+    liab.sgst -= useSgst_Sgst;
+
+    if (itc.sgst > 0) {
+        let useSgst_Igst = Math.min(itc.sgst, liab.igst);
+        utilized.sgst.igst = useSgst_Igst;
+        itc.sgst -= useSgst_Igst;
+        liab.igst -= useSgst_Igst;
+    }
+
+    // 4. Utilize Cess ITC
+    let useCess_Cess = Math.min(itc.cess, liab.cess);
+    utilized.cess.cess = useCess_Cess;
+    itc.cess -= useCess_Cess;
+    liab.cess -= useCess_Cess;
+
+    return {
+        utilized,
+        remainingLiability: liab,
+        remainingCredit: itc
+    };
 }
 
 export async function reconcileGSTR1vs3B(startDate, endDate) {

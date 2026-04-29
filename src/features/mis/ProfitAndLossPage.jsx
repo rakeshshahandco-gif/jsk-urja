@@ -175,7 +175,21 @@ const ProfitAndLossPage = () => {
 
             <div className={s.summarySection}>
                 <div className={s.statCard}>
-                    <span className={s.label}>Gross Profit</span>
+                    <span className={s.label}>BOM Raw Material Cost</span>
+                    <div className={s.valueContent}>
+                         <span className={s.value}>{formatAmount(reportData?.bomCost)}</span>
+                         <Database size={32} className="opacity-20" />
+                    </div>
+                </div>
+                <div className={s.statCard}>
+                    <span className={s.label}>Consumable / Non-BOM Cost</span>
+                    <div className={s.valueContent}>
+                         <span className={s.value}>{formatAmount(reportData?.consumableCost)}</span>
+                         <TrendingDown size={32} className="opacity-20 text-rose-400" />
+                    </div>
+                </div>
+                <div className={s.statCard}>
+                    <span className={s.label}>Gross Profit (After BOM & Consumables)</span>
                     <div className={s.valueContent}>
                          <span className={s.value}>{formatAmount(reportData?.grossProfit)}</span>
                          <span className={reportData?.grossProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}>

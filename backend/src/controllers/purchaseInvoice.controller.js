@@ -226,6 +226,13 @@ const piItemJoi = Joi.object({
     discountPercent: Joi.number().min(0).max(100).default(0),
     grnItemId: Joi.string().optional().allow('', null),
     poItemId: Joi.string().optional().allow('', null),
+    isConsumable: Joi.boolean().default(false),
+    allocation: Joi.object({
+        type: Joi.string().valid('General', 'Product', 'Sales Order', 'Work Order', 'Department').default('General'),
+        referenceId: Joi.string().optional().allow('', null),
+        referenceName: Joi.string().optional().allow(''),
+        typeModel: Joi.string().optional().allow('', null)
+    }).optional()
 });
 
 const createPISchema = Joi.object({
@@ -259,6 +266,7 @@ const createPISchema = Joi.object({
     freightAmount: Joi.number().min(0).default(0),
     freightGstRate: Joi.number().valid(0, 5, 12, 18).default(0),
     seriesId: Joi.string().optional().allow('', null),
+    isConsumable: Joi.boolean().default(false),
     items: Joi.array().items(piItemJoi).min(1).required(),
 });
 
@@ -366,13 +374,16 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         }
 
         if (isDirectStock) {
-            const stockItems = value.items.map(i => ({
-                itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
-                receivedQty: i.qty, rate: i.rate, warehouse: '',
-            }));
-            // Update updateStockForItems to handle FY tagging (internally or by passing fy)
-            // For now, let's assume it gets it from the referenceId or we pass it
-            await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy);
+            const stockItems = value.items
+                .filter(i => !i.isConsumable) // SKIP consumables from hitting inventory
+                .map(i => ({
+                    itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
+                    receivedQty: i.qty, rate: i.rate, warehouse: '',
+                }));
+            
+            if (stockItems.length > 0) {
+                await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy);
+            }
         }
 
         // Financial Ledger Posting
@@ -392,7 +403,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 });
 
 export const getPurchaseInvoices = asyncHandler(async (req, res) => {
-    const { supplierId, paymentStatus, status, flowType, search, page = 1, limit = 20, includeDeleted, view } = req.query;
+    const { supplierId, paymentStatus, status, flowType, isConsumable, search, page = 1, limit = 20, includeDeleted, view } = req.query;
     const query = { isDeleted: { $ne: true } };
     
     if (view === 'archived') {
@@ -405,6 +416,7 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (status) query.status = status;
     if (flowType) query.flowType = flowType;
+    if (isConsumable !== undefined) query.isConsumable = isConsumable === 'true';
     if (req.query.financialYear) {
         query.financialYear = req.query.financialYear;
     }

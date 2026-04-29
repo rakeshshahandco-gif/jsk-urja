@@ -107,9 +107,20 @@ export const getProfitAndLossReport = asyncHandler(async (req, res) => {
 
     // Income is usually Credit (negative in net logic)
     // Expense is usually Debit (positive in net logic)
-    const tradingIncome = plGroups.filter(g => g.nature === 'Income' && g.affectGrossProfit).reduce((sum, g) => sum - g.total, 0);
-    const tradingExpense = plGroups.filter(g => g.nature === 'Expenses' && g.affectGrossProfit).reduce((sum, g) => sum + g.total, 0);
-    const grossProfit = tradingIncome - tradingExpense;
+    
+    // Trading / Direct components
+    const salesIncome = plGroups.filter(g => g.nature === 'Income' && g.groupName === 'Sales Accounts').reduce((sum, g) => sum - g.total, 0);
+    const otherTradingIncome = plGroups.filter(g => g.nature === 'Income' && g.affectGrossProfit && g.groupName !== 'Sales Accounts').reduce((sum, g) => sum - g.total, 0);
+    const tradingIncome = salesIncome + otherTradingIncome;
+
+    const bomCost = plLedgers.filter(l => l.name === 'Purchase Account' || l.groupName === 'Purchase Accounts').reduce((sum, l) => sum + l.closingBalance, 0);
+    const consumableCost = plLedgers.filter(l => l.name === 'Consumable Purchase / Non-BOM Raw Material Cost').reduce((sum, l) => sum + l.closingBalance, 0);
+    
+    // Direct Expenses (excluding the specific ones handled above)
+    const otherDirectExpense = plGroups.filter(g => g.nature === 'Expenses' && g.affectGrossProfit && g.groupName !== 'Purchase Accounts').reduce((sum, g) => sum + g.total, 0) - consumableCost;
+
+    const grossProfitAfterBOM = tradingIncome - bomCost;
+    const grossProfit = grossProfitAfterBOM - consumableCost - otherDirectExpense;
 
     const totalIncome = plGroups.filter(g => g.nature === 'Income').reduce((sum, g) => sum - g.total, 0);
     const totalExpense = plGroups.filter(g => g.nature === 'Expenses').reduce((sum, g) => sum + g.total, 0);
@@ -119,7 +130,12 @@ export const getProfitAndLossReport = asyncHandler(async (req, res) => {
         incomeGroups,
         expenseGroups,
         tradingIncome,
-        tradingExpense,
+        salesIncome,
+        otherTradingIncome,
+        bomCost,
+        consumableCost,
+        otherDirectExpense,
+        grossProfitAfterBOM,
         grossProfit,
         totalIncome,
         totalExpense,

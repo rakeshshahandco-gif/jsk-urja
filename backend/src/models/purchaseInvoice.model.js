@@ -21,6 +21,15 @@ const piItemSchema = new mongoose.Schema({
     igstRate: { type: Number, default: 0 },
     igstAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },       // taxableAmount + all taxes
+    
+    // Consumable / Non-Stock Logic
+    isConsumable: { type: Boolean, default: false },
+    allocation: {
+        type: { type: String, enum: ['General', 'Product', 'Sales Order', 'Work Order', 'Department'], default: 'General' },
+        referenceId: { type: mongoose.Schema.Types.ObjectId, refPath: 'items.allocation.typeModel', default: null },
+        referenceName: { type: String, default: '' },
+        typeModel: { type: String, enum: ['Item', 'SalesOrder', 'WorkOrder', 'Department', null], default: null }
+    }
 }, { _id: true });
 
 const purchaseInvoiceSchema = new mongoose.Schema({
@@ -65,6 +74,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
         default: 'Direct Invoice',
     },
     isDirectPurchase: { type: Boolean, default: false }, // true = stock hit on invoice  // e-invoicing IRN (optional)
+    isConsumable: { type: Boolean, default: false }, // Header level toggle
 
     // Items
     items: [piItemSchema],

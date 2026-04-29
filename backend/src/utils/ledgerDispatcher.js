@@ -203,11 +203,30 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     const roundOffDebit  = roundOffAmt > 0 ? Math.round(roundOffAmt * 100) / 100 : 0;
     const roundOffCredit = roundOffAmt < 0 ? Math.round(Math.abs(roundOffAmt) * 100) / 100 : 0;
 
-    // Purchase Account = grandTotal − GST debits − freight − net roundOff debit
-    // This guarantees Debits == Credits (grandTotal = Credit to Supplier) always.
-    const purchaseDebit = Math.round(
+    // Split items into Stock vs Consumable for separate ledger posting
+    let stockTaxableTotal = 0;
+    let consumableTaxableTotal = 0;
+
+    invoice.items.forEach(item => {
+        if (item.isConsumable) {
+            consumableTaxableTotal += (item.taxableAmount || 0);
+        } else {
+            stockTaxableTotal += (item.taxableAmount || 0);
+        }
+    });
+
+    // We use the same balancing logic to ensure Debits == Credits
+    // Total Purchase Value (including roundoff adjustment)
+    const totalPurchaseDebit = Math.round(
         (grandTotal - igstAmt - cgstAmt - sgstAmt - freightAmt - roundOffDebit + roundOffCredit) * 100
     ) / 100;
+
+    // Allocate the totalPurchaseDebit proportionally or by exact taxable amount
+    // Using exact taxable amount for Consumables, and remaining for Stock Purchase Account
+    const consumableDebit = Math.round(consumableTaxableTotal * 100) / 100;
+    const purchaseDebit = Math.round((totalPurchaseDebit - consumableDebit) * 100) / 100;
+
+    const consumableLedger = await AccountLedger.findOne({ name: 'Consumable Purchase / Non-BOM Raw Material Cost' }).session(session);
 
     // 4. Create Voucher
     const voucher = await Voucher.create([{
@@ -228,12 +247,40 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     const vId = voucher[0]._id;
 
     // 5. Post Debit Entries
-    // Debit Purchase Account (taxable value derived from grandTotal to ensure balance)
+    // Debit Purchase Account (Stock)
     if (purchaseDebit > 0) {
         await postEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: purchaseLedger._id, amount: purchaseDebit,
-            type: 'Debit', narration: `Direct Purchase`,
+            type: 'Debit', narration: `Stock Purchase`,
+            financialYear: invoice.financialYear
+        }, session);
+    }
+
+    // Debit Consumable Purchase Account
+    if (consumableDebit > 0) {
+        let ledgerToUse = consumableLedger;
+        if (!ledgerToUse) {
+            // Create it if it doesn't exist (One-time safety)
+            const expenseGroup = await AccountGroup.findOne({ name: 'Direct Expenses' }).session(session) || 
+                                 await AccountGroup.findOne({ nature: 'Expenses' }).session(session);
+            
+            ledgerToUse = await AccountLedger.create([{
+                name: 'Consumable Purchase / Non-BOM Raw Material Cost',
+                underGroup: expenseGroup?._id,
+                groupName: expenseGroup?.name,
+                openingBalance: 0,
+                drCr: 'Dr',
+                isSystem: true,
+                createdBy: userId
+            }], { session });
+            ledgerToUse = ledgerToUse[0];
+        }
+
+        await postEntry({
+            voucherId: vId, voucherNo, date,
+            ledgerId: ledgerToUse._id, amount: consumableDebit,
+            type: 'Debit', narration: `Consumable / Non-Stock Purchase`,
             financialYear: invoice.financialYear
         }, session);
     }

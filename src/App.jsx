@@ -24,6 +24,7 @@ import ConversationHistoryReport from '@/features/reports/ConversationHistoryRep
 import FollowupDashboardReport from '@/features/reports/FollowupDashboardReport';
 import FollowupTaskReport from '@/features/reports/FollowupTaskReport';
 import TaskReminderReport from '@/features/reports/TaskReminderReport';
+import ConsumableCostReport from '@/features/reports/ConsumableCostReport';
 import TaskChatDashboard from '@/features/taskChats/TaskChatDashboard';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
 import { TaskList } from '@/features/tasks/components/TaskList';
@@ -318,6 +319,7 @@ const AppLayout = () => {
                         <Route path="/reports/reminders" element={<ProtectedRoute requirePermission="reports"><ReminderReport /></ProtectedRoute>} />
                         <Route path="/reports/open-reminders" element={<ProtectedRoute requirePermission="reports.reminder_report.view"><OpenRemindersReport /></ProtectedRoute>} />
                         <Route path="/reports/conversation-history" element={<ProtectedRoute requirePermission="reports"><ConversationHistoryReport /></ProtectedRoute>} />
+                        <Route path="/reports/consumable-cost" element={<ProtectedRoute requirePermission="reports"><ConsumableCostReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
                         <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />

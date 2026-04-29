@@ -27,7 +27,7 @@ const FLOWS = [
     { key: 'Direct Invoice', label: 'Direct Invoice', desc: 'Small purchase. No PO, no GRN. Stock updates on invoice post.', icon: '🧾' },
 ];
 
-const EMPTY_ROW = { itemId: '', itemName: '', itemCode: '', hsnCode: '', uom: 'NOS', qty: 1, rate: 0, discountPercent: 0, gstRate: 18, description: '', grnItemId: null, poItemId: null, maxQty: null };
+const EMPTY_ROW = { itemId: '', itemName: '', itemCode: '', hsnCode: '', uom: 'NOS', qty: 1, rate: 0, discountPercent: 0, gstRate: 18, description: '', grnItemId: null, poItemId: null, maxQty: null, isConsumable: false, allocation: { type: 'General', referenceId: null, referenceName: '', typeModel: null } };
 
 export default function PurchaseInvoiceFormPage() {
     const navigate = useNavigate();
@@ -55,6 +55,7 @@ export default function PurchaseInvoiceFormPage() {
         gstType: 'CGST / SGST', placeOfSupply: 'Maharashtra', paymentTerms: '30 Days', remarks: '',
         poNumber: '', poDate: '', transporterName: '', vehicleNo: '', lrNumber: '',
         freightAmount: 0, freightGstRate: 0,
+        isConsumable: false
     });
 
     const [rows, setRows] = useState([{ ...EMPTY_ROW }]);
@@ -310,6 +311,7 @@ export default function PurchaseInvoiceFormPage() {
                         lrNumber: inv.lrNumber || '',
                         freightAmount: inv.freightAmount || 0,
                         freightGstRate: inv.freightGstRate || 0,
+                        isConsumable: inv.isConsumable || false,
                     });
                     setRows(inv.items.map(r => ({
                         itemId: r.itemId?._id || r.itemId,
@@ -324,7 +326,9 @@ export default function PurchaseInvoiceFormPage() {
                         description: r.description || '',
                         grnItemId: r.grnItemId || null,
                         poItemId: r.poItemId || null,
-                        maxQty: null // For edit, we assume user knows what they're doing or we'd need current stock/balances
+                        maxQty: null,
+                        isConsumable: r.isConsumable || false,
+                        allocation: r.allocation || { type: 'General', referenceId: null, referenceName: '', typeModel: null }
                     })));
                 } else {
                     setHeader(h => ({
@@ -530,7 +534,10 @@ export default function PurchaseInvoiceFormPage() {
                     discountPercent: Number(r.discountPercent), gstRate: Number(r.gstRate),
                     description: r.description || '',
                     grnItemId: r.grnItemId || null, poItemId: r.poItemId || null,
+                    isConsumable: r.isConsumable || false,
+                    allocation: r.allocation || null
                 })),
+                isConsumable: header.isConsumable || false,
             };
             let result;
             if (isEdit) {
@@ -662,6 +669,22 @@ export default function PurchaseInvoiceFormPage() {
                                     <div style={{ gridColumn: flowType === 'Direct Invoice' ? 'span 1' : 'span 2' }}>
                                         <span style={lbl}>Remarks</span><input value={header.remarks} onChange={e => setH('remarks', e.target.value)} style={inp} placeholder="Any notes..." />
                                     </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', borderRadius: '10px', border: '1px solid #fcd34d' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="headerConsumable" 
+                                            checked={header.isConsumable} 
+                                            onChange={e => {
+                                                const checked = e.target.checked;
+                                                setH('isConsumable', checked);
+                                                setRows(rs => rs.map(r => ({ ...r, isConsumable: checked })));
+                                            }}
+                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="headerConsumable" style={{ fontSize: '13px', fontWeight: 700, color: '#92400e', cursor: 'pointer' }}>
+                                            ALL ITEMS ARE CONSUMABLES (NON-STOCK)
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -691,8 +714,8 @@ export default function PurchaseInvoiceFormPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                         <thead>
                                             <tr style={{ background: '#f8f9fa', color: '#64748b' }}>
-                                                {['#', 'Item', 'Description', 'HSN', 'UOM', 'Qty', 'Balance', 'Rate', 'Total', ''].map((h, i) =>
-                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : 'auto' }}>{h}</th> : null
+                                                {['#', 'Item', 'Consumable', 'Description', 'HSN', 'UOM', 'Qty', 'Balance', 'Rate', 'Total', ''].map((h, i) =>
+                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : h === 'Consumable' ? '100px' : 'auto' }}>{h}</th> : null
                                                 )}
                                             </tr>
                                         </thead>
@@ -718,6 +741,40 @@ export default function PurchaseInvoiceFormPage() {
                                                             ) : (
                                                                 <div style={{ color: '#1e293b', fontWeight: 500 }}>{row.itemName}<div style={{ color: '#64748b', fontSize: '10px' }}>{row.itemCode}</div></div>
                                                             )}
+                                                        </td>
+                                                        <td style={{ padding: '6px 10px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={row.isConsumable} 
+                                                                        onChange={e => setRow(i, 'isConsumable', e.target.checked)}
+                                                                        style={{ width: '16px', height: '16px' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '11px', fontWeight: 600 }}>Consumable</span>
+                                                                </div>
+                                                                {row.isConsumable && (
+                                                                    <select 
+                                                                        value={row.allocation?.type || 'General'}
+                                                                        onChange={e => setRow(i, 'allocation', { ...row.allocation, type: e.target.value })}
+                                                                        style={{ ...inp, padding: '2px 4px', fontSize: '10px', width: '90px' }}
+                                                                    >
+                                                                        <option value="General">General</option>
+                                                                        <option value="Product">Product</option>
+                                                                        <option value="Sales Order">SO</option>
+                                                                        <option value="Work Order">WO</option>
+                                                                        <option value="Department">Dept</option>
+                                                                    </select>
+                                                                )}
+                                                                {row.isConsumable && row.allocation?.type !== 'General' && (
+                                                                    <input 
+                                                                        value={row.allocation?.referenceName || ''}
+                                                                        onChange={e => setRow(i, 'allocation', { ...row.allocation, referenceName: e.target.value })}
+                                                                        style={{ ...inp, padding: '2px 4px', fontSize: '10px', marginTop: '2px' }}
+                                                                        placeholder={`Ref ${row.allocation?.type}...`}
+                                                                    />
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td style={{ padding: '6px 10px', minWidth: '200px' }}>
                                                             <textarea
