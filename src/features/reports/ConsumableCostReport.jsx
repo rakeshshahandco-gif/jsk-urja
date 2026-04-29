@@ -44,6 +44,7 @@ const ConsumableCostReport = () => {
                     }
                 });
             });
+        }
 
             setReportData(flatItems);
         } catch (error) {
