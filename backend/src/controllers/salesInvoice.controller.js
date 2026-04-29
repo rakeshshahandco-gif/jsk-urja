@@ -139,6 +139,57 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             delete invData.soId;
         }
 
+        // --- PHASE 1.5: FORCE DATA CONSISTENCY ---
+        // 1. Ensure invoiceDate is a Date object
+        if (invData.invoiceDate) {
+            invData.invoiceDate = new Date(invData.invoiceDate);
+        } else {
+            invData.invoiceDate = new Date();
+        }
+
+        // 2. Recalculate Totals (Prevent 0 taxable amount bugs)
+        if (invData.items && invData.items.length > 0) {
+            let calcTotalTaxable = 0;
+            let calcTotalQty = 0;
+            let calcTotalGst = 0;
+
+            invData.items = invData.items.map(itm => {
+                const qty = Number(itm.qty) || 0;
+                const rate = Number(itm.rate) || 0;
+                const discAmount = Number(itm.discountAmount) || 0;
+                
+                const taxable = (qty * rate) - discAmount;
+                const cgst = itm.cgstRate ? (taxable * itm.cgstRate) / 100 : 0;
+                const sgst = itm.sgstRate ? (taxable * itm.sgstRate) / 100 : 0;
+                const igst = itm.igstRate ? (taxable * itm.igstRate) / 100 : 0;
+                
+                calcTotalTaxable += taxable;
+                calcTotalQty += qty;
+                calcTotalGst += (cgst + sgst + igst);
+
+                return {
+                    ...itm,
+                    qty,
+                    rate,
+                    taxableAmount: taxable,
+                    cgstAmount: Number(cgst.toFixed(2)),
+                    sgstAmount: Number(sgst.toFixed(2)),
+                    igstAmount: Number(igst.toFixed(2)),
+                    totalAmount: Number((taxable + cgst + sgst + igst).toFixed(2))
+                };
+            });
+
+            invData.totalTaxableAmount = Number(calcTotalTaxable.toFixed(2));
+            invData.totalQty = calcTotalQty;
+            invData.totalGst = Number(calcTotalGst.toFixed(2));
+            
+            // Grand Total Calculation
+            const freight = Number(invData.freightAmount) || 0;
+            const freightGst = Number(invData.freightGstAmount) || 0;
+            invData.grandTotal = Number((invData.totalTaxableAmount + invData.totalGst + freight + freightGst).toFixed(2));
+            invData.roundedTotal = Math.round(invData.grandTotal);
+        }
+
         const isB2C = invData.customerRegistrationType === 'Unregistered' || invData.customerRegistrationType === 'Consumer';
         if (isB2C) {
             // August 2024 Portal Amendment: B2CL threshold is ₹1,00,000 for Interstate

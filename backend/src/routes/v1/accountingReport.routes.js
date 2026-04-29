@@ -9,5 +9,6 @@ router.use(protect);
 router.get('/profit-loss', accountReportController.getProfitAndLossReport);
 router.get('/balance-sheet', accountReportController.getBalanceSheetReport);
 router.get('/trial-balance', accountReportController.getTrialBalanceReport);
+router.get('/product-profitability', accountReportController.getProductWiseProfitability);
 
 export default router;

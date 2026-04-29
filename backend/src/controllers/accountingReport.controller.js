@@ -4,6 +4,9 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
+import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { BOM } from '../models/bom.model.js';
+import { Item } from '../models/item.model.js';
 import moment from 'moment';
 
 /**
@@ -219,4 +222,77 @@ export const getTrialBalanceReport = asyncHandler(async (req, res) => {
         isTallied: Math.abs(totalDebit - totalCredit) < 0.1,
         diff: totalDebit - totalCredit
     }));
+});
+
+/**
+ * Product-wise Gross Profit Report
+ * Calculates: Revenue - (Qty * Unit Cost)
+ * Unit Cost is taken from Default BOM or Valuation Rate
+ */
+export const getProductWiseProfitability = asyncHandler(async (req, res) => {
+    const { startDate, endDate, financialYear } = req.query;
+
+    const filters = { isDeleted: { $ne: true } };
+    if (financialYear) filters.financialYear = financialYear;
+    if (startDate || endDate) {
+        filters.invoiceDate = {};
+        if (startDate) filters.invoiceDate.$gte = moment(startDate).startOf('day').toDate();
+        if (endDate) filters.invoiceDate.$lte = moment(endDate).endOf('day').toDate();
+    }
+
+    // Aggregate Sales by Product
+    const salesData = await SalesInvoice.aggregate([
+        { $match: filters },
+        { $unwind: '$items' },
+        {
+            $group: {
+                _id: '$items.itemId',
+                itemCode: { $first: '$items.itemCode' },
+                itemName: { $first: '$items.itemName' },
+                totalQty: { $sum: '$items.qty' },
+                totalRevenue: { $sum: '$items.taxableAmount' },
+                avgRate: { $avg: '$items.rate' },
+                uom: { $first: '$items.uom' }
+            }
+        },
+        { $sort: { totalRevenue: -1 } }
+    ]);
+
+    // Fetch Costs for each product
+    const report = [];
+    for (const item of salesData) {
+        let unitCost = 0;
+        let costSource = 'Manual/No Cost';
+
+        if (item._id) {
+            // 1. Try Default BOM
+            const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
+            if (defaultBOM && defaultBOM.finalProductionCostPerUnit) {
+                unitCost = defaultBOM.finalProductionCostPerUnit;
+                costSource = `BOM (${defaultBOM.bomNumber})`;
+            } else {
+                // 2. Try Item Master Valuation/Purchase Rate
+                const itemMaster = await Item.findById(item._id).lean();
+                if (itemMaster) {
+                    unitCost = itemMaster.valuationRate || itemMaster.purchaseRate || 0;
+                    costSource = itemMaster.valuationRate ? 'Valuation Rate' : (itemMaster.purchaseRate ? 'Purchase Rate' : 'Item Master (No Rate)');
+                }
+            }
+        }
+
+        const totalCost = item.totalQty * unitCost;
+        const grossProfit = item.totalRevenue - totalCost;
+        const gpPercent = item.totalRevenue > 0 ? (grossProfit / item.totalRevenue) * 100 : 0;
+
+        report.push({
+            ...item,
+            unitCost,
+            totalCost,
+            grossProfit,
+            gpPercent,
+            costSource
+        });
+    }
+
+    res.send(new ApiResponse(httpStatus.OK, report, 'Product-wise profitability report fetched'));
 });

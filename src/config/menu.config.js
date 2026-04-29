@@ -201,6 +201,7 @@ export const menuConfig = [
 
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
             { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: '/mis/sales-marketing', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
+            { id: 'report-product-gp-sales', title: 'Product-wise GP Analysis', path: PATHS.REPORTS.PRODUCT_GP, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
         ],
     },
     {
@@ -283,8 +284,8 @@ export const menuConfig = [
         id: 'mis-reports',
         title: 'MIS Reports',
         icon: 'AssessmentIcon',
-        roles: [ROLES.ADMIN, ROLES.MANAGER],
-        permission: 'mis',
+        roles: [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.MANAGER],
+        permission: 'reports',
         children: [
             { id: 'mis-dashboard', title: '📊 MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.dashboard.view' },
             { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
@@ -293,6 +294,7 @@ export const menuConfig = [
             { id: 'gstr1-export', title: '📄 GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
             { id: 'gstr3b-compliance', title: '📊 GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
             { id: 'gst-reconciliation', title: '🔄 2A/2B Reconciliation', path: '/reports/gst-reconciliation', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'report-product-gp', title: '📈 Product-wise GP Analysis', path: PATHS.REPORTS.PRODUCT_GP, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
         ]
     },
     {
