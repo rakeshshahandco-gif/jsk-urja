@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Download, Printer, Filter, Search, Tag, Box, ShoppingCart } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button, BrandedLoader } from '@/components/ui';
-import purchaseApi from '@/services/purchaseApi';
+import * as purchaseApi from '@/services/purchaseApi';
 import moment from 'moment';
 
 const ConsumableCostReport = () => {
@@ -30,8 +30,9 @@ const ConsumableCostReport = () => {
             
             // Flatten items for the report
             const flatItems = [];
-            data.purchaseInvoices.forEach(inv => {
-                inv.items.forEach(item => {
+            if (data && data.invoices) {
+                data.invoices.forEach(inv => {
+                    inv.items.forEach(item => {
                     if (item.isConsumable) {
                         flatItems.push({
                             ...item,
