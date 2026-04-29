@@ -291,6 +291,7 @@ export const menuConfig = [
             { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
             { id: 'gstr1-export', title: '📄 GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
             { id: 'gstr3b-compliance', title: '📊 GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gst-reconciliation', title: '🔄 2A/2B Reconciliation', path: '/reports/gst-reconciliation', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
         ]
     },
     {

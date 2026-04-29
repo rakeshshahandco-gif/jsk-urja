@@ -87,6 +87,7 @@ import salesConversionRoute from './salesConversion.routes.js';
 import transporterRoute from './transporter.routes.js';
 import ewayBillRoute from './ewayBill.routes.js';
 import gstReportRoute from './gstReport.routes.js';
+import gstReconciliationRoute from './gstReconciliation.routes.js';
 import backupRoute from './backup.routes.js';
 
 
@@ -467,6 +468,10 @@ const defaultRoutes = [
   {
     path: '/gst-reports',
     route: gstReportRoute,
+  },
+  {
+    path: '/gst-reconciliation',
+    route: gstReconciliationRoute,
   },
 ];
 
