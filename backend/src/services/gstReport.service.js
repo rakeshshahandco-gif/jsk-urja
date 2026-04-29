@@ -10,6 +10,7 @@ import { CompanyProfile } from '../models/companyProfile.model.js';
 import Customer from '../models/customer.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
+import { getFYFromDate } from '../utils/fyUtils.js';
 import ExcelJS from 'exceljs';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -920,7 +921,7 @@ export async function generateGSTR3BData(startDate, endDate) {
   // Get adjustments for the period
   const month = new Date(startDate).getMonth() + 1;
   const monthStr = String(month).padStart(2, '0');
-  const fy = getFinancialYear(new Date(startDate));
+  const fy = getFYFromDate(new Date(startDate));
   const adjustment = await Gstr3bAdjustment.findOne({ financialYear: fy, month: monthStr }).lean();
 
   const summary = {

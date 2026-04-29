@@ -8,11 +8,11 @@ import {
     cancelCreditDebitNote, 
     deleteCreditDebitNote 
 } from '../../controllers/creditDebitNote.controller.js';
-import { auth } from '../../middlewares/auth.js';
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
-router.use(auth());
+router.use(protect);
 
 router.route('/')
     .post(createCreditDebitNote)
