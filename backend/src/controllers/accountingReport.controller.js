@@ -292,34 +292,38 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
         if (item._id) {
             const itemMaster = await Item.findById(item._id).lean();
             
-            if (itemMaster && itemMaster.useManualBOMCost) {
-                // 1. Manual BOM Cost (Priority 1)
+            // 1. Try Default BOM (Highest Priority)
+            const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
+            
+            if (defaultBOM) {
+                unitCost = defaultBOM.finalProductionCostPerUnit || 0;
+                costSource = 'BOM Final Cost';
+                costDetails = {
+                    bomNumber: defaultBOM.bomNumber,
+                    rawMaterialCost: defaultBOM.totalRawMaterialCost,
+                    processCost: defaultBOM.totalProcessCost,
+                    overheadCost: defaultBOM.overheadCost,
+                    labourCost: defaultBOM.labourCost,
+                    pointsLabourCost: defaultBOM.totalPointsLabourCost,
+                    finalCost: defaultBOM.finalProductionCostPerUnit
+                };
+            } 
+            else if (itemMaster && itemMaster.useManualBOMCost) {
+                // 2. Manual BOM Cost (If specifically enabled)
                 unitCost = itemMaster.manualBOMCostPerUnit || 0;
-                costSource = 'Manual BOM Cost';
+                costSource = 'Manual GP Cost';
                 costDetails = { manualCost: unitCost };
-            } else {
-                // 2. Try Default BOM (Priority 2)
-                const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
-                if (defaultBOM) {
-                    unitCost = defaultBOM.finalProductionCostPerUnit || 0;
-                    costSource = 'BOM Final Cost';
-                    costDetails = {
-                        bomNumber: defaultBOM.bomNumber,
-                        rawMaterialCost: defaultBOM.totalRawMaterialCost,
-                        processCost: defaultBOM.totalProcessCost,
-                        overheadCost: defaultBOM.overheadCost,
-                        labourCost: defaultBOM.labourCost,
-                        pointsLabourCost: defaultBOM.totalPointsLabourCost,
-                        finalCost: defaultBOM.finalProductionCostPerUnit
-                    };
-                } else if (itemMaster) {
-                    // Fallback to valuation rate ONLY if no BOM and no manual cost?
-                    // User said: "Show status in GP report as 'Cost Missing / BOM Not Available'. Do not show misleading profit."
-                    // and "Valuation Rate only if specifically allowed, but default should not use valuation rate for GP when BOM/manual cost is available."
-                    // I will mark as Missing if no BOM and no Manual.
-                    unitCost = 0;
-                    costSource = 'Cost Missing';
-                }
+            }
+            else if (itemMaster && itemMaster.valuationRate > 0) {
+                // 3. Fallback to Item Master Valuation Rate (New Requirement)
+                unitCost = itemMaster.valuationRate;
+                costSource = 'Item Valuation Rate';
+                costDetails = { valuationRate: unitCost };
+            }
+            else {
+                // 4. No cost info found
+                unitCost = 0;
+                costSource = 'Cost Missing';
             }
         }
 

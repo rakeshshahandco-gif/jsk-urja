@@ -144,6 +144,14 @@ const ProductGpReport = () => {
                 <Button variant="outline" onClick={fetchReport} style={{ borderRadius: '12px', padding: '10px 20px' }}>Apply Filters</Button>
             </div>
 
+            {/* Info Note */}
+            <div style={{ background: '#eff6ff', padding: '10px 20px', borderRadius: '12px', border: '1px solid #dbeafe', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Info size={16} style={{ color: '#3b82f6' }} />
+                <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 500 }}>
+                    If BOM is not available, valuation rate from Item Master is used for estimated cost.
+                </span>
+            </div>
+
             {/* Table */}
             <div style={{ background: '#ffffff', borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
                 {loading ? (
@@ -158,6 +166,7 @@ const ProductGpReport = () => {
                                     <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Avg Rate</th>
                                     <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Value</th>
                                     <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost/Unit</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost Source</th>
                                     <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Est. Cost</th>
                                     <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Gross Profit</th>
                                     <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Margin %</th>
@@ -190,9 +199,29 @@ const ProductGpReport = () => {
                                             <div style={{ fontSize: '13px', fontWeight: 600, color: item.costSource === 'Cost Missing' ? '#dc2626' : '#475569' }}>
                                                 {formatCurrency(item.unitCost, 2)}
                                             </div>
-                                            <div style={{ fontSize: '9px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
-                                                <Info size={9} /> {item.costSource}
-                                            </div>
+                                        </td>
+                                        <td style={{ padding: '14px 20px' }}>
+                                            <span style={{ 
+                                                fontSize: '10px', 
+                                                fontWeight: 700, 
+                                                padding: '4px 8px', 
+                                                borderRadius: '6px',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.02em',
+                                                background: item.costSource === 'BOM Final Cost' ? '#f0fdf4' : 
+                                                            item.costSource === 'Item Valuation Rate' ? '#fffbeb' : 
+                                                            item.costSource === 'Cost Missing' ? '#fef2f2' : '#eff6ff',
+                                                color: item.costSource === 'BOM Final Cost' ? '#16a34a' : 
+                                                       item.costSource === 'Item Valuation Rate' ? '#d97706' : 
+                                                       item.costSource === 'Cost Missing' ? '#dc2626' : '#3b82f6',
+                                                border: `1px solid ${
+                                                    item.costSource === 'BOM Final Cost' ? '#dcfce7' : 
+                                                    item.costSource === 'Item Valuation Rate' ? '#fef3c7' : 
+                                                    item.costSource === 'Cost Missing' ? '#fee2e2' : '#dbeafe'
+                                                }`
+                                            }}>
+                                                {item.costSource}
+                                            </span>
                                         </td>
                                         <td style={{ padding: '14px 20px', textAlign: 'right' }}>
                                             <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.totalCost)}</div>
