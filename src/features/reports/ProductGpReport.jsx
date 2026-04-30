@@ -364,18 +364,22 @@ const ProductGpReport = () => {
                             {/* Sales Invoices List */}
                             <div>
                                 <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Search size={16} /> Sales Invoices Included
+                                    <Search size={16} /> Sales Invoices Included (Detailed Mapping)
                                 </h3>
                                 <div style={{ border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                                         <thead>
                                             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Invoice #</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Customer</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Qty</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Value</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Status/Category</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Invoice #</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Date</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Customer</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Item / Additional Notes</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'center' }}>Qty</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Rate</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Value (Taxable)</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>GST</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Total</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Status/Category</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -385,18 +389,37 @@ const ProductGpReport = () => {
                                                 const isReplacement = category === 'Replacement';
                                                 const isSample = category === 'Sample';
                                                 const isEstimate = docType === 'Estimate';
+
+                                                const totalGst = (inv.cgstAmount || 0) + (inv.sgstAmount || 0) + (inv.igstAmount || 0);
+                                                
+                                                // Validation Warning: Qty > 0, Value = 0, but Rate > 0
+                                                const showWarning = inv.qty > 0 && inv.taxableAmount === 0 && inv.rate > 0;
                                                 
                                                 return (
                                                     <tr key={i} style={{ 
                                                         borderBottom: i === selectedItem.invoices.length - 1 ? 'none' : '1px solid #f1f5f9',
                                                         background: isReplacement ? '#fff1f2' : (isSample ? '#eff6ff' : (isEstimate ? '#f5f3ff' : 'transparent'))
                                                     }}>
-                                                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{inv.invoiceNumber}</td>
-                                                        <td style={{ padding: '10px 12px' }}>{moment(inv.invoiceDate).format('DD-MMM-YY')}</td>
-                                                        <td style={{ padding: '10px 12px' }}>{inv.customerName}</td>
-                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{inv.qty}</td>
-                                                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(inv.taxableAmount)}</td>
-                                                        <td style={{ padding: '10px 12px' }}>
+                                                        <td style={{ padding: '8px 10px', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                                                        <td style={{ padding: '8px 10px' }}>{moment(inv.invoiceDate).format('DD-MMM-YY')}</td>
+                                                        <td style={{ padding: '8px 10px' }}>{inv.customerName}</td>
+                                                        <td style={{ padding: '8px 10px' }}>
+                                                            <div style={{ fontWeight: 600 }}>{inv.itemName || selectedItem.itemName}</div>
+                                                            {inv.additionalNotes && <div style={{ fontSize: '10px', color: '#64748b', fontStyle: 'italic' }}>{inv.additionalNotes}</div>}
+                                                        </td>
+                                                        <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700 }}>{inv.qty}</td>
+                                                        <td style={{ padding: '8px 10px', textAlign: 'right' }}>{formatCurrency(inv.rate, 2)}</td>
+                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: showWarning ? '#dc2626' : '#0f172a' }}>
+                                                            {formatCurrency(inv.taxableAmount)}
+                                                            {showWarning && (
+                                                                <div style={{ fontSize: '8px', color: '#dc2626', fontWeight: 800, marginTop: '2px' }}>
+                                                                    ⚠ GP value mapping error: Qty and rate exist but value is zero.
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td style={{ padding: '8px 10px', textAlign: 'right' }}>{formatCurrency(totalGst)}</td>
+                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(inv.totalAmount)}</td>
+                                                        <td style={{ padding: '8px 10px' }}>
                                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                                 <span style={{ 
                                                                     fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px',
@@ -422,9 +445,11 @@ const ProductGpReport = () => {
                                         </tbody>
                                         <tfoot>
                                             <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontWeight: 800 }}>
-                                                <td colSpan="3" style={{ padding: '10px 12px', textAlign: 'right' }}>TOTAL:</td>
+                                                <td colSpan="4" style={{ padding: '10px 12px', textAlign: 'right' }}>TOTAL:</td>
                                                 <td style={{ padding: '10px 12px', textAlign: 'center' }}>{selectedItem.totalQty}</td>
+                                                <td></td>
                                                 <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(selectedItem.totalRevenue)}</td>
+                                                <td colSpan="3"></td>
                                             </tr>
                                         </tfoot>
                                     </table>

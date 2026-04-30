@@ -296,7 +296,19 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
                     $sum: {
                         $cond: [
                             { $ne: ['$orderCategory', 'Replacement'] },
-                            '$items.taxableAmount',
+                            {
+                                $cond: [
+                                    { $gt: ['$items.taxableAmount', 0] },
+                                    '$items.taxableAmount',
+                                    { 
+                                        $cond: [
+                                            { $gt: ['$items.rate', 0] },
+                                            { $subtract: [{ $multiply: ['$items.qty', '$items.rate'] }, { $ifNull: ['$items.discountAmount', 0] }] },
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
                             0
                         ]
                     }
@@ -308,9 +320,27 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
                         invoiceNumber: '$invoiceNumber',
                         invoiceDate: '$invoiceDate',
                         customerName: '$customerName',
+                        itemName: '$items.itemName',
+                        additionalNotes: { $ifNull: ['$items.additionalNotes', ''] },
                         qty: '$items.qty',
                         rate: '$items.rate',
-                        taxableAmount: '$items.taxableAmount',
+                        taxableAmount: {
+                            $cond: [
+                                { $gt: ['$items.taxableAmount', 0] },
+                                '$items.taxableAmount',
+                                { 
+                                    $cond: [
+                                        { $gt: ['$items.rate', 0] },
+                                        { $subtract: [{ $multiply: ['$items.qty', '$items.rate'] }, { $ifNull: ['$items.discountAmount', 0] }] },
+                                        0
+                                    ]
+                                }
+                            ]
+                        },
+                        cgstAmount: { $ifNull: ['$items.cgstAmount', 0] },
+                        sgstAmount: { $ifNull: ['$items.sgstAmount', 0] },
+                        igstAmount: { $ifNull: ['$items.igstAmount', 0] },
+                        totalAmount: { $ifNull: ['$items.totalAmount', 0] },
                         orderCategory: { $ifNull: ['$orderCategory', 'Order'] },
                         documentType: { $ifNull: ['$documentType', 'Tax Invoice'] }
                     }
