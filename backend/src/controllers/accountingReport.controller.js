@@ -232,7 +232,11 @@ export const getTrialBalanceReport = asyncHandler(async (req, res) => {
 export const getProductWiseProfitability = asyncHandler(async (req, res) => {
     const { startDate, endDate, financialYear } = req.query;
 
-    const filters = { isDeleted: { $ne: true } };
+    const filters = { 
+        isDeleted: { $ne: true },
+        status: { $nin: ['Cancelled', 'Draft'] } // Only confirmed/posted sales
+    };
+    
     if (financialYear) filters.financialYear = financialYear;
     if (startDate || endDate) {
         filters.invoiceDate = {};
@@ -251,8 +255,28 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
                 itemName: { $first: '$items.itemName' },
                 totalQty: { $sum: '$items.qty' },
                 totalRevenue: { $sum: '$items.taxableAmount' },
-                avgRate: { $avg: '$items.rate' },
-                uom: { $first: '$items.uom' }
+                uom: { $first: '$items.uom' },
+                invoices: {
+                    $push: {
+                        invoiceNumber: '$invoiceNumber',
+                        invoiceDate: '$invoiceDate',
+                        customerName: '$customerName',
+                        qty: '$items.qty',
+                        rate: '$items.rate',
+                        taxableAmount: '$items.taxableAmount'
+                    }
+                }
+            }
+        },
+        {
+            $addFields: {
+                avgRate: { 
+                    $cond: [
+                        { $gt: ['$totalQty', 0] }, 
+                        { $divide: ['$totalRevenue', '$totalQty'] }, 
+                        0 
+                    ] 
+                }
             }
         },
         { $sort: { totalRevenue: -1 } }
@@ -262,20 +286,39 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
     const report = [];
     for (const item of salesData) {
         let unitCost = 0;
-        let costSource = 'Manual/No Cost';
+        let costSource = 'Cost Missing';
+        let costDetails = {};
 
         if (item._id) {
-            // 1. Try Default BOM
-            const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
-            if (defaultBOM && defaultBOM.finalProductionCostPerUnit) {
-                unitCost = defaultBOM.finalProductionCostPerUnit;
-                costSource = `BOM (${defaultBOM.bomNumber})`;
+            const itemMaster = await Item.findById(item._id).lean();
+            
+            if (itemMaster && itemMaster.useManualBOMCost) {
+                // 1. Manual BOM Cost (Priority 1)
+                unitCost = itemMaster.manualBOMCostPerUnit || 0;
+                costSource = 'Manual BOM Cost';
+                costDetails = { manualCost: unitCost };
             } else {
-                // 2. Try Item Master Valuation/Purchase Rate
-                const itemMaster = await Item.findById(item._id).lean();
-                if (itemMaster) {
-                    unitCost = itemMaster.valuationRate || itemMaster.purchaseRate || 0;
-                    costSource = itemMaster.valuationRate ? 'Valuation Rate' : (itemMaster.purchaseRate ? 'Purchase Rate' : 'Item Master (No Rate)');
+                // 2. Try Default BOM (Priority 2)
+                const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
+                if (defaultBOM) {
+                    unitCost = defaultBOM.finalProductionCostPerUnit || 0;
+                    costSource = 'BOM Final Cost';
+                    costDetails = {
+                        bomNumber: defaultBOM.bomNumber,
+                        rawMaterialCost: defaultBOM.totalRawMaterialCost,
+                        processCost: defaultBOM.totalProcessCost,
+                        overheadCost: defaultBOM.overheadCost,
+                        labourCost: defaultBOM.labourCost,
+                        pointsLabourCost: defaultBOM.totalPointsLabourCost,
+                        finalCost: defaultBOM.finalProductionCostPerUnit
+                    };
+                } else if (itemMaster) {
+                    // Fallback to valuation rate ONLY if no BOM and no manual cost?
+                    // User said: "Show status in GP report as 'Cost Missing / BOM Not Available'. Do not show misleading profit."
+                    // and "Valuation Rate only if specifically allowed, but default should not use valuation rate for GP when BOM/manual cost is available."
+                    // I will mark as Missing if no BOM and no Manual.
+                    unitCost = 0;
+                    costSource = 'Cost Missing';
                 }
             }
         }
@@ -290,7 +333,9 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
             totalCost,
             grossProfit,
             gpPercent,
-            costSource
+            costSource,
+            costDetails,
+            formula: 'Gross Profit = Sales Value - (Qty Sold * Unit Cost)'
         });
     }
 

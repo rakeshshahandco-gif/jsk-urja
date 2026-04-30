@@ -85,6 +85,10 @@ const itemSchema = new mongoose.Schema({
     machineRequired: { type: String, trim: true, default: '' },
     qcRequired: { type: Boolean, default: false },
     stdProductionCost: { type: Number, default: 0 },
+    
+    // Costing Overrides
+    useManualBOMCost: { type: Boolean, default: false },
+    manualBOMCostPerUnit: { type: Number, default: 0 },
 
     // ── 6. TECHNICAL SPECIFICATIONS (Electrical items only) ────────────────────
     technical: {

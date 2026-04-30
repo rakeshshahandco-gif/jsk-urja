@@ -8,6 +8,7 @@ import moment from 'moment';
 const ProductGpReport = () => {
     const [reportData, setReportData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedItem, setSelectedItem] = useState(null); // For drill-down
     const [filters, setFilters] = useState({
         startDate: moment().startOf('month').format('YYYY-MM-DD'),
         endDate: moment().endOf('month').format('YYYY-MM-DD'),
@@ -50,11 +51,11 @@ const ProductGpReport = () => {
 
     const totalGpPercent = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
 
-    const formatCurrency = (val) => {
+    const formatCurrency = (val, dec = 0) => {
         return new Intl.NumberFormat('en-IN', {
             style: 'currency',
             currency: 'INR',
-            maximumFractionDigits: 0
+            maximumFractionDigits: dec
         }).format(val);
     };
 
@@ -93,10 +94,10 @@ const ProductGpReport = () => {
                         <div style={{ fontSize: '12px', fontWeight: 700, color: '#ef4444', background: '#fee2e2', padding: '4px 10px', borderRadius: '20px' }}>Total Cost</div>
                     </div>
                     <div style={{ fontSize: '26px', fontWeight: 900, color: '#1e293b' }}>{formatCurrency(totals.cost)}</div>
-                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>BOM / Valuation Cost</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Estimated Cost Breakdown</div>
                 </div>
 
-                <div style={{ background: 'linear-gradient(135deg, #059669, #047857)', padding: '20px', borderRadius: '20px', color: '#fff', boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)' }}>
+                <div style={{ background: totals.profit >= 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #dc2626, #991b1b)', padding: '20px', borderRadius: '20px', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <div style={{ padding: '8px', background: 'rgba(255,255,255,0.2)', borderRadius: '12px' }}><IndianRupee size={20} /></div>
                         <div style={{ fontSize: '12px', fontWeight: 700, background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: '20px' }}>Gross Profit</div>
@@ -152,54 +153,68 @@ const ProductGpReport = () => {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Product Details</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Qty Sold</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Value</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Est. Cost</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Gross Profit</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Margin</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Product Details</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Qty Sold</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Avg Rate</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Value</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost/Unit</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Est. Cost</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Gross Profit</th>
+                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Margin %</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredData.length === 0 ? (
-                                    <tr><td colSpan="6" style={{ padding: '60px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>No sales data found for the selected period.</td></tr>
+                                    <tr><td colSpan="8" style={{ padding: '60px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>No sales data found for the selected period.</td></tr>
                                 ) : filteredData.map((item, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                        <td style={{ padding: '18px 20px' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{item.itemName}</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{item.itemCode}</div>
+                                    <tr key={idx} 
+                                        style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s', cursor: 'pointer' }} 
+                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} 
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        onClick={() => setSelectedItem(item)}
+                                    >
+                                        <td style={{ padding: '14px 20px' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{item.itemName}</div>
+                                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{item.itemCode}</div>
                                         </td>
-                                        <td style={{ padding: '18px 20px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{item.totalQty} {item.uom}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Avg Rate: {formatCurrency(item.avgRate)}</div>
+                                        <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{item.totalQty} {item.uom}</div>
                                         </td>
-                                        <td style={{ padding: '18px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(item.totalRevenue)}</div>
+                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.avgRate, 2)}</div>
                                         </td>
-                                        <td style={{ padding: '18px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.totalCost)}</div>
-                                            <div style={{ fontSize: '10px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                                                <Info size={10} /> {item.costSource}
+                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(item.totalRevenue)}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: item.costSource === 'Cost Missing' ? '#dc2626' : '#475569' }}>
+                                                {formatCurrency(item.unitCost, 2)}
+                                            </div>
+                                            <div style={{ fontSize: '9px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '3px' }}>
+                                                <Info size={9} /> {item.costSource}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '18px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '15px', fontWeight: 800, color: item.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
+                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.totalCost)}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '14px', fontWeight: 800, color: item.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
                                                 {formatCurrency(item.grossProfit)}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '18px 20px', textAlign: 'center' }}>
+                                        <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                                             <div style={{ 
                                                 display: 'inline-flex', 
                                                 alignItems: 'center', 
                                                 gap: '4px',
-                                                padding: '4px 12px', 
+                                                padding: '3px 10px', 
                                                 borderRadius: '20px', 
-                                                fontSize: '13px', 
+                                                fontSize: '12px', 
                                                 fontWeight: 700,
                                                 background: item.gpPercent >= 20 ? '#d1fae5' : (item.gpPercent >= 0 ? '#ffedd5' : '#fee2e2'),
                                                 color: item.gpPercent >= 20 ? '#065f46' : (item.gpPercent >= 0 ? '#9a3412' : '#991b1b')
                                             }}>
-                                                {item.gpPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                {item.gpPercent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                                                 {item.gpPercent.toFixed(1)}%
                                             </div>
                                         </td>
@@ -210,6 +225,133 @@ const ProductGpReport = () => {
                     </div>
                 )}
             </div>
+
+            {/* Drill-down Modal */}
+            {selectedItem && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }} onClick={() => setSelectedItem(null)}>
+                    <div style={{ background: '#fff', width: '100%', maxWidth: '800px', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div style={{ padding: '24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>{selectedItem.itemName}</h2>
+                                <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748b' }}>{selectedItem.itemCode} • Profitability Analysis Details</p>
+                            </div>
+                            <button onClick={() => setSelectedItem(null)} style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>×</button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+                            {/* Summary row */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                                <div style={{ background: '#f1f5f9', padding: '16px', borderRadius: '16px' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Formula Used</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginTop: '4px' }}>{selectedItem.formula}</div>
+                                </div>
+                                <div style={{ background: '#f1f5f9', padding: '16px', borderRadius: '16px' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cost Source</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginTop: '4px' }}>{selectedItem.costSource}</div>
+                                </div>
+                                <div style={{ background: selectedItem.grossProfit >= 0 ? '#d1fae5' : '#fee2e2', padding: '16px', borderRadius: '16px' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: selectedItem.grossProfit >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase' }}>Result</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 800, color: selectedItem.grossProfit >= 0 ? '#047857' : '#dc2626', marginTop: '4px' }}>
+                                        {selectedItem.grossProfit >= 0 ? 'Profitable' : 'Loss-making'} ({selectedItem.gpPercent.toFixed(1)}%)
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Cost Breakdown */}
+                            <div style={{ marginBottom: '24px' }}>
+                                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Package size={16} /> Cost Breakdown (Per Unit)
+                                </h3>
+                                {selectedItem.costSource === 'BOM Final Cost' ? (
+                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '16px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#64748b' }}>Raw Material:</span>
+                                                <span style={{ fontWeight: 600 }}>{formatCurrency(selectedItem.costDetails.rawMaterialCost, 2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#64748b' }}>Component Labour:</span>
+                                                <span style={{ fontWeight: 600 }}>{formatCurrency(selectedItem.costDetails.pointsLabourCost, 2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#64748b' }}>Process Cost:</span>
+                                                <span style={{ fontWeight: 600 }}>{formatCurrency(selectedItem.costDetails.processCost, 2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#64748b' }}>Overhead Cost:</span>
+                                                <span style={{ fontWeight: 600 }}>{formatCurrency(selectedItem.costDetails.overheadCost, 2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                <span style={{ color: '#64748b' }}>Other Labour:</span>
+                                                <span style={{ fontWeight: 600 }}>{formatCurrency(selectedItem.costDetails.labourCost, 2)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderTop: '1px dashed #cbd5e1', paddingTop: '8px', gridColumn: 'span 2' }}>
+                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>Final BOM Cost:</span>
+                                                <span style={{ fontWeight: 800, color: '#2563eb' }}>{formatCurrency(selectedItem.unitCost, 2)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : selectedItem.costSource === 'Manual BOM Cost' ? (
+                                    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#1e40af' }}>Manual cost override active for this item.</p>
+                                        <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: '#1e3a8a' }}>{formatCurrency(selectedItem.unitCost, 2)}</p>
+                                    </div>
+                                ) : (
+                                    <div style={{ background: '#fef2f2', border: '1px solid #fecdd3', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#991b1b', fontWeight: 600 }}>COST DATA MISSING</p>
+                                        <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#b91c1c' }}>Please configure a BOM or set a Manual Cost in Item Master.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Sales Invoices List */}
+                            <div>
+                                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Search size={16} /> Sales Invoices Included
+                                </h3>
+                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                        <thead>
+                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Invoice #</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Customer</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Qty</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedItem.invoices?.map((inv, i) => (
+                                                <tr key={i} style={{ borderBottom: i === selectedItem.invoices.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{moment(inv.invoiceDate).format('DD-MMM-YY')}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{inv.customerName}</td>
+                                                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>{inv.qty}</td>
+                                                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(inv.taxableAmount)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontWeight: 800 }}>
+                                                <td colSpan="3" style={{ padding: '10px 12px', textAlign: 'right' }}>TOTAL:</td>
+                                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>{selectedItem.totalQty}</td>
+                                                <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(selectedItem.totalRevenue)}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+                            <Button variant="primary" size="sm" onClick={() => setSelectedItem(null)} style={{ borderRadius: '10px' }}>Close Analysis</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -50,6 +50,7 @@ const DEFAULT = {
     uqc: '', goodsOrService: 'Goods', cessRate: 0,
     sellingPrice: 0, mrp: 0, warrantyMonths: 0, salesGst: 18, productDescription: '',
     isManufacturable: false, bomLink: '', productionTimeHours: 0, machineRequired: '', qcRequired: false, stdProductionCost: 0,
+    useManualBOMCost: false, manualBOMCostPerUnit: 0,
     technical: { wattage: '', inputVoltage: '', outputVoltage: '', outputCurrent: '', dimmingType: '', ipRating: '', surgeProtection: '', efficiency: '' },
     purchaseAccount: '', salesAccount: '', inventoryAccount: '', cogsAccount: '',
     isActive: true, isServiceItem: false, allowNegativeStock: false,
@@ -408,6 +409,22 @@ const ItemFormPage = () => {
                                 <div>
                                     <label style={f.label}>QC Required</label>
                                     <Toggle value={form.qcRequired} onChange={v => set('qcRequired', v)} label={form.qcRequired ? 'QC Required before dispatch' : 'No QC required'} />
+                                </div>
+                                <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 8, paddingTop: 12 }}>
+                                    <div style={f.row(2)}>
+                                        <div>
+                                            <label style={f.label}>Use Manual BOM Cost?</label>
+                                            <Toggle value={form.useManualBOMCost} onChange={v => set('useManualBOMCost', v)} label={form.useManualBOMCost ? 'Using Manual Cost' : 'Using BOM Cost'} />
+                                        </div>
+                                        {form.useManualBOMCost && (
+                                            <Field label="Manual BOM Cost Per Unit (₹)">
+                                                <input style={f.input} type="number" min="0" step="0.01" value={form.manualBOMCostPerUnit} onChange={e => num('manualBOMCostPerUnit', e.target.value)} placeholder="0.00" />
+                                            </Field>
+                                        )}
+                                    </div>
+                                    <p style={{ fontSize: 10, color: '#ef4444', marginTop: 4, fontWeight: 600 }}>
+                                        {form.useManualBOMCost ? '⚠️ Manual cost will override BOM cost in GP reports.' : 'ℹ️ System will pull cost from active BOM.'}
+                                    </p>
                                 </div>
                             </div>
                         )}
