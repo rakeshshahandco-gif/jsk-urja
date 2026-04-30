@@ -15,6 +15,8 @@ export const PATHS = {
         CUSTOMER_MASTER: '/reports/customer-master',
         CONSUMABLE_COST: '/reports/consumable-cost',
         PRODUCT_GP: '/reports/product-gp',
+        REPLACEMENTS: '/reports/replacements',
+        SAMPLE_CONVERSION: '/reports/sample-conversion',
     },
     AUTH: {
         LOGIN: '/auth/login',

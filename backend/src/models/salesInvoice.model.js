@@ -44,6 +44,9 @@ const salesInvoiceSchema = new mongoose.Schema({
 
     // Dispatch / Order info
     orderType: { type: String, default: '' },
+    orderCategory: { type: String, default: 'Order' }, // Order, Sample, Replacement
+    documentType: { type: String, default: 'Tax Invoice' }, // Tax Invoice, Estimate, Credit Note, etc.
+    gstApplicable: { type: Boolean, default: true },
     dispatchThrough: { type: String, default: '' },
     paymentDueDate: { type: Date, default: null },
     buyerOrderNo: { type: String, default: '' },

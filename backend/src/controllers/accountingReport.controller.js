@@ -254,7 +254,54 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
                 itemCode: { $first: '$items.itemCode' },
                 itemName: { $first: '$items.itemName' },
                 totalQty: { $sum: '$items.qty' },
-                totalRevenue: { $sum: '$items.taxableAmount' },
+                
+                // 1. Normal Sales (Tax Invoice, not Sample, not Replacement)
+                normalQty: { 
+                    $sum: { 
+                        $cond: [
+                            { $and: [
+                                { $eq: [{ $ifNull: ['$orderCategory', 'Order'] }, 'Order'] },
+                                { $ne: ['$documentType', 'Estimate'] },
+                                { $ne: ['$orderCategory', 'Replacement'] }
+                            ]},
+                            '$items.qty', 
+                            0
+                        ] 
+                    } 
+                },
+
+                // 2. Sample Sales
+                sampleQty: { 
+                    $sum: { 
+                        $cond: [{ $eq: ['$orderCategory', 'Sample'] }, '$items.qty', 0] 
+                    } 
+                },
+
+                // 3. Estimate Sales
+                estimateQty: { 
+                    $sum: { 
+                        $cond: [{ $eq: ['$documentType', 'Estimate'] }, '$items.qty', 0] 
+                    } 
+                },
+
+                // 4. Replacement (Separate)
+                replacementQty: { 
+                    $sum: { 
+                        $cond: [{ $eq: ['$orderCategory', 'Replacement'] }, '$items.qty', 0] 
+                    } 
+                },
+
+                // Total Revenue only from Sales/Sample/Estimate
+                totalRevenue: { 
+                    $sum: {
+                        $cond: [
+                            { $ne: ['$orderCategory', 'Replacement'] },
+                            '$items.taxableAmount',
+                            0
+                        ]
+                    }
+                },
+
                 uom: { $first: '$items.uom' },
                 invoices: {
                     $push: {
@@ -263,17 +310,20 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
                         customerName: '$customerName',
                         qty: '$items.qty',
                         rate: '$items.rate',
-                        taxableAmount: '$items.taxableAmount'
+                        taxableAmount: '$items.taxableAmount',
+                        orderCategory: { $ifNull: ['$orderCategory', 'Order'] },
+                        documentType: { $ifNull: ['$documentType', 'Tax Invoice'] }
                     }
                 }
             }
         },
         {
             $addFields: {
+                totalSalesQty: { $add: ['$normalQty', '$sampleQty', '$estimateQty'] },
                 avgRate: { 
                     $cond: [
-                        { $gt: ['$totalQty', 0] }, 
-                        { $divide: ['$totalRevenue', '$totalQty'] }, 
+                        { $gt: [{ $add: ['$normalQty', '$sampleQty', '$estimateQty'] }, 0] }, 
+                        { $divide: ['$totalRevenue', { $add: ['$normalQty', '$sampleQty', '$estimateQty'] }] }, 
                         0 
                     ] 
                 }
@@ -327,21 +377,134 @@ export const getProductWiseProfitability = asyncHandler(async (req, res) => {
             }
         }
 
-        const totalCost = item.totalQty * unitCost;
-        const grossProfit = item.totalRevenue - totalCost;
+        const totalSalesQty = item.totalSalesQty || 0;
+        const salesCost = totalSalesQty * unitCost;
+        const replacementCost = (item.replacementQty || 0) * unitCost;
+        
+        const grossProfit = item.totalRevenue - salesCost;
         const gpPercent = item.totalRevenue > 0 ? (grossProfit / item.totalRevenue) * 100 : 0;
 
         report.push({
             ...item,
             unitCost,
-            totalCost,
+            salesCost,
+            replacementCost,
             grossProfit,
             gpPercent,
             costSource,
             costDetails,
-            formula: 'Gross Profit = Sales Value - (Qty Sold * Unit Cost)'
+            formula: 'Sales Value = Sum of (Normal + Sample + Estimate taxable value). Gross Profit = Sales Value - (Total Sales Qty * Unit Cost). Replacement cost is shown separately.'
         });
     }
 
     res.send(new ApiResponse(httpStatus.OK, report, 'Product-wise profitability report fetched'));
+});
+
+/**
+ * GET /api/v1/accounting-reports/replacement-report
+ * Fetches all outward replacements with cost impact
+ */
+export const getReplacementReport = asyncHandler(async (req, res) => {
+    const { fromDate, toDate } = req.query;
+    
+    const filters = {
+        orderCategory: 'Replacement',
+        status: { $ne: 'Cancelled' },
+        isDeleted: { $ne: true }
+    };
+
+    if (fromDate && toDate) {
+        filters.invoiceDate = {
+            $gte: new Date(fromDate + 'T00:00:00.000Z'),
+            $lte: new Date(toDate + 'T23:59:59.999Z')
+        };
+    }
+
+    const replacements = await SalesInvoice.find(filters)
+        .populate('items.itemId', 'itemName itemCode valuationRate')
+        .sort({ invoiceDate: -1 })
+        .lean();
+
+    const report = [];
+    for (const inv of replacements) {
+        for (const item of inv.items) {
+            const unitCost = item.itemId?.valuationRate || 0;
+            report.push({
+                date: inv.invoiceDate,
+                invoiceNumber: inv.invoiceNumber,
+                customerName: inv.customerName,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                qty: item.qty,
+                uom: item.uom,
+                unitCost,
+                totalCost: item.qty * unitCost,
+                reason: inv.orderType || 'Warranty/Replacement',
+                remarks: inv.remarks || '',
+                originalInvoice: inv.buyerOrderNo || '' // Using buyerOrderNo or specific field if available
+            });
+        }
+    }
+
+    res.send(new ApiResponse(httpStatus.OK, report, 'Replacement outward report fetched'));
+});
+
+/**
+ * GET /api/v1/accounting-reports/sample-conversion-report
+ * Tracks if samples given to customers converted into regular sales
+ */
+export const getSampleConversionReport = asyncHandler(async (req, res) => {
+    const { fromDate, toDate } = req.query;
+    
+    const sampleFilters = {
+        orderCategory: 'Sample',
+        status: { $ne: 'Cancelled' },
+        isDeleted: { $ne: true }
+    };
+
+    if (fromDate && toDate) {
+        sampleFilters.invoiceDate = {
+            $gte: new Date(fromDate + 'T00:00:00.000Z'),
+            $lte: new Date(toDate + 'T23:59:59.999Z')
+        };
+    }
+
+    // 1. Get all Samples
+    const samples = await SalesInvoice.find(sampleFilters).sort({ invoiceDate: 1 }).lean();
+    
+    const report = [];
+    for (const sample of samples) {
+        for (const item of sample.items) {
+            // Find later sales for this customer and item
+            const laterSales = await SalesInvoice.find({
+                customerId: sample.customerId,
+                'items.itemId': item.itemId,
+                invoiceDate: { $gt: sample.invoiceDate },
+                orderCategory: { $nin: ['Sample', 'Replacement'] },
+                status: { $ne: 'Cancelled' },
+                isDeleted: { $ne: true }
+            }).sort({ invoiceDate: 1 }).limit(1).lean();
+
+            const converted = laterSales.length > 0;
+            const conversionDate = converted ? laterSales[0].invoiceDate : null;
+            const daysToConvert = converted ? 
+                Math.ceil((new Date(conversionDate) - new Date(sample.invoiceDate)) / (1000 * 60 * 60 * 24)) : null;
+
+            report.push({
+                sampleDate: sample.invoiceDate,
+                customerName: sample.customerName,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                sampleQty: item.qty,
+                sampleValue: item.taxableAmount,
+                converted: converted ? 'Yes' : 'No',
+                conversionDate,
+                daysToConvert,
+                salesQty: converted ? laterSales[0].items.find(i => String(i.itemId) === String(item.itemId))?.qty : 0,
+                salesperson: sample.salesPerson || 'N/A'
+            });
+        }
+    }
+
+    res.send(new ApiResponse(httpStatus.OK, report, 'Sample to sales conversion report fetched'));
 });

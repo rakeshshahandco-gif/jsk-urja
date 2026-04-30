@@ -44,9 +44,9 @@ const ProductGpReport = () => {
     );
 
     const totals = filteredData.reduce((acc, item) => ({
-        revenue: acc.revenue + item.totalRevenue,
-        cost: acc.cost + item.totalCost,
-        profit: acc.profit + item.grossProfit
+        revenue: acc.revenue + (item.totalRevenue || 0),
+        cost: acc.cost + (item.salesCost || 0),
+        profit: acc.profit + (item.grossProfit || 0)
     }), { revenue: 0, cost: 0, profit: 0 });
 
     const totalGpPercent = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
@@ -161,15 +161,20 @@ const ProductGpReport = () => {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Product Details</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Qty Sold</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Avg Rate</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Value</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost/Unit</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost Source</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Est. Cost</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'right', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Gross Profit</th>
-                                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Margin %</th>
+                                    <th style={{ padding: '16px 8px', textAlign: 'left', fontSize: '10px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Product Details</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Normal Qty</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sample Qty</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Estimate Qty</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Total Sales</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Avg Rate</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Value</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost/Unit</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'left', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Cost Source</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Est. Cost</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>GP</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Repl. Qty</th>
+                                    <th style={{ padding: '16px 5px', textAlign: 'right', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Repl. Cost</th>
+                                    <th style={{ padding: '16px 8px', textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Margin %</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -182,69 +187,85 @@ const ProductGpReport = () => {
                                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                         onClick={() => setSelectedItem(item)}
                                     >
-                                        <td style={{ padding: '14px 20px' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{item.itemName}</div>
-                                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{item.itemCode}</div>
+                                        <td style={{ padding: '14px 8px' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b' }}>{item.itemName}</div>
+                                            <div style={{ fontSize: '9px', color: '#64748b', marginTop: '1px' }}>{item.itemCode}</div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{item.totalQty} {item.uom}</div>
+                                        <td style={{ padding: '14px 5px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '11px', color: '#1e293b' }}>{item.normalQty}</div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.avgRate, 2)}</div>
+                                        <td style={{ padding: '14px 5px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: item.sampleQty > 0 ? '#2563eb' : '#64748b' }}>{item.sampleQty}</div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(item.totalRevenue)}</div>
+                                        <td style={{ padding: '14px 5px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: item.estimateQty > 0 ? '#7c3aed' : '#64748b' }}>{item.estimateQty}</div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: item.costSource === 'Cost Missing' ? '#dc2626' : '#475569' }}>
-                                                {formatCurrency(item.unitCost, 2)}
+                                        <td style={{ padding: '14px 5px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b' }}>{item.totalSalesQty}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', color: '#475569' }}>{formatCurrency(item.avgRate, 1)}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(item.totalRevenue)}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: item.costSource === 'Cost Missing' ? '#dc2626' : '#475569' }}>
+                                                {formatCurrency(item.unitCost, 1)}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '14px 20px' }}>
+                                        <td style={{ padding: '14px 5px' }}>
                                             <span style={{ 
-                                                fontSize: '10px', 
+                                                fontSize: '8px', 
                                                 fontWeight: 700, 
-                                                padding: '4px 8px', 
-                                                borderRadius: '6px',
+                                                padding: '1px 4px', 
+                                                borderRadius: '3px',
                                                 textTransform: 'uppercase',
-                                                letterSpacing: '0.02em',
                                                 background: item.costSource === 'BOM Final Cost' ? '#f0fdf4' : 
+                                                            item.costSource === 'Manual GP Cost' ? '#eff6ff' :
                                                             item.costSource === 'Item Valuation Rate' ? '#fffbeb' : 
-                                                            item.costSource === 'Cost Missing' ? '#fef2f2' : '#eff6ff',
+                                                            item.costSource === 'Cost Missing' ? '#fef2f2' : '#f8fafc',
                                                 color: item.costSource === 'BOM Final Cost' ? '#16a34a' : 
+                                                       item.costSource === 'Manual GP Cost' ? '#3b82f6' :
                                                        item.costSource === 'Item Valuation Rate' ? '#d97706' : 
-                                                       item.costSource === 'Cost Missing' ? '#dc2626' : '#3b82f6',
+                                                       item.costSource === 'Cost Missing' ? '#dc2626' : '#64748b',
                                                 border: `1px solid ${
                                                     item.costSource === 'BOM Final Cost' ? '#dcfce7' : 
+                                                    item.costSource === 'Manual GP Cost' ? '#dbeafe' :
                                                     item.costSource === 'Item Valuation Rate' ? '#fef3c7' : 
-                                                    item.costSource === 'Cost Missing' ? '#fee2e2' : '#dbeafe'
+                                                    item.costSource === 'Cost Missing' ? '#fee2e2' : '#e2e8f0'
                                                 }`
                                             }}>
-                                                {item.costSource}
+                                                {item.costSource?.replace(' Cost', '')}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{formatCurrency(item.totalCost)}</div>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', color: '#475569' }}>{formatCurrency(item.salesCost)}</div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                                            <div style={{ fontSize: '14px', fontWeight: 800, color: item.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 800, color: item.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
                                                 {formatCurrency(item.grossProfit)}
                                             </div>
                                         </td>
-                                        <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                                        <td style={{ padding: '14px 5px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 600, color: item.replacementQty > 0 ? '#e11d48' : '#64748b' }}>{item.replacementQty}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 5px', textAlign: 'right' }}>
+                                            <div style={{ fontSize: '11px', color: item.replacementCost > 0 ? '#e11d48' : '#64748b' }}>{formatCurrency(item.replacementCost)}</div>
+                                        </td>
+                                        <td style={{ padding: '14px 8px', textAlign: 'center' }}>
                                             <div style={{ 
                                                 display: 'inline-flex', 
                                                 alignItems: 'center', 
-                                                gap: '4px',
-                                                padding: '3px 10px', 
+                                                gap: '2px',
+                                                padding: '1px 6px', 
                                                 borderRadius: '20px', 
-                                                fontSize: '12px', 
+                                                fontSize: '10px', 
                                                 fontWeight: 700,
                                                 background: item.gpPercent >= 20 ? '#d1fae5' : (item.gpPercent >= 0 ? '#ffedd5' : '#fee2e2'),
                                                 color: item.gpPercent >= 20 ? '#065f46' : (item.gpPercent >= 0 ? '#9a3412' : '#991b1b')
                                             }}>
-                                                {item.gpPercent >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                                {item.gpPercent.toFixed(1)}%
+                                                {item.gpPercent.toFixed(0)}%
                                             </div>
                                         </td>
                                     </tr>
@@ -280,10 +301,10 @@ const ProductGpReport = () => {
                                     <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Cost Source</div>
                                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginTop: '4px' }}>{selectedItem.costSource}</div>
                                 </div>
-                                <div style={{ background: selectedItem.grossProfit >= 0 ? '#d1fae5' : '#fee2e2', padding: '16px', borderRadius: '16px' }}>
-                                    <div style={{ fontSize: '11px', fontWeight: 700, color: selectedItem.grossProfit >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase' }}>Result</div>
-                                    <div style={{ fontSize: '13px', fontWeight: 800, color: selectedItem.grossProfit >= 0 ? '#047857' : '#dc2626', marginTop: '4px' }}>
-                                        {selectedItem.grossProfit >= 0 ? 'Profitable' : 'Loss-making'} ({selectedItem.gpPercent.toFixed(1)}%)
+                                <div style={{ background: selectedItem.actualImpact >= 0 ? '#d1fae5' : '#fee2e2', padding: '16px', borderRadius: '16px' }}>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: selectedItem.actualImpact >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase' }}>Actual Impact</div>
+                                    <div style={{ fontSize: '13px', fontWeight: 800, color: selectedItem.actualImpact >= 0 ? '#047857' : '#dc2626', marginTop: '4px' }}>
+                                        {formatCurrency(selectedItem.actualImpact)} ({selectedItem.actualImpact >= 0 ? 'Net Profit' : 'Net Loss'})
                                     </div>
                                 </div>
                             </div>
@@ -322,10 +343,15 @@ const ProductGpReport = () => {
                                             </div>
                                         </div>
                                     </div>
-                                ) : selectedItem.costSource === 'Manual BOM Cost' ? (
+                                ) : selectedItem.costSource === 'Manual GP Cost' ? (
                                     <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
-                                        <p style={{ margin: 0, fontSize: '13px', color: '#1e40af' }}>Manual cost override active for this item.</p>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#1e40af' }}>Manual cost override (Manual GP Cost) active for this item.</p>
                                         <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: '#1e3a8a' }}>{formatCurrency(selectedItem.unitCost, 2)}</p>
+                                    </div>
+                                ) : selectedItem.costSource === 'Item Valuation Rate' ? (
+                                    <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>Using Item Master Valuation Rate (BOM not available).</p>
+                                        <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: '#b45309' }}>{formatCurrency(selectedItem.unitCost, 2)}</p>
                                     </div>
                                 ) : (
                                     <div style={{ background: '#fef2f2', border: '1px solid #fecdd3', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
@@ -349,18 +375,50 @@ const ProductGpReport = () => {
                                                 <th style={{ padding: '10px 12px', textAlign: 'left' }}>Customer</th>
                                                 <th style={{ padding: '10px 12px', textAlign: 'center' }}>Qty</th>
                                                 <th style={{ padding: '10px 12px', textAlign: 'right' }}>Value</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Status/Category</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {selectedItem.invoices?.map((inv, i) => (
-                                                <tr key={i} style={{ borderBottom: i === selectedItem.invoices.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{inv.invoiceNumber}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{moment(inv.invoiceDate).format('DD-MMM-YY')}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{inv.customerName}</td>
-                                                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>{inv.qty}</td>
-                                                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(inv.taxableAmount)}</td>
-                                                </tr>
-                                            ))}
+                                            {selectedItem.invoices?.map((inv, i) => {
+                                                const category = inv.orderCategory || 'Order';
+                                                const docType = inv.documentType || 'Tax Invoice';
+                                                const isReplacement = category === 'Replacement';
+                                                const isSample = category === 'Sample';
+                                                const isEstimate = docType === 'Estimate';
+                                                
+                                                return (
+                                                    <tr key={i} style={{ 
+                                                        borderBottom: i === selectedItem.invoices.length - 1 ? 'none' : '1px solid #f1f5f9',
+                                                        background: isReplacement ? '#fff1f2' : (isSample ? '#eff6ff' : (isEstimate ? '#f5f3ff' : 'transparent'))
+                                                    }}>
+                                                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{inv.invoiceNumber}</td>
+                                                        <td style={{ padding: '10px 12px' }}>{moment(inv.invoiceDate).format('DD-MMM-YY')}</td>
+                                                        <td style={{ padding: '10px 12px' }}>{inv.customerName}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{inv.qty}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatCurrency(inv.taxableAmount)}</td>
+                                                        <td style={{ padding: '10px 12px' }}>
+                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                                <span style={{ 
+                                                                    fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px',
+                                                                    background: isEstimate ? '#ede9fe' : '#f1f5f9',
+                                                                    color: isEstimate ? '#6d28d9' : '#475569'
+                                                                }}>
+                                                                    {docType}
+                                                                </span>
+                                                                {category !== 'Order' && (
+                                                                    <span style={{ 
+                                                                        fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px',
+                                                                        background: isReplacement ? '#ffe4e6' : '#dbeafe',
+                                                                        color: isReplacement ? '#e11d48' : '#1e40af'
+                                                                    }}>
+                                                                        {category.toUpperCase()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                         <tfoot>
                                             <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0', fontWeight: 800 }}>

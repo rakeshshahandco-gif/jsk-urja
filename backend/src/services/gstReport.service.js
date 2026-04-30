@@ -232,6 +232,7 @@ async function fetchInvoicesForPeriod(startDate, endDate) {
     ],
     isDeleted: { $ne: true },
     status: { $ne: 'Cancelled' },
+    orderCategory: { $ne: 'Replacement' } // Rule: Replacement is excluded from GST turnover
   };
 
   if (estimateSeriesIds.length > 0) {
@@ -269,6 +270,7 @@ async function fetchCancelledInvoicesForPeriod(startDate, endDate) {
     ],
     status: 'Cancelled',
     isDeleted: { $ne: true },
+    orderCategory: { $ne: 'Replacement' }
   };
   if (estimateSeriesIds.length > 0) {
     query.seriesId = { $nin: estimateSeriesIds };
@@ -638,6 +640,7 @@ async function buildDocsSummary(startDate, endDate) {
       seriesId: { $in: [series._id, series._id.toString()] },
       ...dateQuery,
       isDeleted: { $ne: true },
+      orderCategory: { $ne: 'Replacement' }
     }).project({ 
       invoiceNumber: 1, 
       noteNumber: 1, 

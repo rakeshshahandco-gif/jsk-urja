@@ -10,5 +10,7 @@ router.get('/profit-loss', accountReportController.getProfitAndLossReport);
 router.get('/balance-sheet', accountReportController.getBalanceSheetReport);
 router.get('/trial-balance', accountReportController.getTrialBalanceReport);
 router.get('/product-profitability', accountReportController.getProductWiseProfitability);
+router.get('/replacement-report', accountReportController.getReplacementReport);
+router.get('/sample-conversion-report', accountReportController.getSampleConversionReport);
 
 export default router;
