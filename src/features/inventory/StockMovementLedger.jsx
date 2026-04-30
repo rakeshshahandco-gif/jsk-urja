@@ -73,17 +73,18 @@ function LedgerRow({ row, i }) {
 }
 
 // ─── COMPREHENSIVE STOCK LEDGER VIEW ─────────────────────────────────────────
-function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
+function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', financialYear }) {
     const [items, setItems] = useState([]);
     const [selectedItemId, setSelectedItemId] = useState(initialItemId);
     const [data, setData] = useState({ summary: {}, rows: [] });
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({
-        dateFrom: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-        dateTo: new Date().toISOString().split('T')[0],
+        dateFrom: '',
+        dateTo: '',
         search: '',
         includeCancelled: false,
-        partyId: ''
+        partyId: '',
+        financialYear: financialYear
     });
     const [rebuildLogs, setRebuildLogs] = useState(null);
     const [isRebuilding, setIsRebuilding] = useState(false);
@@ -137,8 +138,20 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
     };
 
     useEffect(() => {
+        if (financialYear) {
+            const [startYear] = financialYear.split('-');
+            setFilters(p => ({
+                ...p,
+                financialYear: financialYear,
+                dateFrom: `${startYear}-04-01`,
+                dateTo: `${parseInt(startYear) + 1}-03-31`
+            }));
+        }
+    }, [financialYear]);
+
+    useEffect(() => {
         if (selectedItemId) fetchLedger();
-    }, [selectedItemId]);
+    }, [selectedItemId, filters.dateFrom, filters.dateTo, filters.includeCancelled, filters.partyId]);
 
     const { summary, rows } = data;
 
@@ -258,12 +271,17 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {/* Opening Balance Row */}
                                     <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
-                                        <td colSpan={5} style={{ ...TD, textAlign: 'right', fontSize: 11, color: '#64748b' }}>OPENING BALANCE</td>
+                                        <td style={TD}>-</td>
+                                        <td style={TD}>{fmtDate(filters.dateFrom)}</td>
+                                        <td style={TD}>Opening Balance</td>
+                                        <td style={TD}>-</td>
+                                        <td style={TD}>-</td>
                                         <td colSpan={3} style={TDR}></td>
                                         <td colSpan={3} style={TDR}></td>
-                                        <td style={{ ...TDR, fontSize: 14 }}>{fmt(summary.openingQty)}</td>
-                                        <td style={TD}></td>
+                                        <td style={{ ...TDR, fontSize: 14, fontWeight: 900 }}>{fmt(summary.openingQty)}</td>
+                                        <td style={TD}>Opening Stock Value: {fmtVal(summary.openingValue)}</td>
                                     </tr>
                                     {rows.map((r, i) => <LedgerRow key={r._id || i} row={r} i={i} />)}
                                 </tbody>
@@ -290,7 +308,7 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
 }
 
 // ─── STOCK SUMMARY COMPONENT (FOR RAW, FG, CONSUMABLES) ──────────────────────
-function StockSummaryList({ category, accentColor, onSelectItem }) {
+function StockSummaryList({ category, accentColor, onSelectItem, financialYear }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -299,19 +317,18 @@ function StockSummaryList({ category, accentColor, onSelectItem }) {
         setLoading(true);
         try {
             const endpoint = category === 'FINISHED_GOOD' ? '/stock/finished-goods-report' : '/stock/raw-material-report';
-            const params = { itemCategory: category };
+            const params = { itemCategory: category, financialYear };
             const res = await api.get(endpoint, { params });
             // Filter by category client-side if the API returns mixed results (for Consumables)
-            let data = res.data || [];
+            let data = res.data?.data || res.data || [];
             if (category === 'CONSUMABLE') {
-                // If special endpoint for consumables doesn't exist, we use raw-material endpoint but filter
                 data = data.filter(r => r.itemType === 'CONSUMABLE' || r.itemCategory === 'CONSUMABLE');
             }
             setRows(data);
         } catch (e) { console.error(e); } finally { setLoading(false); }
-    }, [category]);
+    }, [category, financialYear]);
 
-    useEffect(() => { fetchReport(); }, [category]);
+    useEffect(() => { fetchReport(); }, [fetchReport]);
 
     const filtered = useMemo(() => {
         const s = search.toLowerCase();
@@ -379,6 +396,7 @@ function StockSummaryList({ category, accentColor, onSelectItem }) {
 export default function StockMovementLedger() {
     const [tab, setTab] = useState(() => localStorage.getItem('inv_active_tab') || 'raw');
     const [selectedItemId, setSelectedItemId] = useState(null);
+    const [financialYear, setFinancialYear] = useState('2026-2027');
 
     useEffect(() => {
         localStorage.setItem('inv_active_tab', tab);
@@ -400,7 +418,15 @@ export default function StockMovementLedger() {
                 <div style={{ display: 'flex', gap: 10 }}>
                     <div style={{ textAlign: 'right', paddingRight: 15, borderRight: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Financial Year</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>2024-25</div>
+                        <select 
+                            value={financialYear} 
+                            onChange={e => setFinancialYear(e.target.value)}
+                            style={{ border: 'none', background: 'none', fontSize: 15, fontWeight: 700, color: '#1e293b', cursor: 'pointer', textAlign: 'right', outline: 'none' }}
+                        >
+                            <option value="2024-2025">2024-2025</option>
+                            <option value="2025-2026">2025-2026</option>
+                            <option value="2026-2027">2026-2027</option>
+                        </select>
                     </div>
                     <button style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                         📥 Export PDF
@@ -436,10 +462,10 @@ export default function StockMovementLedger() {
 
             {/* Content Area */}
             <div style={{ padding: '25px 30px' }}>
-                {tab === 'raw' && <StockSummaryList category="RAW_MATERIAL" accentColor="#3b82f6" onSelectItem={handleSelectFromList} />}
-                {tab === 'fg' && <StockSummaryList category="FINISHED_GOOD" accentColor="#8b5cf6" onSelectItem={handleSelectFromList} />}
-                {tab === 'consumable' && <StockSummaryList category="CONSUMABLE" accentColor="#f59e0b" onSelectItem={handleSelectFromList} />}
-                {tab === 'ledger' && <ComprehensiveLedger initialItemId={selectedItemId} accentColor="#6366f1" />}
+                {tab === 'raw' && <StockSummaryList category="RAW_MATERIAL" accentColor="#3b82f6" onSelectItem={handleSelectFromList} financialYear={financialYear} />}
+                {tab === 'fg' && <StockSummaryList category="FINISHED_GOOD" accentColor="#8b5cf6" onSelectItem={handleSelectFromList} financialYear={financialYear} />}
+                {tab === 'consumable' && <StockSummaryList category="CONSUMABLE" accentColor="#f59e0b" onSelectItem={handleSelectFromList} financialYear={financialYear} />}
+                {tab === 'ledger' && <ComprehensiveLedger initialItemId={selectedItemId} accentColor="#6366f1" financialYear={financialYear} />}
             </div>
         </div>
     );

@@ -30,12 +30,23 @@ const istBoundaries = (dateStr) => {
 // GET /api/v1/stock/raw-material-report
 // ─────────────────────────────────────────────────────────────────────────────
 export const getRawMaterialReport = asyncHandler(async (req, res) => {
-    const { dateFrom, dateTo, itemId, search } = req.query;
+    const { dateFrom, dateTo, itemId, search, financialYear } = req.query;
+
+    let finalDateFrom = dateFrom;
+    let finalDateTo = dateTo;
+
+    if (financialYear && financialYear.includes('-')) {
+        const [startYear] = financialYear.split('-');
+        const fyStart = `${startYear}-04-01`;
+        const fyEnd = `${parseInt(startYear) + 1}-03-31`;
+        if (!finalDateFrom) finalDateFrom = fyStart;
+        if (!finalDateTo) finalDateTo = fyEnd;
+    }
 
     const dateFilter = {};
-    if (dateFrom) dateFilter.$gte = new Date(dateFrom);
-    if (dateTo) {
-        const end = new Date(dateTo);
+    if (finalDateFrom) dateFilter.$gte = new Date(finalDateFrom);
+    if (finalDateTo) {
+        const end = new Date(finalDateTo);
         end.setHours(23, 59, 59, 999);
         dateFilter.$lte = end;
     }
@@ -65,13 +76,13 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
         let beforeRange = [];
         let inRange = ledger;
         
-        if (dateFrom) {
-            const from = new Date(dateFrom);
+        if (finalDateFrom) {
+            const from = new Date(finalDateFrom);
             beforeRange = ledger.filter(l => new Date(l.date) < from);
             inRange = ledger.filter(l => new Date(l.date) >= from);
         }
-        if (dateTo) {
-            const to = new Date(dateTo);
+        if (finalDateTo) {
+            const to = new Date(finalDateTo);
             to.setHours(23, 59, 59, 999);
             inRange = inRange.filter(l => new Date(l.date) <= to);
         }
@@ -119,12 +130,23 @@ export const getRawMaterialReport = asyncHandler(async (req, res) => {
 // GET /api/v1/stock/finished-goods-report
 // ─────────────────────────────────────────────────────────────────────────────
 export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
-    const { dateFrom, dateTo, itemId, search } = req.query;
+    const { dateFrom, dateTo, itemId, search, financialYear } = req.query;
+
+    let finalDateFrom = dateFrom;
+    let finalDateTo = dateTo;
+
+    if (financialYear && financialYear.includes('-')) {
+        const [startYear] = financialYear.split('-');
+        const fyStart = `${startYear}-04-01`;
+        const fyEnd = `${parseInt(startYear) + 1}-03-31`;
+        if (!finalDateFrom) finalDateFrom = fyStart;
+        if (!finalDateTo) finalDateTo = fyEnd;
+    }
 
     const dateFilter = {};
-    if (dateFrom) dateFilter.$gte = new Date(dateFrom);
-    if (dateTo) {
-        const end = new Date(dateTo);
+    if (finalDateFrom) dateFilter.$gte = new Date(finalDateFrom);
+    if (finalDateTo) {
+        const end = new Date(finalDateTo);
         end.setHours(23, 59, 59, 999);
         dateFilter.$lte = end;
     }
@@ -146,20 +168,34 @@ export const getFinishedGoodsReport = asyncHandler(async (req, res) => {
     const results = await Promise.all(items.map(async (item) => {
         const ledgerMatch = {
             itemId: item._id,
-            ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {})
         };
         const ledger = await StockLedger.find(ledgerMatch).lean();
 
-        const productionQty = ledger.filter(l => l.transactionType === 'WO_OUTPUT').reduce((s, l) => s + (l.inQty || 0), 0);
-        const conversionIn = ledger.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.inQty || 0), 0);
-        const conversionOut = ledger.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.outQty || 0), 0);
-        const salesQty = ledger.filter(l => l.transactionType === 'SALES_INVOICE').reduce((s, l) => s + (l.outQty || 0), 0);
-        const replacementDispatch = ledger.filter(l => l.transactionType === 'REPLACEMENT_DISPATCH').reduce((s, l) => s + (l.outQty || 0), 0);
-        const repairInward = ledger.filter(l => l.transactionType === 'REPAIR_INWARD').reduce((s, l) => s + (l.inQty || 0), 0);
-        const adjustmentIn = ledger.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.inQty || 0), 0);
-        const adjustmentOut = ledger.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.outQty || 0), 0);
+        let beforeRange = [];
+        let inRange = ledger;
+        
+        if (finalDateFrom) {
+            const from = new Date(finalDateFrom);
+            beforeRange = ledger.filter(l => new Date(l.date) < from);
+            inRange = ledger.filter(l => new Date(l.date) >= from);
+        }
+        if (finalDateTo) {
+            const to = new Date(finalDateTo);
+            to.setHours(23, 59, 59, 999);
+            inRange = inRange.filter(l => new Date(l.date) <= to);
+        }
 
-        const openingQty = item.openingStock || 0;
+        const openingQty = (item.openingStock || 0) + beforeRange.reduce((s, l) => s + (l.inQty || 0) - (l.outQty || 0), 0);
+
+        const productionQty = inRange.filter(l => l.transactionType === 'WO_OUTPUT').reduce((s, l) => s + (l.inQty || 0), 0);
+        const conversionIn = inRange.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.inQty || 0), 0);
+        const conversionOut = inRange.filter(l => l.transactionType === 'MODEL_CONVERSION').reduce((s, l) => s + (l.outQty || 0), 0);
+        const salesQty = inRange.filter(l => l.transactionType === 'SALES_INVOICE').reduce((s, l) => s + (l.outQty || 0), 0);
+        const replacementDispatch = inRange.filter(l => l.transactionType === 'REPLACEMENT_DISPATCH').reduce((s, l) => s + (l.outQty || 0), 0);
+        const repairInward = inRange.filter(l => l.transactionType === 'REPAIR_INWARD').reduce((s, l) => s + (l.inQty || 0), 0);
+        const adjustmentIn = inRange.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.inQty || 0), 0);
+        const adjustmentOut = inRange.filter(l => l.transactionType === 'ADJUSTMENT').reduce((s, l) => s + (l.outQty || 0), 0);
+
         const closingQty = openingQty + productionQty + repairInward + adjustmentIn + conversionIn - salesQty - replacementDispatch - adjustmentOut - conversionOut;
 
         return {
@@ -264,27 +300,36 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
         search, financialYear, includeCancelled = 'false'
     } = req.query;
 
-    const query = { isDeleted: { $ne: true } };
+    let finalDateFrom = dateFrom;
+    let finalDateTo = dateTo;
+
+    // Handle Financial Year Logic
+    if (financialYear && financialYear.includes('-')) {
+        const [startYear] = financialYear.split('-');
+        const fyStart = `${startYear}-04-01`;
+        const fyEnd = `${parseInt(startYear) + 1}-03-31`;
+        
+        if (!finalDateFrom) finalDateFrom = fyStart;
+        if (!finalDateTo) finalDateTo = fyEnd;
+    }
+
+    const baseQuery = { isDeleted: { $ne: true } };
     if (includeCancelled === 'true') {
-        delete query.isDeleted;
+        delete baseQuery.isDeleted;
     } else {
-        // Exclude specific cancel/reversal types if not in audit mode
-        query.transactionType = { 
+        baseQuery.transactionType = { 
             $nin: ['SALES_INVOICE_CANCEL', 'PURCHASE_INVOICE_DELETE', 'PURCHASE_RETURN', 'PROD_REJECTION'] 
         };
     }
 
-    if (financialYear) query.financialYear = financialYear;
-    if (itemId) query.itemId = new mongoose.Types.ObjectId(itemId);
-    if (partyId) query.partyId = new mongoose.Types.ObjectId(partyId);
-    if (itemCategory) query.itemGroup = itemCategory;
-    if (itemType) query.itemType = itemType;
-    if (transactionType) {
-        query.transactionType = transactionType;
-    }
+    if (itemId) baseQuery.itemId = new mongoose.Types.ObjectId(itemId);
+    if (partyId) baseQuery.partyId = new mongoose.Types.ObjectId(partyId);
+    if (itemCategory) baseQuery.itemGroup = itemCategory;
+    if (itemType) baseQuery.itemType = itemType;
+    if (transactionType) baseQuery.transactionType = transactionType;
 
     if (search) {
-        query.$or = [
+        baseQuery.$or = [
             { itemName: { $regex: search, $options: 'i' } },
             { itemCode: { $regex: search, $options: 'i' } },
             { partyName: { $regex: search, $options: 'i' } },
@@ -292,27 +337,17 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
         ];
     }
 
-    // Date Filter Logic for Opening vs Period
-    let openingMatch = { ...query };
-    let periodMatch = { ...query };
-
-    if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        openingMatch.date = { $lt: fromDate };
-        periodMatch.date = { ...periodMatch.date, $gte: fromDate };
-    }
-
-    if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        periodMatch.date = { ...periodMatch.date, $lte: toDate };
-    }
-
-    // 1. Calculate Opening Balance (Only if dateFrom is provided)
+    // 1. Calculate Opening Balance
     let openingQty = 0;
     let openingValue = 0;
+    let fromDate = null;
 
-    if (dateFrom && itemId) {
+    if (finalDateFrom) {
+        fromDate = new Date(finalDateFrom);
+        const openingMatch = { ...baseQuery, date: { $lt: fromDate } };
+        // IMPORTANT: Remove financialYear filter for opening balance calculation to include all past data
+        delete openingMatch.financialYear;
+
         const opResult = await StockLedger.aggregate([
             { $match: openingMatch },
             { $group: { 
@@ -324,16 +359,24 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
             }}
         ]);
 
-        // Get actual item to add its initial openingStock
         const item = await Item.findById(itemId).select('openingStock valuationRate');
         if (item) {
             openingQty = (item.openingStock || 0) + (opResult[0]?.totalIn || 0) - (opResult[0]?.totalOut || 0);
-            // Valuation logic: use item rate for initial opening if ledger values are missing
             openingValue = (openingQty * (item.valuationRate || 0));
         }
     }
 
     // 2. Fetch Period Entries
+    const periodMatch = { ...baseQuery };
+    if (fromDate) {
+        periodMatch.date = { ...periodMatch.date, $gte: fromDate };
+    }
+    if (finalDateTo) {
+        const toDate = new Date(finalDateTo);
+        toDate.setHours(23, 59, 59, 999);
+        periodMatch.date = { ...periodMatch.date, $lte: toDate };
+    }
+
     const entries = await StockLedger.find(periodMatch)
         .sort({ date: 1, createdAt: 1 })
         .lean();
@@ -345,10 +388,13 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
     let totalInValue = 0;
     let totalOutValue = 0;
 
-    const rows = entries.map(e => {
+    const rows = entries.reduce((acc, e) => {
         const inQty = e.inQty || 0;
         const outQty = e.outQty || 0;
         const amount = e.amount || 0;
+
+        // Skip rows with no movement (zero/blank qty)
+        if (inQty === 0 && outQty === 0) return acc;
 
         currentQty += (inQty - outQty);
         totalInQty += inQty;
@@ -357,7 +403,13 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
         if (inQty > 0) totalInValue += amount;
         if (outQty > 0) totalOutValue += amount;
 
-        return {
+        // Enhanced Party Details for Production
+        let displayParty = e.partyName;
+        if (!displayParty && (e.transactionType === 'WO_OUTPUT' || e.transactionType === 'WO_CONSUMPTION')) {
+            displayParty = `Work Order: ${e.referenceNo}`;
+        }
+
+        acc.push({
             _id: e._id,
             date: e.date,
             itemCode: e.itemCode,
@@ -365,7 +417,7 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
             uom: e.uom,
             transactionType: e.transactionType,
             voucherType: e.voucherType || e.transactionType,
-            partyName: e.partyName,
+            partyName: displayParty,
             partyCode: e.partyCode,
             referenceNo: e.referenceNo,
             referenceId: e.referenceId,
@@ -375,8 +427,9 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
             amount,
             runningStock: currentQty,
             remarks: e.remarks
-        };
-    });
+        });
+        return acc;
+    }, []);
 
     const summary = {
         openingQty: Math.round(openingQty * 100) / 100,
