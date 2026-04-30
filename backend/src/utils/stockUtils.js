@@ -10,7 +10,7 @@ export const recalculateStockLedger = async (itemId, session) => {
     const item = await Item.findById(itemId).session(session);
     if (!item) return;
 
-    const entries = await StockLedger.find({ itemId })
+    const entries = await StockLedger.find({ itemId, isDeleted: { $ne: true } })
         .sort({ date: 1, createdAt: 1 })
         .session(session);
 

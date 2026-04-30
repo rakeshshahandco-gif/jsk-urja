@@ -43,7 +43,9 @@ function LedgerRow({ row, i }) {
             <td style={{ ...TD, whiteSpace: 'nowrap', fontWeight: 600 }}>{fmtDate(row.date)}</td>
             <td style={TD}>
                 <div style={{ fontWeight: 700, color: '#475569', fontSize: 12 }}>{row.voucherType}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>{row.referenceNo}</div>
+            </td>
+            <td style={TD}>
+                <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>{row.referenceNo}</div>
             </td>
             <td style={TD}>
                 {row.partyName ? (
@@ -79,11 +81,23 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
     const [filters, setFilters] = useState({
         dateFrom: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
         dateTo: new Date().toISOString().split('T')[0],
-        search: ''
+        search: '',
+        includeCancelled: false,
+        partyId: ''
     });
+    const [rebuildLogs, setRebuildLogs] = useState(null);
+    const [isRebuilding, setIsRebuilding] = useState(false);
+    const [parties, setParties] = useState([]);
 
     useEffect(() => {
         api.get('/items', { limit: 1000 }).then(res => setItems(res.data?.items || []));
+        api.get('/customers', { limit: 1000 }).then(res => {
+            const custs = (res.data?.customers || []).map(c => ({ _id: c._id, name: c.customerName, type: 'Customer' }));
+            api.get('/suppliers', { limit: 1000 }).then(res2 => {
+                const supps = (res2.data?.suppliers || []).map(s => ({ _id: s._id, name: s.supplierName, type: 'Supplier' }));
+                setParties([...custs, ...supps]);
+            });
+        });
     }, []);
 
     const fetchLedger = useCallback(async (id) => {
@@ -91,7 +105,11 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
         if (!targetId) return;
         setLoading(true);
         try {
-            const params = { ...filters, itemId: targetId };
+            const params = { 
+                ...filters, 
+                itemId: targetId,
+                includeCancelled: filters.includeCancelled ? 'true' : 'false'
+            };
             const res = await api.get('/stock/movement-ledger', { params });
             setData(res.data || { summary: {}, rows: [] });
         } catch (e) {
@@ -100,6 +118,23 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
             setLoading(false);
         }
     }, [selectedItemId, filters]);
+
+    const handleRebuild = async () => {
+        if (!selectedItemId) return;
+        if (!window.confirm('This will purge and re-sync all ledger entries for this item from source documents. Continue?')) return;
+        
+        setIsRebuilding(true);
+        try {
+            const res = await api.post('/stock/rebuild-ledger', { itemId: selectedItemId });
+            setRebuildLogs(res.data?.data?.logs || []);
+            fetchLedger();
+            alert('Ledger rebuild complete!');
+        } catch (e) {
+            alert('Rebuild failed: ' + (e.response?.data?.message || e.message));
+        } finally {
+            setIsRebuilding(false);
+        }
+    };
 
     useEffect(() => {
         if (selectedItemId) fetchLedger();
@@ -135,12 +170,42 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
                             <input type="date" value={filters.dateTo} onChange={e => setFilters(p => ({ ...p, dateTo: e.target.value }))} style={{ padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14 }} />
                         </div>
                     </div>
-                    <button 
-                        onClick={() => fetchLedger()}
-                        style={{ padding: '10px 24px', background: accentColor, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}
-                    >
-                        View Report
-                    </button>
+                    <div style={{ flex: '1 1 200px' }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Filter Party</label>
+                        <select 
+                            value={filters.partyId} 
+                            onChange={e => setFilters(p => ({ ...p, partyId: e.target.value }))}
+                            style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 14 }}
+                        >
+                            <option value="">-- All Parties --</option>
+                            {parties.map(p => <option key={p._id} value={p._id}>{p.name} ({p.type})</option>)}
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10 }}>
+                        <input 
+                            type="checkbox" 
+                            id="inc_cancel"
+                            checked={filters.includeCancelled} 
+                            onChange={e => setFilters(p => ({ ...p, includeCancelled: e.target.checked }))} 
+                            style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                        <label htmlFor="inc_cancel" style={{ fontSize: 13, fontWeight: 700, color: '#64748b', cursor: 'pointer' }}>Show Cancelled</label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <button 
+                            onClick={() => fetchLedger()}
+                            style={{ padding: '10px 24px', background: accentColor, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, transition: 'all 0.2s' }}
+                        >
+                            🔍 Refresh
+                        </button>
+                        <button 
+                            onClick={handleRebuild}
+                            disabled={isRebuilding || !selectedItemId}
+                            style={{ padding: '10px 24px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fee2e2', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, opacity: (isRebuilding || !selectedItemId) ? 0.5 : 1 }}
+                        >
+                            {isRebuilding ? '⚙️ Rebuilding...' : '🛠 Rebuild Ledger'}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -175,7 +240,8 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
                                     <tr style={{ background: '#f8fafc' }}>
                                         <th rowSpan={2} style={TH()}>#</th>
                                         <th rowSpan={2} style={TH()}>Date</th>
-                                        <th rowSpan={2} style={TH()}>Voucher / Ref</th>
+                                        <th rowSpan={2} style={TH()}>Voucher Type</th>
+                                        <th rowSpan={2} style={TH()}>Reference No.</th>
                                         <th rowSpan={2} style={TH()}>Party Details</th>
                                         <th colSpan={3} style={{ ...TH(true), textAlign: 'center', background: '#f0fdf4', color: '#16a34a', borderBottom: '1px solid #dcfce7' }}>Inward Movement</th>
                                         <th colSpan={3} style={{ ...TH(true), textAlign: 'center', background: '#fef2f2', color: '#dc2626', borderBottom: '1px solid #fee2e2' }}>Outward Movement</th>
@@ -193,7 +259,7 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
                                 </thead>
                                 <tbody>
                                     <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
-                                        <td colSpan={4} style={{ ...TD, textAlign: 'right', fontSize: 11, color: '#64748b' }}>OPENING BALANCE</td>
+                                        <td colSpan={5} style={{ ...TD, textAlign: 'right', fontSize: 11, color: '#64748b' }}>OPENING BALANCE</td>
                                         <td colSpan={3} style={TDR}></td>
                                         <td colSpan={3} style={TDR}></td>
                                         <td style={{ ...TDR, fontSize: 14 }}>{fmt(summary.openingQty)}</td>
@@ -203,7 +269,7 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1' }) {
                                 </tbody>
                                 <tfoot>
                                     <tr style={{ background: '#1e293b', color: '#fff' }}>
-                                        <td colSpan={4} style={{ padding: '12px', textAlign: 'right', fontWeight: 800, fontSize: 11 }}>PERIOD TOTALS</td>
+                                        <td colSpan={5} style={{ padding: '12px', textAlign: 'right', fontWeight: 800, fontSize: 11 }}>PERIOD TOTALS</td>
                                         <td style={{ ...TDR, background: '#1e293b', color: '#4ade80', fontWeight: 900 }}>{fmt(summary.totalInQty)}</td>
                                         <td style={{ background: '#1e293b' }}></td>
                                         <td style={{ ...TDR, background: '#1e293b', color: '#4ade80', fontWeight: 900 }}>{fmtVal(summary.totalInValue)}</td>

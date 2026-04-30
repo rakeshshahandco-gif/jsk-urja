@@ -34,6 +34,7 @@ const stockLedgerSchema = new mongoose.Schema({
     remarks: { type: String, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
+    isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 stockLedgerSchema.index({ itemId: 1, date: -1 });

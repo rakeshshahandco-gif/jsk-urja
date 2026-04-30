@@ -1,8 +1,16 @@
 import mongoose from 'mongoose';
 import { Item } from '../models/item.model.js';
 import { StockLedger } from '../models/stockLedger.model.js';
+import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { GRN } from '../models/grn.model.js';
+import { WorkOrder } from '../models/workOrder.model.js';
+import Customer from '../models/customer.model.js';
+import { Supplier } from '../models/supplier.model.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { recalculateStockLedger } from '../utils/stockUtils.js';
 
 // ── Helper: IST date boundaries ───────────────────────────────────────────────
 const istBoundaries = (dateStr) => {
@@ -253,16 +261,27 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
     const { 
         dateFrom, dateTo, itemId, partyId, 
         itemCategory, itemType, transactionType, 
-        search, financialYear 
+        search, financialYear, includeCancelled = 'false'
     } = req.query;
 
-    const query = {};
+    const query = { isDeleted: { $ne: true } };
+    if (includeCancelled === 'true') {
+        delete query.isDeleted;
+    } else {
+        // Exclude specific cancel/reversal types if not in audit mode
+        query.transactionType = { 
+            $nin: ['SALES_INVOICE_CANCEL', 'PURCHASE_INVOICE_DELETE', 'PURCHASE_RETURN', 'PROD_REJECTION'] 
+        };
+    }
+
     if (financialYear) query.financialYear = financialYear;
     if (itemId) query.itemId = new mongoose.Types.ObjectId(itemId);
     if (partyId) query.partyId = new mongoose.Types.ObjectId(partyId);
     if (itemCategory) query.itemGroup = itemCategory;
     if (itemType) query.itemType = itemType;
-    if (transactionType) query.transactionType = transactionType;
+    if (transactionType) {
+        query.transactionType = transactionType;
+    }
 
     if (search) {
         query.$or = [
@@ -470,4 +489,216 @@ export const getStockDashboard = asyncHandler(async (req, res) => {
         replacementTodayQty: replacementToday[0]?.totalQty || 0,
         replacementTodayCount: replacementToday[0]?.count || 0,
     }, 'Stock Dashboard'));
+});
+
+/**
+ * ADMIN: Rebuild Stock Ledger from Source Documents
+ * This utility purges existing ledger entries and re-synchronizes from primary docs.
+ */
+export const rebuildStockMovementLedger = asyncHandler(async (req, res) => {
+    const { itemId, dryRun = 'false' } = req.body;
+    if (!itemId) throw new ApiError(400, 'Item ID is required for rebuilding');
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const item = await Item.findById(itemId).session(session);
+        if (!item) throw new ApiError(404, 'Item not found');
+
+        const logs = [];
+        logs.push(`Starting rebuild for ${item.itemName} (${item.itemCode})`);
+
+        if (dryRun === 'false') {
+            // 1. Purge existing entries
+            await StockLedger.deleteMany({ itemId: item._id }).session(session);
+            logs.push('Deleted existing ledger entries.');
+        }
+
+        const newEntries = [];
+
+        // 2. Fetch Sales Invoices
+        const sales = await SalesInvoice.find({
+            'items.itemId': item._id,
+            status: { $nin: ['Cancelled', 'Draft'] },
+            isDeleted: { $ne: true }
+        }).session(session);
+
+        for (const inv of sales) {
+            const line = inv.items.find(i => i.itemId.toString() === item._id.toString());
+            if (!line) continue;
+            newEntries.push({
+                date: inv.invoiceDate,
+                itemId: item._id,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                itemGroup: item.itemCategory,
+                itemType: item.itemType,
+                uom: item.uom,
+                transactionType: 'SALES_INVOICE',
+                voucherType: 'Sales Outward',
+                partyId: inv.customerId,
+                partyModel: 'Customer',
+                partyName: inv.customerName,
+                referenceNo: inv.invoiceNumber,
+                referenceId: inv._id,
+                outQty: line.qty,
+                rate: line.rate,
+                amount: Math.round(line.qty * line.rate * 100) / 100,
+                financialYear: inv.financialYear,
+                createdBy: req.user.id
+            });
+        }
+        logs.push(`Pulled ${sales.length} Sales Invoices.`);
+
+        // 3. Fetch Purchase Invoices (Direct)
+        const purchases = await PurchaseInvoice.find({
+            'items.itemId': item._id,
+            status: { $nin: ['Cancelled', 'Draft'] },
+            isDeleted: { $ne: true },
+            isDirectPurchase: true
+        }).session(session);
+
+        for (const inv of purchases) {
+            const line = inv.items.find(i => i.itemId.toString() === item._id.toString());
+            if (!line) continue;
+            newEntries.push({
+                date: inv.invoiceDate,
+                itemId: item._id,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                itemGroup: item.itemCategory,
+                itemType: item.itemType,
+                uom: item.uom,
+                transactionType: 'PURCHASE_INVOICE',
+                voucherType: 'Purchase Inward',
+                partyId: inv.supplierId,
+                partyModel: 'Supplier',
+                partyName: inv.supplierName,
+                referenceNo: inv.invoiceNumber,
+                referenceId: inv._id,
+                inQty: line.qty,
+                rate: line.rate,
+                amount: Math.round(line.qty * line.rate * 100) / 100,
+                financialYear: inv.financialYear,
+                createdBy: req.user.id
+            });
+        }
+        logs.push(`Pulled ${purchases.length} Purchase Invoices (Direct).`);
+
+        // 4. Fetch GRNs
+        const grns = await GRN.find({
+            'items.itemId': item._id,
+            status: 'Confirmed',
+            isDeleted: { $ne: true }
+        }).session(session);
+
+        for (const doc of grns) {
+            const line = doc.items.find(i => i.itemId.toString() === item._id.toString());
+            if (!line) continue;
+            newEntries.push({
+                date: doc.grnDate,
+                itemId: item._id,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                itemGroup: item.itemCategory,
+                itemType: item.itemType,
+                uom: item.uom,
+                transactionType: 'GRN',
+                voucherType: 'Purchase Inward',
+                partyId: doc.supplierId,
+                partyModel: 'Supplier',
+                partyName: doc.supplierName,
+                referenceNo: doc.grnNumber,
+                referenceId: doc._id,
+                inQty: line.receivedQty,
+                rate: line.rate || 0,
+                amount: Math.round(line.receivedQty * (line.rate || 0) * 100) / 100,
+                financialYear: doc.financialYear,
+                createdBy: req.user.id
+            });
+        }
+        logs.push(`Pulled ${grns.length} GRNs.`);
+
+        // 5. Fetch Work Orders (Output)
+        const wos = await WorkOrder.find({
+            finishedProductId: item._id,
+            status: 'Completed',
+            inventorySynced: true
+        }).session(session);
+
+        for (const wo of wos) {
+            const finalQcStage = wo.stages.find(s => s.seq === 9);
+            const qty = (finalQcStage && finalQcStage.outputQty > 0) ? finalQcStage.outputQty : wo.targetQty;
+            
+            newEntries.push({
+                date: wo.updatedAt,
+                itemId: item._id,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                itemGroup: item.itemCategory,
+                itemType: item.itemType,
+                uom: item.uom,
+                transactionType: 'WO_OUTPUT',
+                voucherType: 'Production Inward',
+                referenceNo: wo.woNumber,
+                referenceId: wo._id,
+                inQty: qty,
+                rate: item.valuationRate || 0,
+                amount: Math.round(qty * (item.valuationRate || 0) * 100) / 100,
+                financialYear: wo.financialYear,
+                createdBy: req.user.id
+            });
+        }
+        logs.push(`Pulled ${wos.length} Work Order Outputs.`);
+
+        // 6. Fetch Work Orders (Consumption)
+        const woConsumption = await WorkOrder.find({
+            'materialStatus.itemId': item._id,
+            status: 'Completed',
+            inventorySynced: true
+        }).session(session);
+
+        for (const wo of woConsumption) {
+            const mat = wo.materialStatus.find(m => m.itemId.toString() === item._id.toString());
+            if (!mat) continue;
+            newEntries.push({
+                date: wo.updatedAt,
+                itemId: item._id,
+                itemCode: item.itemCode,
+                itemName: item.itemName,
+                itemGroup: item.itemCategory,
+                itemType: item.itemType,
+                uom: item.uom,
+                transactionType: 'WO_CONSUMPTION',
+                voucherType: 'Production Consumption',
+                referenceNo: wo.woNumber,
+                referenceId: wo._id,
+                outQty: mat.requiredQty,
+                rate: item.valuationRate || 0,
+                amount: Math.round(mat.requiredQty * (item.valuationRate || 0) * 100) / 100,
+                financialYear: wo.financialYear,
+                createdBy: req.user.id
+            });
+        }
+        logs.push(`Pulled ${woConsumption.length} Work Order Consumptions.`);
+
+        if (dryRun === 'false' && newEntries.length > 0) {
+            newEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
+            await StockLedger.insertMany(newEntries, { session });
+            logs.push(`Inserted ${newEntries.length} fresh ledger entries.`);
+
+            await recalculateStockLedger(item._id, session);
+            logs.push('Recalculated running balances and valuation rates.');
+        }
+
+        await session.commitTransaction();
+        res.json(new ApiResponse(200, { logs, totalEntries: newEntries.length }, 'Ledger Rebuild Complete'));
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });

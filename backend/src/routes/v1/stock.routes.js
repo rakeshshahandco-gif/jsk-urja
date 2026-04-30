@@ -5,6 +5,7 @@ import {
     getFinishedGoodsReport,
     getStockLedger,
     getStockMovementLedger,
+    rebuildStockMovementLedger,
     getStockSummary,
     getStockDashboard,
 } from '../../controllers/stock.controller.js';
@@ -17,6 +18,7 @@ router.get('/raw-material-report', getRawMaterialReport);
 router.get('/finished-goods-report', getFinishedGoodsReport);
 router.get('/summary', getStockSummary);
 router.get('/movement-ledger', getStockMovementLedger);
+router.post('/rebuild-ledger', rebuildStockMovementLedger);
 router.get('/ledger/:itemId', getStockLedger);
 
 export default router;
