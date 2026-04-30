@@ -48,6 +48,12 @@ function LedgerRow({ row, i }) {
                 <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>{row.referenceNo}</div>
             </td>
             <td style={TD}>
+                <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>{(row.itemGroup || '').replace('_', ' ')}</div>
+            </td>
+            <td style={TD}>
+                <div style={{ fontSize: 11, color: '#1e293b', fontWeight: 600 }}>{row.stockSource}</div>
+            </td>
+            <td style={TD}>
                 {row.partyName ? (
                     <div>
                         <div style={{ fontWeight: 600, color: '#1e293b' }}>{row.partyName}</div>
@@ -91,11 +97,11 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
     const [parties, setParties] = useState([]);
 
     useEffect(() => {
-        api.get('/items', { limit: 1000 }).then(res => setItems(res.data?.items || []));
+        api.get('/items', { limit: 1000 }).then(res => setItems(res.data || []));
         api.get('/customers', { limit: 1000 }).then(res => {
-            const custs = (res.data?.customers || []).map(c => ({ _id: c._id, name: c.customerName, type: 'Customer' }));
+            const custs = (res.data || []).map(c => ({ _id: c._id, name: c.customerName, type: 'Customer' }));
             api.get('/suppliers', { limit: 1000 }).then(res2 => {
-                const supps = (res2.data?.suppliers || []).map(s => ({ _id: s._id, name: s.supplierName, type: 'Supplier' }));
+                const supps = (res2.data || []).map(s => ({ _id: s._id, name: s.supplierName, type: 'Supplier' }));
                 setParties([...custs, ...supps]);
             });
         });
@@ -111,7 +117,7 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
                 itemId: targetId,
                 includeCancelled: filters.includeCancelled ? 'true' : 'false'
             };
-            const res = await api.get('/stock/movement-ledger', { params });
+            const res = await api.get('/stock/movement-ledger', params);
             setData(res.data || { summary: {}, rows: [] });
         } catch (e) {
             console.error('Failed to fetch ledger:', e);
@@ -127,11 +133,11 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
         setIsRebuilding(true);
         try {
             const res = await api.post('/stock/rebuild-ledger', { itemId: selectedItemId });
-            setRebuildLogs(res.data?.data?.logs || []);
+            setRebuildLogs(res.data?.logs || []);
             fetchLedger();
             alert('Ledger rebuild complete!');
         } catch (e) {
-            alert('Rebuild failed: ' + (e.response?.data?.message || e.message));
+            alert('Rebuild failed: ' + e.message);
         } finally {
             setIsRebuilding(false);
         }
@@ -245,6 +251,13 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
                         ))}
                     </div>
 
+                    {/* Debug Info (Only for Admins/Dev) */}
+                    {summary.debug && (
+                        <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: 8, padding: '10px 15px', fontSize: 10, fontFamily: 'monospace', color: '#854d0e' }}>
+                            <strong>DEBUG INFO:</strong> FY: {summary.debug.selectedFY} | Range: {summary.debug.finalDateFrom} to {summary.debug.finalDateTo} | Total Entries: {summary.debug.totalEntriesFound} | After Filter: {summary.debug.rowsAfterStrictFilter} | Min Date: {summary.debug.minDateReturned ? new Date(summary.debug.minDateReturned).toLocaleString() : 'N/A'} | Max Date: {summary.debug.maxDateReturned ? new Date(summary.debug.maxDateReturned).toLocaleString() : 'N/A'}
+                        </div>
+                    )}
+
                     {/* Ledger Table */}
                     <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                         <div style={{ overflowX: 'auto' }}>
@@ -255,6 +268,8 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
                                         <th rowSpan={2} style={TH()}>Date</th>
                                         <th rowSpan={2} style={TH()}>Voucher Type</th>
                                         <th rowSpan={2} style={TH()}>Reference No.</th>
+                                        <th rowSpan={2} style={TH()}>Item Nature</th>
+                                        <th rowSpan={2} style={TH()}>Stock Source</th>
                                         <th rowSpan={2} style={TH()}>Party Details</th>
                                         <th colSpan={3} style={{ ...TH(true), textAlign: 'center', background: '#f0fdf4', color: '#16a34a', borderBottom: '1px solid #dcfce7' }}>Inward Movement</th>
                                         <th colSpan={3} style={{ ...TH(true), textAlign: 'center', background: '#fef2f2', color: '#dc2626', borderBottom: '1px solid #fee2e2' }}>Outward Movement</th>
@@ -278,6 +293,8 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
                                         <td style={TD}>Opening Balance</td>
                                         <td style={TD}>-</td>
                                         <td style={TD}>-</td>
+                                        <td style={TD}>-</td>
+                                        <td style={TD}>-</td>
                                         <td colSpan={3} style={TDR}></td>
                                         <td colSpan={3} style={TDR}></td>
                                         <td style={{ ...TDR, fontSize: 14, fontWeight: 900 }}>{fmt(summary.openingQty)}</td>
@@ -287,7 +304,7 @@ function ComprehensiveLedger({ initialItemId = '', accentColor = '#6366f1', fina
                                 </tbody>
                                 <tfoot>
                                     <tr style={{ background: '#1e293b', color: '#fff' }}>
-                                        <td colSpan={5} style={{ padding: '12px', textAlign: 'right', fontWeight: 800, fontSize: 11 }}>PERIOD TOTALS</td>
+                                        <td colSpan={7} style={{ padding: '12px', textAlign: 'right', fontWeight: 800, fontSize: 11 }}>PERIOD TOTALS</td>
                                         <td style={{ ...TDR, background: '#1e293b', color: '#4ade80', fontWeight: 900 }}>{fmt(summary.totalInQty)}</td>
                                         <td style={{ background: '#1e293b' }}></td>
                                         <td style={{ ...TDR, background: '#1e293b', color: '#4ade80', fontWeight: 900 }}>{fmtVal(summary.totalInValue)}</td>
@@ -318,9 +335,9 @@ function StockSummaryList({ category, accentColor, onSelectItem, financialYear }
         try {
             const endpoint = category === 'FINISHED_GOOD' ? '/stock/finished-goods-report' : '/stock/raw-material-report';
             const params = { itemCategory: category, financialYear };
-            const res = await api.get(endpoint, { params });
+            const res = await api.get(endpoint, params);
             // Filter by category client-side if the API returns mixed results (for Consumables)
-            let data = res.data?.data || res.data || [];
+            let data = res.data || [];
             if (category === 'CONSUMABLE') {
                 data = data.filter(r => r.itemType === 'CONSUMABLE' || r.itemCategory === 'CONSUMABLE');
             }

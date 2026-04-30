@@ -26,6 +26,11 @@ const siItemSchema = new mongoose.Schema({
     cessRate: { type: Number, default: 0 },
     cessAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
+    saleType: { 
+        type: String, 
+        enum: ['MANUFACTURED_SALE', 'TRADING_SALE'], 
+        default: 'MANUFACTURED_SALE' 
+    },
 }, { _id: true });
 
 const salesInvoiceSchema = new mongoose.Schema({

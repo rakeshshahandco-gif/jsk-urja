@@ -28,7 +28,8 @@ const BLANK_ITEM = () => ({
     qty: '',
     rate: '',
     gstRate: 18,
-    discountPercent: 0
+    discountPercent: 0,
+    saleType: 'MANUFACTURED_SALE'
 });
 
 const Section = ({ title, children }) => (
@@ -248,7 +249,8 @@ export default function SalesInvoiceFormPage() {
                     qty: i.qty || '', 
                     rate: i.rate || '', 
                     gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), 
-                    discountPercent: 0 
+                    discountPercent: 0,
+                    saleType: i.saleType || 'MANUFACTURED_SALE'
                 })) : [BLANK_ITEM()],
             }));
         }).catch(() => toast.error('Failed to load SO details'));
@@ -282,6 +284,7 @@ export default function SalesInvoiceFormPage() {
                     gstRate: selected.taxRate || selected.salesGst || selected.gstRate || 18,
                     qty: item.qty || 1,
                     additionalNotes: item.additionalNotes || '',
+                    saleType: selected.itemCategory === 'TRADING' ? 'TRADING_SALE' : 'MANUFACTURED_SALE'
                 };
             });
             return { ...p, items };
@@ -387,6 +390,7 @@ export default function SalesInvoiceFormPage() {
                     uom: i.uom,
                     qty: Number(i.qty),
                     rate: Number(i.rate),
+                    saleType: i.saleType || 'MANUFACTURED_SALE',
                     gstRate: Number(i.gstRate) || 18,
                     discountPercent: Number(i.discountPercent) || 0,
                     discountAmount: Number(i.discAmt) || 0,
@@ -534,7 +538,7 @@ export default function SalesInvoiceFormPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Item Code', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : 'auto' }}>{h}</th>)}
+                                    {['Sr', 'Item Code', 'Sale Type', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : h === 'Sale Type' ? '140px' : 'auto' }}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
@@ -555,6 +559,16 @@ export default function SalesInvoiceFormPage() {
                                                 data-col={1}
                                                 placeholder="Item Code..."
                                             />
+                                        </td>
+                                        <td style={{ ...td, minWidth: 140 }}>
+                                            <select 
+                                                value={item.saleType}
+                                                onChange={e => setItem(i, 'saleType', e.target.value)}
+                                                style={{ ...inp, padding: '4px', fontSize: '11px', fontWeight: 600, color: item.saleType === 'TRADING_SALE' ? '#2563eb' : '#1e293b' }}
+                                            >
+                                                <option value="MANUFACTURED_SALE">Manufactured</option>
+                                                <option value="TRADING_SALE">Trading</option>
+                                            </select>
                                         </td>
                                         <td style={{ ...td, minWidth: 160 }}>
                                             <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" tabIndex="-1" />

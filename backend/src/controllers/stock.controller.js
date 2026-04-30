@@ -340,11 +340,18 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
     // 1. Calculate Opening Balance
     let openingQty = 0;
     let openingValue = 0;
-    let fromDate = null;
+    let fromDateStart = null;
+    let toDateEnd = null;
 
     if (finalDateFrom) {
-        fromDate = new Date(finalDateFrom);
-        const openingMatch = { ...baseQuery, date: { $lt: fromDate } };
+        fromDateStart = new Date(`${finalDateFrom}T00:00:00.000Z`);
+    }
+    if (finalDateTo) {
+        toDateEnd = new Date(`${finalDateTo}T23:59:59.999Z`);
+    }
+
+    if (fromDateStart) {
+        const openingMatch = { ...baseQuery, date: { $lt: fromDateStart } };
         // IMPORTANT: Remove financialYear filter for opening balance calculation to include all past data
         delete openingMatch.financialYear;
 
@@ -368,13 +375,11 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
 
     // 2. Fetch Period Entries
     const periodMatch = { ...baseQuery };
-    if (fromDate) {
-        periodMatch.date = { ...periodMatch.date, $gte: fromDate };
+    if (fromDateStart) {
+        periodMatch.date = { ...periodMatch.date, $gte: fromDateStart };
     }
-    if (finalDateTo) {
-        const toDate = new Date(finalDateTo);
-        toDate.setHours(23, 59, 59, 999);
-        periodMatch.date = { ...periodMatch.date, $lte: toDate };
+    if (toDateEnd) {
+        periodMatch.date = { ...periodMatch.date, $lte: toDateEnd };
     }
 
     const entries = await StockLedger.find(periodMatch)
@@ -388,13 +393,27 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
     let totalInValue = 0;
     let totalOutValue = 0;
 
+    // For debugging
+    let minDate = null;
+    let maxDate = null;
+
     const rows = entries.reduce((acc, e) => {
+        const entryDate = new Date(e.date);
+        
+        // STRICT DATE FILTER CHECK (Safety check for MongoDB boundary issues)
+        if (fromDateStart && entryDate < fromDateStart) return acc;
+        if (toDateEnd && entryDate > toDateEnd) return acc;
+
         const inQty = e.inQty || 0;
         const outQty = e.outQty || 0;
         const amount = e.amount || 0;
 
         // Skip rows with no movement (zero/blank qty)
         if (inQty === 0 && outQty === 0) return acc;
+
+        // Debug date tracking
+        if (!minDate || entryDate < minDate) minDate = entryDate;
+        if (!maxDate || entryDate > maxDate) maxDate = entryDate;
 
         currentQty += (inQty - outQty);
         totalInQty += inQty;
@@ -403,10 +422,32 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
         if (inQty > 0) totalInValue += amount;
         if (outQty > 0) totalOutValue += amount;
 
-        // Enhanced Party Details for Production
+        // Enhanced Party Details
         let displayParty = e.partyName;
-        if (!displayParty && (e.transactionType === 'WO_OUTPUT' || e.transactionType === 'WO_CONSUMPTION')) {
-            displayParty = `Work Order: ${e.referenceNo}`;
+        if (!displayParty) {
+            if (e.transactionType === 'WO_OUTPUT' || e.transactionType === 'WO_CONSUMPTION') {
+                displayParty = `Work Order: ${e.referenceNo}`;
+            } else if (e.transactionType === 'SALES_INVOICE' || e.transactionType === 'SALES_RETURN') {
+                displayParty = 'Unknown Customer';
+            } else if (e.transactionType === 'PURCHASE_INVOICE' || e.transactionType === 'PURCHASE_RETURN' || e.transactionType === 'GRN') {
+                displayParty = 'Unknown Supplier';
+            } else {
+                displayParty = '-';
+            }
+        }
+
+        // Determine Stock Source
+        let stockSource = 'Other';
+        if (e.transactionType === 'PURCHASE_INVOICE' || e.transactionType === 'GRN') {
+            stockSource = (e.itemGroup === 'TRADING') ? 'Trading' : 'Raw Material';
+        } else if (e.transactionType === 'WO_OUTPUT') {
+            stockSource = 'Manufacturing';
+        } else if (e.transactionType === 'SALES_INVOICE') {
+            stockSource = (e.itemGroup === 'FINISHED_GOOD') ? 'Manufacturing' : 'Trading';
+        } else if (e.transactionType === 'WO_CONSUMPTION') {
+            stockSource = 'Raw Material';
+        } else if (e.itemGroup === 'CONSUMABLE') {
+            stockSource = 'Consumable';
         }
 
         acc.push({
@@ -414,6 +455,8 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
             date: e.date,
             itemCode: e.itemCode,
             itemName: e.itemName,
+            itemGroup: e.itemGroup,
+            stockSource,
             uom: e.uom,
             transactionType: e.transactionType,
             voucherType: e.voucherType || e.transactionType,
@@ -439,7 +482,16 @@ export const getStockMovementLedger = asyncHandler(async (req, res) => {
         totalOutQty: Math.round(totalOutQty * 100) / 100,
         totalOutValue: Math.round(totalOutValue * 100) / 100,
         closingQty: Math.round(currentQty * 100) / 100,
-        closingValue: Math.round((openingValue + totalInValue - totalOutValue) * 100) / 100
+        closingValue: Math.round((openingValue + totalInValue - totalOutValue) * 100) / 100,
+        debug: {
+            selectedFY: financialYear,
+            finalDateFrom,
+            finalDateTo,
+            totalEntriesFound: entries.length,
+            rowsAfterStrictFilter: rows.length,
+            minDateReturned: minDate,
+            maxDateReturned: maxDate
+        }
     };
 
     res.json(new ApiResponse(200, { summary, rows }, 'Stock Movement Ledger Fetched'));
@@ -615,6 +667,9 @@ export const rebuildStockMovementLedger = asyncHandler(async (req, res) => {
         for (const inv of purchases) {
             const line = inv.items.find(i => i.itemId.toString() === item._id.toString());
             if (!line) continue;
+            if (line.isConsumable || line.purchaseType === 'CONSUMABLE_PURCHASE') continue;
+            if (item.itemCategory === 'FINISHED_GOOD' && line.purchaseType !== 'TRADING_PURCHASE') continue;
+
             newEntries.push({
                 date: inv.invoiceDate,
                 itemId: item._id,
@@ -649,6 +704,9 @@ export const rebuildStockMovementLedger = asyncHandler(async (req, res) => {
         for (const doc of grns) {
             const line = doc.items.find(i => i.itemId.toString() === item._id.toString());
             if (!line) continue;
+            if (item.itemCategory === 'FINISHED_GOOD') continue; // Historical GRNs assumed to not be Trading Purchases unless explicitly moved to Direct Invoice
+            if (item.itemCategory === 'CONSUMABLE') continue;
+
             newEntries.push({
                 date: doc.grnDate,
                 itemId: item._id,

@@ -27,7 +27,7 @@ const FLOWS = [
     { key: 'Direct Invoice', label: 'Direct Invoice', desc: 'Small purchase. No PO, no GRN. Stock updates on invoice post.', icon: '🧾' },
 ];
 
-const EMPTY_ROW = { itemId: '', itemName: '', itemCode: '', hsnCode: '', uom: 'NOS', qty: 1, rate: 0, discountPercent: 0, gstRate: 18, description: '', grnItemId: null, poItemId: null, maxQty: null, isConsumable: false, allocation: { type: 'General', referenceId: null, referenceName: '', typeModel: null } };
+const EMPTY_ROW = { itemId: '', itemName: '', itemCode: '', hsnCode: '', uom: 'NOS', qty: 1, rate: 0, discountPercent: 0, gstRate: 18, description: '', grnItemId: null, poItemId: null, maxQty: null, isConsumable: false, purchaseType: 'RAW_MATERIAL_PURCHASE', allocation: { type: 'General', referenceId: null, referenceName: '', typeModel: null } };
 
 export default function PurchaseInvoiceFormPage() {
     const navigate = useNavigate();
@@ -328,6 +328,7 @@ export default function PurchaseInvoiceFormPage() {
                         poItemId: r.poItemId || null,
                         maxQty: null,
                         isConsumable: r.isConsumable || false,
+                        purchaseType: r.purchaseType || 'RAW_MATERIAL_PURCHASE',
                         allocation: r.allocation || { type: 'General', referenceId: null, referenceName: '', typeModel: null }
                     })));
                 } else {
@@ -403,7 +404,29 @@ export default function PurchaseInvoiceFormPage() {
         const updated = { ...row, [k]: v };
         if (k === 'itemId') {
             const found = items.find(it => it._id === v);
-            if (found) { updated.itemName = found.itemName; updated.itemCode = found.itemCode; updated.uom = found.uom || 'NOS'; updated.rate = found.purchaseRate || 0; updated.hsnCode = found.hsnCode || ''; updated.gstRate = found.purchaseGst || 18; }
+            if (found) { 
+                updated.itemName = found.itemName; 
+                updated.itemCode = found.itemCode; 
+                updated.uom = found.uom || 'NOS'; 
+                updated.rate = found.purchaseRate || 0; 
+                updated.hsnCode = found.hsnCode || ''; 
+                updated.gstRate = found.purchaseGst || 18; 
+                
+                // Auto-select purchase type
+                if (found.itemCategory === 'FINISHED_GOOD') {
+                    updated.purchaseType = 'TRADING_PURCHASE';
+                    updated.isConsumable = false;
+                } else if (found.itemCategory === 'TRADING') {
+                    updated.purchaseType = 'TRADING_PURCHASE';
+                    updated.isConsumable = false;
+                } else if (found.itemCategory === 'CONSUMABLE') {
+                    updated.purchaseType = 'CONSUMABLE_PURCHASE';
+                    updated.isConsumable = true;
+                } else {
+                    updated.purchaseType = 'RAW_MATERIAL_PURCHASE';
+                    updated.isConsumable = false;
+                }
+            }
         }
         return updated;
     }));
@@ -534,7 +557,8 @@ export default function PurchaseInvoiceFormPage() {
                     discountPercent: Number(r.discountPercent), gstRate: Number(r.gstRate),
                     description: r.description || '',
                     grnItemId: r.grnItemId || null, poItemId: r.poItemId || null,
-                    isConsumable: r.isConsumable || false,
+                    isConsumable: r.purchaseType === 'CONSUMABLE_PURCHASE' ? true : (r.isConsumable || false),
+                    purchaseType: r.purchaseType || 'RAW_MATERIAL_PURCHASE',
                     allocation: r.allocation || null
                 })),
                 isConsumable: header.isConsumable || false,
@@ -714,8 +738,8 @@ export default function PurchaseInvoiceFormPage() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                                         <thead>
                                             <tr style={{ background: '#f8f9fa', color: '#64748b' }}>
-                                                {['#', 'Item', 'Consumable', 'Description', 'HSN', 'UOM', 'Qty', 'Balance', 'Rate', 'Total', ''].map((h, i) =>
-                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : h === 'Consumable' ? '100px' : 'auto' }}>{h}</th> : null
+                                                {['#', 'Item', 'Purchase Type', 'Description', 'HSN', 'UOM', 'Qty', 'Balance', 'Rate', 'Total', ''].map((h, i) =>
+                                                    h !== '' ? <th key={i} style={{ padding: '8px 10px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', minWidth: h === 'Qty' ? '120px' : h === 'Purchase Type' ? '140px' : 'auto' }}>{h}</th> : null
                                                 )}
                                             </tr>
                                         </thead>
@@ -744,16 +768,20 @@ export default function PurchaseInvoiceFormPage() {
                                                         </td>
                                                         <td style={{ padding: '6px 10px' }}>
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={row.isConsumable} 
-                                                                        onChange={e => setRow(i, 'isConsumable', e.target.checked)}
-                                                                        style={{ width: '16px', height: '16px' }}
-                                                                    />
-                                                                    <span style={{ fontSize: '11px', fontWeight: 600 }}>Consumable</span>
-                                                                </div>
-                                                                {row.isConsumable && (
+                                                                <select 
+                                                                    value={row.purchaseType}
+                                                                    onChange={e => {
+                                                                        const val = e.target.value;
+                                                                        const isCons = val === 'CONSUMABLE_PURCHASE';
+                                                                        setRows(prev => prev.map((r, idx) => idx === i ? { ...r, purchaseType: val, isConsumable: isCons } : r));
+                                                                    }}
+                                                                    style={{ ...inp, padding: '4px', fontSize: '11px', width: '130px', fontWeight: 600, color: row.purchaseType === 'TRADING_PURCHASE' ? '#2563eb' : (row.purchaseType === 'CONSUMABLE_PURCHASE' ? '#92400e' : '#1e293b') }}
+                                                                >
+                                                                    <option value="RAW_MATERIAL_PURCHASE">Raw Material</option>
+                                                                    <option value="TRADING_PURCHASE">Trading</option>
+                                                                    <option value="CONSUMABLE_PURCHASE">Consumable</option>
+                                                                </select>
+                                                                {row.purchaseType === 'CONSUMABLE_PURCHASE' && (
                                                                     <select 
                                                                         value={row.allocation?.type || 'General'}
                                                                         onChange={e => setRow(i, 'allocation', { ...row.allocation, type: e.target.value })}
@@ -766,7 +794,7 @@ export default function PurchaseInvoiceFormPage() {
                                                                         <option value="Department">Dept</option>
                                                                     </select>
                                                                 )}
-                                                                {row.isConsumable && row.allocation?.type !== 'General' && (
+                                                                {row.purchaseType === 'CONSUMABLE_PURCHASE' && row.allocation?.type !== 'General' && (
                                                                     <input 
                                                                         value={row.allocation?.referenceName || ''}
                                                                         onChange={e => setRow(i, 'allocation', { ...row.allocation, referenceName: e.target.value })}

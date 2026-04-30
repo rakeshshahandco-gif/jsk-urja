@@ -227,6 +227,7 @@ const piItemJoi = Joi.object({
     grnItemId: Joi.string().optional().allow('', null),
     poItemId: Joi.string().optional().allow('', null),
     isConsumable: Joi.boolean().default(false),
+    purchaseType: Joi.string().valid('RAW_MATERIAL_PURCHASE', 'TRADING_PURCHASE', 'CONSUMABLE_PURCHASE').default('RAW_MATERIAL_PURCHASE'),
     allocation: Joi.object({
         type: Joi.string().valid('General', 'Product', 'Sales Order', 'Work Order', 'Department').default('General'),
         referenceId: Joi.string().optional().allow('', null),
@@ -325,6 +326,21 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 
         const isDirectStock = flowType === 'PO→Direct Invoice' || flowType === 'Direct Invoice';
 
+        // ── Business Logic Validation: Manufacturing & Trading ──
+        const itemIds = value.items.map(i => i.itemId);
+        const dbItems = await Item.find({ _id: { $in: itemIds } }).select('_id itemCategory').lean().session(session);
+        const itemCategoryMap = dbItems.reduce((acc, item) => {
+            acc[item._id.toString()] = item.itemCategory;
+            return acc;
+        }, {});
+
+        for (const item of value.items) {
+            const category = itemCategoryMap[item.itemId.toString()];
+            if (category === 'FINISHED_GOOD' && item.purchaseType !== 'TRADING_PURCHASE') {
+                throw new ApiError(400, `Item "${item.itemName}" is a Manufactured Finished Good. Direct stock purchase is not allowed unless Purchase Type is explicitly set to "Trading Purchase".`);
+            }
+        }
+
         const inv = await PurchaseInvoice.create([{
             ...value, 
             items: updatedItems,
@@ -375,7 +391,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 
         if (isDirectStock) {
             const stockItems = value.items
-                .filter(i => !i.isConsumable) // SKIP consumables from hitting inventory
+                .filter(i => !i.isConsumable && i.purchaseType !== 'CONSUMABLE_PURCHASE') // SKIP consumables from hitting inventory
                 .map(i => ({
                     itemId: i.itemId, itemCode: i.itemCode || '', itemName: i.itemName,
                     receivedQty: i.qty, rate: i.rate, warehouse: '',
@@ -388,6 +404,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
                 });
             }
         }
+
 
         // Financial Ledger Posting
         await postPurchaseInvoiceToLedger(invoice, req.user._id, session);
@@ -462,6 +479,22 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
                 inv[key] = updateData[key];
             }
         });
+
+        if (updateData.items) {
+            const itemIds = updateData.items.map(i => i.itemId);
+            const dbItems = await Item.find({ _id: { $in: itemIds } }).select('_id itemCategory').lean().session(session);
+            const itemCategoryMap = dbItems.reduce((acc, item) => {
+                acc[item._id.toString()] = item.itemCategory;
+                return acc;
+            }, {});
+
+            for (const item of updateData.items) {
+                const category = itemCategoryMap[item.itemId.toString()];
+                if (category === 'FINISHED_GOOD' && item.purchaseType !== 'TRADING_PURCHASE') {
+                    throw new ApiError(400, `Item "${item.itemName}" is a Manufactured Finished Good. Direct stock purchase is not allowed unless Purchase Type is explicitly set to "Trading Purchase".`);
+                }
+            }
+        }
 
         if (Object.keys(auditTrail).length > 0) {
             // Recalculate if items or freight changed

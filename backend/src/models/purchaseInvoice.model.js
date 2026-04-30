@@ -24,6 +24,11 @@ const piItemSchema = new mongoose.Schema({
     
     // Consumable / Non-Stock Logic
     isConsumable: { type: Boolean, default: false },
+    purchaseType: { 
+        type: String, 
+        enum: ['RAW_MATERIAL_PURCHASE', 'TRADING_PURCHASE', 'CONSUMABLE_PURCHASE'], 
+        default: 'RAW_MATERIAL_PURCHASE' 
+    },
     allocation: {
         type: { type: String, enum: ['General', 'Product', 'Sales Order', 'Work Order', 'Department'], default: 'General' },
         referenceId: { type: mongoose.Schema.Types.ObjectId, refPath: 'items.allocation.typeModel', default: null },
