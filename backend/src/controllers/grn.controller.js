@@ -21,7 +21,7 @@ const generateGrnNumber = async () => {
 };
 
 // ── Stock helper ──────────────────────────────────────────────────────────────
-export const updateStockForItems = async (items, refNo, refId, refType, userId, session, financialYear) => {
+export const updateStockForItems = async (items, refNo, refId, refType, userId, session, financialYear, partyInfo = {}) => {
     const ledgerEntries = [];
     for (const item of items) {
         const inventoryItem = await Item.findById(item.itemId).session(session);
@@ -45,9 +45,17 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
         ledgerEntries.push({
             date: new Date(),
             itemId: item.itemId,
-            itemCode: item.itemCode || '',
-            itemName: item.itemName,
+            itemCode: item.itemCode || inventoryItem.itemCode || '',
+            itemName: item.itemName || inventoryItem.itemName,
+            itemGroup: inventoryItem.itemCategory || '',
+            itemType: inventoryItem.itemType || '',
+            uom: inventoryItem.uom || item.uom || '',
             transactionType: refType,
+            voucherType: 'Purchase Inward',
+            partyId: partyInfo.supplierId || null,
+            partyModel: 'Supplier',
+            partyName: partyInfo.supplierName || '',
+            partyCode: partyInfo.supplierCode || '',
             referenceNo: refNo,
             referenceId: refId,
             inQty: newQty,
@@ -222,7 +230,10 @@ const createGRNAgainstPO = async (req, res) => {
         await po.save({ session });
 
         // Update stock
-        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy);
+        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy, {
+            supplierId: createdGrn.supplierId,
+            supplierName: createdGrn.supplierName
+        });
 
         await AuditLog.create([{
             user: req.user._id,
@@ -313,7 +324,10 @@ const createDirectGRN = async (req, res) => {
         const createdGrn = grn[0];
 
         // Update stock immediately on Direct GRN
-        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy);
+        await updateStockForItems(grnItems, createdGrn.grnNumber, createdGrn._id, 'GRN', req.user._id, session, fy, {
+            supplierId: createdGrn.supplierId,
+            supplierName: createdGrn.supplierName
+        });
 
         await AuditLog.create([{
             user: req.user._id,

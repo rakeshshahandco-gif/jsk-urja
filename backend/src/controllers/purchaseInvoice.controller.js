@@ -382,7 +382,10 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
                 }));
             
             if (stockItems.length > 0) {
-                await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy);
+                await updateStockForItems(stockItems, invoice.invoiceNumber, invoice._id, 'PURCHASE_INVOICE', req.user._id, session, fy, {
+                    supplierId: invoice.supplierId,
+                    supplierName: invoice.supplierName
+                });
             }
         }
 

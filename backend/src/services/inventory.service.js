@@ -28,21 +28,71 @@ export const syncWorkOrderToInventory = async (wo, session, userId) => {
         date: new Date(),
         itemId: wo.finishedProductId,
         itemCode: item.itemCode || '',
-        itemName: item.name || wo.finishedProductName || '',
+        itemName: item.itemName || item.name || wo.finishedProductName || '',
+        itemGroup: item.itemCategory || '',
+        itemType: item.itemType || '',
+        uom: item.uom || '',
         transactionType: 'WO_OUTPUT',
+        voucherType: 'Production Inward',
         referenceNo: wo.woNumber,
         referenceId: wo._id,
         inQty: qtyToAdd,
         outQty: 0,
+        rate: item.valuationRate || 0,
+        amount: Math.round(qtyToAdd * (item.valuationRate || 0) * 100) / 100,
         remarks: `Production Completion: ${wo.woNumber}`,
         financialYear: wo.financialYear,
         createdBy: userId,
     }], { session });
 
-    // 4. Update Item Master and Ledger Consistency
+    // 4. Handle Consumption (Deduct components from stock)
+    if (wo.materialStatus && wo.materialStatus.length > 0) {
+        const consumptionEntries = [];
+        for (const mat of wo.materialStatus) {
+            if (!mat.itemId) continue;
+            
+            // Get actual used qty (usually target * qty per unit, but could be adjusted)
+            // For now, using requiredQty as what was consumed.
+            const consumedQty = mat.requiredQty || 0;
+            if (consumedQty <= 0) continue;
+
+            const compItem = await Item.findById(mat.itemId).session(session);
+            if (!compItem) continue;
+
+            consumptionEntries.push({
+                date: new Date(),
+                itemId: mat.itemId,
+                itemCode: mat.itemCode || compItem.itemCode || '',
+                itemName: mat.itemName || compItem.itemName || compItem.name || '',
+                itemGroup: compItem.itemCategory || '',
+                itemType: compItem.itemType || '',
+                uom: mat.uom || compItem.uom || '',
+                transactionType: 'WO_CONSUMPTION',
+                voucherType: 'Production Consumption',
+                referenceNo: wo.woNumber,
+                referenceId: wo._id,
+                inQty: 0,
+                outQty: consumedQty,
+                rate: compItem.valuationRate || 0,
+                amount: Math.round(consumedQty * (compItem.valuationRate || 0) * 100) / 100,
+                remarks: `Production Consumption for WO: ${wo.woNumber}`,
+                financialYear: wo.financialYear,
+                createdBy: userId,
+            });
+
+            // Update individual item master stock
+            compItem.currentStock = (compItem.currentStock || 0) - consumedQty;
+            await compItem.save({ session });
+        }
+
+        if (consumptionEntries.length > 0) {
+            await StockLedger.insertMany(consumptionEntries, { session });
+        }
+    }
+
+    // 5. Update Item Master and Ledger Consistency for finished product
     await recalculateStockLedger(wo.finishedProductId, session);
 
-    // 5. Mark WO as synced
+    // 6. Mark WO as synced
     wo.inventorySynced = true;
-    // Note: No need to call wo.save() here as it's usually called by the caller within same session
 };

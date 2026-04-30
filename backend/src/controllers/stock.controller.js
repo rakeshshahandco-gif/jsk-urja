@@ -187,7 +187,7 @@ export const getStockLedger = asyncHandler(async (req, res) => {
     const { itemId } = req.params;
     const { dateFrom, dateTo, page = 1, limit = 100 } = req.query;
 
-    const item = await Item.findById(itemId).select('itemCode itemName uom openingStock currentStock valuationRate').lean();
+    const item = await Item.findById(itemId).select('itemCode itemName itemCategory itemType uom openingStock currentStock valuationRate').lean();
     if (!item) return res.status(404).json(new ApiResponse(404, null, 'Item not found'));
 
     const match = { itemId: new mongoose.Types.ObjectId(itemId) };
@@ -220,15 +220,19 @@ export const getStockLedger = asyncHandler(async (req, res) => {
     };
 
     const rows = entries.map(e => ({
+        _id: e._id,
         date: e.date,
         transactionType: e.transactionType,
-        typeLabel: typeLabels[e.transactionType] || e.transactionType,
+        voucherType: e.voucherType || typeLabels[e.transactionType] || e.transactionType,
         referenceNo: e.referenceNo,
+        referenceId: e.referenceId,
+        partyName: e.partyName || '',
+        partyCode: e.partyCode || '',
         inQty: e.inQty || 0,
         outQty: e.outQty || 0,
-        balance: e.runningStock || 0,
         rate: e.rate || 0,
         amount: e.amount || 0,
+        balance: e.runningStock || 0,
         remarks: e.remarks || '',
     }));
 
@@ -239,6 +243,134 @@ export const getStockLedger = asyncHandler(async (req, res) => {
         page: Number(page),
         pages: Math.ceil(total / Number(limit)),
     }, 'Stock Ledger'));
+});
+
+/**
+ * Comprehensive Stock Movement Ledger with Qty + Value
+ * Supports Party-wise, Item-wise and Group-wise movement
+ */
+export const getStockMovementLedger = asyncHandler(async (req, res) => {
+    const { 
+        dateFrom, dateTo, itemId, partyId, 
+        itemCategory, itemType, transactionType, 
+        search, financialYear 
+    } = req.query;
+
+    const query = {};
+    if (financialYear) query.financialYear = financialYear;
+    if (itemId) query.itemId = new mongoose.Types.ObjectId(itemId);
+    if (partyId) query.partyId = new mongoose.Types.ObjectId(partyId);
+    if (itemCategory) query.itemGroup = itemCategory;
+    if (itemType) query.itemType = itemType;
+    if (transactionType) query.transactionType = transactionType;
+
+    if (search) {
+        query.$or = [
+            { itemName: { $regex: search, $options: 'i' } },
+            { itemCode: { $regex: search, $options: 'i' } },
+            { partyName: { $regex: search, $options: 'i' } },
+            { referenceNo: { $regex: search, $options: 'i' } },
+        ];
+    }
+
+    // Date Filter Logic for Opening vs Period
+    let openingMatch = { ...query };
+    let periodMatch = { ...query };
+
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        openingMatch.date = { $lt: fromDate };
+        periodMatch.date = { ...periodMatch.date, $gte: fromDate };
+    }
+
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        periodMatch.date = { ...periodMatch.date, $lte: toDate };
+    }
+
+    // 1. Calculate Opening Balance (Only if dateFrom is provided)
+    let openingQty = 0;
+    let openingValue = 0;
+
+    if (dateFrom && itemId) {
+        const opResult = await StockLedger.aggregate([
+            { $match: openingMatch },
+            { $group: { 
+                _id: null, 
+                totalIn: { $sum: '$inQty' }, 
+                totalOut: { $sum: '$outQty' },
+                totalInVal: { $sum: { $cond: [{ $gt: ['$inQty', 0] }, '$amount', 0] } },
+                totalOutVal: { $sum: { $cond: [{ $gt: ['$outQty', 0] }, '$amount', 0] } }
+            }}
+        ]);
+
+        // Get actual item to add its initial openingStock
+        const item = await Item.findById(itemId).select('openingStock valuationRate');
+        if (item) {
+            openingQty = (item.openingStock || 0) + (opResult[0]?.totalIn || 0) - (opResult[0]?.totalOut || 0);
+            // Valuation logic: use item rate for initial opening if ledger values are missing
+            openingValue = (openingQty * (item.valuationRate || 0));
+        }
+    }
+
+    // 2. Fetch Period Entries
+    const entries = await StockLedger.find(periodMatch)
+        .sort({ date: 1, createdAt: 1 })
+        .lean();
+
+    // 3. Process Rows & Calculate Running Balances
+    let currentQty = openingQty;
+    let totalInQty = 0;
+    let totalOutQty = 0;
+    let totalInValue = 0;
+    let totalOutValue = 0;
+
+    const rows = entries.map(e => {
+        const inQty = e.inQty || 0;
+        const outQty = e.outQty || 0;
+        const amount = e.amount || 0;
+
+        currentQty += (inQty - outQty);
+        totalInQty += inQty;
+        totalOutQty += outQty;
+
+        if (inQty > 0) totalInValue += amount;
+        if (outQty > 0) totalOutValue += amount;
+
+        return {
+            _id: e._id,
+            date: e.date,
+            itemCode: e.itemCode,
+            itemName: e.itemName,
+            uom: e.uom,
+            transactionType: e.transactionType,
+            voucherType: e.voucherType || e.transactionType,
+            partyName: e.partyName,
+            partyCode: e.partyCode,
+            referenceNo: e.referenceNo,
+            referenceId: e.referenceId,
+            inQty,
+            outQty,
+            rate: e.rate || 0,
+            amount,
+            runningStock: currentQty,
+            remarks: e.remarks
+        };
+    });
+
+    const summary = {
+        openingQty: Math.round(openingQty * 100) / 100,
+        openingValue: Math.round(openingValue * 100) / 100,
+        totalInQty: Math.round(totalInQty * 100) / 100,
+        totalInValue: Math.round(totalInValue * 100) / 100,
+        totalOutQty: Math.round(totalOutQty * 100) / 100,
+        totalOutValue: Math.round(totalOutValue * 100) / 100,
+        closingQty: Math.round(currentQty * 100) / 100,
+        closingValue: Math.round((openingValue + totalInValue - totalOutValue) * 100) / 100
+    };
+
+    res.json(new ApiResponse(200, { summary, rows }, 'Stock Movement Ledger Fetched'));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
