@@ -635,7 +635,7 @@ const DashboardPage = () => {
                             onClick={() => setIsAddModalOpen(true)}
                         >
                             <div className={styles.addIcon}>
-                                <Plus size={32} />
+                                <Plus size={28} />
                             </div>
                             <div className={styles.cardBody}>
                                 <h3 className={styles.formName}>Add Form</h3>
