@@ -90,6 +90,7 @@ import gstReportRoute from './gstReport.routes.js';
 import gstReconciliationRoute from './gstReconciliation.routes.js';
 import backupRoute from './backup.routes.js';
 import distributorRoute from './distributor.route.js';
+import userHomePreferenceRoute from './userHomePreference.route.js';
 
 const router = express.Router();
 
@@ -475,6 +476,10 @@ const defaultRoutes = [
     {
         path: '/distributors',
         route: distributorRoute,
+    },
+    {
+        path: '/user-home/preferences',
+        route: userHomePreferenceRoute,
     },
 ];
 

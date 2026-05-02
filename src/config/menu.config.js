@@ -15,7 +15,7 @@ export const menuConfig = [
         icon: 'BusinessIcon',
         path: '/',
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
-        permission: 'tasks'
+        permission: null
     },
     {
         id: 'crm',

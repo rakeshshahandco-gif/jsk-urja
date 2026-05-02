@@ -6,6 +6,7 @@ import { rollbackStockLedger } from '../utils/stockUtils.js';
 import { PurchaseOrder } from '../models/purchaseOrder.model.js';
 import { GRN } from '../models/grn.model.js';
 import { Supplier } from '../models/supplier.model.js';
+import { Item } from '../models/item.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
