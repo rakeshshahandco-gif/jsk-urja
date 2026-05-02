@@ -431,6 +431,35 @@
     }
 }
 
+.copyRightsWrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.copySelect {
+    padding: 0.5rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4b5563;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 220px;
+
+    &:focus {
+        outline: none;
+        border-color: #3b82f6;
+    }
+
+    &:hover {
+        border-color: #93c5fd;
+        background: #f9fafb;
+    }
+}
+
 .groupSection {
     background: #f8fafc;
     border: 2px solid #e2e8f0;

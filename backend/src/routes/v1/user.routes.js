@@ -1,6 +1,6 @@
 import express from 'express';
 import * as userController from '../../controllers/user.controller.js';
-import { getPermissionMetadata } from '../../controllers/permission.controller.js';
+import { getPermissionMetadata, syncPermissions } from '../../controllers/permission.controller.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -9,6 +9,7 @@ router.use(protect);
 
 // 1. SPECIFIC ROUTES (Must be BEFORE :id)
 router.get('/permissions/metadata', getPermissionMetadata);
+router.post('/permissions/sync', protect, authorize('superadmin', 'admin'), syncPermissions);
 router.get('/roles', userController.getRoles);
 router.get('/departments', userController.getDepartments);
 

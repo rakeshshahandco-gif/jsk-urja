@@ -27,7 +27,12 @@ export const userService = {
     },
 
     getPermissionMetadata: async () => {
-        const { data } = await api.get('/permissions/metadata');
+        const { data } = await api.get('/users/permissions/metadata');
+        return data;
+    },
+
+    syncPermissions: async () => {
+        const { data } = await api.post('/users/permissions/sync');
         return data;
     },
 

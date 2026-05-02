@@ -3,7 +3,7 @@ import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { Button, useModal } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { AddUserForm } from './components/AddUserForm';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, RefreshCw } from 'lucide-react';
 import { userService } from '@/services/user.service';
 import { ROLE_CONFIG, PERMISSION_LABELS, ROLES } from '@/utils/permissions';
 import styles from './UserManagement.module.scss';
@@ -141,6 +141,22 @@ export const UserManagement = () => {
     const handleResetPassword = (userId) => {
         alert(`Password reset link sent to user (Implement separately via email service)`);
     };
+    
+    const handleSyncPermissions = async () => {
+        try {
+            setIsLoading(true);
+            const response = await userService.syncPermissions();
+            if (response.success) {
+                toast.success(`Synced! ${response.data.updatedRoles} roles updated.`);
+                fetchUsers(); // Refresh list to see synced counts
+            }
+        } catch (error) {
+            console.error("Sync failed", error);
+            toast.error("Failed to sync permissions");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Never';
@@ -192,9 +208,14 @@ export const UserManagement = () => {
                     <h1 className={styles.title}>User Management</h1>
                     <p className={styles.subtitle}>Manage system users and their permissions</p>
                 </div>
-                <Button onClick={handleAddUser} startIcon={<UserPlus size={18} />}>
-                    Add User
-                </Button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <Button onClick={handleSyncPermissions} variant="outline" startIcon={<RefreshCw size={18} />}>
+                        Sync Permissions
+                    </Button>
+                    <Button onClick={handleAddUser} startIcon={<UserPlus size={18} />}>
+                        Add User
+                    </Button>
+                </div>
             </div>
 
             <div className={styles.tableContainer}>

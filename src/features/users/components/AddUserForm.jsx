@@ -9,17 +9,19 @@ import { toast } from 'react-hot-toast';
 export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const isEdit = !!user;
     const [searchTerm, setSearchTerm] = useState('');
-    const [metadata, setMetadata] = useState([]);
+     const [metadata, setMetadata] = useState([]);
     const [roles, setRoles] = useState([]);
     const [departments, setDepartments] = useState([]);
+    const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const PERMISSION_GROUPS = [
-        { id: 'sales_crm', name: 'Sales & CRM', modules: ['customers', 'sales', 'service', 'reports'] },
-        { id: 'operations', name: 'Operations', modules: ['inventory', 'purchase', 'production', 'production_rework'] },
-        { id: 'finance_bi', name: 'Finance & BI', modules: ['accounts', 'fixed_assets', 'mis', 'messenger'] },
-        { id: 'whatsapp_group', name: '💬 WhatsApp', modules: ['whatsapp'] },
-        { id: 'admin_support', name: 'Administration & Support', modules: ['admin', 'hr', 'tasks', 'prd'] }
+        { id: 'general', name: '🏠 Home & Dashboard', modules: ['home'] },
+        { id: 'sales_crm', name: '💼 CRM & Sales', modules: ['crm', 'sales'] },
+        { id: 'accounts_finance', name: '💰 Accounts & GST', modules: ['voucher_entry', 'account_master', 'accounts_reports', 'gst'] },
+        { id: 'operations', name: '⚙️ Operations & Inventory', modules: ['inventory', 'purchase', 'production'] },
+        { id: 'reports_mis', name: '📊 MIS & Reports', modules: ['mis', 'reports'] },
+        { id: 'support_admin', name: '🛠 Admin & Tasks', modules: ['admin', 'tasks'] }
     ];
 
     const [expandedModules, setExpandedModules] = useState({});
@@ -54,10 +56,11 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                 const results = await Promise.allSettled([
                     userService.getPermissionMetadata(),
                     userService.getRoles(),
-                    userService.getDepartments()
+                    userService.getDepartments(),
+                    userService.getAllUsers()
                 ]);
 
-                const [metaRes, rolesRes, deptsRes] = results.map((r, i) => {
+                const [metaRes, rolesRes, deptsRes, usersRes] = results.map((r, i) => {
                     if (r.status === 'fulfilled') return r.value;
                     console.error(`API Call failed index ${i}:`, r.reason);
                     return { success: false, data: [] };
@@ -71,6 +74,10 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
 
                 if (deptsRes.success) setDepartments(deptsRes.data);
                 else console.warn("Departments failed to load", deptsRes);
+
+                if (usersRes?.status === 'fulfilled' && usersRes.value?.success) setUsers(usersRes.value.data);
+                else if (usersRes?.success) setUsers(usersRes.data);
+                else console.warn("Users failed to load", usersRes);
 
                 if (!metaRes.success || !rolesRes.success || !deptsRes.success) {
                     toast.error("Partial data load: some features may be limited");
@@ -360,6 +367,28 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className={styles.searchInput}
                                 />
+                            </div>
+                            <div className={styles.copyRightsWrapper}>
+                                <select 
+                                    className={styles.copySelect}
+                                    onChange={(e) => {
+                                        const userId = e.target.value;
+                                        if (userId && window.confirm('Copy permissions from this user? This will overwrite current selections.')) {
+                                            const sourceUser = users.find(u => u._id === userId);
+                                            if (sourceUser) {
+                                                setSelectedPermissions(sourceUser.additionalPermissions || {});
+                                                setValue('additionalPermissions', sourceUser.additionalPermissions || {});
+                                                toast.success(`Copied permissions from ${sourceUser.name}`);
+                                            }
+                                        }
+                                        e.target.value = '';
+                                    }}
+                                >
+                                    <option value="">📋 Copy Rights from User...</option>
+                                    {users.filter(u => u._id !== (user?._id || '')).map(u => (
+                                        <option key={u._id} value={u._id}>{u.name} ({u.roleName || u.role?.name})</option>
+                                    ))}
+                                </select>
                             </div>
                             <button type="button" onClick={handleSelectAll} className={styles.linkButton}>✅ Select All</button>
                             <button type="button" onClick={handleClearAll} className={styles.linkButton}>❌ Clear All</button>
