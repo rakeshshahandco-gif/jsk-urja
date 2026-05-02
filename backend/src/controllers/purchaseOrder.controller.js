@@ -52,7 +52,6 @@ const createPOSchema = Joi.object({
     freightGstRate: Joi.number().min(0).default(0),
     complaintId: Joi.string().optional().allow(null, ''),
     complaintNo: Joi.string().optional().allow(''),
-    stickerType: Joi.string().optional().allow(''),
     items: Joi.array().items(poItemSchema).min(1).required(),
 });
 

@@ -214,6 +214,8 @@ const calculateInvoiceTotals = (items, gstType, freightAmount = 0, freightGstRat
     };
 };
 
+const DEFAULT_ALLOCATION = { type: 'General', referenceId: null, referenceName: '', typeModel: null };
+
 const piItemJoi = Joi.object({
     itemId: Joi.string().required(),
     itemCode: Joi.string().optional().allow(''),
@@ -234,7 +236,7 @@ const piItemJoi = Joi.object({
         referenceId: Joi.string().optional().allow('', null),
         referenceName: Joi.string().optional().allow(''),
         typeModel: Joi.string().optional().allow('', null)
-    }).optional()
+    }).optional().allow(null).default(() => ({ ...DEFAULT_ALLOCATION }))
 });
 
 const createPISchema = Joi.object({
@@ -287,6 +289,16 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
     session.startTransaction();
 
     try {
+        // ── Normalize allocation on every item before Joi runs ──
+        if (Array.isArray(req.body.items)) {
+            req.body.items = req.body.items.map(item => ({
+                ...item,
+                allocation: (item.allocation && typeof item.allocation === 'object' && !Array.isArray(item.allocation))
+                    ? item.allocation
+                    : { ...DEFAULT_ALLOCATION }
+            }));
+        }
+
         const { error, value } = createPISchema.validate(req.body, { allowUnknown: false });
         if (error) throw new ApiError(400, error.details[0].message);
 
@@ -472,6 +484,17 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
 
         const auditTrail = {};
         const updateData = req.body;
+
+        // ── Normalize allocation on every item before processing ──
+        if (Array.isArray(updateData.items)) {
+            updateData.items = updateData.items.map(item => ({
+                ...item,
+                allocation: (item.allocation && typeof item.allocation === 'object' && !Array.isArray(item.allocation))
+                    ? item.allocation
+                    : { ...DEFAULT_ALLOCATION }
+            }));
+        }
+
 
         // Implementation of standard PATCH logic
         Object.keys(updateData).forEach(key => {

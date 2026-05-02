@@ -47,7 +47,6 @@ const purchaseOrderSchema = new mongoose.Schema({
     supplierContact: { type: String, default: '' },
     supplierPhone: { type: String, default: '' },
     supplierEmail: { type: String, default: '' },
-    stickerType: { type: String, default: '' },
     deliveryAddress: { type: String, default: '' },
     deliveryFacility: { type: String, default: '' },
     items: [poItemSchema],

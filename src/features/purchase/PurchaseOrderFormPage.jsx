@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { createPurchaseOrder, getPurchaseOrderById, updatePurchaseOrder } from '@/services/purchaseApi';
 import { getSuppliers } from '@/services/purchaseApi';
-import { getStickers as getStickerList } from '@/services/stickerApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
@@ -28,7 +27,6 @@ export default function PurchaseOrderFormPage() {
     const [saving, setSaving] = useState(false);
     const [suppliers, setSuppliers] = useState([]);
     const [items, setItems] = useState([]);
-    const [stickerOptions, setStickerOptions] = useState([]);
 
     const [header, setHeader] = useState({
         supplierId: '', poDate: new Date().toISOString().split('T')[0],
@@ -37,7 +35,6 @@ export default function PurchaseOrderFormPage() {
         supplierAddress: '', supplierGstNumber: '',
         transporterName: '', vehicleNo: '', lrNumber: '',
         freightAmount: 0, freightGstRate: 0,
-        stickerType: ''
     });
     const [lineItems, setLineItems] = useState([{ ...EMPTY_ITEM }]);
     const setH = (k, v) => setHeader(h => ({ ...h, [k]: v }));
@@ -75,13 +72,11 @@ export default function PurchaseOrderFormPage() {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const [supData, itemData, stickRes] = await Promise.all([
+                const [supData, itemData] = await Promise.all([
                     getSuppliers({ limit: 200 }),
                     getItems({ limit: 5000, sortBy: 'itemName:asc' }),
-                    getStickerList().catch(() => [])
                 ]);
                 setSuppliers(supData.suppliers || []);
-                if (Array.isArray(stickRes)) setStickerOptions(stickRes.map(s => s.name));
                 const itemsList = Array.isArray(itemData.data) ? itemData.data : [];
                 // Sort by latest created first
                 const sorted = [...itemsList].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -105,7 +100,6 @@ export default function PurchaseOrderFormPage() {
                         lrNumber: po.lrNumber || '',
                         freightAmount: po.freightAmount || 0,
                         freightGstRate: po.freightGstRate || 0,
-                        stickerType: po.stickerType || ''
                     });
                     setLineItems(po.items.map(i => ({
                         itemId: i.itemId?._id || i.itemId,
@@ -234,7 +228,6 @@ export default function PurchaseOrderFormPage() {
                 status: isEdit ? header.status : 'Ordered',
                 freightAmount: Number(header.freightAmount) || 0,
                 freightGstRate: Number(header.freightGstRate) || (lineItems[0]?.taxPercent || 18),
-                stickerType: header.stickerType || '',
                 items: lineItems.map(i => ({
                     itemId: i.itemId, itemCode: i.itemCode, itemName: i.itemName,
                     description: i.description, hsnCode: i.hsnCode || '', uom: i.uom,
@@ -316,13 +309,6 @@ export default function PurchaseOrderFormPage() {
                                 <div>
                                     <span style={label}>Warehouse / Store</span>
                                     <input value={header.warehouse} onChange={e => setH('warehouse', e.target.value)} style={inp} placeholder="Store location" />
-                                </div>
-                                <div>
-                                    <span style={label}>Sticker Type</span>
-                                    <select value={header.stickerType} onChange={e => setH('stickerType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-                                        <option value="">-- No Sticker --</option>
-                                        {stickerOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
                                 </div>
                             </div>
                         </div>

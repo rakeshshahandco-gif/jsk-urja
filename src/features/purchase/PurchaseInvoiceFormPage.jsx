@@ -559,7 +559,18 @@ export default function PurchaseInvoiceFormPage() {
                     grnItemId: r.grnItemId || null, poItemId: r.poItemId || null,
                     isConsumable: r.purchaseType === 'CONSUMABLE_PURCHASE' ? true : (r.isConsumable || false),
                     purchaseType: r.purchaseType || 'RAW_MATERIAL_PURCHASE',
-                    allocation: r.allocation || null
+                    allocation: (() => {
+                            const alloc = r.allocation;
+                            if (alloc && typeof alloc === 'object' && !Array.isArray(alloc)) {
+                                return {
+                                    type: alloc.type || 'General',
+                                    referenceId: alloc.referenceId || null,
+                                    referenceName: alloc.referenceName || '',
+                                    typeModel: alloc.typeModel || null
+                                };
+                            }
+                            return { type: 'General', referenceId: null, referenceName: '', typeModel: null };
+                        })()
                 })),
                 isConsumable: header.isConsumable || false,
             };
