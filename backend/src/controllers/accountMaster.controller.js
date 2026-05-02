@@ -216,6 +216,34 @@ const deleteLedger = catchAsync(async (req, res) => {
     res.status(200).send(new ApiResponse(200, null, 'Ledger deleted successfully'));
 });
 
+const linkEntityLedger = catchAsync(async (req, res) => {
+    const { entityId, entityType, ledgerId } = req.body;
+    
+    if (!entityId || !entityType || !ledgerId) {
+        return res.status(400).send(new ApiResponse(400, null, 'Entity ID, Entity Type and Ledger ID are required'));
+    }
+
+    const ledger = await AccountLedger.findById(ledgerId);
+    if (!ledger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
+
+    if (entityType === 'Customer') {
+        const CustomerModel = (await import('../models/customer.model.js')).default;
+        await CustomerModel.findByIdAndUpdate(entityId, { ledgerId });
+    } else if (entityType === 'Supplier') {
+        await Supplier.findByIdAndUpdate(entityId, { ledgerId });
+    } else {
+        return res.status(400).send(new ApiResponse(400, null, 'Invalid entity type'));
+    }
+
+    // Bi-directional link
+    await AccountLedger.findByIdAndUpdate(ledgerId, {
+        referenceId: entityId,
+        referenceModel: entityType
+    });
+
+    res.status(200).send(new ApiResponse(200, null, 'Ledger linked successfully'));
+});
+
 export default {
     initializeMasters,
     getGroups,
@@ -226,5 +254,6 @@ export default {
     getLedgers,
     createLedger,
     updateLedger,
-    deleteLedger
+    deleteLedger,
+    linkEntityLedger
 };

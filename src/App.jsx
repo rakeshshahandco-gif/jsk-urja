@@ -83,6 +83,7 @@ import DiagnosticDashboard from '@/features/admin/diagnostics/DiagnosticDashboar
 import BackupRestorePage from '@/features/admin/backup/BackupRestorePage';
 import { DistributorList } from '@/features/distributors/DistributorList';
 import IncentiveReport from '@/features/reports/IncentiveReport';
+import AutoLinkLedgers from '@/features/admin/components/AutoLinkLedgers';
 
 
 // Service / Replacement Module
@@ -362,6 +363,7 @@ const AppLayout = () => {
                         <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
                         <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/ledger-linking" element={<ProtectedRoute requirePermission="admin.ledger_linking.view"><AutoLinkLedgers /></ProtectedRoute>} />
                         <Route path="/admin/backups" element={<ProtectedRoute requireRole="admin"><BackupRestorePage /></ProtectedRoute>} />
 
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />

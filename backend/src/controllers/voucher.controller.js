@@ -11,6 +11,7 @@ import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { getFYFromDate } from '../utils/fyUtils.js';
+import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -178,6 +179,29 @@ export const createVoucher = asyncHandler(async (req, res) => {
 
     try {
         const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
+
+        // --- SAFETY HOOK: Ensure party ledgers are linked ---
+        if (req.body.customerId) {
+            const customerLedgerId = await autoLinkEntityLedger(req.body.customerId, 'Customer', session);
+            if (!req.body.partyId) req.body.partyId = customerLedgerId;
+        }
+        if (req.body.supplierId) {
+            const supplierLedgerId = await autoLinkEntityLedger(req.body.supplierId, 'Supplier', session);
+            if (!req.body.partyId) req.body.partyId = supplierLedgerId;
+        }
+        
+        // Check items for customerId/supplierId as well (some complex JVs might use them)
+        if (items && Array.isArray(items)) {
+            for (const item of items) {
+                if (item.customerId) {
+                    item.ledgerId = await autoLinkEntityLedger(item.customerId, 'Customer', session);
+                }
+                if (item.supplierId) {
+                    item.ledgerId = await autoLinkEntityLedger(item.supplierId, 'Supplier', session);
+                }
+            }
+        }
+        // ----------------------------------------------------
 
         const vType = await VoucherType.findById(voucherTypeId).session(session);
         if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');

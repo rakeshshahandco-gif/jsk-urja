@@ -29,6 +29,7 @@ const supplierSchema = new mongoose.Schema({
     deletedAt: { type: Date, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ledgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
 }, { timestamps: true });
 
 supplierSchema.index({ supplierName: 'text', supplierCode: 'text' });

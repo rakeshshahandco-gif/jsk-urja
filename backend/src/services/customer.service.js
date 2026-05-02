@@ -2,6 +2,7 @@ import Customer from '../models/customer.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { getSundryDebtorsGroupId } from '../utils/accountInitializer.js';
+import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
@@ -109,24 +110,8 @@ const createCustomer = async (body) => {
         }
     }
 
-    // Create Ledger in Chart of Accounts under Sundry Debtors
-    try {
-        const groupId = await getSundryDebtorsGroupId();
-        await AccountLedger.create({
-            name: customer.company || customer.customerName,
-            underGroup: groupId,
-            groupName: 'Sundry Debtors',
-            type: 'Customer',
-            isCustomer: true,
-            referenceId: customer._id,
-            referenceModel: 'Customer',
-            openingBalance: customer.openingBalance || 0,
-            currentBalance: (customer.drCr === 'Cr') ? -(customer.openingBalance || 0) : (customer.openingBalance || 0),
-            drCr: customer.drCr || 'Dr'
-        });
-    } catch (ledgerErr) {
-        logger.error('❌ Failed to create ledger for customer:', ledgerErr);
-    }
+    // Create/Link Ledger in Chart of Accounts
+    await autoLinkEntityLedger(customer, 'Customer');
 
     logger.info(`✅ Customer created successfully with ID: ${customer._id}, Code: ${customer.customerCode}`);
     return customer;
@@ -238,12 +223,19 @@ const updateCustomerById = async (customerId, updateBody) => {
     const oldName = oldCustomer.company || oldCustomer.customerName;
     const newName = customer.company || customer.customerName;
 
+    // Ensure ledger exists and is linked
+    await autoLinkEntityLedger(customer, 'Customer');
+
     if (oldName !== newName) {
-        // 1. Sync name change to linked AccountLedger
+        // 1. Sync name change to linked AccountLedger is now handled by autoLinkEntityLedger above if we want,
+        // but GlobalRenamer also handles it. Let's keep it explicit if needed or let autoLink handle it.
+        // autoLinkEntityLedger already checks for name mismatches if we add that logic, 
+        // but here we just need to ensure the specific linked ledger name is updated.
         try {
+            const ledgerName = customer.city ? `${newName.trim()} - ${customer.city.trim()}` : newName.trim();
             await AccountLedger.findOneAndUpdate(
                 { referenceId: customer._id, referenceModel: 'Customer' },
-                { $set: { name: newName } }
+                { $set: { name: ledgerName } }
             );
         } catch (err) {
             logger.error('⚠️ Failed to sync AccountLedger name from Customer update:', err);

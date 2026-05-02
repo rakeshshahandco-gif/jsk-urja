@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import Joi from 'joi';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
+import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
 
 // Helper — resolves Sundry Creditors group _id
 const getSundryCreditorGroupId = async () => {
@@ -202,18 +203,11 @@ export const importSuppliersExcel = asyncHandler(async (req, res) => {
                     item.data.supplierCode = await generateSupplierCode();
                 }
                 supplier = await Supplier.create(item.data);
-
-                // Create Ledger under Sundry Creditors
-                const scGroupId = await getSundryCreditorGroupId();
-                await AccountLedger.create({
-                    name: supplier.supplierName,
-                    underGroup: scGroupId,
-                    type: 'Supplier',
-                    referenceId: supplier._id,
-                    referenceModel: 'Supplier',
-                    createdBy: req.user._id
-                });
             }
+
+            // Always ensure ledger is linked/created correctly
+            await autoLinkEntityLedger(supplier, 'Supplier');
+            
             successCount++;
         } catch (err) {
             errors.push(`Row ${item.rowNum}: ${err.message}`);
@@ -291,45 +285,8 @@ export const createSupplier = asyncHandler(async (req, res) => {
 
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
 
-    // Create Ledger under Sundry Creditors — sync ALL supplier details
-    try {
-        const scGroupId = await getSundryCreditorGroupId();
-        const hasGst = !!(supplier.gstNumber && supplier.gstNumber.trim());
-        await AccountLedger.create({
-            name: supplier.supplierName,
-            underGroup: scGroupId,
-            groupName: 'Sundry Creditors',
-            type: 'Supplier',
-            isSupplier: true,
-            referenceId: supplier._id,
-            referenceModel: 'Supplier',
-            // Opening Balance — Ensure currentBalance is signed correctly (Dr=+, Cr=-)
-            openingBalance: supplier.openingBalance || 0,
-            currentBalance: (supplier.openingBalanceDrCr === 'Cr') ? -(supplier.openingBalance || 0) : (supplier.openingBalance || 0),
-            drCr: supplier.openingBalanceDrCr || 'Cr',
-            // GST Details
-            gstApplicable: hasGst,
-            gstin: supplier.gstNumber || '',
-            pan: supplier.panNumber || '',
-            registrationType: hasGst ? 'Regular' : 'Unregistered',
-            // Contact
-            contactPerson: supplier.contactPerson || '',
-            mobile: supplier.phone || '',
-            email: supplier.email || '',
-            // Address
-            address: supplier.address || '',
-            city: supplier.city || '',
-            state: supplier.state || '',
-            pincode: supplier.pincode || '',
-            // Bank
-            bankName: supplier.bankName || '',
-            accountNo: supplier.bankAccountNo || '',
-            ifsc: supplier.bankIfsc || '',
-            createdBy: req.user._id
-        });
-    } catch (ledgerErr) {
-        console.error('❌ Failed to create ledger for supplier:', ledgerErr.message);
-    }
+    // Create/Link Ledger
+    await autoLinkEntityLedger(supplier, 'Supplier');
 
     res.status(201).json(new ApiResponse(201, supplier, 'Supplier created'));
 });
@@ -366,49 +323,9 @@ export const updateSupplier = asyncHandler(async (req, res) => {
     if (!supplier) throw new ApiError(404, 'Supplier not found');
 
     // Sync changes to the linked AccountLedger
-    try {
-        const hasGst = !!(supplier.gstNumber && supplier.gstNumber.trim());
-        const ledgerUpdate = {
-            name: supplier.supplierName,
-            // GST Details
-            gstApplicable: hasGst,
-            gstin: supplier.gstNumber || '',
-            pan: supplier.panNumber || '',
-            // Contact
-            contactPerson: supplier.contactPerson || '',
-            mobile: supplier.phone || '',
-            email: supplier.email || '',
-            // Address
-            address: supplier.address || '',
-            city: supplier.city || '',
-            state: supplier.state || '',
-            pincode: supplier.pincode || '',
-            // Bank
-            bankName: supplier.bankName || '',
-            accountNo: supplier.bankAccountNo || '',
-            ifsc: supplier.bankIfsc || '',
-        };
-        // Calculate signed currentBalance for the update
-        const oldLedger = await AccountLedger.findOne({ referenceId: supplier._id, referenceModel: 'Supplier' });
-        if (oldLedger) {
-            const newOpBal = Number(supplier.openingBalance) || 0;
-            const newDrCr = supplier.openingBalanceDrCr || 'Cr';
-            const newSignedOpBal = (newDrCr === 'Cr') ? -newOpBal : newOpBal;
+    await autoLinkEntityLedger(supplier, 'Supplier');
 
-            const oldSignedOpBal = (oldLedger.drCr === 'Cr') ? -oldLedger.openingBalance : oldLedger.openingBalance;
-
-            ledgerUpdate.currentBalance = (oldLedger.currentBalance || 0) - oldSignedOpBal + newSignedOpBal;
-            ledgerUpdate.openingBalance = newOpBal;
-            ledgerUpdate.drCr = newDrCr;
-        }
-
-        await AccountLedger.findOneAndUpdate(
-            { referenceId: supplier._id, referenceModel: 'Supplier' },
-            { $set: ledgerUpdate }
-        );
-    } catch (ledgerErr) {
-        console.error('⚠️ Failed to sync ledger for supplier update:', ledgerErr.message);
-    }
+    // Propagate name change globally (already handled in some cases, but autoLink does the direct one)
 
     // Propagate name change globally
     if (oldSupplier.supplierName !== supplier.supplierName) {

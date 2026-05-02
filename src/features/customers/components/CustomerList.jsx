@@ -13,7 +13,8 @@ import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload, Download
 import styles from './CustomerList.module.scss';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { TableSkeleton } from '@/components/ui/BrandedLoading';
+import { TableSkeleton, LedgerPickerModal, Badge } from '@/components/ui';
+import axios from 'axios';
 
 export const CustomerList = () => {
     const { openModal, closeModal } = useModal();
@@ -35,6 +36,9 @@ export const CustomerList = () => {
     const [totalResults, setTotalResults] = useState(0);
     const [showImportModal, setShowImportModal] = useState(false);
     const [showGSTModal, setShowGSTModal] = useState(false);
+    const [showLedgerModal, setShowLedgerModal] = useState(false);
+    const [selectedCustomerForLedger, setSelectedCustomerForLedger] = useState(null);
+
     const limit = 10;
     // Fetch customers from API
     const fetchCustomers = async () => {
@@ -185,6 +189,26 @@ export const CustomerList = () => {
         setFilter('currentPage', 1);
     };
 
+    const handleOpenLedgerPicker = (customer) => {
+        setSelectedCustomerForLedger(customer);
+        setShowLedgerModal(true);
+    };
+
+    const handleLinkLedger = async (ledger) => {
+        try {
+            await axios.post('/api/v1/accounts/masters/ledger-link/manual', {
+                entityId: selectedCustomerForLedger._id,
+                entityType: 'Customer',
+                ledgerId: ledger._id
+            });
+            toast.success('Ledger linked successfully');
+            setShowLedgerModal(false);
+            fetchCustomers();
+        } catch (error) {
+            toast.error('Failed to link ledger');
+        }
+    };
+
     const handleStatusFilter = (e) => {
         setFilter('statusFilter', e.target.value);
         setFilter('currentPage', 1);
@@ -302,6 +326,7 @@ export const CustomerList = () => {
                                             <th>Primary Contact</th>
                                             <th>Mobile</th>
                                             <th>GST Reg</th>
+                                            <th>Ledger</th>
                                             <th>Status</th>
                                             <th style={{ textAlign: 'center' }}>Actions</th>
                                         </tr>
@@ -339,6 +364,13 @@ export const CustomerList = () => {
                                                     <td>{primaryContact ? (primaryContact.name || '-') : '-'}</td>
                                                     <td>{primaryContact ? (primaryContact.mobile || '-') : '-'}</td>
                                                     <td>{customer.gstRegistrationType || '-'}</td>
+                                                    <td>
+                                                        {customer.ledgerId ? (
+                                                            <Badge variant="success" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(customer)}>Linked</Badge>
+                                                        ) : (
+                                                            <Badge variant="warning" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(customer)}>Unlinked</Badge>
+                                                        )}
+                                                    </td>
                                                     <td>
                                                         <span className={clsx(styles.badge, statusClass)}>
                                                             {currentStatus}
@@ -436,6 +468,13 @@ export const CustomerList = () => {
                 />
             )}
 
+            <LedgerPickerModal
+                isOpen={showLedgerModal}
+                onClose={() => setShowLedgerModal(false)}
+                onSelect={handleLinkLedger}
+                entityType="Customer"
+                initialSearch={selectedCustomerForLedger?.company || selectedCustomerForLedger?.customerName || ""}
+            />
 
         </div>
     );

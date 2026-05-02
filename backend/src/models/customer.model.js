@@ -351,6 +351,11 @@ const customerSchema = mongoose.Schema(
                 default: '',
             }
         },
+        ledgerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'AccountLedger',
+            default: null,
+        },
     },
     {
         timestamps: true,

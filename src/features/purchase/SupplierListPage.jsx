@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate, generateSupplierCode } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
+import { LedgerPickerModal, Badge } from '@/components/ui';
+import axios from 'axios';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
@@ -27,6 +29,8 @@ export default function SupplierListPage() {
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
     const [generatingCode, setGeneratingCode] = useState(false);
+    const [showLedgerModal, setShowLedgerModal] = useState(false);
+    const [selectedSupplierForLedger, setSelectedSupplierForLedger] = useState(null);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -112,6 +116,26 @@ export default function SupplierListPage() {
         finally { setImporting(false); e.target.value = ''; }
     };
 
+    const handleOpenLedgerPicker = (supplier) => {
+        setSelectedSupplierForLedger(supplier);
+        setShowLedgerModal(true);
+    };
+
+    const handleLinkLedger = async (ledger) => {
+        try {
+            await axios.post('/api/v1/accounts/masters/ledger-link/manual', {
+                entityId: selectedSupplierForLedger._id,
+                entityType: 'Supplier',
+                ledgerId: ledger._id
+            });
+            toast.success('Ledger linked successfully');
+            setShowLedgerModal(false);
+            load();
+        } catch (error) {
+            toast.error('Failed to link ledger');
+        }
+    };
+
     return (
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* Header */}
@@ -146,7 +170,7 @@ export default function SupplierListPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr>
-                            {['Code', 'Supplier Name', 'Contact', 'Phone', 'City', 'GST No.', 'Opening Bal.', 'Actions'].map(h => (
+                            {['Code', 'Supplier Name', 'Contact', 'Phone', 'City', 'GST No.', 'Ledger', 'Opening Bal.', 'Actions'].map(h => (
                                 <th key={h} style={th}>{h}</th>
                             ))}
                         </tr>
@@ -166,6 +190,13 @@ export default function SupplierListPage() {
                                 <td style={td}>{s.phone || '—'}</td>
                                 <td style={td}>{s.city || '—'}</td>
                                 <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{s.gstNumber || '—'}</td>
+                                <td style={td}>
+                                    {s.ledgerId ? (
+                                        <Badge variant="success" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(s)}>Linked</Badge>
+                                    ) : (
+                                        <Badge variant="warning" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(s)}>Unlinked</Badge>
+                                    )}
+                                </td>
                                 <td style={{ ...td, fontWeight: 700, color: (s.openingBalance || 0) > 0 ? '#059669' : '#6b7280' }}>
                                     {(s.openingBalance || 0) > 0
                                         ? `₹${Number(s.openingBalance).toLocaleString('en-IN')} ${s.openingBalanceDrCr || 'Cr'}`
@@ -349,6 +380,14 @@ export default function SupplierListPage() {
                     </div>
                 </div>
             )}
+
+            <LedgerPickerModal
+                isOpen={showLedgerModal}
+                onClose={() => setShowLedgerModal(false)}
+                onSelect={handleLinkLedger}
+                entityType="Supplier"
+                initialSearch={selectedSupplierForLedger?.supplierName || ""}
+            />
         </div>
     );
 }

@@ -15,6 +15,7 @@ import { AuditLog } from '../models/auditLog.model.js';
 import Joi from 'joi';
 import { syncPurchaseRatesToBOMs } from '../services/bomPriceSync.service.js';
 import { postPurchaseInvoiceToLedger, reverseInvoiceLedgerImpact } from '../utils/ledgerDispatcher.js';
+import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
 import logger from '../utils/logger.js';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
@@ -420,7 +421,15 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
 
 
         // Financial Ledger Posting
-        await postPurchaseInvoiceToLedger(invoice, req.user._id, session);
+        try {
+            // Ensure supplier ledger is linked
+            if (supplier) {
+                await autoLinkEntityLedger(supplier, 'Supplier', session);
+            }
+            await postPurchaseInvoiceToLedger(invoice, req.user._id, session);
+        } catch (ledgerErr) {
+            logger.error(`[Ledger] Could not post purchase invoice ${invoice.invoiceNumber}: ${ledgerErr.message}`);
+        }
 
         await session.commitTransaction();
         await syncPurchaseRatesToBOMs(value.items, req.user._id);
