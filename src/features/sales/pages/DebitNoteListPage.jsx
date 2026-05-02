@@ -41,7 +41,7 @@ export default function DebitNoteListPage() {
             noteType: 'Debit Note',
             limit: 100 
         })
-            .then(data => setNotes(data.data || []))
+            .then(data => setNotes(data.notes || []))
             .catch(() => toast.error('Failed to load debit notes'))
             .finally(() => setLoading(false));
     }, [search, status, seriesFilter]);
@@ -75,7 +75,7 @@ export default function DebitNoteListPage() {
                     <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Price corrections and GST liability increases</p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={() => navigate('/sales/debit-notes/new')}
+                    <button onClick={() => navigate('/voucher-entry/debit-notes/new')}
                         style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
                         + New Debit Note
                     </button>
@@ -124,7 +124,7 @@ export default function DebitNoteListPage() {
                             ) : notes.map((note) => {
                             return (
                                 <tr key={note._id} style={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/sales/debit-notes/${note._id}`)}
+                                    onClick={() => navigate(`/voucher-entry/debit-notes/${note._id}`)}
                                     onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'}
                                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                     <td style={{ ...td, color: '#2563eb', fontWeight: 700 }}>
@@ -145,7 +145,7 @@ export default function DebitNoteListPage() {
                                     </td>
                                     <td style={td} onClick={e => e.stopPropagation()}>
                                         <div style={{ display: 'flex', gap: 6 }}>
-                                            <button onClick={() => navigate(`/sales/debit-notes/${note._id}`)}
+                                            <button onClick={() => navigate(`/voucher-entry/debit-notes/${note._id}`)}
                                                 style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                 View
                                             </button>

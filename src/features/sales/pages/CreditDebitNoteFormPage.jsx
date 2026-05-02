@@ -194,7 +194,7 @@ export default function CreditDebitNoteFormPage() {
                 toast.success('Note Saved as Draft');
             }
             
-            navigate(form.noteType === 'Credit Note' ? PATHS.SALES.CREDIT_NOTES : PATHS.SALES.DEBIT_NOTES);
+            navigate(form.noteType === 'Credit Note' ? PATHS.ACCOUNTS.CREDIT_NOTES : PATHS.ACCOUNTS.DEBIT_NOTES);
         } catch (e) {
             toast.error(e.response?.data?.message || 'Save failed');
         } finally {

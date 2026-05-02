@@ -57,6 +57,9 @@ export const updateInvoiceGstDetails = async (id, payload) => {
 export const recordSalesPayment = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/record-payment`, data).then(r => r.data);
 
+export const updateIncentiveStatus = (id, data) =>
+    apiClient.post(`/sales-invoices/${id}/incentive-status`, data).then(r => r.data);
+
 export const previewCleanupDrafts = (financialYear, seriesId, search) =>
     apiClient.get('admin/cleanup-preview', { params: { financialYear, seriesId, search } }).then(r => r.data.data);
 
@@ -80,6 +83,9 @@ export const bulkRenumberInvoices = (data) =>
 
 export const bulkLockInvoices = (data) =>
     apiClient.post('/sales-invoices/bulk-lock', data).then(r => r.data);
+
+export const getIncentiveReport = (params = {}) =>
+    apiClient.get('/sales-invoices/incentive-report', { params }).then(r => r.data.data);
 
 // ─── INVOICE SERIES ───────────────────────────────────────────────────────────
 

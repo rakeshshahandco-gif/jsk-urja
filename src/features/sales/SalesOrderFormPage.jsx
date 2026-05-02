@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createSalesOrder, getSalesOrderById, updateSalesOrder, getInvoiceSeries } from '@/services/salesApi';
-import { getCustomers, searchCustomers } from '@/services/customerApi';
+import { getCustomers, searchCustomers, getCustomer } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
 import { getStickers } from '@/services/stickerApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -47,6 +47,14 @@ export default function SalesOrderFormPage() {
         seriesId: '',
         gstApplicable: true,
         stickerType: '',
+        referralDetails: {
+            sourceType: 'Direct',
+            salespersonId: null,
+            distributorId: null,
+            incentiveApplicable: false,
+            incentiveType: 'Percentage of sales',
+            incentiveValue: 0,
+        },
         items: [BLANK_ITEM()],
     });
 
@@ -150,26 +158,59 @@ export default function SalesOrderFormPage() {
         }, 300);
     };
 
-    const handleCustomerSelect = (c) => {
+    const handleCustomerSelect = async (c) => {
         console.log('🎯 [SelectionTrace] Selected:', c.name, 'Sticker:', c.sticker, 'Trace:', c.backend_trace);
         if (!c.backend_trace) console.warn('⚠️ [SelectionTrace] WARNING: Missing backend_trace! Server might be stale.');
-        setForm(p => ({
-            ...p,
-            customerName: c.name,
-            customerCode: c.customerCode || '',
-            customerPhone: c.phone || '',
-            customerEmail: c.email || '',
-            customerGstin: c.gstin || '',
-            customerState: c.state || '',
-            customerStateCode: c.stateCode || '',
-            billingAddress: c.billingAddress || '',
-            shippingAddress: c.shippingAddress || '',
-            gstType: c.gstType || p.gstType,
-            customerId: c.id,
-            creditPeriod: c.creditPeriod || 0,
-            paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash'),
-            stickerType: c.sticker || '',
-        }));
+        
+        try {
+            // Fetch full customer details to get referral info
+            const fullCustomer = await getCustomer(c.id || c._id);
+            setForm(p => ({
+                ...p,
+                customerName: fullCustomer.name,
+                customerCode: fullCustomer.customerCode || '',
+                customerPhone: fullCustomer.phone || fullCustomer.mobile || '',
+                customerEmail: fullCustomer.email || '',
+                customerGstin: fullCustomer.gstin || '',
+                customerState: fullCustomer.state || '',
+                customerStateCode: fullCustomer.stateCode || '',
+                billingAddress: fullCustomer.billingAddress || '',
+                shippingAddress: fullCustomer.shippingAddress || fullCustomer.billingAddress || '',
+                gstType: fullCustomer.gstType || p.gstType,
+                customerId: fullCustomer._id || fullCustomer.id,
+                creditPeriod: fullCustomer.creditPeriod || 0,
+                paymentType: fullCustomer.paymentType || (fullCustomer.creditPeriod > 0 ? 'Credit' : 'Cash'),
+                stickerType: fullCustomer.sticker || '',
+                referralDetails: fullCustomer.referralDetails || {
+                    sourceType: 'Direct',
+                    salespersonId: null,
+                    distributorId: null,
+                    incentiveApplicable: false,
+                    incentiveType: 'Percentage of sales',
+                    incentiveValue: 0,
+                },
+            }));
+        } catch (error) {
+            toast.error('Failed to load full customer details');
+            // Fallback to what we have
+            setForm(p => ({
+                ...p,
+                customerName: c.name,
+                customerCode: c.customerCode || '',
+                customerPhone: c.phone || '',
+                customerEmail: c.email || '',
+                customerGstin: c.gstin || '',
+                customerState: c.state || '',
+                customerStateCode: c.stateCode || '',
+                billingAddress: c.billingAddress || '',
+                shippingAddress: c.shippingAddress || '',
+                gstType: c.gstType || p.gstType,
+                customerId: c.id,
+                creditPeriod: c.creditPeriod || 0,
+                paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash'),
+                stickerType: c.sticker || '',
+            }));
+        }
         setShowCustDropdown(false);
     };
 
@@ -580,6 +621,21 @@ export default function SalesOrderFormPage() {
                 </Section>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <Section title="Sales / Referral & Remarks">
+                        <div style={{ padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '12px' }}>
+                            <label style={{ fontSize: '11px', color: '#0d9488', fontWeight: 600, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Incentive Tracking</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '11px' }}>
+                                <div><strong>Source:</strong> {form.referralDetails?.sourceType}</div>
+                                <div><strong>Applicable:</strong> {form.referralDetails?.incentiveApplicable ? 'Yes' : 'No'}</div>
+                                {form.referralDetails?.incentiveApplicable && (
+                                    <div style={{ gridColumn: 'span 2', color: '#16a34a', fontWeight: 600 }}>
+                                        {form.referralDetails.incentiveType}: {form.referralDetails.incentiveValue}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{ marginTop: 0 }}><label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' }}>Remarks</label><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical' }} placeholder="Any remarks..." disabled={form.status && form.status !== 'Draft'} /></div>
+                    </Section>
                     <Section title="Order Summary">
                         <div style={{ display: 'grid', gap: 6 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6b7280' }}>

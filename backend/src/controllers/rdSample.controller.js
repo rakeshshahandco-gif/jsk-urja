@@ -79,6 +79,13 @@ export const createSample = asyncHandler(async (req, res) => {
     if (!req.body.entryNo) {
         req.body.entryNo = await generateSampleNo();
     }
+    const { testStatus, notConvertedDetails } = req.body;
+    if (['Rejected', 'Not Converted', 'Hold'].includes(testStatus)) {
+        if (!notConvertedDetails || !notConvertedDetails.reason || !notConvertedDetails.matter) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Reason and detailed matter are mandatory for Rejected, Not Converted, or Hold status');
+        }
+    }
+
     const sample = await RdSample.create({
         ...req.body,
         createdBy: req.user._id
@@ -127,6 +134,13 @@ export const getSample = asyncHandler(async (req, res) => {
 });
 
 export const updateSample = asyncHandler(async (req, res) => {
+    const { testStatus, notConvertedDetails } = req.body;
+    if (testStatus && ['Rejected', 'Not Converted', 'Hold'].includes(testStatus)) {
+        if (!notConvertedDetails || !notConvertedDetails.reason || !notConvertedDetails.matter) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Reason and detailed matter are mandatory for Rejected, Not Converted, or Hold status');
+        }
+    }
+
     const sample = await RdSample.findByIdAndUpdate(req.params.sampleId, req.body, { new: true });
     if (!sample) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Sample not found');

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries, previewNextInvoiceNo } from '@/services/salesApi';
 import { getItems } from '@/services/itemApi';
+import { getCustomers, getCustomer } from '@/services/customerApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import { numberToWords } from '@/utils/numberToWords';
@@ -172,24 +173,36 @@ export default function SalesInvoiceFormPage() {
         paymentType: 'Credit',
         paymentTerms: '',
         gstApplicable: true,
-        freightAmount: '',
         freightGstRate: 0,
+        referralDetails: {
+            sourceType: 'Direct',
+            salespersonId: null,
+            distributorId: null,
+            incentiveApplicable: false,
+            incentiveType: 'Percentage of sales',
+            incentiveValue: 0,
+        },
         remarks: '',
         items: [BLANK_ITEM()],
     });
 
     const [allItems, setAllItems] = useState([]);
+    const [allCustomers, setAllCustomers] = useState([]);
 
     useEffect(() => {
         // Pre-load all active items (inclusive of all saleable categories)
         getItems({ limit: 5000, active: true }).then(res => {
             const list = res?.data || res?.results || res || [];
             if (Array.isArray(list)) {
-                // Sort by creation date descending to show new items first
                 const sorted = [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
                 setAllItems(sorted);
             }
         }).catch(e => console.error('Error loading items:', e));
+
+        getCustomers({ limit: 1000 }).then(res => {
+            const list = res?.results || res?.data || res || [];
+            setAllCustomers(list);
+        }).catch(e => console.error('Error loading customers:', e));
     }, []);
 
     useEffect(() => {
@@ -237,6 +250,14 @@ export default function SalesInvoiceFormPage() {
                 remarks: so.remarks || '',
                 freightAmount: so.freightAmount || '',
                 freightGstRate: so.freightGstRate || 0,
+                referralDetails: so.referralDetails || {
+                    sourceType: 'Direct',
+                    salespersonId: null,
+                    distributorId: null,
+                    incentiveApplicable: false,
+                    incentiveType: 'Percentage of sales',
+                    incentiveValue: 0,
+                },
                 items: so.items?.length ? so.items.map(i => ({ 
                     itemId: i.itemId || null, 
                     itemCode: i.itemCode || i.code || i.sku || '', 
@@ -289,6 +310,36 @@ export default function SalesInvoiceFormPage() {
             });
             return { ...p, items };
         });
+    };
+
+    const handleCustomerSelect = async (customerId) => {
+        const selected = allCustomers.find(c => c._id === customerId);
+        if (!selected) return;
+
+        try {
+            // Fetch full customer details to get referral info
+            const fullCustomer = await getCustomer(customerId);
+            setForm(p => ({
+                ...p,
+                customerName: fullCustomer.name,
+                customerGstin: fullCustomer.gstin || '',
+                customerPhone: fullCustomer.mobile || '',
+                billingAddress: fullCustomer.billingAddress || '',
+                billingState: fullCustomer.state || '',
+                billingStateCode: fullCustomer.stateCode || '',
+                shippingAddress: fullCustomer.shippingAddress || fullCustomer.billingAddress || '',
+                referralDetails: fullCustomer.referralDetails || {
+                    sourceType: 'Direct',
+                    salespersonId: null,
+                    distributorId: null,
+                    incentiveApplicable: false,
+                    incentiveType: 'Percentage of sales',
+                    incentiveValue: 0,
+                }
+            }));
+        } catch (error) {
+            toast.error('Failed to load customer details');
+        }
     };
 
     // Live totals
@@ -496,7 +547,17 @@ export default function SalesInvoiceFormPage() {
                     </Field>
 
                     <Field label="Customer (Buyer) *">
-                        <input value={form.customerName} onChange={e => setF('customerName', e.target.value)} style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b', borderColor: !form.customerName ? '#fca5a5' : '#1e293b' }} placeholder="Type Customer Name..." />
+                        <SearchableSelect
+                            options={allCustomers.map(c => ({
+                                value: c._id,
+                                label: `${c.name} ${c.gstin ? `(${c.gstin})` : ''}`,
+                                meta: `${c.name} ${c.gstin || ''} ${c.mobile || ''}`
+                            }))}
+                            value={allCustomers.find(c => c.name === form.customerName)?._id || ''}
+                            onChange={handleCustomerSelect}
+                            placeholder="Search Customer..."
+                            style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b' }}
+                        />
                         {form.customerGstin && <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontWeight: 600 }}>GSTIN: {form.customerGstin}</div>}
                     </Field>
                 </div>
@@ -610,6 +671,20 @@ export default function SalesInvoiceFormPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <Section title="Payment & Remarks">
                         <div style={{ marginTop: 0 }}><label style={lbl}>Payment Terms</label><input value={form.paymentTerms} onChange={e => setF('paymentTerms', e.target.value)} style={inp} placeholder="e.g. Net 30" /></div>
+                        
+                        <div style={{ marginTop: 12, padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                            <label style={{ ...lbl, color: '#0d9488' }}>Sales / Referral Details</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: '11px' }}>
+                                <div><strong>Source:</strong> {form.referralDetails?.sourceType}</div>
+                                <div><strong>Incentive:</strong> {form.referralDetails?.incentiveApplicable ? 'Yes' : 'No'}</div>
+                                {form.referralDetails?.incentiveApplicable && (
+                                    <div style={{ gridColumn: 'span 2', color: '#16a34a', fontWeight: 600 }}>
+                                        {form.referralDetails.incentiveType}: {form.referralDetails.incentiveValue}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <div style={{ marginTop: 12 }}><label style={lbl}>Remarks</label><textarea value={form.remarks} onChange={e => setF('remarks', e.target.value)} style={{ ...inp, height: 56, resize: 'vertical' }} /></div>
                     </Section>
                     <Section title="Invoice Summary">

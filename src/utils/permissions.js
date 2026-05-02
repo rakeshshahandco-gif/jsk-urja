@@ -94,7 +94,9 @@ export const APP_MODULES = [
             { id: 'day_book', name: 'Day Book', actions: ['view', 'export'] },
             { id: 'cash_book', name: 'Cash Book', actions: ['view', 'export'] },
             { id: 'bank_book', name: 'Bank Book', actions: ['view', 'export'] },
-            { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] }
+            { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] },
+            { id: 'credit_notes', name: 'Credit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] },
+            { id: 'debit_notes', name: 'Debit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] }
         ]
     },
     {
@@ -109,6 +111,19 @@ export const APP_MODULES = [
             { id: 'reminder_report', name: 'Open Reminders', actions: ['view'] },
             { id: 'task_reminder_report', name: 'Task Reminder Report', actions: ['view', 'export'] },
             { id: 'purchase_comparison_report', name: 'Purchase Comparison Report', actions: ['view', 'export'] }
+        ]
+    },
+    {
+        id: 'mis',
+        name: 'MIS',
+        submodules: [
+            { id: 'dashboard', name: 'MIS Dashboard', actions: ['view'] },
+            { id: 'trial_balance', name: 'Trial Balance', actions: ['view', 'export'] },
+            { id: 'profit_loss', name: 'Profit & Loss', actions: ['view', 'export'] },
+            { id: 'balance_sheet', name: 'Balance Sheet', actions: ['view', 'export'] },
+            { id: 'sales_marketing', name: 'Sales MIS Dashboard', actions: ['view'] },
+            { id: 'product_gp_analysis', name: 'Product-wise GP Analysis', actions: ['view'] },
+            { id: 'sales_conversion', name: 'Sales Conversion', actions: ['view'] }
         ]
     },
     {

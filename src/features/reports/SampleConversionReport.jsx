@@ -271,6 +271,7 @@ const SampleConversionReport = () => {
                                     <th style={{ padding: '16px 12px', textAlign: 'left', fontSize: '10px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Sales Info</th>
                                     <th style={{ padding: '16px 12px', textAlign: 'center', fontSize: '10px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Time Taken</th>
                                     <th style={{ padding: '16px 12px', textAlign: 'left', fontSize: '10px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Salesperson</th>
+                                    <th style={{ padding: '16px 12px', textAlign: 'left', fontSize: '10px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Reason</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -325,6 +326,10 @@ const SampleConversionReport = () => {
                                                 <User size={14} color="#94a3b8" />
                                                 {item.salesperson}
                                             </div>
+                                        </td>
+                                        <td style={{ padding: '14px 12px' }}>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>{item.reason || '—'}</div>
+                                            {item.matter && <div style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>{item.matter}</div>}
                                         </td>
                                     </tr>
                                 ))}

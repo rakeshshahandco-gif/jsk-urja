@@ -1,9 +1,9 @@
 import React from 'react';
 import styles from './Card.module.scss';
 
-export const Card = ({ children, title, className = '', noPadding = false }) => {
+export const Card = ({ children, title, className = '', noPadding = false, ...props }) => {
     return (
-        <div className={`${styles.card} ${className}`}>
+        <div className={`${styles.card} ${className}`} {...props}>
             {title && (
                 <div className={styles.header}>
                     <h3 className={styles.title}>{title}</h3>

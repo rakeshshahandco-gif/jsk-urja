@@ -39,7 +39,12 @@ const RdSampleForm = ({ sample, onClose, onSuccess }) => {
         testStatus: 'Pending',
         testResultSummary: '',
         finalSelectionStatus: 'Not Selected',
-        notes: ''
+        notes: '',
+        notConvertedDetails: {
+            reason: '',
+            matter: '',
+            remarks: ''
+        }
     });
 
     const [projects, setProjects] = useState([]);
@@ -109,6 +114,14 @@ const RdSampleForm = ({ sample, onClose, onSuccess }) => {
             if (!payload.project) {
                 toast.error('Please select a project');
                 return;
+            }
+
+            const negativeStatuses = ['Rejected', 'Not Converted', 'Hold'];
+            if (negativeStatuses.includes(payload.testStatus)) {
+                if (!payload.notConvertedDetails?.reason || !payload.notConvertedDetails?.matter) {
+                    toast.error('Reason and Detailed Matter are mandatory for this status');
+                    return;
+                }
             }
 
             if (sample) {
@@ -242,13 +255,51 @@ const RdSampleForm = ({ sample, onClose, onSuccess }) => {
                             <label className="text-[11px] font-bold text-gray-500 uppercase">Testing Status</label>
                             <Select name="testStatus" value={formData.testStatus} onChange={handleChange}>
                                 <option value="Pending">Pending</option>
-                                <option value="Under Test">Under Test</option>
+                                <option value="Sample Sent">Sample Sent</option>
+                                <option value="Under Testing">Under Testing</option>
                                 <option value="Approved">Approved</option>
                                 <option value="Rejected">Rejected</option>
                                 <option value="Alternative">Alternative</option>
                                 <option value="Final Selected">Final Selected</option>
+                                <option value="Negotiation">Negotiation</option>
+                                <option value="Converted to Order">Converted to Order</option>
+                                <option value="Not Converted">Not Converted</option>
+                                <option value="Hold">Hold</option>
                             </Select>
                         </div>
+
+                        {['Rejected', 'Not Converted', 'Hold'].includes(formData.testStatus) && (
+                            <Card className="p-3 bg-red-50 border-red-200 mt-2">
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-[11px] font-bold text-red-600 uppercase">Fixed Reason *</label>
+                                        <Select 
+                                            name="notConvertedReason" 
+                                            value={formData.notConvertedDetails?.reason} 
+                                            onChange={(e) => setFormData({...formData, notConvertedDetails: {...formData.notConvertedDetails, reason: e.target.value}})}
+                                        >
+                                            <option value="">Select Reason</option>
+                                            <option value="Rate is high">Rate is high</option>
+                                            <option value="Product not suitable">Product not suitable</option>
+                                            <option value="Competitor selected">Competitor selected</option>
+                                            <option value="Technical Issue">Technical Issue</option>
+                                            <option value="Sample Failed">Sample Failed</option>
+                                            <option value="Other">Other</option>
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold text-red-600 uppercase">Detailed Matter *</label>
+                                        <textarea 
+                                            className="w-full border rounded p-2 text-sm" 
+                                            value={formData.notConvertedDetails?.matter}
+                                            onChange={(e) => setFormData({...formData, notConvertedDetails: {...formData.notConvertedDetails, matter: e.target.value}})}
+                                            rows={2}
+                                            placeholder="Details about rejection/hold..."
+                                        />
+                                    </div>
+                                </div>
+                            </Card>
+                        )}
                     </div>
 
                     <div className="space-y-4">

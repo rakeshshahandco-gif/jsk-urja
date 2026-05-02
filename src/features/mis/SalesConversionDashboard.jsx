@@ -411,7 +411,10 @@ const SalesConversionDashboard = () => {
                                             <td>{r.sampleDate ? moment(r.sampleDate).format('DD-MM-YY') : '—'}</td>
                                             <td>{r.salesperson || '—'}</td>
                                             <td><span className={s.stagePill}>{r.leadStage || '—'}</span></td>
-                                            <td>{r.lostReason || '—'}</td>
+                                            <td>
+                                                <strong>{r.lostReason || '—'}</strong>
+                                                {r.lostMatter && <div className={s.lostMatter}>{r.lostMatter}</div>}
+                                            </td>
                                             <td>
                                                 <span className={`${s.daysBadge} ${r.daysPending > 90 ? s.danger : r.daysPending > 30 ? s.warn : ''}`}>
                                                     {safe(r.daysPending, 0)} days

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Button, Input, Select, useModal
 } from '@/components/ui';
-import { Plus, Edit2, Trash2, FileText, Hash, Layers } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileText, Hash, Layers, ChevronRight } from 'lucide-react';
 import { getVoucherTypes, createVoucherType, updateVoucherType, deleteVoucherType } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -155,6 +155,12 @@ const VoucherTypeMasterPage = () => {
 
     return (
         <div className="p-6 space-y-6">
+            <div className="flex items-center gap-2 mb-[-8px] text-xs font-medium text-gray-500">
+                <span>Account Master</span>
+                <ChevronRight size={12} />
+                <span className="text-primary-600 font-bold">Series Master</span>
+            </div>
+
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 leading-tight">Voucher Type Management</h1>

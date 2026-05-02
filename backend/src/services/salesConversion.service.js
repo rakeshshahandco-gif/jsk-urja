@@ -220,7 +220,10 @@ export const getNonConvertedSamples = async (filters, options = {}) => {
   const { page = 1, limit = 20 } = options;
   const skip = (page - 1) * limit;
 
-  const match = { isDeleted: false, leadStage: 'Sample Sent' };
+  const match = { 
+    isDeleted: false, 
+    leadStage: { $in: ['Sample Sent', 'Sample Under Testing', 'Not Converted', 'Lost', 'Hold', 'Project Postponed', 'Customer Not Responding'] } 
+  };
   if (dateRange) match.createdAt = dateRange;
   
   const results = await Customer.aggregate([
@@ -240,6 +243,8 @@ export const getNonConvertedSamples = async (filters, options = {}) => {
         sampleDate: '$createdAt',
         salesperson: '$sp.name',
         leadStage: 1,
+        lostReason: '$notConvertedDetails.reason',
+        lostMatter: '$notConvertedDetails.matter',
         daysPending: { $floor: { $divide: [{ $subtract: [new Date(), "$createdAt"] }, 86400000] } }
       }
     },

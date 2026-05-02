@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
-import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare, LayoutDashboard } from 'lucide-react';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useMessenger } from '@/contexts/MessengerContext';
 import { NotificationPanel } from './NotificationPanel';
@@ -59,7 +59,7 @@ export const Header = () => {
         };
 
         title = findTitle(menuConfig);
-        return title || 'Dashboard';
+        return title || 'Home';
     }, [location.pathname]);
 
     // User initials for avatar
@@ -116,6 +116,15 @@ export const Header = () => {
 
             <div className={styles.content}>
                 <div className={styles.pageHeader}>
+                    {location.pathname !== '/' && (
+                        <button 
+                            className={styles.backToDashboard} 
+                            onClick={() => navigate('/')}
+                            title="Back to Home"
+                        >
+                            <LayoutDashboard size={18} />
+                        </button>
+                    )}
                     <h2 className={styles.pageTitle}>{pageTitle}</h2>
                 </div>
 

@@ -89,6 +89,12 @@ const LedgerMasterPage = () => {
 
     return (
         <div style={page}>
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                <span>Account Master</span>
+                <ChevronRight size={12} strokeWidth={3} />
+                <span style={{ color: '#2563eb', fontWeight: 700 }}>Ledger Master</span>
+            </div>
+
             {/* Page Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
                 <div>

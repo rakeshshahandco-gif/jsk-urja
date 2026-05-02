@@ -10,17 +10,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Get all backend models
+ * Get all backend models and ensure they are loaded in Mongoose
  */
-const getModels = () => {
+const getModelsAndLoad = async () => {
     const modelsPath = path.join(__dirname, '..', 'models');
     try {
-        const files = fs.readdirSync(modelsPath);
-        return files
-            .filter(f => f.endsWith('.js'))
-            .map(f => f.replace('.model.js', '').replace('.js', ''));
+        const files = fs.readdirSync(modelsPath).filter(f => f.endsWith('.model.js'));
+        
+        for (const file of files) {
+            try {
+                // Use file:// protocol for Windows compatibility with absolute paths in ESM
+                const modelPath = path.join(modelsPath, file);
+                const fileUrl = `file://${modelPath.replace(/\\/g, '/')}`;
+                await import(fileUrl);
+            } catch (e) {
+                // Already loaded or other issue
+            }
+        }
+        
+        return mongoose.modelNames();
     } catch (e) {
-        return [];
+        console.error('Model discovery failed', e);
+        return mongoose.modelNames();
     }
 };
 
@@ -45,17 +56,8 @@ const discoverRoutes = () => {
     }
 };
 
-import Customer from '../models/customer.model.js';
-import { Item } from '../models/item.model.js';
-import { SalesOrder } from '../models/salesOrder.model.js';
-import { SalesInvoice } from '../models/salesInvoice.model.js';
-import { PurchaseOrder } from '../models/purchaseOrder.model.js';
-import { Task } from '../models/task.model.js';
-import { WeChatGroup } from '../models/weChatGroup.model.js';
-import { StockLedger } from '../models/stockLedger.model.js';
-
 export const getSystemDiscovery = asyncHandler(async (req, res) => {
-    const models = getModels();
+    const modelNames = await getModelsAndLoad();
     const backendRoutes = discoverRoutes();
     
     let pkg = {};
@@ -72,32 +74,37 @@ export const getSystemDiscovery = asyncHandler(async (req, res) => {
     let dbCounts = {};
     if (mongoose.connection.readyState === 1) {
         try {
-            const modelsToCount = [
-                { key: 'Customer', model: 'Customer' },
-                { key: 'Item', model: 'Item' },
-                { key: 'SalesOrder', model: 'SalesOrder' },
-                { key: 'SalesInvoice', model: 'SalesInvoice' },
-                { key: 'PurchaseOrder', model: 'PurchaseOrder' },
-                { key: 'Task', model: 'Task' },
-                { key: 'ChinaSourcingGroup', model: 'WeChatGroup' },
-                { key: 'StockLedger', model: 'StockLedger' },
-                { key: 'User', model: 'User' },
-                { key: 'AccountMaster', model: 'AccountMaster' }
-            ];
-
+            // Count all discovered models
             const countResults = await Promise.all(
-                modelsToCount.map(async (m) => {
+                modelNames.map(async (name) => {
                     try {
-                        const count = await mongoose.model(m.model).countDocuments();
-                        return { key: m.key, count };
+                        const count = await mongoose.model(name).countDocuments();
+                        return { key: name, count };
                     } catch (err) {
-                        return { key: m.key, count: 0 };
+                        return { key: name, count: 0 };
                     }
                 })
             );
 
+            // Sort counts: put common ones first, then alphabetical
+            const priority = ['Customer', 'Item', 'SalesOrder', 'SalesInvoice', 'PurchaseOrder', 'Task', 'Distributor', 'WorkOrder', 'AccountLedger'];
+            
+            countResults.sort((a, b) => {
+                const idxA = priority.indexOf(a.key);
+                const idxB = priority.indexOf(b.key);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return a.key.localeCompare(b.key);
+            });
+
             countResults.forEach(res => {
-                dbCounts[res.key] = res.count;
+                // Rename for UI if needed
+                let uiKey = res.key;
+                if (uiKey === 'AccountLedger') uiKey = 'Account Master';
+                if (uiKey === 'WeChatGroup') uiKey = 'China Sourcing Group';
+                
+                dbCounts[uiKey] = res.count;
             });
         } catch (e) {
             console.error('Failed to get DB counts', e);
@@ -123,9 +130,9 @@ export const getSystemDiscovery = asyncHandler(async (req, res) => {
         data: {
             system: systemInfo,
             discovery: {
-                models,
+                models: modelNames,
                 backendRoutes,
-                totalModels: models.length,
+                totalModels: modelNames.length,
                 totalRoutes: backendRoutes.length
             },
             status: 'Deployment Safe'

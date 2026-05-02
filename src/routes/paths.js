@@ -1,6 +1,6 @@
 export const PATHS = {
     ROOT: '/',
-    DASHBOARD: '/dashboard',
+    DASHBOARD: '/',
     CUSTOMERS: {
         ROOT: '/customers',
         LIST: '/customers/list',
@@ -99,12 +99,25 @@ export const PATHS = {
         DASHBOARD: '/prd/dashboard',
         TEST_PARAMETERS: '/prd/test-parameters',
     },
+    ACCOUNT_MASTER: {
+        ROOT: '/account-master',
+        GROUP_MASTER: '/account-master/groups',
+        LEDGER_MASTER: '/account-master/ledgers',
+        FINANCIAL_YEAR: '/account-master/financial-years',
+        SERIES_MASTER: '/account-master/series',
+    },
     ACCOUNTS: {
         ROOT: '/accounts',
         RECEIPT_ENTRY: '/accounts/receipt-entry',
         PAYMENT_ENTRY: '/accounts/payment-entry',
         EXPENSE_ENTRY: '/accounts/expense-entry',
         JOURNAL_ENTRY: '/accounts/journal-entry',
+        CREDIT_NOTES: '/voucher-entry/credit-notes',
+        DEBIT_NOTES: '/voucher-entry/debit-notes',
+        CREDIT_NOTE_DETAIL: (id) => `/voucher-entry/credit-notes/${id}`,
+        DEBIT_NOTE_DETAIL: (id) => `/voucher-entry/debit-notes/${id}`,
+        CREDIT_NOTE_DETAIL_PATTERN: '/voucher-entry/credit-notes/:id',
+        DEBIT_NOTE_DETAIL_PATTERN: '/voucher-entry/debit-notes/:id',
         VOUCHER_LIST: '/accounts/vouchers',
         CASH_BANK_MASTER: '/accounts/masters/cash-bank',
         GROUP_MASTER: '/accounts/masters/groups',
@@ -122,6 +135,12 @@ export const PATHS = {
         FIXED_ASSETS: '/accounts/fixed-assets',
         ASSET_CATEGORIES: '/accounts/asset-categories',
         ASSET_LOCATIONS: '/accounts/asset-locations',
+    },
+    MIS: {
+        SALES_DASHBOARD: '/mis/sales-dashboard',
+        PRODUCT_GP: '/mis/product-gp-analysis',
+        SALES_CONVERSION: '/mis/sales-conversion',
+        DASHBOARD: '/mis/dashboard'
     },
     HR: {
         ROOT: '/hr',

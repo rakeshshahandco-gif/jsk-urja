@@ -79,8 +79,25 @@ const rdSampleSchema = new mongoose.Schema({
     usedFor: String,
     testStatus: {
         type: String,
-        enum: ['Pending', 'Under Test', 'Approved', 'Rejected', 'Alternative', 'Final Selected'],
+        enum: [
+            'Pending', 
+            'Sample Sent',
+            'Under Testing', 
+            'Approved', 
+            'Rejected', 
+            'Alternative', 
+            'Final Selected',
+            'Negotiation',
+            'Converted to Order',
+            'Not Converted',
+            'Hold'
+        ],
         default: 'Pending'
+    },
+    notConvertedDetails: {
+        reason: String,
+        matter: String,
+        remarks: String
     },
     testResultSummary: String,
     finalSelectionStatus: {

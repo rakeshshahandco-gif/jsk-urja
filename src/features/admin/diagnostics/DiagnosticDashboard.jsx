@@ -11,17 +11,25 @@ const CRITICAL_MODULES = [
     { id: 'item', name: 'Item Master', url: 'items?limit=1' },
     { id: 'sales_order', name: 'Sales Order', url: 'sales-orders?limit=1' },
     { id: 'sales_invoice', name: 'Sales Invoice', url: 'sales-invoices?limit=1' },
-    { id: 'gstr1', name: 'GSTR-1 Compliance', url: 'gst-reports/validate?startDate=2026-04-01&endDate=2026-04-30' },
     { id: 'po', name: 'Purchase Order', url: 'purchase-orders?limit=1' },
-    { id: 'inventory', name: 'Inventory Reports', url: 'stock/summary?limit=1' },
+    { id: 'purchase_invoice', name: 'Purchase Invoice', url: 'purchase-invoices?limit=1' },
+    { id: 'grn', name: 'GRN', url: 'grns?limit=1' },
+    { id: 'work_order', name: 'Work Order', url: 'work-orders?limit=1' },
+    { id: 'bom', name: 'BOM', url: 'boms?limit=1' },
     { id: 'task', name: 'Task Management', url: 'tasks?limit=1' },
-    { id: 'sourcing', name: 'China Sourcing', url: 'wechat/groups?limit=1' }
+    { id: 'distributor', name: 'Distributors', url: 'distributors?limit=1' },
+    { id: 'rd_sample', name: 'RD Samples', url: 'rd-samples/samples?limit=1' },
+    { id: 'replacement', name: 'Replacements', url: 'replacement-dispatches?limit=1' },
+    { id: 'inventory', name: 'Inventory Reports', url: 'stock/summary?limit=1' },
+    { id: 'sourcing', name: 'China Sourcing', url: 'wechat/groups?limit=1' },
+    { id: 'gstr1', name: 'GSTR-1 Compliance', url: 'gst-reports/validate?startDate=2026-04-01&endDate=2026-04-30' },
 ];
 
 const DiagnosticDashboard = () => {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState(null);
+    const [showAllCounts, setShowAllCounts] = useState(false);
     
     // Test Engine State
     const [testResults, setTestResults] = useState({});
@@ -100,6 +108,9 @@ const DiagnosticDashboard = () => {
         return '#64748b';
     };
 
+    const countsEntries = system?.databaseCounts ? Object.entries(system.databaseCounts) : [];
+    const visibleCounts = showAllCounts ? countsEntries : countsEntries.slice(0, 12);
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -153,8 +164,18 @@ const DiagnosticDashboard = () => {
                 {/* Database Safety Check Card */}
                 <div className={styles.card} style={{ gridColumn: 'span 2' }}>
                     <div className={styles.cardHeader}>
-                        <Database className={styles.icon} />
-                        <h3>Database Safety Check</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Database className={styles.icon} />
+                            <h3>Database Safety Check</h3>
+                        </div>
+                        {countsEntries.length > 12 && (
+                            <button 
+                                onClick={() => setShowAllCounts(!showAllCounts)}
+                                style={{ fontSize: '12px', background: '#f1f5f9', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', color: '#475569', fontWeight: 600 }}
+                            >
+                                {showAllCounts ? 'Show Less' : `Show All (${countsEntries.length})`}
+                            </button>
+                        )}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', gap: '16px' }}>
@@ -179,9 +200,9 @@ const DiagnosticDashboard = () => {
                     
                     {/* Collection Counts Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '16px' }}>
-                        {system?.databaseCounts ? Object.entries(system.databaseCounts).map(([col, count]) => (
+                        {countsEntries.length > 0 ? visibleCounts.map(([col, count]) => (
                             <div key={col} style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col.replace(/([A-Z])/g, ' $1').trim()}</div>
+                                <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={col}>{col.replace(/([A-Z])/g, ' $1').trim()}</div>
                                 <div style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{count.toLocaleString()}</div>
                             </div>
                         )) : (

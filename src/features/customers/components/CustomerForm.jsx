@@ -9,6 +9,8 @@ import { fetchGeocodeAddress } from '@/services/locationApi';
 import { AddStickerModal } from './AddStickerModal';
 import { MultiSelect } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
+import { getDistributors } from '@/services/distributorApi';
+import { getUsers } from '@/services/userApi';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -33,6 +35,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     ]);
     const [dynamicStickers, setDynamicStickers] = useState([]);
     const [showAddSticker, setShowAddSticker] = useState(false);
+    const [salesTeam, setSalesTeam] = useState([]);
+    const [distributors, setDistributors] = useState([]);
     // Normalize customer data for form display
     const normalizeCustomerData = (customerData) => {
         console.log('🔄 Normalizing customer data:', customerData);
@@ -134,6 +138,15 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 }],
             creditPeriod: customerData.creditPeriod || 0,
             paymentType: customerData.paymentType || 'Credit',
+            referralDetails: customerData.referralDetails || {
+                sourceType: 'Direct',
+                salespersonId: null,
+                distributorId: null,
+                incentiveApplicable: false,
+                incentiveType: 'Percentage of sales',
+                incentiveValue: 0,
+                remarks: '',
+            }
         };
 
 
@@ -314,6 +327,23 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         fetchStickers();
     }, []);
 
+    // Fetch sales team and distributors
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [userData, distData] = await Promise.all([
+                    getUsers({ isActive: true, limit: 100 }),
+                    getDistributors({ status: 'Active', limit: 100 })
+                ]);
+                setSalesTeam(userData.users || []);
+                setDistributors(distData.results || []);
+            } catch (error) {
+                console.error('Failed to load referral data:', error);
+            }
+        };
+        fetchData();
+    }, []);
+
 
 
     // Helper function to convert input to uppercase
@@ -376,6 +406,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </a>
                         <a className={styles['sidebar-item']} href="#sec-additional" onClick={e => { e.preventDefault(); document.getElementById('sec-additional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>📝</span> Additional Info
+                        </a>
+                        <a className={styles['sidebar-item']} href="#sec-referral" onClick={e => { e.preventDefault(); document.getElementById('sec-referral')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>🤝</span> Sales / Referral
                         </a>
                     </nav>
 
@@ -954,6 +987,89 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         <small className={styles['help-text']}>Separate tags with commas</small>
                      </div>{/* end form-group tags */}
                         </div>{/* end sec-additional */}
+
+                        {/* Sales / Referral Details */}
+                        <div id="sec-referral" className={styles['form-section']}>
+                            <h3>Sales / Referral Details</h3>
+                            <div className={styles.grid4}>
+                                <div className={styles['form-group']}>
+                                    <label>SOURCE TYPE</label>
+                                    <select {...register('referralDetails.sourceType')} className={styles['form-select']}>
+                                        <option value="Direct">Direct</option>
+                                        <option value="Salesperson">Salesperson</option>
+                                        <option value="Distributor">Distributor</option>
+                                        <option value="Dealer">Dealer</option>
+                                        <option value="Referral Partner">Referral Partner</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+
+                                {watch('referralDetails.sourceType') === 'Salesperson' && (
+                                    <div className={styles['form-group']}>
+                                        <label>SELECT SALESPERSON</label>
+                                        <select {...register('referralDetails.salespersonId')} className={styles['form-select']}>
+                                            <option value="">-- Select Salesperson --</option>
+                                            {salesTeam.map(user => (
+                                                <option key={user._id} value={user._id}>{user.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {['Distributor', 'Dealer', 'Referral Partner'].includes(watch('referralDetails.sourceType')) && (
+                                    <div className={styles['form-group']}>
+                                        <label>SELECT PARTNER</label>
+                                        <select {...register('referralDetails.distributorId')} className={styles['form-select']}>
+                                            <option value="">-- Select Partner --</option>
+                                            {distributors.map(d => (
+                                                <option key={d._id} value={d._id}>{d.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className={styles['form-group']}>
+                                    <label>INCENTIVE APPLICABLE?</label>
+                                    <select {...register('referralDetails.incentiveApplicable')} className={styles['form-select']}>
+                                        <option value={false}>No</option>
+                                        <option value={true}>Yes</option>
+                                    </select>
+                                </div>
+
+                                {watch('referralDetails.incentiveApplicable') == 'true' && (
+                                    <>
+                                        <div className={styles['form-group']}>
+                                            <label>INCENTIVE TYPE</label>
+                                            <select {...register('referralDetails.incentiveType')} className={styles['form-select']}>
+                                                <option value="Percentage of sales">Percentage of sales</option>
+                                                <option value="Fixed amount per invoice">Fixed amount per invoice</option>
+                                                <option value="Fixed amount per customer">Fixed amount per customer</option>
+                                                <option value="Item-wise incentive">Item-wise incentive</option>
+                                                <option value="Manual">Manual</option>
+                                            </select>
+                                        </div>
+                                        <div className={styles['form-group']}>
+                                            <label>VALUE (%) / AMOUNT</label>
+                                            <Input
+                                                type="number"
+                                                {...register('referralDetails.incentiveValue', { valueAsNumber: true })}
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            <div className={styles['form-group']} style={{ marginTop: '1rem' }}>
+                                <label>REMARKS</label>
+                                <textarea
+                                    {...register('referralDetails.remarks')}
+                                    placeholder="Any internal remarks about this referral..."
+                                    rows={2}
+                                    className={styles['form-textarea']}
+                                    onChange={handleUppercaseChange('referralDetails.remarks')}
+                                />
+                            </div>
+                        </div>{/* end sec-referral */}
                     </div>{/* end form-content */}
                 </div>{/* end form-body */}
 

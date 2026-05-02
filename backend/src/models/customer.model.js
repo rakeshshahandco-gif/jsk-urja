@@ -172,8 +172,45 @@ const customerSchema = mongoose.Schema(
         },
         leadStage: {
             type: String,
-            enum: ['New', 'Contacted', 'Qualified', 'Sample Sent', 'Negotiation', 'Converted', 'Lost', 'Closed', ''],
+            enum: [
+                'New', 
+                'Contacted', 
+                'Qualified', 
+                'Interested',
+                'Follow-up Required',
+                'Quotation Required',
+                'Sample Required',
+                'Sample Sent', 
+                'Sample Under Testing',
+                'Negotiation', 
+                'Converted to Order', 
+                'Not Converted',
+                'Lost', 
+                'Hold',
+                'Project Postponed',
+                'Customer Not Responding',
+                'Closed', 
+                ''
+            ],
             default: 'New',
+        },
+        notConvertedDetails: {
+            reason: String,
+            matter: String,
+            offeredRate: Number,
+            expectedRate: Number,
+            competitorRate: Number,
+            competitorName: String,
+            requiredSpec: String,
+            offeredSpec: String,
+            issueDetails: String,
+            expectedRequirementDate: Date,
+            nextFollowUpDate: Date,
+            assignedTo: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            remarks: String
         },
         leadDate: {
             type: Date,
@@ -270,6 +307,49 @@ const customerSchema = mongoose.Schema(
             type: String,
             enum: ['Dr', 'Cr'],
             default: 'Dr',
+        },
+        // Sales / Referral Details
+        referralDetails: {
+            sourceType: {
+                type: String,
+                enum: ['Direct', 'Salesperson', 'Distributor', 'Dealer', 'Referral Partner', 'Other'],
+                default: 'Direct',
+            },
+            salespersonId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+                default: null,
+            },
+            distributorId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Distributor',
+                default: null,
+            },
+            incentiveApplicable: {
+                type: Boolean,
+                default: false,
+            },
+            incentiveType: {
+                type: String,
+                enum: ['Percentage of sales', 'Fixed amount per invoice', 'Fixed amount per customer', 'Item-wise incentive', 'Manual'],
+                default: 'Percentage of sales',
+            },
+            incentiveValue: {
+                type: Number,
+                default: 0,
+            },
+            startDate: {
+                type: Date,
+                default: null,
+            },
+            endDate: {
+                type: Date,
+                default: null,
+            },
+            remarks: {
+                type: String,
+                default: '',
+            }
         },
     },
     {

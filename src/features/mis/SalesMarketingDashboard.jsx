@@ -140,8 +140,8 @@ const SalesMarketingDashboard = () => {
             {/* Header Section */}
             <div className={s.headerRow}>
                 <div className={s.titleSection}>
-                    <div className={s.breadcrumb}>Intelligence &bull; Sales Operations</div>
-                    <h1>Sales & Marketing MIS</h1>
+                    <div className={s.breadcrumb}>MIS Reports &bull; Sales Operations</div>
+                    <h1>Sales MIS Dashboard</h1>
                     <p>Live Lead-to-Cash Business Intelligence Engine</p>
                 </div>
 

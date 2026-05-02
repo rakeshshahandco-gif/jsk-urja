@@ -32,9 +32,78 @@ export const FollowUpForm = () => {
             discussionDetails: '',
             outcome: '',
             interestedProducts: [],
-            productNotes: ''
+            productNotes: '',
+            followUpStatus: 'Follow-up Required',
+            notConvertedDetails: {
+                reason: '',
+                matter: '',
+                offeredRate: '',
+                expectedRate: '',
+                competitorRate: '',
+                competitorName: '',
+                requiredSpec: '',
+                offeredSpec: '',
+                issueDetails: '',
+                expectedRequirementDate: '',
+                nextFollowUpDate: '',
+                assignedTo: '',
+                remarks: ''
+            }
         }
     });
+
+    const watchStatus = conversationForm.watch('followUpStatus');
+    const watchReason = conversationForm.watch('notConvertedDetails.reason');
+
+    const [selectedProducts, setSelectedProducts] = useState([
+        'PHASE CUT DIMMABLE DRIVER AND DIMMER',
+        'ANALOG DRIVER & DIMMER',
+        'DALI DRIVER & DIMMER',
+        'SMART DRIVER – BLE',
+        'SMART DRIVER – ZIGBEE'
+    ]);
+    const [newProduct, setNewProduct] = useState('');
+    const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+
+    const handleAddProduct = () => {
+        if (newProduct.trim() && !selectedProducts.includes(newProduct.trim())) {
+            const updated = [...selectedProducts, newProduct.trim()];
+            setSelectedProducts(updated);
+            setNewProduct('');
+            // Sync with form
+            const currentSelected = conversationForm.getValues('interestedProducts') || [];
+            if (Array.isArray(currentSelected)) {
+                conversationForm.setValue('interestedProducts', [...currentSelected, newProduct.trim()]);
+            }
+        }
+    };
+
+    const handleRemoveProduct = (product) => {
+        const updated = selectedProducts.filter(p => p !== product);
+        setSelectedProducts(updated);
+        // Sync with form
+        const currentSelected = conversationForm.getValues('interestedProducts') || [];
+        if (Array.isArray(currentSelected)) {
+            conversationForm.setValue('interestedProducts', currentSelected.filter(p => p !== product));
+        }
+    };
+
+    const onDragStart = (index) => {
+        setDraggedItemIndex(index);
+    };
+
+    const onDragOver = (e) => {
+        e.preventDefault();
+    };
+
+    const onDrop = (index) => {
+        const updated = [...selectedProducts];
+        const draggedItem = updated[draggedItemIndex];
+        updated.splice(draggedItemIndex, 1);
+        updated.splice(index, 0, draggedItem);
+        setSelectedProducts(updated);
+        setDraggedItemIndex(null);
+    };
 
     // Follow-up/Reminder form
     const reminderForm = useForm({
@@ -110,7 +179,18 @@ export const FollowUpForm = () => {
                     : (data.interestedProducts && data.interestedProducts !== 'on' ? [data.interestedProducts] : []),
                 productNotes: data.productNotes || '',
                 callDuration: data.callDuration ? Number(data.callDuration) : null,
+                followUpStatus: data.followUpStatus,
+                notConvertedDetails: data.notConvertedDetails
             };
+
+            // Validation for mandatory reason
+            const negativeStatuses = ['Not Converted', 'Lost', 'Hold', 'Project Postponed', 'Customer Not Responding'];
+            if (negativeStatuses.includes(data.followUpStatus)) {
+                if (!data.notConvertedDetails?.reason || !data.notConvertedDetails?.matter) {
+                    addToast('Reason and Detailed Matter are mandatory for this status', 'error');
+                    return;
+                }
+            }
 
             const response = await createConversation(conversationData);
 
@@ -267,27 +347,250 @@ export const FollowUpForm = () => {
                                 />
                             </div>
 
+                            <div className={styles.formGroup}>
+                                <label>Lead Status Update *</label>
+                                <select
+                                    {...conversationForm.register('followUpStatus', { required: true })}
+                                    className={styles.formSelect}
+                                >
+                                    <option value="Interested">Interested</option>
+                                    <option value="Follow-up Required">Follow-up Required</option>
+                                    <option value="Quotation Required">Quotation Required</option>
+                                    <option value="Sample Required">Sample Required</option>
+                                    <option value="Sample Sent">Sample Sent</option>
+                                    <option value="Sample Under Testing">Sample Under Testing</option>
+                                    <option value="Negotiation">Negotiation</option>
+                                    <option value="Converted to Order">Converted to Order</option>
+                                    <option value="Not Converted">Not Converted</option>
+                                    <option value="Lost">Lost</option>
+                                    <option value="Hold">Hold</option>
+                                    <option value="Project Postponed">Project Postponed</option>
+                                    <option value="Customer Not Responding">Customer Not Responding</option>
+                                </select>
+                            </div>
+
+                            {['Not Converted', 'Lost', 'Hold', 'Project Postponed', 'Customer Not Responding'].includes(watchStatus) && (
+                                <div className={styles.reasonSection}>
+                                    <div className={styles.formGrid}>
+                                        <div className={styles.formGroup}>
+                                            <label>Fixed Reason *</label>
+                                            <select 
+                                                {...conversationForm.register('notConvertedDetails.reason', { required: true })}
+                                                className={styles.formSelect}
+                                            >
+                                                <option value="">Select Reason</option>
+                                                <option value="Rate is high">Rate is high</option>
+                                                <option value="Product not suitable">Product not suitable</option>
+                                                <option value="No need now / Project postponed">No need now / Project postponed</option>
+                                                <option value="Competitor selected">Competitor selected</option>
+                                                <option value="Service Issue">Service Issue</option>
+                                                <option value="Payment Terms">Payment Terms</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div className={styles.formGroup}>
+                                            <label>Assigned To</label>
+                                            <input 
+                                                type="text"
+                                                {...conversationForm.register('notConvertedDetails.assignedTo')}
+                                                placeholder="Person name"
+                                                className={styles.formInput}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className={styles.formGroup}>
+                                        <label>Detailed Matter / Explanation *</label>
+                                        <textarea
+                                            {...conversationForm.register('notConvertedDetails.matter', { required: true })}
+                                            rows={3}
+                                            placeholder="Explain why lead was lost/on hold..."
+                                            className={styles.formTextarea}
+                                        />
+                                    </div>
+
+                                    {/* Reason Specific Fields */}
+                                    {watchReason === 'Rate is high' && (
+                                        <div className={styles.reasonSpecificFields}>
+                                            <div className={styles.formGrid}>
+                                                <div className={styles.formGroup}>
+                                                    <label>Our Offered Rate</label>
+                                                    <input type="number" {...conversationForm.register('notConvertedDetails.offeredRate')} className={styles.formInput} />
+                                                </div>
+                                                <div className={styles.formGroup}>
+                                                    <label>Customer Expected Rate</label>
+                                                    <input type="number" {...conversationForm.register('notConvertedDetails.expectedRate')} className={styles.formInput} />
+                                                </div>
+                                                <div className={styles.formGroup}>
+                                                    <label>Competitor Rate</label>
+                                                    <input type="number" {...conversationForm.register('notConvertedDetails.competitorRate')} className={styles.formInput} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {watchReason === 'Product not suitable' && (
+                                        <div className={styles.reasonSpecificFields}>
+                                            <div className={styles.formGrid}>
+                                                <div className={styles.formGroup}>
+                                                    <label>Required Specification</label>
+                                                    <input type="text" {...conversationForm.register('notConvertedDetails.requiredSpec')} className={styles.formInput} />
+                                                </div>
+                                                <div className={styles.formGroup}>
+                                                    <label>Offered Specification</label>
+                                                    <input type="text" {...conversationForm.register('notConvertedDetails.offeredSpec')} className={styles.formInput} />
+                                                </div>
+                                            </div>
+                                            <div className={styles.formGroup}>
+                                                <label>Issue Details</label>
+                                                <textarea {...conversationForm.register('notConvertedDetails.issueDetails')} className={styles.formTextarea} rows={2} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {watchReason === 'No need now / Project postponed' && (
+                                        <div className={styles.reasonSpecificFields}>
+                                            <div className={styles.formGrid}>
+                                                <div className={styles.formGroup}>
+                                                    <label>Expected Requirement Date</label>
+                                                    <input type="date" {...conversationForm.register('notConvertedDetails.expectedRequirementDate')} className={styles.formInput} />
+                                                </div>
+                                                <div className={styles.formGroup}>
+                                                    <label>Next Follow-up Date</label>
+                                                    <input type="date" {...conversationForm.register('notConvertedDetails.nextFollowUpDate')} className={styles.formInput} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {watchReason === 'Competitor selected' && (
+                                        <div className={styles.reasonSpecificFields}>
+                                            <div className={styles.formGrid}>
+                                                <div className={styles.formGroup}>
+                                                    <label>Competitor Name</label>
+                                                    <input type="text" {...conversationForm.register('notConvertedDetails.competitorName')} className={styles.formInput} />
+                                                </div>
+                                                <div className={styles.formGroup}>
+                                                    <label>Competitor Rate</label>
+                                                    <input type="number" {...conversationForm.register('notConvertedDetails.competitorRate')} className={styles.formInput} />
+                                                </div>
+                                            </div>
+                                            <div className={styles.formGroup}>
+                                                <label>Customer Reason</label>
+                                                <textarea {...conversationForm.register('notConvertedDetails.customerReason')} className={styles.formTextarea} rows={2} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className={styles.formGroup}>
+                                        <label>Remarks</label>
+                                        <textarea
+                                            {...conversationForm.register('notConvertedDetails.remarks')}
+                                            rows={2}
+                                            className={styles.formTextarea}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             <div className={styles.formSection} style={{ border: 'none', padding: 0, marginTop: '1.5rem', background: 'none' }}>
-                                <label style={{ marginBottom: '12px', display: 'block', fontWeight: 600, color: '#374151' }}>Interested Products</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                                    {[
-                                        'PHASE CUT DIMMABLE DRIVER AND DIMMER',
-                                        'ANALOG DRIVER & DIMMER',
-                                        'DALI DRIVER & DIMMER',
-                                        'SMART DRIVER – BLE',
-                                        'SMART DRIVER – ZIGBEE'
-                                    ].map((product) => (
-                                        <label key={product} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <label style={{ margin: 0, fontWeight: 600, color: '#374151' }}>Interested Products</label>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <input 
+                                            type="text" 
+                                            value={newProduct}
+                                            onChange={(e) => setNewProduct(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProduct())}
+                                            placeholder="Add product..."
+                                            className={styles.formInput}
+                                            style={{ width: '200px', height: '32px', fontSize: '12px' }}
+                                        />
+                                        <button 
+                                            type="button" 
+                                            onClick={handleAddProduct}
+                                            className={styles.addBtn}
+                                            style={{ padding: '0 12px', height: '32px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ 
+                                    display: 'flex', 
+                                    flexWrap: 'wrap', 
+                                    gap: '10px', 
+                                    marginBottom: '20px',
+                                    padding: '12px',
+                                    background: '#f9fafb',
+                                    borderRadius: '12px',
+                                    border: '1px dashed #d1d5db',
+                                    minHeight: '60px'
+                                }}>
+                                    {selectedProducts.map((product, index) => (
+                                        <div
+                                            key={product}
+                                            draggable
+                                            onDragStart={() => onDragStart(index)}
+                                            onDragOver={onDragOver}
+                                            onDrop={() => onDrop(index)}
+                                            onDragEnd={() => setDraggedItemIndex(null)}
+                                            style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px', 
+                                                padding: '8px 14px',
+                                                background: draggedItemIndex === index ? '#eff6ff' : '#ffffff',
+                                                border: draggedItemIndex === index ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+                                                borderRadius: '24px',
+                                                cursor: 'grab',
+                                                userSelect: 'none',
+                                                transition: 'all 0.2s',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                opacity: draggedItemIndex === index ? 0.5 : 1
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
+                                            onMouseLeave={e => e.currentTarget.style.borderColor = draggedItemIndex === index ? '#3b82f6' : '#e5e7eb'}
+                                        >
                                             <input
                                                 type="checkbox"
                                                 value={product}
+                                                defaultChecked={true}
                                                 {...conversationForm.register('interestedProducts')}
-                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                                style={{ width: '15px', height: '15px', cursor: 'pointer' }}
                                             />
-                                            <span style={{ fontSize: '0.875rem', color: '#1f2937' }}>{product}</span>
-                                        </label>
+                                            <span style={{ fontSize: '13px', color: '#374151', fontWeight: 600 }}>{product}</span>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleRemoveProduct(product)}
+                                                style={{ 
+                                                    border: 'none', 
+                                                    background: '#fee2e2', 
+                                                    color: '#ef4444', 
+                                                    cursor: 'pointer', 
+                                                    fontSize: '12px', 
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '50%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    padding: 0
+                                                }}
+                                                title="Remove"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
                                     ))}
+                                    {selectedProducts.length === 0 && (
+                                        <div style={{ color: '#9ca3af', fontSize: '12px', fontStyle: 'italic', padding: '10px' }}>
+                                            No products added yet. Use the field above to add.
+                                        </div>
+                                    )}
                                 </div>
+                            </div>
 
                                 <div className={styles.formGroup}>
                                     <label>Product Requirement Notes</label>
@@ -298,7 +601,6 @@ export const FollowUpForm = () => {
                                         className={styles.formTextarea}
                                     />
                                 </div>
-                            </div>
 
                             <Button
                                 type="submit"

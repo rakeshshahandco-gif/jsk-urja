@@ -7,7 +7,8 @@ import {
     XCircle, 
     Calendar,
     Settings,
-    Star
+    Star,
+    ChevronRight
 } from 'lucide-react';
 import { 
     Button, 
@@ -159,6 +160,12 @@ const FinancialYearMaster = () => {
 
     return (
         <div className="p-6">
+            <div className="flex items-center gap-2 mb-4 text-xs font-medium text-gray-500">
+                <span>Account Master</span>
+                <ChevronRight size={12} />
+                <span className="text-primary-600 font-bold">Financial Year Master</span>
+            </div>
+
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">

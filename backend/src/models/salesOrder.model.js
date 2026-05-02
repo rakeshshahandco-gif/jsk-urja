@@ -95,6 +95,17 @@ const salesOrderSchema = new mongoose.Schema({
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     deleteReason: { type: String, default: '' },
+
+    // Sales / Referral Details (Snapshot from Customer Master)
+    salespersonId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    distributorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Distributor', default: null },
+    referralSource: { type: String, default: '' }, // Snapshot of sourceType
+    
+    // Incentive Calculation
+    incentiveApplicable: { type: Boolean, default: false },
+    incentiveType: { type: String, default: '' },
+    incentiveValue: { type: Number, default: 0 },
+    incentiveAmount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 salesOrderSchema.index({ soNumber: 1 });

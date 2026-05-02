@@ -53,10 +53,10 @@ export const createCreditDebitNote = asyncHandler(async (req, res) => {
 });
 
 export const getCreditDebitNotes = asyncHandler(async (req, res) => {
-    const { type, customerId, status, dateFrom, dateTo, limit = 50, page = 1, search } = req.query;
+    const { noteType, customerId, status, dateFrom, dateTo, limit = 50, page = 1, search } = req.query;
     
     const filter = { isDeleted: { $ne: true } };
-    if (type) filter.noteType = type;
+    if (noteType) filter.noteType = noteType;
     if (customerId) filter.customerId = customerId;
     if (status) filter.status = status;
     if (dateFrom || dateTo) {
@@ -74,7 +74,8 @@ export const getCreditDebitNotes = asyncHandler(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [notes, total] = await Promise.all([
         CreditDebitNote.find(filter)
-            .populate('customerId', 'name')
+            .populate('customerId', 'customerName')
+            .populate('seriesId', 'seriesName')
             .populate('originalInvoiceId', 'invoiceNumber invoiceDate')
             .sort({ noteDate: -1 })
             .skip(skip)

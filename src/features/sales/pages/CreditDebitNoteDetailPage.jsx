@@ -29,7 +29,7 @@ export default function CreditDebitNoteDetailPage() {
         cancelCreditDebitNote(id, { reason })
             .then(() => {
                 toast.success('Note cancelled');
-                navigate(note.noteType === 'Credit Note' ? PATHS.SALES.CREDIT_NOTES : PATHS.SALES.DEBIT_NOTES);
+                navigate(note.noteType === 'Credit Note' ? PATHS.ACCOUNTS.CREDIT_NOTES : PATHS.ACCOUNTS.DEBIT_NOTES);
             })
             .catch(e => toast.error(e.response?.data?.message || 'Cancel failed'));
     };
@@ -40,7 +40,7 @@ export default function CreditDebitNoteDetailPage() {
                 <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>← Back</button>
                 <div style={{ display: 'flex', gap: 10 }}>
                     {note.status === 'Draft' && (
-                        <button onClick={() => navigate(`/sales/${note.noteType === 'Credit Note' ? 'credit-notes' : 'debit-notes'}/edit/${id}`)} 
+                        <button onClick={() => navigate(`/voucher-entry/${note.noteType === 'Credit Note' ? 'credit-notes' : 'debit-notes'}/edit/${id}`)} 
                             style={{ padding: '8px 16px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
                             Edit Draft
                         </button>

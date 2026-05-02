@@ -4,6 +4,7 @@ import { StockLedger } from '../models/stockLedger.model.js';
 import { rollbackStockLedger, recalculateStockLedger } from '../utils/stockUtils.js';
 import { Item } from '../models/item.model.js';
 import Customer from '../models/customer.model.js';
+import Distributor from '../models/distributor.model.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -68,6 +69,24 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             paymentStatus: 'Unpaid',
             numberLocked: body.status === 'Confirmed' // Auto-lock if confirmed
         };
+
+        // Map Referral Details if present
+        if (body.referralDetails) {
+            invData.salespersonId = body.referralDetails.salespersonId || null;
+            invData.distributorId = body.referralDetails.distributorId || null;
+            invData.referralSource = body.referralDetails.sourceType || '';
+            invData.incentiveApplicable = body.referralDetails.incentiveApplicable || false;
+            invData.incentiveType = body.referralDetails.incentiveType || '';
+            invData.incentiveValue = body.referralDetails.incentiveValue || 0;
+            
+            // Calculate incentive amount
+            if (invData.incentiveApplicable && invData.incentiveType === 'Percentage of sales') {
+                const taxable = Number(body.totalTaxableAmount) || 0;
+                invData.incentiveAmount = Number(((taxable * invData.incentiveValue) / 100).toFixed(2));
+            } else if (invData.incentiveApplicable && invData.incentiveType === 'Fixed amount per document') {
+                invData.incentiveAmount = Number(invData.incentiveValue) || 0;
+            }
+        }
 
         // --- PHASE 2: GSTR-1 COMPLIANCE INJECTION ---
         // 1. Snapshot Item UQC/HSN for Table 12
@@ -1309,4 +1328,95 @@ export const updateGstDetails = asyncHandler(async (req, res) => {
     } finally {
         session.endSession();
     }
+});
+
+/**
+ * GET /api/v1/sales-invoices/incentive-report
+ * Query params: dateFrom, dateTo, salespersonId, distributorId, status
+ */
+export const getIncentiveReport = asyncHandler(async (req, res) => {
+    const { dateFrom, dateTo, salespersonId, distributorId, status } = req.query;
+
+    const query = {
+        isDeleted: false,
+        status: { $ne: 'Cancelled' },
+        incentiveApplicable: true
+    };
+
+    if (dateFrom || dateTo) {
+        query.invoiceDate = {};
+        if (dateFrom) query.invoiceDate.$gte = new Date(dateFrom);
+        if (dateTo) query.invoiceDate.$lte = new Date(dateTo);
+    }
+
+    if (salespersonId) query.salespersonId = salespersonId;
+    if (distributorId) query.distributorId = distributorId;
+    if (status) query.incentiveStatus = status;
+
+    const invoices = await SalesInvoice.find(query)
+        .populate('salespersonId', 'name mobile')
+        .populate('distributorId', 'name contactPerson phone')
+        .sort({ invoiceDate: -1 });
+
+    // Summary statistics
+    const summary = {
+        totalTaxable: 0,
+        totalIncentive: 0,
+        pendingCount: 0,
+        paidAmount: 0
+    };
+
+    const reportData = invoices.map(inv => {
+        summary.totalTaxable += inv.totalTaxableAmount || 0;
+        summary.totalIncentive += inv.incentiveAmount || 0;
+        summary.paidAmount += inv.incentivePaidAmount || 0;
+        if (inv.incentiveStatus === 'Pending') summary.pendingCount++;
+
+        return {
+            _id: inv._id,
+            invoiceNumber: inv.invoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            customerName: inv.customerName,
+            taxableAmount: inv.totalTaxableAmount,
+            referralSource: inv.referralSource,
+            beneficiary: inv.referralSource === 'Internal Salesperson' 
+                ? inv.salespersonId?.name 
+                : (inv.distributorId?.name || 'N/A'),
+            incentiveType: inv.incentiveType,
+            incentiveValue: inv.incentiveValue,
+            incentiveAmount: inv.incentiveAmount,
+            status: inv.incentiveStatus,
+            paidAmount: inv.incentivePaidAmount,
+            paidDate: inv.incentivePaidDate,
+            remarks: inv.incentiveRemarks
+        };
+    });
+
+    res.json(new ApiResponse(httpStatus.OK, {
+        summary,
+        results: reportData
+    }, 'Incentive report fetched successfully'));
+});
+
+/**
+ * POST /api/v1/sales-invoices/:id/incentive-status
+ */
+export const updateIncentiveStatus = asyncHandler(async (req, res) => {
+    const { status, paidAmount, remarks } = req.body;
+    const inv = await SalesInvoice.findById(req.params.id);
+    if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+
+    if (status) inv.incentiveStatus = status;
+    if (paidAmount !== undefined) {
+        inv.incentivePaidAmount = Number(paidAmount);
+        if (inv.incentivePaidAmount > 0 && !inv.incentivePaidDate) {
+            inv.incentivePaidDate = new Date();
+        }
+    }
+    if (remarks) inv.incentiveRemarks = remarks;
+
+    inv.updatedBy = req.user.id;
+    await inv.save();
+
+    res.json({ success: true, data: inv, message: 'Incentive status updated' });
 });

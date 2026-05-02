@@ -133,7 +133,7 @@ export const createSO = asyncHandler(async (req, res) => {
         }
     }
 
-    const so = await SalesOrder.create({
+    const soData = {
         ...body,
         soNumber: String(soNumber),
         seriesId: body.seriesId,
@@ -154,7 +154,27 @@ export const createSO = asyncHandler(async (req, res) => {
         amountInWords: numWords(roundedTotal),
         financialYear: fy,
         createdBy: req.user.id,
-    });
+    };
+
+    // Map Referral Details if present
+    if (body.referralDetails) {
+        soData.salespersonId = body.referralDetails.salespersonId || null;
+        soData.distributorId = body.referralDetails.distributorId || null;
+        soData.referralSource = body.referralDetails.sourceType || '';
+        soData.incentiveApplicable = body.referralDetails.incentiveApplicable || false;
+        soData.incentiveType = body.referralDetails.incentiveType || '';
+        soData.incentiveValue = body.referralDetails.incentiveValue || 0;
+        
+        // Calculate incentive amount (snapshot)
+        if (soData.incentiveApplicable && soData.incentiveType === 'Percentage of sales') {
+            const taxable = Number(totalAmount) || 0;
+            soData.incentiveAmount = Number(((taxable * soData.incentiveValue) / 100).toFixed(2));
+        } else if (soData.incentiveApplicable && soData.incentiveType === 'Fixed amount per document') {
+            soData.incentiveAmount = Number(soData.incentiveValue) || 0;
+        }
+    }
+
+    const so = await SalesOrder.create(soData);
 
     await AuditLog.create({
         user: req.user.id,

@@ -35,6 +35,42 @@ const conversationSchema = mongoose.Schema(
         callDuration: {
             type: Number,
         },
+        followUpStatus: {
+            type: String,
+            enum: [
+                'Interested',
+                'Follow-up Required',
+                'Quotation Required',
+                'Sample Required',
+                'Sample Sent',
+                'Sample Under Testing',
+                'Negotiation',
+                'Converted to Order',
+                'Not Converted',
+                'Lost',
+                'Hold',
+                'Project Postponed',
+                'Customer Not Responding'
+            ],
+        },
+        notConvertedDetails: {
+            reason: String, // Fixed reason from dropdown
+            matter: String, // Detailed matter / explanation
+            offeredRate: Number,
+            expectedRate: Number,
+            competitorRate: Number,
+            competitorName: String,
+            requiredSpec: String,
+            offeredSpec: String,
+            issueDetails: String,
+            expectedRequirementDate: Date,
+            nextFollowUpDate: Date,
+            assignedTo: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            remarks: String
+        }
     },
     {
         timestamps: true,

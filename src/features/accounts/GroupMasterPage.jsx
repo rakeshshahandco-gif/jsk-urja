@@ -221,6 +221,12 @@ const GroupMasterPage = () => {
 
     return (
         <div style={s.page}>
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                <span>Account Master</span>
+                <ChevronRight size={12} />
+                <span style={{ color: '#1d4ed8', fontWeight: 700 }}>Group Master</span>
+            </div>
+
             <div style={s.header}>
                 <div>
                     <h1 style={s.title}>Account Groups (Masters)</h1>

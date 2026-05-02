@@ -1,4 +1,5 @@
 import Conversation from '../models/conversation.model.js';
+import Customer from '../models/customer.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
 
@@ -10,6 +11,16 @@ import logger from '../utils/logger.js';
 const createConversation = async (body) => {
     logger.info('📝 Creating conversation for customer:', body.customerId);
     const conversation = await Conversation.create(body);
+
+    // Update Customer lead stage and notConvertedDetails if status is provided
+    if (body.followUpStatus) {
+        await Customer.findByIdAndUpdate(body.customerId, {
+            leadStage: body.followUpStatus,
+            notConvertedDetails: body.notConvertedDetails || {}
+        });
+        logger.info(`🔄 Updated Customer ${body.customerId} lead stage to: ${body.followUpStatus}`);
+    }
+
     logger.info(`✅ Conversation created with ID: ${conversation._id}`);
     return conversation;
 };

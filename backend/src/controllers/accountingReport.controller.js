@@ -7,6 +7,7 @@ import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
+import Customer from '../models/customer.model.js';
 import moment from 'moment';
 
 /**
@@ -520,6 +521,15 @@ export const getSampleConversionReport = asyncHandler(async (req, res) => {
             const daysToConvert = converted ? 
                 Math.ceil((new Date(conversionDate) - new Date(sample.invoiceDate)) / (1000 * 60 * 60 * 24)) : null;
 
+            // Fetch reason if not converted
+            let reason = '';
+            let matter = '';
+            if (!converted) {
+                const customer = await Customer.findById(sample.customerId).lean();
+                reason = customer?.notConvertedDetails?.reason || '';
+                matter = customer?.notConvertedDetails?.matter || '';
+            }
+
             report.push({
                 sampleDate: sample.invoiceDate,
                 customerName: sample.customerName,
@@ -531,7 +541,9 @@ export const getSampleConversionReport = asyncHandler(async (req, res) => {
                 conversionDate,
                 daysToConvert,
                 salesQty: converted ? laterSales[0].items.find(i => String(i.itemId) === String(item.itemId))?.qty : 0,
-                salesperson: sample.salesPerson || 'N/A'
+                salesperson: sample.salesPerson || 'N/A',
+                reason,
+                matter
             });
         }
     }

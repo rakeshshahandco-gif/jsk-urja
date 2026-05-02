@@ -15,7 +15,9 @@ export const PERMISSION_REGISTRY = [
             { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'ledger_master', name: 'Ledger Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
+            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'credit_notes', name: 'Credit Notes', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] },
+            { id: 'debit_notes', name: 'Debit Notes', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'delete', label: 'Delete', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] }
         ]
     },
     {
@@ -248,7 +250,8 @@ export const PERMISSION_REGISTRY = [
             { id: 'trial_balance', name: 'Trial Balance', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'profit_loss', name: 'Profit & Loss', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'balance_sheet', name: 'Balance Sheet', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'sales_marketing', name: 'Sales & Marketing', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'sales_marketing', name: 'Sales MIS Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'product_gp_analysis', name: 'Product-wise GP Analysis', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
             { id: 'sales_conversion', name: 'Sales Conversion', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
         ]
     },

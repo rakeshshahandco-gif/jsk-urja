@@ -64,7 +64,8 @@ const ProductGpReport = () => {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>Product-wise Gross Profit</h1>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.5px' }}>MIS Reports &bull; Profitability</div>
+                    <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>Product-wise GP Analysis</h1>
                     <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#64748b' }}>Item-level profitability analysis based on sales vs production/purchase cost</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>

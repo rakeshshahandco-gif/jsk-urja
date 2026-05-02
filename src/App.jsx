@@ -1,6 +1,6 @@
 // Version: 1.0.9 - Deploy: 2026-04-25T15:48:00Z
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
@@ -81,7 +81,8 @@ import EwayBillDraftPage from '@/features/eway-bill/EwayBillDraftPage';
 import TransporterListPage from '@/features/transporters/TransporterListPage';
 import DiagnosticDashboard from '@/features/admin/diagnostics/DiagnosticDashboard';
 import BackupRestorePage from '@/features/admin/backup/BackupRestorePage';
-
+import { DistributorList } from '@/features/distributors/DistributorList';
+import IncentiveReport from '@/features/reports/IncentiveReport';
 
 
 // Service / Replacement Module
@@ -107,6 +108,7 @@ const GroupMasterPage = lazy(() => import('./features/accounts/GroupMasterPage')
 const LedgerMasterPage = lazy(() => import('./features/accounts/LedgerMasterPage'));
 const VoucherTypeMasterPage = lazy(() => import('./features/accounts/VoucherTypeMasterPage'));
 const SalesRegisterPage = lazy(() => import('./features/accounts/SalesRegisterPage'));
+const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'));
 const PurchaseRegisterPage = lazy(() => import('./features/accounts/PurchaseRegisterPage'));
 const ExpenseRegisterPage = lazy(() => import('./features/accounts/ExpenseRegisterPage'));
 const FinancialYearMasterPage = lazy(() => import('./features/accounts/FinancialYearMasterPage.jsx'));
@@ -182,12 +184,27 @@ import { FinancialYearProvider, useFinancialYear } from '@/contexts/FinancialYea
 import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
 
+import { useAuth } from '@/hooks/useAuth';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ToastProvider } from '@/components/ui/Toast';
 import './styles/main.scss';
 import { BrandedSplashScreen, BrandedModuleLoader, BrandedLoader } from '@/components/ui/BrandedLoading';
 
 import { Toaster } from 'react-hot-toast';
+
+// Redirect component that preserves parameters
+const ParamRedirect = ({ to }) => {
+    const params = useParams();
+    let target = to;
+    Object.keys(params).forEach(key => {
+        target = target.replace(`:${key}`, params[key]);
+        // Also support just appending id if target doesn't have it
+        if (!target.includes(`:${key}`) && key === 'id') {
+            target = `${target}/${params[key]}`;
+        }
+    });
+    return <Navigate to={target} replace />;
+};
 
 function App() {
     const [showSplash, setShowSplash] = useState(true);
@@ -276,8 +293,42 @@ function App() {
 
 // Separate layout component to handle route-specific logic
 const AppLayout = () => {
+    const { user } = useAuth();
     const { selectedFY } = useFinancialYear();
     const { isCollapsed, isHoverOpen } = useSidebar();
+
+    const location = useLocation();
+
+    // Tracking for Recently Opened forms
+    useEffect(() => {
+        const path = location.pathname;
+        // Simple check to see if this is a form path (avoiding heavy imports here)
+        // We'll just look for common form path patterns or exact matches in a simple list
+        const forms = [
+            { path: '/customers/list', title: 'Customer Master', id: 'customer-master', icon: 'crm' },
+            { path: '/sales/orders', title: 'Sales Order', id: 'sales-order', icon: 'sales' },
+            { path: '/sales/invoices', title: 'Tax Invoice (GST)', id: 'sales-invoice', icon: 'sales' },
+            { path: '/purchase/orders', title: 'Purchase Order', id: 'purchase-order', icon: 'purchase' },
+            { path: '/purchase/invoices', title: 'Purchase Invoice', id: 'purchase-invoice', icon: 'purchase' },
+            { path: '/inventory/stock/ledger', title: 'Stock Movement Ledger', id: 'stock-ledger', icon: 'inventory' },
+            { path: '/inventory/items', title: 'Item Master', id: 'item-master', icon: 'inventory' },
+            { path: '/followups', title: 'Follow-up', id: 'follow-up', icon: 'crm' },
+            { path: '/tasks/list', title: 'Manage Tasks', id: 'manage-tasks', icon: 'tasks' },
+        ];
+        
+        const form = forms.find(f => path === f.path);
+        if (form && (user?._id || user?.id)) {
+            const RECENT_KEY = `dashboard_recent_${user?._id || user?.id}`;
+            const saved = localStorage.getItem(RECENT_KEY);
+            let recent = saved ? JSON.parse(saved) : [];
+            recent = recent.filter(item => item.id !== form.id);
+            recent = [{
+                ...form,
+                timestamp: new Date().toISOString()
+            }, ...recent].slice(0, 5);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+        }
+    }, [location.pathname, user?.id]);
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -301,7 +352,7 @@ const AppLayout = () => {
                 >
                     <ErrorBoundary>
                         <Routes>
-                            <Route path="/" element={<Navigate to="/tasks/list" replace />} />
+                            <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                         <Route path="/customers" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/customers/list" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/followups" element={<ProtectedRoute requirePermission="customers"><FollowupDashboard /></ProtectedRoute>} />
@@ -323,11 +374,21 @@ const AppLayout = () => {
                         <Route path="/reports/open-reminders" element={<ProtectedRoute requirePermission="reports.reminder_report.view"><OpenRemindersReport /></ProtectedRoute>} />
                         <Route path="/reports/conversation-history" element={<ProtectedRoute requirePermission="reports"><ConversationHistoryReport /></ProtectedRoute>} />
                         <Route path="/reports/consumable-cost" element={<ProtectedRoute requirePermission="reports"><ConsumableCostReport /></ProtectedRoute>} />
-                        <Route path={PATHS.REPORTS.PRODUCT_GP} element={<ProtectedRoute requirePermission="reports"><ProductGpReport /></ProtectedRoute>} />
+                        
+                        {/* MIS Reports */}
+                        <Route path={PATHS.MIS.SALES_DASHBOARD} element={<ProtectedRoute requirePermission="mis.sales_marketing.view"><SalesMarketingDashboard /></ProtectedRoute>} />
+                        <Route path={PATHS.MIS.PRODUCT_GP} element={<ProtectedRoute requirePermission="mis.product_gp_analysis.view"><ProductGpReport /></ProtectedRoute>} />
+                        
+                        {/* Redirects for MIS Reports */}
+                        <Route path="/mis/sales-marketing" element={<Navigate to={PATHS.MIS.SALES_DASHBOARD} replace />} />
+                        <Route path="/reports/product-gp" element={<Navigate to={PATHS.MIS.PRODUCT_GP} replace />} />
+
+                        <Route path={PATHS.REPORTS.PRODUCT_GP} element={<Navigate to={PATHS.MIS.PRODUCT_GP} replace />} />
                         <Route path={PATHS.REPORTS.REPLACEMENTS} element={<ProtectedRoute requirePermission="reports"><ReplacementReport /></ProtectedRoute>} />
                         <Route path={PATHS.REPORTS.SAMPLE_CONVERSION} element={<ProtectedRoute requirePermission="reports"><SampleConversionReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
+                        <Route path="/reports/incentive" element={<ProtectedRoute requirePermission="sales"><IncentiveReport /></ProtectedRoute>} />
                         <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />
                         <Route path="/reports/gstr3b" element={<ProtectedRoute requirePermission="admin.company_profile.view"><Gstr3bReportPage /></ProtectedRoute>} />
                         <Route path="/reports/gst-reconciliation" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstReconciliationPage /></ProtectedRoute>} />
@@ -357,6 +418,7 @@ const AppLayout = () => {
                         <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
                         <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
                         <Route path="/purchase/suppliers" element={<ProtectedRoute requirePermission="purchase"><SupplierListPage /></ProtectedRoute>} />
+                        <Route path="/distributors" element={<ProtectedRoute requirePermission="sales"><DistributorList /></ProtectedRoute>} />
                         <Route path="/purchase/orders" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderListPage /></ProtectedRoute>} />
                         <Route path="/purchase/orders/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
                         <Route path="/purchase/orders/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
@@ -377,14 +439,29 @@ const AppLayout = () => {
                         <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
-                        <Route path="/sales/credit-notes" element={<ProtectedRoute requirePermission="sales"><CreditNoteListPage /></ProtectedRoute>} />
-                        <Route path="/sales/debit-notes" element={<ProtectedRoute requirePermission="sales"><DebitNoteListPage /></ProtectedRoute>} />
-                        <Route path="/sales/credit-notes/new" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
-                        <Route path="/sales/debit-notes/new" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
-                        <Route path="/sales/credit-notes/edit/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
-                        <Route path="/sales/debit-notes/edit/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteFormPage /></ProtectedRoute>} />
-                        <Route path="/sales/credit-notes/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
-                        <Route path="/sales/debit-notes/:id" element={<ProtectedRoute requirePermission="sales"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.CREDIT_NOTES} element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditNoteListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.DEBIT_NOTES} element={<ProtectedRoute requirePermission="accounts.debit_notes.view || sales.sales_invoices.view"><DebitNoteListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.CREDIT_NOTE_DETAIL_PATTERN} element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.DEBIT_NOTE_DETAIL_PATTERN} element={<ProtectedRoute requirePermission="accounts.debit_notes.view || sales.sales_invoices.view"><CreditDebitNoteDetailPage /></ProtectedRoute>} />
+                        
+                        {/* New Routes for Form (Voucher Entry) */}
+                        <Route path="/voucher-entry/credit-notes/new" element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/voucher-entry/debit-notes/new" element={<ProtectedRoute requirePermission="accounts.debit_notes.view || sales.sales_invoices.view"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/voucher-entry/credit-notes/edit/:id" element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+                        <Route path="/voucher-entry/debit-notes/edit/:id" element={<ProtectedRoute requirePermission="accounts.debit_notes.view || sales.sales_invoices.view"><CreditDebitNoteFormPage /></ProtectedRoute>} />
+
+                        {/* Redirects for Credit/Debit Notes */}
+                        <Route path="/sales/credit-notes" element={<Navigate to={PATHS.ACCOUNTS.CREDIT_NOTES} replace />} />
+                        <Route path="/sales/debit-notes" element={<Navigate to={PATHS.ACCOUNTS.DEBIT_NOTES} replace />} />
+                        <Route path="/sales/credit-notes/new" element={<Navigate to="/voucher-entry/credit-notes/new" replace />} />
+                        <Route path="/sales/debit-notes/new" element={<Navigate to="/voucher-entry/debit-notes/new" replace />} />
+                        <Route path="/sales/credit-notes/edit/:id" element={<Navigate to="/voucher-entry/credit-notes/edit/:id" replace />} />
+                        <Route path="/sales/debit-notes/edit/:id" element={<Navigate to="/voucher-entry/debit-notes/edit/:id" replace />} />
+                        
+                        <Route path="/sales/credit-notes/:id" element={<ParamRedirect to="/voucher-entry/credit-notes" />} />
+                        <Route path="/sales/debit-notes/:id" element={<ParamRedirect to="/voucher-entry/debit-notes" />} />
+                        
+                        {/* Keep old routes temporarily if redirecting logic is not enough, but redirect is better */}
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.INVOICE_SERIES} element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.BULK_RENUMBER} element={<ProtectedRoute requireRole="admin"><BulkInvoiceRenumber /></ProtectedRoute>} />
@@ -416,9 +493,19 @@ const AppLayout = () => {
                         <Route path="/accounts/journal-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/vouchers" element={<ProtectedRoute requirePermission="accounts"><VoucherListPage /></ProtectedRoute>} />
                         <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute requirePermission="accounts"><CashBankMasterPage /></ProtectedRoute>} />
-                        <Route path="/accounts/masters/groups" element={<ProtectedRoute requirePermission="accounts"><GroupMasterPage /></ProtectedRoute>} />
-                        <Route path="/accounts/masters/ledgers" element={<ProtectedRoute requirePermission="accounts"><LedgerMasterPage /></ProtectedRoute>} />
-                        <Route path="/accounts/masters/voucher-types" element={<ProtectedRoute requirePermission="accounts"><VoucherTypeMasterPage /></ProtectedRoute>} />
+                        {/* Account Master Routes */}
+                        <Route path={PATHS.ACCOUNT_MASTER.GROUP_MASTER} element={<ProtectedRoute requirePermission="accounts"><GroupMasterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNT_MASTER.LEDGER_MASTER} element={<ProtectedRoute requirePermission="accounts"><LedgerMasterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNT_MASTER.FINANCIAL_YEAR} element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNT_MASTER.SERIES_MASTER} element={<ProtectedRoute requirePermission="accounts"><VoucherTypeMasterPage /></ProtectedRoute>} />
+
+                        {/* Legacy Redirects for Account Master */}
+                        <Route path="/accounts/masters/groups" element={<Navigate to={PATHS.ACCOUNT_MASTER.GROUP_MASTER} replace />} />
+                        <Route path="/accounts/masters/ledgers" element={<Navigate to={PATHS.ACCOUNT_MASTER.LEDGER_MASTER} replace />} />
+                        <Route path="/accounts/masters/voucher-types" element={<Navigate to={PATHS.ACCOUNT_MASTER.SERIES_MASTER} replace />} />
+                        <Route path="/accounts/masters/financial-years" element={<Navigate to={PATHS.ACCOUNT_MASTER.FINANCIAL_YEAR} replace />} />
+
+                        <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute requirePermission="accounts"><CashBankMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/ledger" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/sales-register" element={<ProtectedRoute requirePermission="accounts"><SalesRegisterPage /></ProtectedRoute>} />
                         <Route path="/accounts/reports/purchase-register" element={<ProtectedRoute requirePermission="accounts"><PurchaseRegisterPage /></ProtectedRoute>} />
@@ -433,7 +520,6 @@ const AppLayout = () => {
                         <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="mis.profit_loss.view"><ProfitAndLossPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="mis.balance_sheet.view"><BalanceSheetPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="mis.trial_balance.view"><TrialBalancePage /></ProtectedRoute>} />
-                        <Route path="/accounts/masters/financial-years" element={<ProtectedRoute requirePermission="accounts"><FinancialYearMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
                         <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
                         <Route path="/accounts/asset-categories" element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />

@@ -89,8 +89,7 @@ import ewayBillRoute from './ewayBill.routes.js';
 import gstReportRoute from './gstReport.routes.js';
 import gstReconciliationRoute from './gstReconciliation.routes.js';
 import backupRoute from './backup.routes.js';
-
-
+import distributorRoute from './distributor.route.js';
 
 const router = express.Router();
 
@@ -473,6 +472,10 @@ const defaultRoutes = [
     path: '/gst-reconciliation',
     route: gstReconciliationRoute,
   },
+    {
+        path: '/distributors',
+        route: distributorRoute,
+    },
 ];
 
 
