@@ -27,7 +27,13 @@ const createGroup = catchAsync(async (req, res) => {
 });
 
 const getLedgers = catchAsync(async (req, res) => {
+    const { search, underGroup, type, isCustomer, isSupplier, isBank, isCashLedger } = req.query;
     const filters = pick(req.query, ['underGroup', 'type', 'isCustomer', 'isSupplier', 'isBank', 'isCashLedger']);
+    
+    if (search) {
+        filters.name = { $regex: search, $options: 'i' };
+    }
+    
     const ledgers = await AccountLedger.find(filters).populate('underGroup', 'name').sort({ name: 1 });
     res.status(200).send(new ApiResponse(200, ledgers, 'Ledgers fetched successfully'));
 });

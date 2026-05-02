@@ -13,7 +13,7 @@ import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight, Upload, Download
 import styles from './CustomerList.module.scss';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { TableSkeleton, LedgerPickerModal, Badge } from '@/components/ui';
+import { TableSkeleton, Badge } from '@/components/ui';
 import axios from 'axios';
 
 export const CustomerList = () => {
@@ -189,23 +189,17 @@ export const CustomerList = () => {
         setFilter('currentPage', 1);
     };
 
-    const handleOpenLedgerPicker = (customer) => {
-        setSelectedCustomerForLedger(customer);
-        setShowLedgerModal(true);
-    };
-
-    const handleLinkLedger = async (ledger) => {
+    const handleAutoLink = async (customer) => {
+        const loadingToast = toast.loading('Linking to ledger...');
         try {
-            await axios.post('/api/v1/accounts/masters/ledger-link/manual', {
-                entityId: selectedCustomerForLedger._id,
-                entityType: 'Customer',
-                ledgerId: ledger._id
+            await axios.post('/api/v1/accounts/masters/ledger-link/auto-single', {
+                entityId: customer._id,
+                entityType: 'Customer'
             });
-            toast.success('Ledger linked successfully');
-            setShowLedgerModal(false);
+            toast.success('Linked successfully', { id: loadingToast });
             fetchCustomers();
         } catch (error) {
-            toast.error('Failed to link ledger');
+            toast.error(error.response?.data?.message || 'Failed to link ledger', { id: loadingToast });
         }
     };
 
@@ -366,9 +360,9 @@ export const CustomerList = () => {
                                                     <td>{customer.gstRegistrationType || '-'}</td>
                                                     <td>
                                                         {customer.ledgerId ? (
-                                                            <Badge variant="success" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(customer)}>Linked</Badge>
+                                                            <Badge variant="success" className="cursor-pointer" onClick={() => handleAutoLink(customer)}>Linked</Badge>
                                                         ) : (
-                                                            <Badge variant="warning" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(customer)}>Unlinked</Badge>
+                                                            <Badge variant="warning" className="cursor-pointer" onClick={() => handleAutoLink(customer)}>Unlinked</Badge>
                                                         )}
                                                     </td>
                                                     <td>
@@ -434,7 +428,7 @@ export const CustomerList = () => {
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            onClick={() => setFilter('currentPage', Math.max(1, currentPage - 1))}
                             disabled={currentPage === 1}
                         >
                             <ChevronLeft size={16} /> Previous
@@ -442,7 +436,7 @@ export const CustomerList = () => {
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            onClick={() => setFilter('currentPage', Math.min(totalPages, currentPage + 1))}
                             disabled={currentPage === totalPages}
                         >
                             Next <ChevronRight size={16} />
@@ -468,13 +462,6 @@ export const CustomerList = () => {
                 />
             )}
 
-            <LedgerPickerModal
-                isOpen={showLedgerModal}
-                onClose={() => setShowLedgerModal(false)}
-                onSelect={handleLinkLedger}
-                entityType="Customer"
-                initialSearch={selectedCustomerForLedger?.company || selectedCustomerForLedger?.customerName || ""}
-            />
 
         </div>
     );

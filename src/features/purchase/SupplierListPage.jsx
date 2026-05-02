@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getSuppliers, deleteSupplier, createSupplier, updateSupplier, importSuppliersExcel, downloadSupplierTemplate, generateSupplierCode } from '@/services/purchaseApi';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
-import { LedgerPickerModal, Badge } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import axios from 'axios';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
@@ -116,23 +116,17 @@ export default function SupplierListPage() {
         finally { setImporting(false); e.target.value = ''; }
     };
 
-    const handleOpenLedgerPicker = (supplier) => {
-        setSelectedSupplierForLedger(supplier);
-        setShowLedgerModal(true);
-    };
-
-    const handleLinkLedger = async (ledger) => {
+    const handleAutoLink = async (supplier) => {
+        const loadingToast = toast.loading('Linking to ledger...');
         try {
-            await axios.post('/api/v1/accounts/masters/ledger-link/manual', {
-                entityId: selectedSupplierForLedger._id,
-                entityType: 'Supplier',
-                ledgerId: ledger._id
+            await axios.post('/api/v1/accounts/masters/ledger-link/auto-single', {
+                entityId: supplier._id,
+                entityType: 'Supplier'
             });
-            toast.success('Ledger linked successfully');
-            setShowLedgerModal(false);
+            toast.success('Linked successfully', { id: loadingToast });
             load();
         } catch (error) {
-            toast.error('Failed to link ledger');
+            toast.error(error.response?.data?.message || 'Failed to link ledger', { id: loadingToast });
         }
     };
 
@@ -192,9 +186,9 @@ export default function SupplierListPage() {
                                 <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{s.gstNumber || '—'}</td>
                                 <td style={td}>
                                     {s.ledgerId ? (
-                                        <Badge variant="success" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(s)}>Linked</Badge>
+                                        <Badge variant="success" className="cursor-pointer" onClick={() => handleAutoLink(s)}>Linked</Badge>
                                     ) : (
-                                        <Badge variant="warning" className="cursor-pointer" onClick={() => handleOpenLedgerPicker(s)}>Unlinked</Badge>
+                                        <Badge variant="warning" className="cursor-pointer" onClick={() => handleAutoLink(s)}>Unlinked</Badge>
                                     )}
                                 </td>
                                 <td style={{ ...td, fontWeight: 700, color: (s.openingBalance || 0) > 0 ? '#059669' : '#6b7280' }}>
@@ -381,13 +375,6 @@ export default function SupplierListPage() {
                 </div>
             )}
 
-            <LedgerPickerModal
-                isOpen={showLedgerModal}
-                onClose={() => setShowLedgerModal(false)}
-                onSelect={handleLinkLedger}
-                entityType="Supplier"
-                initialSearch={selectedSupplierForLedger?.supplierName || ""}
-            />
         </div>
     );
 }

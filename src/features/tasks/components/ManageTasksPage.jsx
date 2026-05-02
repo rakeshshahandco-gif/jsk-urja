@@ -298,7 +298,7 @@ const ManageTasksPage = () => {
                 </button>
 
                 {viewMode === 'existing' && (
-                    <select style={{ ...s.sel, marginLeft: 'auto' }} value={pagination.limit} onChange={e => setPagination(p => ({ ...p, limit: Number(e.target.value), page: 1 }))}>
+                    <select style={{ ...s.sel, marginLeft: 'auto' }} value={limit} onChange={e => setFilter('limit', Number(e.target.value))}>
                         <option value={15}>15 / page</option>
                         <option value={25}>25 / page</option>
                         <option value={50}>50 / page</option>
@@ -329,15 +329,15 @@ const ManageTasksPage = () => {
                         />
                     </div>
 
-                    {!loading && pagination.total > 0 && (
+                    {!loading && total > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, color: '#6b7280' }}>
-                                {((pagination.page - 1) * pagination.limit) + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+                                {((page - 1) * limit) + 1}–{Math.min(page * limit, total)} of {total}
                             </span>
                             <button
-                                disabled={pagination.page <= 1}
-                                onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page <= 1 ? 0.4 : 1 }}
+                                disabled={page <= 1}
+                                onClick={() => setFilter('page', page - 1)}
+                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page <= 1 ? 0.4 : 1 }}
                             >
                                 <ChevronLeft size={13} />
                             </button>
@@ -346,17 +346,17 @@ const ManageTasksPage = () => {
                                 return (
                                     <button
                                         key={pg}
-                                        onClick={() => setPagination(p => ({ ...p, page: pg }))}
-                                        style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: pagination.page === pg ? '#0d9488' : '#fff', color: pagination.page === pg ? '#fff' : '#374151' }}
+                                        onClick={() => setFilter('page', pg)}
+                                        style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: page === pg ? '#0d9488' : '#fff', color: page === pg ? '#fff' : '#374151' }}
                                     >
                                         {pg}
                                     </button>
                                 );
                             })}
                             <button
-                                disabled={pagination.page >= totalPages}
-                                onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: pagination.page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: pagination.page >= totalPages ? 0.4 : 1 }}
+                                disabled={page >= totalPages}
+                                onClick={() => setFilter('page', page + 1)}
+                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page >= totalPages ? 0.4 : 1 }}
                             >
                                 <ChevronRight size={13} />
                             </button>

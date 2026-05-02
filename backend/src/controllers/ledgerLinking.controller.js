@@ -12,8 +12,18 @@ import mongoose from 'mongoose';
  * Preview auto-linking for all customers and suppliers
  */
 export const previewAutoLink = asyncHandler(async (req, res) => {
-    const customers = await Customer.find({ isDeleted: { $ne: true } }).lean();
-    const suppliers = await Supplier.find({ isDeleted: { $ne: true } }).lean();
+    const customers = await Customer.find({ 
+        $or: [
+            { isDeleted: { $ne: true } },
+            { isDeleted: { $exists: false } }
+        ]
+    }).lean();
+    const suppliers = await Supplier.find({ 
+        $or: [
+            { isDeleted: { $ne: true } },
+            { isDeleted: { $exists: false } }
+        ]
+    }).lean();
 
     const results = {
         customers: [],
@@ -31,6 +41,7 @@ export const previewAutoLink = asyncHandler(async (req, res) => {
     };
 
     // Process Customers
+    console.log(`[LedgerLink] Scanning ${customers.length} customers...`);
     for (const c of customers) {
         const name = c.company || c.customerName;
         const city = c.city || '';
@@ -38,7 +49,7 @@ export const previewAutoLink = asyncHandler(async (req, res) => {
         const mobile = primaryContact?.mobile || '';
         const email = c.companyEmail || primaryContact?.email || '';
 
-        if (c.ledgerId) {
+        if (c.ledgerId && c.ledgerId.toString() !== '') {
             results.summary.customersAlreadyLinked++;
             continue;
         }
@@ -74,8 +85,9 @@ export const previewAutoLink = asyncHandler(async (req, res) => {
     }
 
     // Process Suppliers
+    console.log(`[LedgerLink] Scanning ${suppliers.length} suppliers...`);
     for (const s of suppliers) {
-        if (s.ledgerId) {
+        if (s.ledgerId && s.ledgerId.toString() !== '') {
             results.summary.suppliersAlreadyLinked++;
             continue;
         }
@@ -117,8 +129,22 @@ export const previewAutoLink = asyncHandler(async (req, res) => {
  * Apply auto-linking for all customers and suppliers
  */
 export const applyAutoLink = asyncHandler(async (req, res) => {
-    const customers = await Customer.find({ isDeleted: { $ne: true }, ledgerId: null });
-    const suppliers = await Supplier.find({ isDeleted: { $ne: true }, ledgerId: null });
+    const customers = await Customer.find({ 
+        isDeleted: { $ne: true }, 
+        $or: [
+            { ledgerId: null },
+            { ledgerId: { $exists: false } },
+            { ledgerId: "" }
+        ]
+    });
+    const suppliers = await Supplier.find({ 
+        isDeleted: { $ne: true }, 
+        $or: [
+            { ledgerId: null },
+            { ledgerId: { $exists: false } },
+            { ledgerId: "" }
+        ]
+    });
 
     const stats = {
         customersLinked: 0,
@@ -159,4 +185,34 @@ export const applyAutoLink = asyncHandler(async (req, res) => {
     }
 
     res.json(new ApiResponse(200, stats, 'Auto-linking completed'));
+});
+
+/**
+ * Auto-link a single entity (Customer or Supplier)
+ */
+export const autoLinkSingle = asyncHandler(async (req, res) => {
+    const { entityId, entityType } = req.body;
+
+    if (!entityId || !entityType) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Entity ID and Type are required');
+    }
+
+    let entity;
+    if (entityType === 'Customer') {
+        entity = await Customer.findById(entityId);
+    } else if (entityType === 'Supplier') {
+        entity = await Supplier.findById(entityId);
+    }
+
+    if (!entity) {
+        throw new ApiError(httpStatus.NOT_FOUND, `${entityType} not found`);
+    }
+
+    const ledgerId = await autoLinkEntityLedger(entity, entityType);
+    
+    if (!ledgerId) {
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to auto-link ledger');
+    }
+
+    res.json(new ApiResponse(200, { ledgerId }, `${entityType} linked successfully`));
 });

@@ -21,5 +21,6 @@ router.delete('/ledgers/:id', accountMasterController.deleteLedger);
 router.post('/ledger-link/manual', accountMasterController.linkEntityLedger);
 router.get('/ledger-link/preview', ledgerLinkingController.previewAutoLink);
 router.post('/ledger-link/apply', ledgerLinkingController.applyAutoLink);
+router.post('/ledger-link/auto-single', ledgerLinkingController.autoLinkSingle);
 
 export default router;
