@@ -386,11 +386,25 @@ export default function SalesInvoiceDetailPage() {
                                             <div style={{ padding: '0' }}>
                                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
                                                     <tbody>
+                                                         {!isEstimate && (
+                                                            <>
+                                                                <tr>
+                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Item Value</td>
+                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalTaxableAmount - (inv.freightAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                </tr>
+                                                                {Number(inv.freightAmount || 0) > 0 && (
+                                                                    <tr>
+                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ Freight / Shipping</td>
+                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {Number(inv.freightAmount).toFixed(2)}</td>
+                                                                    </tr>
+                                                                )}
+                                                            </>
+                                                        )}
                                                         <tr>
-                                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Taxable Value</td>
+                                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontWeight: 700 }}>{isEstimate ? 'Total Estimated Price' : 'Total Taxable Value'}</td>
                                                             <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                         </tr>
-                                                        {gstApplicable && (
+                                                        {!isEstimate && gstApplicable && (
                                                             isIGST ? (
                                                                 <tr>
                                                                     <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ IGST @ {inv.items?.[0]?.taxRate || 18}%</td>
@@ -408,12 +422,6 @@ export default function SalesInvoiceDetailPage() {
                                                                     </tr>
                                                                 </>
                                                             )
-                                                        )}
-                                                        {Number(inv.freightAmount || 0) > 0 && (
-                                                            <tr>
-                                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ Freight / Shipping</td>
-                                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {Number(inv.freightAmount).toFixed(2)}</td>
-                                                            </tr>
                                                         )}
                                                         {inv.roundOff !== 0 && (
                                                             <tr>
