@@ -12,6 +12,12 @@ router.get('/gstr3b-summary', checkPermission('gst.gstr3b.view'), gstCtrl.getGST
 router.get('/gstr3b-adjustment', checkPermission('gst.gstr3b.view'), gstCtrl.getGSTR3BAdjustment);
 router.post('/gstr3b-adjustment', checkPermission('gst.gstr3b.view'), gstCtrl.saveGSTR3BAdjustment);
 
+// New Reports
+router.get('/itc-register', checkPermission('admin.company_profile.view'), gstCtrl.getItcRegister);
+router.get('/payable-summary', checkPermission('admin.company_profile.view'), gstCtrl.getGstPayableSummary);
+router.get('/hsn-summary', checkPermission('admin.company_profile.view'), gstCtrl.getHsnSummary);
+router.get('/ledger', checkPermission('admin.company_profile.view'), gstCtrl.getGstLedger);
+
 // Admin Utility for Missing Place of Supply
 router.get('/missing-pos-preview', authorize('superadmin', 'admin'), gstCtrl.getMissingPosPreview);
 router.post('/sync-missing-pos', authorize('superadmin', 'admin'), gstCtrl.syncMissingPos);

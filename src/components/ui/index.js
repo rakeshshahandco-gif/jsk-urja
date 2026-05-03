@@ -12,3 +12,4 @@ export { default as SearchableSelect } from './SearchableSelect';
 export * from './Tabs';
 export * from './BrandedLoading';
 export * from './LedgerPickerModal';
+export * from './PlaceholderPage';

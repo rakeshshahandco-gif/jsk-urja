@@ -11,6 +11,7 @@ import { ROLE_CONFIG } from '@/utils/permissions';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
 import { NotificationSettingsForm } from './NotificationSettingsForm';
 import { menuConfig } from '@/config/menu.config';
+import { PATHS } from '@/routes/paths';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { Calendar, Monitor, CheckCircle, AlertCircle, Settings } from 'lucide-react';
 import { getNotificationPermission, requestNotificationPermission, isNotificationSupported } from '@/utils/browserNotification';
@@ -42,24 +43,59 @@ export const Header = () => {
     };
 
 
-    // Dynamic page title logic
-    const pageTitle = useMemo(() => {
+    // Dynamic breadcrumb logic
+    const breadcrumb = useMemo(() => {
         const path = location.pathname;
-        let title = '';
+        
+        // Helper to get module home path
+        const getModuleHomePath = (it) => {
+            const id = it.id?.toUpperCase().replace(/-/g, '_');
+            const specialMappings = {
+                'CRM': PATHS.CRM?.HOME,
+                'ACCOUNT_MASTER_PARENT': PATHS.ACCOUNT_MASTER?.HOME,
+                'GST_MENU': PATHS.GST?.HOME,
+                'MIS_REPORTS': PATHS.MIS?.HOME,
+                'FIXED_ASSETS_PARENT': PATHS.FIXED_ASSETS?.HOME,
+                'CHINA_SUPPLIER': PATHS.CHINA_SUPPLIER?.HOME,
+                'RD_SAMPLES': PATHS.RD_SAMPLES?.HOME,
+            };
+            if (specialMappings[id]) return specialMappings[id];
+            if (PATHS[id] && PATHS[id].HOME) return PATHS[id].HOME;
+            return null;
+        };
 
-        const findTitle = (items) => {
+        const findBreadcrumb = (items, parent = null) => {
             for (const item of items) {
-                if (item.path === path) return item.title;
+                if (item.path === path) {
+                    return {
+                        title: item.title,
+                        parentTitle: parent ? parent.title : null,
+                        parentPath: parent ? getModuleHomePath(parent) : null
+                    };
+                }
                 if (item.children) {
-                    const childTitle = findTitle(item.children);
-                    if (childTitle) return childTitle;
+                    const result = findBreadcrumb(item.children, parent || item);
+                    if (result) return result;
                 }
             }
             return null;
         };
 
-        title = findTitle(menuConfig);
-        return title || 'Home';
+        const result = findBreadcrumb(menuConfig);
+        
+        // Handle module home pages
+        if (!result && path.endsWith('/home')) {
+            const parentItem = menuConfig.find(item => getModuleHomePath(item) === path);
+            if (parentItem) {
+                return {
+                    title: `${parentItem.title} - Home`,
+                    parentTitle: null,
+                    parentPath: null
+                };
+            }
+        }
+
+        return result || { title: 'Home', parentTitle: null, parentPath: null };
     }, [location.pathname]);
 
     // User initials for avatar
@@ -119,13 +155,23 @@ export const Header = () => {
                     {location.pathname !== '/' && (
                         <button 
                             className={styles.backToDashboard} 
-                            onClick={() => navigate('/')}
-                            title="Back to Home"
+                            onClick={() => navigate(breadcrumb.parentPath || '/')}
+                            title={breadcrumb.parentTitle ? `Back to ${breadcrumb.parentTitle}` : "Back to Home"}
                         >
                             <LayoutDashboard size={18} />
                         </button>
                     )}
-                    <h2 className={styles.pageTitle}>{pageTitle}</h2>
+                    <h2 className={styles.pageTitle}>
+                        {breadcrumb.parentTitle ? (
+                            <>
+                                <span className={styles.parentTitle}>{breadcrumb.parentTitle}</span>
+                                <span className={styles.separator}> / </span>
+                                <span>{breadcrumb.title}</span>
+                            </>
+                        ) : (
+                            <span>{breadcrumb.title}</span>
+                        )}
+                    </h2>
                 </div>
 
                 <div className={styles.userSection}>

@@ -292,3 +292,50 @@ export async function getGSTR3BAdjustment(req, res) {
     res.status(500).json({ success: false, message: error.message });
   }
 }
+
+import * as calcService from '../services/gstCalculations.service.js';
+
+export async function getItcRegister(req, res) {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        const data = await calcService.getItcRegister(startDate, endDate);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+export async function getGstPayableSummary(req, res) {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        const data = await calcService.getGstPayableSummary(startDate, endDate);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+export async function getHsnSummary(req, res) {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        const data = await calcService.getHsnSummary(startDate, endDate);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+export async function getGstLedger(req, res) {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+        const data = await calcService.getGstLedger(startDate, endDate);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+

@@ -11,7 +11,7 @@ import * as svc from '../services/salesConversion.service.js';
 const catchAsync = (fn) => (req, res, next) =>
     Promise.resolve(fn(req, res, next)).catch(next);
 
-const FILTER_FIELDS = ['fromDate', 'toDate', 'fy', 'salesperson', 'customer', 'item', 'itemGroup', 'source', 'customerType', 'paymentStatus', 'highValueThreshold'];
+const FILTER_FIELDS = ['fromDate', 'toDate', 'fy', 'salesperson', 'customer', 'item', 'itemGroup', 'source', 'customerType', 'paymentStatus', 'highValueThreshold', 'viewBy'];
 const PAGE_FIELDS   = ['page', 'limit', 'sortBy'];
 
 // 1. Full Sales Conversion Funnel
@@ -70,4 +70,12 @@ export const getPaymentReceivedAnalysis = catchAsync(async (req, res) => {
     const filters = pick(req.query, FILTER_FIELDS);
     const data = await svc.getPaymentReceivedAnalysis(filters);
     res.json(new ApiResponse(200, data, 'Payment received analysis fetched successfully'));
+});
+
+// 9. Customer Deep Dive Analysis
+export const getCustomerDeepDiveAnalysis = catchAsync(async (req, res) => {
+    const filters = pick(req.query, FILTER_FIELDS);
+    const customerId = req.params.customerId;
+    const data = await svc.getCustomerDeepDiveAnalysis(customerId, filters);
+    res.json(new ApiResponse(200, data, 'Customer deep dive analysis fetched successfully'));
 });

@@ -8,6 +8,7 @@ import { Header } from './components/layout/Header';
 import { Button, Input, Select, ModalProvider, useModal } from '@/components/ui';
 import { SidebarProvider, useSidebar } from './context/SidebarContext';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { PlaceholderPage } from '@/components/ui/PlaceholderPage';
 import { CustomerList } from '@/features/customers/components';
 import { AddCustomerPage } from '@/features/customers/components/AddCustomerPage';
 import { FollowUpForm, FollowupDashboard } from '@/features/followup/components';
@@ -110,6 +111,7 @@ const LedgerMasterPage = lazy(() => import('./features/accounts/LedgerMasterPage
 const VoucherTypeMasterPage = lazy(() => import('./features/accounts/VoucherTypeMasterPage'));
 const SalesRegisterPage = lazy(() => import('./features/accounts/SalesRegisterPage'));
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'));
+const ModuleHomePage = lazy(() => import('./features/dashboard/components/ModuleHomePage'));
 const PurchaseRegisterPage = lazy(() => import('./features/accounts/PurchaseRegisterPage'));
 const ExpenseRegisterPage = lazy(() => import('./features/accounts/ExpenseRegisterPage'));
 const FinancialYearMasterPage = lazy(() => import('./features/accounts/FinancialYearMasterPage.jsx'));
@@ -176,6 +178,10 @@ import SalaryWorkingReport from '@/features/hr/components/SalaryWorkingReport';
 import GstrReportPage from '@/features/reports/GstrReportPage';
 import Gstr3bReportPage from '@/features/reports/Gstr3bReportPage';
 import GstReconciliationPage from '@/features/gst-reconciliation/GstReconciliationPage';
+import ItcRegisterPage from '@/features/reports/gst/ItcRegisterPage';
+import GstPayableSummary from '@/features/reports/gst/GstPayableSummary';
+import HsnSummaryPage from '@/features/reports/gst/HsnSummaryPage';
+import GstLedgerPage from '@/features/reports/gst/GstLedgerPage';
 
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
@@ -353,7 +359,33 @@ const AppLayout = () => {
                 >
                     <ErrorBoundary>
                         <Routes>
-                            <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                        <Route path="/" element={<ProtectedRoute><ModuleHomePage moduleName="dashboard" title="Home" subtitle="Your Global Shortcuts" isStatic={false} /></ProtectedRoute>} />
+                        
+                        {/* Module Home Pages - Static */}
+                        <Route path={PATHS.SALES.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Sales" title="Sales - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Purchase" title="Purchase - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.INVENTORY.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Inventory" title="Inventory - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Production" title="Production - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNT_MASTER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Account Master" title="Account Master - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.VOUCHER_ENTRY.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Voucher Entry" title="Voucher Entry - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Accounts" title="Accounts - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="GST" title="GST - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.MIS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="MIS Reports" title="MIS Reports - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.CRM.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="CRM" title="CRM - Home" isStatic={true} /></ProtectedRoute>} />
+                        
+                        {/* Other modules can stay dynamic or be made static as needed */}
+                        <Route path={PATHS.HR.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="HR Management" title="HR Management - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.SERVICE.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Service" title="Service - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.PRD.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Product R&D" title="Product R&D - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.RD_SAMPLES.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="R&D Samples" title="R&D Samples - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path="/tasks/home" element={<ProtectedRoute><ModuleHomePage moduleName="Task Management" title="Task Management - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path="/admin/home" element={<ProtectedRoute><ModuleHomePage moduleName="Admin" title="Admin - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.CHINA_SUPPLIER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="China Sourcing" title="China Sourcing - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.EWAY_BILL.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="eway-bill" title="E-Way Bills - Home" isStatic={false} /></ProtectedRoute>} />
+                        <Route path={PATHS.TRANSPORTERS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="transporters" title="Transporters - Home" isStatic={false} /></ProtectedRoute>} />
+                        <Route path={PATHS.MESSENGER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="messenger" title="Messenger - Home" isStatic={false} /></ProtectedRoute>} />
+                        <Route path={PATHS.WECHAT.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="wechat" title="WeChat - Home" isStatic={false} /></ProtectedRoute>} />
+
                         <Route path="/customers" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/customers/list" element={<ProtectedRoute requirePermission="view_customers"><CustomerList /></ProtectedRoute>} />
                         <Route path="/followups" element={<ProtectedRoute requirePermission="customers"><FollowupDashboard /></ProtectedRoute>} />
@@ -394,6 +426,12 @@ const AppLayout = () => {
                         <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />
                         <Route path="/reports/gstr3b" element={<ProtectedRoute requirePermission="admin.company_profile.view"><Gstr3bReportPage /></ProtectedRoute>} />
                         <Route path="/reports/gst-reconciliation" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstReconciliationPage /></ProtectedRoute>} />
+                        
+                        {/* New GST Reports */}
+                        <Route path="/reports/gst-payable" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstPayableSummary /></ProtectedRoute>} />
+                        <Route path="/reports/gst/itc-register" element={<ProtectedRoute requirePermission="admin.company_profile.view"><ItcRegisterPage /></ProtectedRoute>} />
+                        <Route path="/reports/gst/hsn-summary" element={<ProtectedRoute requirePermission="admin.company_profile.view"><HsnSummaryPage /></ProtectedRoute>} />
+                        <Route path="/reports/gst/ledger" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstLedgerPage /></ProtectedRoute>} />
                         <Route path="/reports/task-reminders" element={<ProtectedRoute requirePermission="tasks"><TaskReminderReport /></ProtectedRoute>} />
                         <Route path="/task-chats" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
                         <Route path="/task-chats/:taskId" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
@@ -522,10 +560,16 @@ const AppLayout = () => {
                         <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="mis.profit_loss.view"><ProfitAndLossPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/balance-sheet" element={<ProtectedRoute requirePermission="mis.balance_sheet.view"><BalanceSheetPage /></ProtectedRoute>} />
                         <Route path="/mis/reports/trial-balance" element={<ProtectedRoute requirePermission="mis.trial_balance.view"><TrialBalancePage /></ProtectedRoute>} />
-                        <Route path="/accounts/fixed-assets" element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
-                        <Route path="/accounts/fixed-assets/:id" element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
-                        <Route path="/accounts/asset-categories" element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />
-                        <Route path="/accounts/asset-locations" element={<ProtectedRoute requirePermission="accounts"><AssetLocationPage /></ProtectedRoute>} />
+                        <Route path={PATHS.FIXED_ASSETS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Fixed Assets" title="Fixed Assets - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.FIXED_ASSETS.LIST} element={<ProtectedRoute requirePermission="accounts"><FixedAssetMasterPage /></ProtectedRoute>} />
+                        <Route path={`${PATHS.FIXED_ASSETS.LIST}/:id`} element={<ProtectedRoute requirePermission="accounts"><AssetDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.FIXED_ASSETS.CATEGORIES} element={<ProtectedRoute requirePermission="accounts"><AssetCategoryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.FIXED_ASSETS.LOCATIONS} element={<ProtectedRoute requirePermission="accounts"><AssetLocationPage /></ProtectedRoute>} />
+
+                        {/* Legacy Redirects for Fixed Assets */}
+                        <Route path="/accounts/fixed-assets" element={<Navigate to={PATHS.FIXED_ASSETS.LIST} replace />} />
+                        <Route path="/accounts/asset-categories" element={<Navigate to={PATHS.FIXED_ASSETS.CATEGORIES} replace />} />
+                        <Route path="/accounts/asset-locations" element={<Navigate to={PATHS.FIXED_ASSETS.LOCATIONS} replace />} />
                         <Route path="prd/dashboard" element={<ProtectedRoute requirePermission="prd"><PrdDashboard /></ProtectedRoute>} />
                         <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
                         <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />

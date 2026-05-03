@@ -23,6 +23,8 @@ export const PATHS = {
         REGISTER: '/auth/register',
     },
     SETTINGS: {
+        ROOT: '/admin',
+        HOME: '/admin/home',
         COMPANY_PROFILE: '/company-profile',
         WHATSAPP: '/whatsapp',
     },
@@ -34,6 +36,8 @@ export const PATHS = {
         GROUPS: '/tasks/groups',
     },
     INVENTORY: {
+        ROOT: '/inventory',
+        HOME: '/inventory/home',
         ITEMS: '/inventory/items',
         NEW_ITEM: '/inventory/items/new',
         EDIT_ITEM: (id) => `/inventory/items/${id}`,
@@ -46,6 +50,8 @@ export const PATHS = {
         },
     },
     PRODUCTION: {
+        ROOT: '/production',
+        HOME: '/production/home',
         DASHBOARD: '/production',
         WORK_ORDERS: '/production/work-orders',
         NEW_WO: '/production/work-orders/new',
@@ -57,6 +63,8 @@ export const PATHS = {
         }
     },
     PURCHASE: {
+        ROOT: '/purchase',
+        HOME: '/purchase/home',
         SUPPLIERS: '/purchase/suppliers',
         ORDERS: '/purchase/orders',
         NEW_ORDER: '/purchase/orders/new',
@@ -72,6 +80,8 @@ export const PATHS = {
         PURCHASE_REPORT: '/reports/purchase-comparison',
     },
     SALES: {
+        ROOT: '/sales',
+        HOME: '/sales/home',
         DASHBOARD: '/sales',
         ORDERS: '/sales/orders',
         NEW_ORDER: '/sales/orders/new',
@@ -87,20 +97,24 @@ export const PATHS = {
         CREDIT_NOTES: '/sales/credit-notes',
         DEBIT_NOTES: '/sales/debit-notes',
         CREDIT_NOTE_DETAIL: (id) => `/sales/credit-notes/${id}`,
-        DEBIT_NOTE_DETAIL: (id) => `/sales/debit-notes/${id}`,
+        DEBIT_NOTE_DETAIL: (id) => `/sales/credit-notes/${id}`,
     },
     SERVICE: {
+        ROOT: '/service',
+        HOME: '/service/home',
         COMPLAINTS: '/service/complaints',
         REPLACEMENT_DASHBOARD: '/service/replacement-dashboard',
     },
     PRD: {
         ROOT: '/prd',
+        HOME: '/prd/home',
         PROJECTS: '/prd/projects',
         DASHBOARD: '/prd/dashboard',
         TEST_PARAMETERS: '/prd/test-parameters',
     },
     ACCOUNT_MASTER: {
         ROOT: '/account-master',
+        HOME: '/account-master/home',
         GROUP_MASTER: '/account-master/groups',
         LEDGER_MASTER: '/account-master/ledgers',
         FINANCIAL_YEAR: '/account-master/financial-years',
@@ -108,6 +122,7 @@ export const PATHS = {
     },
     ACCOUNTS: {
         ROOT: '/accounts',
+        HOME: '/accounts/home',
         RECEIPT_ENTRY: '/accounts/receipt-entry',
         PAYMENT_ENTRY: '/accounts/payment-entry',
         EXPENSE_ENTRY: '/accounts/expense-entry',
@@ -132,11 +147,17 @@ export const PATHS = {
         CASH_BOOK: '/accounts/reports/cash-book',
         BANK_BOOK: '/accounts/reports/bank-book',
         OUTSTANDING_REPORT: '/accounts/reports/outstanding',
-        FIXED_ASSETS: '/accounts/fixed-assets',
-        ASSET_CATEGORIES: '/accounts/asset-categories',
-        ASSET_LOCATIONS: '/accounts/asset-locations',
+    },
+    FIXED_ASSETS: {
+        ROOT: '/fixed-assets',
+        HOME: '/fixed-assets/home',
+        LIST: '/fixed-assets/list',
+        CATEGORIES: '/fixed-assets/categories',
+        LOCATIONS: '/fixed-assets/locations',
     },
     MIS: {
+        ROOT: '/mis',
+        HOME: '/mis/home',
         SALES_DASHBOARD: '/mis/sales-dashboard',
         PRODUCT_GP: '/mis/product-gp-analysis',
         SALES_CONVERSION: '/mis/sales-conversion',
@@ -144,6 +165,7 @@ export const PATHS = {
     },
     HR: {
         ROOT: '/hr',
+        HOME: '/hr/home',
         DASHBOARD: '/hr/dashboard',
         EMPLOYEES: '/hr/employees',
         SHIFTS: '/hr/shifts',
@@ -155,20 +177,24 @@ export const PATHS = {
     },
     MESSENGER: {
         ROOT: '/messenger',
+        HOME: '/messenger/home',
         THREAD: (id) => `/messenger/${id}`,
     },
     RD_SAMPLES: {
         ROOT: '/rd-samples',
+        HOME: '/rd-samples/home',
         PROJECTS: '/rd-samples/projects',
         SAMPLES: '/rd-samples/samples',
         COMPARISON: '/rd-samples/comparison',
     },
     WECHAT: {
         ROOT: '/wechat',
+        HOME: '/wechat/home',
         CONTACTS: '/wechat/contacts',
     },
     CHINA_SUPPLIER: {
         ROOT: '/china-supplier',
+        HOME: '/china-supplier/home',
         DASHBOARD: '/china-supplier/dashboard',
         PRODUCTS: '/china-supplier/products',
         CONTACTS: '/china-supplier/contacts',
@@ -179,13 +205,25 @@ export const PATHS = {
     },
     EWAY_BILL: {
         ROOT: '/eway-bills',
+        HOME: '/eway-bills/home',
         LIST: '/eway-bills/list',
         DRAFT: (id) => `/eway-bills/draft/${id}`,
     },
     TRANSPORTERS: {
         ROOT: '/transporters',
+        HOME: '/transporters/home',
         LIST: '/transporters/list',
+    },
+    GST: {
+        ROOT: '/gst',
+        HOME: '/gst/home'
+    },
+    VOUCHER_ENTRY: {
+        ROOT: '/voucher-entry',
+        HOME: '/voucher-entry/home'
+    },
+    CRM: {
+        ROOT: '/crm',
+        HOME: '/crm/home'
     }
 };
-
-

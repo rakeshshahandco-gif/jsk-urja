@@ -378,7 +378,7 @@ export const getCustomerWiseSalesAnalysis = async (filters, options = {}) => {
     { $match: match },
     {
       $group: {
-        _id: '$customerId',
+        _id: { $ifNull: ['$customerId', '$customerName'] },
         invoiceCount: { $sum: 1 },
         totalValue: { $sum: '$grandTotal' },
         totalPaid: { $sum: '$paidAmount' },
@@ -390,6 +390,15 @@ export const getCustomerWiseSalesAnalysis = async (filters, options = {}) => {
     {
       $addFields: {
         outstanding: { $subtract: ['$totalValue', '$totalPaid'] },
+        outstandingPct: { $cond: [{ $gt: ['$totalValue', 0] }, { $multiply: [{ $divide: [{ $subtract: ['$totalValue', '$totalPaid'] }, '$totalValue'] }, 100] }, 0] },
+        repeatOrders: { $cond: [{ $gt: ['$invoiceCount', 1] }, { $subtract: ['$invoiceCount', 1] }, 0] },
+        averageInvoiceValue: { $cond: [{ $gt: ['$invoiceCount', 0] }, { $divide: ['$totalValue', '$invoiceCount'] }, 0] },
+        paymentBehaviour: {
+           $cond: [
+               { $lte: [{ $subtract: ['$totalValue', '$totalPaid'] }, 10] }, 'Good',
+               { $cond: [{ $lt: [{ $divide: ['$totalPaid', '$totalValue'] }, 0.5] }, 'Delayed', 'Average'] }
+           ]
+        },
         classification: { $cond: [{ $gt: ['$totalValue', 100000] }, 'Premium', 'Standard'] }
       }
     },
@@ -516,5 +525,144 @@ export const getPaymentReceivedAnalysis = async (filters) => {
     ],
     customerBehaviorSummary: [],
     monthlyRealization: []
+  };
+};
+
+/**
+ * 9. CUSTOMER DEEP DIVE ANALYSIS
+ * Detailed view for a specific customer.
+ */
+export const getCustomerDeepDiveAnalysis = async (customerId, filters) => {
+  const { match, fyName, dateRange } = await resolveFilters(filters);
+  
+  const baseMatch = { isDeleted: false };
+  if (mongoose.isValidObjectId(customerId)) {
+      baseMatch.customerId = new mongoose.Types.ObjectId(customerId);
+  } else {
+      baseMatch.customerName = customerId;
+  }
+
+  if (fyName) baseMatch.financialYear = fyName;
+  else if (dateRange) baseMatch.invoiceDate = dateRange;
+
+  // Basic stats
+  const basicStats = await SalesInvoice.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: null,
+        invoiceCount: { $sum: 1 },
+        totalValue: { $sum: '$grandTotal' },
+        totalPaid: { $sum: '$paidAmount' },
+        firstInvoice: { $min: '$invoiceDate' },
+        lastInvoice: { $max: '$invoiceDate' },
+        customerName: { $first: '$customerName' }
+      }
+    },
+    {
+      $addFields: {
+        outstanding: { $subtract: ['$totalValue', '$totalPaid'] },
+        repeatOrders: { $cond: [{ $gt: ['$invoiceCount', 1] }, { $subtract: ['$invoiceCount', 1] }, 0] },
+        averageInvoiceValue: { $cond: [{ $gt: ['$invoiceCount', 0] }, { $divide: ['$totalValue', '$invoiceCount'] }, 0] },
+        paymentBehaviour: {
+           $cond: [
+               { $lte: [{ $subtract: ['$totalValue', '$totalPaid'] }, 10] }, 'Good',
+               { $cond: [{ $lt: [{ $divide: ['$totalPaid', '$totalValue'] }, 0.5] }, 'Delayed', 'Average'] }
+           ]
+        },
+        segment: { $cond: [{ $gt: ['$totalValue', 100000] }, 'Premium', 'Standard'] }
+      }
+    }
+  ]);
+
+  // Sales Trend (Monthly or Weekly)
+  const viewBy = filters.viewBy || 'Monthly'; // 'Weekly' or 'Monthly'
+  let trendFormat = "%Y-%m"; // Default Monthly
+  if (viewBy === 'Weekly') trendFormat = "%Y-%U";
+
+  const salesTrend = await SalesInvoice.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: { $dateToString: { format: trendFormat, date: "$invoiceDate" } },
+        sales: { $sum: '$grandTotal' },
+        date: { $min: '$invoiceDate' }
+      }
+    },
+    { $sort: { date: 1 } }
+  ]);
+
+  // Period Comparison (3M, 6M, 12M)
+  const now = new Date();
+  const m3 = new Date(now); m3.setMonth(now.getMonth() - 3);
+  const m6 = new Date(now); m6.setMonth(now.getMonth() - 6);
+  const m12 = new Date(now); m12.setMonth(now.getMonth() - 12);
+
+  const periodComparisonMatch = { isDeleted: false, invoiceDate: { $gte: m12 } };
+  if (mongoose.isValidObjectId(customerId)) {
+      periodComparisonMatch.customerId = new mongoose.Types.ObjectId(customerId);
+  } else {
+      periodComparisonMatch.customerName = customerId;
+  }
+  
+  const periodData = await SalesInvoice.aggregate([
+    { $match: periodComparisonMatch },
+    {
+      $group: {
+        _id: null,
+        last3M: { $sum: { $cond: [{ $gte: ['$invoiceDate', m3] }, '$grandTotal', 0] } },
+        last6M: { $sum: { $cond: [{ $gte: ['$invoiceDate', m6] }, '$grandTotal', 0] } },
+        last12M: { $sum: { $cond: [{ $gte: ['$invoiceDate', m12] }, '$grandTotal', 0] } }
+      }
+    }
+  ]);
+
+  // Product Wise Sales
+  const productSales = await SalesInvoice.aggregate([
+    { $match: baseMatch },
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: '$items.itemName',
+        qty: { $sum: '$items.qty' },
+        value: { $sum: { $multiply: ['$items.qty', '$items.rate'] } },
+        lastSale: { $max: '$invoiceDate' }
+      }
+    },
+    { $sort: { value: -1 } }
+  ]);
+
+  // Repeat Order Trend
+  const repeatTrend = await SalesInvoice.aggregate([
+    { $match: baseMatch },
+    { $sort: { invoiceDate: 1 } },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m", date: "$invoiceDate" } },
+        count: { $sum: 1 },
+        value: { $sum: '$grandTotal' },
+        date: { $min: '$invoiceDate' }
+      }
+    },
+    { $sort: { date: 1 } }
+  ]);
+  
+  // Tag first order vs repeat orders in trend
+  let seenFirst = false;
+  repeatTrend.forEach(rt => {
+      if (!seenFirst) {
+          rt.repeatCount = Math.max(0, rt.count - 1);
+          seenFirst = true;
+      } else {
+          rt.repeatCount = rt.count;
+      }
+  });
+
+  return {
+    basicStats: basicStats[0] || null,
+    salesTrend,
+    periodComparison: periodData[0] || { last3M: 0, last6M: 0, last12M: 0 },
+    productSales,
+    repeatTrend
   };
 };

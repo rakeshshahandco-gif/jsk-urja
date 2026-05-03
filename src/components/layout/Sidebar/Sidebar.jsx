@@ -15,7 +15,6 @@ export const Sidebar = () => {
     const location = useLocation();
     const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || ROLES.VIEWER;
 
-    const [expandedMenuId, setExpandedMenuId] = useState(null);
     const [logoUrl, setLogoUrl] = useState(null);
     const [logoHeight, setLogoHeight] = useState(65);
 
@@ -31,11 +30,6 @@ export const Sidebar = () => {
             })
             .catch(() => { });
     }, []);
-
-    const handleToggle = (id) => {
-        if (isCollapsed && !isHoverOpen) return; // Prevent expansion in collapsed mode
-        setExpandedMenuId(prevId => prevId === id ? null : id);
-    };
 
     // Filter items based on user role and permissions
     const filterItems = React.useCallback((items) => {
@@ -62,21 +56,6 @@ export const Sidebar = () => {
     const visibleMenuItems = React.useMemo(() => 
         filterItems(menuConfig),
     [filterItems]);
-
-    useEffect(() => {
-        const isItemActive = (it) => {
-            if (it.path && location.pathname.startsWith(it.path)) return true;
-            if (it.children) return it.children.some(child => isItemActive(child));
-            return false;
-        };
-
-        const activeParent = menuConfig.find(item => isItemActive(item));
-        if (activeParent) {
-            setExpandedMenuId(activeParent.id);
-        }
-    }, [location.pathname]);
-
-    const isMessenger = location.pathname.startsWith('/messenger');
 
     // Effective state for rendering labels
     const showingFull = !isCollapsed || isHoverOpen;
@@ -125,8 +104,6 @@ export const Sidebar = () => {
                             key={item.id}
                             item={item}
                             collapsed={!showingFull}
-                            isOpen={expandedMenuId === item.id}
-                            onToggle={() => handleToggle(item.id)}
                         />
                     ))}
                 </ul>

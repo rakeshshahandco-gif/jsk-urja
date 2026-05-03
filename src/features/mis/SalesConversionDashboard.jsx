@@ -15,6 +15,7 @@ import {
 import salesConversionApi from '@/services/salesConversionApi';
 import { getFinancialYears } from '@/services/financialYearApi';
 import * as userApi from '@/services/userApi';
+import { CustomerAnalysisTab } from './CustomerAnalysisTab';
 import s from './SalesConversionDashboard.module.scss';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
@@ -616,49 +617,8 @@ const SalesConversionDashboard = () => {
             {/* TAB: CUSTOMER ANALYSIS                                           */}
             {/* ════════════════════════════════════════════════════════════════ */}
             {tab === 'customers' && (
-                <div className={s.tabContent}>
-                    {/* Segment summary */}
-                    {customers?.segmentSummary?.length > 0 && (
-                        <div className={s.kpiGrid4}>
-                            {customers.segmentSummary.map((seg, i) => (
-                                <KPI key={i} title={seg._id} value={seg.count} icon={<Users size={18}/>} color={['blue','purple','emerald'][i % 3]} sub={fmt(seg.value)} />
-                            ))}
-                        </div>
-                    )}
-
-                    <Card title="Customer-Wise Sales Detail" icon={<Users size={15}/>}>
-                        <div className={s.tableWrap}>
-                            <table className={s.table}>
-                                <thead><tr>
-                                    <th>#</th><th>Customer</th><th>Type</th>
-                                    <th>Invoices</th><th>Total Sales</th><th>Paid</th><th>Outstanding</th>
-                                    <th>First Sale</th><th>Last Sale</th><th>Segment</th>
-                                </tr></thead>
-                                <tbody>
-                                    {(customers?.results || []).map((r, i) => (
-                                        <tr key={i}>
-                                            <td>{(customerPage-1)*20 + i + 1}</td>
-                                            <td><strong>{r.customerName}</strong></td>
-                                            <td>{r.customerType || '—'}</td>
-                                            <td>{r.invoiceCount}</td>
-                                            <td><strong>{fmt(r.totalValue)}</strong></td>
-                                            <td>{fmt(r.totalPaid)}</td>
-                                            <td>
-                                                <span className={r.outstanding > 0 ? s.outstandingWarn : ''}>
-                                                    {fmt(r.outstanding)}
-                                                </span>
-                                            </td>
-                                            <td>{r.firstInvoice ? moment(r.firstInvoice).format('DD-MM-YY') : '—'}</td>
-                                            <td>{r.lastInvoice  ? moment(r.lastInvoice).format('DD-MM-YY')  : '—'}</td>
-                                            <td><span className={s.classBadge}>{r.classification}</span></td>
-                                        </tr>
-                                    ))}
-                                    {!(customers?.results?.length) && <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8' }}>No data</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                        <Pagination page={customerPage} totalPages={customers?.totalPages || 1} total={customers?.total || 0} onPage={setCustomerPage} />
-                    </Card>
+                <div className={s.tabContent} style={{ background: '#f8fafc', padding: '24px', borderRadius: '16px', margin: '-12px' }}>
+                    <CustomerAnalysisTab globalFilters={filters} />
                 </div>
             )}
 

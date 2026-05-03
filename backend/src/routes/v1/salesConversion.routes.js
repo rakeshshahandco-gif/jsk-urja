@@ -15,5 +15,6 @@ router.get('/item-wise',            protect, checkPermission('mis.sales_conversi
 router.get('/customer-wise',        protect, checkPermission('mis.sales_conversion.view'), ctrl.getCustomerWiseSalesAnalysis);
 router.get('/salesperson-matrix',   protect, checkPermission('mis.sales_conversion.view'), ctrl.getSalespersonConversionMatrix);
 router.get('/payment-analysis',     protect, checkPermission('mis.sales_conversion.view'), ctrl.getPaymentReceivedAnalysis);
+router.get('/customer-analysis/:customerId', protect, checkPermission('mis.sales_conversion.view'), ctrl.getCustomerDeepDiveAnalysis);
 
 export default router;

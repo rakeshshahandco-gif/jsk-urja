@@ -56,6 +56,12 @@ const salesConversionApi = {
      */
     getPaymentAnalysis: (params = {}) =>
         api.get(`${BASE}/payment-analysis`, { params }).then(r => r.data),
+
+    /**
+     * Customer deep dive analysis (trends, repeat orders, product split)
+     */
+    getCustomerDeepDive: (customerId, params = {}) =>
+        api.get(`${BASE}/customer-analysis/${customerId}`, { params }).then(r => r.data),
 };
 
 export default salesConversionApi;

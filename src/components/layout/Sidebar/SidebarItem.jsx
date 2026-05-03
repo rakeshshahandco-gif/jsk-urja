@@ -1,5 +1,6 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
 
@@ -22,7 +23,8 @@ import {
     Building2,
     MessageCircle,
     FileText,
-    Folder
+    Folder,
+    Globe
 } from 'lucide-react';
 
 const iconMap = {
@@ -42,6 +44,7 @@ const iconMap = {
     'AccountBalanceIcon': Building2,
     'ChatIcon': MessageCircle,
     'VoucherIcon': FileText,
+    'GlobeIcon': Globe,
     '💬': MessageCircle,
 };
 
@@ -50,79 +53,64 @@ const IconRenderer = ({ name, title }) => {
     return <Icon size={18} strokeWidth={2.2} />;
 };
 
-export const SidebarItem = ({ item, collapsed, isOpen: externalIsOpen, onToggle: externalOnToggle }) => {
+export const SidebarItem = ({ item, collapsed }) => {
+    const navigate = useNavigate();
     const location = useLocation();
-    const [internalIsOpen, setInternalIsOpen] = React.useState(false);
 
-    // For top-level items, Sidebar manages expansion (one-at-a-time accordion).
-    // For nested sub-menus, the item manages its own expansion state.
-    const isOpen = externalOnToggle ? externalIsOpen : internalIsOpen;
-    const onToggle = externalOnToggle ? externalOnToggle : () => setInternalIsOpen(!internalIsOpen);
+    // Helper to find module home path
+    const getModuleHomePath = (it) => {
+        const id = it.id?.toUpperCase().replace(/-/g, '_');
+        
+        // Special mappings for IDs that don't match PATHS keys exactly
+        const specialMappings = {
+            'CRM': PATHS.CRM?.HOME,
+            'ACCOUNT_MASTER_PARENT': PATHS.ACCOUNT_MASTER?.HOME,
+            'GST_MENU': PATHS.GST?.HOME,
+            'MIS_REPORTS': PATHS.MIS?.HOME,
+            'FIXED_ASSETS_PARENT': PATHS.FIXED_ASSETS?.HOME,
+            'CHINA_SUPPLIER': PATHS.CHINA_SUPPLIER?.HOME,
+            'RD_SAMPLES': PATHS.RD_SAMPLES?.HOME,
+        };
 
-    // Check if item has children
+        if (specialMappings[id]) return specialMappings[id];
+        
+        // Try direct match in PATHS
+        if (PATHS[id] && PATHS[id].HOME) return PATHS[id].HOME;
+        
+        return null;
+    };
+
     const hasChildren = item.children && item.children.length > 0;
+    const homePath = getModuleHomePath(item);
+    const targetPath = item.path || homePath;
 
     const isItemActive = React.useCallback((it) => {
-        if (it.path && location.pathname.startsWith(it.path)) return true;
+        if (it.path && location.pathname === it.path) return true;
+        if (it.path && location.pathname.startsWith(it.path) && it.path !== '/') return true;
         if (it.children) return it.children.some(child => isItemActive(child));
         return false;
     }, [location.pathname]);
 
-    // Check if any child (including deeply nested ones) is active
-    const isChildActive = React.useMemo(() => 
-        hasChildren && item.children.some(child => isItemActive(child)),
-    [hasChildren, item.children, isItemActive]);
+    const isActive = isItemActive(item);
 
-    // Auto-expand nested sub-menus if an item inside them is active
-    React.useEffect(() => {
-        if (isChildActive && !externalOnToggle) {
-            setInternalIsOpen(true);
+    const handleClick = (e) => {
+        if (targetPath && location.pathname !== targetPath) {
+            navigate(targetPath);
         }
-    }, [isChildActive, externalOnToggle]);
-
-    if (hasChildren) {
-        return (
-            <li className={clsx(styles.menuItem, { [styles.subMenuContainer]: isOpen && !collapsed })} title={collapsed ? item.title : ''}>
-                <div
-                    className={clsx(styles.link, {
-                        [styles.active]: isChildActive,
-                        [styles.subMenuHeader]: isOpen && !collapsed
-                    })}
-                    onClick={onToggle}
-                >
-                    <span className={styles.icon}>
-                        <IconRenderer name={item.icon} title={item.title} />
-                    </span>
-                    {!collapsed && <span className={styles.label}>{item.title}</span>}
-                    {!collapsed && (
-                        <span className={clsx(styles.arrow, { [styles.expanded]: isOpen })}>
-                            <ChevronDown size={14} strokeWidth={3} />
-                        </span>
-                    )}
-                </div>
-
-                {isOpen && !collapsed && (
-                    <ul className={styles.subMenu}>
-                        {item.children.map(child => (
-                            <SidebarItem key={child.id} item={child} collapsed={collapsed} />
-                        ))}
-                    </ul>
-                )}
-            </li>
-        );
-    }
+    };
 
     return (
         <li className={styles.menuItem} title={collapsed ? item.title : ''}>
-            <NavLink
-                to={item.path}
-                className={({ isActive }) => clsx(styles.link, { [styles.active]: isActive })}
+            <div
+                className={clsx(styles.link, { [styles.active]: isActive })}
+                onClick={handleClick}
+                style={{ cursor: 'pointer' }}
             >
                 <span className={styles.icon}>
                     <IconRenderer name={item.icon} title={item.title} />
                 </span>
                 {!collapsed && <span className={styles.label}>{item.title}</span>}
-            </NavLink>
+            </div>
         </li>
     );
 };

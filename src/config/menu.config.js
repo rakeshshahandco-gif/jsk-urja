@@ -236,10 +236,10 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'accounts',
         children: [
-            { id: 'group-master', title: '🗂 Group Master', path: PATHS.ACCOUNT_MASTER.GROUP_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.group_master.view' },
+            { id: 'group-master', title: 'Group Master', path: PATHS.ACCOUNT_MASTER.GROUP_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.group_master.view' },
             { id: 'ledger-master', title: 'Ledger Master', path: PATHS.ACCOUNT_MASTER.LEDGER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.ledger_master.view' },
-            { id: 'financial-year-master', title: '📅 Financial Year Master', path: PATHS.ACCOUNT_MASTER.FINANCIAL_YEAR, roles: [ROLES.ADMIN], permission: 'accounts.financial_year.view' },
-            { id: 'voucher-type-master', title: '🎫 Series Master', path: PATHS.ACCOUNT_MASTER.SERIES_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'financial-year-master', title: 'Financial Year Master', path: PATHS.ACCOUNT_MASTER.FINANCIAL_YEAR, roles: [ROLES.ADMIN], permission: 'accounts.financial_year.view' },
+            { id: 'voucher-type-master', title: 'Series Master', path: PATHS.ACCOUNT_MASTER.SERIES_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
         ]
     },
     {
@@ -258,6 +258,9 @@ export const menuConfig = [
             { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.cash_book.view' },
             { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.bank_book.view' },
             { id: 'outstanding', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER], permission: 'accounts.outstanding.view' },
+            { id: 'trial-balance-acc', title: 'Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
+            { id: 'profit-loss-acc', title: 'Profit & Loss', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
+            { id: 'balance-sheet-acc', title: 'Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
         ]
     },
     {
@@ -267,9 +270,13 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         permission: 'admin.company_profile.view',
         children: [
-            { id: 'gstr1-export', title: '📄 GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gstr3b-compliance', title: '📊 GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gst-reconciliation', title: '🔄 2A/2B Reconciliation', path: '/reports/gst-reconciliation', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gstr1-export', title: 'GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: '/reports/gst-reconciliation', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'itc-register', title: 'ITC Register', path: '/reports/gst/itc-register', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gst-payable', title: 'GST Payable Summary', path: '/reports/gst-payable', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'hsn-summary', title: 'HSN Summary', path: '/reports/gst/hsn-summary', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gst-ledger', title: 'GST Ledger', path: '/reports/gst/ledger', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
         ]
     },
     {
@@ -279,14 +286,11 @@ export const menuConfig = [
         roles: [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.MANAGER],
         permission: 'reports',
         children: [
-            { id: 'mis-dashboard', title: '📊 MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.dashboard.view' },
-            { id: 'trial-balance-mis', title: '📋 Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
-            { id: 'profit-loss-mis', title: '📈 Profit & Loss A/c', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
-            { id: 'balance-sheet-mis', title: '⚖️ Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
-            { id: 'sales-analysis', title: '📊 Sales MIS Dashboard', path: PATHS.MIS.SALES_DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
-            { id: 'report-product-gp', title: '📈 Product-wise GP Analysis', path: PATHS.MIS.PRODUCT_GP, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.product_gp_analysis.view' },
-            { id: 'report-sample-conversion', title: '🧪 Sample Conversion Analysis', path: PATHS.REPORTS.SAMPLE_CONVERSION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
-            { id: 'report-replacements', title: '🔄 Replacement Outward Report', path: PATHS.REPORTS.REPLACEMENTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
+            { id: 'mis-dashboard', title: 'MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.dashboard.view' },
+            { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: PATHS.MIS.SALES_DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
+            { id: 'report-product-gp', title: 'Product-wise GP Analysis', path: PATHS.MIS.PRODUCT_GP, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.product_gp_analysis.view' },
+            { id: 'report-sample-conversion', title: 'Sample Conversion Analysis', path: PATHS.REPORTS.SAMPLE_CONVERSION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
+            { id: 'report-replacements', title: 'Replacement Outward Report', path: PATHS.REPORTS.REPLACEMENTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
             { id: 'report-purchase-comparison', title: 'Purchase Comparison Report', path: '/reports/purchase-comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.purchase_comparison_report.view' },
         ]
     },
@@ -297,9 +301,9 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'accounts',
         children: [
-            { id: 'fixed-assets-list', title: '🧾 Asset Register', path: PATHS.ACCOUNTS.FIXED_ASSETS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.fixed_assets.view' },
-            { id: 'asset-categories', title: '📂 Asset Categories', path: PATHS.ACCOUNTS.ASSET_CATEGORIES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_categories.view' },
-            { id: 'asset-locations', title: '📍 Asset Locations', path: PATHS.ACCOUNTS.ASSET_LOCATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_locations.view' },
+            { id: 'fixed-assets-list', title: 'Asset Register', path: PATHS.FIXED_ASSETS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.fixed_assets.view' },
+            { id: 'asset-categories', title: 'Asset Categories', path: PATHS.FIXED_ASSETS.CATEGORIES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_categories.view' },
+            { id: 'asset-locations', title: 'Asset Locations', path: PATHS.FIXED_ASSETS.LOCATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_locations.view' },
         ]
     },
     {
@@ -368,12 +372,12 @@ export const menuConfig = [
             { id: 'leave-management', title: 'Leave Management', path: '/hr/leaves', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.leave_management.view' },
             { id: 'payroll', title: 'Payroll / Salary Working', path: '/hr/payroll', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.payroll.view' },
             { id: 'hr-reports', title: 'HR Reports', path: '/hr/reports', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
-            { id: 'holiday-list', title: '📅 Holiday List', path: '/hr/holidays', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
+            { id: 'holiday-list', title: 'Holiday List', path: '/hr/holidays', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
         ],
     },
     {
         id: 'whatsapp',
-        title: '💬 WhatsApp',
+        title: 'WhatsApp',
         icon: 'ChatIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         path: PATHS.SETTINGS.WHATSAPP,
