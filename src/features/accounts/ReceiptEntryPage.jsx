@@ -140,10 +140,15 @@ const ReceiptEntryPage = () => {
                 targetLedgerId = matchedByRef._id;
                 targetLedgerName = matchedByRef.name;
             } else if (customerName) {
-                // Match by name as secondary fallback
-                const matchedByName = ledgers.find(l => 
-                    l.name?.trim().toLowerCase() === customerName?.trim().toLowerCase()
-                );
+                // Match by name as secondary fallback - more flexible matching
+                const cleanCustName = customerName.split('(')[0].trim().toLowerCase();
+                const matchedByName = ledgers.find(l => {
+                    const cleanLedgerName = l.name?.split('(')[0].trim().toLowerCase();
+                    return cleanLedgerName === cleanCustName || 
+                           cleanLedgerName?.startsWith(cleanCustName) || 
+                           cleanCustName.startsWith(cleanLedgerName || '');
+                });
+
                 if (matchedByName) {
                     targetLedgerId = matchedByName._id;
                     targetLedgerName = matchedByName.name;
