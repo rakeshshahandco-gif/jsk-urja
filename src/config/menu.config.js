@@ -387,6 +387,7 @@ export const menuConfig = [
     {
         id: 'admin',
         title: 'Admin',
+        path: '/admin/home',
         icon: 'SettingsIcon',
         roles: [ROLES.ADMIN],
         permission: 'admin',

@@ -380,6 +380,7 @@ const AppLayout = () => {
                         <Route path={PATHS.RD_SAMPLES.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="R&D Samples" title="R&D Samples - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path="/tasks" element={<Navigate to="/tasks/home" replace />} />
                         <Route path="/tasks/home" element={<ProtectedRoute><ModuleHomePage moduleName="Task Management" title="Task Management - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path="/admin" element={<Navigate to="/admin/home" replace />} />
                         <Route path="/admin/home" element={<ProtectedRoute><ModuleHomePage moduleName="Admin" title="Admin - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.CHINA_SUPPLIER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="China Sourcing" title="China Sourcing - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.EWAY_BILL.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="eway-bill" title="E-Way Bills - Home" isStatic={false} /></ProtectedRoute>} />
