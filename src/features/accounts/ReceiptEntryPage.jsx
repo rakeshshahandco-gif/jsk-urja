@@ -5,10 +5,11 @@ import {
 import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
 import { Plus, Trash2, Save, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
-    getVoucherTypes, getCashBankAccounts, getLedgers,
-    getOutstandingBills, createVoucher, getVoucher, updateVoucher,
+    getVoucherTypes, getCashBankAccounts, getLedgers, getAccountGroups,
+    getOutstandingBills, createVoucher, createLedger, getVoucher, updateVoucher,
     autoLinkSingleLedger
 } from '@/services/accountApi';
+import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
@@ -23,6 +24,7 @@ const ReceiptEntryPage = () => {
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [cashBankAccounts, setCashBankAccounts] = useState([]);
     const [ledgers, setLedgers] = useState([]);
+    const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { id } = useParams();
@@ -57,14 +59,16 @@ const ReceiptEntryPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [vTypes, cbAccs, allLedgers] = await Promise.all([
+                const [vTypes, cbAccs, allLedgers, allGroups] = await Promise.all([
                     getVoucherTypes({ nature: 'Receipt', active: true }),
                     getCashBankAccounts({ status: 'Active' }),
-                    getLedgers()
+                    getLedgers(),
+                    getAccountGroups()
                 ]);
                 setVoucherTypes(vTypes);
                 setCashBankAccounts(cbAccs);
                 setLedgers(allLedgers);
+                setGroups(allGroups);
 
                 if (vTypes.length > 0) {
                     const defaultType = vTypes.find(v => v.name.toUpperCase() === 'RECEIPT VOUCHER' || v.name.toUpperCase() === 'RECEIPT') || vTypes[0];
@@ -241,6 +245,42 @@ const ReceiptEntryPage = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleQuickCreateLedger = (searchTerm, targetItemId) => {
+        const debtorGroup = groups.find(g => g.name === 'Sundry Debtors');
+        
+        openModal({
+            title: `Quick Create Ledger: ${searchTerm}`,
+            size: 'lg',
+            content: (
+                <LedgerForm 
+                    initial={{ name: searchTerm, underGroup: debtorGroup?._id }}
+                    groups={groups}
+                    onCancel={closeModal}
+                    onSave={async (data) => {
+                        try {
+                            const newLedger = await createLedger(data);
+                            toast.success('Ledger created successfully');
+                            
+                            // Refresh lists
+                            const [lData, cbData] = await Promise.all([
+                                getLedgers(),
+                                getCashBankAccounts({ status: 'Active' })
+                            ]);
+                            setLedgers(lData);
+                            setCashBankAccounts(cbData);
+
+                            // Select it
+                            handleItemChange(targetItemId, 'ledgerId', newLedger._id);
+                            closeModal();
+                        } catch (err) {
+                            toast.error(err.response?.data?.message || 'Failed to create ledger');
+                        }
+                    }}
+                />
+            )
+        });
     };
 
     const LedgerLinkMissingAlert = ({ account }) => {
@@ -792,6 +832,7 @@ const ReceiptEntryPage = () => {
                                                         value={item.ledgerId}
                                                         onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
                                                         placeholder="Search ledger..."
+                                                        onCreateNew={(term) => handleQuickCreateLedger(term, item.id)}
                                                     />
                                                 )}
                                             </td>

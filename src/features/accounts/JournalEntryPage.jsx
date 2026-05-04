@@ -4,8 +4,9 @@ import {
 } from '@/components/ui';
 import { Plus, Trash2, Save, BookOpen, AlertCircle } from 'lucide-react';
 import {
-    getVoucherTypes, getLedgers, createVoucher, getVoucher, updateVoucher
+    getVoucherTypes, getLedgers, getCashBankAccounts, getAccountGroups, createVoucher, createLedger, getVoucher, updateVoucher
 } from '@/services/accountApi';
+import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
@@ -16,6 +17,7 @@ const JournalEntryPage = () => {
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [ledgers, setLedgers] = useState([]);
+    const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { id } = useParams();
@@ -36,12 +38,14 @@ const JournalEntryPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [vTypes, allLedgers] = await Promise.all([
+                const [vTypes, allLedgers, allGroups] = await Promise.all([
                     getVoucherTypes({ nature: 'Journal', active: true }),
-                    getLedgers()
+                    getLedgers(),
+                    getAccountGroups()
                 ]);
                 setVoucherTypes(vTypes);
                 setLedgers(allLedgers);
+                setGroups(allGroups);
 
                 if (vTypes.length > 0) {
                     setFormData(prev => ({ ...prev, voucherTypeId: vTypes[0]._id }));
@@ -122,12 +126,37 @@ const JournalEntryPage = () => {
         }));
     };
 
-    const removeItem = (id) => {
-        if (formData.items.length <= 2) return;
-        setFormData(prev => ({
-            ...prev,
-            items: prev.items.filter(item => item.id !== id)
-        }));
+    const handleQuickCreateLedger = (searchTerm, targetItemId) => {
+        openModal({
+            title: `Quick Create Ledger: ${searchTerm}`,
+            size: 'lg',
+            content: (
+                <LedgerForm 
+                    initial={{ name: searchTerm }}
+                    groups={groups}
+                    onCancel={closeModal}
+                    onSave={async (data) => {
+                        try {
+                            const newLedger = await createLedger(data);
+                            toast.success('Ledger created successfully');
+                            
+                            // Refresh lists
+                            const [lData, cbData] = await Promise.all([
+                                getLedgers(),
+                                getCashBankAccounts({ status: 'Active' })
+                            ]);
+                            setLedgers(lData);
+
+                            // Select it
+                            handleItemChange(targetItemId, 'ledgerId', newLedger._id);
+                            closeModal();
+                        } catch (err) {
+                            toast.error(err.response?.data?.message || 'Failed to create ledger');
+                        }
+                    }}
+                />
+            )
+        });
     };
 
     const handleSave = async () => {
@@ -294,6 +323,7 @@ const JournalEntryPage = () => {
                                                     value={item.ledgerId}
                                                     onChange={(val) => handleItemChange(item.id, 'ledgerId', val)}
                                                     placeholder="Search ledger..."
+                                                    onCreateNew={(term) => handleQuickCreateLedger(term, item.id)}
                                                 />
                                             </td>
                                             <td style={{ padding: '10px' }}>
