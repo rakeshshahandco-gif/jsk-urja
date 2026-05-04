@@ -125,7 +125,7 @@ export default function SalesOrderFormPage() {
         if (!val.trim()) {
             setForm(p => ({
                 ...p,
-                customerName: '',
+                customerName: val,
                 customerCode: '',
                 customerPhone: '',
                 customerEmail: '',
@@ -167,20 +167,20 @@ export default function SalesOrderFormPage() {
             const fullCustomer = await getCustomer(c.id || c._id);
             setForm(p => ({
                 ...p,
-                customerName: fullCustomer.name,
-                customerCode: fullCustomer.customerCode || '',
-                customerPhone: fullCustomer.phone || fullCustomer.mobile || '',
-                customerEmail: fullCustomer.email || '',
-                customerGstin: fullCustomer.gstin || '',
-                customerState: fullCustomer.state || '',
-                customerStateCode: fullCustomer.stateCode || '',
-                billingAddress: fullCustomer.billingAddress || '',
-                shippingAddress: fullCustomer.shippingAddress || fullCustomer.billingAddress || '',
-                gstType: fullCustomer.gstType || p.gstType,
-                customerId: fullCustomer._id || fullCustomer.id,
-                creditPeriod: fullCustomer.creditPeriod || 0,
-                paymentType: fullCustomer.paymentType || (fullCustomer.creditPeriod > 0 ? 'Credit' : 'Cash'),
-                stickerType: fullCustomer.sticker || '',
+                customerName: c.name || c.company || c.customerName || '',
+                customerCode: c.customerCode || '',
+                customerPhone: c.phone || '',
+                customerEmail: c.email || '',
+                customerGstin: c.gstin || '',
+                customerState: c.state || '',
+                customerStateCode: c.stateCode || '',
+                billingAddress: c.billingAddress || '',
+                shippingAddress: c.shippingAddress || c.billingAddress || '',
+                gstType: c.gstType || p.gstType,
+                customerId: c.id || c._id,
+                creditPeriod: c.creditPeriod || 0,
+                paymentType: c.paymentType || (c.creditPeriod > 0 ? 'Credit' : 'Cash'),
+                stickerType: c.sticker || '',
                 referralDetails: fullCustomer.referralDetails || {
                     sourceType: 'Direct',
                     salespersonId: null,
@@ -351,6 +351,7 @@ export default function SalesOrderFormPage() {
     const handleSubmit = async (nextStatus) => {
 
         if (!form.customerName) return toast.error('Customer name is required');
+        if (!form.customerId) return toast.error('Please select customer from the list or create new customer.');
         if (form.orderCategory === 'Replacement' && !form.warrantyDetails?.trim()) return toast.error('Please enter Warranty Details for Replacement order.');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
