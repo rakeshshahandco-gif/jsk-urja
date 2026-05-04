@@ -41,13 +41,13 @@ function buildDateQuery(startDate, endDate, dateField = 'invoiceDate') {
  * 1. ITC Register
  * Returns a detailed list of all purchase invoices with GST components.
  */
-export async function getItcRegister(startDate, endDate) {
+export async function getItcRegister(startDate, endDate, filters = {}) {
+    const { supplier, gstin, gstType, itcEligibility, purchaseType, missingGstinOnly } = filters;
+
     const query = {
         ...buildDateQuery(startDate, endDate, 'invoiceDate'),
         isDeleted: { $ne: true },
-        status: { $ne: 'Cancelled' },
-        // Assuming all confirmed purchases with GST are eligible for ITC for this report
-        totalTax: { $gt: 0 }
+        status: { $ne: 'Cancelled' }
     };
 
     const purchases = await PurchaseInvoice.find(query)
@@ -55,20 +55,101 @@ export async function getItcRegister(startDate, endDate) {
         .sort({ invoiceDate: 1 })
         .lean();
 
-    return purchases.map(p => ({
-        id: p._id,
-        date: p.invoiceDate,
-        supplierName: p.supplierName || p.supplierId?.name,
-        supplierGstin: p.supplierGstin || p.supplierId?.gstin,
-        invoiceNumber: p.invoiceNumber || p.supplierInvoiceNo,
-        taxableValue: p.totalTaxableAmount || 0,
-        cgst: p.totalCgst || 0,
-        sgst: p.totalSgst || 0,
-        igst: p.totalIgst || 0,
-        totalTax: p.totalTax || (p.totalCgst + p.totalSgst + p.totalIgst) || 0,
-        totalInvoiceValue: p.grandTotal || p.roundedTotal || 0,
-        placeOfSupply: p.placeOfSupply || p.supplierStateCode || ''
-    }));
+    let results = [];
+
+    purchases.forEach(p => {
+        // Evaluate GSTIN
+        const supplierGstin = p.supplierGstin || p.supplierId?.gstin || '';
+        const isMissingOnly = String(missingGstinOnly) === 'true';
+        if (isMissingOnly && supplierGstin) return; // skip if we only want missing
+
+        if (supplier && !p.supplierName?.toLowerCase().includes(supplier.toLowerCase()) && !p.supplierId?.name?.toLowerCase().includes(supplier.toLowerCase())) {
+            return;
+        }
+        if (gstin && !supplierGstin.toLowerCase().includes(gstin.toLowerCase())) {
+            return;
+        }
+
+        // Determine GST Local vs Interstate
+        const isInter = isInterState(p.placeOfSupply, p.supplierStateCode || p.supplierId?.stateCode);
+
+        // Sum up from items
+        let taxableValue = 0;
+        let cgst = 0;
+        let sgst = 0;
+        let igst = 0;
+        let hasGst = false;
+        let pType = 'Raw Material'; // default
+        if (p.items && p.items.length > 0) {
+            pType = p.items[0].purchaseType === 'CONSUMABLE_PURCHASE' ? 'Consumable' :
+                    p.items[0].purchaseType === 'TRADING_PURCHASE' ? 'Trading' : 'Raw Material';
+            
+            p.items.forEach(item => {
+                taxableValue += (item.taxableAmount || 0);
+                let icgst = item.cgstAmount || 0;
+                let isgst = item.sgstAmount || 0;
+                let iigst = item.igstAmount || 0;
+                
+                // If backend saved 0 for all but item has gstRate, recalculate based on inter/intra state
+                if (icgst === 0 && isgst === 0 && iigst === 0 && item.gstRate > 0 && item.taxableAmount > 0) {
+                    const totalTax = (item.taxableAmount * item.gstRate) / 100;
+                    if (isInter) {
+                        iigst = totalTax;
+                    } else {
+                        icgst = totalTax / 2;
+                        isgst = totalTax / 2;
+                    }
+                }
+                
+                if (icgst > 0 || isgst > 0 || iigst > 0) hasGst = true;
+                
+                cgst += icgst;
+                sgst += isgst;
+                igst += iigst;
+            });
+        } else {
+            // fallback to header if items are missing for some reason
+            taxableValue = p.totalTaxableAmount || 0;
+            cgst = p.totalCgst || 0;
+            sgst = p.totalSgst || 0;
+            igst = p.totalIgst || 0;
+            if (cgst > 0 || sgst > 0 || igst > 0) hasGst = true;
+        }
+
+        // Exclude Non-GST purchases
+        if (!hasGst) return;
+
+        // Apply filters
+        if (purchaseType && purchaseType !== 'All' && pType !== purchaseType) return;
+        
+        // ITC Eligibility (assume Eligible by default)
+        const eligibility = p.itcEligibility || 'Eligible';
+        if (itcEligibility && itcEligibility !== 'All' && eligibility !== itcEligibility) return;
+
+        let totalTax = cgst + sgst + igst;
+
+        if (gstType === 'CGST/SGST' && (cgst === 0 && sgst === 0)) return;
+        if (gstType === 'IGST' && igst === 0) return;
+
+        results.push({
+            id: p._id,
+            date: p.supplierInvoiceDate || p.invoiceDate,
+            supplierName: p.supplierName || p.supplierId?.name,
+            supplierGstin: supplierGstin,
+            invoiceNumber: p.supplierInvoiceNo || p.invoiceNumber,
+            taxableValue: taxableValue,
+            cgst: cgst,
+            sgst: sgst,
+            igst: igst,
+            totalTax: totalTax,
+            itcEligibility: eligibility,
+            purchaseType: pType,
+            totalInvoiceValue: p.grandTotal || p.roundedTotal || 0,
+            placeOfSupply: p.placeOfSupply || p.supplierStateCode || ''
+        });
+    });
+
+    return results;
 }
 
 /**

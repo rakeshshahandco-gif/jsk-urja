@@ -85,6 +85,7 @@ export const menuConfig = [
     {
         id: 'tasks',
         title: 'Task Management',
+        path: '/tasks/home',
         icon: 'AssignmentIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'tasks',

@@ -297,9 +297,9 @@ import * as calcService from '../services/gstCalculations.service.js';
 
 export async function getItcRegister(req, res) {
     try {
-        const { startDate, endDate } = req.query;
+        const { startDate, endDate, ...filters } = req.query;
         if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
-        const data = await calcService.getItcRegister(startDate, endDate);
+        const data = await calcService.getItcRegister(startDate, endDate, filters);
         res.json({ success: true, data });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
