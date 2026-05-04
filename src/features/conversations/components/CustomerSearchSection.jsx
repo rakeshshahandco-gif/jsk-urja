@@ -44,6 +44,7 @@ export const CustomerSearchSection = ({ customers, onSelect, selectedCustomer })
                         setShowDropdown(true);
                     }}
                     onFocus={() => setShowDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                 />
 
                 {showDropdown && searchTerm && filteredCustomers.length > 0 && (
@@ -54,7 +55,10 @@ export const CustomerSearchSection = ({ customers, onSelect, selectedCustomer })
                                 <div
                                     key={customer._id}
                                     className={styles.dropdownItem}
-                                    onClick={() => handleSelect(customer)}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelect(customer);
+                                    }}
                                 >
                                     <div className={styles.dropdownCompany}>{customer.customerName || customer.name || 'Not Provided'}</div>
                                     <div className={styles.dropdownDetails}>

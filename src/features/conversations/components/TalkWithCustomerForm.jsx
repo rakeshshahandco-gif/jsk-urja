@@ -9,9 +9,12 @@ import { ConversationHistoryList } from './ConversationHistoryList';
 import { getCustomers } from '@/services/customerApi';
 import { createConversation, getConversationsByCustomer } from '@/services/conversationApi';
 import { createFollowup, updateFollowup, getFollowupByCustomer } from '@/services/followupApi';
+import { useParams } from 'react-router-dom';
+import { getCustomer } from '@/services/customerApi';
 import styles from './TalkWithCustomerForm.module.scss';
 
 export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, closeModal }) => {
+    const { customerId } = useParams();
     const [selectedCustomer, setSelectedCustomer] = useState(preSelectedCustomer || null);
     const [conversations, setConversations] = useState([]);
     const [customers, setCustomers] = useState([]);
@@ -38,12 +41,24 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
         loadCustomers();
     }, []);
 
-    // Auto-load customer data if pre-selected
+    // Auto-load customer data if pre-selected via props or URL
     useEffect(() => {
         if (preSelectedCustomer) {
             handleCustomerSelect(preSelectedCustomer);
+        } else if (customerId) {
+            const fetchCustomerFromUrl = async () => {
+                try {
+                    const cust = await getCustomer(customerId);
+                    if (cust) {
+                        handleCustomerSelect(cust);
+                    }
+                } catch (error) {
+                    console.error('Failed to load customer from URL:', error);
+                }
+            };
+            fetchCustomerFromUrl();
         }
-    }, [preSelectedCustomer]);
+    }, [preSelectedCustomer, customerId]);
 
     const loadCustomers = async () => {
         setLoadingCustomers(true);

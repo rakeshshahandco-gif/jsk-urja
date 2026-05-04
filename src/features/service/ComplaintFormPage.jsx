@@ -245,7 +245,7 @@ const ComplaintFormPage = () => {
                                 <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 4, maxHeight: 240, overflowY: 'auto', zIndex: 100, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)' }}>
                                     {customerOptions.length > 0 ? customerOptions.slice(0, 10).map((c, idx) => (
                                         <div key={c.id || c._id}
-                                            onClick={() => handleCustomerSelect(c)}
+                                            onMouseDown={(e) => { e.preventDefault(); handleCustomerSelect(c); }}
                                             style={{ padding: '9px 12px', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: custHighlightIndex === idx ? '#f1f5f9' : 'transparent', transition: 'background 0.15s' }}
                                             onMouseEnter={() => setCustHighlightIndex(idx)}>
                                             <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{c.name}</div>

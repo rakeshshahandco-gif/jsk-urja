@@ -463,7 +463,9 @@ export default function SalesOrderFormPage() {
                         <Field label="Customer Name *">
                             <div ref={custRef} style={{ position: 'relative' }}>
                                 <input placeholder="Search company or name..." value={form.customerName} onChange={e => handleCustomerSearch(e.target.value)}
-                                    onFocus={() => form.customerName && setShowCustDropdown(true)} style={inp}
+                                    onFocus={() => form.customerName && setShowCustDropdown(true)} 
+                                    onBlur={() => setTimeout(() => setShowCustDropdown(false), 200)}
+                                    style={inp}
                                     disabled={form.status && form.status !== 'Draft'}
                                     onKeyDown={e => {
                                         if (!showCustDropdown) return;
@@ -482,7 +484,7 @@ export default function SalesOrderFormPage() {
                                             customerOptions.slice(0, 10).map((c, idx) => (
                                                 <div
                                                     key={c.id}
-                                                    onClick={() => handleCustomerSelect(c)}
+                                                    onMouseDown={(e) => { e.preventDefault(); handleCustomerSelect(c); }}
                                                     style={{
                                                         padding: '10px 14px',
                                                         borderBottom: '1px solid #f3f4f6',
@@ -504,7 +506,7 @@ export default function SalesOrderFormPage() {
                                             <div style={{ padding: '14px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No customer found</div>
                                         )}
                                         <div
-                                            onClick={() => navigate(PATHS.CUSTOMERS + '/new')}
+                                            onMouseDown={(e) => { e.preventDefault(); navigate(PATHS.CUSTOMERS + '/new'); }}
                                             style={{
                                                 padding: '12px 14px',
                                                 borderTop: '2px solid #f3f4f6',
