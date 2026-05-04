@@ -209,6 +209,51 @@ const BackupRestorePage = () => {
                         {isBackingUp ? 'Generating ZIP...' : 'Take Full Database Backup'}
                     </Button>
                 </div>
+
+                {/* UPLOAD BACKUP ACTION */}
+                <div className={`${styles.card} ${styles.uploadCard}`}>
+                    <div className={styles.cardHeader}>
+                        <FileArchive size={20} color="#8b5cf6" />
+                        <h3>Upload External Backup</h3>
+                    </div>
+                    <p className={styles.description}>
+                        Upload a backup ZIP file downloaded from another environment (e.g. Render) to restore it here.
+                    </p>
+                    <div className={styles.uploadZone}>
+                        <input 
+                            type="file" 
+                            id="backupUpload" 
+                            accept=".zip" 
+                            style={{ display: 'none' }} 
+                            onChange={async (e) => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                
+                                try {
+                                    setIsLoading(true);
+                                    toast.loading('Uploading backup file...', { id: 'upload' });
+                                    await backupApi.uploadBackup(file);
+                                    toast.success('Backup uploaded and indexed!', { id: 'upload' });
+                                    fetchBackups();
+                                } catch (error) {
+                                    toast.error('Upload failed: ' + (error.response?.data?.message || error.message), { id: 'upload' });
+                                } finally {
+                                    setIsLoading(false);
+                                    e.target.value = ''; // Reset input
+                                }
+                            }}
+                        />
+                        <Button 
+                            variant="outline" 
+                            onClick={() => document.getElementById('backupUpload').click()}
+                            isLoading={isLoading}
+                            fullWidth
+                            startIcon={<UploadCloud size={18} />}
+                        >
+                            Select & Upload ZIP File
+                        </Button>
+                    </div>
+                </div>
             </div>
 
             {/* RESTORE WARNING */}

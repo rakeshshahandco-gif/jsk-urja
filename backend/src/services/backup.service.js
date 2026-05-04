@@ -188,6 +188,60 @@ export const restoreBackup = async (backupId, userId) => {
 };
 
 /**
+ * Process an uploaded backup file
+ */
+export const processUploadedBackup = async (file, userId) => {
+    if (!file || !file.buffer) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'No file uploaded');
+    }
+
+    try {
+        const zip = new AdmZip(file.buffer);
+        const metadataEntry = zip.getEntry('metadata.json');
+        
+        if (!metadataEntry) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid backup file: metadata.json missing');
+        }
+
+        const metadata = JSON.parse(metadataEntry.getData().toString('utf8'));
+        const backupName = metadata.name || `uploaded-backup-${moment().format('YYYY-MM-DD-HHmm')}`;
+        const zipPath = path.join(BACKUP_DIR, `${backupName}.zip`);
+
+        // Save the buffer to disk
+        fs.writeFileSync(zipPath, file.buffer);
+
+        // Update Backup Index
+        const indexPath = path.join(BACKUP_DIR, 'index.json');
+        let index = [];
+        if (fs.existsSync(indexPath)) {
+            index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+        }
+
+        const backupEntry = {
+            id: backupName,
+            filename: `${backupName}.zip`,
+            date: new Date(),
+            reason: metadata.reason || 'Uploaded Backup',
+            createdBy: userId,
+            counts: metadata.recordCounts || {},
+            size: file.size
+        };
+
+        // Avoid duplicates in index
+        index = index.filter(b => b.id !== backupName);
+        index.unshift(backupEntry);
+        if (index.length > 30) index = index.slice(0, 30);
+
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+
+        return backupEntry;
+    } catch (error) {
+        console.error('Processing uploaded backup failed:', error);
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to process backup file: ' + error.message);
+    }
+};
+
+/**
  * Get backup file path for download
  */
 export const getBackupFilePath = (backupId) => {

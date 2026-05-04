@@ -196,33 +196,30 @@ export const ROLE_PERMISSIONS = {
     ]
 };
 
-// Check if role has permission
+// Check if user has permission
 export const hasPermission = (userPermissions, requiredPermission, userRole = null, additionalPermissions = {}) => {
-    // Extract role name if userRole is an object
-    const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
+    // 1. Normalize and check for System Admin/Admin role bypass
+    const normalizedRole = (userRole || '').trim().toLowerCase();
+    const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(normalizedRole);
+    
+    if (isAdmin) return true;
 
-    // Superadmin and Admin have all permissions (bypass all checks)
-    if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
-    if (actualRole === ROLES.ADMIN || actualRole === 'admin') return true;
+    // 2. Safety check for missing permission data
+    if (!userPermissions && !additionalPermissions) {
+        return false;
+    }
 
-    // 1. Check Granular Object (additionalPermissions)
-    // Format can be "module.submodule.action" or just "module"
+    // 3. Check additionalPermissions (granular object structure)
     if (typeof requiredPermission === 'string' && additionalPermissions) {
         if (requiredPermission.includes('.')) {
             const parts = requiredPermission.split('.');
             if (parts.length === 3) {
                 const [mod, sub, act] = parts;
                 if (additionalPermissions[mod]?.[sub]?.[act]) return true;
-                
-                // Fallback for flat structure under module: module.action
                 if (additionalPermissions[mod]?.[act]) return true;
-                // Fallback for extreme flat: module.submodule_action
-                if (additionalPermissions[mod]?.[`${sub}_${act}`]) return true;
             } else if (parts.length === 2) {
                 const [mod, act] = parts;
                 if (additionalPermissions[mod]?.[act]) return true;
-                
-                // Also check if any submodule has this action
                 const moduleData = additionalPermissions[mod];
                 if (moduleData && typeof moduleData === 'object') {
                     return Object.values(moduleData).some(sub => 
@@ -231,38 +228,27 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
                 }
             }
         } else {
-            // Handle module-level string (e.g., 'customers', 'tasks')
             const moduleData = additionalPermissions[requiredPermission];
-            
-            // 1. Direct match (legacy flat structure or explicit module-level grant)
             if (moduleData === true) return true;
-            
-            // 2. Objects check (Nested structure: module -> submodule -> action)
             if (moduleData && typeof moduleData === 'object') {
                 const hasAnyTrueValue = (obj) => {
                     if (!obj || typeof obj !== 'object') return obj === true;
-                    return Object.values(obj).some(val => {
-                        if (val === true) return true;
-                        if (val && typeof val === 'object') return hasAnyTrueValue(val);
-                        return false;
-                    });
+                    return Object.values(obj).some(val => val === true || (val && typeof val === 'object' && hasAnyTrueValue(val)));
                 };
                 return hasAnyTrueValue(moduleData);
             }
         }
     }
 
-    // 2. Check explicitly set Legacy Permissions Array (for backward compatibility)
-    if (Array.isArray(userPermissions)) {
-        if (userPermissions.includes('*')) return true;
-        if (userPermissions.includes(requiredPermission)) return true;
-    }
+    // 4. Check userPermissions array
+    const permissions = Array.isArray(userPermissions) ? userPermissions : [userPermissions].filter(Boolean);
+    if (permissions.includes('*')) return true;
+    if (permissions.some(p => (typeof p === 'string' ? p : p?.key) === requiredPermission)) return true;
 
-    // 3. Fallback to Role Default Permissions (from constants)
+    // 5. Fallback to Role Default Permissions
     if (userRole && ROLE_PERMISSIONS[userRole]) {
         const rolePerms = ROLE_PERMISSIONS[userRole];
-        if (rolePerms.includes('*')) return true;
-        if (rolePerms.includes(requiredPermission)) return true;
+        if (rolePerms.includes('*') || rolePerms.includes(requiredPermission)) return true;
     }
 
     return false;
@@ -270,14 +256,20 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
 
 // Check if user has role
 export const hasRole = (userRole, requiredRole) => {
-    // Extract role name if userRole is an object
-    const actualRole = typeof userRole === 'object' ? (userRole?.name || userRole?.roleName) : userRole;
-
-    if (actualRole === ROLES.SUPERADMIN || actualRole === 'superadmin') return true;
-    if (Array.isArray(requiredRole)) {
-        return requiredRole.includes(actualRole);
+    if (!userRole) return false;
+    
+    const normalizedUserRole = userRole.trim().toLowerCase();
+    
+    // System Admin bypasses all role requirements
+    if (['admin', 'superadmin', 'system admin', 'systemadmin'].includes(normalizedUserRole)) {
+        return true;
     }
-    return actualRole === requiredRole;
+
+    if (Array.isArray(requiredRole)) {
+        return requiredRole.some(role => role.trim().toLowerCase() === normalizedUserRole);
+    }
+    
+    return normalizedUserRole === requiredRole.trim().toLowerCase();
 };
 
 // Get permissions for a role

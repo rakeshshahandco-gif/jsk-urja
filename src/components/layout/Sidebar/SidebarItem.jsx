@@ -80,10 +80,6 @@ export const SidebarItem = ({ item, collapsed }) => {
         return null;
     };
 
-    const hasChildren = item.children && item.children.length > 0;
-    const homePath = getModuleHomePath(item);
-    const targetPath = item.path || homePath;
-
     const isItemActive = React.useCallback((it) => {
         if (it.path && location.pathname === it.path) return true;
         if (it.path && location.pathname.startsWith(it.path) && it.path !== '/') return true;
@@ -92,6 +88,8 @@ export const SidebarItem = ({ item, collapsed }) => {
     }, [location.pathname]);
 
     const isActive = isItemActive(item);
+    const homePath = getModuleHomePath(item);
+    const targetPath = item.path || homePath;
 
     const handleClick = (e) => {
         if (targetPath && location.pathname !== targetPath) {

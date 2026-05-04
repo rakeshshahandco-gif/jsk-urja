@@ -35,3 +35,12 @@ export const restoreFromBackup = asyncHandler(async (req, res) => {
         data: result
     });
 });
+
+export const uploadBackup = asyncHandler(async (req, res) => {
+    const backup = await backupService.processUploadedBackup(req.file, req.user.id);
+    res.json({
+        success: true,
+        message: 'Backup uploaded and indexed successfully',
+        data: backup
+    });
+});

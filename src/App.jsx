@@ -219,7 +219,7 @@ function App() {
     useEffect(() => {
         const timer = setTimeout(() => {
             setShowSplash(false);
-        }, 2000);
+        }, 800);
         return () => clearTimeout(timer);
     }, []);
 
@@ -243,7 +243,7 @@ function App() {
                                         style: { zIndex: 99999 }
                                     }}
                                 />
-                                <BrandedModuleLoader />
+
                                 <ModalProvider>
                                     <Suspense fallback={<BrandedLoader size={120} />}>
                                         <Routes>

@@ -45,7 +45,7 @@ const VoucherDetail = ({ voucher }) => {
                              <CreditCard size={18} className="text-purple-500" />}
                         </div>
                         <div>
-                            <p className="text-sm font-black text-slate-800">{voucher.cashBankAccountName || voucher.partyName || '—'}</p>
+                            <p className="text-sm font-black text-slate-800">{voucher.cashBankAccountName || voucher.partyName || voucher.primaryAccountName || voucher.primaryAccount?.name || voucher.ledgerName || '—'}</p>
                             <p className="text-[10px] font-bold text-slate-500 uppercase">{voucher.expenseType || 'Primary'} Mode</p>
                         </div>
                     </div>
@@ -280,7 +280,7 @@ const VoucherListPage = () => {
                                         </div>
                                     </td>
                                     <td>
-                                        <div className={s.accountName}>{v.cashBankAccountName || v.partyName || '—'}</div>
+                                        <div className={s.accountName}>{v.cashBankAccountName || v.partyName || v.primaryAccountName || v.primaryAccount?.name || v.ledgerName || '—'}</div>
                                         <div className={s.narration} title={v.narration}>{v.narration}</div>
                                     </td>
                                     <td><StatusBadge status={v.status} /></td>

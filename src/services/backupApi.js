@@ -24,3 +24,11 @@ export const downloadBackup = (id) => {
 
 export const restoreBackup = (id) => 
     apiClient.post(`/backups/restore/${id}`).then(r => r.data);
+
+export const uploadBackup = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post('/backups/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(r => r.data);
+};
