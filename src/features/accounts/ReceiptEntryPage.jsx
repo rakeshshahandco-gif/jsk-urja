@@ -3,10 +3,11 @@ import {
     Button, Input, Select, useModal, SearchableSelect, BrandedLoader
 } from '@/components/ui';
 import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
-import { Plus, Trash2, Save, Layers } from 'lucide-react';
+import { Plus, Trash2, Save, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers,
-    getOutstandingBills, createVoucher, getVoucher, updateVoucher
+    getOutstandingBills, createVoucher, getVoucher, updateVoucher,
+    autoLinkSingleLedger
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
@@ -206,6 +207,66 @@ const ReceiptEntryPage = () => {
         });
     };
 
+    const handleFixAccountLedger = async (accountId) => {
+        if (!accountId) return;
+        setLoading(true);
+        try {
+            await autoLinkSingleLedger(accountId, 'CashBankAccount');
+            toast.success('Ledger linked successfully');
+            // Refresh accounts and ledgers
+            const [cbAccs, allLedgers] = await Promise.all([
+                getCashBankAccounts({ status: 'Active' }),
+                getLedgers()
+            ]);
+            setCashBankAccounts(cbAccs);
+            setLedgers(allLedgers);
+        } catch (error) {
+            toast.error('Failed to link ledger automatically');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFixEntityLedger = async (entityId, entityType) => {
+        if (!entityId) return;
+        setLoading(true);
+        try {
+            await autoLinkSingleLedger(entityId, entityType);
+            toast.success('Ledger linked successfully');
+            // Refresh ledgers
+            const allLedgers = await getLedgers();
+            setLedgers(allLedgers);
+        } catch (error) {
+            toast.error('Failed to link ledger automatically');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const LedgerLinkMissingAlert = ({ account }) => {
+        if (!account || account.ledgerId) return null;
+        return (
+            <div style={{ marginTop: 12, padding: '12px 16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <AlertTriangle size={20} color="#f97316" />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 13, color: '#9a3412', fontWeight: 700 }}>Ledger Link Missing</span>
+                        <span style={{ fontSize: 11, color: '#c2410c' }}>"{account.accountName}" needs an accounting ledger to save this entry.</span>
+                    </div>
+                </div>
+                <button 
+                    type="button"
+                    onClick={() => handleFixAccountLedger(account._id)}
+                    style={{ padding: '7px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(249,115,22,0.3)' }}
+                    onMouseOver={(e) => e.target.style.background = '#ea580c'}
+                    onMouseOut={(e) => e.target.style.background = '#f97316'}
+                >
+                    Create & Link Ledger
+                </button>
+            </div>
+        );
+    };
+
     const addItem = () => {
         setFormData(prev => ({
             ...prev,
@@ -337,6 +398,11 @@ const ReceiptEntryPage = () => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
         if (formData.totalAmount <= 0) return toast.error('Entry amount must be greater than zero');
 
+        const selectedAcc = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+        if (selectedAcc && !selectedAcc.ledgerId) {
+            return toast.error('Selected Cash/Bank account is not linked to an accounting ledger. Please fix it first.');
+        }
+
         if (!fromInvoice) {
             const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
             if (invalidItem) return toast.error('All items must have a ledger and amount');
@@ -451,7 +517,12 @@ const ReceiptEntryPage = () => {
                                     {formData.items[0]?.ledgerId ? (
                                         <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Linked</span>
                                     ) : (
-                                        <span style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase', fontWeight: 800 }}>Not Linked</span>
+                                        <button 
+                                            onClick={() => handleFixEntityLedger(location.state?.customerId, 'Customer')}
+                                            style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '2px 8px', border: '1px solid #fecaca', borderRadius: 6, textTransform: 'uppercase', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                                        >
+                                            <AlertCircle size={10} /> Not Linked — Fix Now
+                                        </button>
                                     )}
                                 </div>
                             </div>
@@ -550,6 +621,7 @@ const ReceiptEntryPage = () => {
                                 Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                             </div>
                         )}
+                        <LedgerLinkMissingAlert account={selectedAccount} />
                     </div>
 
                     {/* Action Buttons */}
@@ -640,6 +712,7 @@ const ReceiptEntryPage = () => {
                                         </option>
                                     ))}
                                 </select>
+                                <LedgerLinkMissingAlert account={cashBankAccounts.find(a => a._id === formData.cashBankAccountId)} />
                             </div>
                             <div>
                                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument Type</span>

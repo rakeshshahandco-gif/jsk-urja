@@ -3,10 +3,11 @@ import {
     Button, Input, Select, useModal, SearchableSelect, BrandedLoader
 } from '@/components/ui';
 import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
-import { Plus, Trash2, Save, Layers } from 'lucide-react';
+import { Plus, Trash2, Save, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers,
-    getOutstandingBills, createVoucher, getVoucher, updateVoucher
+    getOutstandingBills, createVoucher, getVoucher, updateVoucher,
+    autoLinkSingleLedger
 } from '@/services/accountApi';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
@@ -149,6 +150,66 @@ const PaymentEntryPage = () => {
         });
     };
 
+    const handleFixAccountLedger = async (accountId) => {
+        if (!accountId) return;
+        setLoading(true);
+        try {
+            await autoLinkSingleLedger(accountId, 'CashBankAccount');
+            toast.success('Ledger linked successfully');
+            // Refresh accounts and ledgers
+            const [cbAccs, allLedgers] = await Promise.all([
+                getCashBankAccounts({ status: 'Active' }),
+                getLedgers()
+            ]);
+            setCashBankAccounts(cbAccs);
+            setLedgers(allLedgers);
+        } catch (error) {
+            toast.error('Failed to link ledger automatically');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFixEntityLedger = async (entityId, entityType) => {
+        if (!entityId) return;
+        setLoading(true);
+        try {
+            await autoLinkSingleLedger(entityId, entityType);
+            toast.success('Ledger linked successfully');
+            // Refresh ledgers
+            const allLedgers = await getLedgers();
+            setLedgers(allLedgers);
+        } catch (error) {
+            toast.error('Failed to link ledger automatically');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const LedgerLinkMissingAlert = ({ account }) => {
+        if (!account || account.ledgerId) return null;
+        return (
+            <div style={{ marginTop: 12, padding: '12px 16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <AlertTriangle size={20} color="#f97316" />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 13, color: '#9a3412', fontWeight: 700 }}>Ledger Link Missing</span>
+                        <span style={{ fontSize: 11, color: '#c2410c' }}>"{account.accountName}" needs an accounting ledger to save this entry.</span>
+                    </div>
+                </div>
+                <button 
+                    type="button"
+                    onClick={() => handleFixAccountLedger(account._id)}
+                    style={{ padding: '7px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(249,115,22,0.3)' }}
+                    onMouseOver={(e) => e.target.style.background = '#ea580c'}
+                    onMouseOut={(e) => e.target.style.background = '#f97316'}
+                >
+                    Create & Link Ledger
+                </button>
+            </div>
+        );
+    };
+
     const addItem = () => {
         setFormData(prev => ({
             ...prev,
@@ -283,6 +344,11 @@ const PaymentEntryPage = () => {
         if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account to pay from');
         if (formData.totalAmount <= 0) return toast.error('Payment amount must be greater than zero');
 
+        const selectedAcc = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+        if (selectedAcc && !selectedAcc.ledgerId) {
+            return toast.error('Selected account is not linked to an accounting ledger. Please fix it first.');
+        }
+
         if (!fromInvoice) {
             const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
             if (invalidItem) return toast.error('All payment lines must have a ledger and amount');
@@ -364,7 +430,30 @@ const PaymentEntryPage = () => {
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Supplier</span>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{supplierName}</span>
+                                <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 8,
+                                    padding: '6px 12px',
+                                    background: '#f5f3ff',
+                                    border: '1px solid #c4b5fd',
+                                    borderRadius: 7,
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: '#4f46e5'
+                                }}>
+                                    <span>{supplierName}</span>
+                                    {formData.items[0]?.ledgerId ? (
+                                        <span style={{ fontSize: 10, background: '#e0e7ff', color: '#4338ca', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Linked</span>
+                                    ) : (
+                                        <button 
+                                            onClick={() => handleFixEntityLedger(location.state?.supplierId, 'Supplier')}
+                                            style={{ fontSize: 10, background: '#fee2e2', color: '#b91c1c', padding: '2px 8px', border: '1px solid #fecaca', borderRadius: 6, textTransform: 'uppercase', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                                        >
+                                            <AlertCircle size={10} /> Fix Now
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Amount to Pay</span>
@@ -397,6 +486,7 @@ const PaymentEntryPage = () => {
                             ))}
                         </select>
                         {selectedAccount && <div style={{ marginBottom: 16, fontSize: 12, color: '#6b7280' }}>Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></div>}
+                        <LedgerLinkMissingAlert account={selectedAccount} />
 
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>Payment Mode</label>
                         <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
@@ -494,6 +584,7 @@ const PaymentEntryPage = () => {
                                         </option>
                                     ))}
                                 </select>
+                                <LedgerLinkMissingAlert account={cashBankAccounts.find(a => a._id === formData.cashBankAccountId)} />
                             </div>
                             <div>
                                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument Type</span>

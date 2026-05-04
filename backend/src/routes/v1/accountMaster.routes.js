@@ -22,5 +22,7 @@ router.post('/ledger-link/manual', accountMasterController.linkEntityLedger);
 router.get('/ledger-link/preview', ledgerLinkingController.previewAutoLink);
 router.post('/ledger-link/apply', ledgerLinkingController.applyAutoLink);
 router.post('/ledger-link/auto-single', ledgerLinkingController.autoLinkSingle);
+router.get('/ledger-link/cb-preview', ledgerLinkingController.previewCashBankLink);
+router.post('/ledger-link/cb-apply', ledgerLinkingController.applyCashBankLink);
 
 export default router;

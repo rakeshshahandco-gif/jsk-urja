@@ -16,6 +16,7 @@ const cashBankAccountSchema = new mongoose.Schema({
 
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     remarks: { type: String, default: '' },
+    ledgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

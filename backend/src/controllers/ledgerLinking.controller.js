@@ -4,8 +4,9 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import Customer from '../models/customer.model.js';
 import { Supplier } from '../models/supplier.model.js';
+import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
-import { findMatchingLedger, autoLinkEntityLedger, normalizeName } from '../utils/ledgerLinking.utils.js';
+import { findMatchingLedger, autoLinkEntityLedger, autoLinkCashBankLedger, normalizeName } from '../utils/ledgerLinking.utils.js';
 import mongoose from 'mongoose';
 
 /**
@@ -198,21 +199,120 @@ export const autoLinkSingle = asyncHandler(async (req, res) => {
     }
 
     let entity;
+    let ledgerId;
+
     if (entityType === 'Customer') {
         entity = await Customer.findById(entityId);
+        if (!entity) throw new ApiError(httpStatus.NOT_FOUND, 'Customer not found');
+        ledgerId = await autoLinkEntityLedger(entity, 'Customer');
     } else if (entityType === 'Supplier') {
         entity = await Supplier.findById(entityId);
+        if (!entity) throw new ApiError(httpStatus.NOT_FOUND, 'Supplier not found');
+        ledgerId = await autoLinkEntityLedger(entity, 'Supplier');
+    } else if (entityType === 'CashBankAccount') {
+        entity = await CashBankAccount.findById(entityId);
+        if (!entity) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
+        ledgerId = await autoLinkCashBankLedger(entity);
     }
 
-    if (!entity) {
-        throw new ApiError(httpStatus.NOT_FOUND, `${entityType} not found`);
-    }
-
-    const ledgerId = await autoLinkEntityLedger(entity, entityType);
-    
     if (!ledgerId) {
         throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to auto-link ledger');
     }
 
     res.json(new ApiResponse(200, { ledgerId }, `${entityType} linked successfully`));
+});
+
+/**
+ * Preview auto-linking for all Cash and Bank accounts
+ */
+export const previewCashBankLink = asyncHandler(async (req, res) => {
+    const accounts = await CashBankAccount.find({ status: 'Active' }).lean();
+
+    const results = {
+        accounts: [],
+        summary: {
+            totalAccounts: accounts.length,
+            alreadyLinked: 0,
+            toLink: 0,
+            toCreate: 0
+        }
+    };
+
+    for (const acc of accounts) {
+        if (acc.ledgerId) {
+            results.summary.alreadyLinked++;
+            continue;
+        }
+
+        const isBank = acc.accountType === 'Bank';
+        const exactNameRegex = new RegExp(`^\\s*${acc.accountName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+        const match = await AccountLedger.findOne({ 
+            name: exactNameRegex, 
+            type: isBank ? 'Bank' : 'Cash' 
+        }).lean();
+
+        if (match) {
+            results.summary.toLink++;
+            results.accounts.push({
+                id: acc._id,
+                name: acc.accountName,
+                type: acc.accountType,
+                existingLedgerFound: true,
+                ledgerName: match.name,
+                action: 'Link Existing',
+                group: isBank ? 'Bank Accounts' : 'Cash-in-Hand'
+            });
+        } else {
+            results.summary.toCreate++;
+            results.accounts.push({
+                id: acc._id,
+                name: acc.accountName,
+                type: acc.accountType,
+                existingLedgerFound: false,
+                proposedLedgerName: acc.accountName.trim(),
+                action: 'Create New',
+                group: isBank ? 'Bank Accounts' : 'Cash-in-Hand'
+            });
+        }
+    }
+
+    res.json(new ApiResponse(200, results, 'Cash/Bank auto-link preview generated'));
+});
+
+/**
+ * Apply auto-linking for all Cash and Bank accounts
+ */
+export const applyCashBankLink = asyncHandler(async (req, res) => {
+    const accounts = await CashBankAccount.find({ 
+        $or: [
+            { ledgerId: null },
+            { ledgerId: { $exists: false } },
+            { ledgerId: "" }
+        ]
+    });
+
+    const stats = {
+        linked: 0,
+        created: 0,
+        errors: []
+    };
+
+    for (const acc of accounts) {
+        try {
+            const isBank = acc.accountType === 'Bank';
+            const exactNameRegex = new RegExp(`^\\s*${acc.accountName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+            const match = await AccountLedger.findOne({ 
+                name: exactNameRegex, 
+                type: isBank ? 'Bank' : 'Cash' 
+            }).lean();
+
+            await autoLinkCashBankLedger(acc);
+            if (match) stats.linked++;
+            else stats.created++;
+        } catch (err) {
+            stats.errors.push(`Account ${acc.accountName}: ${err.message}`);
+        }
+    }
+
+    res.json(new ApiResponse(200, stats, 'Cash/Bank auto-linking completed'));
 });

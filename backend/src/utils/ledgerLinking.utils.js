@@ -202,3 +202,94 @@ export const autoLinkEntityLedger = async (entity, entityType, session = null) =
         return null;
     }
 };
+
+/**
+ * Creates and/or links a ledger for a Cash or Bank Account
+ */
+export const autoLinkCashBankLedger = async (account, session = null) => {
+    try {
+        const isBank = account.accountType === 'Bank';
+        const name = account.accountName;
+        
+        // 1. Check if already linked correctly
+        if (account.ledgerId) {
+            const existing = await AccountLedger.findById(account.ledgerId).lean();
+            if (existing && existing.referenceId?.toString() === account._id.toString()) {
+                return account.ledgerId;
+            }
+        }
+        
+        // Check by referenceId even if account.ledgerId is missing (legacy data)
+        const byRef = await AccountLedger.findOne({ referenceId: account._id, referenceModel: 'CashBankAccount' }).lean();
+        if (byRef) {
+            // Update the account document if session is not provided, otherwise use updateOne
+            if (session) {
+                await account.constructor.updateOne({ _id: account._id }, { $set: { ledgerId: byRef._id } }, { session });
+            } else {
+                await account.constructor.updateOne({ _id: account._id }, { $set: { ledgerId: byRef._id } });
+            }
+            return byRef._id;
+        }
+
+        // 2. Try to find an existing matching ledger by name
+        const exactNameRegex = new RegExp(`^\\s*${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+        const matchedLedger = await AccountLedger.findOne({ 
+            name: exactNameRegex, 
+            type: isBank ? 'Bank' : 'Cash' 
+        }).lean();
+
+        if (matchedLedger) {
+            // Link existing ledger to account
+            const updateAcc = { $set: { ledgerId: matchedLedger._id } };
+            if (session) {
+                await account.constructor.updateOne({ _id: account._id }, updateAcc, { session });
+                await AccountLedger.updateOne(
+                    { _id: matchedLedger._id },
+                    { $set: { referenceId: account._id, referenceModel: 'CashBankAccount', isBank, isCashLedger: !isBank } },
+                    { session }
+                );
+            } else {
+                await account.constructor.updateOne({ _id: account._id }, updateAcc);
+                await AccountLedger.updateOne(
+                    { _id: matchedLedger._id },
+                    { $set: { referenceId: account._id, referenceModel: 'CashBankAccount', isBank, isCashLedger: !isBank } }
+                );
+            }
+            return matchedLedger._id;
+        }
+
+        // 3. Create new ledger
+        const groupName = isBank ? 'Bank Accounts' : 'Cash-in-Hand';
+        const groupId = await getGroupIdByName(groupName);
+        
+        const newLedgerData = {
+            name: name.trim(),
+            underGroup: groupId,
+            groupName: groupName,
+            type: isBank ? 'Bank' : 'Cash',
+            isBank: isBank,
+            isCashLedger: !isBank,
+            referenceId: account._id,
+            referenceModel: 'CashBankAccount',
+            openingBalance: account.openingBalance || 0,
+            drCr: 'Dr',
+            currentBalance: account.openingBalance || 0,
+            createdBy: account.createdBy || null
+        };
+
+        const newLedger = await AccountLedger.create([newLedgerData], { session });
+        const ledgerId = newLedger[0]._id;
+
+        // Update account with new ledgerId
+        if (session) {
+            await account.constructor.updateOne({ _id: account._id }, { $set: { ledgerId } }, { session });
+        } else {
+            await account.constructor.updateOne({ _id: account._id }, { $set: { ledgerId } });
+        }
+
+        return ledgerId;
+    } catch (error) {
+        logger.error(`Error in autoLinkCashBankLedger:`, error);
+        return null;
+    }
+};

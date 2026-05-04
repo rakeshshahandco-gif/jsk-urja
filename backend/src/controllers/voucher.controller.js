@@ -11,7 +11,7 @@ import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { getFYFromDate } from '../utils/fyUtils.js';
-import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
+import { autoLinkEntityLedger, autoLinkCashBankLedger } from '../utils/ledgerLinking.utils.js';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -267,10 +267,12 @@ export const createVoucher = asyncHandler(async (req, res) => {
             } else {
                 if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
                 
-                const mainLedger = await AccountLedger.findOne({ referenceId: cashBankAccountId }).session(session);
-                if (!mainLedger) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found for selected Cash/Bank account');
+                const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
+                if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
+
+                mainLedgerId = await autoLinkCashBankLedger(cbAcc, session);
+                if (!mainLedgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found for selected Cash/Bank account and auto-link failed');
                 
-                mainLedgerId = mainLedger._id;
                 voucher.paymentStatus = 'Paid';
                 voucher.paidAmount = processingTotal;
 
@@ -571,9 +573,13 @@ export const updateVoucher = asyncHandler(async (req, res) => {
                 oldVoucher.paidAmount = 0;
             } else {
                 if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required');
-                const mainLedger = await AccountLedger.findOne({ referenceId: cashBankAccountId }).session(session);
-                if (!mainLedger) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found');
-                mainLedgerId = mainLedger._id;
+                
+                const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
+                if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
+
+                mainLedgerId = await autoLinkCashBankLedger(cbAcc, session);
+                if (!mainLedgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found and auto-link failed');
+
                 oldVoucher.paymentStatus = 'Paid';
                 oldVoucher.paidAmount = processingTotal;
                 if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';

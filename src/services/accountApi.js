@@ -32,6 +32,9 @@ export const updateLedger = (id, data) =>
 export const deleteLedger = (id) =>
     apiClient.delete(`/accounts/masters/ledgers/${id}`).then(r => r.data);
 
+export const autoLinkSingleLedger = (entityId, entityType) =>
+    apiClient.post('/accounts/masters/ledger-link/auto-single', { entityId, entityType }).then(r => r.data.data);
+
 // ── Masters (Legacy/Other) ──────────────────────────────────────────────────
 
 export const getCashBankAccounts = (params = {}) =>

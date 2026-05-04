@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { autoLinkCashBankLedger } from '../utils/ledgerLinking.utils.js';
 
 export const createAccount = asyncHandler(async (req, res) => {
     const { accountName, accountType } = req.body;
@@ -17,17 +18,8 @@ export const createAccount = asyncHandler(async (req, res) => {
         createdBy: req.user.id
     });
 
-    // Create a corresponding Ledger in the Chart of Accounts
-    await AccountLedger.create({
-        name: account.accountName,
-        group: accountType === 'Cash' ? 'Current Assets' : 'Current Assets', // Both are current assets generally
-        type: accountType,
-        referenceId: account._id,
-        referenceModel: 'CashBankAccount',
-        openingBalance: account.openingBalance,
-        currentBalance: account.openingBalance,
-        createdBy: req.user.id
-    });
+    // Create a corresponding Ledger in the Chart of Accounts using standardized utility
+    await autoLinkCashBankLedger(account);
 
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, account, 'Account created successfully'));
 });
@@ -51,7 +43,10 @@ export const updateAccount = asyncHandler(async (req, res) => {
     account.updatedBy = req.user.id;
     await account.save();
 
-    // Update linked ledger name if it changed
+    // Standardize linking on update as well
+    await autoLinkCashBankLedger(account);
+
+    // Update linked ledger name if it changed explicitly (though autoLink handles matching, name sync is good)
     if (req.body.accountName && req.body.accountName !== oldName) {
         await AccountLedger.findOneAndUpdate(
             { referenceId: account._id, referenceModel: 'CashBankAccount' },
