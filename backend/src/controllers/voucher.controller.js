@@ -53,9 +53,14 @@ const postToLedger = async (data, session) => {
  */
 const adjustBill = async (adj, nature, voucherNo, date, session) => {
     const { refId, amount, adjustmentType, refModel } = adj;
-    if (!refId || adjustmentType !== 'Against Bill') return;
+    if (!refId || (adjustmentType !== 'Against Bill' && adjustmentType !== 'Opening Credit')) return;
 
-    if (nature === 'Receipt') {
+    if (adjustmentType === 'Opening Credit') {
+        // Just an audit trail, no logic needed here currently as net ledger balance already reflects it
+        return;
+    }
+
+    if (nature === 'Receipt' || nature === 'Adjustment') {
         const invoice = await SalesInvoice.findById(refId).session(session);
         if (!invoice) return;
         if (invoice.paymentStatus === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, `Sales Invoice ${invoice.invoiceNumber} is cancelled. Cannot receive payment.`);
@@ -196,6 +201,12 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     mainEntryType = 'Credit';
                     voucher.paymentStatus = 'Unpaid';
                     voucher.paidAmount = 0;
+                } else if (req.body.paymentMode === 'Adjustment') {
+                    // Adjustment mode - typically zero-sum Customer Dr/Cr
+                    // We skip main ledger entry here as the items will contain the Dr/Cr pair
+                    mainLedgerId = null; 
+                    voucher.paymentStatus = 'Paid';
+                    voucher.paidAmount = processingTotal;
                 } else {
                     if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
                     const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
@@ -208,14 +219,16 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     else if (actualNature === 'Contra') mainEntryType = req.body.headerType || 'Debit';
                 }
 
-                await postToLedger({
-                    voucherId: voucher._id, voucherNo, date,
-                    ledgerId: mainLedgerId, amount: processingTotal,
-                    type: mainEntryType,
-                    narration: narration || `Main entry for ${voucherNo}`,
-                    cashBankAccountId: isCreditExpense ? null : cashBankAccountId,
-                    financialYear: fy
-                }, session);
+                if (mainLedgerId) {
+                    await postToLedger({
+                        voucherId: voucher._id, voucherNo, date,
+                        ledgerId: mainLedgerId, amount: processingTotal,
+                        type: mainEntryType,
+                        narration: narration || `Main entry for ${voucherNo}`,
+                        cashBankAccountId: isCreditExpense ? null : cashBankAccountId,
+                        financialYear: fy
+                    }, session);
+                }
 
                 for (const item of voucher.items) {
                     await postToLedger({

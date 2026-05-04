@@ -34,6 +34,7 @@ const ReceiptEntryPage = () => {
         voucherTypeId: '',
         date: new Date().toISOString().split('T')[0],
         cashBankAccountId: '',
+        paymentMode: 'Cash/Bank', // 'Cash/Bank' or 'Adjustment'
         totalAmount: 0,
         narration: '',
         instrumentType: 'Cash',
@@ -167,6 +168,7 @@ const ReceiptEntryPage = () => {
 
         setFormData(prev => ({
             ...prev,
+            paymentMode: location.state?.paymentMode || prev.paymentMode,
             totalAmount: defaultAmount,
             narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
             items: [{
@@ -435,12 +437,15 @@ const ReceiptEntryPage = () => {
     };
 
     const handleSave = async (shouldClose = false) => {
-        if (!formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
+        const isAdj = formData.paymentMode === 'Adjustment';
+        if (!isAdj && !formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
         if (formData.totalAmount <= 0) return toast.error('Entry amount must be greater than zero');
 
-        const selectedAcc = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
-        if (selectedAcc && !selectedAcc.ledgerId) {
-            return toast.error('Selected Cash/Bank account is not linked to an accounting ledger. Please fix it first.');
+        if (!isAdj) {
+            const selectedAcc = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+            if (selectedAcc && !selectedAcc.ledgerId) {
+                return toast.error('Selected Cash/Bank account is not linked to an accounting ledger. Please fix it first.');
+            }
         }
 
         if (!fromInvoice) {
@@ -461,9 +466,36 @@ const ReceiptEntryPage = () => {
                 toast.success(`Voucher updated successfully`);
                 navigate(PATHS.ACCOUNTS.VOUCHERS);
             } else {
+                let payload = { ...formData };
+                
+                if (isAdj) {
+                    // Logic: To record an adjustment without double-counting the ledger balance,
+                    // we create a zero-sum voucher:
+                    // 1. Existing Credit items (the user entered these to adjust against bills)
+                    // 2. Automated Debit item (the "source" of the adjustment - Opening Credit)
+                    const custLedgerId = formData.items[0]?.ledgerId;
+                    if (!custLedgerId) throw new Error('Customer ledger required for adjustment');
+
+                    const adjItem = {
+                        id: 'adj-source',
+                        ledgerId: custLedgerId,
+                        ledgerName: formData.items[0]?.ledgerName,
+                        amount: formData.totalAmount,
+                        type: 'Debit',
+                        narration: 'Adjusted from Opening Credit/Advance',
+                        adjustments: [{
+                            adjustmentType: 'Opening Credit',
+                            amount: formData.totalAmount,
+                            refId: custLedgerId, // Link to self for audit
+                            refNumber: 'Opening Balance'
+                        }]
+                    };
+                    payload.items = [...formData.items, adjItem];
+                }
+
                 const response = await createVoucher({ 
-                    ...formData, 
-                    nature: 'Receipt',
+                    ...payload, 
+                    nature: isAdj ? 'Adjustment' : 'Receipt',
                     voucherType: formData.voucherTypeId 
                 });
                 const savedNo = response?.data?.voucherNo || 'Voucher';
@@ -603,17 +635,44 @@ const ReceiptEntryPage = () => {
                                     style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 13, fontWeight: 600, color: '#374151', textAlign: 'right' }}
                                 />
                             </div>
-                            {/* Instrument Mode */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Mode</span>
-                                <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
-                                    style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
-                                    <option value="Cash">Cash</option>
-                                    <option value="Bank Transfer">Bank Transfer</option>
-                                    <option value="Cheque">Cheque</option>
-                                    <option value="UPI">UPI/QR</option>
-                                </select>
-                            </div>
+                            {/* Receipt Mode */}
+                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Mode</span>
+                                 <div style={{ display: 'flex', gap: 6 }}>
+                                     <button 
+                                         type="button"
+                                         onClick={() => setFormData(p => ({ ...p, paymentMode: 'Cash/Bank' }))}
+                                         style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', border: '1px solid #e2e8f0', background: formData.paymentMode === 'Cash/Bank' ? '#eff6ff' : '#fff', color: formData.paymentMode === 'Cash/Bank' ? '#2563eb' : '#64748b', fontWeight: 700 }}
+                                     >Standard</button>
+                                     <button 
+                                         type="button"
+                                         onClick={() => setFormData(p => ({ ...p, paymentMode: 'Adjustment' }))}
+                                         style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', border: '1px solid #e2e8f0', background: formData.paymentMode === 'Adjustment' ? '#f0fdf4' : '#fff', color: formData.paymentMode === 'Adjustment' ? '#166534' : '#64748b', fontWeight: 700 }}
+                                     >Credit Adj.</button>
+                                 </div>
+                             </div>
+                             {formData.paymentMode !== 'Adjustment' && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Instrument Type</span>
+                                    <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
+                                        style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                        <option value="Cheque">Cheque</option>
+                                        <option value="UPI">UPI/QR</option>
+                                    </select>
+                                </div>
+                             )}
+                             {/* Customer Balance Info */}
+                             {formData.items[0]?.ledgerId && (
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                     <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Available Credit</span>
+                                     <span style={{ fontSize: 13, fontWeight: 800, color: (ledgers.find(l => l._id === formData.items[0]?.ledgerId)?.currentBalance || 0) < 0 ? '#10b981' : '#64748b' }}>
+                                         ₹{Math.abs(ledgers.find(l => l._id === formData.items[0]?.ledgerId)?.currentBalance || 0).toLocaleString('en-IN')}
+                                         {(ledgers.find(l => l._id === formData.items[0]?.ledgerId)?.currentBalance || 0) < 0 ? ' Cr' : ' Dr'}
+                                     </span>
+                                 </div>
+                             )}
                             {/* Narration */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, paddingTop: 6 }}>Narration</span>
@@ -628,40 +687,55 @@ const ReceiptEntryPage = () => {
                         </div>
                     </div>
 
-                    {/* Only user-fillable field: Cash/Bank Account */}
+                    {/* Header Selection or Adjustment Info */}
                     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', padding: '24px', marginBottom: 20 }}>
-                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>
-                            Deposit Into — Select Account *
-                        </label>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>Choose how the payment was received (Cash, Bank, or Other)</p>
-                        <select
-                            name="cashBankAccountId"
-                            value={formData.cashBankAccountId}
-                            onChange={handleHeaderChange}
-                            style={{ width: '100%', padding: '11px 14px', border: '2px solid #0d9488', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f0fdfa', color: '#0d9488', outline: 'none', cursor: 'pointer', marginBottom: (formData.instrumentType !== 'Cash') ? 16 : 0 }}
-                        >
-                            {cashBankAccounts.map(a => (
-                                <option key={a._id} value={a._id}>
-                                    {a.accountName}  (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
-                                </option>
-                            ))}
-                        </select>
-                        {(formData.instrumentType !== 'Cash') && (
+                        {formData.paymentMode === 'Adjustment' ? (
+                            <div style={{ textAlign: 'center', padding: '10px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#166534' }}>
+                                        <Layers size={24} />
+                                    </div>
+                                </div>
+                                <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 800, color: '#166534' }}>Credit Adjustment Mode</h3>
+                                <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Settling invoice against available opening credit or advance balance.</p>
+                                <p style={{ margin: '8px 0 0', fontSize: 11, fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '4px 12px', borderRadius: 20, display: 'inline-block' }}>No Cash/Bank entry will be generated</p>
+                            </div>
+                        ) : (
                             <>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 8 }}>
-                                    {formData.instrumentType} Ref / No.
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>
+                                    Deposit Into — Select Account *
                                 </label>
-                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
-                                    placeholder={`Enter ${formData.instrumentType} number`}
-                                    style={{ ...inp, borderRadius: 9, padding: '11px 14px' }} />
+                                <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14, marginTop: -6 }}>Choose how the payment was received (Cash, Bank, or Other)</p>
+                                <select
+                                    name="cashBankAccountId"
+                                    value={formData.cashBankAccountId}
+                                    onChange={handleHeaderChange}
+                                    style={{ width: '100%', padding: '11px 14px', border: '2px solid #0d9488', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f0fdfa', color: '#0d9488', outline: 'none', cursor: 'pointer', marginBottom: (formData.instrumentType !== 'Cash') ? 16 : 0 }}
+                                >
+                                    {cashBankAccounts.map(a => (
+                                        <option key={a._id} value={a._id}>
+                                            {a.accountName}  (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
+                                        </option>
+                                    ))}
+                                </select>
+                                {(formData.instrumentType !== 'Cash') && (
+                                    <>
+                                        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 8 }}>
+                                            {formData.instrumentType} Ref / No.
+                                        </label>
+                                        <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
+                                            placeholder={`Enter ${formData.instrumentType} number`}
+                                            style={{ ...inp, borderRadius: 9, padding: '11px 14px' }} />
+                                    </>
+                                )}
+                                {selectedAccount && (
+                                    <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
+                                        Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                                    </div>
+                                )}
+                                <LedgerLinkMissingAlert account={selectedAccount} />
                             </>
                         )}
-                        {selectedAccount && (
-                            <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
-                                Current balance: <strong>₹{(selectedAccount.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                            </div>
-                        )}
-                        <LedgerLinkMissingAlert account={selectedAccount} />
                     </div>
 
                     {/* Action Buttons */}
@@ -739,20 +813,46 @@ const ReceiptEntryPage = () => {
                                 )}
                             </div>
                             <div style={{ gridColumn: 'span 2' }}>
-                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Deposit Into (Cash/Bank Account) *</span>
-                                <select
-                                    name="cashBankAccountId"
-                                    value={formData.cashBankAccountId}
-                                    onChange={handleHeaderChange}
-                                    style={{ ...inp, cursor: 'pointer', fontWeight: 700, color: '#0d9488', background: '#f0fdfa', borderColor: '#0d9488' }}
-                                >
-                                    {cashBankAccounts.map(a => (
-                                        <option key={a._id} value={a._id}>
-                                            {a.accountName} (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
-                                        </option>
-                                    ))}
-                                </select>
-                                <LedgerLinkMissingAlert account={cashBankAccounts.find(a => a._id === formData.cashBankAccountId)} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                        {formData.paymentMode === 'Adjustment' ? 'Adjustment Source' : 'Deposit Into (Cash/Bank) *'}
+                                    </span>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setFormData(p => ({ ...p, paymentMode: 'Cash/Bank' }))}
+                                            style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', border: '1px solid #e2e8f0', background: formData.paymentMode === 'Cash/Bank' ? '#eff6ff' : '#fff', color: formData.paymentMode === 'Cash/Bank' ? '#2563eb' : '#64748b', fontWeight: 700 }}
+                                        >Standard</button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setFormData(p => ({ ...p, paymentMode: 'Adjustment' }))}
+                                            style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', border: '1px solid #e2e8f0', background: formData.paymentMode === 'Adjustment' ? '#f0fdf4' : '#fff', color: formData.paymentMode === 'Adjustment' ? '#166534' : '#64748b', fontWeight: 700 }}
+                                        >Credit Adjustment</button>
+                                    </div>
+                                </div>
+
+                                {formData.paymentMode === 'Adjustment' ? (
+                                    <div style={{ ...inp, background: '#f0fdf4', borderColor: '#166534', color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <Layers size={14} />
+                                        Adjusting from Customer Opening Credit / Advance
+                                    </div>
+                                ) : (
+                                    <select
+                                        name="cashBankAccountId"
+                                        value={formData.cashBankAccountId}
+                                        onChange={handleHeaderChange}
+                                        style={{ ...inp, cursor: 'pointer', fontWeight: 700, color: '#0d9488', background: '#f0fdfa', borderColor: '#0d9488' }}
+                                    >
+                                        {cashBankAccounts.map(a => (
+                                            <option key={a._id} value={a._id}>
+                                                {a.accountName} (Bal: ₹{(a.currentBalance || 0).toLocaleString('en-IN')})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                                {formData.paymentMode !== 'Adjustment' && (
+                                    <LedgerLinkMissingAlert account={cashBankAccounts.find(a => a._id === formData.cashBankAccountId)} />
+                                )}
                             </div>
                             <div>
                                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument Type</span>

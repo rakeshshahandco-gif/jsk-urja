@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const billAdjustmentSchema = new mongoose.Schema({
     adjustmentType: {
         type: String,
-        // enum: ['Against Bill', 'Advance', 'On Account', 'New Reference'],
+        enum: ['Against Bill', 'Advance', 'On Account', 'New Reference', 'Opening Credit'],
         default: 'Against Bill'
     },
     refId: { type: mongoose.Schema.Types.ObjectId, refPath: 'items.adjustments.refModel' },

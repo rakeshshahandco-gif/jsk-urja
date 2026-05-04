@@ -608,23 +608,43 @@ export default function SalesInvoiceDetailPage() {
                              )}
                             {/* Receive Payment */}
                             {notCancelled && notFullyPaid && (
-                                <button
-                                    onClick={() => navigate('/accounts/receipt-entry', { 
-                                        state: { 
-                                            source: 'sales_invoice',
-                                            invoiceId: inv._id, 
-                                            invoiceNumber: inv.invoiceNumber, 
-                                            customerId: inv.customerId?._id || inv.customerId, 
-                                            customerName: inv.customerName,
-                                            ledgerId: inv.customerLedgerId,
-                                            ledgerName: inv.customerLedgerName,
-                                            amount: (inv.roundedTotal || inv.grandTotal) - inv.paidAmount 
-                                        } 
-                                    })}
-                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
-                                >
-                                    💳 Receive Payment
-                                </button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => navigate('/accounts/receipt-entry', { 
+                                            state: { 
+                                                source: 'sales_invoice',
+                                                invoiceId: inv._id, 
+                                                invoiceNumber: inv.invoiceNumber, 
+                                                customerId: inv.customerId?._id || inv.customerId, 
+                                                customerName: inv.customerName,
+                                                ledgerId: inv.customerLedgerId,
+                                                ledgerName: inv.customerLedgerName,
+                                                amount: (inv.roundedTotal || inv.grandTotal) - inv.paidAmount 
+                                            } 
+                                        })}
+                                        style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
+                                    >
+                                        💳 Receive Payment
+                                    </button>
+                                    <button
+                                        onClick={() => navigate('/accounts/receipt-entry', { 
+                                            state: { 
+                                                source: 'sales_invoice',
+                                                invoiceId: inv._id, 
+                                                invoiceNumber: inv.invoiceNumber, 
+                                                customerId: inv.customerId?._id || inv.customerId, 
+                                                customerName: inv.customerName,
+                                                ledgerId: inv.customerLedgerId,
+                                                ledgerName: inv.customerLedgerName,
+                                                amount: (inv.roundedTotal || inv.grandTotal) - inv.paidAmount,
+                                                paymentMode: 'Adjustment' // Set mode to Adjustment
+                                            } 
+                                        })}
+                                        style={{ padding: '9px 18px', borderRadius: 8, background: '#f0fdf4', color: '#166534', border: '1px solid #86efac', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(22,101,52,0.1)' }}
+                                    >
+                                        ⚖️ Adjust from Credit
+                                    </button>
+                                </div>
                             )}
 
                             {/* E-Way Bill Button */}
