@@ -117,6 +117,7 @@ import { Voucher } from '../models/voucher.model.js';
 import { VoucherType } from '../models/voucherType.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { getFYFromDate } from '../utils/fyUtils.js';
+import { getNextVoucherNo } from '../utils/voucherUtils.js';
 
 export const createServiceCreditNote = asyncHandler(async (req, res) => {
     const complaint = await Complaint.findById(req.params.id);
@@ -143,9 +144,7 @@ export const createServiceCreditNote = asyncHandler(async (req, res) => {
 
         // Create Voucher
         // For Debit Note/Credit Note, nature should be as per VType
-        const voucherNo = `${vType.prefix}${String(vType.nextNumber).padStart(4, '0')}`;
-        vType.nextNumber += 1;
-        await vType.save({ session });
+        const voucherNo = await getNextVoucherNo(vTypeId, date, session);
 
         const voucher = await Voucher.create([{
             voucherNo,

@@ -10,74 +10,11 @@ import { AccountLedger } from '../models/accountLedger.model.js';
 import { CashBankAccount } from '../models/cashBankAccount.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
-import { getFYFromDate } from '../utils/fyUtils.js';
+import { getFYFromDate, getShortFY } from '../utils/fyUtils.js';
+import { calculateVoucherGstTotals, getNextVoucherNo } from '../utils/voucherUtils.js';
 import { autoLinkEntityLedger, autoLinkCashBankLedger } from '../utils/ledgerLinking.utils.js';
 
-const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
-const calculateVoucherGstTotals = (items, gstType) => {
-    let totalTaxable = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0;
-    const isIGST = gstType === 'IGST';
-
-    const updatedItems = items.map(item => {
-        const taxableAmount = r2(item.amount); // For expenses, the base amount is the taxable
-        let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
-        let gstRate = Number(item.gstRate || 0);
-
-        if (gstRate > 0) {
-            if (isIGST) {
-                igstAmount = r2(taxableAmount * gstRate / 100);
-            } else {
-                cgstAmount = r2(taxableAmount * (gstRate / 2) / 100);
-                sgstAmount = r2(taxableAmount * (gstRate / 2) / 100);
-            }
-        }
-
-        totalTaxable += taxableAmount;
-        totalCgst += cgstAmount;
-        totalSgst += sgstAmount;
-        totalIgst += igstAmount;
-
-        return {
-            ...item,
-            taxableAmount,
-            cgstAmount,
-            sgstAmount,
-            igstAmount,
-            totalAmount: r2(taxableAmount + cgstAmount + sgstAmount + igstAmount)
-        };
-    });
-
-    const rawTotal = r2(totalTaxable + totalCgst + totalSgst + totalIgst);
-    const grandTotal = Math.round(rawTotal);
-    const roundOff = r2(grandTotal - rawTotal);
-
-    return {
-        updatedItems,
-        totalTaxableAmount: r2(totalTaxable),
-        totalCgst: r2(totalCgst),
-        totalSgst: r2(totalSgst),
-        totalIgst: r2(totalIgst),
-        totalTax: r2(totalCgst + totalSgst + totalIgst),
-        roundOff,
-        grandTotal
-    };
-};
-
-/**
- * Generate Next Voucher Number
- */
-const getNextVoucherNo = async (typeId) => {
-    const vType = await VoucherType.findById(typeId);
-    if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
-
-    const num = vType.nextNumber;
-    const vNo = `${vType.prefix}${String(num).padStart(4, '0')}`;
-
-    vType.nextNumber += 1;
-    await vType.save();
-    return vNo;
-};
 
 /**
  * Post to Ledger and update balances
@@ -174,181 +111,162 @@ const adjustBill = async (adj, nature, voucherNo, date, session) => {
 };
 
 export const createVoucher = asyncHandler(async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
+    let retries = 3;
+    let lastError = null;
 
-    try {
-        const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
+    while (retries > 0) {
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-        // --- SAFETY HOOK: Ensure party ledgers are linked ---
-        if (req.body.customerId) {
-            const customerLedgerId = await autoLinkEntityLedger(req.body.customerId, 'Customer', session);
-            if (!req.body.partyId) req.body.partyId = customerLedgerId;
-        }
-        if (req.body.supplierId) {
-            const supplierLedgerId = await autoLinkEntityLedger(req.body.supplierId, 'Supplier', session);
-            if (!req.body.partyId) req.body.partyId = supplierLedgerId;
-        }
-        
-        // Check items for customerId/supplierId as well (some complex JVs might use them)
-        if (items && Array.isArray(items)) {
-            for (const item of items) {
-                if (item.customerId) {
-                    item.ledgerId = await autoLinkEntityLedger(item.customerId, 'Customer', session);
-                }
-                if (item.supplierId) {
-                    item.ledgerId = await autoLinkEntityLedger(item.supplierId, 'Supplier', session);
-                }
+        try {
+            // --- SAFETY HOOK: Ensure party ledgers are linked ---
+            if (req.body.customerId) {
+                const customerLedgerId = await autoLinkEntityLedger(req.body.customerId, 'Customer', session);
+                if (!req.body.partyId) req.body.partyId = customerLedgerId;
             }
-        }
-        // ----------------------------------------------------
-
-        const vType = await VoucherType.findById(voucherTypeId).session(session);
-        if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
-
-        const fy = req.body.financialYear || getFYFromDate(date || new Date());
-        const voucherNo = await getNextVoucherNo(voucherTypeId);
-        const actualNature = vType.nature || nature;
-
-        const voucher = new Voucher({
-            ...req.body,
-            voucherNo,
-            financialYear: fy,
-            voucherType: vType._id,
-            nature: actualNature,
-            voucherTypeName: vType.name,
-            createdBy: req.user.id
-        });
-
-        // Journal Vouchers: Double Entry Mode (No header cashBankAccountId)
-        if (actualNature === 'Journal') {
-            let debitTotal = 0;
-            let creditTotal = 0;
-
-            for (const item of items) {
-                if (item.type === 'Debit') debitTotal += item.amount;
-                else creditTotal += item.amount;
-
-                await postToLedger({
-                    voucherId: voucher._id, voucherNo, date,
-                    ledgerId: item.ledgerId, amount: item.amount,
-                    type: item.type,
-                    narration: item.narration || narration,
-                    financialYear: fy
-                }, session);
+            if (req.body.supplierId) {
+                const supplierLedgerId = await autoLinkEntityLedger(req.body.supplierId, 'Supplier', session);
+                if (!req.body.partyId) req.body.partyId = supplierLedgerId;
             }
-
-            if (Math.abs(debitTotal - creditTotal) > 0.01) {
-                throw new ApiError(httpStatus.BAD_REQUEST, 'Journal entries must be balanced (Total Dr = Total Cr)');
-            }
-        } 
-        // Receipt / Payment / Expense / Contra: Single Entry Mode
-        else {
-            let mainLedgerId;
-            let mainEntryType = 'Debit';
-            let isCreditExpense = actualNature === 'Expense' && req.body.expenseType === 'Credit';
-            let isGstEnabled = actualNature === 'Expense' && req.body.isGstEnabled;
-
-            let processingTotal = totalAmount;
-
-            if (isGstEnabled) {
-                const gstResult = calculateVoucherGstTotals(items, req.body.gstType);
-                Object.assign(voucher, gstResult);
-                processingTotal = gstResult.grandTotal;
-                voucher.items = gstResult.updatedItems;
-            }
-
-            if (isCreditExpense) {
-                if (!req.body.partyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Supplier ledger (partyId) is required for Credit Expense');
-                mainLedgerId = req.body.partyId;
-                mainEntryType = 'Credit';
-                voucher.paymentStatus = 'Unpaid';
-                voucher.paidAmount = 0;
-            } else {
-                if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
-                
-                const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
-                if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
-
-                mainLedgerId = await autoLinkCashBankLedger(cbAcc, session);
-                if (!mainLedgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found for selected Cash/Bank account and auto-link failed');
-                
-                voucher.paymentStatus = 'Paid';
-                voucher.paidAmount = processingTotal;
-
-                if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
-                else if (actualNature === 'Contra') {
-                    mainEntryType = req.body.headerType || 'Debit'; 
-                }
-            }
-
-            // Post Main Account (Header) - Total Amount (Tax Inclusive)
-            await postToLedger({
-                voucherId: voucher._id, voucherNo, date,
-                ledgerId: mainLedgerId, amount: processingTotal,
-                type: mainEntryType,
-                narration: narration || `Main entry for ${voucherNo}`,
-                cashBankAccountId: isCreditExpense ? null : cashBankAccountId,
-                financialYear: fy
-            }, session);
-
-            // Post Item Entries (Taxable Amounts)
-            for (const item of voucher.items) {
-                await postToLedger({
-                    voucherId: voucher._id, voucherNo, date,
-                    ledgerId: item.ledgerId, amount: isGstEnabled ? item.taxableAmount : item.amount,
-                    type: item.type, // Debit for Expense
-                    narration: item.narration || narration,
-                    financialYear: fy
-                }, session);
-
-                // Handle Bill Adjustments
-                if (item.adjustments && item.adjustments.length > 0) {
-                    for (const adj of item.adjustments) {
-                        await adjustBill(adj, actualNature, voucherNo, date, session);
+            
+            if (items && Array.isArray(items)) {
+                for (const item of items) {
+                    if (item.customerId) {
+                        item.ledgerId = await autoLinkEntityLedger(item.customerId, 'Customer', session);
+                    }
+                    if (item.supplierId) {
+                        item.ledgerId = await autoLinkEntityLedger(item.supplierId, 'Supplier', session);
                     }
                 }
             }
+            // ----------------------------------------------------
 
-            // Post Tax Entries and Round Off if GST is enabled
-            if (isGstEnabled) {
-                const cgstLedger = await AccountLedger.findOne({ name: 'CGST Input' }).session(session);
-                const sgstLedger = await AccountLedger.findOne({ name: 'SGST Input' }).session(session);
-                const igstLedger = await AccountLedger.findOne({ name: 'IGST Input' }).session(session);
-                const roundOffLedger = await AccountLedger.findOne({ name: 'Round Off' }).session(session);
+            const vType = await VoucherType.findById(voucherTypeId).session(session);
+            if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
 
-                if (voucher.totalCgst > 0 && cgstLedger) {
-                    await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: cgstLedger._id, amount: voucher.totalCgst, type: 'Debit', narration: 'Input CGST', financialYear: fy }, session);
-                }
-                if (voucher.totalSgst > 0 && sgstLedger) {
-                    await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: sgstLedger._id, amount: voucher.totalSgst, type: 'Debit', narration: 'Input SGST', financialYear: fy }, session);
-                }
-                if (voucher.totalIgst > 0 && igstLedger) {
-                    await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: igstLedger._id, amount: voucher.totalIgst, type: 'Debit', narration: 'Input IGST', financialYear: fy }, session);
-                }
-                if (voucher.roundOff !== 0 && roundOffLedger) {
-                    await postToLedger({ 
-                        voucherId: voucher._id, voucherNo, date, 
-                        ledgerId: roundOffLedger._id, 
-                        amount: Math.abs(voucher.roundOff), 
-                        type: voucher.roundOff > 0 ? 'Debit' : 'Credit', 
-                        narration: 'Round Off', 
-                        financialYear: fy 
+            const fy = req.body.financialYear || getFYFromDate(date || new Date());
+            const voucherNo = await getNextVoucherNo(voucherTypeId, date, session);
+            const actualNature = vType.nature || nature;
+
+            const voucher = new Voucher({
+                ...req.body,
+                voucherNo,
+                financialYear: fy,
+                voucherType: vType._id,
+                nature: actualNature,
+                voucherTypeName: vType.name,
+                createdBy: req.user.id
+            });
+
+            if (actualNature === 'Journal') {
+                let debitTotal = 0;
+                let creditTotal = 0;
+                for (const item of items) {
+                    if (item.type === 'Debit') debitTotal += item.amount;
+                    else creditTotal += item.amount;
+                    await postToLedger({
+                        voucherId: voucher._id, voucherNo, date,
+                        ledgerId: item.ledgerId, amount: item.amount,
+                        type: item.type,
+                        narration: item.narration || narration,
+                        financialYear: fy
                     }, session);
                 }
+                if (Math.abs(debitTotal - creditTotal) > 0.01) {
+                    throw new ApiError(httpStatus.BAD_REQUEST, 'Journal entries must be balanced (Total Dr = Total Cr)');
+                }
+            } else {
+                let mainLedgerId;
+                let mainEntryType = 'Debit';
+                let isCreditExpense = actualNature === 'Expense' && req.body.expenseType === 'Credit';
+                let isGstEnabled = actualNature === 'Expense' && req.body.isGstEnabled;
+                let processingTotal = totalAmount;
+
+                if (isGstEnabled) {
+                    const gstResult = calculateVoucherGstTotals(items, req.body.gstType);
+                    Object.assign(voucher, gstResult);
+                    processingTotal = gstResult.grandTotal;
+                    voucher.items = gstResult.updatedItems;
+                }
+
+                if (isCreditExpense) {
+                    if (!req.body.partyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Supplier ledger (partyId) is required for Credit Expense');
+                    mainLedgerId = req.body.partyId;
+                    mainEntryType = 'Credit';
+                    voucher.paymentStatus = 'Unpaid';
+                    voucher.paidAmount = 0;
+                } else {
+                    if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
+                    const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
+                    if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
+                    mainLedgerId = await autoLinkCashBankLedger(cbAcc, session);
+                    if (!mainLedgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'Main account ledger not found for selected Cash/Bank account and auto-link failed');
+                    voucher.paymentStatus = 'Paid';
+                    voucher.paidAmount = processingTotal;
+                    if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
+                    else if (actualNature === 'Contra') mainEntryType = req.body.headerType || 'Debit';
+                }
+
+                await postToLedger({
+                    voucherId: voucher._id, voucherNo, date,
+                    ledgerId: mainLedgerId, amount: processingTotal,
+                    type: mainEntryType,
+                    narration: narration || `Main entry for ${voucherNo}`,
+                    cashBankAccountId: isCreditExpense ? null : cashBankAccountId,
+                    financialYear: fy
+                }, session);
+
+                for (const item of voucher.items) {
+                    await postToLedger({
+                        voucherId: voucher._id, voucherNo, date,
+                        ledgerId: item.ledgerId, amount: isGstEnabled ? item.taxableAmount : item.amount,
+                        type: item.type,
+                        narration: item.narration || narration,
+                        financialYear: fy
+                    }, session);
+                    if (item.adjustments && item.adjustments.length > 0) {
+                        for (const adj of item.adjustments) {
+                            await adjustBill(adj, actualNature, voucherNo, date, session);
+                        }
+                    }
+                }
+
+                if (isGstEnabled) {
+                    const [cgstLedger, sgstLedger, igstLedger, roundOffLedger] = await Promise.all([
+                        AccountLedger.findOne({ name: 'CGST Input' }).session(session),
+                        AccountLedger.findOne({ name: 'SGST Input' }).session(session),
+                        AccountLedger.findOne({ name: 'IGST Input' }).session(session),
+                        AccountLedger.findOne({ name: 'Round Off' }).session(session)
+                    ]);
+                    if (voucher.totalCgst > 0 && cgstLedger) await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: cgstLedger._id, amount: voucher.totalCgst, type: 'Debit', narration: 'Input CGST', financialYear: fy }, session);
+                    if (voucher.totalSgst > 0 && sgstLedger) await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: sgstLedger._id, amount: voucher.totalSgst, type: 'Debit', narration: 'Input SGST', financialYear: fy }, session);
+                    if (voucher.totalIgst > 0 && igstLedger) await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: igstLedger._id, amount: voucher.totalIgst, type: 'Debit', narration: 'Input IGST', financialYear: fy }, session);
+                    if (voucher.roundOff !== 0 && roundOffLedger) await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: roundOffLedger._id, amount: Math.abs(voucher.roundOff), type: voucher.roundOff > 0 ? 'Debit' : 'Credit', narration: 'Round Off', financialYear: fy }, session);
+                }
             }
+
+            await voucher.save({ session });
+            await session.commitTransaction();
+            return res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, voucher, 'Voucher created successfully'));
+
+        } catch (error) {
+            await session.abortTransaction();
+            lastError = error;
+            // Handle MongoDB Duplicate Key Error (Code 11000)
+            if ((error.code === 11000 || error.message?.includes('E11000')) && retries > 1) {
+                retries--;
+                console.log(`Duplicate voucher number detected. Retrying... Attempts left: ${retries}`);
+                continue;
+            }
+            throw error;
+        } finally {
+            session.endSession();
         }
-
-        await voucher.save({ session });
-        await session.commitTransaction();
-        res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, voucher, 'Voucher created successfully'));
-
-    } catch (error) {
-        await session.abortTransaction();
-        throw error;
-    } finally {
-        session.endSession();
     }
+
+    // If all retries failed
+    throw new ApiError(httpStatus.CONFLICT, 'Voucher number already exists. Please try again or manually update the voucher series next number.');
 });
 
 export const getVouchers = asyncHandler(async (req, res) => {

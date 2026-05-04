@@ -31,7 +31,7 @@ const voucherItemSchema = new mongoose.Schema({
 });
 
 const voucherSchema = new mongoose.Schema({
-    voucherNo: { type: String, required: true, unique: true },
+    voucherNo: { type: String, required: true },
     voucherType: { type: mongoose.Schema.Types.ObjectId, ref: 'VoucherType', required: true },
     voucherTypeName: { type: String, default: '' },
     nature: { type: String, /* enum: ['Receipt', 'Payment', 'Contra', 'Journal', 'Expense', 'Debit Note', 'Credit Note', 'Sales', 'Purchase'], */ required: true },
@@ -102,6 +102,7 @@ voucherSchema.index({ voucherNo: 1 });
 voucherSchema.index({ date: -1 });
 voucherSchema.index({ partyId: 1 });
 voucherSchema.index({ status: 1 });
+voucherSchema.index({ financialYear: 1, voucherType: 1, voucherNo: 1 }, { unique: true });
 voucherSchema.index({ financialYear: 1 });
 
 const Voucher = mongoose.model('Voucher', voucherSchema);

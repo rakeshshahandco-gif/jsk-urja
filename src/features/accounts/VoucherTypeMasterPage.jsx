@@ -101,14 +101,18 @@ const VoucherTypeMasterPage = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Prefix</label>
                         <Input name="prefix" value={formData.prefix} onChange={handleChange} placeholder="e.g. RCPT/" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Starting Number</label>
+                        <label className="text-sm font-medium">Starting No.</label>
                         <Input type="number" name="startingNumber" value={formData.startingNumber} onChange={handleChange} />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Next Number</label>
+                        <Input type="number" name="nextNumber" value={formData.nextNumber || formData.startingNumber} onChange={handleChange} />
                     </div>
                 </div>
 
@@ -180,7 +184,65 @@ const VoucherTypeMasterPage = () => {
                     </div>
                 ) : (
                     <table className="w-full text-left border-collapse">
-                        {/* ... existing table code ... */}
+                        <thead>
+                            <tr className="bg-gray-50 text-gray-600 text-xs font-bold uppercase tracking-wider">
+                                <th className="px-6 py-4 border-b">Name</th>
+                                <th className="px-6 py-4 border-b">Nature</th>
+                                <th className="px-6 py-4 border-b">Prefix</th>
+                                <th className="px-6 py-4 border-b">Next No</th>
+                                <th className="px-6 py-4 border-b">Status</th>
+                                <th className="px-6 py-4 border-b text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {voucherTypes.map((type) => (
+                                <tr key={type._id} className="hover:bg-gray-50 transition-colors group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                                                <FileText size={16} />
+                                            </div>
+                                            <span className="font-semibold text-gray-900">{type.name}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                            type.nature === 'Receipt' ? 'bg-green-100 text-green-700' :
+                                            type.nature === 'Payment' ? 'bg-red-100 text-red-700' :
+                                            type.nature === 'Journal' ? 'bg-blue-100 text-blue-700' :
+                                            'bg-gray-100 text-gray-700'
+                                        }`}>
+                                            {type.nature}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-600 font-medium">
+                                        {type.prefix || <span className="text-gray-300 italic">None</span>}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-1.5 text-gray-900 font-bold">
+                                            <Hash size={14} className="text-gray-400" />
+                                            {type.nextNumber}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`flex items-center gap-1.5 text-xs font-medium ${type.active ? 'text-green-600' : 'text-gray-400'}`}>
+                                            <div className={`w-1.5 h-1.5 rounded-full ${type.active ? 'bg-green-600' : 'bg-gray-400'}`} />
+                                            {type.active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => handleEdit(type)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button onClick={() => handleDelete(type._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
                     </table>
                 )}
             </div>
