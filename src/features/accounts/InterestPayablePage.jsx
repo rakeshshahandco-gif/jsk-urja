@@ -13,6 +13,8 @@ import {
 import { toast } from "react-hot-toast";
 import { useFYDateRange } from "@/contexts/FinancialYearContext";
 import FYBadge from "@/components/ui/FYBadge";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import { getAccountGroups, getLedgers } from "@/services/accountApi";
 import s from "./InterestPayablePage.module.scss";
 
 const InterestPayablePage = () => {
@@ -23,8 +25,33 @@ const InterestPayablePage = () => {
         from: fyDateRange.startDate,
         to: fyDateRange.endDate,
         minAmount: 0,
-        rate: 12
+        rate: 12,
+        selectionType: 'group', // 'group' or 'ledger'
+        selectedGroup: '',
+        selectedLedger: ''
     });
+    const [masters, setMasters] = useState({ groups: [], ledgers: [] });
+
+    useEffect(() => {
+        const loadMasters = async () => {
+            try {
+                const [gs, ls] = await Promise.all([
+                    getAccountGroups(),
+                    getLedgers({ limit: 1000 })
+                ]);
+                setMasters({ groups: gs || [], ledgers: ls || [] });
+                
+                // Set default group to Sundry Creditors if exists
+                const scGroup = gs?.find(g => g.name === 'Sundry Creditors');
+                if (scGroup) {
+                    setFilters(p => ({ ...p, selectedGroup: scGroup._id }));
+                }
+            } catch (err) {
+                console.error("Failed to load masters", err);
+            }
+        };
+        loadMasters();
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
@@ -33,11 +60,26 @@ const InterestPayablePage = () => {
             // const res = await getInterestPayable(filters);
             // Using mock data for demonstration as per requirement
             setTimeout(() => {
-                setData([
-                    { _id: '1', partyName: 'Aditya Enterprises', groupName: 'Sundry Creditors', principal: 1500000, rate: 12, days: 90, interest: 44383 },
-                    { _id: '2', partyName: 'Apex Logistics', groupName: 'Sundry Creditors', principal: 750000, rate: 12, days: 45, interest: 11095 },
-                    { _id: '3', partyName: 'Bharat Electronics', groupName: 'Sundry Creditors', principal: 2200000, rate: 12, days: 120, interest: 86794 },
-                ]);
+                let mockData = [
+                    { _id: '1', partyName: 'Aditya Enterprises', groupName: 'Sundry Creditors', principal: 1500000, rate: filters.rate, days: 90, interest: (1500000 * filters.rate * 90) / 36500 },
+                    { _id: '2', partyName: 'Apex Logistics', groupName: 'Sundry Creditors', principal: 750000, rate: filters.rate, days: 45, interest: (750000 * filters.rate * 45) / 36500 },
+                    { _id: '3', partyName: 'Bharat Electronics', groupName: 'Sundry Creditors', principal: 2200000, rate: filters.rate, days: 120, interest: (2200000 * filters.rate * 120) / 36500 },
+                ];
+
+                if (filters.selectionType === 'ledger' && filters.selectedLedger) {
+                    const l = masters.ledgers.find(lx => lx._id === filters.selectedLedger);
+                    mockData = [{
+                        _id: l?._id || 'sel',
+                        partyName: l?.name || 'Selected Ledger',
+                        groupName: l?.groupName || 'Ledger',
+                        principal: 1200000,
+                        rate: filters.rate,
+                        days: 60,
+                        interest: (1200000 * filters.rate * 60) / 36500
+                    }];
+                }
+
+                setData(mockData);
                 setLoading(false);
             }, 800);
         } catch (error) {
@@ -107,7 +149,50 @@ const InterestPayablePage = () => {
                         />
                     </div>
                 </div>
-                <div className={s.filterGroup}>
+                <div className={s.filterGroup} style={{ flex: 'none', width: 'auto' }}>
+                    <label>Report Type</label>
+                    <div className={s.radioGroup}>
+                        <label className={filters.selectionType === 'group' ? s.activeRadio : ''}>
+                            <input 
+                                type="radio" 
+                                name="selType" 
+                                checked={filters.selectionType === 'group'} 
+                                onChange={() => setFilters(p => ({ ...p, selectionType: 'group' }))}
+                            />
+                            Group
+                        </label>
+                        <label className={filters.selectionType === 'ledger' ? s.activeRadio : ''}>
+                            <input 
+                                type="radio" 
+                                name="selType" 
+                                checked={filters.selectionType === 'ledger'} 
+                                onChange={() => setFilters(p => ({ ...p, selectionType: 'ledger' }))}
+                            />
+                            Ledger
+                        </label>
+                    </div>
+                </div>
+
+                <div className={s.filterGroup} style={{ flex: 2 }}>
+                    <label>{filters.selectionType === 'group' ? 'Select Account Group' : 'Select Account Ledger'}</label>
+                    {filters.selectionType === 'group' ? (
+                        <SearchableSelect
+                            options={masters.groups.map(g => ({ label: g.name, value: g._id }))}
+                            value={filters.selectedGroup}
+                            onChange={(val) => setFilters(p => ({ ...p, selectedGroup: val }))}
+                            placeholder="Search group..."
+                        />
+                    ) : (
+                        <SearchableSelect
+                            options={masters.ledgers.map(l => ({ label: l.name, value: l._id, meta: l.groupName }))}
+                            value={filters.selectedLedger}
+                            onChange={(val) => setFilters(p => ({ ...p, selectedLedger: val }))}
+                            placeholder="Search ledger..."
+                        />
+                    )}
+                </div>
+
+                <div className={s.filterGroup} style={{ flex: 1 }}>
                     <label>Interest Rate (% P.A.)</label>
                     <Input
                         type="number"
