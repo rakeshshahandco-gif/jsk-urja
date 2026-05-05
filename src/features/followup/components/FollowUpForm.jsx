@@ -13,6 +13,10 @@ import { getFollowupByCustomer } from '@/services/followupApi'; // Still use thi
 import { getReminders } from '@/services/reminderApi';
 import styles from './FollowUpForm.module.scss';
 import { useToast } from '@/components/ui/Toast';
+import SearchableSelect from '@/components/ui/SearchableSelect';
+import { getItems } from '@/services/itemApi';
+import { getUsers } from '@/services/userApi';
+import { Plus, X, GripVertical } from 'lucide-react';
 
 export const FollowUpForm = () => {
     const { customerId } = useParams();
@@ -55,37 +59,96 @@ export const FollowUpForm = () => {
     const watchStatus = conversationForm.watch('followUpStatus');
     const watchReason = conversationForm.watch('notConvertedDetails.reason');
 
-    const [selectedProducts, setSelectedProducts] = useState([
-        'PHASE CUT DIMMABLE DRIVER AND DIMMER',
-        'ANALOG DRIVER & DIMMER',
-        'DALI DRIVER & DIMMER',
-        'SMART DRIVER – BLE',
-        'SMART DRIVER – ZIGBEE'
-    ]);
+    const MASTER_PRODUCTS = [
+        'Phase Cut Dimmable Driver and Dimmer',
+        'Analog Driver and Dimmer',
+        'DALI Dimmable Driver',
+        'DALI DT6 Driver',
+        'DALI DT8 Driver',
+        'Smart Driver - BLE',
+        'Smart Driver - Zigbee',
+        'Smart Driver - WiFi',
+        'CCT Tunable Driver',
+        'Smart Switch',
+        'Scene Controller',
+        'LED Strip Driver',
+        'LED Driver'
+    ];
+
+    const [selectedProducts, setSelectedProducts] = useState([]);
     const [newProduct, setNewProduct] = useState('');
     const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+    const [allItems, setAllItems] = useState([]);
+    const [allUsers, setAllUsers] = useState([]);
+    const [isLoadingItems, setIsLoadingItems] = useState(false);
 
-    const handleAddProduct = () => {
-        if (newProduct.trim() && !selectedProducts.includes(newProduct.trim())) {
-            const updated = [...selectedProducts, newProduct.trim()];
-            setSelectedProducts(updated);
-            setNewProduct('');
-            // Sync with form
-            const currentSelected = conversationForm.getValues('interestedProducts') || [];
-            if (Array.isArray(currentSelected)) {
-                conversationForm.setValue('interestedProducts', [...currentSelected, newProduct.trim()]);
+    useEffect(() => {
+        const fetchItems = async () => {
+            setIsLoadingItems(true);
+            try {
+                const [itemsData, usersData] = await Promise.all([
+                    getItems({ limit: 1000 }),
+                    getUsers({ limit: 1000 })
+                ]);
+                setAllItems(itemsData.results || []);
+                setAllUsers(usersData.users || []);
+            } catch (err) {
+                console.error("Failed to fetch data:", err);
+            } finally {
+                setIsLoadingItems(false);
             }
+        };
+        fetchItems();
+    }, []);
+
+    const handleAddProduct = (directProduct) => {
+        let name = '';
+        let source = 'manual';
+        let productId = null;
+
+        if (typeof directProduct === 'object' && directProduct?.label) {
+            name = directProduct.label;
+            source = 'master';
+            productId = directProduct.value;
+        } else if (typeof directProduct === 'string') {
+            name = directProduct.trim();
+            source = 'master'; // From dropdown search
+        } else {
+            name = newProduct.trim();
+            source = 'manual';
         }
+
+        if (!name) {
+            addToast('Please enter or select a product name', 'warning');
+            return;
+        }
+
+        if (selectedProducts.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+            addToast('Product already added', 'info');
+            return;
+        }
+
+        const newEntry = {
+            name,
+            source,
+            productId,
+            orderNo: selectedProducts.length + 1
+        };
+
+        const updated = [...selectedProducts, newEntry];
+        setSelectedProducts(updated);
+        setNewProduct('');
+        
+        // Sync with form - store raw names or objects? User wants to save metadata.
+        // We'll store the full objects in the form so they persist.
+        conversationForm.setValue('interestedProducts', updated, { shouldDirty: true });
+        addToast(`Added: ${name}`, 'success');
     };
 
-    const handleRemoveProduct = (product) => {
-        const updated = selectedProducts.filter(p => p !== product);
+    const handleRemoveProduct = (productName) => {
+        const updated = selectedProducts.filter(p => p.name !== productName);
         setSelectedProducts(updated);
-        // Sync with form
-        const currentSelected = conversationForm.getValues('interestedProducts') || [];
-        if (Array.isArray(currentSelected)) {
-            conversationForm.setValue('interestedProducts', currentSelected.filter(p => p !== product));
-        }
+        conversationForm.setValue('interestedProducts', updated, { shouldDirty: true });
     };
 
     const onDragStart = (index) => {
@@ -97,11 +160,16 @@ export const FollowUpForm = () => {
     };
 
     const onDrop = (index) => {
+        if (draggedItemIndex === null) return;
         const updated = [...selectedProducts];
-        const draggedItem = updated[draggedItemIndex];
-        updated.splice(draggedItemIndex, 1);
+        const [draggedItem] = updated.splice(draggedItemIndex, 1);
         updated.splice(index, 0, draggedItem);
-        setSelectedProducts(updated);
+        
+        // Update orderNo
+        const reordered = updated.map((p, i) => ({ ...p, orderNo: i + 1 }));
+        
+        setSelectedProducts(reordered);
+        conversationForm.setValue('interestedProducts', reordered, { shouldDirty: true });
         setDraggedItemIndex(null);
     };
 
@@ -175,12 +243,16 @@ export const FollowUpForm = () => {
                 discussionDetails: data.discussionDetails,
                 outcome: data.outcome || '',
                 interestedProducts: Array.isArray(data.interestedProducts)
-                    ? data.interestedProducts.filter(p => p && p !== 'on')
-                    : (data.interestedProducts && data.interestedProducts !== 'on' ? [data.interestedProducts] : []),
+                    ? data.interestedProducts.map(p => typeof p === 'string' ? p : p.name)
+                    : [],
+                interestedProductsFull: data.interestedProducts, // Keep full metadata for internal use
                 productNotes: data.productNotes || '',
                 callDuration: data.callDuration ? Number(data.callDuration) : null,
                 followUpStatus: data.followUpStatus,
-                notConvertedDetails: data.notConvertedDetails
+                notConvertedDetails: {
+                    ...data.notConvertedDetails,
+                    assignedTo: data.notConvertedDetails?.assignedTo || null
+                }
             };
 
             // Validation for mandatory reason
@@ -208,6 +280,7 @@ export const FollowUpForm = () => {
                 productNotes: '',
                 callDuration: ''
             });
+            setSelectedProducts([]); // Also clear the UI pills
 
             addToast('Conversation saved successfully!', 'success');
 
@@ -390,11 +463,15 @@ export const FollowUpForm = () => {
                                         </div>
                                         <div className={styles.formGroup}>
                                             <label>Assigned To</label>
-                                            <input 
-                                                type="text"
-                                                {...conversationForm.register('notConvertedDetails.assignedTo')}
-                                                placeholder="Person name"
-                                                className={styles.formInput}
+                                            <SearchableSelect
+                                                options={allUsers.map(u => ({
+                                                    label: u.name,
+                                                    value: u._id,
+                                                    meta: u.role
+                                                }))}
+                                                value={conversationForm.watch('notConvertedDetails.assignedTo')}
+                                                onChange={(val) => conversationForm.setValue('notConvertedDetails.assignedTo', val)}
+                                                placeholder="Select person..."
                                             />
                                         </div>
                                     </div>
@@ -493,100 +570,75 @@ export const FollowUpForm = () => {
                                 </div>
                             )}
 
-                            <div className={styles.formSection} style={{ border: 'none', padding: 0, marginTop: '1.5rem', background: 'none' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                    <label style={{ margin: 0, fontWeight: 600, color: '#374151' }}>Interested Products</label>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className={styles.interestedProductsSection}>
+                                <div className={styles.sectionHeader}>
+                                    <label>Interested Products</label>
+                                    <div className={styles.addProductControls}>
+                                        <SearchableSelect
+                                            options={[
+                                                ...MASTER_PRODUCTS.map(p => ({ label: p, value: p })),
+                                                ...allItems.map(item => ({
+                                                    label: item.itemName,
+                                                    value: item._id,
+                                                    meta: item.itemCode
+                                                }))
+                                            ]}
+                                            onChange={(val, opt) => val && handleAddProduct(opt)}
+                                            placeholder="Search products..."
+                                            style={{ width: '300px' }}
+                                        />
+                                        <div className={styles.divider}>OR</div>
                                         <input 
                                             type="text" 
                                             value={newProduct}
                                             onChange={(e) => setNewProduct(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProduct())}
-                                            placeholder="Add product..."
-                                            className={styles.formInput}
-                                            style={{ width: '200px', height: '32px', fontSize: '12px' }}
+                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProduct())}
+                                            placeholder="Type custom product..."
+                                            className={styles.miniInput}
                                         />
-                                        <button 
+                                        <Button 
                                             type="button" 
-                                            onClick={handleAddProduct}
-                                            className={styles.addBtn}
-                                            style={{ padding: '0 12px', height: '32px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                            onClick={() => handleAddProduct()}
+                                            className={styles.addSmallBtn}
                                         >
                                             Add
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
 
-                                <div style={{ 
-                                    display: 'flex', 
-                                    flexWrap: 'wrap', 
-                                    gap: '10px', 
-                                    marginBottom: '20px',
-                                    padding: '12px',
-                                    background: '#f9fafb',
-                                    borderRadius: '12px',
-                                    border: '1px dashed #d1d5db',
-                                    minHeight: '60px'
-                                }}>
+                                <div 
+                                    className={`${styles.productTagList} ${draggedItemIndex !== null ? styles.isDragging : ''}`}
+                                    onDragOver={onDragOver}
+                                >
                                     {selectedProducts.map((product, index) => (
                                         <div
-                                            key={product}
+                                            key={`${product.name}-${index}`}
                                             draggable
                                             onDragStart={() => onDragStart(index)}
-                                            onDragOver={onDragOver}
                                             onDrop={() => onDrop(index)}
                                             onDragEnd={() => setDraggedItemIndex(null)}
-                                            style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                gap: '10px', 
-                                                padding: '8px 14px',
-                                                background: draggedItemIndex === index ? '#eff6ff' : '#ffffff',
-                                                border: draggedItemIndex === index ? '1px solid #3b82f6' : '1px solid #e5e7eb',
-                                                borderRadius: '24px',
-                                                cursor: 'grab',
-                                                userSelect: 'none',
-                                                transition: 'all 0.2s',
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                                opacity: draggedItemIndex === index ? 0.5 : 1
-                                            }}
-                                            onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
-                                            onMouseLeave={e => e.currentTarget.style.borderColor = draggedItemIndex === index ? '#3b82f6' : '#e5e7eb'}
+                                            className={`${styles.productTag} ${draggedItemIndex === index ? styles.dragged : ''}`}
                                         >
-                                            <input
-                                                type="checkbox"
-                                                value={product}
-                                                defaultChecked={true}
-                                                {...conversationForm.register('interestedProducts')}
-                                                style={{ width: '15px', height: '15px', cursor: 'pointer' }}
-                                            />
-                                            <span style={{ fontSize: '13px', color: '#374151', fontWeight: 600 }}>{product}</span>
+                                            <GripVertical size={14} className={styles.dragGrip} />
+                                            <span className={styles.productName}>
+                                                {product.name}
+                                                {product.source === 'manual' && (
+                                                    <span className={styles.manualBadge}>Manual</span>
+                                                )}
+                                            </span>
                                             <button 
                                                 type="button" 
-                                                onClick={() => handleRemoveProduct(product)}
-                                                style={{ 
-                                                    border: 'none', 
-                                                    background: '#fee2e2', 
-                                                    color: '#ef4444', 
-                                                    cursor: 'pointer', 
-                                                    fontSize: '12px', 
-                                                    width: '18px',
-                                                    height: '18px',
-                                                    borderRadius: '50%',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    padding: 0
-                                                }}
+                                                onClick={() => handleRemoveProduct(product.name)}
+                                                className={styles.removeProductBtn}
                                                 title="Remove"
                                             >
-                                                ×
+                                                <X size={14} />
                                             </button>
                                         </div>
                                     ))}
                                     {selectedProducts.length === 0 && (
-                                        <div style={{ color: '#9ca3af', fontSize: '12px', fontStyle: 'italic', padding: '10px' }}>
-                                            No products added yet. Use the field above to add.
+                                        <div className={styles.emptyProducts}>
+                                            No product found. Use Manual Entry to add.
                                         </div>
                                     )}
                                 </div>

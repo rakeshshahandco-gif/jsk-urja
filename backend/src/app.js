@@ -48,7 +48,16 @@ app.use(morgan('dev'));
 
 // Serve Frontend Build
 const buildPath = path.join(__dirname, '../../dist');
-app.use(express.static(buildPath));
+console.log(`[Static] Serving frontend from: ${buildPath}`);
+
+app.use(express.static(buildPath, {
+    maxAge: '1d',
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // Serve Uploads Directory
 const uploadPath = path.join(__dirname, '../uploads');
@@ -69,7 +78,13 @@ app.use('/api', (req, res, next) => {
 
 // SPA Fallback - Serve index.html for all non-API routes
 app.get('*', (req, res) => {
-    res.sendFile(path.join(buildPath, 'index.html'));
+    const indexPath = path.join(buildPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.error(`[SPA Fallback Error] Could not send index.html: ${err.message}`);
+            res.status(500).send("Application shell not found. Please ensure 'npm run build' was successful.");
+        }
+    });
 });
 
 // Global Error Handler

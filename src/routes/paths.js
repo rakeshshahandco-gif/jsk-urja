@@ -147,6 +147,7 @@ export const PATHS = {
         CASH_BOOK: '/accounts/reports/cash-book',
         BANK_BOOK: '/accounts/reports/bank-book',
         OUTSTANDING_REPORT: '/accounts/reports/outstanding',
+        INTEREST_PAYABLE: '/accounts/interest-payable',
     },
     FIXED_ASSETS: {
         ROOT: '/fixed-assets',

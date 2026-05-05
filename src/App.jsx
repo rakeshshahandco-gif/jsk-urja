@@ -118,6 +118,7 @@ const FinancialYearMasterPage = lazy(() => import('./features/accounts/Financial
 const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
 const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
 const OutstandingReportPage = lazy(() => import('./features/accounts/OutstandingReportPage'));
+const InterestPayablePage = lazy(() => import('./features/accounts/InterestPayablePage'));
 const TrialBalancePage = lazy(() => import('./features/mis/TrialBalancePage'));
 const ProfitAndLossPage = lazy(() => import('./features/mis/ProfitAndLossPage'));
 const BalanceSheetPage = lazy(() => import('./features/mis/BalanceSheetPage'));
@@ -557,6 +558,7 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/cash-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Cash" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
+                        <Route path="/accounts/interest-payable" element={<ProtectedRoute requirePermission="accounts"><InterestPayablePage /></ProtectedRoute>} />
                         <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="mis.dashboard.view"><MISDashboard /></ProtectedRoute>} />
                         <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="mis.sales_marketing.view"><SalesMarketingDashboard /></ProtectedRoute>} />
                         <Route path="/mis/sales-conversion" element={<ProtectedRoute requirePermission="mis.sales_conversion.view"><SalesConversionDashboard /></ProtectedRoute>} />

@@ -262,6 +262,7 @@ export const menuConfig = [
             { id: 'trial-balance-acc', title: 'Trial Balance', path: '/mis/reports/trial-balance', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.trial_balance.view' },
             { id: 'profit-loss-acc', title: 'Profit & Loss', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
             { id: 'balance-sheet-acc', title: 'Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
+            { id: 'interest-payable-statement', title: 'Interest Payable Statement', path: PATHS.ACCOUNTS.INTEREST_PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.interest_payable_statement.view' },
         ]
     },
     {

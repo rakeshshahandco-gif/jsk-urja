@@ -112,8 +112,8 @@ const SalesMarketingDashboard = () => {
     };
 
     const funnelData = useMemo(() => {
-        if (!data?.summary) return [];
-        const s = data.summary;
+        const s = data?.summary;
+        if (!s) return [];
         return [
             { value: s.totalLeads || 0, name: 'Generated', fill: '#6366f1' },
             { value: s.contacted || 0, name: 'Contacted', fill: '#8b5cf6' },
@@ -181,18 +181,18 @@ const SalesMarketingDashboard = () => {
 
             {/* KPI Cards Grid */}
             <div className={s.kpiGrid}>
-                <KPICard title="Total Leads" value={s_data.totalLeads || 0} icon={<Users size={18} />} color="blue" onClick={() => navigate('/customers/list?status=lead')} />
-                <KPICard title="Engagement" value={s_data.contacted || 0} icon={<BellRing size={18} />} color="purple" onClick={() => navigate('/reports/followups')} />
-                <KPICard title="Qualified" value={s_data.qualified || 0} icon={<Target size={18} />} color="pink" onClick={() => navigate('/customers/list?stage=Qualified')} />
-                <KPICard title="Sample Issued" value={s_data.samples || 0} icon={<Package size={18} />} color="amber" onClick={() => navigate('/rd-samples/samples')} />
-                <KPICard title="Sales Orders" value={s_data.orders || 0} icon={<ShoppingCart size={18} />} color="orange" onClick={() => navigate('/sales/orders')} />
-                <KPICard title="Invoice Done" value={s_data.invoices || 0} icon={<FileText size={18} />} color="emerald" onClick={() => navigate('/sales/invoices')} />
-                <KPICard title="Gross Sales" value={formatCurrency(s_data.salesValue)} icon={<IndianRupee size={18} />} color="indigo" highlight />
-                <KPICard title="Lead Cycle" value={`${s_data.leadToCashDays || 0} Days`} icon={<Clock size={18} />} color="cyan" sub="Average Lead-to-Cash" />
-                <KPICard title="Conversion Rate" value={`${s_data.conversionRate || 0}%`} icon={<Zap size={18} />} color="rose" sub="Inquiry Success" />
-                <KPICard title="Sample Logic" value={`${s_data.sampleToSoRate || 0}%`} icon={<BarChart3 size={18} />} color="violet" sub="Sample-to-SO%" />
-                <KPICard title="Lost Deals" value={s_data.lostLeads || 0} icon={<XCircle size={18} />} color="slate" onClick={() => navigate('/customers/list?stage=Lost')} />
-                <KPICard title="Alert Action" value={s_data.overdueFollowups || 0} icon={<AlertCircle size={18} />} color="red" animate={s_data.overdueFollowups > 0} onClick={() => navigate('/reports/open-reminders')} sub="Overdue Followups" />
+                <KPICard title="Total Leads" value={s_data?.totalLeads || 0} icon={<Users size={18} />} color="blue" onClick={() => navigate('/customers/list?status=lead')} />
+                <KPICard title="Engagement" value={s_data?.contacted || 0} icon={<BellRing size={18} />} color="purple" onClick={() => navigate('/reports/followups')} />
+                <KPICard title="Qualified" value={s_data?.qualified || 0} icon={<Target size={18} />} color="pink" onClick={() => navigate('/customers/list?stage=Qualified')} />
+                <KPICard title="Sample Issued" value={s_data?.samples || 0} icon={<Package size={18} />} color="amber" onClick={() => navigate('/rd-samples/samples')} />
+                <KPICard title="Sales Orders" value={s_data?.orders || 0} icon={<ShoppingCart size={18} />} color="orange" onClick={() => navigate('/sales/orders')} />
+                <KPICard title="Invoice Done" value={s_data?.invoices || 0} icon={<FileText size={18} />} color="emerald" onClick={() => navigate('/sales/invoices')} />
+                <KPICard title="Gross Sales" value={formatCurrency(s_data?.salesValue)} icon={<IndianRupee size={18} />} color="indigo" highlight />
+                <KPICard title="Lead Cycle" value={`${s_data?.leadToCashDays || 0} Days`} icon={<Clock size={18} />} color="cyan" sub="Average Lead-to-Cash" />
+                <KPICard title="Conversion Rate" value={`${s_data?.conversionRate || 0}%`} icon={<Zap size={18} />} color="rose" sub="Inquiry Success" />
+                <KPICard title="Sample Logic" value={`${s_data?.sampleToSoRate || 0}%`} icon={<BarChart3 size={18} />} color="violet" sub="Sample-to-SO%" />
+                <KPICard title="Lost Deals" value={s_data?.lostLeads || 0} icon={<XCircle size={18} />} color="slate" onClick={() => navigate('/customers/list?stage=Lost')} />
+                <KPICard title="Alert Action" value={s_data?.overdueFollowups || 0} icon={<AlertCircle size={18} />} color="red" animate={(s_data?.overdueFollowups || 0) > 0} onClick={() => navigate('/reports/open-reminders')} sub="Overdue Followups" />
             </div>
 
             {/* Charts Section */}

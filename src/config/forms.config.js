@@ -67,6 +67,7 @@ export const ALL_FORMS = [
     { id: 'trial-balance', title: 'Trial Balance', path: '/mis/reports/trial-balance', icon: 'accounts', permission: 'mis.trial_balance.view', module: 'Accounts' },
     { id: 'profit-loss', title: 'Profit & Loss', path: '/mis/reports/profit-loss', icon: 'accounts', permission: 'mis.profit_loss.view', module: 'Accounts' },
     { id: 'balance-sheet', title: 'Balance Sheet', path: '/mis/reports/balance-sheet', icon: 'accounts', permission: 'mis.balance_sheet.view', module: 'Accounts' },
+    { id: 'interest-payable-statement', title: 'Interest Payable Statement', path: PATHS.ACCOUNTS.INTEREST_PAYABLE, icon: 'accounts', permission: 'accounts.interest_payable_statement.view', module: 'Accounts' },
 
     // Fixed Assets
     { id: 'fixed-assets-list', title: 'Asset Register', path: '/fixed-assets/list', icon: 'accounts', permission: 'accounts.fixed_assets.view', module: 'Fixed Assets' },
@@ -86,10 +87,11 @@ export const ALL_FORMS = [
     { id: 'sales-mis', title: 'Sales MIS Dashboard', path: PATHS.MIS.SALES_DASHBOARD, icon: 'mis', permission: 'mis.sales_marketing.view', module: 'MIS Reports' },
     { id: 'product-gp', title: 'Product-wise GP Analysis', path: PATHS.MIS.PRODUCT_GP, icon: 'mis', permission: 'mis.product_gp_analysis.view', module: 'MIS Reports' },
     { id: 'sales-conversion-analysis', title: 'Sales Conversion Analysis Dashboard', path: '/mis/sales-conversion', icon: 'mis', permission: 'mis.sales_conversion.view', module: 'MIS Reports' },
-    { id: 'customer-gp', title: 'Customer-wise GP', path: '/mis/reports/customer-gp', icon: 'mis', permission: 'mis.product_gp_analysis.view', module: 'MIS Reports' },
-    { id: 'stock-ageing-mis', title: 'Stock Ageing', path: '/inventory/stock/ageing', icon: 'inventory', permission: 'inventory.stock_ledger.view', module: 'MIS Reports' },
-    { id: 'sample-conversion', title: 'Sample Conversion', path: PATHS.REPORTS.SAMPLE_CONVERSION, icon: 'mis', permission: 'reports', module: 'MIS Reports' },
+    { id: 'customer-gp', title: 'Customer-wise GP Analysis', path: '/mis/reports/customer-gp', icon: 'mis', permission: 'mis.product_gp_analysis.view', module: 'MIS Reports' },
+    { id: 'stock-ageing-mis', title: 'Stock Ageing Report', path: '/inventory/stock/ageing', icon: 'inventory', permission: 'inventory.stock_ledger.view', module: 'MIS Reports' },
+    { id: 'sample-conversion', title: 'Sample Conversion Tracking', path: PATHS.REPORTS.SAMPLE_CONVERSION, icon: 'mis', permission: 'reports', module: 'MIS Reports' },
     { id: 'replacement-cost', title: 'Replacement Cost Report', path: '/reports/replacement-cost', icon: 'mis', permission: 'reports', module: 'MIS Reports' },
+    { id: 'consumable-cost', title: 'Consumable Cost Report', path: '/reports/consumable-cost', icon: 'mis', permission: 'reports', module: 'MIS Reports' },
 
     // Service
     { id: 'complaints', title: 'Customer Complaints', path: '/service/complaints', icon: 'settings', permission: 'service.complaints.view', module: 'Service' },

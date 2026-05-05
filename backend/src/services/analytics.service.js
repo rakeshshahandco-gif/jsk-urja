@@ -150,7 +150,7 @@ const getSalesMarketingAnalytics = async (filters, user) => {
         ])
     ]);
 
-    // Lead-to-Cash Cycle Calculation
+    // 3. Lead-to-Cash Cycle Calculation (Defensive)
     const cycleData = await Customer.aggregate([
         { $match: { _id: { $in: customerIds }, leadDate: { $exists: true } } },
         {
@@ -174,30 +174,53 @@ const getSalesMarketingAnalytics = async (filters, user) => {
         { $group: { _id: null, avg: { $avg: '$diff' }, count: { $sum: 1 } } }
     ]);
 
+    // 4. Lost Reason Analysis (New)
+    const lostAnalysisData = await Customer.aggregate([
+        { $match: { _id: { $in: customerIds }, leadStage: 'Lost', updatedAt: { $gte: rangeStart, $lte: rangeEnd } } },
+        { $group: { _id: { $ifNull: ['$lostReason', 'Other'] }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+    ]);
+
+    // 5. Follow-up Health Analysis (New)
+    const followupHealth = await Followup.aggregate([
+        { $match: { customerId: { $in: customerIds }, createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+        {
+            $group: {
+                _id: {
+                    $cond: [
+                        { $eq: ['$isClosed', true] }, 'Completed',
+                        { $cond: [{ $lt: ['$reminderDate', new Date()] }, 'Overdue', 'Open'] }
+                    ]
+                },
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+
     const leadToCashDays = (cycleData[0] && typeof cycleData[0].avg === 'number') ? cycleData[0].avg.toFixed(1) : 0;
     const conversionRate = leadsCount > 0 ? ((invoicesData.count / leadsCount) * 100).toFixed(1) : 0;
     const sampleToSoRate = ordersData.totalSamples > 0 ? ((ordersData.sampleToSoCount / ordersData.totalSamples) * 100).toFixed(1) : 0;
 
     return {
         summary: {
-            totalLeads: leadsCount,
-            contacted: contactedCount,
-            qualified: qualifiedCount,
-            samples: ordersData.totalSamples,
-            orders: ordersData.totalOrders,
-            invoices: invoicesData.count,
-            salesValue: invoicesData.value,
-            leadToCashDays,
-            conversionRate,
-            sampleToSoRate,
-            lostLeads: lostCount,
-            overdueFollowups: overdueCount
+            totalLeads: leadsCount || 0,
+            contacted: contactedCount || 0,
+            qualified: qualifiedCount || 0,
+            samples: ordersData.totalSamples || 0,
+            orders: ordersData.totalOrders || 0,
+            invoices: invoicesData.count || 0,
+            salesValue: invoicesData.value || 0,
+            leadToCashDays: leadToCashDays || 0,
+            conversionRate: conversionRate || 0,
+            sampleToSoRate: sampleToSoRate || 0,
+            lostLeads: lostCount || 0,
+            overdueFollowups: overdueCount || 0
         },
-        trends: trendsData,
-        salespersonPerformance: salespersonWise,
-        sourceDistribution: sourceWise,
-        lostAnalysis: [],
-        followupAnalysis: []
+        trends: trendsData || [],
+        salespersonPerformance: salespersonWise || [],
+        sourceDistribution: sourceWise || [],
+        lostAnalysis: lostAnalysisData || [],
+        followupAnalysis: followupHealth || []
     };
 };
 /**
