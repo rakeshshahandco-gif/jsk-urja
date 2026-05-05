@@ -66,7 +66,7 @@ const CustomTooltip = ({ active, payload, label, money }) => {
     );
 };
 
-export const CustomerAnalysisTab = ({ globalFilters }) => {
+export const CustomerAnalysisTab = ({ globalFilters = { fromDate: moment().subtract(3, 'months').format('YYYY-MM-DD'), toDate: moment().format('YYYY-MM-DD') } }) => {
     const navigate = useNavigate();
 
     // Local State

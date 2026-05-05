@@ -5,7 +5,7 @@ import { BrandedLoader } from '@/components/ui/BrandedLoading';
 const fmt = (n) => Number(n || 0).toFixed(2);
 const fmtVal = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 });
 
-export default function RawMaterialStockReport() {
+export default function RawMaterialStockReport({ showAgeing = false }) {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', search: '' });
@@ -37,8 +37,8 @@ export default function RawMaterialStockReport() {
 
     return (
         <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
-            <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#1e293b' }}>Raw Material Stock Report</h2>
-            <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13 }}>Opening + Purchase − Consumed − Replacement − Rejection = Closing</p>
+            <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#1e293b' }}>{showAgeing ? 'Stock Ageing Analysis' : 'Raw Material Stock Report'}</h2>
+            <p style={{ margin: '0 0 18px', color: '#64748b', fontSize: 13 }}>{showAgeing ? 'Analysis of stock based on how long it has been in the warehouse' : 'Opening + Purchase − Consumed − Replacement − Rejection = Closing'}</p>
 
             {/* Summary Cards */}
             <div style={{ display: 'flex', gap: 14, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -76,9 +76,14 @@ export default function RawMaterialStockReport() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f1f5f9' }}>
-                                {['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Returned', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
-                                    <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
-                                ))}
+                                {showAgeing ? 
+                                    ['#', 'Item Code', 'Item Name', 'UOM', 'Current Stock', 'Value (₹)', '0-30 Days', '31-60 Days', '61-90 Days', '> 90 Days', 'Last Inward'].map(h => (
+                                        <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                    )) :
+                                    ['#', 'Item Code', 'Item Name', 'Type', 'UOM', 'Opening', 'Purchase (GRN)', 'Consumed', 'Returned', 'Replacement', 'Rejection', 'Closing', 'Current Stock', 'Value (₹)', 'Status'].map(h => (
+                                        <th key={h} style={{ padding: '9px 12px', textAlign: h === '#' ? 'center' : 'left', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                    ))
+                                }
                             </tr>
                         </thead>
                         <tbody>
@@ -89,24 +94,39 @@ export default function RawMaterialStockReport() {
                                     <td style={{ padding: '7px 12px', textAlign: 'center', color: '#94a3b8' }}>{i + 1}</td>
                                     <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontWeight: 600, color: '#3b82f6' }}>{r.itemCode}</td>
                                     <td style={{ padding: '7px 12px', fontWeight: 500 }}>{r.itemName}</td>
-                                    <td style={{ padding: '7px 12px' }}>
+                                    
+                                    {!showAgeing && <td style={{ padding: '7px 12px' }}>
                                         <span style={{ fontSize: 10, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, color: '#64748b', fontWeight: 600 }}>{r.itemType || '—'}</span>
-                                    </td>
+                                    </td>}
+                                    
                                     <td style={{ padding: '7px 12px', color: '#64748b' }}>{r.uom}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.openingQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>+{fmt(r.purchaseQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.consumedQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981' }}>+{fmt(r.returnedQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.replacementQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', color: '#ef4444' }}>-{fmt(r.rejectionQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(r.closingQty)}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: r.belowReorder ? '#ef4444' : '#1e293b' }}>{fmt(r.currentStock)}</td>
+                                    
+                                    {!showAgeing && <>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.openingQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981', fontWeight: 600 }}>+{fmt(r.purchaseQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.consumedQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#10b981' }}>+{fmt(r.returnedQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#f59e0b' }}>-{fmt(r.replacementQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: '#ef4444' }}>-{fmt(r.rejectionQty)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(r.closingQty)}</td>
+                                    </>}
+                                    
+                                    <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 600, color: r.belowReorder && !showAgeing ? '#ef4444' : '#1e293b' }}>{fmt(r.currentStock)}</td>
                                     <td style={{ padding: '7px 12px', textAlign: 'right' }}>₹{Number(r.stockValue || 0).toLocaleString('en-IN')}</td>
-                                    <td style={{ padding: '7px 12px', textAlign: 'center' }}>
-                                        <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: r.belowReorder ? '#fee2e2' : '#dcfce7', color: r.belowReorder ? '#dc2626' : '#16a34a' }}>
-                                            {r.belowReorder ? 'Low Stock' : 'OK'}
-                                        </span>
-                                    </td>
+                                    
+                                    {showAgeing ? <>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.ageing?.bucket1 || 0)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.ageing?.bucket2 || 0)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right' }}>{fmt(r.ageing?.bucket3 || 0)}</td>
+                                        <td style={{ padding: '7px 12px', textAlign: 'right', color: (r.ageing?.bucket4 > 0) ? '#ef4444' : 'inherit', fontWeight: (r.ageing?.bucket4 > 0) ? 600 : 400 }}>{fmt(r.ageing?.bucket4 || 0)}</td>
+                                        <td style={{ padding: '7px 12px' }}>{r.lastInwardDate ? new Date(r.lastInwardDate).toLocaleDateString() : '—'}</td>
+                                    </> : <>
+                                        <td style={{ padding: '7px 12px', textAlign: 'center' }}>
+                                            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: r.belowReorder ? '#fee2e2' : '#dcfce7', color: r.belowReorder ? '#dc2626' : '#16a34a' }}>
+                                                {r.belowReorder ? 'Low Stock' : 'OK'}
+                                            </span>
+                                        </td>
+                                    </>}
                                 </tr>
                             ))}
                         </tbody>

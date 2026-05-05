@@ -174,7 +174,7 @@ const getSalesMarketingAnalytics = async (filters, user) => {
         { $group: { _id: null, avg: { $avg: '$diff' }, count: { $sum: 1 } } }
     ]);
 
-    const leadToCashDays = cycleData[0] ? cycleData[0].avg.toFixed(1) : 0;
+    const leadToCashDays = (cycleData[0] && typeof cycleData[0].avg === 'number') ? cycleData[0].avg.toFixed(1) : 0;
     const conversionRate = leadsCount > 0 ? ((invoicesData.count / leadsCount) * 100).toFixed(1) : 0;
     const sampleToSoRate = ordersData.totalSamples > 0 ? ((ordersData.sampleToSoCount / ordersData.totalSamples) * 100).toFixed(1) : 0;
 

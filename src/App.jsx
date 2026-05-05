@@ -183,6 +183,7 @@ import GstPayableSummary from '@/features/reports/gst/GstPayableSummary';
 import HsnSummaryPage from '@/features/reports/gst/HsnSummaryPage';
 import GstLedgerPage from '@/features/reports/gst/GstLedgerPage';
 
+import { CustomerAnalysisTab } from '@/features/mis/CustomerAnalysisTab';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
@@ -617,6 +618,9 @@ const AppLayout = () => {
                         <Route path="/china-supplier/reports" element={<ProtectedRoute requirePermission="wechat.contacts.view"><WechatListPage /></ProtectedRoute>} />
 
                         <Route path="/inventory/stock/raw-material" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport /></ProtectedRoute>} />
+                        <Route path="/inventory/stock/ageing" element={<ProtectedRoute requirePermission="inventory"><RawMaterialStockReport showAgeing={true} /></ProtectedRoute>} />
+                        <Route path="/mis/reports/customer-gp" element={<ProtectedRoute requirePermission="mis.product_gp_analysis.view"><CustomerAnalysisTab /></ProtectedRoute>} />
+                        <Route path="/reports/replacement-cost" element={<ProtectedRoute requirePermission="reports"><ConsumableCostReport /></ProtectedRoute>} />
 
 
                         <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />
