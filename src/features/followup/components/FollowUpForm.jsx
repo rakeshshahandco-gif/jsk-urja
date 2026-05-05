@@ -177,7 +177,6 @@ export const FollowUpForm = () => {
     const reminderForm = useForm({
         defaultValues: {
             nextCallDate: '',
-            nextCallTime: '',
             note: '',
             priority: 'medium',
             reminderEnabled: false,
@@ -302,7 +301,6 @@ export const FollowUpForm = () => {
             const reminderPayload = {
                 conversationId: lastSavedConversationId, // Optional link
                 nextCallDate: data.nextCallDate,
-                nextCallTime: data.nextCallTime,
                 followUpType: data.followUpType,
                 note: data.note,
                 priority: data.priority,
@@ -733,15 +731,6 @@ export const FollowUpForm = () => {
                                     className={styles.formInput}
                                 />
                                 {/* removed HTML required because it depends on checkbox logic, handled in submit */}
-                            </div>
-
-                            <div className={styles.formGroup}>
-                                <label>Next Call Time</label>
-                                <input
-                                    type="time"
-                                    {...reminderForm.register('nextCallTime')}
-                                    className={styles.formInput}
-                                />
                             </div>
 
                             <div className={styles.formGroup}>

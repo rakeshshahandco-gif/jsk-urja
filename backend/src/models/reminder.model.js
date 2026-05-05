@@ -21,7 +21,8 @@ const reminderSchema = mongoose.Schema(
         },
         reminderTime: {
             type: String, // format "HH:mm"
-            required: true,
+            required: false,
+            default: '09:00',
         },
         followUpType: {
             type: String,
