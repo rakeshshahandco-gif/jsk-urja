@@ -24,12 +24,7 @@ export const FollowUpUpdateSection = ({ form, onUpdate }) => {
                 error={errors.nextCallDate}
             />
 
-            <Input
-                label="Next Call Time (Optional)"
-                type="time"
-                startIcon={<Clock size={18} />}
-                {...register('nextCallTime')}
-            />
+
 
             <div className={styles.textareaGroup}>
                 <label className={styles.label}>
@@ -39,7 +34,7 @@ export const FollowUpUpdateSection = ({ form, onUpdate }) => {
                 <textarea
                     className={styles.textarea}
                     rows={6}
-                    placeholder="Enter notes for next conversation..."
+                    placeholder="Enter notes for follow-up..."
                     {...register('whatToTalkNext')}
                 />
             </div>

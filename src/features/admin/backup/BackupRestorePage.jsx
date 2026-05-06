@@ -11,9 +11,10 @@ import {
     Loader2, 
     FileArchive,
     UploadCloud,
-    ArrowLeftRight
+    ArrowLeftRight,
+    Lock
 } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, Modal } from '@/components/ui';
 import { toast } from 'react-hot-toast';
 import * as backupApi from '@/services/backupApi';
 import moment from 'moment';
@@ -27,6 +28,8 @@ const BackupRestorePage = () => {
     const [isRestoring, setIsRestoring] = useState(false);
     const [systemInfo, setSystemInfo] = useState(null);
     const [backupReason, setBackupReason] = useState('Manual Backup before deployment');
+    const [restoreTargetId, setRestoreTargetId] = useState(null);
+    const [restoreConfirmation, setRestoreConfirmation] = useState('');
 
     const fetchBackups = async () => {
         try {
@@ -83,33 +86,30 @@ const BackupRestorePage = () => {
         }
     };
 
-    const handleRestore = async (id) => {
-        const confirm = window.confirm(
-            "⚠️ CRITICAL WARNING: You are about to restore the database from a backup. " +
-            "This will OVERWRITE all current live data. " +
-            "A safety backup of the current state will be taken automatically. " +
-            "Are you absolutely sure you want to proceed?"
-        );
-
-        if (!confirm) return;
-
-        const finalConfirm = window.prompt("To confirm restoration, please type 'RESTORE' below:");
-        if (finalConfirm !== 'RESTORE') {
-            toast.error('Restoration cancelled. Confirmation text mismatch.');
+    const handleRestoreExecute = async () => {
+        if (restoreConfirmation !== 'RESTORE') {
+            toast.error('Please type RESTORE to confirm');
             return;
         }
 
         try {
             setIsRestoring(true);
             toast.loading('System restoration in progress. Please do not close the browser...', { id: 'restore' });
-            await backupApi.restoreBackup(id);
+            await backupApi.restoreBackup(restoreTargetId);
             toast.success('System restored successfully!', { id: 'restore' });
+            setRestoreTargetId(null);
+            setRestoreConfirmation('');
             fetchBackups();
         } catch (error) {
             toast.error('Restoration failed: ' + (error.response?.data?.message || error.message), { id: 'restore' });
         } finally {
             setIsRestoring(false);
         }
+    };
+
+    const handleRestoreInitiate = (id) => {
+        setRestoreTargetId(id);
+        setRestoreConfirmation('');
     };
 
     const formatSize = (bytes) => {
@@ -145,8 +145,10 @@ const BackupRestorePage = () => {
                 {/* PRE-DEPLOY CHECKLIST */}
                 <div className={styles.card}>
                     <div className={styles.cardHeader}>
-                        <ShieldCheck size={20} color="#10b981" />
-                        <h3>Pre-Deploy Data Snapshot</h3>
+                        <div className={styles.iconWrapper} style={{ backgroundColor: '#ecfdf5' }}>
+                            <ShieldCheck size={22} color="#10b981" />
+                        </div>
+                        <h3>Live Data Snapshot</h3>
                     </div>
                     <div className={styles.snapshotGrid}>
                         <div className={styles.snapshotItem}>
@@ -158,11 +160,11 @@ const BackupRestorePage = () => {
                             <strong>{dbCounts.Item || 0}</strong>
                         </div>
                         <div className={styles.snapshotItem}>
-                            <span>Sales Invoices</span>
+                            <span>Invoices</span>
                             <strong>{dbCounts.SalesInvoice || 0}</strong>
                         </div>
                         <div className={styles.snapshotItem}>
-                            <span>Sales Orders</span>
+                            <span>Orders</span>
                             <strong>{dbCounts.SalesOrder || 0}</strong>
                         </div>
                         <div className={styles.snapshotItem}>
@@ -170,32 +172,34 @@ const BackupRestorePage = () => {
                             <strong>{dbCounts.Task || 0}</strong>
                         </div>
                         <div className={styles.snapshotItem}>
-                            <span>China Sourcing</span>
+                            <span>Sourcing</span>
                             <strong>{dbCounts.ChinaSourcingGroup || 0}</strong>
                         </div>
                     </div>
                     <div className={styles.dbStatus}>
-                        <CheckCircle2 size={14} color="#10b981" />
-                        <span>Database: <strong>{systemInfo?.system?.databaseName}</strong> (Connected)</span>
+                        <CheckCircle2 size={16} color="#10b981" />
+                        <span>Connected to: <strong>{systemInfo?.system?.databaseName}</strong></span>
                     </div>
                 </div>
 
                 {/* TAKE BACKUP ACTION */}
                 <div className={styles.card}>
                     <div className={styles.cardHeader}>
-                        <UploadCloud size={20} color="#3b82f6" />
-                        <h3>Take Manual Backup</h3>
+                        <div className={styles.iconWrapper} style={{ backgroundColor: '#eff6ff' }}>
+                            <UploadCloud size={22} color="#3b82f6" />
+                        </div>
+                        <h3>Manual Backup</h3>
                     </div>
                     <p className={styles.description}>
-                        This will create a full snapshot of the database (all collections) and the uploads folder.
+                        Create a complete ZIP archive containing the database collections and all uploaded attachments.
                     </p>
                     <div className={styles.formGroup}>
-                        <label>Backup Reason / Note</label>
+                        <label>Reason for backup</label>
                         <input 
                             type="text" 
                             value={backupReason} 
                             onChange={(e) => setBackupReason(e.target.value)}
-                            placeholder="e.g. Before Render deploy v1.2"
+                            placeholder="e.g. Pre-deployment check"
                         />
                     </div>
                     <Button 
@@ -204,20 +208,22 @@ const BackupRestorePage = () => {
                         isLoading={isBackingUp}
                         fullWidth
                         startIcon={<Database size={18} />}
-                        style={{ marginTop: '16px', background: '#0f172a' }}
+                        style={{ marginTop: 'auto', background: '#0f172a' }}
                     >
-                        {isBackingUp ? 'Generating ZIP...' : 'Take Full Database Backup'}
+                        {isBackingUp ? 'Generating Archive...' : 'Take Full Backup Now'}
                     </Button>
                 </div>
 
                 {/* UPLOAD BACKUP ACTION */}
                 <div className={`${styles.card} ${styles.uploadCard}`}>
                     <div className={styles.cardHeader}>
-                        <FileArchive size={20} color="#8b5cf6" />
-                        <h3>Upload External Backup</h3>
+                        <div className={styles.iconWrapper} style={{ backgroundColor: '#f5f3ff' }}>
+                            <FileArchive size={22} color="#8b5cf6" />
+                        </div>
+                        <h3>Upload Backup</h3>
                     </div>
                     <p className={styles.description}>
-                        Upload a backup ZIP file downloaded from another environment (e.g. Render) to restore it here.
+                        Restore data from an external ZIP file. The file will be indexed and available for restoration below.
                     </p>
                     <div className={styles.uploadZone}>
                         <input 
@@ -231,9 +237,9 @@ const BackupRestorePage = () => {
                                 
                                 try {
                                     setIsLoading(true);
-                                    toast.loading('Uploading backup file...', { id: 'upload' });
+                                    toast.loading('Uploading archive...', { id: 'upload' });
                                     await backupApi.uploadBackup(file);
-                                    toast.success('Backup uploaded and indexed!', { id: 'upload' });
+                                    toast.success('Archive uploaded successfully!', { id: 'upload' });
                                     fetchBackups();
                                 } catch (error) {
                                     toast.error('Upload failed: ' + (error.response?.data?.message || error.message), { id: 'upload' });
@@ -249,8 +255,9 @@ const BackupRestorePage = () => {
                             isLoading={isLoading}
                             fullWidth
                             startIcon={<UploadCloud size={18} />}
+                            style={{ marginTop: 'auto' }}
                         >
-                            Select & Upload ZIP File
+                            Select ZIP Archive
                         </Button>
                     </div>
                 </div>
@@ -319,7 +326,7 @@ const BackupRestorePage = () => {
                                             <button 
                                                 className={`${styles.iconBtn} ${styles.restoreBtn}`} 
                                                 title="Restore this backup"
-                                                onClick={() => handleRestore(b.id)}
+                                                onClick={() => handleRestoreInitiate(b.id)}
                                                 disabled={isRestoring}
                                             >
                                                 <ArrowLeftRight size={18} />
@@ -332,6 +339,94 @@ const BackupRestorePage = () => {
                     </table>
                 </div>
             </div>
+
+            {/* RESTORE CONFIRMATION MODAL */}
+            {restoreTargetId && (
+                <Modal 
+                    title="Confirm System Restoration"
+                    onClose={() => !isRestoring && setRestoreTargetId(null)}
+                    size="md"
+                    footer={
+                        <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                            <Button 
+                                variant="outline" 
+                                onClick={() => setRestoreTargetId(null)}
+                                disabled={isRestoring}
+                                style={{ flex: 1 }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                variant="primary" 
+                                onClick={handleRestoreExecute}
+                                isLoading={isRestoring}
+                                style={{ flex: 1, backgroundColor: '#ef4444' }}
+                                startIcon={<RefreshCw size={18} />}
+                            >
+                                Start Restoration
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                        <div style={{ 
+                            width: '64px', 
+                            height: '64px', 
+                            borderRadius: '50%', 
+                            backgroundColor: '#fee2e2', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            margin: '0 auto 20px'
+                        }}>
+                            <AlertTriangle size={32} color="#ef4444" />
+                        </div>
+                        <h3 style={{ color: '#991b1b', marginBottom: '12px', fontWeight: 700 }}>Critical Action Warning</h3>
+                        <p style={{ color: '#4b5563', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
+                            You are about to restore the system to backup: <br />
+                            <strong style={{ fontFamily: 'monospace', color: '#111827' }}>{restoreTargetId}</strong>
+                            <br /><br />
+                            This will <strong>OVERWRITE</strong> all current live data. 
+                            A safety backup of the current state will be taken automatically before we proceed.
+                        </p>
+                        
+                        <div style={{ 
+                            backgroundColor: '#f9fafb', 
+                            padding: '16px', 
+                            borderRadius: '12px', 
+                            border: '1px solid #e5e7eb',
+                            textAlign: 'left'
+                        }}>
+                            <label style={{ 
+                                display: 'block', 
+                                fontSize: '12px', 
+                                fontWeight: 600, 
+                                color: '#374151', 
+                                marginBottom: '8px' 
+                            }}>
+                                Type <span style={{ color: '#ef4444' }}>RESTORE</span> to confirm:
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                                <Lock size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#9ca3af' }} />
+                                <input 
+                                    type="text"
+                                    value={restoreConfirmation}
+                                    onChange={(e) => setRestoreConfirmation(e.target.value)}
+                                    placeholder="Type RESTORE here..."
+                                    style={{ 
+                                        width: '100%', 
+                                        padding: '10px 12px 10px 36px', 
+                                        border: '1px solid #d1d5db', 
+                                        borderRadius: '8px',
+                                        fontSize: '14px'
+                                    }}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

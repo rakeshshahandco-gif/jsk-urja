@@ -177,7 +177,7 @@ export const FollowUpForm = () => {
     const reminderForm = useForm({
         defaultValues: {
             nextCallDate: '',
-            note: '',
+            whatToTalkNext: '',
             priority: 'medium',
             reminderEnabled: false,
             followUpType: 'CALL'
@@ -213,8 +213,7 @@ export const FollowUpForm = () => {
                 const openReminder = reminderData.results[0];
                 reminderForm.reset({
                     nextCallDate: openReminder.reminderDate ? openReminder.reminderDate.split('T')[0] : '',
-                    nextCallTime: openReminder.reminderTime || '',
-                    note: openReminder.taskNote || '',
+                    whatToTalkNext: openReminder.taskNote || '',
                     priority: openReminder.priority || 'medium',
                     reminderEnabled: true, // It's open, so enabled
                     followUpType: openReminder.followUpType || 'CALL'
@@ -250,7 +249,9 @@ export const FollowUpForm = () => {
                 followUpStatus: data.followUpStatus,
                 notConvertedDetails: {
                     ...data.notConvertedDetails,
-                    assignedTo: data.notConvertedDetails?.assignedTo || null
+                    assignedTo: (data.notConvertedDetails?.assignedTo && data.notConvertedDetails.assignedTo.length === 24) 
+                        ? data.notConvertedDetails.assignedTo 
+                        : undefined
                 }
             };
 
@@ -291,7 +292,6 @@ export const FollowUpForm = () => {
     };
 
     const onUpdateReminder = async (data) => {
-        // Validation handled by HTML5 or hook form required?
         if (data.reminderEnabled && !data.nextCallDate) {
             addToast('Next Call Date is required when reminder is enabled', 'error');
             return;
@@ -299,12 +299,13 @@ export const FollowUpForm = () => {
 
         try {
             const reminderPayload = {
-                conversationId: lastSavedConversationId, // Optional link
+                conversationId: lastSavedConversationId || (conversations.length > 0 ? conversations[0]._id : null),
                 nextCallDate: data.nextCallDate,
                 followUpType: data.followUpType,
-                note: data.note,
+                whatToTalkNext: data.whatToTalkNext, 
                 priority: data.priority,
-                enableReminder: data.reminderEnabled
+                reminderEnabled: data.reminderEnabled,
+                reminderTime: '10:00'
             };
 
             const response = await upsertReminder(customerId, reminderPayload);
@@ -314,13 +315,10 @@ export const FollowUpForm = () => {
             } else {
                 addToast('Reminder closed/disabled.', 'info');
             }
-
-            // Optionally reload to confirm state?
-            // loadCustomerData(); 
-
         } catch (error) {
-            console.error('Error saving reminder:', error);
-            addToast('Failed to save reminder', 'error');
+            console.error('Reminder Save Error:', error);
+            const serverError = error.response?.data?.message || error.message || 'Unknown error';
+            addToast(`Failed to save reminder: ${serverError}`, 'error');
         }
     };
 
@@ -530,10 +528,7 @@ export const FollowUpForm = () => {
                                                     <label>Expected Requirement Date</label>
                                                     <input type="date" {...conversationForm.register('notConvertedDetails.expectedRequirementDate')} className={styles.formInput} />
                                                 </div>
-                                                <div className={styles.formGroup}>
-                                                    <label>Next Follow-up Date</label>
-                                                    <input type="date" {...conversationForm.register('notConvertedDetails.nextFollowUpDate')} className={styles.formInput} />
-                                                </div>
+                                                {/* Removed duplicate Next Follow-up Date - use global reminder section */}
                                             </div>
                                         </div>
                                     )}
@@ -736,9 +731,9 @@ export const FollowUpForm = () => {
                             <div className={styles.formGroup}>
                                 <label>What to Talk Next</label>
                                 <textarea
-                                    {...reminderForm.register('note')}
+                                    {...reminderForm.register('whatToTalkNext')}
                                     rows={6}
-                                    placeholder="Enter notes for next conversation..."
+                                    placeholder="Enter notes for follow-up..."
                                     className={styles.formTextarea}
                                 />
                             </div>
@@ -781,9 +776,10 @@ export const FollowUpForm = () => {
                                 type="submit"
                                 variant="secondary"
                                 isLoading={reminderForm.formState.isSubmitting}
+                                disabled={reminderForm.formState.isSubmitting}
                                 className={styles.updateButton}
                             >
-                                Update Reminder
+                                {reminderForm.formState.isSubmitting ? 'Updating...' : 'Update Reminder'}
                             </Button>
                         </form>
                     </div>

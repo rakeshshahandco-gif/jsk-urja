@@ -38,6 +38,9 @@ const extendReminder = catchAsync(async (req, res) => {
 });
 
 const upsertReminder = catchAsync(async (req, res) => {
+    if (!req.user || !req.user.id) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required to save reminders');
+    }
     const reminder = await reminderService.upsertReminderForCustomer(req.params.customerId, { ...req.body, createdBy: req.user.id });
     res.send({ reminder, message: reminder ? 'Reminder updated' : 'Reminder closed/disabled' });
 });

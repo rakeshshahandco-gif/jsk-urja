@@ -47,7 +47,6 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                         <th className={styles.sortable} onClick={() => onSort('reminderDate')}>
                             Follow-up Date <SortIcon column="reminderDate" />
                         </th>
-                        <th>Time</th>
                         <th>Type</th>
                         <th>Priority</th>
                         <th>Summary / Next Action</th>
@@ -91,7 +90,6 @@ export const FollowUpReportTable = ({ data, loading, onSort, sortBy, sortOrder }
                                         return !isNaN(d.getTime()) ? d.toLocaleDateString() : '—';
                                     })()}
                                 </td>
-                                <td>{r.reminderTime || '-'}</td>
                                 <td>{r.followUpType === 'CALL' ? '📞 CALL' : '💬 WHATSAPP'}</td>
                                 <td>
                                     {r.priority === 'high' && '🔴 High'}

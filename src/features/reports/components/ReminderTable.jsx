@@ -59,10 +59,6 @@ export const ReminderTable = ({ reminders, onChangeDate, onCloseTask, loading })
                                         <Calendar size={14} className="text-gray-400" />
                                         <span>{format(new Date(reminder.reminderDate), 'dd MMM yyyy')}</span>
                                     </div>
-                                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                                        <Clock size={12} />
-                                        <span>{reminder.reminderTime}</span>
-                                    </div>
                                     {reminder.rescheduleCount > 0 && (
                                         <div className="text-xs text-orange-600 mt-1" title={`${reminder.rescheduleCount} times`}>
                                             Rescheduled {reminder.rescheduleCount}x

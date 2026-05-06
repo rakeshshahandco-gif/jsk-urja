@@ -21,7 +21,7 @@ const syncReminder = async (followup, body = {}) => {
                 followUpId: followup._id,
                 conversationId: body.conversationId || followup.conversationId,
                 reminderDate: followup.nextCallDate,
-                reminderTime: followup.nextCallTime,
+                reminderTime: followup.nextCallTime || '10:00',
                 followUpType: followup.followUpType,
                 taskNote: followup.whatToTalkNext,
                 priority: followup.priority,

@@ -371,7 +371,6 @@ const FollowupDashboardReport = () => {
                                                     <tr key={task._id} style={{ transition: 'background 0.15s' }}>
                                                         <td style={s.td}>
                                                             <div style={{ fontWeight: 600 }}>{format(new Date(task.reminderDate), 'dd MMM yyyy')}</div>
-                                                            {task.reminderTime && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{task.reminderTime}</div>}
                                                         </td>
                                                         <td style={s.td}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, fontSize: 12 }}>

@@ -89,7 +89,6 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
                     setExistingFollowup(followupData);
                     followUpForm.reset({
                         nextCallDate: followupData.nextCallDate?.split('T')[0],
-                        nextCallTime: followupData.nextCallTime || '',
                         whatToTalkNext: followupData.whatToTalkNext || '',
                         priority: followupData.priority || 'medium',
                         reminderEnabled: followupData.reminderEnabled || false,
@@ -98,7 +97,6 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
                     setExistingFollowup(null);
                     followUpForm.reset({
                         nextCallDate: '',
-                        nextCallTime: '',
                         whatToTalkNext: '',
                         priority: 'medium',
                         reminderEnabled: false,
@@ -109,7 +107,6 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
                 setExistingFollowup(null);
                 followUpForm.reset({
                     nextCallDate: '',
-                    nextCallTime: '',
                     whatToTalkNext: '',
                     priority: 'medium',
                     reminderEnabled: false,
@@ -188,7 +185,6 @@ export const TalkWithCustomerForm = ({ selectedCustomer: preSelectedCustomer, cl
             const followupData = {
                 customerId: selectedCustomer._id,
                 nextCallDate: new Date(data.nextCallDate),
-                nextCallTime: data.nextCallTime || '',
                 whatToTalkNext: data.whatToTalkNext || '',
                 priority: data.priority,
                 reminderEnabled: data.reminderEnabled,

@@ -15,19 +15,14 @@ export const FollowUpReminderPanel = ({ register, errors, control, onSubmit, isS
                     error={errors.nextCallDate}
                 />
 
-                <Input
-                    label="Next Call Time (Optional)"
-                    type="time"
-                    {...register('nextCallTime')}
-                    error={errors.nextCallTime}
-                />
+
 
                 <div className={styles.textareaGroup}>
                     <label className={styles.label}>What to Talk Next</label>
                     <textarea
                         className={styles.textarea}
                         rows={5}
-                        placeholder="Enter notes for next conversation..."
+                        placeholder="Enter notes for follow-up..."
                         {...register('whatToTalkNext')}
                     />
                 </div>

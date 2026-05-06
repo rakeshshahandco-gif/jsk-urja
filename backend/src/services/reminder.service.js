@@ -471,7 +471,9 @@ const queryOpenRemindersWithDetails = async (filters, options) => {
  * @returns {Promise<Reminder>}
  */
 const upsertReminderForCustomer = async (customerId, reminderData) => {
-    if (reminderData.enableReminder) {
+    const isReminderEnabled = reminderData.reminderEnabled !== undefined ? reminderData.reminderEnabled : reminderData.enableReminder;
+
+    if (isReminderEnabled) {
         // Upsert open reminder
         const reminder = await Reminder.findOneAndUpdate(
             {
@@ -482,9 +484,9 @@ const upsertReminderForCustomer = async (customerId, reminderData) => {
                 customerId: customerId,
                 conversationId: reminderData.conversationId,
                 reminderDate: reminderData.nextCallDate,
-                reminderTime: reminderData.nextCallTime,
+                reminderTime: reminderData.nextCallTime || '10:00',
                 followUpType: reminderData.followUpType,
-                taskNote: reminderData.note, // 'what to talk next'
+                taskNote: reminderData.whatToTalkNext || reminderData.note, // Supports both 'whatToTalkNext' and 'note'
                 priority: reminderData.priority,
                 isClosed: false,
                 createdBy: reminderData.createdBy

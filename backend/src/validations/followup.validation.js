@@ -9,7 +9,7 @@ const createFollowup = {
         nextCallDate: Joi.date().required().messages({
             'date.base': 'Next call date must be a valid date'
         }),
-        nextCallTime: Joi.string().optional().allow('').pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).messages({
+        nextCallTime: Joi.string().optional().allow('', null).pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).messages({
             'string.pattern.base': 'Time must be in HH:MM format (24-hour)'
         }),
         whatToTalkNext: Joi.string().optional().allow(''),
@@ -56,7 +56,7 @@ const updateFollowup = {
     body: Joi.object()
         .keys({
             nextCallDate: Joi.date(),
-            nextCallTime: Joi.string().allow('').pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
+            nextCallTime: Joi.string().allow('', null).pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
             whatToTalkNext: Joi.string().allow(''),
             priority: Joi.string().valid('high', 'medium', 'low'),
             reminderEnabled: Joi.boolean(),

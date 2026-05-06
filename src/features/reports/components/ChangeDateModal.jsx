@@ -8,7 +8,6 @@ export const ChangeDateModal = ({ reminder, onClose, onSave, isSubmitting }) => 
     const { register, handleSubmit, formState: { errors }, reset } = useForm({
         defaultValues: {
             reminderDate: reminder?.reminderDate ? new Date(reminder.reminderDate).toISOString().split('T')[0] : '',
-            reminderTime: reminder?.reminderTime || '',
             note: ''
         }
     });
@@ -21,7 +20,7 @@ export const ChangeDateModal = ({ reminder, onClose, onSave, isSubmitting }) => 
         <div style={{ padding: '20px', minWidth: '400px' }}>
             <h2 style={{ marginBottom: '20px', fontSize: '1.25rem', fontWeight: 600 }}>Reschedule Reminder</h2>
             <div style={{ marginBottom: '15px' }}>
-                <strong>Current Date:</strong> {new Date(reminder.reminderDate).toLocaleDateString()} {reminder.reminderTime}
+                <strong>Current Date:</strong> {new Date(reminder.reminderDate).toLocaleDateString()}
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)}>
@@ -30,12 +29,6 @@ export const ChangeDateModal = ({ reminder, onClose, onSave, isSubmitting }) => 
                     type="date"
                     {...register('reminderDate', { required: 'Date is required' })}
                     error={errors.reminderDate}
-                />
-                <Input
-                    label="New Reminder Time"
-                    type="time"
-                    {...register('reminderTime')}
-                    error={errors.reminderTime}
                 />
 
                 <div style={{ marginBottom: '16px' }}>

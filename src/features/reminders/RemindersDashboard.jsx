@@ -24,7 +24,7 @@ export const RemindersDashboard = () => {
     // Modal states
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedReminder, setSelectedReminder] = useState(null);
-    const [extendData, setExtendData] = useState({ date: '', time: '' });
+    const [extendData, setExtendData] = useState({ date: '' });
     const [actionLoading, setActionLoading] = useState(false);
 
     const fetchCounts = useCallback(async () => {
@@ -100,8 +100,7 @@ export const RemindersDashboard = () => {
     const handleOpenExtendModal = (reminder) => {
         setSelectedReminder(reminder);
         setExtendData({
-            date: new Date(reminder.reminderDate).toISOString().split('T')[0],
-            time: reminder.reminderTime || ''
+            date: new Date(reminder.reminderDate).toISOString().split('T')[0]
         });
         setIsExtendModalOpen(true);
     };
@@ -115,8 +114,7 @@ export const RemindersDashboard = () => {
         setActionLoading(true);
         try {
             await extendReminder(selectedReminder._id, {
-                reminderDate: extendData.date,
-                reminderTime: extendData.time
+                reminderDate: extendData.date
             });
             addToast('Task date extended', 'success');
             setIsExtendModalOpen(false);
@@ -218,11 +216,6 @@ export const RemindersDashboard = () => {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <Calendar size={14} />
                                                 {new Date(r.reminderDate).toLocaleDateString()}
-                                                {r.reminderTime && (
-                                                    <span style={{ marginLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                        <Clock size={14} /> {r.reminderTime}
-                                                    </span>
-                                                )}
                                             </div>
                                         </td>
                                         <td>{r.followUpType}</td>
@@ -284,14 +277,6 @@ export const RemindersDashboard = () => {
                                     type="date"
                                     value={extendData.date}
                                     onChange={(e) => setExtendData(prev => ({ ...prev, date: e.target.value }))}
-                                />
-                            </div>
-                            <div className={styles.formGroup}>
-                                <label>New Reminder Time</label>
-                                <input
-                                    type="time"
-                                    value={extendData.time}
-                                    onChange={(e) => setExtendData(prev => ({ ...prev, time: e.target.value }))}
                                 />
                             </div>
                         </div>

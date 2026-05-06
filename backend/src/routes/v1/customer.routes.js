@@ -59,7 +59,7 @@ router
 router.route('/:id/conversations').get(customerController.getCustomerConversations);
 router.route('/:customerId/conversation-history').get(customerController.getConversationHistory);
 
-router.route('/:customerId/reminder').put(reminderController.upsertReminder);
+router.route('/:customerId/reminder').put(protect, reminderController.upsertReminder);
 
 // Debug/Restoration Route (TEMPORARILY UNPROTECTED FOR RECOVERY)
 router.get('/debug/restore-all', customerController.restoreAllCustomers);

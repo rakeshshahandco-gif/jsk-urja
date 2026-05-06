@@ -3,6 +3,7 @@ import path from 'path';
 import Joi from 'joi';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
+dotenv.config({ path: path.join(process.cwd(), 'backend', '.env') });
 
 const envSchema = Joi.object().keys({
     NODE_ENV: Joi.string().valid('production', 'development', 'test').required(),

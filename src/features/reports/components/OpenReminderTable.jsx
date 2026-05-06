@@ -59,12 +59,6 @@ export const OpenReminderTable = ({ reminders, onAction, loading }) => {
                                         {isValidDate ? format(rDate, 'dd MMM yyyy') : 'No Date'}
                                     </div>
                                     <div className="flex flex-col gap-1 mt-1">
-                                        {reminder.reminderTime && (
-                                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                                <Clock size={12} />
-                                                {reminder.reminderTime}
-                                            </div>
-                                        )}
                                         <span className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium border
                                             ${reminder.followUpType === 'WHATSAPP' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                                             {reminder.followUpType}
