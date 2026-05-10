@@ -41,7 +41,7 @@ const ReplacementDispatchPrintPage = () => {
             <div ref={printRef} style={{ maxWidth: 800, margin: '20px auto', padding: 32, background: '#fff', fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111' }}>
                 {/* Company Header */}
                 <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: 10, marginBottom: 12 }}>
-                    <div style={{ fontSize: 20, fontWeight: 900 }}>{company?.companyName || 'JSK URJA'}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900 }}>{company?.companyName || 'SHREEJAL'}</div>
                     <div style={{ fontSize: 11, marginTop: 2 }}>{company?.address || ''}</div>
                     <div style={{ fontSize: 11 }}>GST: {company?.gstin || ''} | Ph: {company?.phone || ''}</div>
                 </div>

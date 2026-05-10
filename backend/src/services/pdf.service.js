@@ -724,7 +724,7 @@ class PDFService {
                                     <div class="company-info">
                                         ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : ''}
                                         <div class="company-details">
-                                            <h1>${company.companyName || "JSK URJA"}</h1>
+                                            <h1>${company.companyName || "SHREEJAL"}</h1>
                                             <div class="company-addr">
                                                 ${company.address}<br />
                                                 ${company.city} ${company.state}, India. Postal Code: ${company.pincode}. State Code: ${company.stateCode || ""}<br />
@@ -763,7 +763,7 @@ class PDFService {
                                 </div>
                             ` : `
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #000; padding-bottom: 5px;">
-                                    <div style="font-size: 14pt; font-weight: 900; text-transform: uppercase;">${company.companyName || "JSK URJA"}</div>
+                                    <div style="font-size: 14pt; font-weight: 900; text-transform: uppercase;">${company.companyName || "SHREEJAL"}</div>
                                     <div style="text-align: right; font-size: 9pt;">
                                         <strong>Order No:</strong> ${so.soNumber} | <strong>Date:</strong> ${fmt(so.soDate)}
                                     </div>

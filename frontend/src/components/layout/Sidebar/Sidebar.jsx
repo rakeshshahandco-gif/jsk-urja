@@ -84,12 +84,12 @@ export const Sidebar = () => {
                         )}
                         {showingFull ? (
                             <div className={styles.brandText}>
-                                <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
+                                <span className={styles.focus}>SHREEJAL</span>
                                 <span className={styles.tagline}>CRM/ERP</span>
                             </div>
                         ) : (
-                            <div className={styles.collapsedLogo} title="JSK URJA CRM/ERP">
-                                <div className={styles.juText}>JU</div>
+                            <div className={styles.collapsedLogo} title="SHREEJAL CRM/ERP">
+                                <div className={styles.juText}>SJ</div>
                                 <div className={styles.collapsedTagline}>CRM/ERP</div>
                             </div>
                         )}

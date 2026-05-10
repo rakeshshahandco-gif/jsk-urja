@@ -44,7 +44,7 @@ export const generateSalesOrderHTML = (so, company) => {
       <body>
         <div class="header">
           <div class="company-details">
-            <h2>${company.companyName || 'JSK URJA'}</h2>
+            <h2>${company.companyName || 'SHREEJAL'}</h2>
             <p style="margin: 4px 0; font-size: 12px; max-width: 300px;">
               ${company.address || ''}<br/>
               ${company.city || ''} ${company.state || ''} - ${company.pincode || ''}<br/>
@@ -171,7 +171,7 @@ export const generateSalesInvoiceHTML = (inv, company) => {
       <body>
         <div class="header">
           <div class="company-details">
-            <h2>${company.companyName || 'JSK URJA'}</h2>
+            <h2>${company.companyName || 'SHREEJAL'}</h2>
             <p style="margin: 4px 0; font-size: 12px; max-width: 300px;">
               ${company.address || ''}<br/>
               ${company.city || ''} ${company.state || ''} - ${company.pincode || ''}<br/>
@@ -244,7 +244,7 @@ export const generateSalesInvoiceHTML = (inv, company) => {
              2. Subject to local jurisdiction.
            </div>
            <div style="text-align: right; margin-top: 20px;">
-             <strong>For ${company.companyName || 'JSK URJA'}</strong><br/><br/><br/>
+             <strong>For ${company.companyName || 'SHREEJAL'}</strong><br/><br/><br/>
              Authorized Signatory
            </div>
         </div>

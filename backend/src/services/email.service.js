@@ -11,7 +11,7 @@ class EmailService {
         });
 
         const mailOptions = {
-            from: `"${settings.senderName || 'JSK URJA'}" <${settings.emailId}>`,
+            from: `"${settings.senderName || 'SHREEJAL'}" <${settings.emailId}>`,
             to,
             subject,
             text,

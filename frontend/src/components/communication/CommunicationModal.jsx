@@ -21,7 +21,7 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
     const [groupSearch, setGroupSearch] = useState('');
     const [groupsLoading, setGroupsLoading] = useState(false);
     const [groupsError, setGroupsError] = useState('');
-    const [subject, setSubject] = useState(data.subject || `${type} from JSK URJA`);
+    const [subject, setSubject] = useState(data.subject || `${type} from SHREEJAL`);
     const [sending, setSending] = useState(false);
     const [status, setStatus] = useState('');
     const [sessionStatus, setSessionStatus] = useState({ connected: false, checking: true });
@@ -45,7 +45,7 @@ export default function CommunicationModal({ isOpen, onClose, onSend, data, type
             });
         }
         
-        msg += `\nKindly review and confirm.\n\nRegards,\nJSK URJA`;
+        msg += `\nKindly review and confirm.\n\nRegards,\nSHREEJAL`;
         return msg;
     };
 

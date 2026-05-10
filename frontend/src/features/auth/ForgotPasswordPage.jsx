@@ -66,7 +66,7 @@ export const ForgotPasswordPage = () => {
         <div className={styles.container}>
             <div className={styles.card}>
                 <div className={styles.header}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
+                    <h1 className={styles.companyName}>SHREEJAL</h1>
                     <h2 className={styles.title}>Forgot Password?</h2>
                     <p className={styles.subtitle}>
                         Enter your email address and we&apos;ll send you a link to reset your password.

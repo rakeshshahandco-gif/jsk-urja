@@ -38,9 +38,9 @@ export const LoginScreen = () => {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoCircle}>
-              <Text style={styles.logoText}>JSK</Text>
+              <Text style={styles.logoText}>SHR</Text>
             </View>
-            <Text style={styles.brand}>JSK URJA</Text>
+            <Text style={styles.brand}>SHREEJAL</Text>
             <Text style={{ fontSize: 20, color: 'red', fontWeight: 'bold' }}>[MOBILE APK TEST MODE]</Text>
             <Text style={styles.subtitle}>Task Management</Text>
           </View>
@@ -117,7 +117,7 @@ export const LoginScreen = () => {
           </View>
 
           {/* Footer */}
-          <Text style={styles.footer}>JSK Urja CRM • Task Management v1.0</Text>
+          <Text style={styles.footer}>Shreejal CRM • Task Management v1.0</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

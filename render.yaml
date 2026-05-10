@@ -1,7 +1,7 @@
 services:
   # Backend Web Service (serves both API and React frontend)
   - type: web
-    name: jsk-urja-backend
+    name: shreejal-backend
     env: node
     rootDir: .
     buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install

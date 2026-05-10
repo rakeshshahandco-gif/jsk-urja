@@ -12,8 +12,8 @@ export const initSocket = (server) => {
                 'http://localhost:4000', 
                 'http://localhost:4001', 
                 'http://localhost:5173', 
-                'https://jsk-urja.onrender.com',
-                'https://jsk-urja-backend.onrender.com'
+                'https://shreejal.onrender.com',
+                'https://shreejal-backend.onrender.com'
             ],
             credentials: true,
         },

@@ -3,7 +3,7 @@ import { getAuthData, clearAuthData } from '@/utils/auth';
 
 import { env } from '@/config/env';
 
-export const prodBackend = 'https://jsk-urja-backend.onrender.com';
+export const prodBackend = 'https://shreejal-backend.onrender.com';
 export const SOCKET_URL = env.SOCKET_URL;
 export const currentLocation = env.API_URL;
 

@@ -72,7 +72,7 @@ const salesInvoiceSchema = new mongoose.Schema({
     shippingPhone: { type: String, default: '' },
 
     // Seller (Our Company) Info
-    sellerName: { type: String, default: 'JSK URJA' },
+    sellerName: { type: String, default: 'SHREEJAL' },
     sellerGstin: { type: String, default: '' },
     sellerAddress: { type: String, default: '' },
     sellerState: { type: String, default: '' },

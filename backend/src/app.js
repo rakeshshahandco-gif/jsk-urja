@@ -31,7 +31,7 @@ app.use(cors({
             'http://localhost:4001', 
             'http://localhost:5173', 
             'http://localhost:8081',
-            'https://jsk-urja.onrender.com'
+            'https://shreejal.onrender.com'
         ];
         
         if (allowed.includes(origin) || origin.startsWith('http://localhost:')) {

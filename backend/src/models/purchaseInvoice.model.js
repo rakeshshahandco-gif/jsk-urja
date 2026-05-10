@@ -60,7 +60,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     supplierInvoiceNo: { type: String, default: '' },  // Supplier's own invoice ref
 
     // Buyer (Our Company) Info
-    buyerName: { type: String, default: 'JSK URJA' },
+    buyerName: { type: String, default: 'SHREEJAL' },
     buyerGstin: { type: String, default: '' },
     buyerAddress: { type: String, default: '' },
     buyerState: { type: String, default: '' },

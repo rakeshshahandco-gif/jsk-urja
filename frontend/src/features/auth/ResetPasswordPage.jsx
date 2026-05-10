@@ -130,7 +130,7 @@ export const ResetPasswordPage = () => {
         <div className={styles.container}>
             <div className={styles.card}>
                 <div className={styles.header}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
+                    <h1 className={styles.companyName}>SHREEJAL</h1>
                     <h2 className={styles.title}>Reset Password</h2>
                     <p className={styles.subtitle}>Enter your new password below</p>
                 </div>

@@ -126,7 +126,7 @@ export default function PurchaseInvoiceDetailPage() {
                                 <img src={company.logoUrl} alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
                             )}
                             <div>
-                                <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'JSK URJA'}</div>
+                                <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'SHREEJAL'}</div>
                                 <div style={{ fontSize: '9pt', color: '#000', lineHeight: '1.4', maxWidth: '400px' }}>
                                     {company.address}<br />
                                     {(company.city || company.state) ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}` : ''}<br />
@@ -159,7 +159,7 @@ export default function PurchaseInvoiceDetailPage() {
                         </div>
                         <div style={{ padding: '10px' }}>
                             <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px', borderBottom: '1px solid #000', paddingBottom: '4px' }}>Billed To (Buyer)</div>
-                            <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>{inv.buyerName || company.companyName || 'JSK URJA'}</div>
+                            <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '4px' }}>{inv.buyerName || company.companyName || 'SHREEJAL'}</div>
                             {inv.buyerAddress ? (
                                 <div style={{ fontSize: '12px', marginBottom: '2px' }}>{inv.buyerAddress}</div>
                             ) : (

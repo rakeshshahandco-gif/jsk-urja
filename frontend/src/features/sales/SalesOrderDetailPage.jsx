@@ -225,7 +225,7 @@ export default function SalesOrderDetailPage() {
                     lineHeight: 1.1,
                   }}
                 >
-                  {company.companyName || "JSK URJA"}
+                  {company.companyName || "SHREEJAL"}
                 </div>
                 <div
                   style={{
@@ -556,7 +556,7 @@ export default function SalesOrderDetailPage() {
           </>
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
-                <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName || "JSK URJA"}</div>
+                <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName || "SHREEJAL"}</div>
                 <div style={{ textAlign: 'right', fontSize: '9pt' }}>
                     <strong>Order No:</strong> {so.soNumber} | <strong>Date:</strong> {fmt(so.soDate)}
                 </div>
@@ -1124,7 +1124,7 @@ export default function SalesOrderDetailPage() {
                   borderBottom: "1px solid #000",
                 }}
               >
-                For {company.companyName || "JSK URJA"}
+                For {company.companyName || "SHREEJAL"}
               </div>
               <div
                 style={{

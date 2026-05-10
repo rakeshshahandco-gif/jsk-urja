@@ -139,7 +139,7 @@ export default function PurchaseOrderDetailPage() {
                         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
                             <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: '80px', maxWidth: '120px', objectFit: 'contain' }} />
                             <div>
-                                <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'JSK URJA'}</div>
+                                <div style={{ fontSize: '22pt', fontWeight: 900, color: '#000', marginBottom: '2px', lineHeight: 1.1 }}>{company.companyName || 'SHREEJAL'}</div>
                                 <div style={{ fontSize: '9pt', color: '#000', lineHeight: '1.4', maxWidth: '400px' }}>
                                     {company.address}<br />
                                     {(company.city || company.state) ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}` : ''}<br />
@@ -186,7 +186,7 @@ export default function PurchaseOrderDetailPage() {
                         </div>
                         <div style={{ padding: '15px' }}>
                             <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '10px', borderBottom: '1px solid #000', paddingBottom: '5px', color: '#666' }}>DELIVER TO / SHIP TO</div>
-                            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{company.companyName || 'JSK URJA'}</div>
+                            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '6px', color: '#000' }}>{company.companyName || 'SHREEJAL'}</div>
                             <div style={{ fontSize: '13px', color: '#333', maxWidth: '400px', lineHeight: '1.4' }}>
                                 {company.address && <div>{company.address}</div>}
                                 {(company.city || company.state) && <div>{company.city}, {company.state} - {company.pincode}</div>}
@@ -309,7 +309,7 @@ export default function PurchaseOrderDetailPage() {
                         </div>
                         <div style={{ border: '1px solid #000', display: 'flex', flexDirection: 'column', height: '140px', width: '220px' }}>
                             <div style={{ background: '#f5f5f5', padding: '6px', fontSize: '11px', fontWeight: 800, textAlign: 'center', borderBottom: '1px solid #000' }}>
-                                For {company.companyName || 'JSK URJA'}
+                                For {company.companyName || 'SHREEJAL'}
                             </div>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12px' }}>
                                 <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>{po.createdBy?.name || user?.name || 'Authorized User'}</div>

@@ -19,8 +19,8 @@ export const SalesDetailScreen = ({ route, navigation }) => {
   const handlePrint = async () => {
     try {
       const html = type === 'Order' 
-        ? generateSalesOrderHTML(invoice, { companyName: 'JSK URJA' }) 
-        : generateSalesInvoiceHTML(invoice, { companyName: 'JSK URJA' });
+        ? generateSalesOrderHTML(invoice, { companyName: 'SHREEJAL' }) 
+        : generateSalesInvoiceHTML(invoice, { companyName: 'SHREEJAL' });
       await Print.printAsync({ html });
     } catch (e) {
       console.warn(e);
@@ -30,8 +30,8 @@ export const SalesDetailScreen = ({ route, navigation }) => {
   const handleShare = async () => {
     try {
       const html = type === 'Order' 
-        ? generateSalesOrderHTML(invoice, { companyName: 'JSK URJA' }) 
-        : generateSalesInvoiceHTML(invoice, { companyName: 'JSK URJA' });
+        ? generateSalesOrderHTML(invoice, { companyName: 'SHREEJAL' }) 
+        : generateSalesInvoiceHTML(invoice, { companyName: 'SHREEJAL' });
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       await Sharing.shareAsync(uri);
     } catch (e) {

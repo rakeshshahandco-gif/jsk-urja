@@ -169,7 +169,7 @@ export default function CompanyProfilePage() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
                             <div>
                                 <span style={lbl}>Company Name *</span>
-                                <input type="text" name="companyName" value={profile.companyName} onChange={handleChange} required style={inp} placeholder="e.g. JSK URJA" />
+                                <input type="text" name="companyName" value={profile.companyName} onChange={handleChange} required style={inp} placeholder="e.g. SHREEJAL" />
                             </div>
                         </div>
 

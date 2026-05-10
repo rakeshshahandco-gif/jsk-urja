@@ -1,8 +1,8 @@
-# JSK Urja — Task Management Mobile APK
+# Shreejal — Task Management Mobile APK
 
 ## Overview
-This is the Android mobile app for JSK Urja CRM Task Management.
-- **Same backend** as the desktop CRM (https://jsk-urja.onrender.com)
+This is the Android mobile app for Shreejal CRM Task Management.
+- **Same backend** as the desktop CRM (https://shreejal.onrender.com)
 - **Same database** — real-time sync between mobile and desktop
 - **Same login credentials** — no separate accounts needed
 - Desktop CRM is **100% untouched and unaffected**
@@ -113,6 +113,6 @@ Download: `eas credentials`
 ---
 
 ## Support
-- Backend API: https://jsk-urja.onrender.com
+- Backend API: https://shreejal.onrender.com
 - Expo Docs: https://docs.expo.dev
 - EAS Build: https://docs.expo.dev/build/introduction

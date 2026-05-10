@@ -195,7 +195,7 @@ export const createThread = asyncHandler(async (req, res) => {
 // SAFETY: This ONLY touches the isCompanyWide thread — NEVER direct/private threads
 // ─────────────────────────────────────────────────────────────
 const ensureCompanyThread = async (myId) => {
-    const COMPANY_THREAD_NAME = "JSK URJA TEAM";
+    const COMPANY_THREAD_NAME = "SHREEJAL TEAM";
     let thread = await MsgThread.findOne({ name: COMPANY_THREAD_NAME, isCompanyWide: true });
 
     if (!thread) {
@@ -209,12 +209,12 @@ const ensureCompanyThread = async (myId) => {
             isCompanyWide: true,
             isPermanent: true,
             createdBy: myId,
-            lastMessage: { content: "Welcome to JSK URJA Official Team Chat!", sender: myId, timestamp: new Date() }
+            lastMessage: { content: "Welcome to SHREEJAL Official Team Chat!", sender: myId, timestamp: new Date() }
         });
         await MsgMessage.create({
             threadId: thread._id,
             sender: myId,
-            content: "Welcome to JSK URJA Official Team Chat!"
+            content: "Welcome to SHREEJAL Official Team Chat!"
         });
     } else {
         // Only add THIS user if they are not already a participant

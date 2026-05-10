@@ -365,7 +365,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             supplierAddress: value.supplierAddress || supplier.address || '',
             supplierState: value.supplierState || supplier.state || '',
             poId: po?._id || null, poNumber, grnId: grn?._id || null, grnNumber: grn?.grnNumber || '',
-            buyerName: value.buyerName || 'JSK URJA',
+            buyerName: value.buyerName || 'SHREEJAL',
             poDate: parseDate(value.poDate) || (po ? po.poDate : null),
             ...headerTotals,
             financialYear: fy,

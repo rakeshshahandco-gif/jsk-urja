@@ -6,7 +6,7 @@ export const BrandedSplashScreen = () => {
     return (
         <div className={styles.splashContainer}>
             <div className={styles.splashLogo}>
-                <img src={logo} alt="JSK URJA" className={styles.logoImage} />
+                <img src={logo} alt="SHREEJAL" className={styles.logoImage} />
             </div>
         </div>
     );

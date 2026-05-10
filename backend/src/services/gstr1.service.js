@@ -42,8 +42,8 @@ export const generateGSTR1Excel = async (filters) => {
 
     // ─── Build Workbook ───────────────────────────────────────────────
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'JSK URJA CRM';
-    workbook.lastModifiedBy = 'JSK URJA CRM';
+    workbook.creator = 'SHREEJAL CRM';
+    workbook.lastModifiedBy = 'SHREEJAL CRM';
     workbook.created = new Date();
 
     // --- SHEET 1: b2b ---

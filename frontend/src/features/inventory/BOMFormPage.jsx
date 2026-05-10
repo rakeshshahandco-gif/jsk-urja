@@ -738,7 +738,7 @@ const BOMFormPage = () => {
             <div className="print-view">
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '3px solid #000', paddingBottom: 15, marginBottom: 20 }}>
                     <div>
-                        <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4 }}>{company.companyName || 'JSK URJA'}</div>
+                        <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4 }}>{company.companyName || 'SHREEJAL'}</div>
                         <div style={{ fontSize: 10, maxWidth: 350 }}>
                             {company.address} {company.city} {company.state} - {company.pincode}<br />
                             Email: {company.email} | Phone: {company.phone}
