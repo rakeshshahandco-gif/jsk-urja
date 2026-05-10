@@ -16,8 +16,10 @@ class PDFService {
             // Try common paths relative to root and backend
             const possiblePaths = [
                 path.resolve('public/logo.jpeg'),
+                path.resolve('frontend/public/logo.jpeg'),
                 path.resolve('../public/logo.jpeg'),
-                path.join(process.cwd(), 'public/logo.jpeg')
+                path.join(process.cwd(), 'public/logo.jpeg'),
+                path.join(process.cwd(), 'frontend', 'public', 'logo.jpeg')
             ];
 
             for (const logoPath of possiblePaths) {

@@ -1,21 +1,20 @@
 # CRM Application
 
-## Frontend Architecture Scaffolding
+## Project Structure
 
-This project has been scaffolded with a feature-based architecture.
+- `frontend/` - React + Vite web app
+- `backend/` - Node + Express API server
+- `mobile/` - Expo mobile app
+- `scripts/` - utility/debug/test scripts
 
-### Prerequisites
+## Run Frontend
 
-Node.js is required to run this project. It seems Node.js is not currently installed or in the system PATH.
+1. `cd frontend`
+2. `npm install`
+3. `npm run dev`
 
-1.  **Install Node.js**: Download and install from [nodejs.org](https://nodejs.org/).
-2.  **Install Dependencies**: Run `npm install` in this directory.
-3.  **Start Development Server**: Run `npm run dev`.
+## Run Backend
 
-### Directory Structure
-
-- `src/features/`: Domain specific logic (Auth, Customers, etc.)
-- `src/components/`: Shared UI components
-- `src/store/`: Global state (Zustand)
-- `src/config/`: Environment config
-- `src/styles/`: Global SCSS
+1. `cd backend`
+2. `npm install`
+3. `npm run dev`

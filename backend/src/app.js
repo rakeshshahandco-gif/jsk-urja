@@ -47,7 +47,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
 // Serve Frontend Build
-const buildPath = path.join(__dirname, '../../dist');
+const buildPath = path.join(__dirname, '../../frontend/dist');
 console.log(`[Static] Serving frontend from: ${buildPath}`);
 
 app.use(express.static(buildPath, {
