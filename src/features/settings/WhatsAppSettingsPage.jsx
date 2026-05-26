@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Settings, Save, Smartphone, Search, Paperclip, MessageSquare,
     ShieldCheck, Send, Wifi, WifiOff, RefreshCw, QrCode, CheckCircle2,
-    AlertCircle, Loader2, LogOut, Phone
+    AlertCircle, Loader2, LogOut, Phone, ExternalLink, UserPlus, Share2
 } from 'lucide-react';
 import {
     getWhatsAppSettings,
     updateWhatsAppSettings,
     getWhatsAppStatus,
     connectWhatsApp,
-    disconnectWhatsApp
+    disconnectWhatsApp,
+    sendWhatsAppMessage
 } from '@/services/whatsappApi';
 import { useSocket } from '@/contexts/SocketContext';
 import toast from 'react-hot-toast';
+import ConvertFromWhatsAppModal from '@/features/leads/components/ConvertFromWhatsAppModal';
+import ProductCatalogPicker from '@/features/productCatalog/components/ProductCatalogPicker';
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status, phone }) => {
@@ -44,6 +48,7 @@ const StatusBadge = ({ status, phone }) => {
 
 export default function WhatsAppSettingsPage() {
     const { socket, connected: socketConnected } = useSocket();
+    const navigate = useNavigate();
 
     const [settings, setSettings] = useState({
         enabled: true,
@@ -70,6 +75,48 @@ export default function WhatsAppSettingsPage() {
     const [disconnecting, setDisconnecting] = useState(false);
 
     const qrTimeoutRef = useRef(null);
+
+    // ── WhatsApp quick-action modal state ───────────────────────────────────
+    // (Uses yesterday's ConvertFromWhatsAppModal + ProductCatalogPicker)
+    const [convertOpen, setConvertOpen] = useState(false);
+    const [catalogOpen, setCatalogOpen] = useState(false);
+    const [sharingCatalog, setSharingCatalog] = useState(false);
+
+    const openWhatsAppWeb = () => {
+        // "WhatsApp open in CRM" — actual WhatsApp Web in a new tab.
+        window.open('https://web.whatsapp.com', '_blank', 'noopener');
+    };
+
+    const handleCatalogConfirm = async (picked) => {
+        if (!picked || picked.length === 0) { setCatalogOpen(false); return; }
+        // Ask once for the phone to send to.
+        const phone = (window.prompt(
+            'Phone number (with country code, digits only) to share catalog with:\n' +
+            'e.g. 919920730373'
+        ) || '').replace(/\D/g, '');
+        if (!phone) { setCatalogOpen(false); return; }
+
+        setSharingCatalog(true);
+        try {
+            // Build a single WhatsApp message containing each product's name + any catalog/datasheet PDF URLs.
+            const lines = picked.map(p => {
+                const bits = [`*${p.name}*${p.code ? ` (${p.code})` : ''}`];
+                if (p.shortDescription) bits.push(p.shortDescription);
+                if (p.catalogPdfUrl)   bits.push(`Catalog:   ${p.catalogPdfUrl}`);
+                if (p.datasheetPdfUrl) bits.push(`Datasheet: ${p.datasheetPdfUrl}`);
+                if (p.brochureUrl)     bits.push(`Brochure:  ${p.brochureUrl}`);
+                return bits.join('\n');
+            });
+            const message = `Hello,\n\nSharing the following from our catalog:\n\n${lines.join('\n\n')}\n\nRegards.`;
+            await sendWhatsAppMessage({ phone, message });
+            toast.success(`Catalog sent to +${phone} (${picked.length} item${picked.length > 1 ? 's' : ''})`);
+            setCatalogOpen(false);
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Could not send catalog over WhatsApp');
+        } finally {
+            setSharingCatalog(false);
+        }
+    };
 
     // ── Load initial data ───────────────────────────────────────────────────
     useEffect(() => {
@@ -397,6 +444,147 @@ export default function WhatsAppSettingsPage() {
                     </div>
                 )}
             </div>
+
+            {/* ── WhatsApp Quick Actions (matches yesterday's design) ── */}
+            <div style={sectionStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                    <div style={{ padding: 8, background: '#f0fdf4', color: '#16a34a', borderRadius: 8 }}><MessageSquare size={20} /></div>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>WhatsApp Quick Actions</h2>
+                </div>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 16px' }}>
+                    Open WhatsApp directly from the CRM. Convert any conversation into a Lead, or share product catalog / datasheets — all without leaving this page.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                    {/* 1. Open WhatsApp Web directly */}
+                    <button
+                        type="button"
+                        onClick={openWhatsAppWeb}
+                        title="Open WhatsApp Web in a new tab"
+                        style={{
+                            textAlign: 'left', padding: '16px 18px', borderRadius: 12,
+                            background: '#f0fdf4', border: '1.5px solid #86efac',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', flexDirection: 'column', gap: 10,
+                            transition: 'transform 0.15s, box-shadow 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 16px -8px rgba(0,0,0,0.15)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{
+                                width: 38, height: 38, borderRadius: 10,
+                                background: '#fff', border: '1px solid #86efac',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#16a34a',
+                            }}>
+                                <MessageSquare size={18} />
+                            </div>
+                            <ExternalLink size={16} color="#16a34a" />
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', marginBottom: 4 }}>
+                                Open WhatsApp Web
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                                Chat with any customer directly on WhatsApp.
+                            </div>
+                        </div>
+                    </button>
+
+                    {/* 2. Convert WhatsApp chat → Lead (uses yesterday's modal) */}
+                    <button
+                        type="button"
+                        onClick={() => setConvertOpen(true)}
+                        title="Paste a WhatsApp chat and convert it into a Lead"
+                        style={{
+                            textAlign: 'left', padding: '16px 18px', borderRadius: 12,
+                            background: '#f5f3ff', border: '1.5px solid #c4b5fd',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                            display: 'flex', flexDirection: 'column', gap: 10,
+                            transition: 'transform 0.15s, box-shadow 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 16px -8px rgba(0,0,0,0.15)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{
+                                width: 38, height: 38, borderRadius: 10,
+                                background: '#fff', border: '1px solid #c4b5fd',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#7c3aed',
+                            }}>
+                                <UserPlus size={18} />
+                            </div>
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', marginBottom: 4 }}>
+                                Convert Chat → Lead
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                                Paste a WhatsApp message; saves as a Lead with source = whatsapp.
+                            </div>
+                        </div>
+                    </button>
+
+                    {/* 3. Send Catalog / Datasheet over WhatsApp (uses yesterday's picker) */}
+                    <button
+                        type="button"
+                        onClick={() => setCatalogOpen(true)}
+                        disabled={sharingCatalog}
+                        title={waStatus.status === 'CONNECTED'
+                            ? 'Pick products and send their catalog / datasheet links over WhatsApp'
+                            : 'Will send via WhatsApp once the session above is connected'}
+                        style={{
+                            textAlign: 'left', padding: '16px 18px', borderRadius: 12,
+                            background: '#fff7ed', border: '1.5px solid #fdba74',
+                            cursor: sharingCatalog ? 'wait' : 'pointer', fontFamily: 'inherit',
+                            display: 'flex', flexDirection: 'column', gap: 10,
+                            transition: 'transform 0.15s, box-shadow 0.15s',
+                            opacity: sharingCatalog ? 0.7 : 1,
+                        }}
+                        onMouseEnter={e => { if (!sharingCatalog) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 16px -8px rgba(0,0,0,0.15)'; } }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{
+                                width: 38, height: 38, borderRadius: 10,
+                                background: '#fff', border: '1px solid #fdba74',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: '#ea580c',
+                            }}>
+                                {sharingCatalog
+                                    ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                                    : <Share2 size={18} />}
+                            </div>
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', marginBottom: 4 }}>
+                                Send Catalog / Datasheet
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                                Pick products and share their catalog &amp; datasheet links over WhatsApp.
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            {/* Modals (built yesterday) */}
+            <ConvertFromWhatsAppModal
+                open={convertOpen}
+                onClose={() => setConvertOpen(false)}
+                onCreated={(lead) => {
+                    setConvertOpen(false);
+                    toast.success('Lead created from WhatsApp chat');
+                    if (lead?._id) navigate(`/crm/leads/${lead._id}`);
+                }}
+            />
+            <ProductCatalogPicker
+                open={catalogOpen}
+                onClose={() => setCatalogOpen(false)}
+                onConfirm={handleCatalogConfirm}
+            />
 
             {/* ── General Config ── */}
             <div style={sectionStyle}>

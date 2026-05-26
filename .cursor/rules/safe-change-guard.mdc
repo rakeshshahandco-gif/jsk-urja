@@ -1,0 +1,49 @@
+---
+description: Safe Change Guard — minimal patches, no cross-module regression, data safety, focused verification
+alwaysApply: true
+---
+
+# Safe Change Guard (CRM)
+
+Applies to **all** work in this repo unless the user explicitly overrides.
+
+## ZERO-SCOPE-CREEP RULE (highest priority)
+
+**NEVER modify, touch, or "improve" any file, module, page, component, route, controller, model, style, config, or DB record that the user did NOT explicitly name in the current prompt.**
+
+- The scope of work is **only** what the user's latest prompt explicitly asks for.
+- If you believe an unrelated module needs a change to make the requested change work, you MUST **STOP** and ask the user before touching it. Do not act unilaterally.
+- "Related-looking", "similar-looking", "while I'm at it", "let me also clean up", or "obviously should be fixed" are **forbidden reasons** to edit anything.
+- Before any edit, write a short **Scope Declaration**: "Files I will touch: A, B. Files I will NOT touch: everything else." Stick to it.
+- After editing, verify with `git status` that only the declared files appear in the diff. If anything else shows up, revert it.
+- If the user blames you for changing something unrelated, ALWAYS run `git status` / `git log` / `git diff` first and present the evidence before responding — do not blindly apologize, and do not blindly defend.
+- This rule applies to **already-working modules** with extra force: WhatsApp, Sales, Purchase, Inventory, Accounts, GST, TDS, Reports, Dashboards, Sidebar, Print/PDF, Permissions, Series, Company/FY selector, Global Search, Login/Auth.
+
+## Non-negotiables
+
+- Change **only** what the user asked for; **no** drive-by refactors, renames, UI redesigns, or optimizations unless **required** for that change.
+- **Do not** break other modules: UI, DB behavior, reports, APIs, print/PDF, permissions, series, GST/accounting/stock, dashboards, global search, company/FY selector, sidebar, or existing flows.
+- **Protect live data:** never delete, reset, migrate, or bulk-change production/live data without **explicit written** user permission.
+- Prefer the **smallest patch**; reuse existing helpers; avoid duplicate logic.
+
+## Before editing
+
+- Identify **affected files and dependencies**; avoid scanning unrelated codebases without cause.
+- If a **second module** must change: state (a) why, (b) exact field/API/schema change, (c) files, (d) that no other behavior changes; then touch **only** the minimum.
+
+## After editing
+
+- Verify **affected** behavior and **direct** dependents; avoid unnecessary full-project churn.
+- Run **relevant** backend unit tests when they exist; if none exist for touched services, note that in the report (add minimal tests only when the user asks for that work).
+- If something unrelated would change: **stop** and explain first.
+
+## If wrong or breaking
+
+- **Revert** the offending change (restore prior file state via git or user-approved rollback); do not pile on blind fixes.
+
+## Output discipline
+
+- Short reports: files changed, why, tests run, what was tested, unrelated modules untouched, risks.
+- Avoid huge dumps, repeated explanations, and token-heavy blanket searches.
+
+**Full checklist:** see project root CURSOR_SAFE_CHANGE_RULES.md.

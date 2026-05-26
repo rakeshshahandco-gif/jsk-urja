@@ -19,6 +19,7 @@ import path from 'path';
 import fs from 'fs';
 import logger from '../utils/logger.js';
 import { getIO } from '../config/socket.js';
+import WhatsAppMessage from '../models/whatsappMessage.model.js';
 
 // Baileys needs a Pino-compatible logger
 const baileysLogger = {
@@ -159,6 +160,82 @@ class WhatsAppSession {
 
             sock.ev.on('creds.update', saveCreds);
 
+            // ── Inbound message log (additive — feeds /whatsapp/chat UI) ──
+            // Persists each text message (inbound + outbound) to WhatsAppMessage
+            // and pushes a live socket event so the chat panel updates in
+            // real time. Failures here MUST NOT break the existing Baileys
+            // session, so everything is wrapped in try/catch.
+            sock.ev.on('messages.upsert', async ({ messages, type }) => {
+                if (!Array.isArray(messages) || messages.length === 0) return;
+                for (const m of messages) {
+                    try {
+                        if (!m || !m.key) continue;
+                        const remoteJid = m.key.remoteJid;
+                        if (!remoteJid || remoteJid === 'status@broadcast') continue;
+                        const fromMe = !!m.key.fromMe;
+                        const direction = fromMe ? 'out' : 'in';
+                        const messageId = m.key.id || null;
+                        const tsRaw = typeof m.messageTimestamp === 'number'
+                            ? m.messageTimestamp
+                            : (m.messageTimestamp?.toNumber?.() ?? Math.floor(Date.now() / 1000));
+                        const timestamp = new Date(tsRaw * 1000);
+                        const isGroup = remoteJid.endsWith('@g.us');
+                        const participant = isGroup ? (m.key.participant || null) : null;
+
+                        let text = '';
+                        let mediaType = 'text';
+                        const c = m.message || {};
+                        if (c.conversation) { text = c.conversation; mediaType = 'text'; }
+                        else if (c.extendedTextMessage?.text) { text = c.extendedTextMessage.text; mediaType = 'text'; }
+                        else if (c.imageMessage)    { text = c.imageMessage.caption || '[image]';       mediaType = 'image'; }
+                        else if (c.videoMessage)    { text = c.videoMessage.caption || '[video]';       mediaType = 'video'; }
+                        else if (c.documentMessage) { text = c.documentMessage.fileName || '[document]'; mediaType = 'document'; }
+                        else if (c.audioMessage)    { text = '[audio]';   mediaType = 'audio'; }
+                        else if (c.stickerMessage)  { text = '[sticker]'; mediaType = 'sticker'; }
+                        else { text = ''; mediaType = 'unsupported'; }
+
+                        let doc = null;
+                        try {
+                            doc = await WhatsAppMessage.findOneAndUpdate(
+                                { userId: this.userId, messageId: messageId || `${remoteJid}:${tsRaw}:${direction}` },
+                                {
+                                    $setOnInsert: {
+                                        userId: this.userId,
+                                        jid: remoteJid,
+                                        isGroup,
+                                        participant,
+                                        direction,
+                                        fromMe,
+                                        messageId: messageId || null,
+                                        text,
+                                        mediaType,
+                                        timestamp,
+                                        read: fromMe, // outbound is always "read"
+                                    },
+                                },
+                                { upsert: true, new: true, setDefaultsOnInsert: true }
+                            );
+                        } catch (dbErr) {
+                            // Duplicate key on retry is fine; anything else: log + continue.
+                            if (dbErr.code !== 11000) {
+                                logger.warn(`[WhatsApp] User ${this.userId}: Could not persist message: ${dbErr.message}`);
+                            }
+                        }
+
+                        if (doc) {
+                            this._emit('whatsapp:message', {
+                                _id: doc._id, userId: this.userId,
+                                jid: remoteJid, isGroup, participant,
+                                direction, fromMe, messageId,
+                                text, mediaType, timestamp,
+                            });
+                        }
+                    } catch (e) {
+                        logger.warn(`[WhatsApp] User ${this.userId}: upsert handler error: ${e.message}`);
+                    }
+                }
+            });
+
         } catch (error) {
             this._connecting = false;
             logger.error(`[WhatsApp] User ${this.userId}: Connect error: ${error.message}`);
@@ -228,6 +305,18 @@ class WhatsAppSession {
         const jid = this._toJid(phone);
         logger.info(`[WhatsApp] User ${this.userId}: Sending text to ${jid}`);
         await this.sock.sendMessage(jid, { text: message });
+        return { success: true };
+    }
+
+    // ── Send to a raw JID (used by /whatsapp/chat panel) ──────────────────────
+    // Accepts either a 1:1 JID (xxx@s.whatsapp.net) or a group JID (xxx@g.us)
+    // and lets Baileys route accordingly. Does NOT touch sendMessage/sendDocument
+    // logic above.
+    async sendRawToJid(jid, payload) {
+        this._assertConnected();
+        if (!jid || !jid.includes('@')) throw new Error('Invalid JID');
+        logger.info(`[WhatsApp] User ${this.userId}: Sending raw to ${jid}`);
+        await this.sock.sendMessage(jid, payload);
         return { success: true };
     }
 
@@ -317,6 +406,10 @@ class WhatsAppServiceManager {
 
     async sendMessage(userId, params) {
         return this._getOrCreate(userId).sendMessage(params);
+    }
+
+    async sendRawToJid(userId, jid, payload) {
+        return this._getOrCreate(userId).sendRawToJid(jid, payload);
     }
 
     async sendDocument(userId, params) {

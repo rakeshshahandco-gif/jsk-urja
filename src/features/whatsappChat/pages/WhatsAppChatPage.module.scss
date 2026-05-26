@@ -1,0 +1,445 @@
+// ── WhatsApp Chat — WhatsApp-Web-style two-pane layout ──────────────────────
+// Mounted inside the CRM main content area. Uses calc(100vh - 70px) to fit
+// below the CRM header (70px) and never causes outer page scroll. Internal
+// scrolling only on the chat list and the messages area. Composer fixed at
+// bottom of the right panel.
+
+.container {
+    // Header is 70px (Header.module.scss). Subtract it so the whole chat
+    // fills the remaining viewport — no outer scroll, ever.
+    height: calc(100vh - 70px);
+    display: flex;
+    flex-direction: row;
+    background: #f0f2f5;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+// ── Left: chat list ─────────────────────────────────────────────────────────
+.sidebar {
+    width: 32%;
+    min-width: 280px;
+    max-width: 420px;
+    background: #ffffff;
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;     // internal scroll only on the list
+    flex-shrink: 0;
+}
+
+.sidebarHeader {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 14px 10px;
+    background: #f0f2f5;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.iconBtn {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #54656f;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    &:hover { background: rgba(0, 0, 0, 0.06); }
+}
+
+.sidebarTitle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.connDot, .disconnDot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.connDot     { background: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.18); }
+.disconnDot  { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18); }
+
+.searchWrap {
+    flex-shrink: 0;
+    position: relative;
+    padding: 8px 12px;
+    background: #ffffff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+.searchIcon {
+    position: absolute;
+    top: 50%;
+    left: 22px;
+    transform: translateY(-50%);
+    color: #8696a0;
+    pointer-events: none;
+}
+.searchInput {
+    width: 100%;
+    padding: 8px 10px 8px 32px;
+    border: 1px solid #e5e7eb;
+    background: #f6f6f6;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    &:focus { border-color: #25d366; background: #ffffff; }
+}
+
+.chatList {
+    flex: 1;                  // ← takes all remaining height
+    overflow-y: auto;         // ← internal scroll only
+    background: #ffffff;
+    scrollbar-width: thin;
+    &::-webkit-scrollbar { width: 6px; }
+    &::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 4px; }
+}
+
+.listInfo {
+    padding: 24px 16px;
+    color: #64748b;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    text-align: center;
+}
+
+.chatRow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s;
+    &:hover { background: #f5f6f7; }
+}
+.chatRowActive { background: #e7f3ef !important; }
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #dfe5e7;
+    color: #54656f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.chatRowBody {
+    flex: 1;
+    min-width: 0;
+}
+.chatRowHead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+}
+.chatRowName {
+    font-weight: 600;
+    font-size: 14px;
+    color: #111b21;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chatRowTime {
+    font-size: 11px;
+    color: #667781;
+    flex-shrink: 0;
+}
+.chatRowMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+.chatRowPreview {
+    flex: 1;
+    color: #667781;
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.unreadBadge {
+    background: #25d366;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+// ── Right: chat panel ───────────────────────────────────────────────────────
+.chatPanel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;     // header / messages / composer
+    overflow: hidden;           // no panel scroll; only messages scroll
+    background: #efeae2;
+    min-width: 0;
+}
+
+.chatHeader {
+    flex-shrink: 0;             // fixed at top of the panel
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #f0f2f5;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.chatHeaderText {
+    flex: 1;
+    min-width: 0;
+}
+.leadTag {
+    margin-left: 6px;
+    font-size: 11px;
+    color: #16a34a;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 1px 6px;
+    white-space: nowrap;
+}
+.chatActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.actionBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #ffffff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    white-space: nowrap;
+    &:hover:not(:disabled) {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    &:active:not(:disabled) { transform: translateY(0.5px); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.composerAttachBtn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #54656f;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s;
+    &:hover:not(:disabled) { background: #f1f5f9; }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.chatHeaderName {
+    font-weight: 700;
+    font-size: 15px;
+    color: #111b21;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chatHeaderSub {
+    font-size: 12px;
+    color: #667781;
+    margin-top: 1px;
+}
+
+.messagesScroll {
+    flex: 1;                    // ← takes remaining height
+    overflow-y: auto;           // ← internal scroll only
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background-image:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.012) 0 1px, transparent 1px 28px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.012) 0 1px, transparent 1px 28px);
+    scrollbar-width: thin;
+    &::-webkit-scrollbar { width: 6px; }
+    &::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 4px; }
+}
+.msgInfo {
+    color: #475569;
+    font-size: 13px;
+    text-align: center;
+    padding: 30px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.bubble {
+    max-width: 65%;
+    padding: 6px 10px 16px;
+    border-radius: 8px;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+.bubbleIn {
+    background: #ffffff;
+    color: #111b21;
+    align-self: flex-start;
+    border-top-left-radius: 0;
+}
+.bubbleOut {
+    background: #d9fdd3;
+    color: #111b21;
+    align-self: flex-end;
+    border-top-right-radius: 0;
+}
+.bubbleText {
+    word-break: break-word;
+}
+.bubbleTime {
+    position: absolute;
+    right: 8px;
+    bottom: 3px;
+    font-size: 10.5px;
+    color: rgba(0, 0, 0, 0.45);
+}
+
+// ── Composer (fixed at bottom of right panel) ───────────────────────────────
+.composer {
+    flex-shrink: 0;            // always visible
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f0f2f5;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.composerInput {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    border-radius: 10px;
+    font-size: 14px;
+    outline: none;
+    &:focus { border-color: #25d366; }
+    &:disabled { background: #f1f5f9; color: #94a3b8; }
+}
+.composerSendBtn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #25d366;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(37, 211, 102, 0.35);
+    transition: opacity 0.15s, transform 0.1s;
+    &:hover:not(:disabled) { transform: translateY(-1px); }
+    &:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+}
+
+// ── Empty state (no chat selected) ──────────────────────────────────────────
+.empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #54656f;
+    background: #efeae2;
+    text-align: center;
+    padding: 32px;
+
+    h3 {
+        margin: 6px 0 0;
+        font-size: 18px;
+        color: #1e293b;
+    }
+    p {
+        margin: 0;
+        font-size: 13px;
+        max-width: 360px;
+        color: #64748b;
+    }
+}
+.linkBtn {
+    margin-top: 14px;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    &:hover { background: #f8fafc; }
+}
+
+// ── Spin keyframes (used by Loader2) ────────────────────────────────────────
+@keyframes whatsapp-chat-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+.spin {
+    animation: whatsapp-chat-spin 1s linear infinite;
+}
+
+// ── Mobile breakpoint ──────────────────────────────────────────────────────
+@media (max-width: 768px) {
+    .container { height: calc(100vh - 70px); }
+    .sidebar {
+        width: 100%;
+        max-width: 100%;
+        display: flex;
+    }
+    .chatPanel {
+        display: none;
+    }
+    // When a chat is active, swap to chat view (handled by adding modifier via JS in future).
+}
