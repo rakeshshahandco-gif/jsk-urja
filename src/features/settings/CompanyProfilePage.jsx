@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getCompanyProfile, updateCompanyProfile } from '@/services/settingsApi';
+import InvoiceBarcodeSettingsCard from './InvoiceBarcodeSettingsCard';
 import toast from 'react-hot-toast';
 
 const inp = {
@@ -37,6 +38,7 @@ export default function CompanyProfilePage() {
         pincode: '',
         gstNumber: '',
         panNumber: '',
+        tanNumber: '',
         email: '',
         phone: '',
         urn: '',
@@ -107,6 +109,7 @@ export default function CompanyProfilePage() {
             formData.append('pincode', profile.pincode);
             formData.append('gstNumber', profile.gstNumber);
             formData.append('panNumber', profile.panNumber);
+            formData.append('tanNumber', (profile.tanNumber || '').trim().toUpperCase());
             formData.append('email', profile.email);
             formData.append('phone', profile.phone);
             formData.append('urn', profile.urn);
@@ -197,6 +200,23 @@ export default function CompanyProfilePage() {
                             <div>
                                 <span style={lbl}>PAN / Income Tax No.</span>
                                 <input type="text" name="panNumber" value={profile.panNumber} onChange={handleChange} style={inp} placeholder="10-character PAN" />
+                            </div>
+                            <div>
+                                <span style={lbl}>TDS No. (TAN)</span>
+                                <input
+                                    type="text"
+                                    name="tanNumber"
+                                    value={profile.tanNumber}
+                                    onChange={(e) =>
+                                        setProfile((prev) => ({
+                                            ...prev,
+                                            tanNumber: e.target.value.toUpperCase(),
+                                        }))
+                                    }
+                                    style={inp}
+                                    placeholder="e.g. ABCD12345E"
+                                    maxLength={10}
+                                />
                             </div>
                             <div>
                                 <span style={lbl}>CIN (Corporate Identification Number)</span>
@@ -352,6 +372,8 @@ export default function CompanyProfilePage() {
                             ) : null}
                         </div>
                     </div>
+
+                    <InvoiceBarcodeSettingsCard />
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '24px' }}>
                         <button type="submit" disabled={saving} style={{

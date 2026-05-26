@@ -8,8 +8,11 @@ export * from './WhatsAppButton';
 export * from './Badge';
 export * from './Card';
 export * from './Table';
-export { default as SearchableSelect } from './SearchableSelect';
+
 export * from './Tabs';
+export * from './ViewTabs';
+export * from './FilterChips';
 export * from './BrandedLoading';
 export * from './LedgerPickerModal';
 export * from './PlaceholderPage';
+export { default as SearchableSelect } from './SearchableSelect';

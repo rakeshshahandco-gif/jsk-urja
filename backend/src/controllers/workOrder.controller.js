@@ -1,4 +1,6 @@
 import { WorkOrder, PRODUCTION_STAGES } from '../models/workOrder.model.js';
+import { getCompanyFeatureSettings } from '../services/companyFeatureSettings.service.js';
+import { resolveProductionStages } from '../services/productionTemplate.service.js';
 import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -72,8 +74,10 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         if (existing) throw new ApiError(400, `Work Order Number ${woNumber} already exists`);
     }
 
-    // Build initial stages from PRODUCTION_STAGES constant
-    const stages = PRODUCTION_STAGES.map(s => ({
+    const featureSettings = req.companyId ? await getCompanyFeatureSettings(req.companyId) : null;
+    const stageTemplate = resolveProductionStages(featureSettings?.industry);
+
+    const stages = stageTemplate.map(s => ({
         seq: s.seq,
         stageName: s.stageName,
         isQcGate: s.isQcGate,

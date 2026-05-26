@@ -1,31 +1,14 @@
 import { Voucher } from '../models/voucher.model.js';
 import { VoucherType } from '../models/voucherType.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
-import { LedgerEntry } from '../models/ledgerEntry.model.js';
-import { ApiError } from './ApiError.js';
-import httpStatus from 'http-status';
+import { postAccountingEntry } from '../services/accounting/accountingPostingEngine.service.js';
 
 /**
- * Helper to post to ledger and update balance
+ * Universal posting hook — delegates to accounting foundation engine.
+ * @param {import('mongoose').ClientSession|null} session
  */
-const postEntry = async (data, session) => {
-    const { voucherId, voucherNo, date, ledgerId, amount, type, narration, financialYear } = data;
-    if (amount <= 0) return;
-
-    const ledger = await AccountLedger.findById(ledgerId).session(session);
-    if (!ledger) throw new ApiError(httpStatus.NOT_FOUND, `Ledger ${ledgerId} not found`);
-
-    await LedgerEntry.create([{
-        voucherId, voucherNo, date, ledgerId, ledgerName: ledger.name,
-        amount, type, narration, financialYear
-    }], { session });
-
-    // Debit increases Asset/Expense, decreases Liability/Income
-    // Credit increases Liability/Income, decreases Asset/Expense
-    // We use a simple currentBalance: Debit is +, Credit is -
-    const change = type === 'Debit' ? amount : -amount;
-    ledger.currentBalance += change;
-    await ledger.save({ session });
+export const postLedgerEntry = async (data, session) => {
+    return postAccountingEntry(data, session);
 };
 
 /**
@@ -84,7 +67,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
 
     // 4. Post Entries
     // Debit Customer (Total)
-    await postEntry({
+    await postLedgerEntry({
         voucherId: vId, voucherNo, date,
         ledgerId: customerLedger._id, amount: invoice.roundedTotal || invoice.grandTotal,
         type: 'Debit', narration: `Sale to ${invoice.customerName}`,
@@ -98,7 +81,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
     // Let's deduce the base sales by subtracting freight that was added.
     const baseSalesTaxable = invoice.totalTaxableAmount - (invoice.freightAmount || 0);
     
-    await postEntry({
+    await postLedgerEntry({
         voucherId: vId, voucherNo, date,
         ledgerId: salesLedger._id, amount: baseSalesTaxable,
         type: 'Credit', narration: `Revenue from Sales`,
@@ -107,7 +90,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
 
     // Credit Freight Account
     if (invoice.freightAmount && invoice.freightAmount > 0 && freightLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: freightLedger._id, amount: invoice.freightAmount,
             type: 'Credit', narration: `Freight & Forwarding Income`,
@@ -117,7 +100,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
 
     // Credit GST Output
     if (invoice.totalCgst > 0 && cgstLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: cgstLedger._id, amount: invoice.totalCgst,
             type: 'Credit', narration: 'Output CGST',
@@ -125,7 +108,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
     if (invoice.totalSgst > 0 && sgstLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: sgstLedger._id, amount: invoice.totalSgst,
             type: 'Credit', narration: 'Output SGST',
@@ -133,7 +116,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
     if (invoice.totalIgst > 0 && igstLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: igstLedger._id, amount: invoice.totalIgst,
             type: 'Credit', narration: 'Output IGST',
@@ -144,7 +127,7 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
     // Round Off
     if (invoice.roundOff && roundOffLedger) {
         const type = invoice.roundOff > 0 ? 'Credit' : 'Debit';
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: Math.abs(invoice.roundOff),
             type, narration: 'Invoice Round Off',
@@ -249,7 +232,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     // 5. Post Debit Entries
     // Debit Purchase Account (Stock)
     if (purchaseDebit > 0) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: purchaseLedger._id, amount: purchaseDebit,
             type: 'Debit', narration: `Stock Purchase`,
@@ -277,7 +260,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
             ledgerToUse = ledgerToUse[0];
         }
 
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: ledgerToUse._id, amount: consumableDebit,
             type: 'Debit', narration: `Consumable / Non-Stock Purchase`,
@@ -287,7 +270,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
 
     // Debit Freight Inward Account
     if (freightAmt > 0 && freightLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: freightLedger._id, amount: freightAmt,
             type: 'Debit', narration: `Freight Inward Expense`,
@@ -297,7 +280,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
 
     // Debit GST Input
     if (cgstAmt > 0 && cgstInputLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: cgstInputLedger._id, amount: cgstAmt,
             type: 'Debit', narration: 'Input CGST',
@@ -305,7 +288,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
     if (sgstAmt > 0 && sgstInputLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: sgstInputLedger._id, amount: sgstAmt,
             type: 'Debit', narration: 'Input SGST',
@@ -313,7 +296,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
     if (igstAmt > 0 && igstInputLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: igstInputLedger._id, amount: igstAmt,
             type: 'Debit', narration: 'Input IGST',
@@ -323,7 +306,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
 
     // Round Off
     if (roundOffDebit > 0 && roundOffLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: roundOffDebit,
             type: 'Debit', narration: 'Invoice Round Off',
@@ -331,7 +314,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
     if (roundOffCredit > 0 && roundOffLedger) {
-        await postEntry({
+        await postLedgerEntry({
             voucherId: vId, voucherNo, date,
             ledgerId: roundOffLedger._id, amount: roundOffCredit,
             type: 'Credit', narration: 'Invoice Round Off',
@@ -339,13 +322,27 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
         }, session);
     }
 
-    // Credit Supplier (always equals grandTotal — Debit side is guaranteed to match)
-    await postEntry({
+    // Credit Supplier (net of TDS withheld at source, when bill carries tdsAmount)
+    const tdsAmt = Math.round((Number(invoice.tdsAmount) || 0) * 100) / 100;
+    const supplierCredit = Math.round((grandTotal - tdsAmt) * 100) / 100;
+
+    await postLedgerEntry({
         voucherId: vId, voucherNo, date,
-        ledgerId: supplierLedger._id, amount: grandTotal,
+        ledgerId: supplierLedger._id, amount: supplierCredit,
         type: 'Credit', narration: `Purchased from ${invoice.supplierName}`,
         financialYear: invoice.financialYear
     }, session);
+
+    if (tdsAmt > 0 && invoice.tdsPayableLedgerId) {
+        await postLedgerEntry({
+            voucherId: vId, voucherNo, date,
+            ledgerId: invoice.tdsPayableLedgerId,
+            amount: tdsAmt,
+            type: 'Credit',
+            narration: `TDS u/s ${invoice.tdsSection || ''} — ${invoice.supplierName}`,
+            financialYear: invoice.financialYear
+        }, session);
+    }
 
     return vId;
 };

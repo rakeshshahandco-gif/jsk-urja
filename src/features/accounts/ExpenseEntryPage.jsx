@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Button, Input, Select, useModal, SearchableSelect
 } from '@/components/ui';
@@ -15,8 +15,18 @@ import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
+import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
+import { TdsPayableLedgerModal } from '@/features/accounts/components/TdsPayableLedgerModal';
+import { tdsComplianceApi } from '@/services/tdsComplianceApi';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
+
+/** API payloads may use populated `{ _id }` from forms — normalize for preview/save. */
+const toApiId = (val) => {
+    if (val == null || val === '') return null;
+    if (typeof val === 'object' && val._id != null) return String(val._id);
+    return String(val);
+};
 
 const inp = { padding: '10px 14px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '8px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'all 0.2s' };
 const labelStyle = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' };
@@ -31,6 +41,15 @@ const ExpenseEntryPage = () => {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [tdsPreview, setTdsPreview] = useState(null);
+    const [tdsAlertOpen, setTdsAlertOpen] = useState(false);
+    const [payableModalOpen, setPayableModalOpen] = useState(false);
+    const [payableModalCtx, setPayableModalCtx] = useState({ code: '', name: '' });
+    const [payableModalIntro, setPayableModalIntro] = useState('');
+    const [tdsSectionConflictOpen, setTdsSectionConflictOpen] = useState(false);
+    const [tdsSectionConflict, setTdsSectionConflict] = useState(null);
+    const expenseTdsSectionResolutionRef = useRef(null);
+    const closeAfterSaveRef = useRef(false);
     const { id } = useParams();
     const isEdit = !!id;
 
@@ -367,6 +386,100 @@ const ExpenseEntryPage = () => {
         });
     };
 
+    const buildExpenseTdsPreviewBody = () => {
+        const totals = calculateTotals(formData.items, formData.isGstEnabled, formData.gstType);
+        const processingTotal = formData.isGstEnabled ? totals.grandTotal : totals.totalAmount;
+        return {
+            partyId: toApiId(formData.partyId) || undefined,
+            date: formData.date,
+            items: formData.items.map((item) => ({
+                ...item,
+                ledgerId: toApiId(item.ledgerId) || null,
+                type: item.type || 'Debit',
+            })),
+            isGstEnabled: formData.isGstEnabled,
+            processingTotal,
+            grandTotal: totals.grandTotal,
+            totalAmount: totals.totalAmount,
+            totalTaxableAmount: formData.isGstEnabled ? totals.totalTaxableAmount : undefined,
+            totalTax: formData.isGstEnabled ? totals.totalTax : undefined,
+            totalCgst: formData.isGstEnabled ? totals.totalCgst : undefined,
+            totalSgst: formData.isGstEnabled ? totals.totalSgst : undefined,
+            totalIgst: formData.isGstEnabled ? totals.totalIgst : undefined,
+            roundOff: formData.isGstEnabled ? totals.roundOff : undefined,
+            excludeVoucherId: isEdit ? id : undefined,
+            expenseTdsSectionResolution: expenseTdsSectionResolutionRef.current || undefined,
+        };
+    };
+
+    const performSave = async (shouldClose, { tdsUserConfirmed = false, tdsPopupSkipped = false }) => {
+        const totals = calculateTotals(formData.items, formData.isGstEnabled, formData.gstType);
+        const payload = {
+            ...formData,
+            nature: 'Expense',
+            partyId: toApiId(formData.partyId) || null,
+            cashBankAccountId: toApiId(formData.cashBankAccountId) || null,
+            items: formData.items.map((item) => ({
+                ...item,
+                ledgerId: toApiId(item.ledgerId) || null,
+                type: item.type || 'Debit',
+            })),
+            tdsUserConfirmed,
+            tdsPopupSkipped,
+            expenseTdsSectionResolution: expenseTdsSectionResolutionRef.current || undefined,
+        };
+
+        if (isEdit) {
+            await updateVoucher(id, payload);
+            expenseTdsSectionResolutionRef.current = null;
+            toast.success('Expense updated successfully');
+            navigate(PATHS.ACCOUNTS.VOUCHERS);
+        } else {
+            const response = await createVoucher(payload);
+            const savedNo = response?.data?.voucherNo || 'Voucher';
+            toast.success(`${savedNo} saved successfully`);
+
+            setFormData((prev) => ({
+                ...INITIAL_FORM_STATE,
+                date: prev.date,
+                voucherTypeId: prev.voucherTypeId,
+                expenseType: prev.expenseType,
+                cashBankAccountId: prev.cashBankAccountId,
+                items: [{ id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }],
+            }));
+
+            if (shouldClose) {
+                navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
+            }
+        }
+    };
+
+    const confirmTdsAndSave = async () => {
+        setIsSubmitting(true);
+        try {
+            await performSave(closeAfterSaveRef.current, { tdsUserConfirmed: true, tdsPopupSkipped: false });
+            setTdsAlertOpen(false);
+        } catch (error) {
+            console.error('Save error:', error);
+            toast.error(error.response?.data?.message || 'Failed to save expense');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const skipTdsAndSave = async () => {
+        setIsSubmitting(true);
+        try {
+            await performSave(closeAfterSaveRef.current, { tdsUserConfirmed: false, tdsPopupSkipped: true });
+            setTdsAlertOpen(false);
+        } catch (error) {
+            console.error('Save error:', error);
+            toast.error(error.response?.data?.message || 'Failed to save expense');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleSave = async (shouldClose = false) => {
         // Validation
         if (!formData.partyId && !formData.cashBankAccountId) {
@@ -374,7 +487,7 @@ const ExpenseEntryPage = () => {
         }
 
         if (formData.cashBankAccountId) {
-            const selectedAcc = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+            const selectedAcc = cashBankAccounts.find((a) => a._id === formData.cashBankAccountId);
             if (selectedAcc && !selectedAcc.ledgerId) {
                 return toast.error('Selected Cash/Bank account is not linked to an accounting ledger. Please fix it first.');
             }
@@ -382,47 +495,74 @@ const ExpenseEntryPage = () => {
 
         if (formData.totalAmount <= 0) return toast.error('Total amount must be greater than zero');
 
-        const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
+        const invalidItem = formData.items.find((item) => !item.ledgerId || item.amount <= 0);
         if (invalidItem) return toast.error('All items must have a ledger and amount');
 
         setIsSubmitting(true);
         try {
-            // Sanitize payload: Ensure empty IDs are null
-            const payload = {
-                ...formData,
-                nature: 'Expense',
-                partyId: formData.partyId || null,
-                cashBankAccountId: formData.cashBankAccountId || null,
-                items: formData.items.map(item => ({
-                    ...item,
-                    ledgerId: item.ledgerId || null
-                }))
-            };
-
-            if (isEdit) {
-                await updateVoucher(id, payload);
-                toast.success('Expense updated successfully');
-                navigate(PATHS.ACCOUNTS.VOUCHERS);
-            } else {
-                const response = await createVoucher(payload);
-                const savedNo = response?.data?.voucherNo || 'Voucher';
-                toast.success(`${savedNo} saved successfully`);
-                
-                // STAY ON PAGE FOR FAST ENTRY (Reset but keep date and vType)
-                setFormData(prev => ({
-                    ...INITIAL_FORM_STATE,
-                    date: prev.date,
-                    voucherTypeId: prev.voucherTypeId,
-                    expenseType: prev.expenseType,
-                    cashBankAccountId: prev.cashBankAccountId,
-                    items: [{ id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }]
-                }));
-                
-                // If explicit close requested (optional flag)
-                if (shouldClose) {
-                    navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS);
-                }
+            let preview = null;
+            try {
+                preview = await tdsComplianceApi.previewExpenseVoucher(buildExpenseTdsPreviewBody());
+            } catch (pe) {
+                const data = pe.response?.data;
+                const msg =
+                    (typeof data?.message === 'string' && data.message) ||
+                    (typeof data?.error === 'string' && data.error) ||
+                    (typeof pe.message === 'string' && pe.message) ||
+                    (pe.code === 'ECONNABORTED'
+                        ? 'TDS preview timed out — server took too long. Check backend logs ([tds] expense-voucher/preview) and database performance.'
+                        : null);
+                toast.error(msg || 'TDS preview failed — see browser Network tab for details.');
+                return;
             }
+
+            if (preview.sectionConflict?.message) {
+                setTdsSectionConflict(preview.sectionConflict);
+                setTdsSectionConflictOpen(true);
+                closeAfterSaveRef.current = shouldClose;
+                return;
+            }
+
+            if (preview.previewFailed && preview.previewErrorCode === 'TDS_PAYABLE_LEDGER_MISSING') {
+                setPayableModalCtx({
+                    code: preview.missingTdsSection || '',
+                    name: preview.master?.sectionName || '',
+                });
+                setPayableModalIntro(
+                    preview.previewErrorMessage
+                        || `TDS payable ledger is not mapped for Section ${preview.missingTdsSection || ''}. Please create or select ledger.`,
+                );
+                setPayableModalOpen(true);
+                return;
+            }
+
+            if (preview.previewFailed && preview.previewErrorMessage) {
+                toast.error(preview.previewErrorMessage);
+                return;
+            }
+
+            if (Array.isArray(preview.previewMessages) && preview.previewMessages.length > 0) {
+                preview.previewMessages.forEach((m) => toast(m, { duration: 6500 }));
+            }
+
+            if (preview.blocked) {
+                toast.error(preview.blockReason || 'TDS validation failed');
+                return;
+            }
+            if (preview.engineActive && preview.decision?.panBlock) {
+                toast.error('PAN is required for this TDS deduction — update Supplier Master or adjust the expense ledger.');
+                return;
+            }
+
+            const d = preview.decision;
+            if (preview.engineActive && d?.tdsApplicable && Number(d.tdsAmount || 0) > 0) {
+                setTdsPreview(preview);
+                closeAfterSaveRef.current = shouldClose;
+                setTdsAlertOpen(true);
+                return;
+            }
+
+            await performSave(shouldClose, { tdsUserConfirmed: false, tdsPopupSkipped: false });
         } catch (error) {
             console.error('Save error:', error);
             toast.error(error.response?.data?.message || 'Failed to save expense');
@@ -724,6 +864,134 @@ const ExpenseEntryPage = () => {
                     </div>
                 </div>
             </div>
+
+            {tdsSectionConflictOpen && tdsSectionConflict && (
+                <div
+                    role="presentation"
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15,23,42,0.5)',
+                        zIndex: 1250,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                    }}
+                    onClick={() => !isSubmitting && setTdsSectionConflictOpen(false)}
+                >
+                    <div
+                        role="dialog"
+                        aria-labelledby="tds-section-conflict-title"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 14,
+                            maxWidth: 500,
+                            width: '100%',
+                            padding: '24px 26px',
+                            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                            border: '1px solid #e2e8f0',
+                        }}
+                    >
+                        <h3 id="tds-section-conflict-title" style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+                            TDS section mismatch
+                        </h3>
+                        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#475569', lineHeight: 1.55 }}>
+                            {tdsSectionConflict.message}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => {
+                                    expenseTdsSectionResolutionRef.current = 'EXPENSE_LEDGER';
+                                    setTdsSectionConflictOpen(false);
+                                    setTdsSectionConflict(null);
+                                    handleSave(closeAfterSaveRef.current);
+                                }}
+                                style={{
+                                    padding: '12px 16px',
+                                    borderRadius: 10,
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg,#4f46e5,#4338ca)',
+                                    color: '#fff',
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                }}
+                            >
+                                Use expense ledger section {tdsSectionConflict.expenseSection}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => {
+                                    expenseTdsSectionResolutionRef.current = 'SUPPLIER_DEFAULT';
+                                    setTdsSectionConflictOpen(false);
+                                    setTdsSectionConflict(null);
+                                    handleSave(closeAfterSaveRef.current);
+                                }}
+                                style={{
+                                    padding: '12px 16px',
+                                    borderRadius: 10,
+                                    border: '1.5px solid #cbd5e1',
+                                    background: '#f8fafc',
+                                    color: '#334155',
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                }}
+                            >
+                                Use supplier default section {tdsSectionConflict.supplierSection}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => {
+                                    expenseTdsSectionResolutionRef.current = null;
+                                    setTdsSectionConflictOpen(false);
+                                    setTdsSectionConflict(null);
+                                }}
+                                style={{
+                                    padding: '10px 16px',
+                                    borderRadius: 10,
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#64748b',
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                }}
+                            >
+                                Cancel — edit ledger or supplier mapping
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <TdsLiabilityAlertModal
+                open={tdsAlertOpen}
+                supplierName={tdsPreview?.supplier?.supplierName || formData.partyName}
+                decision={tdsPreview?.decision}
+                master={tdsPreview?.master}
+                onYes={confirmTdsAndSave}
+                onNo={skipTdsAndSave}
+                loading={isSubmitting}
+            />
+            <TdsPayableLedgerModal
+                open={payableModalOpen}
+                sectionCode={payableModalCtx.code}
+                sectionName={payableModalCtx.name}
+                introText={payableModalIntro}
+                primaryButtonLabel="Create Ledger Now"
+                onClose={() => setPayableModalOpen(false)}
+                onSuccess={() => {
+                    setPayableModalOpen(false);
+                    toast.success('TDS Payable ledger mapped. Click Post again to continue.');
+                }}
+            />
         </div>
     );
 };

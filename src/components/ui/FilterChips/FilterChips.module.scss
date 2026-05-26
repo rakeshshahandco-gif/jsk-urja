@@ -1,0 +1,55 @@
+@import '@/styles/_variables';
+
+.wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.label {
+    font-size: $font-size-ui-sm;
+    color: $text-tertiary;
+    font-weight: 600;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: $font-size-ui-sm;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: $radius-full;
+    background: $chip-bg;
+    color: $chip-color;
+    border: 1px solid $chip-border;
+}
+
+.removeBtn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    color: inherit;
+    opacity: 0.85;
+
+    &:hover {
+        opacity: 1;
+    }
+}
+
+.clearAll {
+    border: none;
+    background: transparent;
+    font-size: $font-size-ui-sm;
+    color: $accent-workboard;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0 4px;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}

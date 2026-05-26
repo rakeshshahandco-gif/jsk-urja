@@ -1,92 +1,69 @@
 .moduleContainer {
-    animation: fadeIn 0.4s ease-out;
+    animation: fadeIn 0.3s ease-out;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .dynamicGrid {
-    transition: all 0.3s ease;
-    
-    // Large sizes (1-4 cards)
-    &.large {
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 2rem;
-        
-        .dynamicCard {
-            min-height: 180px;
-            padding: 2rem;
-            
-            .formName {
-                font-size: 1.1rem;
-            }
-            
-            .cardIcon {
-                width: 54px;
-                height: 54px;
-                margin-bottom: 1.5rem;
-                
-                svg {
-                    width: 28px;
-                    height: 28px;
-                }
-            }
-        }
-    }
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
 
-    // Medium sizes (5-8 cards)
-    &.medium {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 1.5rem;
-        
-        .dynamicCard {
-            min-height: 150px;
-            padding: 1.25rem;
-        }
-    }
+@import '@/styles/_variables';
 
-    // Compact sizes (9+ cards)
-    &.compact {
-        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-        gap: 1rem;
-        
-        .dynamicCard {
-            min-height: 130px;
-            padding: 1rem;
-            
-            .formName {
-                font-size: 0.875rem;
-            }
-            
-            .cardIcon {
-                width: 36px;
-                height: 36px;
-                margin-bottom: 0.75rem;
-                
-                svg {
-                    width: 20px;
-                    height: 20px;
-                }
-            }
-        }
+.dynamicCard {
+    background: $surface-elevated;
+    border: 1px solid $border-color;
+    border-radius: $radius-2xl;
+    padding: 1.5rem 1.25rem;
+    height: 100%;
+    min-height: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    box-shadow: $shadow-sm;
+
+    &:hover {
+        transform: translateY(-3px);
+        box-shadow: $shadow-lg;
+        border-color: $primary-light;
     }
 }
 
-.dynamicCard {
-    // Add subtle glassmorphism effect for premium feel
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    
-    &::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0));
-        pointer-events: none;
-    }
+.cardIconWrap {
+    width: 40px;
+    height: 40px;
+    border-radius: $radius-xl;
+    background: $primary-bg;
+    color: $primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.cardTitle {
+    font-size: 1rem;
+    font-weight: 700;
+    color: $text-color;
+    margin: 0 0 6px;
+}
+
+.cardDesc {
+    font-size: 0.8125rem;
+    color: $text-secondary;
+    margin: 0;
+    line-height: 1.4;
 }
 
 .isStatic {
@@ -96,12 +73,6 @@
 
     .staticCard {
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-
-        &:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-        }
     }
 }
 

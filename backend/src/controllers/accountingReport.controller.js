@@ -1,14 +1,19 @@
 import httpStatus from 'http-status';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { ApiError } from '../utils/ApiError.js';
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
+import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
+import { Voucher } from '../models/voucher.model.js';
 import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
 import Customer from '../models/customer.model.js';
 import moment from 'moment';
+import * as gpAnalysis from '../services/gpAnalysis.service.js';
+import { getCashFlowStatement } from '../services/cashFlow.service.js';
 
 /**
  * Common Logic to Fetch All Ledger Balances for a given period
@@ -227,206 +232,35 @@ export const getTrialBalanceReport = asyncHandler(async (req, res) => {
 
 /**
  * Product-wise Gross Profit Report
- * Calculates: Revenue - (Qty * Unit Cost)
- * Unit Cost is taken from Default BOM or Valuation Rate
+ * Uses stored invoice line GP when available; legacy rows estimated at report time.
  */
 export const getProductWiseProfitability = asyncHandler(async (req, res) => {
-    const { startDate, endDate, financialYear } = req.query;
+    const rows = await gpAnalysis.getProductWiseGpReport({
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        financialYear: req.query.financialYear,
+        itemId: req.query.itemId,
+        category: req.query.category,
+        exportFilter: req.query.exportFilter,
+        customerId: req.query.customerId,
+    });
 
-    const filters = { 
-        isDeleted: { $ne: true },
-        status: { $nin: ['Cancelled', 'Draft'] } // Only confirmed/posted sales
-    };
-    
-    if (financialYear) filters.financialYear = financialYear;
-    if (startDate || endDate) {
-        filters.invoiceDate = {};
-        if (startDate) filters.invoiceDate.$gte = moment(startDate).startOf('day').toDate();
-        if (endDate) filters.invoiceDate.$lte = moment(endDate).endOf('day').toDate();
-    }
-
-    // Aggregate Sales by Product
-    const salesData = await SalesInvoice.aggregate([
-        { $match: filters },
-        { $unwind: '$items' },
-        {
-            $group: {
-                _id: '$items.itemId',
-                itemCode: { $first: '$items.itemCode' },
-                itemName: { $first: '$items.itemName' },
-                totalQty: { $sum: '$items.qty' },
-                
-                // 1. Normal Sales (Tax Invoice, not Sample, not Replacement)
-                normalQty: { 
-                    $sum: { 
-                        $cond: [
-                            { $and: [
-                                { $eq: [{ $ifNull: ['$orderCategory', 'Order'] }, 'Order'] },
-                                { $ne: ['$documentType', 'Estimate'] },
-                                { $ne: ['$orderCategory', 'Replacement'] }
-                            ]},
-                            '$items.qty', 
-                            0
-                        ] 
-                    } 
-                },
-
-                // 2. Sample Sales
-                sampleQty: { 
-                    $sum: { 
-                        $cond: [{ $eq: ['$orderCategory', 'Sample'] }, '$items.qty', 0] 
-                    } 
-                },
-
-                // 3. Estimate Sales
-                estimateQty: { 
-                    $sum: { 
-                        $cond: [{ $eq: ['$documentType', 'Estimate'] }, '$items.qty', 0] 
-                    } 
-                },
-
-                // 4. Replacement (Separate)
-                replacementQty: { 
-                    $sum: { 
-                        $cond: [{ $eq: ['$orderCategory', 'Replacement'] }, '$items.qty', 0] 
-                    } 
-                },
-
-                // Total Revenue only from Sales/Sample/Estimate
-                totalRevenue: { 
-                    $sum: {
-                        $cond: [
-                            { $ne: ['$orderCategory', 'Replacement'] },
-                            {
-                                $cond: [
-                                    { $gt: ['$items.taxableAmount', 0] },
-                                    '$items.taxableAmount',
-                                    { 
-                                        $cond: [
-                                            { $gt: ['$items.rate', 0] },
-                                            { $subtract: [{ $multiply: ['$items.qty', '$items.rate'] }, { $ifNull: ['$items.discountAmount', 0] }] },
-                                            0
-                                        ]
-                                    }
-                                ]
-                            },
-                            0
-                        ]
-                    }
-                },
-
-                uom: { $first: '$items.uom' },
-                invoices: {
-                    $push: {
-                        invoiceNumber: '$invoiceNumber',
-                        invoiceDate: '$invoiceDate',
-                        customerName: '$customerName',
-                        itemName: '$items.itemName',
-                        additionalNotes: { $ifNull: ['$items.additionalNotes', ''] },
-                        qty: '$items.qty',
-                        rate: '$items.rate',
-                        taxableAmount: {
-                            $cond: [
-                                { $gt: ['$items.taxableAmount', 0] },
-                                '$items.taxableAmount',
-                                { 
-                                    $cond: [
-                                        { $gt: ['$items.rate', 0] },
-                                        { $subtract: [{ $multiply: ['$items.qty', '$items.rate'] }, { $ifNull: ['$items.discountAmount', 0] }] },
-                                        0
-                                    ]
-                                }
-                            ]
-                        },
-                        cgstAmount: { $ifNull: ['$items.cgstAmount', 0] },
-                        sgstAmount: { $ifNull: ['$items.sgstAmount', 0] },
-                        igstAmount: { $ifNull: ['$items.igstAmount', 0] },
-                        totalAmount: { $ifNull: ['$items.totalAmount', 0] },
-                        orderCategory: { $ifNull: ['$orderCategory', 'Order'] },
-                        documentType: { $ifNull: ['$documentType', 'Tax Invoice'] }
-                    }
-                }
-            }
-        },
-        {
-            $addFields: {
-                totalSalesQty: { $add: ['$normalQty', '$sampleQty', '$estimateQty'] },
-                avgRate: { 
-                    $cond: [
-                        { $gt: [{ $add: ['$normalQty', '$sampleQty', '$estimateQty'] }, 0] }, 
-                        { $divide: ['$totalRevenue', { $add: ['$normalQty', '$sampleQty', '$estimateQty'] }] }, 
-                        0 
-                    ] 
-                }
-            }
-        },
-        { $sort: { totalRevenue: -1 } }
-    ]);
-
-    // Fetch Costs for each product
-    const report = [];
-    for (const item of salesData) {
-        let unitCost = 0;
-        let costSource = 'Cost Missing';
-        let costDetails = {};
-
-        if (item._id) {
-            const itemMaster = await Item.findById(item._id).lean();
-            
-            // 1. Try Default BOM (Highest Priority)
-            const defaultBOM = await BOM.findOne({ finishedProductId: item._id, isDefault: true }).lean();
-            
-            if (defaultBOM) {
-                unitCost = defaultBOM.finalProductionCostPerUnit || 0;
-                costSource = 'BOM Final Cost';
-                costDetails = {
-                    bomNumber: defaultBOM.bomNumber,
-                    rawMaterialCost: defaultBOM.totalRawMaterialCost,
-                    processCost: defaultBOM.totalProcessCost,
-                    overheadCost: defaultBOM.overheadCost,
-                    labourCost: defaultBOM.labourCost,
-                    pointsLabourCost: defaultBOM.totalPointsLabourCost,
-                    finalCost: defaultBOM.finalProductionCostPerUnit
-                };
-            } 
-            else if (itemMaster && itemMaster.useManualBOMCost) {
-                // 2. Manual BOM Cost (If specifically enabled)
-                unitCost = itemMaster.manualBOMCostPerUnit || 0;
-                costSource = 'Manual GP Cost';
-                costDetails = { manualCost: unitCost };
-            }
-            else if (itemMaster && itemMaster.valuationRate > 0) {
-                // 3. Fallback to Item Master Valuation Rate (New Requirement)
-                unitCost = itemMaster.valuationRate;
-                costSource = 'Item Valuation Rate';
-                costDetails = { valuationRate: unitCost };
-            }
-            else {
-                // 4. No cost info found
-                unitCost = 0;
-                costSource = 'Cost Missing';
-            }
-        }
-
-        const totalSalesQty = item.totalSalesQty || 0;
-        const salesCost = totalSalesQty * unitCost;
-        const replacementCost = (item.replacementQty || 0) * unitCost;
-        
-        const grossProfit = item.totalRevenue - salesCost;
-        const gpPercent = item.totalRevenue > 0 ? (grossProfit / item.totalRevenue) * 100 : 0;
-
-        report.push({
-            ...item,
-            unitCost,
-            salesCost,
-            replacementCost,
-            grossProfit,
-            gpPercent,
-            costSource,
-            costDetails,
-            formula: 'Sales Value = Sum of (Normal + Sample + Estimate taxable value). Gross Profit = Sales Value - (Total Sales Qty * Unit Cost). Replacement cost is shown separately.'
-        });
-    }
+    const report = rows.map((r) => ({
+        _id: r.itemId,
+        itemCode: r.itemCode,
+        itemName: r.itemName,
+        totalQty: r.qtySold,
+        totalSalesQty: r.qtySold,
+        totalRevenue: r.salesValue,
+        unitCost: r.avgCostRate,
+        salesCost: r.costValue,
+        grossProfit: r.gpAmount,
+        gpPercent: r.gpPercent,
+        costSource: r.primaryCostSource,
+        avgRate: r.avgSaleRate,
+        estimatedLines: r.estimatedLines,
+        formula: 'GP = taxable sales value (ex GST) − cost at posting snapshot (or estimated for legacy invoices).',
+    }));
 
     res.send(new ApiResponse(httpStatus.OK, report, 'Product-wise profitability report fetched'));
 });
@@ -549,4 +383,354 @@ export const getSampleConversionReport = asyncHandler(async (req, res) => {
     }
 
     res.send(new ApiResponse(httpStatus.OK, report, 'Sample to sales conversion report fetched'));
+});
+
+// ── Cash Flow Statement ─────────────────────────────────────────────────────
+
+export const getCashFlowReport = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) throw new ApiError(httpStatus.BAD_REQUEST, 'startDate and endDate are required');
+    const data = await getCashFlowStatement({ startDate, endDate });
+    res.send(new ApiResponse(httpStatus.OK, data));
+});
+
+// ── Comparative P&L (two periods side-by-side) ─────────────────────────────
+
+export const getComparativePL = asyncHandler(async (req, res) => {
+    const { startDate1, endDate1, startDate2, endDate2 } = req.query;
+    if (!startDate1 || !endDate1 || !startDate2 || !endDate2) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'All four date params are required: startDate1, endDate1, startDate2, endDate2');
+    }
+
+    const buildPL = async (start, end) => {
+        const { ledgerReports } = await getLedgerBalances(new Date(start), new Date(end));
+        const plLedgers = ledgerReports.filter(l => ['Income', 'Expenses'].includes(l.nature));
+        const totalIncome = plLedgers.filter(l => l.nature === 'Income').reduce((s, l) => s - l.closingBalance, 0);
+        const totalExpense = plLedgers.filter(l => l.nature === 'Expenses').reduce((s, l) => s + l.closingBalance, 0);
+        // Build group-level summary
+        const groups = {};
+        plLedgers.forEach(l => {
+            const k = l.groupId?.toString() || 'unmapped';
+            if (!groups[k]) groups[k] = { groupName: l.groupName, nature: l.nature, total: 0 };
+            groups[k].total += l.closingBalance;
+        });
+        return { groups: Object.values(groups), totalIncome, totalExpense, netProfit: totalIncome - totalExpense };
+    };
+
+    const [period1, period2] = await Promise.all([
+        buildPL(startDate1, endDate1),
+        buildPL(startDate2, endDate2),
+    ]);
+
+    // Merge groups for comparison
+    const allGroupNames = new Set([
+        ...period1.groups.map(g => g.groupName),
+        ...period2.groups.map(g => g.groupName),
+    ]);
+
+    const comparison = [...allGroupNames].map(name => {
+        const p1 = period1.groups.find(g => g.groupName === name) || { total: 0, nature: '' };
+        const p2 = period2.groups.find(g => g.groupName === name) || { total: 0, nature: '' };
+        const variance = p2.total - p1.total;
+        const variancePct = p1.total !== 0 ? +((variance / Math.abs(p1.total)) * 100).toFixed(2) : null;
+        return { groupName: name, nature: p1.nature || p2.nature, period1: p1.total, period2: p2.total, variance, variancePct };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        period1: { startDate: startDate1, endDate: endDate1, ...period1 },
+        period2: { startDate: startDate2, endDate: endDate2, ...period2 },
+        comparison,
+    }));
+});
+
+// ── Comparative Balance Sheet ────────────────────────────────────────────────
+
+export const getComparativeBS = asyncHandler(async (req, res) => {
+    const { date1, date2 } = req.query;
+    if (!date1 || !date2) throw new ApiError(httpStatus.BAD_REQUEST, 'date1 and date2 are required');
+
+    const buildBS = async (date) => {
+        const { ledgerReports } = await getLedgerBalances(null, new Date(date));
+        const bsLedgers = ledgerReports.filter(l => ['Assets', 'Liabilities'].includes(l.nature));
+        const groups = {};
+        bsLedgers.forEach(l => {
+            const k = l.groupId?.toString() || 'unmapped';
+            if (!groups[k]) groups[k] = { groupName: l.groupName, nature: l.nature, total: 0 };
+            groups[k].total += l.closingBalance;
+        });
+        return Object.values(groups);
+    };
+
+    const [g1, g2] = await Promise.all([buildBS(date1), buildBS(date2)]);
+    const allNames = new Set([...g1.map(g => g.groupName), ...g2.map(g => g.groupName)]);
+
+    const comparison = [...allNames].map(name => {
+        const a = g1.find(g => g.groupName === name) || { total: 0, nature: '' };
+        const b = g2.find(g => g.groupName === name) || { total: 0, nature: '' };
+        const variance = b.total - a.total;
+        return { groupName: name, nature: a.nature || b.nature, date1: a.total, date2: b.total, variance };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, { date1, date2, comparison }));
+});
+
+// ── Ageing Analysis ─────────────────────────────────────────────────────────
+
+export const getAgeingAnalysis = asyncHandler(async (req, res) => {
+    const { type, asOnDate, financialYear } = req.query;
+    if (!type || !['Receivable', 'Payable'].includes(type)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'type must be Receivable or Payable');
+    }
+
+    const asOn = asOnDate ? new Date(asOnDate) : new Date();
+
+    const fyMatch = financialYear ? { financialYear } : {};
+
+    let invoices = [];
+    if (type === 'Receivable') {
+        invoices = await SalesInvoice.find({
+            paymentStatus: { $ne: 'Paid' },
+            status: 'Confirmed',
+            isDeleted: false,
+            ...fyMatch,
+        }).select('invoiceDate invoiceNumber customerName grandTotal paidAmount dueDate').lean();
+    } else {
+        const pi = await PurchaseInvoice.find({
+            paymentStatus: { $ne: 'Paid' },
+            status: { $in: ['Confirmed', 'Posted'] },
+            isDeleted: false,
+            ...fyMatch,
+        }).select('invoiceDate invoiceNumber supplierName grandTotal paidAmount dueDate').lean();
+        invoices = pi.map(i => ({ ...i, customerName: i.supplierName }));
+    }
+
+    const buckets = { current: [], days0_30: [], days31_60: [], days61_90: [], days91_180: [], days181_365: [], over365: [] };
+
+    invoices.forEach(inv => {
+        const outstanding = (inv.grandTotal || 0) - (inv.paidAmount || 0);
+        if (outstanding <= 0) return;
+        const dueDate = inv.dueDate ? new Date(inv.dueDate) : new Date(inv.invoiceDate);
+        const daysPast = Math.floor((asOn - dueDate) / (1000 * 60 * 60 * 24));
+        const row = {
+            partyName: inv.customerName,
+            invoiceNo: inv.invoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            dueDate,
+            daysPast,
+            outstanding: +outstanding.toFixed(2),
+        };
+        if (daysPast <= 0) buckets.current.push(row);
+        else if (daysPast <= 30) buckets.days0_30.push(row);
+        else if (daysPast <= 60) buckets.days31_60.push(row);
+        else if (daysPast <= 90) buckets.days61_90.push(row);
+        else if (daysPast <= 180) buckets.days91_180.push(row);
+        else if (daysPast <= 365) buckets.days181_365.push(row);
+        else buckets.over365.push(row);
+    });
+
+    const sumBucket = (b) => b.reduce((s, r) => s + r.outstanding, 0);
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        type, asOnDate: asOn,
+        buckets,
+        summary: {
+            current: +sumBucket(buckets.current).toFixed(2),
+            '0-30': +sumBucket(buckets.days0_30).toFixed(2),
+            '31-60': +sumBucket(buckets.days31_60).toFixed(2),
+            '61-90': +sumBucket(buckets.days61_90).toFixed(2),
+            '91-180': +sumBucket(buckets.days91_180).toFixed(2),
+            '181-365': +sumBucket(buckets.days181_365).toFixed(2),
+            'over365': +sumBucket(buckets.over365).toFixed(2),
+            total: +invoices.reduce((s, i) => s + Math.max(0, (i.grandTotal || 0) - (i.paidAmount || 0)), 0).toFixed(2),
+        },
+    }));
+});
+
+// ── MSME Compliance Report ───────────────────────────────────────────────────
+
+export const getMsmeReport = asyncHandler(async (req, res) => {
+    const { asOnDate, financialYear } = req.query;
+    const asOn = asOnDate ? new Date(asOnDate) : new Date();
+    const MSME_DAYS = 45;
+
+    const fyMatch = financialYear ? { financialYear } : {};
+
+    const msmeLedgerIds = (await AccountLedger.find({ msmeApplicable: true }).select('_id name').lean()).map(l => l._id);
+    if (!msmeLedgerIds.length) return res.send(new ApiResponse(httpStatus.OK, { items: [], totalOverdue: 0 }));
+
+    const piList = await PurchaseInvoice.find({
+        supplierId: { $exists: true },
+        paymentStatus: { $ne: 'Paid' },
+        status: { $in: ['Confirmed', 'Posted'] },
+        isDeleted: false,
+        ...fyMatch,
+    }).select('invoiceDate invoiceNumber supplierName grandTotal paidAmount').lean();
+
+    const items = [];
+    for (const inv of piList) {
+        const outstanding = (inv.grandTotal || 0) - (inv.paidAmount || 0);
+        if (outstanding <= 0) continue;
+        const daysPast = Math.floor((asOn - new Date(inv.invoiceDate)) / (1000 * 60 * 60 * 24));
+        if (daysPast > MSME_DAYS) {
+            items.push({
+                supplierName: inv.supplierName,
+                invoiceNo: inv.invoiceNumber,
+                invoiceDate: inv.invoiceDate,
+                daysPast,
+                outstanding: +outstanding.toFixed(2),
+                exceededBy: daysPast - MSME_DAYS,
+            });
+        }
+    }
+
+    items.sort((a, b) => b.daysPast - a.daysPast);
+    const totalOverdue = items.reduce((s, i) => s + i.outstanding, 0);
+
+    res.send(new ApiResponse(httpStatus.OK, { asOnDate: asOn, msmeDaysLimit: MSME_DAYS, items, totalOverdue: +totalOverdue.toFixed(2) }));
+});
+
+// ── Ratio Analysis ───────────────────────────────────────────────────────────
+
+export const getRatioAnalysis = asyncHandler(async (req, res) => {
+    const { date } = req.query;
+    const end = date ? new Date(date) : new Date();
+
+    const { ledgerReports } = await getLedgerBalances(null, end);
+
+    const sumByNature = (nature) => ledgerReports.filter(l => l.nature === nature).reduce((s, l) => s + l.closingBalance, 0);
+    const sumByGroup = (gName) => ledgerReports.filter(l => (l.groupName || '').toLowerCase().includes(gName.toLowerCase())).reduce((s, l) => s + l.closingBalance, 0);
+
+    const totalAssets = sumByNature('Assets');
+    const totalLiabilities = Math.abs(sumByNature('Liabilities'));
+    const totalIncome = Math.abs(sumByNature('Income'));
+    const totalExpense = sumByNature('Expenses');
+    const netProfit = totalIncome - totalExpense;
+
+    const currentAssets = sumByGroup('current asset');
+    const currentLiabilities = Math.abs(sumByGroup('current liabilit'));
+    const inventory = sumByGroup('stock') + sumByGroup('inventory');
+    const cash = ledgerReports.filter(l => l.groupName?.toLowerCase().includes('cash') || l.groupName?.toLowerCase().includes('bank')).reduce((s, l) => s + l.closingBalance, 0);
+
+    const safe = (n, d) => d !== 0 ? +( n / d).toFixed(4) : null;
+
+    const ratios = {
+        liquidity: {
+            currentRatio: safe(currentAssets, currentLiabilities),
+            quickRatio: safe(currentAssets - inventory, currentLiabilities),
+            cashRatio: safe(cash, currentLiabilities),
+        },
+        profitability: {
+            netProfitMargin: safe(netProfit, totalIncome),
+            returnOnAssets: safe(netProfit, totalAssets),
+            returnOnEquity: safe(netProfit, totalAssets - totalLiabilities),
+        },
+        solvency: {
+            debtToEquity: safe(totalLiabilities, totalAssets - totalLiabilities),
+            debtToAssets: safe(totalLiabilities, totalAssets),
+        },
+    };
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        asOfDate: end,
+        totals: { totalAssets, totalLiabilities, totalIncome, totalExpense, netProfit, currentAssets, currentLiabilities, inventory, cash },
+        ratios,
+    }));
+});
+
+// ── Fund Flow Statement ──────────────────────────────────────────────────────
+
+export const getFundFlowStatement = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    if (!startDate || !endDate) throw new ApiError(httpStatus.BAD_REQUEST, 'startDate and endDate are required');
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    const allLedgers = await AccountLedger.find({}).lean();
+    const allGroups = await AccountGroup.find({}).lean();
+    const groupMap = {};
+    allGroups.forEach(g => { groupMap[g._id.toString()] = g; });
+
+    const getBalanceAt = async (date) => {
+        const entries = await LedgerEntry.aggregate([
+            { $match: { date: { $lte: date } } },
+            { $group: { _id: '$ledgerId', debit: { $sum: { $cond: [{ $eq: ['$type', 'Debit'] }, '$amount', 0] } }, credit: { $sum: { $cond: [{ $eq: ['$type', 'Credit'] }, '$amount', 0] } } } },
+        ]);
+        const m = {};
+        entries.forEach(e => { m[e._id.toString()] = e.debit - e.credit; });
+        return m;
+    };
+
+    const [openMap, closeMap] = await Promise.all([getBalanceAt(new Date(start - 1)), getBalanceAt(end)]);
+
+    const changes = allLedgers.map(l => {
+        const ob = (l.drCr === 'Cr' ? -(l.openingBalance || 0) : (l.openingBalance || 0)) + (openMap[l._id.toString()] || 0);
+        const cb = (l.drCr === 'Cr' ? -(l.openingBalance || 0) : (l.openingBalance || 0)) + (closeMap[l._id.toString()] || 0);
+        const grp = l.underGroup ? groupMap[l.underGroup.toString()] : null;
+        const gName = (grp?.name || '').toLowerCase();
+        const isWorkingCapital = !gName.includes('fixed') && !gName.includes('loan') && !gName.includes('capital') && !gName.includes('term');
+        return { name: l.name, groupName: grp?.name || '', nature: grp?.nature || '', ob, cb, change: cb - ob, isWorkingCapital };
+    }).filter(c => Math.abs(c.change) > 0.01);
+
+    const workingCapitalIncreases = changes.filter(c => c.isWorkingCapital && c.change > 0).map(c => ({ name: c.name, amount: +c.change.toFixed(2) }));
+    const workingCapitalDecreases = changes.filter(c => c.isWorkingCapital && c.change < 0).map(c => ({ name: c.name, amount: +Math.abs(c.change).toFixed(2) }));
+
+    const sourcesOfFunds = changes.filter(c => !c.isWorkingCapital && (
+        (c.nature === 'Liabilities' && c.change < 0) || (c.nature === 'Assets' && c.change > 0)
+    )).map(c => ({ name: c.name, amount: +Math.abs(c.change).toFixed(2) }));
+
+    const useOfFunds = changes.filter(c => !c.isWorkingCapital && (
+        (c.nature === 'Assets' && c.change < 0) || (c.nature === 'Liabilities' && c.change > 0)
+    )).map(c => ({ name: c.name, amount: +Math.abs(c.change).toFixed(2) }));
+
+    const totalSources = sourcesOfFunds.reduce((s, i) => s + i.amount, 0);
+    const totalUse = useOfFunds.reduce((s, i) => s + i.amount, 0);
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        period: { startDate, endDate },
+        sourcesOfFunds, totalSources: +totalSources.toFixed(2),
+        useOfFunds, totalUse: +totalUse.toFixed(2),
+        workingCapitalIncreases, workingCapitalDecreases,
+        netChangeInWorkingCapital: +(workingCapitalIncreases.reduce((s, i) => s + i.amount, 0) - workingCapitalDecreases.reduce((s, i) => s + i.amount, 0)).toFixed(2),
+    }));
+});
+
+// ── Interest Calculation on Overdue Bills ────────────────────────────────────
+
+export const getInterestOnOverdue = asyncHandler(async (req, res) => {
+    const { type, asOnDate, ratePercent, financialYear } = req.query;
+    if (!type || !['Receivable', 'Payable'].includes(type)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'type must be Receivable or Payable');
+    }
+    const rate = parseFloat(ratePercent || '18');
+    const asOn = asOnDate ? new Date(asOnDate) : new Date();
+    const fyMatch = financialYear ? { financialYear } : {};
+
+    let invoices = [];
+    if (type === 'Receivable') {
+        invoices = await SalesInvoice.find({ paymentStatus: { $ne: 'Paid' }, status: 'Confirmed', isDeleted: false, ...fyMatch }).lean();
+        invoices = invoices.map(i => ({ partyName: i.customerName, invoiceNo: i.invoiceNumber, invoiceDate: i.invoiceDate, dueDate: i.dueDate || i.invoiceDate, outstanding: (i.grandTotal || 0) - (i.paidAmount || 0) }));
+    } else {
+        const pi = await PurchaseInvoice.find({ paymentStatus: { $ne: 'Paid' }, status: { $in: ['Confirmed', 'Posted'] }, isDeleted: false, ...fyMatch }).lean();
+        invoices = pi.map(i => ({ partyName: i.supplierName, invoiceNo: i.invoiceNumber, invoiceDate: i.invoiceDate, dueDate: i.dueDate || i.invoiceDate, outstanding: (i.grandTotal || 0) - (i.paidAmount || 0) }));
+    }
+
+    const items = invoices
+        .filter(i => i.outstanding > 0)
+        .map(inv => {
+            const due = new Date(inv.dueDate);
+            const overdueDays = Math.max(0, Math.floor((asOn - due) / (1000 * 60 * 60 * 24)));
+            const interest = +(inv.outstanding * rate / 100 * overdueDays / 365).toFixed(2);
+            return { ...inv, outstanding: +inv.outstanding.toFixed(2), overdueDays, interest, annualRate: rate };
+        })
+        .filter(i => i.overdueDays > 0)
+        .sort((a, b) => b.overdueDays - a.overdueDays);
+
+    const totalInterest = items.reduce((s, i) => s + i.interest, 0);
+    const totalOutstanding = items.reduce((s, i) => s + i.outstanding, 0);
+
+    res.send(new ApiResponse(httpStatus.OK, {
+        type, asOnDate: asOn, annualRate: rate,
+        items, totalInterest: +totalInterest.toFixed(2), totalOutstanding: +totalOutstanding.toFixed(2),
+    }));
 });

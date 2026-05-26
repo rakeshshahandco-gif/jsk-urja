@@ -99,9 +99,18 @@ export default function SalesOrderFormPage() {
         }).catch(e => console.error('Error loading stickers:', e));
 
         getInvoiceSeries({ active: true }).then(s => {
-            setSeriesList(s || []);
-            const def = (s || []).find(x => x.isDefault);
-            if (def && !isEdit) setForm(p => ({ ...p, seriesId: def._id, gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true }));
+            const list = s || [];
+            setSeriesList(list);
+            if (!isEdit) {
+                // Pick series marked as Default for Sales Order in Series Master
+                const def = list.find(x => x.isDefaultForSalesOrder);
+                if (def) {
+                    setForm(p => ({ ...p, seriesId: def._id, gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true }));
+                } else {
+                    // No default configured — warn (non-blocking; user can still select manually)
+                    toast.error('Please set default series in Series Master.', { id: 'so-no-default' });
+                }
+            }
         }).catch(() => { });
 
         return () => document.removeEventListener('mousedown', handleClickOutside);

@@ -7,8 +7,8 @@
     min-width: 280px;
     max-width: 280px;
     height: 100vh;
-    background-color: #FFFFFF;
-    border-right: 1px solid #E2E8F0;
+    background-color: $surface-elevated;
+    border-right: 1px solid $border-light;
     display: flex;
     flex-direction: column;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -67,34 +67,24 @@
 }
 
 .header {
-    height: 90px;
+    min-height: 80px;
     display: flex;
-    align-items: center;
-    padding: 0 24px;
-    position: relative;
-    margin-bottom: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 24px;
+    gap: 20px;
     border-bottom: 1px solid #F1F5F9;
 
     .brand {
         display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .logoWrapper {
-        display: flex;
         align-items: center;
         gap: 12px;
-        overflow: visible;
     }
 
     .logoImage {
         max-height: 48px;
-        max-width: auto;
         width: auto;
         object-fit: contain;
-        transition: all 0.3s ease;
-        // filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.05));
     }
 
     .brandText {
@@ -104,11 +94,10 @@
 
     .focus {
         font-weight: 800;
-        font-size: 20px;
+        font-size: 19px;
         color: #0F172A;
         line-height: 1.1;
-        letter-spacing: -0.8px;
-        position: relative;
+        letter-spacing: -0.5px;
 
         .one {
             color: #2563EB;
@@ -116,38 +105,93 @@
     }
 
     .tagline {
-        font-size: 10px;
+        font-size: 9px;
         color: #64748B;
-        font-weight: 600;
-        margin-top: 2px;
+        font-weight: 700;
+        margin-top: 1px;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }
+}
 
-    .collapsedLogo {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        line-height: 1;
+.sidebarSelectors {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
 
-        .juText {
-            font-weight: 900;
-            font-size: 20px;
-            color: #2563EB;
-            letter-spacing: -1px;
-        }
+.selectorGroup {
+    width: 100%;
+}
 
-        .collapsedTagline {
-            font-size: 8px;
-            font-weight: 800;
-            color: #64748B;
-            margin-top: 1px;
-            letter-spacing: 0px;
-        }
+/* ─── Financial Year Selector (Adapted from Header) ─── */
+.fySelectorContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #F0FDF4;
+    border: 1.5px solid #DCFCE7;
+    padding: 6px 10px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    width: 100%;
+
+    &:hover {
+        background: #DCFCE7;
+        border-color: #BBF7D0;
     }
+}
+
+.fyIcon {
+    color: #16A34A;
+    flex-shrink: 0;
+}
+
+.fyLabelGroup {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.fyLabel {
+    font-size: 8px;
+    font-weight: 800;
+    color: #16A34A;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fySelect {
+    background: transparent;
+    border: none;
+    font-size: 12px;
+    font-weight: 700;
+    color: #15803D;
+    cursor: pointer;
+    outline: none;
+    padding: 0;
+    font-family: inherit;
+
+    option {
+        background: white;
+        color: #0F172A;
+    }
+}
+
+.fyActiveDot {
+    width: 6px;
+    height: 6px;
+    background: #22C55E;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+    animation: fyPulse 2s infinite;
+    margin-left: auto;
+}
+
+@keyframes fyPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.6; }
 }
 
 .nav {

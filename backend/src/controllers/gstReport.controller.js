@@ -2,7 +2,10 @@
  * GSTR-1 Report Controller
  * Endpoints: preview, validate, generate Excel download
  */
-import { generateGSTR1Data, validateGSTR1, generateGSTR1Excel, generateGSTR3BData, reconcileGSTR1vs3B } from '../services/gstReport.service.js';
+import { generateGSTR1Data, validateGSTR1, generateGSTR1Excel, generateGSTR3BData, reconcileGSTR1vs3B, buildGstr1Json, generateIrn, generateGSTR9Data, generateGSTR9Excel } from '../services/gstReport.service.js';
+import { importGstr9PortalFile, getGstr9PortalImports, deleteGstr9PortalImport, reconcileGstr9 } from '../services/gstr9Portal.service.js';
+import { SalesInvoice as SalesInvoiceModel } from '../models/salesInvoice.model.js';
+import { CompanyProfile } from '../models/companyProfile.model.js';
 import { Gstr3bAdjustment } from '../models/gstr3bAdjustment.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
@@ -339,3 +342,161 @@ export async function getGstLedger(req, res) {
     }
 }
 
+// ── GSTR-1 JSON Export ──────────────────────────────────────────────────────
+
+export async function downloadGSTR1Json(req, res) {
+    try {
+        const { month, year } = req.query;
+        if (!month || !year) return res.status(400).json({ success: false, message: 'month and year are required' });
+
+        const profile = await CompanyProfile.findOne({}).lean();
+        const gstin = profile?.gstin || '';
+        const jsonPayload = await buildGstr1Json({ month: parseInt(month, 10), year: parseInt(year, 10), gstin });
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=GSTR1_${year}_${String(month).padStart(2, '0')}.json`);
+        res.send(JSON.stringify(jsonPayload, null, 2));
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+// ── E-Invoice ────────────────────────────────────────────────────────────────
+
+export async function getEInvoicePayload(req, res) {
+    try {
+        const { invoiceId } = req.params;
+        const invoice = await SalesInvoiceModel.findById(invoiceId).lean();
+        if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+        const profile = await CompanyProfile.findOne({}).lean();
+        const { buildEInvoicePayload } = await import('../services/gstReport.service.js');
+        const payload = await buildEInvoicePayload(invoice, profile);
+        res.json({ success: true, data: payload });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GSTR-9 Annual Return
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/gst-reports/gstr9-summary?fy=2025-2026
+ */
+export async function getGSTR9Summary(req, res) {
+  try {
+    const fy = req.query.fy || `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`;
+    const data = await generateGSTR9Data(fy);
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[GSTR9] summary error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * GET /api/v1/gst-reports/gstr9-download?fy=2025-2026
+ */
+export async function downloadGSTR9Excel(req, res) {
+  try {
+    const fy = req.query.fy || `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`;
+    const wb = await generateGSTR9Excel(fy);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="GSTR9_${fy}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[GSTR9] download error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ── GSTR-9 Portal Import ───────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/gst-reports/gstr9-import
+ * multipart/form-data: file (JSON or Excel), formType (GSTR1 | GSTR3B)
+ */
+export async function importGstr9Portal(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    const formType = req.body.formType;
+    if (!['GSTR1', 'GSTR3B'].includes(formType)) {
+      return res.status(400).json({ success: false, message: 'formType must be GSTR1 or GSTR3B.' });
+    }
+    const result = await importGstr9PortalFile({
+      buffer:   req.file.buffer,
+      fileName: req.file.originalname,
+      formType,
+      userId:   req.user?._id,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('[GSTR9 Import]', err.message);
+    res.status(400).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * GET /api/v1/gst-reports/gstr9-imports?fy=2025-2026
+ */
+export async function listGstr9PortalImports(req, res) {
+  try {
+    const fy = req.query.fy || `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`;
+    const data = await getGstr9PortalImports(fy);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * DELETE /api/v1/gst-reports/gstr9-imports/:id
+ */
+export async function removeGstr9PortalImport(req, res) {
+  try {
+    await deleteGstr9PortalImport(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * GET /api/v1/gst-reports/gstr9-reconcile?fy=2025-2026
+ */
+export async function getGstr9Reconciliation(req, res) {
+  try {
+    const fy = req.query.fy || `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`;
+    const data = await reconcileGstr9(fy);
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('[GSTR9 Reconcile]', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function postGenerateIrn(req, res) {
+    try {
+        const { invoiceId } = req.params;
+        const invoice = await SalesInvoiceModel.findById(invoiceId).lean();
+        if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+        const profile = await CompanyProfile.findOne({}).lean();
+        const result = await generateIrn(invoice, profile);
+
+        // If IRN was generated, save it back to the invoice
+        if (result.irn) {
+            await SalesInvoiceModel.findByIdAndUpdate(invoiceId, {
+                irn: result.irn,
+                irnAckNo: result.ackNo,
+                signedQrCode: result.signedQrCode,
+                eInvoiceStatus: 'Generated',
+            });
+        }
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { MultiSelect } from '@/components/ui';
 import { userService } from '@/services/user.service';
@@ -7,6 +7,7 @@ import { createTask, updateTask, getTaskGroups, createTaskMaster, updateTaskMast
 import { getTaskCategories } from '@/services/taskCategoryApi';
 import toast from 'react-hot-toast';
 import { GroupForm } from './GroupForm';
+import { TaskShortcutInput } from './TaskShortcutInput';
 import { useModal } from '@/components/ui';
 import { Plus, RefreshCw, Landmark, CreditCard, Receipt } from 'lucide-react';
 
@@ -54,6 +55,7 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const [categoriesOptions, setCategoriesOptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [shortcutDateError, setShortcutDateError] = useState(null);
 
     const assignmentMode = watch('assignmentMode');
     const recurrenceEnabled = watch('recurrence.enabled');
@@ -102,7 +104,21 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
         });
     };
 
+    const handleShortcutApply = useCallback((applied) => {
+        if (applied.dateError) setShortcutDateError(applied.dateError);
+        else setShortcutDateError(null);
+        if (applied.title !== undefined) setValue('title', applied.title);
+        if (applied.dueDate) setValue('dueDate', applied.dueDate);
+        if (applied.groupId !== undefined) setValue('groupId', applied.groupId);
+        if (applied.assigneeIds !== undefined) setValue('assigneeIds', applied.assigneeIds);
+        if (applied.assignmentMode) setValue('assignmentMode', applied.assignmentMode);
+    }, [setValue]);
+
     const onSubmit = async (data) => {
+        if (!task && shortcutDateError) {
+            toast.error(shortcutDateError);
+            return;
+        }
         const selectedGroup = groupsOptions.find(g => (g._id || g.id) === data.groupId);
         const hasFixedUsers = selectedGroup && selectedGroup.userIds && selectedGroup.userIds.length > 0;
 
@@ -184,8 +200,18 @@ export const TaskForm = ({ task, onSuccess, onCancel }) => {
     const needsAssignee = !hasFixedUsers && (assignmentMode === 'SINGLE' || assignmentMode === 'MULTI');
     const needsGroup = !hasFixedUsers && (assignmentMode === 'GROUP');
 
+    const activeUsers = usersOptions.filter((u) => u.isActive !== false);
+
     return (
         <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
+            {!task && (
+                <TaskShortcutInput
+                    groupsOptions={groupsOptions}
+                    usersOptions={activeUsers}
+                    onApply={handleShortcutApply}
+                    onEnterSubmit={handleSubmit(onSubmit)}
+                />
+            )}
             {/* ── ROW 1: Group | +New | Title ── */}
             <div className={clsx(styles.row, styles.mixedCols)}>
                 <div className={styles.field}>

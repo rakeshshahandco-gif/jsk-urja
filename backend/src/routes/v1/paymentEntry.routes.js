@@ -9,5 +9,6 @@ router.post('/', pe.createPaymentEntry);
 router.get('/cash-book', pe.getCashBook);
 router.get('/bank-book', pe.getBankBook);
 router.get('/by-invoice/:invoiceId', pe.getPaymentsByInvoice);
+router.get('/:paymentEntryId', pe.getPaymentEntryById);
 
 export default router;

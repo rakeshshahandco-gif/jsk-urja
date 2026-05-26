@@ -254,6 +254,13 @@ const initializeAccountingMasters = async (userId) => {
             }
         }
 
+        /** Keep TDS Payable under Duties & Taxes for TB hierarchy (section-wise liability ledgers). */
+        const dutiesTaxesId = groupMap.get('Duties & Taxes');
+        const tdsPayableGrpId = groupMap.get('TDS Payable');
+        if (dutiesTaxesId && tdsPayableGrpId) {
+            await AccountGroup.findByIdAndUpdate(tdsPayableGrpId, { parentGroup: dutiesTaxesId });
+        }
+
         logger.info('Accounting masters initialization completed.');
 
         // ── Migrate all customer ledgers to Sundry Debtors ──────────────────

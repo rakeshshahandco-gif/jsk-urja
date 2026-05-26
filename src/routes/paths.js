@@ -26,6 +26,8 @@ export const PATHS = {
         ROOT: '/admin',
         HOME: '/admin/home',
         COMPANY_PROFILE: '/company-profile',
+        FEATURE_COMPLIANCE: '/admin/feature-compliance-settings',
+        PLATFORM_FEATURE_DEFAULTS: '/admin/platform-feature-defaults',
         WHATSAPP: '/whatsapp',
     },
     GROUPS: {
@@ -127,6 +129,9 @@ export const PATHS = {
         PAYMENT_ENTRY: '/accounts/payment-entry',
         EXPENSE_ENTRY: '/accounts/expense-entry',
         JOURNAL_ENTRY: '/accounts/journal-entry',
+        CONTRA_ENTRY: '/accounts/contra-entry',
+        PERIOD_LOCK: '/accounts/period-lock',
+        ACCOUNTING_AUDIT: '/accounts/accounting-audit',
         CREDIT_NOTES: '/voucher-entry/credit-notes',
         DEBIT_NOTES: '/voucher-entry/debit-notes',
         CREDIT_NOTE_DETAIL: (id) => `/voucher-entry/credit-notes/${id}`,
@@ -148,6 +153,24 @@ export const PATHS = {
         BANK_BOOK: '/accounts/reports/bank-book',
         OUTSTANDING_REPORT: '/accounts/reports/outstanding',
         INTEREST_PAYABLE: '/accounts/interest-payable',
+        BILL_WISE_ADJUSTMENT: '/accounts/bill-wise-adjustment',
+        BANK_RECONCILIATION: '/accounts/bank-reconciliation',
+        /** @deprecated Bookmarks only — redirects to {@link PATHS.TDS.DASHBOARD} */
+        TDS_COMPLIANCE: '/accounts/tds-compliance',
+    },
+    TDS: {
+        ROOT: '/tds',
+        HOME: '/tds/dashboard',
+        DASHBOARD: '/tds/dashboard',
+        MASTER: '/tds/master',
+        LEDGER_MAPPING: '/tds/ledger-mapping',
+        DEDUCTIONS: '/tds/deductions',
+        PAYABLE_REGISTER: '/tds/payable-register',
+        CHALLANS: '/tds/challans',
+        RETURNS: '/tds/returns',
+        FORM16A: '/tds/form16a',
+        SETTINGS: '/tds/settings',
+        REPORTS: '/tds/reports',
     },
     FIXED_ASSETS: {
         ROOT: '/fixed-assets',
@@ -161,6 +184,8 @@ export const PATHS = {
         HOME: '/mis/home',
         SALES_DASHBOARD: '/mis/sales-dashboard',
         PRODUCT_GP: '/mis/product-gp-analysis',
+        GP_ANALYSIS: '/mis/gp-analysis',
+        DIRECTOR_DASHBOARD: '/mis/director-dashboard',
         SALES_CONVERSION: '/mis/sales-conversion',
         DASHBOARD: '/mis/dashboard'
     },
@@ -210,6 +235,12 @@ export const PATHS = {
         LIST: '/eway-bills/list',
         DRAFT: (id) => `/eway-bills/draft/${id}`,
     },
+    E_INVOICE: {
+        ROOT: '/e-invoices',
+        HOME: '/e-invoices/home',
+        LIST: '/e-invoices/list',
+        DRAFT: (id) => `/e-invoices/draft/${id}`,
+    },
     TRANSPORTERS: {
         ROOT: '/transporters',
         HOME: '/transporters/home',
@@ -217,7 +248,15 @@ export const PATHS = {
     },
     GST: {
         ROOT: '/gst',
-        HOME: '/gst/home'
+        HOME: '/gst/home',
+        GSTR1: '/gst/gstr1',
+        GSTR3B: '/gst/gstr3b',
+        GSTR9: '/gst/gstr9',
+        RECONCILIATION: '/gst/reconciliation',
+        PAYABLE: '/gst/payable',
+        ITC_REGISTER: '/gst/itc-register',
+        HSN_SUMMARY: '/gst/hsn-summary',
+        LEDGER: '/gst/ledger',
     },
     VOUCHER_ENTRY: {
         ROOT: '/voucher-entry',
@@ -226,5 +265,55 @@ export const PATHS = {
     CRM: {
         ROOT: '/crm',
         HOME: '/crm/home'
-    }
+    },
+    // ── New Accounting Modules ─────────────────────────────────────────────────
+    COST_CENTERS: {
+        ROOT: '/accounts/cost-centers',
+        LIST: '/accounts/cost-centers',
+        PL_REPORT: '/accounts/cost-centers/pl-report',
+    },
+    BUDGETS: {
+        ROOT: '/accounts/budgets',
+        LIST: '/accounts/budgets',
+    },
+    PDC: {
+        ROOT: '/accounts/pdc',
+        LIST: '/accounts/pdc',
+        DUE_SOON: '/accounts/pdc/due-soon',
+    },
+    TCS: {
+        ROOT: '/tcs',
+        HOME: '/tcs/dashboard',
+        DASHBOARD: '/tcs/dashboard',
+        MASTER: '/tcs/master',
+        DEDUCTIONS: '/tcs/deductions',
+        CHALLANS: '/tcs/challans',
+        REPORTS: '/tcs/reports',
+    },
+    CASH_FLOW: '/accounting/reports/cash-flow',
+    COMPARATIVE_PL: '/accounting/reports/comparative-pl',
+    COMPARATIVE_BS: '/accounting/reports/comparative-bs',
+    AGEING: '/accounting/reports/ageing',
+    MSME_REPORT: '/accounting/reports/msme',
+    RATIO_ANALYSIS: '/accounting/reports/ratio-analysis',
+    FUND_FLOW: '/accounting/reports/fund-flow',
+    DEPRECIATION: {
+        ROOT: '/fixed-assets/depreciation',
+        SCHEDULE: '/fixed-assets/depreciation/schedule',
+    },
+    NARRATION_TEMPLATES: '/accounts/narration-templates',
+    FORM_26AS: {
+        ROOT: '/tds/form-26as',
+        LIST: '/tds/form-26as',
+    },
+    /** @deprecated use E_INVOICE.LIST — kept for redirects */
+    EINVOICE: '/gst/einvoice',
+    // ── SaaS Super Admin ──────────────────────────────────────────────────
+    SAAS_ADMIN: {
+        ROOT: '/saas-admin',
+        DASHBOARD: '/saas-admin/dashboard',
+        COMPANIES: '/saas-admin/companies',
+        SUBSCRIPTIONS: '/saas-admin/subscriptions',
+        ACTIVITY_LOGS: '/saas-admin/activity-logs',
+    },
 };

@@ -90,6 +90,7 @@ const bomSchema = new mongoose.Schema({
     labourCostPerPoint: { type: Number, default: 0.25 },
     totalPointsLabourCost: { type: Number, default: 0 },
     finalProductionCostPerUnit: { type: Number, default: 0 },
+    standardCostUpdatedAt: { type: Date, default: null },
 
     // Process Details
     processes: {

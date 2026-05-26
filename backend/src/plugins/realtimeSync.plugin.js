@@ -5,9 +5,11 @@ import mongoose from 'mongoose';
 const _emitEvent = (doc, action, oldDoc = null) => {
     try {
         const io = getIO();
-        if (!io || doc._skipSync) return;
+        if (!io || !doc || doc._skipSync) return;
 
-        const modelName = doc.constructor.modelName;
+        const modelName = doc.constructor?.modelName;
+        if (!modelName || !doc._id) return;
+
         const recordId = doc._id.toString();
 
         // Find fields that changed (for updates)

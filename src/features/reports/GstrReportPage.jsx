@@ -579,27 +579,27 @@ export default function GstrReportPage() {
               <tbody>
                 <tr>
                   <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>(a) Outward taxable supplies (other than zero rated, nil rated and exempted)</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.taxableValue)}</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.igst)}</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.cgst)}</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.sgst)}</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardTaxable.cess)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.taxableValue)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.igst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.cgst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.sgst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.cess)}</td>
                 </tr>
                 <tr>
                   <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>(b) Outward taxable supplies (zero rated)</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.taxableValue)}</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.igst)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardZeroRated?.taxableValue)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardZeroRated?.igst)}</td>
                   <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>—</td>
                   <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>—</td>
-                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.outwardZeroRated.cess)}</td>
+                  <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>₹{fmt(gstr3bSummary.table31?.outwardZeroRated?.cess)}</td>
                 </tr>
                 <tr style={{ background: '#f0fdf4' }}>
                   <td style={{ padding: '12px', fontWeight: 700, color: '#166534' }}>Net Total Liability</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.taxableValue + gstr3bSummary.outwardZeroRated.taxableValue)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.igst + gstr3bSummary.outwardZeroRated.igst)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.cgst)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.sgst)}</td>
-                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.outwardTaxable.cess + gstr3bSummary.outwardZeroRated.cess)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt((gstr3bSummary.table31?.outwardTaxable?.taxableValue || 0) + (gstr3bSummary.table31?.outwardZeroRated?.taxableValue || 0))}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt((gstr3bSummary.table31?.outwardTaxable?.igst || 0) + (gstr3bSummary.table31?.outwardZeroRated?.igst || 0))}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.cgst)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt(gstr3bSummary.table31?.outwardTaxable?.sgst)}</td>
+                  <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700 }}>₹{fmt((gstr3bSummary.table31?.outwardTaxable?.cess || 0) + (gstr3bSummary.table31?.outwardZeroRated?.cess || 0))}</td>
                 </tr>
               </tbody>
             </table>

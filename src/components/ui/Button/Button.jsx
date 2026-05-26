@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react';
 import clsx from 'clsx';
 import styles from './Button.module.scss';
 import PropTypes from 'prop-types';
-import { BrandedLoader } from '@/components/ui/BrandedLoading';
+import { BrandedLoader } from '../BrandedLoading';
 
 export const Button = forwardRef(({
     children,

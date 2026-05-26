@@ -119,6 +119,7 @@ const LedgerMasterPage = () => {
                         <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 4 }}><X size={18} /></button>
                     </div>
                     <LedgerForm
+                        key={panel === 'create' ? 'create' : panel?.ledger?._id || 'ledger'}
                         initial={panel?.ledger || EMPTY}
                         groups={groups}
                         onSave={handleSave}

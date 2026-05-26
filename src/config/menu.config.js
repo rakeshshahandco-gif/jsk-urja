@@ -62,6 +62,69 @@ export const menuConfig = [
                 ]
             },
             {
+                id: 'crm-leads',
+                title: 'WhatsApp Leads',
+                icon: 'ChatIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'crm.leads.view',
+                children: [
+                    {
+                        id: 'lead-list',
+                        title: 'Leads / Inquiries',
+                        path: '/crm/leads',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'crm.leads.view',
+                    },
+                    {
+                        id: 'lead-create-whatsapp',
+                        title: 'Convert WhatsApp Chat → Lead',
+                        path: '/crm/leads',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'crm.leads.convert_whatsapp',
+                    },
+                ]
+            },
+            {
+                id: 'crm-product-catalog',
+                title: 'Product Catalog',
+                icon: 'PackageIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'crm.product_catalog.view',
+                children: [
+                    {
+                        id: 'product-catalog-list',
+                        title: 'Catalog Master',
+                        path: '/crm/product-catalog',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'crm.product_catalog.view',
+                    },
+                    {
+                        id: 'product-catalog-share',
+                        title: 'Share Catalog / Datasheet',
+                        path: '/crm/product-catalog',
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'crm.product_catalog.share',
+                    },
+                ]
+            },
+            {
+                id: 'crm-kanban',
+                title: 'Kanban / Workflow',
+                icon: 'BarChartIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'customers',
+                children: [
+                    { id: 'crm-kanban-sales-inquiry', title: 'Sales Inquiry', path: '/crm/kanban/sales-inquiry', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'customers' },
+                    { id: 'crm-kanban-task', title: 'Tasks', path: '/crm/kanban/tasks', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tasks' },
+                    { id: 'crm-kanban-purchase-rfq', title: 'Purchase RFQ', path: '/crm/kanban/purchase-rfq', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase' },
+                    { id: 'crm-kanban-production', title: 'Production', path: '/crm/kanban/production', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production' },
+                    { id: 'crm-kanban-dispatch', title: 'Dispatch', path: '/crm/kanban/dispatch', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales' },
+                    { id: 'crm-kanban-gst-tds', title: 'GST / TDS', path: '/crm/kanban/gst-tds', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst' },
+                    { id: 'crm-kanban-complaint', title: 'Complaints', path: '/crm/kanban/complaints', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'service' },
+                    { id: 'crm-kanban-apk', title: 'APK View', path: '/crm/kanban/apk', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'customers' },
+                ],
+            },
+            {
                 id: 'crm-reports',
                 title: 'Reports',
                 icon: 'BarChartIcon',
@@ -92,7 +155,7 @@ export const menuConfig = [
         children: [
             {
                 id: 'task-list',
-                title: 'Manage Tasks',
+                title: 'Task Hub',
                 path: '/tasks/list',
                 roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
                 permission: 'tasks.task_list.view',
@@ -124,6 +187,7 @@ export const menuConfig = [
             { id: 'sales-orders', title: 'Sales Orders', path: PATHS.SALES.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_orders.view' },
             { id: 'sales-invoices', title: 'Tax Invoices (GST)', path: PATHS.SALES.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'eway-bills', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
+            { id: 'e-invoices', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'logistics-master', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'sales.sales_invoices.view' },
             { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, roles: [ROLES.ADMIN], permission: 'sales.invoice_series.view' },
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
@@ -224,10 +288,15 @@ export const menuConfig = [
         children: [
             { id: 'receipt-entry', title: 'Receipt Entry', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.receipt_entry.view' },
             { id: 'payment-entry', title: 'Payment Entry', path: PATHS.ACCOUNTS.PAYMENT_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.payment_entry.view' },
+            { id: 'contra-entry', title: 'Contra Entry', path: PATHS.ACCOUNTS.CONTRA_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.vouchers.view' },
             { id: 'expense-entry', title: 'Expense Voucher', path: PATHS.ACCOUNTS.EXPENSE_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.expense_entry.view' },
             { id: 'journal-entry', title: 'Journal Voucher', path: PATHS.ACCOUNTS.JOURNAL_ENTRY, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.journal_entry.view' },
             { id: 'credit-notes', title: 'Credit Notes', path: PATHS.ACCOUNTS.CREDIT_NOTES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.credit_notes.view' },
             { id: 'debit-notes', title: 'Debit Notes', path: PATHS.ACCOUNTS.DEBIT_NOTES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.debit_notes.view' },
+            { id: 'bill-wise-adjustment', title: 'Bill-wise Adjustment', path: PATHS.ACCOUNTS.BILL_WISE_ADJUSTMENT, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.vouchers.view' },
+            { id: 'bank-reconciliation', title: 'Bank Reconciliation', path: PATHS.ACCOUNTS.BANK_RECONCILIATION, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.vouchers.view' },
+            { id: 'pdc-register', title: 'PDC Register', path: PATHS.PDC.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.vouchers.view' },
+            { id: 'narration-templates', title: 'Narration Templates', path: PATHS.NARRATION_TEMPLATES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
         ]
     },
     {
@@ -241,6 +310,8 @@ export const menuConfig = [
             { id: 'ledger-master', title: 'Ledger Master', path: PATHS.ACCOUNT_MASTER.LEDGER_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.ledger_master.view' },
             { id: 'financial-year-master', title: 'Financial Year Master', path: PATHS.ACCOUNT_MASTER.FINANCIAL_YEAR, roles: [ROLES.ADMIN], permission: 'accounts.financial_year.view' },
             { id: 'voucher-type-master', title: 'Series Master', path: PATHS.ACCOUNT_MASTER.SERIES_MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'cost-centers', title: 'Cost / Profit Centres', path: PATHS.COST_CENTERS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'budgets', title: 'Budget Master', path: PATHS.BUDGETS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
         ]
     },
     {
@@ -263,22 +334,65 @@ export const menuConfig = [
             { id: 'profit-loss-acc', title: 'Profit & Loss', path: '/mis/reports/profit-loss', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.profit_loss.view' },
             { id: 'balance-sheet-acc', title: 'Balance Sheet', path: '/mis/reports/balance-sheet', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.balance_sheet.view' },
             { id: 'interest-payable-statement', title: 'Interest Payable Statement', path: PATHS.ACCOUNTS.INTEREST_PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.interest_payable_statement.view' },
+            { id: 'cash-flow', title: 'Cash Flow Statement', path: PATHS.CASH_FLOW, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'comparative-pl', title: 'Comparative P&L', path: PATHS.COMPARATIVE_PL, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'comparative-bs', title: 'Comparative Balance Sheet', path: PATHS.COMPARATIVE_BS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'ageing-analysis', title: 'Ageing Analysis', path: PATHS.AGEING, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'msme-report', title: 'MSME Compliance Report', path: PATHS.MSME_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'ratio-analysis', title: 'Ratio Analysis', path: PATHS.RATIO_ANALYSIS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'fund-flow', title: 'Fund Flow Statement', path: PATHS.FUND_FLOW, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'cost-center-pl', title: 'Cost Centre P&L', path: PATHS.COST_CENTERS.PL_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'accounting-audit', title: 'Accounting Audit Trail', path: PATHS.ACCOUNTS.ACCOUNTING_AUDIT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
+            { id: 'period-lock', title: 'Period Lock Settings', path: PATHS.ACCOUNTS.PERIOD_LOCK, roles: [ROLES.ADMIN], permission: 'accounts.vouchers.view' },
         ]
+    },
+    {
+        id: 'tds',
+        title: 'TDS',
+        icon: 'ReceiptLongIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: 'tds',
+        children: [
+            { id: 'tds-dashboard', title: 'TDS Dashboard', path: PATHS.TDS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
+            { id: 'tds-master', title: 'TDS Master / Section Rates', path: PATHS.TDS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.master.view' },
+            { id: 'tds-ledger-mapping', title: 'TDS Ledger Mapping', path: PATHS.TDS.LEDGER_MAPPING, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.ledger_mapping.view' },
+            { id: 'tds-deduction-register', title: 'TDS Deduction Register', path: PATHS.TDS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
+            { id: 'tds-payable-register', title: 'TDS Payable Register', path: PATHS.TDS.PAYABLE_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.payable_register.view' },
+            { id: 'tds-challan', title: 'TDS Challan / Payment', path: PATHS.TDS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.challan.view' },
+            { id: 'tds-returns', title: 'TDS Return / Filing Data', path: PATHS.TDS.RETURNS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.returns.view' },
+            { id: 'tds-reports', title: 'TDS Reports', path: PATHS.TDS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.reports.view' },
+            { id: 'form-26as', title: '26AS Reconciliation', path: PATHS.FORM_26AS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
+        ],
+    },
+    {
+        id: 'tcs',
+        title: 'TCS',
+        icon: 'ReceiptLongIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: 'tds',
+        children: [
+            { id: 'tcs-dashboard', title: 'TCS Dashboard', path: PATHS.TCS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
+            { id: 'tcs-master', title: 'TCS Master / Section Rates', path: PATHS.TCS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.master.view' },
+            { id: 'tcs-deductions', title: 'TCS Deduction Register', path: PATHS.TCS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
+            { id: 'tcs-challans', title: 'TCS Challan / Payment', path: PATHS.TCS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.challan.view' },
+            { id: 'tcs-reports', title: 'TCS Reports', path: PATHS.TCS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
+        ],
     },
     {
         id: 'gst-menu',
         title: 'GST',
         icon: 'AssessmentIcon',
-        roles: [ROLES.ADMIN, ROLES.MANAGER],
-        permission: 'admin.company_profile.view',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: 'gst',
         children: [
-            { id: 'gstr1-export', title: 'GSTR-1 Compliance', path: '/reports/gstr1', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: '/reports/gstr3b', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: '/reports/gst-reconciliation', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'itc-register', title: 'ITC Register', path: '/reports/gst/itc-register', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gst-payable', title: 'GST Payable Summary', path: '/reports/gst-payable', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'hsn-summary', title: 'HSN Summary', path: '/reports/gst/hsn-summary', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
-            { id: 'gst-ledger', title: 'GST Ledger', path: '/reports/gst/ledger', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'admin.company_profile.view' },
+            { id: 'gstr1-export', title: 'GSTR-1 Compliance', path: PATHS.GST.GSTR1, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr1.view' },
+            { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: PATHS.GST.GSTR3B, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
+            { id: 'gstr9-annual', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
+            { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_reconciliation.view' },
+            { id: 'itc-register', title: 'ITC Register', path: PATHS.GST.ITC_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.itc_register.view' },
+            { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_payable.view' },
+            { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.hsn_summary.view' },
+            { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_ledger.view' },
         ]
     },
     {
@@ -289,8 +403,10 @@ export const menuConfig = [
         permission: 'reports',
         children: [
             { id: 'mis-dashboard', title: 'MIS Dashboard', path: '/mis/dashboard', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.dashboard.view' },
+            { id: 'director-mis', title: 'Director MIS Dashboard', path: PATHS.MIS.DIRECTOR_DASHBOARD, roles: [ROLES.ADMIN], permission: 'mis.director_dashboard.view' },
             { id: 'sales-analysis', title: 'Sales MIS Dashboard', path: PATHS.MIS.SALES_DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'mis.sales_marketing.view' },
             { id: 'report-product-gp', title: 'Product-wise GP Analysis', path: PATHS.MIS.PRODUCT_GP, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.product_gp_analysis.view' },
+            { id: 'report-gp-analysis', title: 'GP Analysis Hub', path: PATHS.MIS.GP_ANALYSIS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'mis.product_gp_analysis.view' },
             { id: 'report-sample-conversion', title: 'Sample Conversion Analysis', path: PATHS.REPORTS.SAMPLE_CONVERSION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
             { id: 'report-replacements', title: 'Replacement Outward Report', path: PATHS.REPORTS.REPLACEMENTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
             { id: 'report-purchase-comparison', title: 'Purchase Comparison Report', path: '/reports/purchase-comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.purchase_comparison_report.view' },
@@ -306,6 +422,8 @@ export const menuConfig = [
             { id: 'fixed-assets-list', title: 'Asset Register', path: PATHS.FIXED_ASSETS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'accounts.fixed_assets.view' },
             { id: 'asset-categories', title: 'Asset Categories', path: PATHS.FIXED_ASSETS.CATEGORIES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_categories.view' },
             { id: 'asset-locations', title: 'Asset Locations', path: PATHS.FIXED_ASSETS.LOCATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.asset_locations.view' },
+            { id: 'depreciation', title: 'Depreciation', path: PATHS.DEPRECIATION.ROOT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.fixed_assets.view' },
+            { id: 'depreciation-schedule', title: 'Depreciation Schedule', path: PATHS.DEPRECIATION.SCHEDULE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.fixed_assets.view' },
         ]
     },
     {
@@ -386,6 +504,24 @@ export const menuConfig = [
         permission: 'whatsapp.whatsapp_settings.view',
     },
     {
+        id: 'whatsapp-chat',
+        title: 'WhatsApp Chat',
+        icon: 'ChatIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        path: '/whatsapp/chat',
+        permission: 'whatsapp.whatsapp_settings.view',
+    },
+    // Optional per-user UI customization (visible only when
+    // ui.advancedCustomizationEnabled feature flag is on; defaults OFF).
+    {
+        id: 'ui-preferences',
+        title: 'My UI Preferences',
+        path: '/profile/ui-preferences',
+        icon: 'SettingsIcon',
+        roles: [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
+        permission: null,
+    },
+    {
         id: 'admin',
         title: 'Admin',
         path: '/admin/home',
@@ -394,10 +530,43 @@ export const menuConfig = [
         permission: 'admin',
         children: [
             { id: 'company-profile', title: 'Company Profile', path: PATHS.SETTINGS.COMPANY_PROFILE, roles: [ROLES.ADMIN], permission: 'admin.company_profile.view' },
+            { id: 'feature-compliance-settings', title: 'Feature / Compliance Settings', path: PATHS.SETTINGS.FEATURE_COMPLIANCE, roles: [ROLES.ADMIN], permission: 'admin' },
+            { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, roles: [ROLES.ADMIN], permission: 'admin' },
             { id: 'user-management', title: 'User Management', path: '/admin/users', roles: [ROLES.ADMIN], permission: 'admin.user_management.view' },
             { id: 'ledger-linking', title: 'Ledger Linking Utility', path: '/admin/ledger-linking', roles: [ROLES.ADMIN], permission: 'admin.ledger_linking.view' },
             { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', roles: [ROLES.ADMIN], permission: 'admin' },
             { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', roles: [ROLES.ADMIN], permission: 'admin' },
         ],
     },
+    // ── SaaS Super Admin (only visible to superadmin role) ──────────────────
+    {
+        id: 'saas-admin',
+        title: 'SaaS Admin',
+        icon: 'SettingsIcon',
+        path: PATHS.SAAS_ADMIN.DASHBOARD,
+        roles: [ROLES.SUPERADMIN],
+        permission: null,
+        children: [
+            { id: 'saas-dashboard', title: 'SaaS Dashboard', path: PATHS.SAAS_ADMIN.DASHBOARD, roles: [ROLES.SUPERADMIN], permission: null },
+            { id: 'saas-companies', title: 'Companies & Modules', path: PATHS.SAAS_ADMIN.COMPANIES, roles: [ROLES.SUPERADMIN], permission: null },
+            { id: 'saas-subscriptions', title: 'Subscriptions', path: PATHS.SAAS_ADMIN.SUBSCRIPTIONS, roles: [ROLES.SUPERADMIN], permission: null },
+            { id: 'saas-activity', title: 'Activity Logs', path: PATHS.SAAS_ADMIN.ACTIVITY_LOGS, roles: [ROLES.SUPERADMIN], permission: null },
+        ],
+    },
 ];
+
+export const getFlattenedMenu = () => {
+    const flattened = [];
+    const traverse = (items) => {
+        items.forEach(item => {
+            const { children, ...rest } = item;
+            flattened.push(rest);
+            if (children && children.length > 0) {
+                traverse(children);
+            }
+        });
+    };
+    traverse(menuConfig);
+    return flattened;
+};
+

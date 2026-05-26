@@ -78,7 +78,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     }
                 ],
                 creditPeriod: 0,
+                creditLimit: 0,
+                creditLimitAction: 'Warn',
                 paymentType: 'Credit',
+                msmeApplicable: false,
+                msmeRegNo: '',
+                msmeCategory: '',
             };
 
         }
@@ -137,7 +142,12 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     isPrimary: true,
                 }],
             creditPeriod: customerData.creditPeriod || 0,
+            creditLimit: customerData.creditLimit || 0,
+            creditLimitAction: customerData.creditLimitAction || 'Warn',
             paymentType: customerData.paymentType || 'Credit',
+            msmeApplicable: customerData.msmeApplicable || false,
+            msmeRegNo: customerData.msmeRegNo || '',
+            msmeCategory: customerData.msmeCategory || '',
             referralDetails: customerData.referralDetails || {
                 sourceType: 'Direct',
                 salespersonId: null,
@@ -406,6 +416,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </a>
                         <a className={styles['sidebar-item']} href="#sec-additional" onClick={e => { e.preventDefault(); document.getElementById('sec-additional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>📝</span> Additional Info
+                        </a>
+                        <a className={styles['sidebar-item']} href="#sec-msme" onClick={e => { e.preventDefault(); document.getElementById('sec-msme')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>🏛️</span> MSME Details
                         </a>
                         <a className={styles['sidebar-item']} href="#sec-referral" onClick={e => { e.preventDefault(); document.getElementById('sec-referral')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>🤝</span> Sales / Referral
@@ -945,6 +958,29 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                             />
                         </div>
 
+                        {/* Credit Limit */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="creditLimit">CREDIT LIMIT (₹)</label>
+                            <Input
+                                id="creditLimit"
+                                type="number"
+                                {...register('creditLimit', { valueAsNumber: true })}
+                                placeholder="0 = No limit"
+                                min="0"
+                            />
+                            <small className={styles['help-text']}>0 means no credit limit enforced</small>
+                        </div>
+
+                        {/* Credit Limit Action */}
+                        <div className={styles['form-group']}>
+                            <label htmlFor="creditLimitAction">ON LIMIT BREACH</label>
+                            <select id="creditLimitAction" {...register('creditLimitAction')} className={styles['form-select']}>
+                                <option value="None">No Action</option>
+                                <option value="Warn">Warn (allow with warning)</option>
+                                <option value="Block">Block (cannot save invoice)</option>
+                            </select>
+                        </div>
+
                         {/* Payment Type */}
                         <div className={styles['form-group']}>
                             <label htmlFor="paymentType">PAYMENT TYPE</label>
@@ -987,6 +1023,47 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         <small className={styles['help-text']}>Separate tags with commas</small>
                      </div>{/* end form-group tags */}
                         </div>{/* end sec-additional */}
+
+                        {/* MSME Details */}
+                        <div id="sec-msme" className={styles['form-section']}>
+                            <h3>🏛️ MSME Details (MSMED Act)</h3>
+                            <div className={styles['form-group']}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        {...register('msmeApplicable')}
+                                        style={{ width: 16, height: 16, accentColor: '#0d9488', cursor: 'pointer' }}
+                                    />
+                                    <span style={{ fontWeight: 600, fontSize: 13 }}>MSME Registered Customer</span>
+                                    <span className={styles['help-text']}>(Enables MSME compliance tracking)</span>
+                                </label>
+                            </div>
+
+                            {watch('msmeApplicable') && (
+                                <div className={styles.grid4}>
+                                    <div className={styles['form-group']}>
+                                        <label>UDYAM REGISTRATION NO.</label>
+                                        <Input
+                                            {...register('msmeRegNo')}
+                                            placeholder="UDYAM-XX-00-0000000"
+                                            style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+                                            onChange={e => setValue('msmeRegNo', e.target.value.toUpperCase())}
+                                        />
+                                        <small className={styles['help-text']}>As per Udyam Registration Certificate</small>
+                                    </div>
+                                    <div className={styles['form-group']}>
+                                        <label>MSME CATEGORY</label>
+                                        <select {...register('msmeCategory')} className={styles['form-select']}>
+                                            <option value="">— Select Category —</option>
+                                            <option value="Micro">Micro Enterprise</option>
+                                            <option value="Small">Small Enterprise</option>
+                                            <option value="Medium">Medium Enterprise</option>
+                                        </select>
+                                        <small className={styles['help-text']}>As classified under MSMED Act</small>
+                                    </div>
+                                </div>
+                            )}
+                        </div>{/* end sec-msme */}
 
                         {/* Sales / Referral Details */}
                         <div id="sec-referral" className={styles['form-section']}>

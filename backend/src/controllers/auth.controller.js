@@ -3,12 +3,31 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { syncPermissionsWithRegistry } from '../utils/permission.utils.js';
+import { UserActivityLog } from '../models/userActivityLog.model.js';
 import jwt from 'jsonwebtoken';
 
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET || 'secret123', {
+// roleName embedded in JWT so subscription middleware can identify superadmin without DB lookup
+export const generateToken = (id, roleName = '') => {
+    return jwt.sign({ id, roleName }, process.env.JWT_SECRET || 'secret123', {
         expiresIn: '30d'
     });
+};
+
+export const logActivity = async ({ userId, companyId, username, action, module = 'auth', description = '', req }) => {
+    try {
+        await UserActivityLog.create({
+            userId,
+            companyId: companyId || null,
+            username,
+            action,
+            module,
+            description,
+            ipAddress: req?.ip || req?.headers?.['x-forwarded-for'] || '',
+            userAgent: req?.headers?.['user-agent'] || '',
+        });
+    } catch (_) {
+        // non-blocking — never crash main flow
+    }
 };
 
 export const register = asyncHandler(async (req, res) => {
@@ -96,10 +115,13 @@ export const login = asyncHandler(async (req, res) => {
         false // Individual overrides shouldn't default to true even for admins
     );
 
+    const roleName = finalUserData.roleName || finalUserData.role?.name || '';
+    logActivity({ userId: user._id, username: user.username, action: 'login', description: 'User logged in', req });
+
     res.status(200).json(
         new ApiResponse(200, {
             ...finalUserData,
-            token: generateToken(user._id)
+            token: generateToken(user._id, roleName)
         }, 'Login successful')
     );
 });

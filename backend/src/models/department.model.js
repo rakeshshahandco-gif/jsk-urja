@@ -20,7 +20,8 @@ const departmentSchema = new mongoose.Schema({
         ref: 'User'
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    disableTenant: true,
 });
 
 const Department = mongoose.model('Department', departmentSchema);

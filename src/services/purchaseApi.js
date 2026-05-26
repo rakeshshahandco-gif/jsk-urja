@@ -49,9 +49,16 @@ export const restorePurchaseInvoice = async (id) => { const r = await api.post(`
 // ── Payment Entries ───────────────────────────────────────────────────────────
 const PE = '/payment-entries';
 export const createPaymentEntry = async (data) => { const r = await api.post(PE, data); return r.data.data; };
+export const getPaymentEntryById = async (id) => { const r = await api.get(`${PE}/${id}`); return r.data.data; };
 export const getPaymentsByInvoice = async (invoiceId) => { const r = await api.get(`${PE}/by-invoice/${invoiceId}`); return r.data.data; };
 export const getCashBook = async (params) => { const r = await api.get(`${PE}/cash-book`, { params }); return r.data.data; };
 export const getBankBook = async (params) => { const r = await api.get(`${PE}/bank-book`, { params }); return r.data.data; };
+
+/** TDS engine preview for a purchase payment (same auth/company as api instance). */
+export const previewPaymentTds = async (body) => {
+    const r = await api.post('/tds/payment-preview', body);
+    return r.data.data;
+};
 
 // ── Purchase Comparison Report ────────────────────────────────────────────────
 export const getPurchaseComparisonReport = async (params) => { const r = await api.get('/reports/purchase-comparison', { params }); return r.data.data; };

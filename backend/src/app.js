@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { errorHandler } from './middlewares/error.middleware.js';
 import { ApiError } from './utils/ApiError.js';
 import { deletionGuardMiddleware } from './middlewares/deletionGuard.middleware.js';
+import { resolveCompanyScope } from './middlewares/companyScope.middleware.js';
 import routes, { weChatRoute } from './routes/v1/index.js';
 import * as groupController from './controllers/weChatGroup.controller.js';
 import { protect } from './middlewares/auth.middleware.js';
@@ -66,10 +67,10 @@ app.use('/uploads', express.static(uploadPath));
 app.use('/api', deletionGuardMiddleware);
 
 // Specific Direct Mount for China Sourcing Intelligence (User Priority)
-app.post('/api/china-supplier/intelligence/link-existing-group', protect, groupController.linkIntelligence);
+app.post('/api/china-supplier/intelligence/link-existing-group', resolveCompanyScope, protect, groupController.linkIntelligence);
 
 app.use('/api/v1', routes);
-app.use('/api/china-supplier', weChatRoute);
+app.use('/api/china-supplier', resolveCompanyScope, weChatRoute);
 
 // 404 Handler for API routes
 app.use('/api', (req, res, next) => {

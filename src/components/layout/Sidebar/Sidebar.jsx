@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { menuConfig, ROLES } from '@/config/menu.config';
+import { MENU_FEATURE_BY_ID, MENU_FEATURE_ALWAYS_VISIBLE } from '@/config/menuFeatureMap';
 import { useAuth } from '@/hooks/useAuth';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
+import { useUiPreferences } from '@/contexts/UiPreferencesContext';
 import { SidebarItem } from './SidebarItem';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useSidebar } from '@/context/SidebarContext';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { CompanySwitcher } from '../CompanySwitcher';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
 
 export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
+    const { isFeatureEnabled } = useFeatureSettings();
+    const { enabled: uiEnabled, preferences: uiPrefs } = useUiPreferences();
     const { isCollapsed, isHoverOpen, setIsHovered, toggleSidebar } = useSidebar();
     const location = useLocation();
     const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || ROLES.VIEWER;
@@ -33,29 +40,68 @@ export const Sidebar = () => {
 
     // Filter items based on user role and permissions
     const filterItems = React.useCallback((items) => {
+        // System Admin / Superadmin bypass - they see everything
+        const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(userRole?.toLowerCase());
+
         return items.filter(item => {
+            if (MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
+                // still apply permission below for non-admin
+            } else {
+                const featurePath = MENU_FEATURE_BY_ID[item.id];
+                if (featurePath && !isFeatureEnabled(featurePath)) return false;
+            }
+
+            if (isAdmin) return true;
+
             if (item.permission) {
                 return hasPermission(item.permission);
+            } else if (item.roles) {
+                return item.roles.includes(userRole);
             }
-            if (item.roles && item.roles.includes(userRole)) {
-                return true;
-            }
-            return false;
+            return true; // No restriction
         }).map(item => {
             if (item.children) {
                 const filteredChildren = filterItems(item.children);
-                if (filteredChildren.length === 0 && item.children.length > 0) {
-                    return null;
-                }
                 return { ...item, children: filteredChildren };
             }
             return item;
-        }).filter(Boolean);
-    }, [hasPermission, userRole, user?.additionalPermissions]);
+        }).filter((item) => {
+            if (item.children && item.children.length === 0) return false;
+            return true;
+        });
+    }, [hasPermission, userRole, isFeatureEnabled]);
 
-    const visibleMenuItems = React.useMemo(() => 
-        filterItems(menuConfig),
-    [filterItems]);
+    const visibleMenuItems = React.useMemo(() => {
+        const items = filterItems(menuConfig);
+
+        // Phase 8b: apply per-user sidebar layout (hide + reorder top-level).
+        // ONLY when the master UI customization feature is enabled. With it
+        // off, we return the original filtered list untouched.
+        if (!uiEnabled) return items;
+        const layout = uiPrefs?.sidebarLayout || {};
+        const hidden = new Set(Array.isArray(layout.hiddenIds) ? layout.hiddenIds : []);
+        const order = Array.isArray(layout.orderIds) ? layout.orderIds : [];
+
+        const afterHide = hidden.size > 0
+            ? items.filter((it) => !hidden.has(it.id))
+            : items;
+
+        if (order.length === 0) return afterHide;
+
+        // Stable sort: items present in `order` come first in that order;
+        // any other items keep their original menuConfig order behind them.
+        const orderIndex = new Map(order.map((id, i) => [id, i]));
+        const known = [];
+        const unknown = [];
+        afterHide.forEach((it) => {
+            if (orderIndex.has(it.id)) known.push(it);
+            else unknown.push(it);
+        });
+        known.sort((a, b) => orderIndex.get(a.id) - orderIndex.get(b.id));
+        return [...known, ...unknown];
+    }, [filterItems, uiEnabled, uiPrefs]);
+
+    const { financialYears, selectedFY, setSelectedFY } = useFinancialYear();
 
     // Effective state for rendering labels
     const showingFull = !isCollapsed || isHoverOpen;
@@ -68,11 +114,19 @@ export const Sidebar = () => {
             }, 'no-print')}
             onMouseEnter={() => isCollapsed && setIsHovered(true)}
             onMouseLeave={() => isCollapsed && setIsHovered(false)}
+            data-jsk-ui-component="sidebar"
+            data-jsk-ui-sidebar-state={
+                isCollapsed && !isHoverOpen
+                    ? 'collapsed'
+                    : isHoverOpen
+                        ? 'hoverOpen'
+                        : 'expanded'
+            }
         >
             <div className={styles.header}>
                 <div className={styles.brand}>
                     <div className={styles.logoWrapper}>
-                        {logoUrl && showingFull && !logoUrl.toLowerCase().endsWith('.pdf') && (
+                        {logoUrl && showingFull ? (
                             <img
                                 src={logoUrl}
                                 alt="Logo"
@@ -81,20 +135,45 @@ export const Sidebar = () => {
                                 crossOrigin="anonymous"
                                 onError={() => setLogoUrl(null)}
                             />
-                        )}
-                        {showingFull ? (
+                        ) : showingFull ? (
                             <div className={styles.brandText}>
                                 <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
-                                <span className={styles.tagline}>CRM/ERP</span>
+                                <span className={styles.tagline}>CRM/ERP SYSTEM</span>
                             </div>
                         ) : (
                             <div className={styles.collapsedLogo} title="JSK URJA CRM/ERP">
                                 <div className={styles.juText}>JU</div>
-                                <div className={styles.collapsedTagline}>CRM/ERP</div>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {showingFull && (
+                    <div className={styles.sidebarSelectors}>
+                        <div className={styles.selectorGroup}>
+                            <CompanySwitcher />
+                        </div>
+                        
+                        <div className={styles.fySelectorContainer}>
+                            <div className={styles.fyHeader}>
+                                <Calendar size={13} className={styles.fyIcon} />
+                                <span className={styles.fyLabel}>Active F.Y.</span>
+                            </div>
+                            <select 
+                                className={styles.fySelect}
+                                value={selectedFY}
+                                onChange={(e) => setSelectedFY(e.target.value)}
+                                title="Switch Financial Year"
+                            >
+                                {financialYears && financialYears.map(fy => (
+                                    <option key={fy._id} value={fy.name}>
+                                        {fy.name}{fy.isCurrent ? ' ✓' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <nav className={styles.nav}>
@@ -121,3 +200,4 @@ export const Sidebar = () => {
         </aside>
     );
 };
+

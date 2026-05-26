@@ -13,7 +13,7 @@ const numStyle = { ...cellStyle, textAlign: 'right', fontWeight: 600 };
 const fmt = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—';
 
-export default function BillToBillTable({ fy, month, source, preSelectedGstin }) {
+export default function BillToBillTable({ fy, month, source, preSelectedGstin, taxTolerance = 2 }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState(preSelectedGstin || '');
@@ -23,7 +23,7 @@ export default function BillToBillTable({ fy, month, source, preSelectedGstin })
     setLoading(true);
     try {
       const { data: res } = await api.get('/gst-reconciliation/bill-to-bill', {
-        params: { financialYear: fy, month, source, supplierGstin: search }
+        params: { financialYear: fy, month, source, supplierGstin: search, taxTolerance, persist: 'false' }
       });
       setData(res.data);
     } catch (e) {

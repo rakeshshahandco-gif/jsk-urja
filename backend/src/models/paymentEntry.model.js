@@ -48,6 +48,28 @@ const paymentEntrySchema = new mongoose.Schema({
     notes: { type: String, default: '' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    /** Optional TDS (purchase vendor payments) — used for TDS compliance row + auto-link */
+    tdsSection: { type: String, trim: true, default: '' },
+    tdsAmount: { type: Number, default: 0, min: 0 },
+    /** Gross / base amount on which TDS is calculated (defaults to amountPaid if not set) */
+    tdsBaseAmount: { type: Number, default: 0, min: 0 },
+    tdsDeducteePan: { type: String, trim: true, uppercase: true, default: '' },
+    tdsIsNonResident: { type: Boolean, default: false },
+
+    /** Snapshot from TDS decision engine (ledger master + TDS master + cumulative FY) */
+    tdsEngineApplied: { type: Boolean, default: false },
+    tdsApplicableComputed: { type: Boolean, default: false },
+    tdsCumulativeBefore: { type: Number, default: 0 },
+    tdsThresholdUsed: { type: Number, default: 0 },
+    tdsRateUsed: { type: Number, default: 0 },
+    tdsWarningThresholdCross: { type: Boolean, default: false },
+    tdsGrossBase: { type: Number, default: 0, min: 0 },
+    /** Linked vendor ledger used for engine / optional GL posting */
+    vendorLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    tdsPostingVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', default: null },
+    tdsPostingStatus: { type: String, enum: ['none', 'posted', 'skipped'], default: 'none' },
+    tdsPostingNote: { type: String, trim: true, default: '' },
 }, { timestamps: true });
 
 paymentEntrySchema.index({ invoiceId: 1 });

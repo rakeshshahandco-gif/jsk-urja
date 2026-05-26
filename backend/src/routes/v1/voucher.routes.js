@@ -1,6 +1,6 @@
 import express from 'express';
 import * as controller from '../../controllers/voucher.controller.js';
-import { protect, checkPermission } from '../../middlewares/auth.middleware.js';
+import { protect, checkPermission, authorize } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
@@ -30,5 +30,7 @@ router.route('/:id')
     .patch(checkVoucherAction('edit'), controller.updateVoucher);
 
 router.post('/:id/cancel', checkVoucherAction('cancel'), controller.cancelVoucher);
+router.post('/:id/reverse', protect, controller.reverseVoucher);
+router.get('/reversing/pending', protect, controller.getPendingReversingJournals);
 
 export default router;

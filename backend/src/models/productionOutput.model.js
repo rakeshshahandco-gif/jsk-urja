@@ -11,6 +11,8 @@ const productionOutputSchema = new mongoose.Schema({
     qtyProduced: { type: Number, required: true, min: 0.01 },
     warehouse: { type: String, default: '' },
     remarks: { type: String, default: '' },
+    productionCostSnapshotId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductionCostSnapshot', default: null },
+    fgCostPerUnit: { type: Number, default: 0, min: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 

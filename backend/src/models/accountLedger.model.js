@@ -73,11 +73,70 @@ const accountLedgerSchema = new mongoose.Schema({
 
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    /** TDS applicability (vendor / expense ledgers) — used by payment TDS engine */
+    tdsApplicable: { type: Boolean, default: false },
+    tdsSection: { type: String, trim: true, default: '' },
+    /** auto = rate from TDS Master by supplier constitution; manual = use tdsDefaultRate */
+    tdsRateSource: { type: String, enum: ['auto', 'manual'], default: 'auto' },
+    /** Manual rate % — used only when tdsRateSource is manual */
+    tdsDefaultRate: { type: Number, default: 0, min: 0, max: 100 },
+    /**
+     * Custom aggregate FY threshold only (single-bill limits always from TDS Master).
+     * 0 = use section default aggregate threshold.
+     */
+    tdsThresholdOverride: { type: Number, default: 0, min: 0 },
+    tdsPanMandatory: { type: Boolean, default: false },
+    /** When false, 206AA higher rate applies (max of specified rate and panMissingRate). */
+    tdsPanAssumedAvailable: { type: Boolean, default: true },
+    /** taxable = TDS base excludes GST on purchase payments; with_gst = payment amount as base */
+    tdsDeductOn: { type: String, enum: ['taxable', 'with_gst'], default: 'with_gst' },
+    /** Optional override of Supplier Master deductee constitution (empty = use supplier) */
+    tdsDeducteeConstitution: { type: String, trim: true, default: '' },
+    tdsDeductorType: { type: String, enum: ['', 'Individual', 'HUF', 'Others'], default: 'Others' },
+    tdsLowerDeductionPercent: { type: Number, default: 0, min: 0, max: 100 },
+    tdsLowerDeductionValidFrom: { type: Date, default: null },
+    tdsLowerDeductionValidTo: { type: Date, default: null },
+    tdsLowerDeductionCertificates: [
+        {
+            section: { type: String, trim: true, uppercase: true, default: '' },
+            certificateNo: { type: String, trim: true, default: '' },
+            rate: { type: Number, min: 0, max: 100, default: 0 },
+            validFrom: { type: Date, default: null },
+            validTo: { type: Date, default: null },
+            active: { type: Boolean, default: true },
+        },
+    ],
+    tdsPanStatus: {
+        type: String,
+        enum: ['', 'Valid', 'Invalid', 'NotAvailable'],
+        default: '',
+    },
+    tdsStartDate: { type: Date, default: null },
+    msmeApplicable: { type: Boolean, default: false },
+    msmeRegNo: { type: String, trim: true, default: '' },
+    msmeCategory: { type: String, enum: ['', 'Micro', 'Small', 'Medium'], default: '' },
+    tdsExemptionApplicable: { type: Boolean, default: false },
+    tdsIgnoreThreshold: { type: Boolean, default: false },
+
+    /** Section-wise TDS liability ledger (under Duties & Taxes → TDS Payable) — one per section recommended. */
+    isTdsPayableLedger: { type: Boolean, default: false },
+    tdsPayableSectionCode: { type: String, trim: true, uppercase: true, default: '' },
 }, { timestamps: true });
 
 accountLedgerSchema.index({ name: 1 });
 accountLedgerSchema.index({ underGroup: 1 });
 accountLedgerSchema.index({ type: 1 });
+accountLedgerSchema.index(
+    { tdsPayableSectionCode: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            isTdsPayableLedger: true,
+            tdsPayableSectionCode: { $exists: true, $nin: [null, ''] },
+        },
+    },
+);
 
 const AccountLedger = mongoose.model('AccountLedger', accountLedgerSchema);
 export { AccountLedger };

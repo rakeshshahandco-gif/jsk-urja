@@ -7,6 +7,8 @@ import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { Voucher } from '../models/voucher.model.js';
+import { BillWiseAdjustment } from '../models/billWiseAdjustment.model.js';
+import { getOutstandingSummaryRows } from '../services/outstandingReport.service.js';
 
 export const getLedgers = asyncHandler(async (req, res) => {
     const { group, type, search } = req.query;
@@ -68,6 +70,22 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
     const natureMap = {};
     vouchers.forEach(v => { natureMap[v._id.toString()] = v.nature; });
 
+    const billAllocs = await BillWiseAdjustment.find({
+        paymentVoucherId: { $in: voucherIds },
+        isReversed: false,
+    }).lean();
+    const billRefByVoucher = {};
+    for (const row of billAllocs) {
+        const vId = row.paymentVoucherId?.toString();
+        if (!vId) continue;
+        if (!billRefByVoucher[vId]) billRefByVoucher[vId] = [];
+        billRefByVoucher[vId].push({
+            billNo: row.billNo,
+            amount: row.adjustedAmount,
+            type: row.adjustmentType,
+        });
+    }
+
     try {
         import('fs').then(fs => {
             fs.writeFileSync('debug_ledger.json', JSON.stringify({
@@ -123,7 +141,8 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
             voucherNo: vNo,
             voucherNature: natureMap[vId] || '',
             narration,
-            runningBalance
+            runningBalance,
+            billReferences: billRefByVoucher[vId] || [],
         };
     });
 
@@ -150,25 +169,54 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
  */
 export const getOutstandingBills = asyncHandler(async (req, res) => {
     const { ledgerId } = req.params;
+    const { financialYear } = req.query;
     const ledger = await AccountLedger.findById(ledgerId);
-    if (!ledger || !ledger.referenceId) {
+    if (!ledger) {
+        return res.send(new ApiResponse(httpStatus.OK, []));
+    }
+
+    const fyMatch = financialYear ? { financialYear } : {};
+
+    if (ledger.type === 'Expense') {
+        const eVouchers = await Voucher.find({
+            partyId: ledger._id,
+            nature: 'Expense',
+            expenseType: 'Credit',
+            paymentStatus: { $ne: 'Paid' },
+            status: { $ne: 'Cancelled' },
+            ...fyMatch,
+        }).sort({ date: 1 }).lean();
+        const bills = eVouchers.map(v => ({
+            ...v,
+            invoiceNumber: v.voucherNo,
+            invoiceDate: v.date,
+            grandTotal: v.totalAmount,
+            paidAmount: v.paidAmount || 0,
+            refModel: 'Voucher',
+        }));
+        return res.send(new ApiResponse(httpStatus.OK, bills));
+    }
+
+    if (!ledger.referenceId) {
         return res.send(new ApiResponse(httpStatus.OK, []));
     }
 
     let bills = [];
-    if (ledger.type === 'Customer') {
+    if (ledger.type === 'Customer' || ledger.isCustomer) {
         bills = await SalesInvoice.find({
             customerId: ledger.referenceId,
             paymentStatus: { $ne: 'Paid' },
             status: 'Confirmed',
-            isDeleted: false
+            isDeleted: false,
+            ...fyMatch,
         }).sort({ invoiceDate: 1 }).lean();
-    } else if (ledger.type === 'Supplier') {
+    } else if (ledger.type === 'Supplier' || ledger.isSupplier) {
         const pInv = await PurchaseInvoice.find({
             supplierId: ledger.referenceId,
             paymentStatus: { $ne: 'Paid' },
             status: { $in: ['Confirmed', 'Posted'] },
-            isDeleted: false
+            isDeleted: false,
+            ...fyMatch,
         }).sort({ invoiceDate: 1 }).lean();
 
         const eVouchers = await Voucher.find({
@@ -176,7 +224,8 @@ export const getOutstandingBills = asyncHandler(async (req, res) => {
             nature: 'Expense',
             expenseType: 'Credit',
             paymentStatus: { $ne: 'Paid' },
-            status: { $ne: 'Cancelled' }
+            status: { $ne: 'Cancelled' },
+            ...fyMatch,
         }).sort({ date: 1 }).lean();
 
         // Normalize Vouchers to match PurchaseInvoice structure for frontend
@@ -203,54 +252,14 @@ export const getCashBankBalances = asyncHandler(async (req, res) => {
 });
 
 export const getOutstandingSummary = asyncHandler(async (req, res) => {
-    const { type, showAll } = req.query; // Receivable, Payable, or Expense
-    const isShowAll = showAll === 'true';
-
-    let ledgerType = 'Customer';
-    if (type === 'Payable') ledgerType = 'Supplier';
-    if (type === 'Expense') ledgerType = 'Expense';
-
-    const ledgers = await AccountLedger.find({ type: ledgerType }).lean();
-    const summary = [];
-
-    for (const ledger of ledgers) {
-        let billCount = 0;
-        // Only fetch bill counts for actual trade accounts (Customer/Supplier)
-        if (ledgerType === 'Customer') {
-            billCount = await SalesInvoice.countDocuments({
-                customerId: ledger.referenceId,
-                paymentStatus: { $ne: 'Paid' },
-                status: 'Confirmed',
-                isDeleted: false
-            });
-        } else if (ledgerType === 'Supplier') {
-            billCount = await PurchaseInvoice.countDocuments({
-                customerId: ledger.referenceId,
-                paymentStatus: { $ne: 'Paid' },
-                status: { $in: ['Confirmed', 'Posted'] },
-                isDeleted: false
-            });
-        }
-
-        // Logic for "Outstanding Only" filtering:
-        // Receivable: Must have Debit balance (> 0)
-        // Payable / Expense: Must have Credit balance (< 0)
-        let isOutstanding = false;
-        if (type === 'Receivable') {
-            isOutstanding = ledger.currentBalance > 0;
-        } else {
-            isOutstanding = ledger.currentBalance < 0;
-        }
-
-        if (isShowAll || isOutstanding) {
-            summary.push({
-                ledgerId: ledger._id,
-                ledgerName: ledger.name,
-                outstanding: Math.abs(ledger.currentBalance),
-                billCount
-            });
-        }
-    }
-
+    const { type, showAll, viewMode, groupId, ledgerId, financialYear } = req.query;
+    const summary = await getOutstandingSummaryRows({
+        type,
+        showAll,
+        viewMode: viewMode || 'group',
+        groupId,
+        ledgerId,
+        financialYear,
+    });
     res.send(new ApiResponse(httpStatus.OK, summary));
 });

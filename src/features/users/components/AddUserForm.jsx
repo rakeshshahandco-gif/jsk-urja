@@ -5,6 +5,7 @@ import { userService } from '@/services/user.service';
 import { hasPermission as checkRolePermission } from '@/utils/permissions';
 import styles from './AddUserForm.module.scss';
 import { toast } from 'react-hot-toast';
+import { getFlattenedMenu } from '@/config/menu.config';
 
 export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const isEdit = !!user;
@@ -15,13 +16,26 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Permission groups: maps every module id to a human-friendly category.
+    // Any new module not listed here is automatically rendered under "Other Modules"
+    // (so the UI never breaks when a new module is added to the registry or menu).
     const PERMISSION_GROUPS = [
-        { id: 'general', name: '🏠 Home & Dashboard', modules: ['home'] },
-        { id: 'sales_crm', name: '💼 CRM & Sales', modules: ['crm', 'sales'] },
-        { id: 'accounts_finance', name: '💰 Accounts & GST', modules: ['voucher_entry', 'account_master', 'accounts_reports', 'gst'] },
-        { id: 'operations', name: '⚙️ Operations & Inventory', modules: ['inventory', 'purchase', 'production'] },
-        { id: 'reports_mis', name: '📊 MIS & Reports', modules: ['mis', 'reports'] },
-        { id: 'support_admin', name: '🛠 Admin & Tasks', modules: ['admin', 'tasks'] }
+        { id: 'home', name: '🏠 Home & Dashboard', modules: ['home'] },
+        { id: 'crm', name: '💼 CRM & Customers', modules: ['crm', 'customers'] },
+        { id: 'tasks', name: '📋 Tasks & Workflow', modules: ['tasks'] },
+        { id: 'communications', name: '💬 Communications', modules: ['messenger', 'whatsapp', 'wechat'] },
+        { id: 'sales', name: '🛒 Sales', modules: ['sales'] },
+        { id: 'purchase', name: '📦 Purchase', modules: ['purchase'] },
+        { id: 'inventory', name: '📥 Inventory', modules: ['inventory'] },
+        { id: 'production', name: '🏭 Production', modules: ['production'] },
+        { id: 'vouchers', name: '🧾 Voucher Entry & Accounts', modules: ['voucher_entry', 'account_master', 'accounts', 'accounts_reports'] },
+        { id: 'taxes', name: '💰 Taxes (GST / TDS / TCS)', modules: ['gst', 'tds', 'tcs'] },
+        { id: 'fixed_assets', name: '🏢 Fixed Assets', modules: ['fixed_assets'] },
+        { id: 'service', name: '🛠 Service & Support', modules: ['service'] },
+        { id: 'rd', name: '🔬 R&D / Product Development', modules: ['prd', 'rd_samples'] },
+        { id: 'hr', name: '👥 HR Management', modules: ['hr'] },
+        { id: 'mis_reports', name: '📊 MIS & Reports', modules: ['mis', 'reports'] },
+        { id: 'admin', name: '⚙️ Admin & Settings', modules: ['admin'] }
     ];
 
     const [expandedModules, setExpandedModules] = useState({});
@@ -66,8 +80,38 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                     return { success: false, data: [] };
                 });
 
-                if (metaRes.success) setMetadata(metaRes.data);
-                else console.warn("Permission metadata failed to load", metaRes);
+                // --- START REGISTRY AUGMENTATION ---
+                // Automatically add any module from menuConfig that is NOT in backend metadata
+                let augmentedMeta = metaRes.success ? [...metaRes.data] : [];
+                const flattenedMenu = getFlattenedMenu();
+                
+                flattenedMenu.forEach(item => {
+                    if (item.permission && item.permission.includes('.')) {
+                        const [moduleId, submoduleId, actionId] = item.permission.split('.');
+                        
+                        // Check if module exists in meta
+                        let moduleEntry = augmentedMeta.find(m => m.id === moduleId);
+                        if (!moduleEntry) {
+                            moduleEntry = { id: moduleId, name: item.moduleName || moduleId, submodules: [] };
+                            augmentedMeta.push(moduleEntry);
+                        }
+                        
+                        // Check if submodule exists
+                        let subEntry = moduleEntry.submodules.find(s => s.id === submoduleId);
+                        if (!subEntry) {
+                            subEntry = { id: submoduleId, name: item.title || submoduleId, actions: [] };
+                            moduleEntry.submodules.push(subEntry);
+                        }
+                        
+                        // Check if action exists
+                        if (!subEntry.actions.some(a => (typeof a === 'string' ? a : a.id) === actionId)) {
+                            subEntry.actions.push(actionId);
+                        }
+                    }
+                });
+                // --- END REGISTRY AUGMENTATION ---
+
+                setMetadata(augmentedMeta);
 
                 if (rolesRes.success) setRoles(rolesRes.data);
                 else console.warn("Roles failed to load", rolesRes);
@@ -500,11 +544,19 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                             );
                         })}
 
-                        {/* Modules not in any group (unmapped) */}
-                        {filteredMetadata.some(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id))) && (
+                        {/* Other Modules: catches anything new added to the registry or menu
+                            that hasn't been categorized yet. Ensures new modules always show up. */}
+                        {filteredMetadata.some(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id))) && (() => {
+                            const otherModules = filteredMetadata.filter(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id)));
+                            const otherGroup = { id: '__other__', name: 'Other Modules', modules: otherModules.map(m => m.id) };
+                            return (
                              <div className={styles.groupSection}>
                                 <div className={styles.groupHeader}>
-                                    <h4 className={styles.groupName}>Other Modules</h4>
+                                    <h4 className={styles.groupName}>🆕 Other Modules</h4>
+                                    <div className={styles.groupActionsQuick}>
+                                        <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(otherGroup, true)}>Allow Group</button>
+                                        <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(otherGroup, false)}>Deny Group</button>
+                                    </div>
                                 </div>
                                 <div className={styles.groupModuleList}>
                                     {filteredMetadata.filter(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id))).map((module) => {
@@ -573,7 +625,8 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                                     })}
                                 </div>
                              </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 </section>
 

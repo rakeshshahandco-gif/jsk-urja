@@ -106,7 +106,8 @@ const userSchema = new mongoose.Schema({
         reminderAlerts: { type: Boolean, default: true }
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    disableTenant: true,
 });
 
 // hash password before saving

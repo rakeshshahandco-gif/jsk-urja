@@ -24,12 +24,18 @@ export const getSeriesById = asyncHandler(async (req, res) => {
 });
 
 export const createSeries = asyncHandler(async (req, res) => {
-    const { seriesName, financialYear, prefix, startNumber, padLength, gstApplicable, isDefault, description } = req.body;
+    const { seriesName, financialYear, prefix, startNumber, padLength, gstApplicable, isDefault, isDefaultForSalesOrder, isDefaultForTaxInvoice, description } = req.body;
     if (!seriesName || !financialYear || !prefix) throw new ApiError(httpStatus.BAD_REQUEST, 'seriesName, financialYear and prefix are required');
 
     // If new series is default, unset others
     if (isDefault === true || String(isDefault) === 'true') {
         await InvoiceSeries.updateMany({}, { isDefault: false });
+    }
+    if (isDefaultForSalesOrder === true || String(isDefaultForSalesOrder) === 'true') {
+        await InvoiceSeries.updateMany({}, { isDefaultForSalesOrder: false });
+    }
+    if (isDefaultForTaxInvoice === true || String(isDefaultForTaxInvoice) === 'true') {
+        await InvoiceSeries.updateMany({}, { isDefaultForTaxInvoice: false });
     }
 
     const s = await InvoiceSeries.create({
@@ -40,6 +46,8 @@ export const createSeries = asyncHandler(async (req, res) => {
         padLength: padLength || 5,
         gstApplicable: String(gstApplicable) === 'true' || gstApplicable === true,
         isDefault: String(isDefault) === 'true' || isDefault === true,
+        isDefaultForSalesOrder: String(isDefaultForSalesOrder) === 'true' || isDefaultForSalesOrder === true,
+        isDefaultForTaxInvoice: String(isDefaultForTaxInvoice) === 'true' || isDefaultForTaxInvoice === true,
         description: description || '',
         isActive: true,
         createdBy: req.user.id,
@@ -61,6 +69,13 @@ export const updateSeries = asyncHandler(async (req, res) => {
     if (body.isDefault === true && !s.isDefault) {
         await InvoiceSeries.updateMany({ _id: { $ne: id } }, { isDefault: false });
     }
+    // Per-document-type default exclusivity
+    if ((body.isDefaultForSalesOrder === true || String(body.isDefaultForSalesOrder) === 'true') && !s.isDefaultForSalesOrder) {
+        await InvoiceSeries.updateMany({ _id: { $ne: id } }, { isDefaultForSalesOrder: false });
+    }
+    if ((body.isDefaultForTaxInvoice === true || String(body.isDefaultForTaxInvoice) === 'true') && !s.isDefaultForTaxInvoice) {
+        await InvoiceSeries.updateMany({ _id: { $ne: id } }, { isDefaultForTaxInvoice: false });
+    }
 
     // Manually update fields
     if (body.seriesName !== undefined) s.seriesName = body.seriesName;
@@ -79,6 +94,12 @@ export const updateSeries = asyncHandler(async (req, res) => {
     }
     if (body.isDefault !== undefined) {
         s.isDefault = String(body.isDefault) === 'true' || body.isDefault === true;
+    }
+    if (body.isDefaultForSalesOrder !== undefined) {
+        s.isDefaultForSalesOrder = String(body.isDefaultForSalesOrder) === 'true' || body.isDefaultForSalesOrder === true;
+    }
+    if (body.isDefaultForTaxInvoice !== undefined) {
+        s.isDefaultForTaxInvoice = String(body.isDefaultForTaxInvoice) === 'true' || body.isDefaultForTaxInvoice === true;
     }
     if (body.isActive !== undefined) {
         s.isActive = String(body.isActive) === 'true' || body.isActive === true;

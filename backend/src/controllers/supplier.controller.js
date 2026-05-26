@@ -231,6 +231,7 @@ const supplierSchema = Joi.object({
     gstNumber: Joi.string().optional().allow(''),
     gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional().allow(''),
     panNumber: Joi.string().optional().allow(''),
+    deducteeConstitution: Joi.string().optional().allow(''),
     paymentTerms: Joi.string().optional().allow(''),
     bankName: Joi.string().optional().allow(''),
     bankAccountNo: Joi.string().optional().allow(''),
@@ -239,6 +240,9 @@ const supplierSchema = Joi.object({
     openingBalance: Joi.number().optional().default(0),
     openingBalanceDrCr: Joi.string().valid('Dr', 'Cr').optional().default('Cr'),
     remarks: Joi.string().optional().allow(''),
+    msmeApplicable: Joi.boolean().optional().default(false),
+    msmeRegNo: Joi.string().optional().allow('').default(''),
+    msmeCategory: Joi.string().valid('', 'Micro', 'Small', 'Medium').optional().allow('').default(''),
 });
 
 // Auto-generate supplier code
@@ -285,8 +289,17 @@ export const createSupplier = asyncHandler(async (req, res) => {
 
     const supplier = await Supplier.create({ ...value, supplierCode, createdBy: req.user._id });
 
-    // Create/Link Ledger
-    await autoLinkEntityLedger(supplier, 'Supplier');
+    // Create/Link Ledger then sync MSME flags
+    const ledgerIdCreate = await autoLinkEntityLedger(supplier, 'Supplier');
+    if (ledgerIdCreate) {
+        await AccountLedger.findByIdAndUpdate(ledgerIdCreate, {
+            $set: {
+                msmeApplicable: supplier.msmeApplicable || false,
+                msmeRegNo: supplier.msmeRegNo || '',
+                msmeCategory: supplier.msmeCategory || '',
+            },
+        });
+    }
 
     res.status(201).json(new ApiResponse(201, supplier, 'Supplier created'));
 });
@@ -322,8 +335,17 @@ export const updateSupplier = asyncHandler(async (req, res) => {
     );
     if (!supplier) throw new ApiError(404, 'Supplier not found');
 
-    // Sync changes to the linked AccountLedger
-    await autoLinkEntityLedger(supplier, 'Supplier');
+    // Sync changes to the linked AccountLedger (name, gstin, etc.) + MSME flags
+    const ledgerIdUpdate = await autoLinkEntityLedger(supplier, 'Supplier');
+    if (ledgerIdUpdate) {
+        await AccountLedger.findByIdAndUpdate(ledgerIdUpdate, {
+            $set: {
+                msmeApplicable: supplier.msmeApplicable || false,
+                msmeRegNo: supplier.msmeRegNo || '',
+                msmeCategory: supplier.msmeCategory || '',
+            },
+        });
+    }
 
     // Propagate name change globally (already handled in some cases, but autoLink does the direct one)
 

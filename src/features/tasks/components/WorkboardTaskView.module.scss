@@ -1,0 +1,102 @@
+@import '@/styles/_variables';
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    flex-direction: column;
+    gap: 12px;
+    color: $text-secondary;
+    background: $surface-elevated;
+    border: 1px solid $border-color;
+    border-radius: $radius-xl;
+}
+
+.loadingText {
+    font-size: $font-size-ui-md;
+}
+
+.spin {
+    animation: workboardSpin 1s linear infinite;
+}
+
+@keyframes workboardSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.panel {
+    background: $surface-elevated;
+    border: 1px solid $border-color;
+    border-radius: $radius-xl;
+    overflow: hidden;
+    box-shadow: $shadow-sm;
+}
+
+.scroll {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: $font-size-ui-sm;
+    table-layout: fixed;
+}
+
+.thead {
+    background: $bg-secondary;
+    border-bottom: 2px solid $border-color;
+}
+
+.th {
+    padding: 5px 10px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+
+    &.center {
+        text-align: center;
+    }
+}
+
+.sectionRow {
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid;
+}
+
+.sectionInner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+}
+
+.sectionLabel {
+    font-size: $font-size-ui-sm;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    flex: 1;
+}
+
+.sectionCount {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 8px;
+    border-radius: 10px;
+}
+
+.emptyCell {
+    background: #fafafa;
+    padding: 12px 18px;
+    font-size: $font-size-ui-sm;
+    color: $text-tertiary;
+    text-align: center;
+}

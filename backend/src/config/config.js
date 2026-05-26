@@ -23,7 +23,9 @@ export default {
     mongoose: {
         url: envVars.MONGODB_URL,
         options: {
-            // mongoose 6+ options
+            // Prefer IPv4 for Atlas replica hostnames (helps ENOTFOUND on some Windows networks)
+            family: 4,
+            serverSelectionTimeoutMS: 20000,
         },
     },
 };

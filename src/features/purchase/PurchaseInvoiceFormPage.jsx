@@ -13,6 +13,8 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { BrandedLoader } from '@/components/ui';
+import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
+import { tdsComplianceApi } from '@/services/tdsComplianceApi';
 
 
 const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
@@ -43,6 +45,8 @@ export default function PurchaseInvoiceFormPage() {
     const [poList, setPoList] = useState([]);
     const [grnList, setGrnList] = useState([]);
     const [saving, setSaving] = useState(false);
+    const [tdsPreview, setTdsPreview] = useState(null);
+    const [tdsAlertOpen, setTdsAlertOpen] = useState(false);
     const [loadingRef, setLoadingRef] = useState(false);
     const [loading, setLoading] = useState(isEdit);
     const prefillProcessed = useRef(false);
@@ -506,6 +510,99 @@ export default function PurchaseInvoiceFormPage() {
     const needGRN = flowType === 'PO→GRN→Invoice' || flowType === 'Direct GRN→Invoice';
     const isManual = flowType === 'Direct Invoice';
 
+    const buildPurchasePayload = (tdsFlags = {}) => ({
+        flowType,
+        supplierId: header.supplierId,
+        invoiceDate: header.invoiceDate,
+        supplierInvoiceNo: header.supplierInvoiceNo,
+        poId: header.selectedPoId || null,
+        grnId: header.selectedGrnId || null,
+
+        supplierGstin: header.supplierGstin,
+        supplierAddress: header.supplierAddress,
+        supplierState: header.supplierState,
+        supplierStateCode: header.supplierStateCode,
+        buyerName: header.buyerName,
+        buyerGstin: header.buyerGstin,
+        buyerAddress: header.buyerAddress,
+        buyerState: header.buyerState,
+        buyerStateCode: header.buyerStateCode,
+        gstType: header.gstType,
+        placeOfSupply: header.placeOfSupply,
+        paymentTerms: header.paymentTerms,
+        poDate: flowType === 'Direct Invoice' ? null : (header.poDate || null),
+        poNumber: flowType === 'Direct Invoice' ? '' : (header.poNumber || ''),
+        remarks: header.remarks,
+        transporterName: header.transporterName,
+        vehicleNo: header.vehicleNo,
+        lrNumber: header.lrNumber,
+        freightAmount: Number(header.freightAmount) || 0,
+        freightGstRate: Number(header.freightGstRate) || 0,
+        items: rows.map(r => ({
+            itemId: r.itemId, itemCode: r.itemCode, itemName: r.itemName,
+            hsnCode: r.hsnCode, uom: r.uom,
+            qty: Number(r.qty), rate: Number(r.rate),
+            discountPercent: Number(r.discountPercent), gstRate: Number(r.gstRate),
+            description: r.description || '',
+            grnItemId: r.grnItemId || null, poItemId: r.poItemId || null,
+            isConsumable: r.purchaseType === 'CONSUMABLE_PURCHASE' ? true : (r.isConsumable || false),
+            purchaseType: r.purchaseType || 'RAW_MATERIAL_PURCHASE',
+            allocation: (() => {
+                const alloc = r.allocation;
+                if (alloc && typeof alloc === 'object' && !Array.isArray(alloc)) {
+                    return {
+                        type: alloc.type || 'General',
+                        referenceId: alloc.referenceId || null,
+                        referenceName: alloc.referenceName || '',
+                        typeModel: alloc.typeModel || null
+                    };
+                }
+                return { type: 'General', referenceId: null, referenceName: '', typeModel: null };
+            })()
+        })),
+        isConsumable: header.isConsumable || false,
+        tdsUserConfirmed: !!tdsFlags.tdsUserConfirmed,
+        tdsPopupSkipped: !!tdsFlags.tdsPopupSkipped,
+        tdsDisabledReason: tdsFlags.tdsDisabledReason || '',
+    });
+
+    const postInvoiceAfterTds = async (payload) => {
+        let result;
+        if (isEdit) {
+            await updatePurchaseInvoice(id, payload);
+            toast.success('Invoice updated!');
+            result = { _id: id };
+        } else {
+            const inv = await createPurchaseInvoice(payload);
+            toast.success(`Invoice ${inv.invoiceNumber} posted!`);
+            result = inv;
+        }
+        navigate(PATHS.PURCHASE.INVOICE_DETAIL(result?._id));
+        setTdsAlertOpen(false);
+    };
+
+    const confirmTdsAndSubmit = async () => {
+        setSaving(true);
+        try {
+            await postInvoiceAfterTds(buildPurchasePayload({ tdsUserConfirmed: true, tdsPopupSkipped: false }));
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const skipTdsAndSubmit = async () => {
+        setSaving(true);
+        try {
+            await postInvoiceAfterTds(buildPurchasePayload({ tdsUserConfirmed: false, tdsPopupSkipped: true }));
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!header.supplierId) return toast.error('Select a supplier');
@@ -522,70 +619,49 @@ export default function PurchaseInvoiceFormPage() {
 
         setSaving(true);
         try {
-            const payload = {
-                flowType,
+            const previewBody = {
                 supplierId: header.supplierId,
                 invoiceDate: header.invoiceDate,
-                supplierInvoiceNo: header.supplierInvoiceNo,
-                poId: header.selectedPoId || null,
-                grnId: header.selectedGrnId || null,
-
-                supplierGstin: header.supplierGstin,
-                supplierAddress: header.supplierAddress,
-                supplierState: header.supplierState,
-                supplierStateCode: header.supplierStateCode,
-                buyerName: header.buyerName,
-                buyerGstin: header.buyerGstin,
-                buyerAddress: header.buyerAddress,
-                buyerState: header.buyerState,
-                buyerStateCode: header.buyerStateCode,
-                gstType: header.gstType,
-                placeOfSupply: header.placeOfSupply,
-                paymentTerms: header.paymentTerms,
-                poDate: flowType === 'Direct Invoice' ? null : (header.poDate || null),
-                poNumber: flowType === 'Direct Invoice' ? '' : (header.poNumber || ''),
-                remarks: header.remarks,
-                transporterName: header.transporterName,
-                vehicleNo: header.vehicleNo,
-                lrNumber: header.lrNumber,
-                freightAmount: Number(header.freightAmount) || 0,
-                freightGstRate: Number(header.freightGstRate) || 0,
-                items: rows.map(r => ({
-                    itemId: r.itemId, itemCode: r.itemCode, itemName: r.itemName,
-                    hsnCode: r.hsnCode, uom: r.uom,
-                    qty: Number(r.qty), rate: Number(r.rate),
-                    discountPercent: Number(r.discountPercent), gstRate: Number(r.gstRate),
-                    description: r.description || '',
-                    grnItemId: r.grnItemId || null, poItemId: r.poItemId || null,
-                    isConsumable: r.purchaseType === 'CONSUMABLE_PURCHASE' ? true : (r.isConsumable || false),
-                    purchaseType: r.purchaseType || 'RAW_MATERIAL_PURCHASE',
-                    allocation: (() => {
-                            const alloc = r.allocation;
-                            if (alloc && typeof alloc === 'object' && !Array.isArray(alloc)) {
-                                return {
-                                    type: alloc.type || 'General',
-                                    referenceId: alloc.referenceId || null,
-                                    referenceName: alloc.referenceName || '',
-                                    typeModel: alloc.typeModel || null
-                                };
-                            }
-                            return { type: 'General', referenceId: null, referenceName: '', typeModel: null };
-                        })()
-                })),
-                isConsumable: header.isConsumable || false,
+                excludePurchaseInvoiceId: isEdit ? id : undefined,
+                invoiceSnapshot: {
+                    grandTotal: grandWithFreight,
+                    totalTaxableAmount: totalTaxableWithFreight,
+                    totalTax: r2(totals.cgst + totals.sgst + totals.igst + freightGstTotal),
+                    totalCgst: r2(totals.cgst + freightCgst),
+                    totalSgst: r2(totals.sgst + freightSgst),
+                    totalIgst: r2(totals.igst + freightIgst),
+                    freightTotalGst: freightGstTotal,
+                    roundOff,
+                },
             };
-            let result;
-            if (isEdit) {
-                await updatePurchaseInvoice(id, payload);
-                toast.success('Invoice updated!');
-                result = { _id: id };
-            } else {
-                result = await createPurchaseInvoice(payload);
-                toast.success(`Invoice ${result.invoiceNumber} posted!`);
+            let preview = null;
+            try {
+                preview = await tdsComplianceApi.previewPurchaseInvoiceBill(previewBody);
+            } catch (pe) {
+                toast.error(pe.response?.data?.message || 'TDS preview failed');
+                return;
             }
-            navigate(PATHS.PURCHASE.INVOICE_DETAIL(result?._id));
-        } catch (err) { toast.error(err.response?.data?.message || err.message || 'Failed'); }
-        finally { setSaving(false); }
+            if (preview.blocked) {
+                toast.error(preview.blockReason || 'TDS validation failed');
+                return;
+            }
+            if (preview.engineActive && preview.decision?.panBlock) {
+                toast.error('PAN is required for this TDS deduction.');
+                return;
+            }
+            const d = preview.decision;
+            if (preview.engineActive && d?.tdsApplicable && d?.liabilityAlert) {
+                setTdsPreview(preview);
+                setTdsAlertOpen(true);
+                setSaving(false);
+                return;
+            }
+            await postInvoiceAfterTds(buildPurchasePayload({ tdsUserConfirmed: false, tdsPopupSkipped: false }));
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -889,6 +965,15 @@ export default function PurchaseInvoiceFormPage() {
                 )}
             </div>
 
+            <TdsLiabilityAlertModal
+                open={tdsAlertOpen}
+                supplierName={tdsPreview?.supplier?.supplierName || suppliers.find((s) => s._id === header.supplierId)?.supplierName}
+                decision={tdsPreview?.decision}
+                master={tdsPreview?.master}
+                onYes={confirmTdsAndSubmit}
+                onNo={skipTdsAndSubmit}
+                loading={saving}
+            />
 
         </div>
     );

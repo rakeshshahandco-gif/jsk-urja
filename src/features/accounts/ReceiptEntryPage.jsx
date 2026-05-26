@@ -13,6 +13,11 @@ import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
+import { useCompany } from '@/contexts/CompanyContext';
+
+function getLoadErrorMessage(err, fallback = 'Failed to load initial data') {
+    return err?.response?.data?.message || err?.message || fallback;
+}
 
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 
@@ -29,6 +34,7 @@ const ReceiptEntryPage = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { id } = useParams();
     const isEdit = !!id;
+    const { selectedCompany, loading: companyLoading } = useCompany();
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -58,65 +64,92 @@ const ReceiptEntryPage = () => {
     const fromInvoice = !!(location.state?.source === 'sales_invoice' || location.state?.invoiceId);
 
     useEffect(() => {
+        if (companyLoading) return;
+
+        if (!selectedCompany?._id) {
+            setLoading(false);
+            toast.error('Please select a company using the switcher in the header.');
+            return;
+        }
+
+        let cancelled = false;
+
         const fetchData = async () => {
+            setLoading(true);
             try {
                 const [vTypes, cbAccs, allLedgers, allGroups] = await Promise.all([
-                    getVoucherTypes({ nature: 'Receipt', active: true }),
+                    getVoucherTypes({ nature: 'Receipt', active: 'true' }),
                     getCashBankAccounts({ status: 'Active' }),
                     getLedgers(),
-                    getAccountGroups()
+                    getAccountGroups(),
                 ]);
-                setVoucherTypes(vTypes);
-                setCashBankAccounts(cbAccs);
-                setLedgers(allLedgers);
-                setGroups(allGroups);
 
-                if (vTypes.length > 0) {
-                    const defaultType = vTypes.find(v => v.name.toUpperCase() === 'RECEIPT VOUCHER' || v.name.toUpperCase() === 'RECEIPT') || vTypes[0];
-                    setFormData(prev => ({ ...prev, voucherTypeId: defaultType._id }));
-                }
-                if (cbAccs.length > 0) {
-                    setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
-                }
-            } catch (error) {
-                console.error('FetchData Error:', error);
-                toast.error('Failed to load initial data');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
+                if (cancelled) return;
 
-    // Effect for loading existing voucher data in edit mode
-    useEffect(() => {
-        if (isEdit && ledgers.length > 0) {
-            const fetchVoucherData = async () => {
-                try {
+                const types = Array.isArray(vTypes) ? vTypes : [];
+                const cb = Array.isArray(cbAccs) ? cbAccs : [];
+                const ledgerList = Array.isArray(allLedgers) ? allLedgers : [];
+                const groupList = Array.isArray(allGroups) ? allGroups : [];
+
+                setVoucherTypes(types);
+                setCashBankAccounts(cb);
+                setLedgers(ledgerList);
+                setGroups(groupList);
+
+                if (isEdit && id) {
                     const response = await getVoucher(id);
                     if (!response) throw new Error('Voucher not found');
-                    
+                    if (cancelled) return;
+
                     setFormData({
                         ...response,
                         date: response.date ? new Date(response.date).toISOString().split('T')[0] : '',
                         voucherTypeId: response.voucherType?._id || response.voucherType,
                         cashBankAccountId: response.cashBankAccountId?._id || response.cashBankAccountId,
-                        items: response.items.map(item => ({
+                        items: (response.items || []).map((item) => ({
                             ...item,
                             id: item._id || Date.now() + Math.random(),
                             ledgerId: item.ledgerId?._id || item.ledgerId,
-                            ledgerName: item.ledgerId?.name || item.ledgerName
-                        }))
+                            ledgerName: item.ledgerId?.name || item.ledgerName,
+                        })),
                     });
-                } catch (error) {
-                    console.error('FetchVoucher Error:', error);
-                    toast.error('Failed to load voucher for editing');
-                    navigate(PATHS.ACCOUNTS.VOUCHERS);
+                } else {
+                    setFormData((prev) => {
+                        const next = { ...prev };
+                        if (types.length > 0) {
+                            const defaultType =
+                                types.find(
+                                    (v) =>
+                                        v.name.toUpperCase() === 'RECEIPT VOUCHER' ||
+                                        v.name.toUpperCase() === 'RECEIPT',
+                                ) || types[0];
+                            next.voucherTypeId = defaultType._id;
+                        }
+                        if (cb.length > 0) {
+                            next.cashBankAccountId = cb[0]._id;
+                        }
+                        return next;
+                    });
                 }
-            };
-            fetchVoucherData();
-        }
-    }, [id, isEdit, ledgers.length]);
+            } catch (error) {
+                console.error('FetchData Error:', error);
+                if (!cancelled) {
+                    const msg = getLoadErrorMessage(error);
+                    toast.error(msg);
+                    if (isEdit) {
+                        navigate(PATHS.ACCOUNTS.VOUCHER_LIST);
+                    }
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        fetchData();
+        return () => {
+            cancelled = true;
+        };
+    }, [companyLoading, selectedCompany?._id, id, isEdit, navigate]);
 
     // Effect for handling incoming state (e.g. from Sales Invoice)
     useEffect(() => {
@@ -211,6 +244,13 @@ const ReceiptEntryPage = () => {
             const total = newItems.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
             return { ...prev, items: newItems, totalAmount: total };
         });
+    };
+
+    const handleDiscard = (e) => {
+        if (e) e.preventDefault();
+        if (window.confirm('Discard changes and return to list?')) {
+            window.location.href = '/accounts/vouchers';
+        }
     };
 
     const handleFixAccountLedger = async (accountId) => {
@@ -464,7 +504,7 @@ const ReceiptEntryPage = () => {
                     nature: 'Receipt'
                 });
                 toast.success(`Voucher updated successfully`);
-                navigate(PATHS.ACCOUNTS.VOUCHERS);
+                navigate(PATHS.ACCOUNTS.VOUCHER_LIST);
             } else {
                 let payload = { ...formData };
                 
@@ -741,7 +781,10 @@ const ReceiptEntryPage = () => {
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: 12 }}>
                         <button
-                            onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }}
+                            onClick={(e) => { 
+                                e.preventDefault();
+                                if (window.confirm('Discard changes?')) navigate(-1); 
+                            }}
                             style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
                         >Cancel</button>
                         <button
@@ -761,7 +804,7 @@ const ReceiptEntryPage = () => {
     return (
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-                <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
+                <button onClick={() => navigate('/accounts/vouchers')}
                     style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                     ← Back to Voucher Register
                 </button>
@@ -772,6 +815,28 @@ const ReceiptEntryPage = () => {
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record money received from customers or other sources</p>
                     </div>
+                    {formData.items?.[0]?.ledgerId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const p = new URLSearchParams({ ledgerId: String(formData.items[0].ledgerId) });
+                                if (isEdit && id) p.set('paymentVoucherId', String(id));
+                                navigate(`${PATHS.ACCOUNTS.BILL_WISE_ADJUSTMENT}?${p.toString()}`);
+                            }}
+                            style={{
+                                padding: '8px 14px',
+                                borderRadius: 8,
+                                border: '1px solid #6366f1',
+                                background: '#eef2ff',
+                                color: '#4338ca',
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Adjust Against Bills
+                        </button>
+                    )}
                 </div>
 
                 <div style={{ pointerEvents: isSubmitting ? 'none' : 'auto', opacity: isSubmitting ? 0.7 : 1 }}>
@@ -1000,7 +1065,7 @@ const ReceiptEntryPage = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '30px' }}>
-                        <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.ACCOUNTS.VOUCHERS); }}
+                        <button type="button" onClick={handleDiscard}
                             style={{ padding: '10px 24px', borderRadius: '8px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>
                             Discard
                         </button>

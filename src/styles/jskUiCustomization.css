@@ -1,0 +1,751 @@
+/* ===========================================================================
+   JSK Urja CRM/ERP - Optional UI Customization Layer
+   ===========================================================================
+   This file is loaded globally, but EVERY rule is gated behind two attributes:
+
+     :root[data-jsk-ui="on"]            -> master kill-switch (set by
+                                           UiPreferencesContext only when
+                                           ui.advancedCustomizationEnabled
+                                           is true)
+     :root[data-jsk-ui-<key>-set="1"]   -> per-property guard, only present
+                                           when the user has actually chosen
+                                           a value for that property
+
+   When either is missing, none of these selectors match and the rule is
+   completely inert. Existing Sidebar.module.scss styles continue to apply
+   exactly as today.
+
+   Phase 2 scope: Sidebar only.
+   - background, text, icon colors
+   - hover background
+   - active row background + text
+   - width preset (compact / normal / wide)
+   - glass effect
+   =========================================================================== */
+
+/* ----- Sidebar background ------------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-bg-set="1"]
+    [data-jsk-ui-component="sidebar"] {
+    background-color: var(--jsk-ui-sidebar-bg);
+}
+
+/* ----- Sidebar text (link label color) ----------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-text-set="1"]
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-link"],
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-text-set="1"]
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-label"] {
+    color: var(--jsk-ui-sidebar-text);
+}
+
+/* ----- Sidebar icon color ------------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-set="1"]
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-icon"],
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-set="1"]
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-arrow"] {
+    color: var(--jsk-ui-sidebar-icon);
+}
+
+/* ----- Hover state -------------------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-hover-bg-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"]:hover {
+    background-color: var(--jsk-ui-sidebar-hover-bg);
+}
+
+/* ----- Active row --------------------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-active-bg-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active {
+    background-color: var(--jsk-ui-sidebar-active-bg);
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-active-text-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active,
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-active-text-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-icon"],
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-active-text-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-label"],
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-active-text-set="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-arrow"] {
+    color: var(--jsk-ui-sidebar-active-text);
+}
+
+/* ----- Width presets (only affects the expanded state, never collapsed) -- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-width="compact"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"] {
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-width="wide"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"] {
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+}
+
+/* ----- Glass / translucent effect ---------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-glass="1"]
+    [data-jsk-ui-component="sidebar"] {
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.08);
+}
+
+/* When glass is on AND the user hasn't picked an explicit bg, fall back to a
+   subtle translucent tint instead of the opaque default - otherwise blur has
+   no visible effect. */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-glass="1"]:not([data-jsk-ui-sidebar-bg-set="1"])
+    [data-jsk-ui-component="sidebar"] {
+    background-color: rgba(255, 255, 255, 0.7);
+}
+
+
+/* ===========================================================================
+   PHASE 3 - Theme mode (Light / Dark / Auto)
+   ===========================================================================
+   Activated by data-jsk-ui-mode="light" or "dark" on :root. The context
+   resolves "auto" to one of these by reading prefers-color-scheme so this
+   stylesheet never has to. Each dark rule uses :not(...-set) so any custom
+   color the user picked in Phase 2 always wins.
+
+   NOTE - scope: this themes shell surfaces only (body, sidebar fallback,
+   native form controls via color-scheme). Pages with hard-coded white card
+   backgrounds will still appear light until they are migrated to a shared
+   surface variable in a later phase. This is a deliberate safe-change limit.
+   =========================================================================== */
+
+/* color-scheme hints native UI (scrollbars, form controls, text selection) */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="light"] {
+    color-scheme: light;
+}
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] {
+    color-scheme: dark;
+}
+
+/* Dark body / html backdrop. Selector is :root[...]+body so it does not raise
+   specificity dramatically; we still allow page-level overrides. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] body {
+    background-color: #0F172A;
+    color: #E2E8F0;
+}
+
+/* Sidebar dark defaults - only when the user has NOT picked a custom value
+   for the same property in Phase 2. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-bg-set="1"])
+    [data-jsk-ui-component="sidebar"] {
+    background-color: #1E293B;
+    border-right-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-text-set="1"])
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-link"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-text-set="1"])
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-label"] {
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-icon-set="1"])
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-icon"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-icon-set="1"])
+    [data-jsk-ui-component="sidebar"] [data-jsk-ui-component="sidebar-arrow"] {
+    color: #94A3B8;
+}
+
+/* Hover background on dark sidebar (only when user hasn't picked a custom
+   hover color). Lighten the row gently so it's visible against #1E293B. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-hover-bg-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"]:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Active row on dark sidebar (only when user hasn't customised it). */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-active-bg-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active {
+    background-color: rgba(59, 130, 246, 0.18);
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-active-text-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active,
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-active-text-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-icon"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-active-text-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-label"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-sidebar-active-text-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active
+    [data-jsk-ui-component="sidebar-arrow"] {
+    color: #60A5FA;
+}
+
+
+/* ===========================================================================
+   PHASE 4 - Compact mode
+   ===========================================================================
+   Tightens spacing on the sidebar only. Existing card/page padding inside
+   feature modules is left alone (safe-change envelope).
+   =========================================================================== */
+
+:root[data-jsk-ui="on"][data-jsk-ui-compact="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"] {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-compact="1"]
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-icon"] {
+    margin-right: 8px;
+}
+
+
+/* ===========================================================================
+   PHASE 5 - Font size (body-level)
+   ===========================================================================
+   Applies to body so it cascades naturally through anything that inherits
+   font-size. Components that hard-code their own font-size (most of them)
+   are unaffected - same safe-change envelope.
+   =========================================================================== */
+
+:root[data-jsk-ui="on"][data-jsk-ui-font-size="small"]  body { font-size: 13px; }
+:root[data-jsk-ui="on"][data-jsk-ui-font-size="normal"] body { font-size: 14px; }
+:root[data-jsk-ui="on"][data-jsk-ui-font-size="large"]  body { font-size: 15px; }
+:root[data-jsk-ui="on"][data-jsk-ui-font-size="xlarge"] body { font-size: 16px; }
+
+
+/* ===========================================================================
+   PHASE 6 - Header / Topbar style
+   ===========================================================================
+   Targets the existing <header data-jsk-ui-component="header"> element added
+   to src/components/layout/Header.jsx. Background + text color overrides
+   only - layout is untouched.
+   =========================================================================== */
+
+:root[data-jsk-ui="on"][data-jsk-ui-header-style="white"]
+    [data-jsk-ui-component="header"] {
+    background: #ffffff;
+    color: #0F172A;
+    border-bottom-color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-header-style="dark"]
+    [data-jsk-ui-component="header"] {
+    background: #1E293B;
+    color: #E2E8F0;
+    border-bottom-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-header-style="gradient"]
+    [data-jsk-ui-component="header"] {
+    background: linear-gradient(90deg, #2563EB 0%, #7C3AED 100%);
+    color: #ffffff;
+    border-bottom-color: transparent;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-header-style="brand"]
+    [data-jsk-ui-component="header"] {
+    background: #2563EB;
+    color: #ffffff;
+    border-bottom-color: #1D4ED8;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-header-style="transparent"]
+    [data-jsk-ui-component="header"] {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+
+/* ===========================================================================
+   PHASE 7 - Dashboard theme tints
+   ===========================================================================
+   Tints the page backdrop. Deep dashboard widget theming (card shadows,
+   accent colours per widget) requires marking dashboard internals which is
+   out of scope here - those will be done in a dedicated Phase 7b once the
+   dashboard component tree is opened up.
+   =========================================================================== */
+
+:root[data-jsk-ui="on"][data-jsk-ui-dashboard-theme="professional"] body {
+    background: #F8FAFC;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-dashboard-theme="colorful"] body {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FCE7F3 100%);
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-dashboard-theme="minimal"] body {
+    background: #FFFFFF;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-dashboard-theme="flat"] body {
+    background: #F1F5F9;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-dashboard-theme="modernDark"] body {
+    background: #0B1220;
+    color: #E2E8F0;
+}
+
+
+/* ===========================================================================
+   PHASE 9a - Icon-only sidebar
+   ===========================================================================
+   Hides labels and chevrons and narrows the expanded sidebar to icon-width.
+   Only applies when the sidebar is in its "expanded" state - the existing
+   collapsed (70px) and hover-open behaviour is preserved.
+   =========================================================================== */
+
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-only="1"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"]
+    [data-jsk-ui-component="sidebar-label"],
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-only="1"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"]
+    [data-jsk-ui-component="sidebar-arrow"] {
+    display: none;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-only="1"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"] {
+    width: 76px;
+    min-width: 76px;
+    max-width: 76px;
+}
+
+/* In icon-only mode, also tighten the icon's right-margin since there's no
+   label to space against. */
+:root[data-jsk-ui="on"][data-jsk-ui-sidebar-icon-only="1"]
+    [data-jsk-ui-component="sidebar"][data-jsk-ui-sidebar-state="expanded"]
+    [data-jsk-ui-component="sidebar-icon"] {
+    margin-right: 0;
+}
+
+
+/* ===========================================================================
+   PHASE 9b - Menu layout (Topbar)
+   ===========================================================================
+   Default state (no attribute set): TopMenuBar is hidden, Sidebar shows.
+   This is true even when the master jsk-ui flag is off, so the new component
+   has zero visual impact on baseline.
+
+   When data-jsk-ui-menu-layout="topbar" is set, we hide the Sidebar and show
+   the TopMenuBar. Layout shell (flex-row outer, flex-column right) is left
+   alone - only visibility flips.
+   =========================================================================== */
+
+/* Hide TopMenuBar by default - even when ui customization is off.
+   !important is required because the component applies an inline
+   `display: flex` via React style prop, which would otherwise win over
+   this rule and keep the topbar permanently visible. */
+[data-jsk-ui-component="top-menu-bar"] {
+    display: none !important;
+}
+
+/* Topbar layout selected: show topbar, hide sidebar. */
+:root[data-jsk-ui="on"][data-jsk-ui-menu-layout="topbar"]
+    [data-jsk-ui-component="top-menu-bar"] {
+    display: flex !important;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-menu-layout="topbar"]
+    [data-jsk-ui-component="sidebar"] {
+    display: none !important;
+}
+
+
+/* ===========================================================================
+   PHASE 10 - Deep dark mode (shared UI surfaces)
+   ===========================================================================
+   This block re-skins the shared UI primitives (Card, Modal, Input, Table,
+   the main scroll area) when dark mode is on. It targets the CSS-module
+   hashed class names via [class*="..._..."] selectors:
+
+       Card.module.scss   -> .Card_card__hash      -> [class*="Card_card"]
+       Modal.module.scss  -> .Modal_container__h   -> [class*="Modal_container"]
+       Input.module.scss  -> .Input_inputWrapper   -> [class*="Input_inputWrapper"]
+       Table.module.scss  -> .Table_table__hash    -> [class*="Table_table"]
+
+   The pattern [class*="Card_card"] is unique enough that it cannot collide
+   with any feature module - each module's hash bakes its source filename
+   into the class.
+
+   Every rule is gated by :root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+   so it's a strict no-op unless the user has explicitly turned dark mode on.
+
+   `!important` is used SPARINGLY and only for properties that compete with
+   inline styles (the <main> background is set via inline style in App.jsx).
+   For class-based defaults, the selector specificity is already high enough
+   without !important.
+   =========================================================================== */
+
+/* --- Main content scroll area (overrides the inline backgroundColor) ----- */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] main {
+    background-color: #0B1220 !important;
+    color: #E2E8F0;
+}
+
+/* --- Shared Card primitive ---------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Card_card"] {
+    background-color: #1E293B;
+    border-color: #334155;
+    color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Card_header"] {
+    background-color: #0F172A;
+    border-bottom-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Card_title"] {
+    color: #F1F5F9;
+}
+
+/* --- Shared Modal primitive --------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Modal_container"] {
+    background-color: #1E293B;
+    color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Modal_header"] {
+    border-bottom-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Modal_title"] {
+    color: #F1F5F9;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Modal_footer"] {
+    background-color: #0F172A;
+    border-top-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Modal_closeButton"] {
+    color: #94A3B8;
+}
+
+/* --- Shared Input primitive --------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_inputWrapper"] {
+    background-color: #0F172A;
+    border-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_inputWrapper"][class*="disabled"] {
+    background-color: #1E293B;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_input"] {
+    color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_input"]::placeholder {
+    color: #64748B;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_label"] {
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_numberControls"] {
+    background-color: #1E293B;
+    border-left-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_icon"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Input_helperText"] {
+    color: #94A3B8;
+}
+
+/* --- Shared Table primitive --------------------------------------------- */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_tableWrapper"] {
+    background-color: #1E293B;
+    border-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] {
+    color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] thead {
+    background-color: #0F172A;
+    border-bottom-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] thead th {
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] tbody tr {
+    background-color: #1E293B;
+    border-bottom-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] tbody tr:hover {
+    background-color: #0F172A;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_table"] tbody td {
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="Table_noData"] {
+    background-color: #0F172A;
+    color: #94A3B8;
+    border-color: #334155;
+}
+
+/* --- Header (top bar component) tracks dark mode unless user picked a    
+       custom header style. The bg-track-only rule is intentional so the
+       gradient/brand/transparent presets still win. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]:not([data-jsk-ui-header-style])
+    [data-jsk-ui-component="header"] {
+    background-color: #0F172A;
+    color: #E2E8F0;
+    border-bottom-color: #334155;
+}
+
+/* --- TopMenuBar tracks dark mode unless user picked a custom header style */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-bar"] {
+    background-color: #1E293B;
+    border-bottom-color: #334155;
+}
+
+/* --- Native form controls hint (color-scheme: dark already covers most of
+       these via the Phase 3 rule, but explicit fallbacks below help on older
+       browsers / certain themes) */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] select,
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] textarea {
+    background-color: #0F172A;
+    color: #E2E8F0;
+    border-color: #334155;
+}
+
+/* --- Generic "card-like" surfaces shipped by several feature modules.
+       We avoid blanket [class*="card"] (would catch unrelated names like
+       "discard"); instead we anchor to the CSS-module pattern with an
+       underscore separator. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_card_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_panel_"] {
+    background-color: #1E293B;
+    color: #E2E8F0;
+    border-color: #334155;
+}
+
+/* --- TopMenuBar dropdown panels in dark mode -----------------------------
+       The dropdown is rendered with inline styles in TopMenuBar.jsx so we
+       need !important to win. Scope is tight: only the dropdown's own data
+       attributes. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-dropdown"] {
+    background-color: #1E293B !important;
+    border-color: #334155 !important;
+    color: #E2E8F0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-section-header"] {
+    color: #64748B !important;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-item"] {
+    background: transparent !important;
+    color: #E2E8F0 !important;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-item"]:hover {
+    background-color: #0F172A !important;
+    color: #FFFFFF !important;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"]
+    [data-jsk-ui-component="top-menu-item"][data-jsk-ui-active="1"] {
+    background-color: rgba(59, 130, 246, 0.18) !important;
+    color: #60A5FA !important;
+}
+
+/* ===========================================================================
+   Phase 11 - Master Brand colour
+   ---------------------------------------------------------------------------
+   One user-picked colour cascades into multiple visible elements. Each rule
+   below additionally has a `:not(...)` guard so that whenever the user has
+   explicitly set a per-control colour (sidebar.activeBg, etc.) that
+   per-control value continues to win. Brand tinting is therefore strictly
+   additive: it only fills in unset slots.
+   =========================================================================== */
+
+/* Sidebar active row background - tints with brand colour when user has
+   NOT picked a custom sidebar.activeBg of their own. */
+:root[data-jsk-ui="on"][data-jsk-ui-brand-set="1"]:not([data-jsk-ui-sidebar-active-bg-set="1"])
+    [data-jsk-ui-component="sidebar"]
+    [data-jsk-ui-component="sidebar-link"].active {
+    background-color: var(--jsk-ui-brand);
+}
+
+/* When the user has chosen the 'brand' header preset, the header colour
+   follows the brand colour (overriding the default #2563EB blue). */
+:root[data-jsk-ui="on"][data-jsk-ui-brand-set="1"][data-jsk-ui-header-style="brand"]
+    [data-jsk-ui-component="header"] {
+    background-color: var(--jsk-ui-brand);
+}
+
+/* Top menu bar active item tint when brand is set and user is in topbar
+   mode. Only applies when the dark-mode top-menu rule above isn't already
+   active (because that rule uses !important). */
+:root[data-jsk-ui="on"][data-jsk-ui-brand-set="1"]
+    [data-jsk-ui-component="top-menu-item"][data-jsk-ui-active="1"] {
+    background-color: var(--jsk-ui-brand);
+    color: #ffffff;
+}
+
+/* ===========================================================================
+   Phase 12 - Deeper dark-mode polish for common form surfaces
+   ---------------------------------------------------------------------------
+   Phase 10 covered Card / Modal / Input / Table primitives and a generic
+   "_card_" / "_panel_" pattern. Phase 12 extends to the next biggest white
+   patches still visible in dark mode: page wrappers, toolbars / filter bars,
+   tabs (incl. sub-tabs), panel + section headers, hero banners, search
+   controls, and pagination.
+
+   Pattern matching strategy:
+   - We target CSS-module hashed class names via `[class*="_<key>_"]`. The
+     leading + trailing underscore makes it match the CSS-module hash format
+     (e.g. `MyPage_toolbar_aB12c`) without accidentally matching unrelated
+     words ("discard", "fixturetoolbarless", etc).
+   - Each rule is double-gated by `[data-jsk-ui="on"][data-jsk-ui-mode="dark"]`
+     so it only applies when dark mode is on AND the master UI flag is on.
+   - No `!important` here: inline styles in feature pages still win, which is
+     desirable for module-specific accent colours (charts, status badges...).
+   =========================================================================== */
+
+/* Page wrappers - the outermost SCSS-module shell on most feature pages.
+   We KEEP these transparent so the main scroll background shows through;
+   text just inherits the new light foreground. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_page_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_pageContainer_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_wrap_"] {
+    background-color: transparent;
+    color: #E2E8F0;
+}
+
+/* Toolbars / filter bars sitting above tables. Examples:
+   ManageTasksPage_toolbar_*, *_filterPanel_*, *_filters_* */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_toolbar_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_filterPanel_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_filters_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_filterRow_"] {
+    background-color: #1E293B;
+    border-color: #334155;
+    color: #E2E8F0;
+}
+
+/* Tabs (primary + sub). Active state intentionally left to the feature's
+   own rule so brand / status colours still shine through. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_tabs_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_tabsShell_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_subTabs_"] {
+    background-color: #0F172A;
+    border-color: #334155;
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_tab_"]:not([class*="_tabActive_"]):not([class*="_subTabActive_"]),
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_subTab_"]:not([class*="_subTabActive_"]) {
+    color: #94A3B8;
+}
+
+/* Panel headers + section titles - common across reports & dashboards */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_panelHeader_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_panelBody_"] {
+    background-color: #1E293B;
+    border-color: #334155;
+    color: #E2E8F0;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_sectionTitle_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_panelTitle_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_pageTitle_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_heroTitle_"] {
+    color: #F1F5F9;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_sectionLabel_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_statLabel_"] {
+    color: #94A3B8;
+}
+
+/* Hero / banner sections (TDS Compliance, Reminders, Dashboards). The
+   default light gradient becomes a dark gradient that still feels premium. */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_hero_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_heroInner_"] {
+    background-color: #1E293B;
+    background-image: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+    border-color: #334155;
+    color: #E2E8F0;
+}
+
+/* Pagination & "no more rows" tails */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_pagination_"] {
+    background-color: #1E293B;
+    border-color: #334155;
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_pageBtn_"] {
+    background-color: #0F172A;
+    border-color: #334155;
+    color: #CBD5E1;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_pageBtn_"]:hover {
+    background-color: #1E293B;
+    color: #F1F5F9;
+}
+
+/* Inline search controls inside toolbars */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_searchWrap_"] {
+    background-color: #0F172A;
+    border-color: #334155;
+}
+
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_searchIcon_"] {
+    color: #64748B;
+}
+
+/* Empty-state cells & "no data" placeholders so they don't glare white */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_empty_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_emptyCell_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_noData_"] {
+    background-color: #1E293B;
+    color: #94A3B8;
+    border-color: #334155;
+}
+
+/* Stat grid containers used on dashboards (the cards themselves are already
+   handled by Phase 10's `_card_` rule). */
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_statGrid_"],
+:root[data-jsk-ui="on"][data-jsk-ui-mode="dark"] [class*="_cardGrid_"] {
+    background-color: transparent;
+}
+
+
+
+

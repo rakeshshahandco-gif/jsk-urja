@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Input } from '@/components/ui';
+import { Modal } from './Modal';
+import { Button } from './Button';
+import { Input } from './Input';
 import { Search, Check, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';

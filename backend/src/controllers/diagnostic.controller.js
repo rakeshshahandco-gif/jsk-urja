@@ -87,7 +87,12 @@ export const getSystemDiscovery = asyncHandler(async (req, res) => {
             );
 
             // Sort counts: put common ones first, then alphabetical
-            const priority = ['Customer', 'Item', 'SalesOrder', 'SalesInvoice', 'PurchaseOrder', 'Task', 'Distributor', 'WorkOrder', 'AccountLedger'];
+            const priority = [
+                'Customer', 'Item', 'SalesOrder', 'SalesInvoice', 'PurchaseOrder', 'Task',
+                'Distributor', 'WorkOrder', 'AccountLedger',
+                'ApprovalRule', 'ApprovalRequest', 'SecuritySettings', 'LoginHistory',
+                'AccountingPeriodLock', 'AuditLog',
+            ];
             
             countResults.sort((a, b) => {
                 const idxA = priority.indexOf(a.key);

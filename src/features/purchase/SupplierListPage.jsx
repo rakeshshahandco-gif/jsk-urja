@@ -11,14 +11,30 @@ const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f
 const secTitle = { fontSize: 11, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #dbeafe', paddingBottom: 6, marginBottom: 12, marginTop: 4 };
 const lbl = { fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' };
 
+const DEDUCTEE_CONSTITUTION_OPTIONS = [
+    '',
+    'Individual',
+    'HUF',
+    'Partnership Firm',
+    'LLP',
+    'Private Limited Company',
+    'Public Limited Company',
+    'Proprietorship',
+    'Trust',
+    'Society',
+    'Others',
+];
+
 const EMPTY = {
     supplierName: '', contactPerson: '', phone: '', email: '',
     address: '', area: '', city: '', state: '', pincode: '',
     gstNumber: '', gstType: '', panNumber: '',
+    deducteeConstitution: '',
     openingBalance: 0, openingBalanceDrCr: 'Cr',
     paymentTerms: '',
     bankName: '', bankAccountNo: '', bankIfsc: '',
-    remarks: ''
+    remarks: '',
+    msmeApplicable: false, msmeRegNo: '', msmeCategory: '',
 };
 
 export default function SupplierListPage() {
@@ -183,7 +199,14 @@ export default function SupplierListPage() {
                                 <td style={td}>{s.contactPerson || '—'}</td>
                                 <td style={td}>{s.phone || '—'}</td>
                                 <td style={td}>{s.city || '—'}</td>
-                                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{s.gstNumber || '—'}</td>
+                                <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>
+                            {s.gstNumber || '—'}
+                            {s.msmeApplicable && (
+                                <span style={{ display: 'inline-block', marginLeft: 6, background: '#dcfce7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, letterSpacing: '0.03em' }}>
+                                    MSME{s.msmeCategory ? ` · ${s.msmeCategory}` : ''}
+                                </span>
+                            )}
+                        </td>
                                 <td style={td}>
                                     {s.ledgerId ? (
                                         <Badge variant="success" className="cursor-pointer" onClick={() => handleAutoLink(s)}>Linked</Badge>
@@ -312,6 +335,17 @@ export default function SupplierListPage() {
                                 <label style={lbl}>PAN Number</label>
                                 <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" />
                             </div>
+                            <div style={{ gridColumn: 'span 3' }}>
+                                <label style={lbl}>Deductee type / constitution</label>
+                                <select value={modal.data.deducteeConstitution || ''} onChange={e => set('deducteeConstitution', e.target.value)} style={{ ...inp, cursor: 'pointer' }} title="Used with TDS Master to pick Individual/HUF vs company rate (e.g. 194C 1% vs 2%).">
+                                    {DEDUCTEE_CONSTITUTION_OPTIONS.map((opt) => (
+                                        <option key={opt || 'blank'} value={opt}>{opt ? opt : '— Not set —'}</option>
+                                    ))}
+                                </select>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6 }}>
+                                    Drives auto TDS rate from TDS Master by section (e.g. 194C: Individual/HUF/Proprietorship vs company).
+                                </span>
+                            </div>
                         </div>
 
                         {/* ── Section 4: Address ── */}
@@ -357,6 +391,58 @@ export default function SupplierListPage() {
                                 <label style={lbl}>IFSC Code</label>
                                 <input value={modal.data.bankIfsc || ''} onChange={e => set('bankIfsc', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="HDFC0001234" />
                             </div>
+                        </div>
+
+                        {/* ── Section 6: MSME Details ── */}
+                        <div style={secTitle}>🏛️ MSME Details (MSMED Act)</div>
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!modal.data.msmeApplicable}
+                                    onChange={e => set('msmeApplicable', e.target.checked)}
+                                    style={{ width: 16, height: 16, accentColor: '#0d9488', cursor: 'pointer' }}
+                                />
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>
+                                    MSME Registered Supplier
+                                </span>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                                    (Enables 45-day MSME compliance tracking)
+                                </span>
+                            </label>
+
+                            {modal.data.msmeApplicable && (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '16px 18px' }}>
+                                    <div>
+                                        <label style={lbl}>Udyam Registration No.</label>
+                                        <input
+                                            value={modal.data.msmeRegNo || ''}
+                                            onChange={e => set('msmeRegNo', e.target.value.toUpperCase())}
+                                            style={{ ...inp, fontFamily: 'monospace' }}
+                                            placeholder="UDYAM-XX-00-0000000"
+                                        />
+                                        <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
+                                            As per Udyam Registration Certificate
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <label style={lbl}>MSME Category</label>
+                                        <select
+                                            value={modal.data.msmeCategory || ''}
+                                            onChange={e => set('msmeCategory', e.target.value)}
+                                            style={{ ...inp, cursor: 'pointer' }}
+                                        >
+                                            <option value="">— Select Category —</option>
+                                            <option value="Micro">Micro Enterprise</option>
+                                            <option value="Small">Small Enterprise</option>
+                                            <option value="Medium">Medium Enterprise</option>
+                                        </select>
+                                        <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
+                                            As classified under MSMED Act
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* ── Remarks ── */}

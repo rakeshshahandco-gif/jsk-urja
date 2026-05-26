@@ -1,29 +1,31 @@
+@import '@/styles/_variables';
+
 .card {
-  background-color: #ffffff;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-  margin-bottom: 1rem;
+    background-color: $surface-elevated;
+    border-radius: $radius-xl;
+    box-shadow: $shadow-sm;
+    border: 1px solid $border-color;
+    overflow: hidden;
+    margin-bottom: $spacing-md;
 
-  .header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #e5e7eb;
-    background-color: #f9fafb;
+    .header {
+        padding: $spacing-md $spacing-lg;
+        border-bottom: 1px solid $border-color;
+        background-color: $bg-secondary;
 
-    .title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #111827;
-      margin: 0;
+        .title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: $text-color;
+            margin: 0;
+        }
     }
-  }
 
-  .content {
-    padding: 1.5rem;
+    .content {
+        padding: $spacing-lg;
 
-    &.noPadding {
-      padding: 0;
+        &.noPadding {
+            padding: 0;
+        }
     }
-  }
 }

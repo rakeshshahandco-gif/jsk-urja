@@ -40,6 +40,8 @@ export const updateStockForItems = async (items, refNo, refId, refType, userId, 
 
         inventoryItem.currentStock = oldStock + newQty;
         inventoryItem.valuationRate = newAvgRate;
+        inventoryItem.lastPurchaseCost = newRate;
+        inventoryItem.averageCost = newAvgRate;
         await inventoryItem.save({ session });
 
         ledgerEntries.push({

@@ -25,6 +25,24 @@
             margin: 0;
         }
     }
+
+    .headerActions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+}
+
+.scopeLine {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+    color: #64748b;
+
+    strong {
+        color: #334155;
+        font-weight: 700;
+    }
 }
 
 .typeSwitcher {
@@ -149,6 +167,45 @@
         background: #f8fafc;
         display: flex;
         gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .filterRow {
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .viewModeRow {
+        display: flex;
+        gap: 0.5rem;
+        font-size: 0.65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+
+        label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            color: #64748b;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+        }
+
+        label.activeView {
+            color: #4f46e5;
+            border-color: #c7d2fe;
+            background: #eef2ff;
+        }
+    }
+
+    .groupTag {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
     }
 
     table {
@@ -214,5 +271,54 @@
         tr:hover td {
             background: #fbfcfe;
         }
+    }
+}
+
+.detailOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 1rem;
+}
+
+.detailPanel {
+    background: #fff;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    width: min(560px, 100%);
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.detailHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #f1f5f9;
+
+    h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+
+    p {
+        margin: 0.25rem 0 0;
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    button {
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
     }
 }

@@ -1,0 +1,62 @@
+@import '@/styles/_variables';
+
+.track {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: $surface-tab-track;
+    border: 1px solid $border-light;
+    border-radius: $radius-xl;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    font-size: $font-size-ui-md;
+    font-weight: 600;
+    border-radius: $radius-lg;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: $tab-inactive-color;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover:not(.active) {
+        color: $text-color;
+    }
+}
+
+.active {
+    background: $tab-active-bg;
+    color: $tab-active-color;
+    box-shadow: $shadow-sm;
+}
+
+.activeAccent {
+    background: $accent-workboard;
+    color: $white;
+    box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25);
+}
+
+.badge {
+    margin-left: 2px;
+    background: $surface-muted;
+    border-radius: $radius-full;
+    padding: 0 6px;
+    font-size: $font-size-ui-sm;
+    font-weight: 700;
+    color: $text-secondary;
+}
+
+.active .badge {
+    background: rgba($primary, 0.12);
+    color: $primary;
+}
+
+.activeAccent .badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: $white;
+}

@@ -294,6 +294,15 @@ const customerSchema = mongoose.Schema(
             type: Number,
             default: 0,
         },
+        creditLimit: {
+            type: Number,
+            default: 0,
+        },
+        creditLimitAction: {
+            type: String,
+            enum: ['None', 'Warn', 'Block'],
+            default: 'Warn',
+        },
         paymentType: {
             type: String,
             enum: ['Cash', 'Credit'],
@@ -356,6 +365,10 @@ const customerSchema = mongoose.Schema(
             ref: 'AccountLedger',
             default: null,
         },
+        // MSME fields — mirrored on linked AccountLedger
+        msmeApplicable: { type: Boolean, default: false },
+        msmeRegNo: { type: String, trim: true, default: '' },
+        msmeCategory: { type: String, enum: ['', 'Micro', 'Small', 'Medium'], default: '' },
     },
     {
         timestamps: true,

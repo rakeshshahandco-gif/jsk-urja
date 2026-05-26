@@ -13,12 +13,23 @@ export const ALL_FORMS = [
     { id: 'follow-up', title: 'Follow-up Tracker', path: '/followups', icon: 'tasks', permission: 'customers.follow_up.view', module: 'CRM' },
     { id: 'reminders', title: 'Reminder / Follow-up', path: '/reminders', icon: 'tasks', permission: 'customers.reminder_tasks.view', module: 'CRM' },
     { id: 'distributors', title: 'Distributor Master', path: '/distributors', icon: 'crm', permission: 'sales.sales_invoices.view', module: 'CRM' },
+    { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, icon: 'report', permission: 'reports.customer_master_report.view', module: 'CRM' },
+    { id: 'report-followups', title: 'Follow-up Tracker Report', path: '/reports/followups', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
+    { id: 'report-followup-dashboard', title: 'Follow-up Dashboard', path: '/reports/followup-dashboard', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
+    { id: 'report-followup-tasks', title: 'Follow-up Task Report', path: '/reports/followup-task-report', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
+    { id: 'report-reminders', title: 'Open Reminders Report', path: '/reports/open-reminders', icon: 'report', permission: 'reports.reminder_report.view', module: 'CRM' },
+    { id: 'report-conversations', title: 'Conversation History', path: '/reports/conversation-history', icon: 'report', permission: 'reports', module: 'CRM' },
+    { id: 'report-task-reminders', title: 'Task Reminders Report', path: '/reports/task-reminders', icon: 'report', permission: 'tasks', module: 'CRM' },
+    { id: 'mis-sales-marketing', title: 'Sales & Marketing MIS', path: PATHS.MIS.SALES_DASHBOARD, icon: 'mis', permission: 'mis.sales_marketing.view', module: 'CRM' },
+    { id: 'mis-sales-conversion', title: 'Sales Conversion Analysis', path: '/mis/sales-conversion', icon: 'mis', permission: 'mis.sales_conversion.view', module: 'CRM' },
+    { id: 'report-incentive', title: 'Sales Incentive Report', path: '/reports/incentive', icon: 'mis', permission: 'sales', module: 'CRM' },
 
     // Sales
     { id: 'sales-order', title: 'Sales Order', path: PATHS.SALES.ORDERS, icon: 'sales', permission: 'sales.sales_orders.view', module: 'Sales' },
     { id: 'sales-invoice', title: 'Tax Invoice (GST)', path: PATHS.SALES.INVOICES, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'estimate', title: 'Estimate / Internal Sale', path: '/sales/estimates', icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'eway-bill', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
+    { id: 'e-invoice', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'logistics', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'invoice-series', title: 'Invoice Series', path: PATHS.SALES.INVOICE_SERIES, icon: 'settings', permission: 'sales.invoice_series.view', module: 'Sales' },
     { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, icon: 'settings', permission: 'admin', module: 'Sales' },
@@ -49,10 +60,14 @@ export const ALL_FORMS = [
     { id: 'receipt-voucher', title: 'Receipt Voucher', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, icon: 'receipt', permission: 'accounts.receipt_entry.view', module: 'Voucher Entry' },
     { id: 'payment-voucher', title: 'Payment Voucher', path: PATHS.ACCOUNTS.PAYMENT_ENTRY, icon: 'receipt', permission: 'accounts.payment_entry.view', module: 'Voucher Entry' },
     { id: 'journal-voucher', title: 'Journal Voucher', path: PATHS.ACCOUNTS.JOURNAL_ENTRY, icon: 'receipt', permission: 'accounts.journal_entry.view', module: 'Voucher Entry' },
-    { id: 'contra-voucher', title: 'Contra Voucher', path: '/accounts/vouchers/contra', icon: 'receipt', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
+    { id: 'contra-voucher', title: 'Contra Voucher', path: PATHS.ACCOUNTS.CONTRA_ENTRY, icon: 'receipt', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
     { id: 'expense-voucher', title: 'Expense Voucher', path: PATHS.ACCOUNTS.EXPENSE_ENTRY, icon: 'receipt', permission: 'accounts.expense_entry.view', module: 'Voucher Entry' },
     { id: 'debit-note', title: 'Debit Note', path: PATHS.ACCOUNTS.DEBIT_NOTES, icon: 'credit', permission: 'accounts.debit_notes.view', module: 'Voucher Entry' },
     { id: 'credit-note', title: 'Credit Note', path: PATHS.ACCOUNTS.CREDIT_NOTES, icon: 'credit', permission: 'accounts.credit_notes.view', module: 'Voucher Entry' },
+    { id: 'bill-wise-adjustment', title: 'Bill-wise Adjustment', path: PATHS.ACCOUNTS.BILL_WISE_ADJUSTMENT, icon: 'receipt', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
+    { id: 'bank-reconciliation', title: 'Bank Reconciliation', path: PATHS.ACCOUNTS.BANK_RECONCILIATION, icon: 'accounts', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
+    { id: 'pdc-register', title: 'PDC Register', path: PATHS.PDC.LIST, icon: 'time', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
+    { id: 'narration-templates', title: 'Narration Templates', path: PATHS.NARRATION_TEMPLATES, icon: 'voucher', permission: 'accounts.vouchers.view', module: 'Voucher Entry' },
 
     // Accounts
     { id: 'voucher-register', title: 'Voucher Register', path: PATHS.ACCOUNTS.VOUCHER_LIST, icon: 'accounts', permission: 'accounts.vouchers.view', module: 'Accounts' },
@@ -63,25 +78,60 @@ export const ALL_FORMS = [
     { id: 'day-book', title: 'Day Book', path: PATHS.ACCOUNTS.DAY_BOOK, icon: 'accounts', permission: 'accounts.day_book.view', module: 'Accounts' },
     { id: 'cash-book', title: 'Cash Book', path: PATHS.ACCOUNTS.CASH_BOOK, icon: 'accounts', permission: 'accounts.cash_book.view', module: 'Accounts' },
     { id: 'bank-book', title: 'Bank Book', path: PATHS.ACCOUNTS.BANK_BOOK, icon: 'accounts', permission: 'accounts.bank_book.view', module: 'Accounts' },
+    { id: 'bank-reconciliation-report', title: 'Bank Reconciliation', path: PATHS.ACCOUNTS.BANK_RECONCILIATION, icon: 'accounts', permission: 'accounts.vouchers.view', module: 'Accounts' },
     { id: 'outstanding-report', title: 'Outstanding Report', path: PATHS.ACCOUNTS.OUTSTANDING_REPORT, icon: 'accounts', permission: 'accounts.outstanding.view', module: 'Accounts' },
     { id: 'trial-balance', title: 'Trial Balance', path: '/mis/reports/trial-balance', icon: 'accounts', permission: 'mis.trial_balance.view', module: 'Accounts' },
     { id: 'profit-loss', title: 'Profit & Loss', path: '/mis/reports/profit-loss', icon: 'accounts', permission: 'mis.profit_loss.view', module: 'Accounts' },
     { id: 'balance-sheet', title: 'Balance Sheet', path: '/mis/reports/balance-sheet', icon: 'accounts', permission: 'mis.balance_sheet.view', module: 'Accounts' },
     { id: 'interest-payable-statement', title: 'Interest Payable Statement', path: PATHS.ACCOUNTS.INTEREST_PAYABLE, icon: 'accounts', permission: 'accounts.interest_payable_statement.view', module: 'Accounts' },
+    { id: 'cash-flow-statement', title: 'Cash Flow Statement', path: PATHS.CASH_FLOW, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'comparative-pl', title: 'Comparative P&L', path: PATHS.COMPARATIVE_PL, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'comparative-bs', title: 'Comparative Balance Sheet', path: PATHS.COMPARATIVE_BS, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'ageing-analysis', title: 'Ageing Analysis', path: PATHS.AGEING, icon: 'time', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'msme-report', title: 'MSME Compliance Report', path: PATHS.MSME_REPORT, icon: 'security', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'ratio-analysis', title: 'Ratio Analysis', path: PATHS.RATIO_ANALYSIS, icon: 'analytics', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'fund-flow-statement', title: 'Fund Flow Statement', path: PATHS.FUND_FLOW, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'cost-centre-pl', title: 'Cost Centre P&L', path: PATHS.COST_CENTERS.PL_REPORT, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'accounting-audit-trail', title: 'Accounting Audit Trail', path: PATHS.ACCOUNTS.ACCOUNTING_AUDIT, icon: 'security', permission: 'accounts.vouchers.view', module: 'Accounts' },
+    { id: 'period-lock-settings', title: 'Period Lock Settings', path: PATHS.ACCOUNTS.PERIOD_LOCK, icon: 'security', permission: 'accounts.vouchers.view', module: 'Accounts' },
+
+    // Account Master (new additions)
+    { id: 'cost-centres', title: 'Cost / Profit Centres', path: PATHS.COST_CENTERS.LIST, icon: 'account-master', permission: 'accounts.vouchers.view', module: 'Account Master' },
+    { id: 'budget-master', title: 'Budget Master', path: PATHS.BUDGETS.LIST, icon: 'chart', permission: 'accounts.vouchers.view', module: 'Account Master' },
+
+    // TDS
+    { id: 'tds-compliance', title: 'TDS Dashboard', path: PATHS.TDS.DASHBOARD, icon: 'accounts', permission: 'tds.dashboard.view', module: 'TDS' },
+    { id: 'tds-master', title: 'TDS Master / Sections', path: PATHS.TDS.MASTER, icon: 'settings', permission: 'tds.master.view', module: 'TDS' },
+    { id: 'tds-deductions', title: 'TDS Deduction Register', path: PATHS.TDS.DEDUCTIONS, icon: 'receipt', permission: 'tds.deduction_register.view', module: 'TDS' },
+    { id: 'tds-payable-register', title: 'TDS Payable Register', path: PATHS.TDS.PAYABLE_REGISTER, icon: 'receipt', permission: 'tds.payable_register.view', module: 'TDS' },
+    { id: 'tds-challans', title: 'TDS Challan / Payment', path: PATHS.TDS.CHALLANS, icon: 'credit', permission: 'tds.challan.view', module: 'TDS' },
+    { id: 'tds-returns', title: 'TDS Return / Filing', path: PATHS.TDS.RETURNS, icon: 'report', permission: 'tds.returns.view', module: 'TDS' },
+    { id: 'tds-reports', title: 'TDS Reports', path: PATHS.TDS.REPORTS, icon: 'report', permission: 'tds.reports.view', module: 'TDS' },
+    { id: 'form-26as', title: '26AS Reconciliation', path: PATHS.FORM_26AS.LIST, icon: 'security', permission: 'tds.reports.view', module: 'TDS' },
+
+    // TCS (Tax Collected at Source)
+    { id: 'tcs-dashboard', title: 'TCS Dashboard', path: PATHS.TCS.DASHBOARD, icon: 'accounts', permission: 'tds.dashboard.view', module: 'TCS' },
+    { id: 'tcs-master', title: 'TCS Section Rates', path: PATHS.TCS.MASTER, icon: 'settings', permission: 'tds.master.view', module: 'TCS' },
+    { id: 'tcs-deductions', title: 'TCS Deduction Register', path: PATHS.TCS.DEDUCTIONS, icon: 'receipt', permission: 'tds.deduction_register.view', module: 'TCS' },
+    { id: 'tcs-challans', title: 'TCS Challan / Payment', path: PATHS.TCS.CHALLANS, icon: 'credit', permission: 'tds.challan.view', module: 'TCS' },
+    { id: 'tcs-reports', title: 'TCS Reports', path: PATHS.TCS.REPORTS, icon: 'report', permission: 'tds.reports.view', module: 'TCS' },
 
     // Fixed Assets
     { id: 'fixed-assets-list', title: 'Asset Register', path: '/fixed-assets/list', icon: 'accounts', permission: 'accounts.fixed_assets.view', module: 'Fixed Assets' },
     { id: 'asset-categories', title: 'Asset Categories', path: '/fixed-assets/categories', icon: 'settings', permission: 'accounts.asset_categories.view', module: 'Fixed Assets' },
     { id: 'asset-locations', title: 'Asset Locations', path: '/fixed-assets/locations', icon: 'settings', permission: 'accounts.asset_locations.view', module: 'Fixed Assets' },
+    { id: 'depreciation', title: 'Depreciation', path: PATHS.DEPRECIATION.ROOT, icon: 'accounts', permission: 'accounts.fixed_assets.view', module: 'Fixed Assets' },
+    { id: 'depreciation-schedule', title: 'Depreciation Schedule', path: PATHS.DEPRECIATION.SCHEDULE, icon: 'chart', permission: 'accounts.fixed_assets.view', module: 'Fixed Assets' },
 
-    // GST
-    { id: 'gstr1', title: 'GSTR-1 Compliance', path: '/reports/gstr1', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'gstr3b', title: 'GSTR-3B Compliance', path: '/reports/gstr3b', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'gst-recon', title: '2A / 2B Reconciliation', path: '/reports/gst-reconciliation', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'gst-payable', title: 'GST Payable Summary', path: '/reports/gst-payable', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'itc-register', title: 'ITC Register', path: '/reports/gst/itc-register', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'hsn-summary', title: 'HSN Summary', path: '/reports/gst/hsn-summary', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
-    { id: 'gst-ledger', title: 'GST Ledger', path: '/reports/gst/ledger', icon: 'gst', permission: 'admin.company_profile.view', module: 'GST' },
+    // GST (all screens under /gst/* — module home + sidebar GST menu)
+    { id: 'gstr1', title: 'GSTR-1 Compliance', path: PATHS.GST.GSTR1, icon: 'gst', permission: 'gst.gstr1.view', module: 'GST' },
+    { id: 'gstr3b', title: 'GSTR-3B Compliance', path: PATHS.GST.GSTR3B, icon: 'gst', permission: 'gst.gstr3b.view', module: 'GST' },
+    { id: 'gstr9', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, icon: 'gst', permission: 'gst.gstr3b.view', module: 'GST' },
+    { id: 'gst-recon', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, icon: 'gst', permission: 'gst.gst_reconciliation.view', module: 'GST' },
+    { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, icon: 'gst', permission: 'gst.gst_payable.view', module: 'GST' },
+    { id: 'itc-register', title: 'ITC Register', path: PATHS.GST.ITC_REGISTER, icon: 'gst', permission: 'gst.itc_register.view', module: 'GST' },
+    { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, icon: 'gst', permission: 'gst.hsn_summary.view', module: 'GST' },
+    { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, icon: 'gst', permission: 'gst.gst_ledger.view', module: 'GST' },
 
     // MIS Reports
     { id: 'sales-mis', title: 'Sales MIS Dashboard', path: PATHS.MIS.SALES_DASHBOARD, icon: 'mis', permission: 'mis.sales_marketing.view', module: 'MIS Reports' },
@@ -125,7 +175,7 @@ export const ALL_FORMS = [
     { id: 'holiday-list', title: 'Holiday List', path: '/hr/holidays', icon: 'settings', permission: 'hr.hr_reports.view', module: 'HR Management' },
 
     // Task Management
-    { id: 'manage-tasks', title: 'Manage Tasks', path: '/tasks/list', icon: 'tasks', permission: 'tasks.task_list.view', module: 'Task Management' },
+    { id: 'manage-tasks', title: 'Task Hub', path: '/tasks/list', icon: 'tasks', permission: 'tasks.task_list.view', module: 'Task Management' },
     { id: 'task-groups', title: 'Task Groups', path: '/tasks/groups', icon: 'tasks', permission: 'tasks.task_groups.view', module: 'Task Management' },
     { id: 'messenger', title: 'Messenger', path: '/messenger', icon: 'messenger', permission: 'tasks', module: 'Task Management' },
 
@@ -134,7 +184,10 @@ export const ALL_FORMS = [
 
     // Admin
     { id: 'company-profile', title: 'Company Profile', path: '/company-profile', icon: 'settings', permission: 'admin.company_profile.view', module: 'Admin' },
+    { id: 'feature-compliance-settings', title: 'Feature / Compliance Settings', path: PATHS.SETTINGS.FEATURE_COMPLIANCE, icon: 'settings', permission: 'admin', module: 'Admin' },
+    { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, icon: 'settings', permission: 'admin', module: 'Admin' },
     { id: 'user-management', title: 'User Management', path: '/admin/users', icon: 'crm', permission: 'admin.user_management.view', module: 'Admin' },
+    { id: 'security-control', title: 'Security & Control', path: '/admin/security', icon: 'security', permission: 'admin.security_control.view', module: 'Admin' },
     { id: 'ledger-linking', title: 'Ledger Linking Utility', path: '/admin/ledger-linking', icon: 'settings', permission: 'admin.ledger_linking.view', module: 'Admin' },
     { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', icon: 'settings', permission: 'admin', module: 'Admin' },
     { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', icon: 'settings', permission: 'admin', module: 'Admin' },

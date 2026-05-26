@@ -1,112 +1,304 @@
+import crypto from 'crypto';
+import httpStatus from 'http-status';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { Gstr2bData } from '../models/gstr2bData.model.js';
-import mongoose from 'mongoose';
+import { GstrImportBatch } from '../models/gstrImportBatch.model.js';
+import { ApiError } from '../utils/ApiError.js';
+import {
+    DEFAULT_GST_MATCH_CONFIG,
+    classifyGstMatchStatus,
+    getMonthDateRange,
+    isRcmRecord,
+    normalizeInvoiceRef,
+    scoreGstPair,
+} from './gstReconciliation/gstReconEngine.js';
+import { parseGstrFile } from './gstReconciliation/parseGstrPortal.js';
+import { logGstReconAudit } from './gstReconciliation/gstReconAudit.service.js';
 
-/**
- * Import GSTR-2A/2B data into the system
- */
-export async function importGstrData(records, financialYear, month, source, userId) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
-        const results = {
-            total: records.length,
-            created: 0,
-            updated: 0,
-            skipped: 0
-        };
+export { DEFAULT_GST_MATCH_CONFIG };
 
-        for (const rec of records) {
-            if (!rec.supplierGstin || !rec.invoiceNumber) {
-                results.skipped++;
-                continue;
-            }
+function fileHash(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
+}
 
-            const query = {
-                supplierGstin: rec.supplierGstin,
-                invoiceNumber: rec.invoiceNumber,
-                invoiceDate: new Date(rec.invoiceDate)
-            };
-
-            const updateData = {
-                financialYear,
-                month,
-                source,
-                supplierName: rec.supplierName || '',
-                invoiceType: rec.invoiceType || 'R',
-                taxableValue: Number(rec.taxableValue || 0),
-                igst: Number(rec.igst || 0),
-                cgst: Number(rec.cgst || 0),
-                sgst: Number(rec.sgst || 0),
-                cess: Number(rec.cess || 0),
-                totalTax: Number(rec.totalTax || 0),
-                invoiceValue: Number(rec.invoiceValue || 0),
-                itcAvailable: rec.itcAvailable || 'Yes',
-                updatedBy: userId
-            };
-
-            const existing = await Gstr2bData.findOneAndUpdate(query, updateData, { upsert: true, new: true, session });
-            if (existing.createdAt.getTime() === existing.updatedAt.getTime()) {
-                results.created++;
-            } else {
-                results.updated++;
-            }
-        }
-
-        await session.commitTransaction();
-        return results;
-    } catch (error) {
-        await session.abortTransaction();
-        throw error;
-    } finally {
-        session.endSession();
-    }
+function booksPurchaseFilter(financialYear, month) {
+    const { startDate, endDate } = getMonthDateRange(financialYear, month);
+    return {
+        financialYear,
+        invoiceDate: { $gte: startDate, $lte: endDate },
+        isDeleted: { $ne: true },
+        status: { $ne: 'Cancelled' },
+    };
 }
 
 /**
- * Mode 1: GSTIN-wise Reconciliation
- * Aggregates Books vs 2B by Supplier
+ * Import GSTR-2A/2B records (JSON array or pre-parsed).
+ */
+export async function importGstrData(records, financialYear, month, source, userId, options = {}) {
+    const { fileName = '', fileHash: hashIn, importBatchId = null, allowDuplicateFile = false } = options;
+
+    if (hashIn && !allowDuplicateFile) {
+        const dup = await GstrImportBatch.findOne({ financialYear, month, source, fileHash: hashIn }).lean();
+        if (dup) {
+            await logGstReconAudit({
+                action: 'ImportDuplicateWarning',
+                financialYear,
+                month,
+                source,
+                userId,
+                importBatchId: dup._id,
+                reason: 'Duplicate file hash',
+            });
+            throw new ApiError(
+                httpStatus.CONFLICT,
+                `This file was already imported for ${month}/${financialYear} (${dup.fileName}).`,
+            );
+        }
+    }
+
+    // Build upsert operations for all valid records in one bulkWrite call.
+    // This replaces N×2 individual Atlas roundtrips with a single network call.
+    const results = { total: records.length, created: 0, updated: 0, skipped: 0 };
+    const bulkOps = [];
+
+    for (const rec of records) {
+        if (!rec.supplierGstin || !rec.invoiceNumber) {
+            results.skipped++;
+            continue;
+        }
+        bulkOps.push({
+            updateOne: {
+                filter: {
+                    financialYear,
+                    month,
+                    source,
+                    supplierGstin: String(rec.supplierGstin).trim().toUpperCase(),
+                    invoiceNumber: String(rec.invoiceNumber).trim(),
+                },
+                update: {
+                    $set: {
+                        financialYear,
+                        month,
+                        source,
+                        supplierGstin: String(rec.supplierGstin).trim().toUpperCase(),
+                        invoiceNumber: String(rec.invoiceNumber).trim(),
+                        invoiceDate: new Date(rec.invoiceDate),
+                        supplierName: rec.supplierName || '',
+                        invoiceType: rec.invoiceType || 'R',
+                        taxableValue: Number(rec.taxableValue || 0),
+                        igst: Number(rec.igst || 0),
+                        cgst: Number(rec.cgst || 0),
+                        sgst: Number(rec.sgst || 0),
+                        cess: Number(rec.cess || 0),
+                        totalTax: Number(rec.totalTax || 0),
+                        invoiceValue: Number(rec.invoiceValue || 0),
+                        itcAvailable: rec.itcAvailable || 'Yes',
+                        isReverseCharge: isRcmRecord(rec),
+                        importBatchId,
+                        updatedBy: userId,
+                    },
+                },
+                upsert: true,
+            },
+        });
+    }
+
+    if (bulkOps.length) {
+        const bulkResult = await Gstr2bData.bulkWrite(bulkOps, { ordered: false });
+        results.created = bulkResult.upsertedCount || 0;
+        results.updated = bulkResult.modifiedCount || 0;
+    }
+
+    await logGstReconAudit({
+        action: 'Import',
+        financialYear,
+        month,
+        source,
+        userId,
+        importBatchId,
+        payload: { ...results, fileName },
+    });
+    return results;
+}
+
+export async function importGstrFromFile({ buffer, fileName, financialYear, month, source, userId }) {
+    let records = [];
+    let fileType = 'json';
+    let sheetSummary = [];
+    let parseErrors = [];
+    let parseTotalSkipped = 0;
+
+    if (fileName.toLowerCase().endsWith('.json')) {
+        const parsed = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
+        records = Array.isArray(parsed) ? parsed : [parsed];
+        fileType = 'json';
+    } else {
+        const parsed = await parseGstrFile(buffer, fileName);
+        records = parsed.records;
+        fileType = parsed.fileType;
+        sheetSummary = parsed.sheetSummary || [];
+        parseErrors = parsed.errors || [];
+        parseTotalSkipped = parsed.totalSkipped || 0;
+
+        if (!records.length) {
+            // Build a descriptive error from sheet-level diagnostics
+            let detail = 'No valid rows parsed from file.';
+            if (fileType === 'unknown') {
+                detail = `Unsupported file format. Please upload an Excel (.xlsx) or CSV file downloaded from the GST portal.`;
+            } else if (sheetSummary.length === 0) {
+                detail = 'The file appears to be empty or corrupt.';
+            } else {
+                const reasons = sheetSummary
+                    .filter((s) => !s.headerDetected)
+                    .map((s) => `Sheet "${s.sheetName}": ${s.reason || 'Header not detected'}`)
+                    .join('; ');
+                if (reasons) {
+                    detail = `Header row could not be detected. ${reasons}. Ensure the file is a standard GST portal GSTR-2B download.`;
+                } else {
+                    const allSkipped = sheetSummary.every((s) => s.parsed === 0);
+                    if (allSkipped) detail = 'All rows were skipped — check that the file contains valid invoice data (non-empty GSTIN/invoice number/date columns).';
+                }
+            }
+            throw new ApiError(httpStatus.BAD_REQUEST, detail);
+        }
+    }
+
+    const hash = fileHash(buffer);
+
+    // ── Duplicate-file guard ──────────────────────────────────────────────────
+    // Check BEFORE creating the batch so we don't create a ghost batch that
+    // immediately blocks its own import on the inner importGstrData call.
+    // Only block on successfully Completed batches; Failed batches are retryable.
+    const existingBatch = await GstrImportBatch.findOne({
+        financialYear,
+        month,
+        source,
+        fileHash: hash,
+        status: 'Completed',
+    }).lean();
+    if (existingBatch) {
+        await logGstReconAudit({
+            action: 'ImportDuplicateWarning',
+            financialYear,
+            month,
+            source,
+            userId,
+            importBatchId: existingBatch._id,
+            reason: 'Duplicate file hash',
+        });
+        throw new ApiError(
+            httpStatus.CONFLICT,
+            `This file was already imported successfully for ${month}/${financialYear} (${existingBatch.fileName}).`,
+        );
+    }
+
+    // Remove any leftover Failed batch for this file so the import starts clean
+    await GstrImportBatch.deleteMany({ financialYear, month, source, fileHash: hash, status: 'Failed' });
+
+    const batch = await GstrImportBatch.create({
+        financialYear,
+        month,
+        source,
+        fileName,
+        fileHash: hash,
+        fileType,
+        importedBy: userId,
+        rowCount: records.length,
+        status: 'Completed',
+    });
+
+    try {
+        // allowDuplicateFile=true — dedup already handled above; skip inner check
+        const results = await importGstrData(records, financialYear, month, source, userId, {
+            fileName,
+            importBatchId: batch._id,
+            allowDuplicateFile: true,
+        });
+        batch.rowCount = records.length;
+        batch.created = results.created;
+        batch.updated = results.updated;
+        batch.skipped = results.skipped;
+        batch.status = 'Completed';
+        await batch.save();
+        return {
+            batch,
+            ...results,
+            sheetSummary,
+            parseErrors: parseErrors.slice(0, 50),
+            totalParsed: records.length,
+            totalSkipped: parseTotalSkipped + results.skipped,
+        };
+    } catch (e) {
+        batch.status = 'Failed';
+        batch.errorMessage = e.message;
+        await batch.save();
+        throw e;
+    }
+}
+
+export async function listImportBatches({ financialYear, month, source, limit = 50 }) {
+    const q = {};
+    if (financialYear) q.financialYear = financialYear;
+    if (month) q.month = month;
+    if (source) q.source = source;
+    return GstrImportBatch.find(q).sort({ createdAt: -1 }).limit(limit).lean();
+}
+
+/**
+ * GSTIN-wise summary (books vs portal for period).
  */
 export async function reconcileGstinWise(financialYear, month, source) {
-    // 1. Get Purchase Data for period
     const purchases = await PurchaseInvoice.aggregate([
-        { $match: { financialYear, isDeleted: { $ne: true }, status: { $ne: 'Cancelled' } } },
-        // Add month filtering if possible, or filter by date
+        { $match: booksPurchaseFilter(financialYear, month) },
         {
             $group: {
-                _id: "$supplierGstin",
-                supplierName: { $first: "$supplierName" },
+                _id: '$supplierGstin',
+                supplierName: { $first: '$supplierName' },
                 booksCount: { $sum: 1 },
-                booksTaxableValue: { $sum: "$totalTaxableAmount" },
-                booksIgst: { $sum: "$totalIgst" },
-                booksCgst: { $sum: "$totalCgst" },
-                booksSgst: { $sum: "$totalSgst" },
-                booksTotalGst: { $sum: "$totalTax" }
-            }
-        }
+                booksTaxableValue: { $sum: '$totalTaxableAmount' },
+                booksIgst: { $sum: '$totalIgst' },
+                booksCgst: { $sum: '$totalCgst' },
+                booksSgst: { $sum: '$totalSgst' },
+                booksTotalGst: { $sum: '$totalTax' },
+                booksRcmCount: { $sum: { $cond: ['$reverseCharge', 1, 0] } },
+                booksRcmGst: { $sum: { $cond: ['$reverseCharge', '$totalTax', 0] } },
+            },
+        },
     ]);
 
-    // 2. Get 2B Data for period
     const portalData = await Gstr2bData.aggregate([
         { $match: { financialYear, month, source } },
         {
             $group: {
-                _id: "$supplierGstin",
-                supplierName: { $first: "$supplierName" },
+                _id: '$supplierGstin',
+                supplierName: { $first: '$supplierName' },
                 portalCount: { $sum: 1 },
-                portalTaxableValue: { $sum: "$taxableValue" },
-                portalIgst: { $sum: "$igst" },
-                portalCgst: { $sum: "$cgst" },
-                portalSgst: { $sum: "$sgst" },
-                portalTotalGst: { $sum: "$totalTax" }
-            }
-        }
+                portalTaxableValue: { $sum: '$taxableValue' },
+                portalIgst: { $sum: '$igst' },
+                portalCgst: { $sum: '$cgst' },
+                portalSgst: { $sum: '$sgst' },
+                portalTotalGst: { $sum: '$totalTax' },
+                portalRcmCount: { $sum: { $cond: ['$isReverseCharge', 1, 0] } },
+                portalRcmGst: { $sum: { $cond: ['$isReverseCharge', '$totalTax', 0] } },
+            },
+        },
     ]);
 
-    // 3. Merge results
     const combinedMap = new Map();
 
-    purchases.forEach(p => {
+    const emptySide = () => ({
+        count: 0,
+        taxableValue: 0,
+        igst: 0,
+        cgst: 0,
+        sgst: 0,
+        totalGst: 0,
+        rcmCount: 0,
+        rcmGst: 0,
+    });
+
+    purchases.forEach((p) => {
+        if (!p._id) return;
         combinedMap.set(p._id, {
             gstin: p._id,
             supplierName: p.supplierName,
@@ -116,14 +308,17 @@ export async function reconcileGstinWise(financialYear, month, source) {
                 igst: p.booksIgst,
                 cgst: p.booksCgst,
                 sgst: p.booksSgst,
-                totalGst: p.booksTotalGst
+                totalGst: p.booksTotalGst,
+                rcmCount: p.booksRcmCount,
+                rcmGst: p.booksRcmGst,
             },
-            portal: { count: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, totalGst: 0 },
-            difference: { taxableValue: p.booksTaxableValue, totalGst: p.booksTotalGst }
+            portal: emptySide(),
+            difference: { taxableValue: p.booksTaxableValue, totalGst: p.booksTotalGst },
         });
     });
 
-    portalData.forEach(p => {
+    portalData.forEach((p) => {
+        if (!p._id) return;
         if (combinedMap.has(p._id)) {
             const entry = combinedMap.get(p._id);
             entry.portal = {
@@ -132,162 +327,230 @@ export async function reconcileGstinWise(financialYear, month, source) {
                 igst: p.portalIgst,
                 cgst: p.portalCgst,
                 sgst: p.portalSgst,
-                totalGst: p.portalTotalGst
+                totalGst: p.portalTotalGst,
+                rcmCount: p.portalRcmCount,
+                rcmGst: p.portalRcmGst,
             };
             entry.difference = {
                 taxableValue: entry.books.taxableValue - p.portalTaxableValue,
-                totalGst: entry.books.totalGst - p.portalTotalGst
+                totalGst: entry.books.totalGst - p.portalTotalGst,
             };
         } else {
             combinedMap.set(p._id, {
                 gstin: p._id,
                 supplierName: p.supplierName,
-                books: { count: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, totalGst: 0 },
+                books: emptySide(),
                 portal: {
                     count: p.portalCount,
                     taxableValue: p.portalTaxableValue,
                     igst: p.portalIgst,
                     cgst: p.portalCgst,
                     sgst: p.portalSgst,
-                    totalGst: p.portalTotalGst
+                    totalGst: p.portalTotalGst,
+                    rcmCount: p.portalRcmCount,
+                    rcmGst: p.portalRcmGst,
                 },
-                difference: { taxableValue: -p.portalTaxableValue, totalGst: -p.portalTotalGst }
+                difference: { taxableValue: -p.portalTaxableValue, totalGst: -p.portalTotalGst },
             });
         }
     });
 
-    return Array.from(combinedMap.values()).map(row => {
+    return Array.from(combinedMap.values()).map((row) => {
         let status = 'Matched';
         if (row.books.count > 0 && row.portal.count === 0) status = 'Books Only';
         else if (row.books.count === 0 && row.portal.count > 0) status = '2B Only';
-        else if (Math.abs(row.difference.totalGst) > 2) status = 'Difference';
+        else if (Math.abs(row.difference.totalGst) > DEFAULT_GST_MATCH_CONFIG.taxTolerance) status = 'Difference';
         return { ...row, status };
     });
 }
 
 /**
- * Mode 2: Bill-to-bill Reconciliation
- * Match each invoice one by one
+ * Bill-to-bill reconciliation with scoring metadata.
  */
-export async function reconcileBillToBill(financialYear, month, source, tolerance = 2) {
-    // Get date range for month
-    const yr = month >= '04' ? financialYear.split('-')[0] : financialYear.split('-')[1];
-    const startDate = new Date(yr, parseInt(month) - 1, 1);
-    const endDate = new Date(yr, parseInt(month), 0, 23, 59, 59);
+export async function reconcileBillToBill(financialYear, month, source, matchConfig = {}, options = {}) {
+    const { persistStatus = true } = options;
+    const config = { ...DEFAULT_GST_MATCH_CONFIG, ...matchConfig };
+    const { startDate, endDate } = getMonthDateRange(financialYear, month);
 
-    // 1. Get Books Data
     const booksInvoices = await PurchaseInvoice.find({
+        ...booksPurchaseFilter(financialYear, month),
         invoiceDate: { $gte: startDate, $lte: endDate },
-        isDeleted: { $ne: true },
-        status: { $ne: 'Cancelled' }
     }).lean();
 
-    // 2. Get Portal Data
-    const portalInvoices = await Gstr2bData.find({
-        financialYear, month, source
-    }).lean();
+    const portalInvoices = await Gstr2bData.find({ financialYear, month, source }).lean();
 
     const results = [];
     const matchedPortalIds = new Set();
 
-    // Try matching books to portal
     for (const bInv of booksInvoices) {
-        // Normalizing bill number for better matching (remove non-alphanumeric)
-        const bNum = (bInv.supplierInvoiceNo || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-        
-        // Find match in portal
-        const pMatch = portalInvoices.find(p => {
-            if (matchedPortalIds.has(p._id.toString())) return false;
-            if (p.supplierGstin !== bInv.supplierGstin) return false;
-            
-            const pNum = p.invoiceNumber.replace(/[^a-z0-9]/gi, '').toLowerCase();
-            return pNum === bNum;
-        });
+        const bNum = normalizeInvoiceRef(bInv.supplierInvoiceNo);
+        let best = null;
+        let bestScore = 0;
 
-        if (pMatch) {
-            matchedPortalIds.add(pMatch._id.toString());
-            const diffTax = Math.abs((bInv.totalTax || 0) - (pMatch.totalTax || 0));
-            const diffTaxable = Math.abs((bInv.totalTaxableAmount || 0) - (pMatch.taxableValue || 0));
-            
-            let status = 'Fully Matched';
-            if (diffTax > tolerance || diffTaxable > tolerance) status = 'Mismatch';
-            else if (diffTax > 0 || diffTaxable > 0) status = 'Matched with Rounding';
+        for (const p of portalInvoices) {
+            if (matchedPortalIds.has(String(p._id))) continue;
+            if (p.supplierGstin !== bInv.supplierGstin) continue;
+            if (normalizeInvoiceRef(p.invoiceNumber) !== bNum) continue;
 
-            results.push({
-                status,
-                gstin: bInv.supplierGstin,
-                supplierName: bInv.supplierName,
-                books: {
-                    billNo: bInv.supplierInvoiceNo,
-                    billDate: bInv.invoiceDate,
-                    taxableValue: bInv.totalTaxableAmount,
-                    igst: bInv.totalIgst,
-                    cgst: bInv.totalCgst,
-                    sgst: bInv.totalSgst,
-                    totalGst: bInv.totalTax,
-                    invoiceValue: bInv.grandTotal
+            const scored = scoreGstPair(
+                {
+                    supplierGstin: bInv.supplierGstin,
+                    supplierInvoiceNo: bInv.supplierInvoiceNo,
+                    invoiceDate: bInv.invoiceDate,
+                    totalTaxableAmount: bInv.totalTaxableAmount,
+                    totalTax: bInv.totalTax,
                 },
-                portal: {
-                    billNo: pMatch.invoiceNumber,
-                    billDate: pMatch.invoiceDate,
-                    taxableValue: pMatch.taxableValue,
-                    igst: pMatch.igst,
-                    cgst: pMatch.cgst,
-                    sgst: pMatch.sgst,
-                    totalGst: pMatch.totalTax,
-                    invoiceValue: pMatch.invoiceValue
-                },
-                difference: {
-                    taxableValue: bInv.totalTaxableAmount - pMatch.taxableValue,
-                    totalGst: (bInv.totalTax || 0) - (pMatch.totalTax || 0)
-                },
-                purchaseId: bInv._id
-            });
+                p,
+                config,
+            );
+            if (scored.score > bestScore) {
+                bestScore = scored.score;
+                best = { portal: p, scored };
+            }
+        }
+
+        if (best) {
+            matchedPortalIds.add(String(best.portal._id));
+            const pMatch = best.portal;
+            const status = classifyGstMatchStatus(bInv, pMatch, config);
+            const row = buildBillRow(bInv, pMatch, status, best.scored);
+            row.purchaseId = bInv._id;
+            row.portalId = pMatch._id;
+            row.isRcm = Boolean(bInv.reverseCharge || pMatch.isReverseCharge);
+            results.push(row);
+
+            if (persistStatus) {
+                await Gstr2bData.updateOne(
+                    { _id: pMatch._id },
+                    { reconciliationStatus: status, matchingPurchaseId: bInv._id },
+                );
+            }
         } else {
             results.push({
-                status: 'Books Only',
-                gstin: bInv.supplierGstin,
-                supplierName: bInv.supplierName,
-                books: {
-                    billNo: bInv.supplierInvoiceNo,
-                    billDate: bInv.invoiceDate,
-                    taxableValue: bInv.totalTaxableAmount,
-                    igst: bInv.totalIgst,
-                    cgst: bInv.totalCgst,
-                    sgst: bInv.totalSgst,
-                    totalGst: bInv.totalTax,
-                    invoiceValue: bInv.grandTotal
-                },
-                portal: null,
-                difference: { taxableValue: bInv.totalTaxableAmount, totalGst: bInv.totalTax },
-                purchaseId: bInv._id
+                ...buildBillRow(bInv, null, 'Books Only', null),
+                purchaseId: bInv._id,
+                isRcm: Boolean(bInv.reverseCharge),
             });
         }
     }
 
-    // Add remaining portal records as "2B Only"
-    portalInvoices.forEach(p => {
-        if (!matchedPortalIds.has(p._id.toString())) {
-            results.push({
-                status: '2B Only',
-                gstin: p.supplierGstin,
-                supplierName: p.supplierName,
-                books: null,
-                portal: {
-                    billNo: p.invoiceNumber,
-                    billDate: p.invoiceDate,
-                    taxableValue: p.taxableValue,
-                    igst: p.igst,
-                    cgst: p.cgst,
-                    sgst: p.sgst,
-                    totalGst: p.totalTax,
-                    invoiceValue: p.invoiceValue
-                },
-                difference: { taxableValue: -p.taxableValue, totalGst: -p.totalTax },
-                portalId: p._id
-            });
+    for (const p of portalInvoices) {
+        if (matchedPortalIds.has(String(p._id))) continue;
+        results.push({
+            ...buildBillRow(null, p, '2B Only', null),
+            portalId: p._id,
+            isRcm: Boolean(p.isReverseCharge),
+        });
+        if (persistStatus) {
+            await Gstr2bData.updateOne({ _id: p._id }, { reconciliationStatus: '2B Only', matchingPurchaseId: null });
+        }
+    }
+
+    if (persistStatus) {
+        await logGstReconAudit({
+            action: 'Reconcile',
+            financialYear,
+            month,
+            source,
+            payload: { rowCount: results.length },
+        });
+    }
+
+    return results;
+}
+
+function buildBillRow(bInv, pMatch, status, scored) {
+    return {
+        status,
+        confidence: scored?.score ?? 0,
+        matchReasons: scored?.reasons ?? [],
+        dateDifferenceDays: scored?.days ?? 0,
+        gstin: bInv?.supplierGstin || pMatch?.supplierGstin,
+        supplierName: bInv?.supplierName || pMatch?.supplierName,
+        books: bInv
+            ? {
+                billNo: bInv.supplierInvoiceNo,
+                billDate: bInv.invoiceDate,
+                taxableValue: bInv.totalTaxableAmount,
+                igst: bInv.totalIgst,
+                cgst: bInv.totalCgst,
+                sgst: bInv.totalSgst,
+                totalGst: bInv.totalTax,
+                invoiceValue: bInv.grandTotal,
+                reverseCharge: bInv.reverseCharge,
+            }
+            : null,
+        portal: pMatch
+            ? {
+                billNo: pMatch.invoiceNumber,
+                billDate: pMatch.invoiceDate,
+                taxableValue: pMatch.taxableValue,
+                igst: pMatch.igst,
+                cgst: pMatch.cgst,
+                sgst: pMatch.sgst,
+                totalGst: pMatch.totalTax,
+                invoiceValue: pMatch.invoiceValue,
+                itcAvailable: pMatch.itcAvailable,
+                isReverseCharge: pMatch.isReverseCharge,
+            }
+            : null,
+        difference: {
+            taxableValue: (bInv?.totalTaxableAmount || 0) - (pMatch?.taxableValue || 0),
+            totalGst: (bInv?.totalTax || 0) - (pMatch?.totalTax || 0),
+        },
+    };
+}
+
+export async function getRcmSummary(financialYear, month, source) {
+    const rows = await reconcileBillToBill(financialYear, month, source, {}, { persistStatus: false });
+    const summary = {
+        booksRcmGst: 0,
+        portalRcmGst: 0,
+        matchedRcmGst: 0,
+        booksOnlyRcmGst: 0,
+        portalOnlyRcmGst: 0,
+        booksRcmCount: 0,
+        portalRcmCount: 0,
+    };
+
+    rows.forEach((row) => {
+        if (!row.isRcm) return;
+        const bTax = row.books?.totalGst || 0;
+        const pTax = row.portal?.totalGst || 0;
+        if (row.books?.reverseCharge || row.isRcm) {
+            summary.booksRcmGst += bTax;
+            summary.booksRcmCount += row.books ? 1 : 0;
+        }
+        if (row.portal?.isReverseCharge) {
+            summary.portalRcmGst += pTax;
+            summary.portalRcmCount += row.portal ? 1 : 0;
+        }
+        if (row.status === 'Fully Matched' || row.status === 'Matched with Rounding') {
+            summary.matchedRcmGst += pTax;
+        } else if (row.status === 'Books Only') {
+            summary.booksOnlyRcmGst += bTax;
+        } else if (row.status === '2B Only') {
+            summary.portalOnlyRcmGst += pTax;
         }
     });
 
-    return results;
+    return summary;
+}
+
+export async function manualOverrideStatus({ portalId, status, remarks, userId }) {
+    const doc = await Gstr2bData.findByIdAndUpdate(
+        portalId,
+        { manualStatus: status, reconciliationStatus: status, remarks, updatedBy: userId },
+        { new: true },
+    );
+    if (!doc) throw new ApiError(httpStatus.NOT_FOUND, 'Portal record not found');
+    await logGstReconAudit({
+        action: 'ManualOverride',
+        financialYear: doc.financialYear,
+        month: doc.month,
+        source: doc.source,
+        userId,
+        payload: { portalId, status, remarks },
+    });
+    return doc;
 }

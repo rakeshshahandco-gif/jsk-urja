@@ -1,6 +1,7 @@
 import { StockLedger } from '../models/stockLedger.model.js';
 import { Item } from '../models/item.model.js';
 import { recalculateStockLedger } from '../utils/stockUtils.js';
+import { createProductionCostSnapshot } from './productCostEngine.service.js';
 
 /**
  * Synchronizes Work Order completion to Industry.
@@ -89,6 +90,26 @@ export const syncWorkOrderToInventory = async (wo, session, userId) => {
             await StockLedger.insertMany(consumptionEntries, { session });
         }
     }
+
+    const materialConsumption = [];
+    for (const mat of wo.materialStatus || []) {
+        if (!mat.itemId) continue;
+        const consumedQty = mat.requiredQty || 0;
+        if (consumedQty <= 0) continue;
+        const ci = await Item.findById(mat.itemId).select('valuationRate').session(session).lean();
+        materialConsumption.push({ consumedQty, rate: ci?.valuationRate || 0 });
+    }
+
+    await createProductionCostSnapshot({
+        finishedItemId: wo.finishedProductId,
+        qtyProduced: qtyToAdd,
+        workOrderId: wo._id,
+        workOrderNo: wo.woNumber || '',
+        productionDate: new Date(),
+        userId,
+        session,
+        materialConsumption,
+    });
 
     // 5. Update Item Master and Ledger Consistency for finished product
     await recalculateStockLedger(wo.finishedProductId, session);

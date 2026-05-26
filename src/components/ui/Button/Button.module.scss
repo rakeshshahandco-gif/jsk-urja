@@ -6,7 +6,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: $radius-lg;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFieldArray } from 'react-hook-form';
-import { Input, Button } from '@/components/ui';
+import { Input } from '../Input';
+import { Button } from '../Button';
 import { Plus, Trash2, Star } from 'lucide-react';
 import styles from './ContactPersonInput.module.scss';
 

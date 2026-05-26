@@ -58,7 +58,9 @@ export const AuthProvider = ({ children }) => {
             return { success: true };
         } catch (error) {
             console.error("Login error:", error);
-            const msg = error.response?.data?.message || error.message || 'Login failed';
+            const msg = !error.response
+                ? 'Cannot reach the server. Start the backend: cd backend && npm run dev (port 5000).'
+                : (error.response?.data?.message || error.message || 'Login failed');
             return { success: false, error: msg };
         }
     }, []);

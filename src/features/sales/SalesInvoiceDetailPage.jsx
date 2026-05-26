@@ -9,11 +9,15 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
 import { createEwayBillDraft } from '@/services/ewayBillApi';
+import { createEInvoiceDraft } from '@/services/eInvoiceApi';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import communicationApi from '@/services/communicationApi';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import GstCorrectionModal from './components/GstCorrectionModal';
+import InvoiceBarcodeBlock from '@/components/invoice/InvoiceBarcodeBlock';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
+import { getBillAdjustments } from '@/services/billWiseAdjustmentApi';
 
 const PAY_COLORS = {
     Unpaid: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -27,6 +31,7 @@ const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7,
 
 export default function SalesInvoiceDetailPage() {
     const { hasRole } = useAuth();
+    const { isFeatureEnabled } = useFeatureSettings();
     const isAdmin = hasRole('admin') || hasRole('superadmin');
     const { id } = useParams();
     const navigate = useNavigate();
@@ -39,6 +44,7 @@ export default function SalesInvoiceDetailPage() {
     const [showSeriesModal, setShowSeriesModal] = useState(false);
     const [showGstModal, setShowGstModal] = useState(false);
     const [isCommModalOpen, setIsCommModalOpen] = useState(false);
+    const [billWiseRows, setBillWiseRows] = useState([]);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -69,6 +75,13 @@ export default function SalesInvoiceDetailPage() {
         load(); 
         getInvoiceSeries({ active: true }).then(setSeriesList).catch(() => {});
     }, [load]);
+
+    useEffect(() => {
+        if (!id) return;
+        getBillAdjustments({ billId: id, billType: 'SalesInvoice' })
+            .then((rows) => setBillWiseRows(Array.isArray(rows) ? rows : []))
+            .catch(() => setBillWiseRows([]));
+    }, [id]);
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', {
         day: '2-digit',
@@ -169,6 +182,19 @@ export default function SalesInvoiceDetailPage() {
             navigate(`/eway-bills/draft/${res.data._id}`);
         } catch (e) {
             toast.error(e.response?.data?.message || 'Failed to prepare E-Way Bill');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEInvoice = async () => {
+        setLoading(true);
+        try {
+            const res = await createEInvoiceDraft(id);
+            toast.success('E-Invoice Draft Ready!');
+            navigate(`/e-invoices/draft/${res.data._id}`);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to prepare E-Invoice');
         } finally {
             setLoading(false);
         }
@@ -443,6 +469,8 @@ export default function SalesInvoiceDetailPage() {
                                             <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{inv.amountInWords}</span>
                                         </div>
 
+                                        {isLastPage && <InvoiceBarcodeBlock invoiceId={id} variant="print" />}
+
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderTop: 'none', minHeight: '100px' }}>
                                             <div style={{ borderRight: '1px solid #000', padding: '8px', fontSize: '8pt', position: 'relative' }}>
                                                 <div style={{ fontWeight: 900, marginBottom: '6px', textDecoration: 'underline' }}>Receiver&apos;s Signature:</div>
@@ -647,14 +675,22 @@ export default function SalesInvoiceDetailPage() {
                                 </div>
                             )}
 
-                            {/* E-Way Bill Button */}
-                            {notCancelled && (
-                                <button
-                                    onClick={handleEwayBill}
-                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
-                                >
-                                    🚚 Prepare E-Way Bill
-                                </button>
+                            {/* E-Way Bill & E-Invoice */}
+                            {notCancelled && isFeatureEnabled('gst.eWayBillRequired') && (
+                                    <button
+                                        onClick={handleEwayBill}
+                                        style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}
+                                    >
+                                        🚚 Prepare E-Way Bill
+                                    </button>
+                            )}
+                            {notCancelled && isFeatureEnabled('gst.eInvoiceRequired') && (
+                                    <button
+                                        onClick={handleEInvoice}
+                                        style={{ padding: '9px 18px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+                                    >
+                                        📄 Prepare E-Invoice
+                                    </button>
                             )}
 
 
@@ -671,6 +707,37 @@ export default function SalesInvoiceDetailPage() {
                             <div style={{ height: 6, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
                                 <div style={{ height: '100%', width: `${Math.min(100, (inv.paidAmount / (inv.roundedTotal || inv.grandTotal)) * 100)}%`, background: 'linear-gradient(90deg,#0d9488,#2563eb)', borderRadius: 99, transition: 'width 0.4s' }} />
                             </div>
+                        </div>
+                    )}
+                    {isFeatureEnabled('sales.enableBarcodeQr') && (
+                    <div style={{ marginTop: 16, padding: 14, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>QR & Barcode</div>
+                        <InvoiceBarcodeBlock invoiceId={id} variant="screen" />
+                    </div>
+                    )}
+                    {billWiseRows.length > 0 && (
+                        <div style={{ marginTop: 16, padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>Bill-wise adjustments</div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ ...th, fontSize: 10 }}>Receipt No.</th>
+                                        <th style={{ ...th, fontSize: 10 }}>Date</th>
+                                        <th style={{ ...th, fontSize: 10 }}>Amount</th>
+                                        <th style={{ ...th, fontSize: 10 }}>Reversed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {billWiseRows.map((r) => (
+                                        <tr key={r._id}>
+                                            <td style={td}>{r.paymentNo}</td>
+                                            <td style={td}>{fmt(r.adjustmentDate)}</td>
+                                            <td style={td}>{fmtCur(r.adjustedAmount)}</td>
+                                            <td style={td}>{r.isReversed ? 'Yes' : 'No'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>

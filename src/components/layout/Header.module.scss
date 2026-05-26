@@ -1,8 +1,10 @@
+@import '@/styles/_variables';
+
 /* Header Redesign — Modern Premium Light Theme */
 .header {
-    background: #ffffff;
-    border-bottom: 1px solid #E2E8F0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    background: $surface-elevated;
+    border-bottom: 1px solid $border-light;
+    box-shadow: $shadow-sm;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -69,6 +71,21 @@
 
     @media (max-width: 768px) {
         gap: 10px;
+    }
+}
+
+.headerSelectors {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-right: 8px;
+
+    @media (max-width: 1024px) {
+        gap: 8px;
+    }
+
+    @media (max-width: 640px) {
+        display: none;
     }
 }
 

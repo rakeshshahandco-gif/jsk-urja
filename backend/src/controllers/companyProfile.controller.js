@@ -14,6 +14,7 @@ const companyProfileSchema = Joi.object({
     pincode: Joi.string().allow('', null),
     gstNumber: Joi.string().allow('', null),
     panNumber: Joi.string().allow('', null),
+    tanNumber: Joi.string().trim().uppercase().allow('', null),
     email: Joi.string().allow('', null),
     phone: Joi.string().allow('', null),
     urn: Joi.string().allow('', null),
@@ -26,12 +27,16 @@ const companyProfileSchema = Joi.object({
 // @route   GET /api/v1/company-profile
 // @access  Private
 export const getCompanyProfile = asyncHandler(async (req, res) => {
-    let profile = await CompanyProfile.findOne();
+    if (!req.companyId) {
+        throw new ApiError(400, 'Active company is required');
+    }
+    let profile = await CompanyProfile.findOne({ companyId: req.companyId });
 
     // If no profile exists, create a default empty one
     if (!profile) {
         profile = await CompanyProfile.create({
             companyName: 'Default Company Name',
+            companyId: req.companyId,
         });
     }
 
@@ -54,10 +59,13 @@ export const updateCompanyProfile = asyncHandler(async (req, res) => {
         value.logoUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
     }
 
-    let profile = await CompanyProfile.findOne();
+    if (!req.companyId) {
+        throw new ApiError(400, 'Active company is required');
+    }
+    let profile = await CompanyProfile.findOne({ companyId: req.companyId });
 
     if (!profile) {
-        profile = new CompanyProfile(value);
+        profile = new CompanyProfile({ ...value, companyId: req.companyId });
     } else {
         Object.assign(profile, value);
     }

@@ -576,6 +576,28 @@ const PaymentEntryPage = () => {
                         </h1>
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record money paid to suppliers or for expenses</p>
                     </div>
+                    {formData.items?.[0]?.ledgerId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const p = new URLSearchParams({ ledgerId: String(formData.items[0].ledgerId) });
+                                if (isEdit && id) p.set('paymentVoucherId', String(id));
+                                navigate(`${PATHS.ACCOUNTS.BILL_WISE_ADJUSTMENT}?${p.toString()}`);
+                            }}
+                            style={{
+                                padding: '8px 14px',
+                                borderRadius: 8,
+                                border: '1px solid #6366f1',
+                                background: '#eef2ff',
+                                color: '#4338ca',
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Adjust Against Bills
+                        </button>
+                    )}
                 </div>
 
                 <div style={{ pointerEvents: isSubmitting ? 'none' : 'auto', opacity: isSubmitting ? 0.7 : 1 }}>

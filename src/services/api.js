@@ -10,6 +10,7 @@ export const currentLocation = env.API_URL;
 // Create axios instance
 const api = axios.create({
     baseURL: currentLocation.endsWith('/') ? currentLocation : `${currentLocation}/`,
+    timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -21,6 +22,17 @@ api.interceptors.request.use(
         const authData = getAuthData();
         if (authData && authData.token) {
             config.headers.Authorization = `Bearer ${authData.token}`;
+            try {
+                const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('jsk_selected_company') : null;
+                if (raw) {
+                    const co = JSON.parse(raw);
+                    if (co && co._id) {
+                        config.headers['X-Company-Id'] = co._id;
+                    }
+                }
+            } catch {
+                /* ignore invalid stored company */
+            }
         }
 
         // Add Financial Year filter to GET requests

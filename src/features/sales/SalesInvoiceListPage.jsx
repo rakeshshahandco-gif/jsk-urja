@@ -1,12 +1,25 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSalesInvoices, deleteSalesOrder, restoreSalesInvoice, getInvoiceSeries } from '@/services/salesApi';
-import { deleteSalesInvoice } from '@/services/salesApi'; // Ensure this is exported or added if needed
+import { getSalesInvoices, restoreSalesInvoice, getInvoiceSeries } from '@/services/salesApi';
+import { deleteSalesInvoice } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
+import useDebounce from '@/hooks/useDebounce';
 import toast from 'react-hot-toast';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ScanLine } from 'lucide-react';
+import InvoiceScannerModal from '@/components/invoice/InvoiceScannerModal';
 import { TableSkeleton } from '@/components/ui/BrandedLoading';
+
+function getInvoiceLoadErrorMessage(err) {
+    if (!err?.response) {
+        if (err?.code === 'ECONNABORTED') {
+            return 'Request timed out. Check that the backend is running on port 5000.';
+        }
+        return err?.message || 'Cannot reach the server. Is the backend running?';
+    }
+    return err.response?.data?.message || `Failed to load invoices (${err.response.status})`;
+}
 
 const PAY_COLORS = {
     'Unpaid': { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
@@ -28,10 +41,15 @@ const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f
 export default function SalesInvoiceListPage() {
     const navigate = useNavigate();
     const { hasRole } = useAuth();
+    const { selectedCompany, loading: companyLoading } = useCompany();
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const [seriesOptions, setSeriesOptions] = useState([]);
-    
+    const loadSeqRef = useRef(0);
+    const lastToastRef = useRef('');
+    const [showScanner, setShowScanner] = useState(false);
+
     // Persistent Filter State
     const { filters, setFilter, resetFilters } = useFilterPersistence('sales-invoices', {
         search: '',
@@ -41,21 +59,56 @@ export default function SalesInvoiceListPage() {
     });
     
     const { search, payFilter, seriesFilter, viewMode } = filters;
+    const debouncedSearch = useDebounce(search, 350);
 
     const load = useCallback(() => {
+        if (companyLoading) return;
+
+        if (!selectedCompany?._id) {
+            const msg = 'Please select a company using the switcher in the header.';
+            setInvoices([]);
+            setLoadError(msg);
+            setLoading(false);
+            if (lastToastRef.current !== msg) {
+                lastToastRef.current = msg;
+                toast.error(msg);
+            }
+            return;
+        }
+
+        const seq = ++loadSeqRef.current;
         setLoading(true);
-        getSalesInvoices({ 
-            search, 
-            paymentStatus: payFilter, 
+        setLoadError(null);
+
+        getSalesInvoices({
+            search: debouncedSearch,
+            paymentStatus: payFilter,
             series: seriesFilter || undefined,
-            view: viewMode, 
-            includeDeleted: true, 
-            limit: 100 
+            view: viewMode,
+            includeDeleted: true,
+            limit: 100,
         })
-            .then(data => setInvoices(data.invoices || []))
-            .catch(() => toast.error('Failed to load invoices'))
-            .finally(() => setLoading(false));
-    }, [search, payFilter, seriesFilter, viewMode]);
+            .then((data) => {
+                if (seq !== loadSeqRef.current) return;
+                setInvoices(data.invoices || []);
+                setLoadError(null);
+                lastToastRef.current = '';
+            })
+            .catch((err) => {
+                if (seq !== loadSeqRef.current) return;
+                const msg = getInvoiceLoadErrorMessage(err);
+                setInvoices([]);
+                setLoadError(msg);
+                if (lastToastRef.current !== msg) {
+                    lastToastRef.current = msg;
+                    toast.error(msg);
+                }
+            })
+            .finally(() => {
+                if (seq !== loadSeqRef.current) return;
+                setLoading(false);
+            });
+    }, [debouncedSearch, payFilter, seriesFilter, viewMode, selectedCompany?._id, companyLoading]);
 
     useEffect(() => {
         getInvoiceSeries()
@@ -63,7 +116,13 @@ export default function SalesInvoiceListPage() {
             .catch(() => { });
     }, []);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        if (companyLoading) {
+            setLoading(true);
+            return;
+        }
+        load();
+    }, [load, companyLoading]);
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
@@ -107,12 +166,17 @@ export default function SalesInvoiceListPage() {
                             <Trash2 size={14} /> Cleanup Drafts
                         </button>
                     )}
+                    <button onClick={() => setShowScanner(true)}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#1e3a5f', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ScanLine size={16} /> Scan Invoice
+                    </button>
                     <button onClick={() => navigate(PATHS.SALES.NEW_INVOICE)}
                         style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
                         + New Invoice
                     </button>
                 </div>
             </div>
+            <InvoiceScannerModal open={showScanner} onClose={() => setShowScanner(false)} />
 
             {/* Visibility Filters */}
             {/* Visibility Filters */}
@@ -155,6 +219,23 @@ export default function SalesInvoiceListPage() {
                 </button>
             </div>
 
+            {loadError && !loading && (
+                <div
+                    role="alert"
+                    style={{
+                        marginBottom: 12,
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        background: '#fef2f2',
+                        border: '1px solid #fca5a5',
+                        color: '#b91c1c',
+                        fontSize: 13,
+                        fontWeight: 600,
+                    }}
+                >
+                    {loadError}
+                </div>
+            )}
 
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                 {loading ? (
@@ -170,7 +251,11 @@ export default function SalesInvoiceListPage() {
                         </thead>
                         <tbody>
                             {invoices.length === 0 ? (
-                                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} invoices found.</td></tr>
+                                <tr>
+                                    <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: loadError ? '#b91c1c' : '#9ca3af' }}>
+                                        {loadError || `No ${viewMode === 'archived' ? 'archived' : ''} invoices found.`}
+                                    </td>
+                                </tr>
                             ) : invoices
                             .filter(inv => {
                                 if (!seriesFilter) return true;

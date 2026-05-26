@@ -52,6 +52,15 @@ const itemSchema = new mongoose.Schema({
     currentStock: { type: Number, default: 0 },
     faultyStock: { type: Number, default: 0 },
     valuationRate: { type: Number, default: 0 },
+    /** Last purchase invoice rate (not WAC) */
+    lastPurchaseCost: { type: Number, default: 0 },
+    /** Weighted average — mirrors valuationRate after GRN/PI */
+    averageCost: { type: Number, default: 0 },
+    /** Cached from default BOM finalProductionCostPerUnit */
+    standardBomCost: { type: Number, default: 0 },
+    standardBomCostUpdatedAt: { type: Date, default: null },
+    /** Manual fallback when BOM unavailable (trading / FG) */
+    manualItemCost: { type: Number, default: 0 },
     warehouseLocation: { type: String, trim: true, default: '' },
     batchTracking: { type: Boolean, default: false },
     serialTracking: { type: Boolean, default: false },

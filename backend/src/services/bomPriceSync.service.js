@@ -2,6 +2,7 @@ import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
 import logger from '../utils/logger.js';
 import mongoose from 'mongoose';
+import { logCostingAudit } from './costingAudit.service.js';
 
 /**
  * Recalculate all costs for a specific BOM
@@ -31,8 +32,21 @@ export const recalculateBOMCosts = async (bom) => {
 
     const qty = bom.productionQuantity || 1;
     bom.finalProductionCostPerUnit = Math.round((totalProductionCost / qty) * 100) / 100;
+    bom.standardCostUpdatedAt = new Date();
 
     await bom.save();
+
+    try {
+        const finished = await Item.findById(bom.finishedProductId);
+        if (finished) {
+            finished.standardBomCost = bom.finalProductionCostPerUnit;
+            finished.standardBomCostUpdatedAt = new Date();
+            await finished.save();
+        }
+    } catch {
+        /* non-fatal */
+    }
+
     return bom;
 };
 
@@ -55,8 +69,16 @@ export const syncPurchaseRatesToBOMs = async (items, userId) => {
             if (item) {
                 logger.info(`Updating Item ${item.itemCode} purchaseRate to ${rate}`);
                 item.purchaseRate = rate;
+                item.lastPurchaseCost = rate;
                 item.updatedBy = userId;
                 await item.save();
+
+                await logCostingAudit({
+                    action: 'RM_COST_UPDATE',
+                    itemId: item._id,
+                    userId,
+                    details: { purchaseRate: rate, source: 'purchase_invoice_sync' },
+                });
 
                 // 2. Find all BOMs containing this item
                 const affectedBOMs = await BOM.find({ 'components.itemId': objectId });
@@ -76,6 +98,12 @@ export const syncPurchaseRatesToBOMs = async (items, userId) => {
                         logger.info(`Syncing rate to BOM ${bom.bomNumber}`);
                         // 3. Recalculate costs and save
                         await recalculateBOMCosts(bom);
+                        await logCostingAudit({
+                            action: 'BOM_COST_SNAPSHOT',
+                            itemId: bom.finishedProductId,
+                            userId,
+                            details: { bomNumber: bom.bomNumber, finalProductionCostPerUnit: bom.finalProductionCostPerUnit },
+                        });
                     }
                 }
             } else {

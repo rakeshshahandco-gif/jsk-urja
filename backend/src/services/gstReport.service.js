@@ -1329,3 +1329,621 @@ export async function generateGSTR1Excel(startDate, endDate) {
 
   return { workbook, data };
 }
+
+// ── GSTR-1 JSON Export (GST Portal Upload Format) ────────────────────────────
+// Reference: https://www.gst.gov.in/websitepages/jsonformat.aspx
+
+export async function buildGstr1Json({ month, year, gstin }) {
+  const { data } = await buildGstr1Workbook({ month, year });
+
+  const fp = `${String(month).padStart(2, '0')}${year}`; // "042025"
+
+  const jsonPayload = {
+    gstin: gstin || '',
+    fp,
+    gt: 0,
+    cur_gt: 0,
+    b2b: [],
+    b2cl: [],
+    b2cs: [],
+    cdnr: [],
+    cdnur: [],
+    exp: [],
+    at: [],
+    atadj: [],
+    docs: [],
+    hsn: { data: [] },
+  };
+
+  // B2B
+  if (data.b2b?.length) {
+    const b2bMap = {};
+    for (const row of data.b2b) {
+      const ctin = row['GSTIN/UIN of Recipient'] || '';
+      if (!b2bMap[ctin]) b2bMap[ctin] = { ctin, inv: [] };
+      b2bMap[ctin].inv.push({
+        inum: row['Invoice Number'] || '',
+        idt: row['Invoice date'] || '',
+        val: row['Invoice Value'] || 0,
+        pos: String(row['Place Of Supply'] || '').substring(0, 2),
+        rchrg: row['Reverse Charge'] || 'N',
+        inv_typ: row['Invoice Type'] || 'R',
+        itms: [{
+          num: 1,
+          itm_det: {
+            txval: row['Taxable Value'] || 0,
+            rt: row['Rate'] || 0,
+            iamt: row['Integrated Tax Amount'] || 0,
+            camt: row['Central Tax Amount'] || 0,
+            samt: row['State/UT Tax Amount'] || 0,
+            csamt: 0,
+          },
+        }],
+      });
+    }
+    jsonPayload.b2b = Object.values(b2bMap);
+  }
+
+  // B2CL
+  if (data.b2cl?.length) {
+    const b2clMap = {};
+    for (const row of data.b2cl) {
+      const pos = String(row['Place Of Supply'] || '').substring(0, 2);
+      if (!b2clMap[pos]) b2clMap[pos] = { pos, inv: [] };
+      b2clMap[pos].inv.push({
+        inum: row['Invoice Number'] || '',
+        idt: row['Invoice date'] || '',
+        val: row['Invoice Value'] || 0,
+        itms: [{
+          num: 1,
+          itm_det: {
+            txval: row['Taxable Value'] || 0,
+            rt: row['Rate'] || 0,
+            iamt: row['Integrated Tax Amount'] || 0,
+            csamt: 0,
+          },
+        }],
+      });
+    }
+    jsonPayload.b2cl = Object.values(b2clMap);
+  }
+
+  // B2CS
+  if (data.b2cs?.length) {
+    jsonPayload.b2cs = data.b2cs.map(row => ({
+      sply_tp: row['Type'] || 'INTRA',
+      pos: String(row['Place Of Supply'] || '').substring(0, 2),
+      typ: 'OE',
+      rt: row['Rate'] || 0,
+      txval: row['Taxable Value'] || 0,
+      iamt: row['Integrated Tax'] || 0,
+      camt: row['Central Tax'] || 0,
+      samt: row['State/UT Tax'] || 0,
+      csamt: 0,
+    }));
+  }
+
+  // HSN Summary
+  if (data.hsn?.length) {
+    jsonPayload.hsn.data = data.hsn.map(row => ({
+      num: 1,
+      hsn_sc: String(row['HSN'] || ''),
+      desc: row['Description'] || '',
+      uqc: row['UQC'] || 'OTH',
+      qty: row['Total Quantity'] || 0,
+      val: row['Total Value'] || 0,
+      txval: row['Taxable Value'] || 0,
+      iamt: row['Integrated Tax Amount'] || 0,
+      camt: row['Central Tax Amount'] || 0,
+      samt: row['State/UT Tax Amount'] || 0,
+      csamt: 0,
+      rt: row['Rate'] || 0,
+    }));
+  }
+
+  // grand total
+  jsonPayload.gt = (data.b2b?.reduce((s, r) => s + (r['Invoice Value'] || 0), 0) || 0)
+    + (data.b2cl?.reduce((s, r) => s + (r['Invoice Value'] || 0), 0) || 0);
+  jsonPayload.cur_gt = jsonPayload.gt;
+
+  return jsonPayload;
+}
+
+// ── E-Invoice (IRN Generation) ────────────────────────────────────────────────
+// Generates the payload in the NIC IRP v1.03 format for a sales invoice.
+// Actual IRN is obtained by posting this payload to the IRP API (configured
+// via EINVOICE_API_URL / EINVOICE_CLIENT_ID env vars).
+
+export async function buildEInvoicePayload(invoice, companyProfile) {
+  const sellerGstin = companyProfile?.gstin || '';
+  const sellerLegalName = companyProfile?.companyName || '';
+  const sellerTradeName = companyProfile?.tradeName || sellerLegalName;
+  const sellerAddr1 = companyProfile?.address || '';
+  const sellerCity = companyProfile?.city || '';
+  const sellerStateCode = sellerGstin.substring(0, 2);
+  const sellerPinCode = String(companyProfile?.pincode || '110001');
+
+  const buyerGstin = invoice.customerGstin || 'URP';
+  const buyerName = invoice.customerName || '';
+  const buyerStateCode = buyerGstin !== 'URP' ? buyerGstin.substring(0, 2) : (invoice.placeOfSupply || sellerStateCode);
+  const supplyType = buyerGstin !== 'URP' && buyerStateCode !== sellerStateCode ? 'EXPWP' : 'B2B';
+
+  const itemList = (invoice.items || []).map((item, idx) => ({
+    SlNo: String(idx + 1),
+    PrdDesc: item.itemName || '',
+    IsServc: 'N',
+    HsnCd: item.hsnCode || '',
+    Barcde: '',
+    Qty: item.qty || 0,
+    FreeQty: 0,
+    Unit: item.uom || 'NOS',
+    UnitPrice: item.rate || 0,
+    TotAmt: item.amount || 0,
+    Discount: item.discount || 0,
+    PreTaxVal: item.taxableAmount || item.amount || 0,
+    AssAmt: item.taxableAmount || item.amount || 0,
+    GstRt: item.gstRate || 0,
+    IgstAmt: item.igstAmount || 0,
+    CgstAmt: item.cgstAmount || 0,
+    SgstAmt: item.sgstAmount || 0,
+    CesRt: 0,
+    CesAmt: 0,
+    CesNonAdvlAmt: 0,
+    StateCesRt: 0,
+    StateCesAmt: 0,
+    StateCesNonAdvlAmt: 0,
+    OthChrg: 0,
+    TotItemVal: item.amount || 0,
+  }));
+
+  const payload = {
+    Version: '1.1',
+    TranDtls: {
+      TaxSch: 'GST',
+      SupTyp: supplyType,
+      RegRev: invoice.reverseCharge ? 'Y' : 'N',
+      EcmGstin: null,
+      IgstOnIntra: 'N',
+    },
+    DocDtls: {
+      Typ: 'INV',
+      No: invoice.invoiceNumber || '',
+      Dt: invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('en-GB').replace(/\//g, '/') : '',
+    },
+    SellerDtls: {
+      Gstin: sellerGstin,
+      LglNm: sellerLegalName,
+      TrdNm: sellerTradeName,
+      Addr1: sellerAddr1,
+      Addr2: '',
+      Loc: sellerCity,
+      Pin: parseInt(sellerPinCode, 10) || 0,
+      Stcd: sellerStateCode,
+      Ph: companyProfile?.phone || '',
+      Em: companyProfile?.email || '',
+    },
+    BuyerDtls: {
+      Gstin: buyerGstin,
+      LglNm: buyerName,
+      TrdNm: buyerName,
+      Pos: String(invoice.placeOfSupply || buyerStateCode).substring(0, 2),
+      Addr1: invoice.customerAddress || '',
+      Addr2: '',
+      Loc: invoice.customerCity || '',
+      Pin: parseInt(invoice.customerPincode || '110001', 10),
+      Stcd: buyerStateCode,
+    },
+    ValDtls: {
+      AssVal: invoice.totalTaxableAmount || 0,
+      CgstVal: invoice.totalCgst || 0,
+      SgstVal: invoice.totalSgst || 0,
+      IgstVal: invoice.totalIgst || 0,
+      CesVal: 0,
+      StCesVal: 0,
+      Discount: 0,
+      OthChrg: 0,
+      RndOffAmt: invoice.roundOff || 0,
+      TotInvVal: invoice.grandTotal || 0,
+    },
+    ItemList: itemList,
+    RefDtls: {
+      InvRm: invoice.narration || '',
+      DocPerdDtls: { InvStDt: '', InvEndDt: '' },
+      PrecDocDtls: [],
+      ContrDtls: [],
+    },
+    AddlDocDtls: { Url: '', Docs: '', Info: '' },
+    ExpDtls: { ShipBNo: '', ShipBDt: '', Port: '', RefClm: '', ForCur: '', CntCode: '' },
+    EwbDtls: { TransId: '', TransName: '', Distance: 0, TransDocNo: '', TransDocDt: '', VehNo: '', VehType: '', TransMode: '' },
+  };
+
+  return payload;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GSTR-9 Annual Return
+// ──────────────────────────────────────────────────────────────────────────────
+
+function g9zero() { return { taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 }; }
+function g9round2(n) { return Math.round((n || 0) * 100) / 100; }
+function g9roundTax(t) {
+  return Object.fromEntries(Object.entries(t).map(([k, v]) => [k, g9round2(v)]));
+}
+function g9addTax(a, b) {
+  return {
+    taxableValue: (a.taxableValue || 0) + (b.taxableValue || 0),
+    igst: (a.igst || 0) + (b.igst || 0),
+    cgst: (a.cgst || 0) + (b.cgst || 0),
+    sgst: (a.sgst || 0) + (b.sgst || 0),
+    cess: (a.cess || 0) + (b.cess || 0),
+  };
+}
+
+/**
+ * Aggregates all GST data for a Financial Year into GSTR-9 table structure.
+ * @param {string} financialYear  e.g. "2025-2026"
+ * @returns {object} GSTR-9 structured data (tables 4, 5, 6, 9, 10, 11, 17, 18)
+ */
+export async function generateGSTR9Data(financialYear) {
+  const [fyStartYear, fyEndYear] = financialYear.split('-').map(Number);
+  const startDate = new Date(fyStartYear, 3, 1);        // April 1
+  const endDate   = new Date(fyEndYear, 2, 31, 23, 59, 59); // March 31 EOD
+
+  const baseQuery = { isDeleted: { $ne: true }, status: { $ne: 'Cancelled' } };
+
+  const [salesInvoices, purchaseInvoices, creditDebitNotes, companyProfile] = await Promise.all([
+    SalesInvoice.find({ ...baseQuery, invoiceDate: { $gte: startDate, $lte: endDate } }).lean(),
+    PurchaseInvoice.find({ ...baseQuery, invoiceDate: { $gte: startDate, $lte: endDate } }).lean(),
+    CreditDebitNote.find({
+      ...baseQuery,
+      $or: [
+        { noteDate: { $gte: startDate, $lte: endDate } },
+        { date:     { $gte: startDate, $lte: endDate } },
+      ],
+    }).lean(),
+    CompanyProfile.findOne({}).lean(),
+  ]);
+
+  // ── Table 4: Outward taxable supplies ─────────────────────────────────────
+  const t4b2b      = g9zero(); // 4A – B2B (registered customers)
+  const t4exports  = g9zero(); // 4B – Zero-rated (exports / SEZ / Deemed Export)
+  const t4b2cLarge = g9zero(); // 4C – B2C inter-state > ₹1 lakh
+  const t4b2cSmall = g9zero(); // 4E – B2C others
+  const t5NilExempt = g9zero(); // 5  – Nil/Exempt (gstApplicable=false / rate=0)
+  const t5NonGst   = g9zero(); // 5  – Non-GST supplies
+  const t9output   = g9zero(); // 9  – Output tax liability
+
+  const hsnOut = {}; // Table 17
+  const hsnIn  = {}; // Table 18
+
+  for (const inv of salesInvoices) {
+    if (inv.documentType === 'Estimate') continue;
+
+    // Non-GST
+    if (inv.gstApplicable === false) {
+      t5NonGst.taxableValue += inv.totalTaxableAmount || 0;
+      continue;
+    }
+
+    const groups = getRateGroups(inv);
+
+    for (const [rateStr, g] of Object.entries(groups)) {
+      const rate = Number(rateStr);
+
+      // Nil / Exempt supplies
+      if (rate === 0) {
+        t5NilExempt.taxableValue += g.taxableValue || 0;
+        continue;
+      }
+
+      // Zero-rated (Exports, SEZ, Deemed Export)
+      const isExport = inv.invoiceType === 'SEZ' ||
+                       inv.invoiceType === 'Deemed Export' ||
+                       (inv.exportCountry && inv.exportCountry.length > 0);
+      if (isExport) {
+        t4exports.taxableValue += g.taxableValue || 0;
+        t4exports.igst         += g.igst         || 0;
+        t4exports.cgst         += g.cgst         || 0;
+        t4exports.sgst         += g.sgst         || 0;
+        t4exports.cess         += g.cess         || 0;
+      } else if (inv.customerGstin && inv.customerGstin.length === 15) {
+        // B2B
+        t4b2b.taxableValue += g.taxableValue || 0;
+        t4b2b.igst         += g.igst         || 0;
+        t4b2b.cgst         += g.cgst         || 0;
+        t4b2b.sgst         += g.sgst         || 0;
+        t4b2b.cess         += g.cess         || 0;
+      } else {
+        // B2C
+        const posCode = String(
+          inv.placeOfSupply || inv.billingStateCode || (inv.customerGstin || '').substring(0, 2) || ''
+        ).substring(0, 2);
+        const isInter = posCode && posCode !== OUR_STATE_CODE;
+        if (isInter && (g.taxableValue || 0) > 100000) {
+          t4b2cLarge.taxableValue += g.taxableValue || 0;
+          t4b2cLarge.igst         += g.igst         || 0;
+          t4b2cLarge.cess         += g.cess         || 0;
+        } else {
+          t4b2cSmall.taxableValue += g.taxableValue || 0;
+          t4b2cSmall.igst         += g.igst         || 0;
+          t4b2cSmall.cgst         += g.cgst         || 0;
+          t4b2cSmall.sgst         += g.sgst         || 0;
+          t4b2cSmall.cess         += g.cess         || 0;
+        }
+      }
+
+      // Accumulate output tax
+      t9output.igst += g.igst || 0;
+      t9output.cgst += g.cgst || 0;
+      t9output.sgst += g.sgst || 0;
+      t9output.cess += g.cess || 0;
+      t9output.taxableValue += g.taxableValue || 0;
+    }
+
+    // HSN-wise outward (Table 17)
+    for (const item of (inv.items || [])) {
+      const key = item.hsnCode || 'MISC';
+      if (!hsnOut[key]) {
+        hsnOut[key] = { hsn: key, description: item.itemName || '', uom: item.uom || 'NOS', qty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, rates: new Set() };
+      }
+      hsnOut[key].qty          += item.qty           || 0;
+      hsnOut[key].taxableValue += item.taxableAmount || 0;
+      hsnOut[key].igst         += item.igstAmount    || 0;
+      hsnOut[key].cgst         += item.cgstAmount    || 0;
+      hsnOut[key].sgst         += item.sgstAmount    || 0;
+      hsnOut[key].cess         += item.cessAmount    || 0;
+      if (item.gstRate != null) hsnOut[key].rates.add(item.gstRate);
+    }
+  }
+
+  const t4total = g9addTax(g9addTax(g9addTax(t4b2b, t4exports), t4b2cLarge), t4b2cSmall);
+
+  // ── Table 6: ITC availed ──────────────────────────────────────────────────
+  const t6regular = g9zero();
+  const t6rcm     = g9zero();
+
+  for (const inv of purchaseInvoices) {
+    const target = inv.reverseCharge ? t6rcm : t6regular;
+    target.igst += (inv.totalIgst || 0) + (inv.freightIgstAmount || 0);
+    target.cgst += (inv.totalCgst || 0) + (inv.freightCgstAmount || 0);
+    target.sgst += (inv.totalSgst || 0) + (inv.freightSgstAmount || 0);
+    target.taxableValue += inv.totalTaxableAmount || 0;
+
+    // HSN-wise inward (Table 18)
+    for (const item of (inv.items || [])) {
+      const key = item.hsnCode || 'MISC';
+      if (!hsnIn[key]) {
+        hsnIn[key] = { hsn: key, description: item.itemName || '', uom: item.uom || 'NOS', qty: 0, taxableValue: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, rates: new Set() };
+      }
+      hsnIn[key].qty          += item.qty           || 0;
+      hsnIn[key].taxableValue += item.taxableAmount || 0;
+      hsnIn[key].igst         += item.igstAmount    || 0;
+      hsnIn[key].cgst         += item.cgstAmount    || 0;
+      hsnIn[key].sgst         += item.sgstAmount    || 0;
+      if (item.gstRate != null) hsnIn[key].rates.add(item.gstRate);
+    }
+  }
+
+  const t6total = g9addTax(t6regular, t6rcm);
+
+  // ── Tables 10 & 11: Credit/Debit Note amendments ──────────────────────────
+  const t10 = g9zero(); // Debit Notes
+  const t11 = g9zero(); // Credit Notes
+
+  for (const note of creditDebitNotes) {
+    const target = note.type === 'Debit Note' ? t10 : t11;
+    target.taxableValue += note.totalTaxableAmount || 0;
+    target.igst         += note.totalIgst          || 0;
+    target.cgst         += note.totalCgst          || 0;
+    target.sgst         += note.totalSgst          || 0;
+    target.cess         += note.totalCessAmount    || 0;
+  }
+
+  // ── Net tax liability ─────────────────────────────────────────────────────
+  const netTax = {
+    taxableValue: g9round2(t9output.taxableValue + t10.taxableValue - t11.taxableValue),
+    igst: g9round2(t9output.igst + t10.igst - t11.igst),
+    cgst: g9round2(t9output.cgst + t10.cgst - t11.cgst),
+    sgst: g9round2(t9output.sgst + t10.sgst - t11.sgst),
+    cess: g9round2((t9output.cess || 0) + (t10.cess || 0) - (t11.cess || 0)),
+  };
+
+  // ── Format HSN tables ─────────────────────────────────────────────────────
+  const formatHsn = (map) =>
+    Object.values(map)
+      .map((h) => ({
+        hsn:          h.hsn,
+        description:  h.description,
+        uom:          h.uom,
+        qty:          g9round2(h.qty),
+        taxableValue: g9round2(h.taxableValue),
+        igst:         g9round2(h.igst),
+        cgst:         g9round2(h.cgst),
+        sgst:         g9round2(h.sgst),
+        cess:         g9round2(h.cess),
+        gstRate:      Array.from(h.rates).sort((a, b) => a - b).join(', '),
+      }))
+      .sort((a, b) => a.hsn.localeCompare(b.hsn));
+
+  return {
+    meta: {
+      financialYear,
+      startDate: startDate.toISOString(),
+      endDate:   endDate.toISOString(),
+      gstin:     companyProfile?.gstin || '',
+      legalName: companyProfile?.companyName || '',
+      tradeName: companyProfile?.tradeName || '',
+      totalSalesInvoices:    salesInvoices.length,
+      totalPurchaseInvoices: purchaseInvoices.length,
+      totalCreditNotes:      creditDebitNotes.filter((n) => n.type === 'Credit Note').length,
+      totalDebitNotes:       creditDebitNotes.filter((n) => n.type === 'Debit Note').length,
+      generatedAt:           new Date().toISOString(),
+    },
+    table4: {
+      b2b:      g9roundTax(t4b2b),
+      exports:  g9roundTax(t4exports),
+      b2cLarge: g9roundTax(t4b2cLarge),
+      b2cSmall: g9roundTax(t4b2cSmall),
+      total:    g9roundTax(t4total),
+    },
+    table5: {
+      nilExempt: { taxableValue: g9round2(t5NilExempt.taxableValue) },
+      nonGST:    { taxableValue: g9round2(t5NonGst.taxableValue) },
+      total:     { taxableValue: g9round2(t5NilExempt.taxableValue + t5NonGst.taxableValue) },
+    },
+    table6: {
+      regular: g9roundTax(t6regular),
+      rcm:     g9roundTax(t6rcm),
+      total:   g9roundTax(t6total),
+    },
+    table9: {
+      outputTax: g9roundTax(t9output),
+      netTax,
+    },
+    table10: g9roundTax(t10),
+    table11: g9roundTax(t11),
+    table17: formatHsn(hsnOut),
+    table18: formatHsn(hsnIn),
+  };
+}
+
+export async function generateGSTR9Excel(financialYear) {
+  const data = await generateGSTR9Data(financialYear);
+  const wb   = new ExcelJS.Workbook();
+
+  const hdr  = { font: { bold: true, size: 11 }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } }, alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } };
+  const subHdr = { font: { bold: true, size: 10 }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDD7EE' } } };
+  const numFmt = '#,##0.00';
+
+  function addSummarySheet() {
+    const ws = wb.addWorksheet('Part I - Basic Details');
+    ws.columns = [{ width: 28 }, { width: 40 }];
+    ws.addRow(['GSTR-9 Annual Return']).font = { bold: true, size: 14 };
+    ws.addRow([]);
+    ws.addRow(['Financial Year', data.meta.financialYear]);
+    ws.addRow(['GSTIN',          data.meta.gstin]);
+    ws.addRow(['Legal Name',     data.meta.legalName]);
+    ws.addRow(['Trade Name',     data.meta.tradeName || '']);
+    ws.addRow(['Generated At',   new Date(data.meta.generatedAt).toLocaleString('en-IN')]);
+    ws.addRow([]);
+    ws.addRow(['Total Sales Invoices',    data.meta.totalSalesInvoices]);
+    ws.addRow(['Total Purchase Invoices', data.meta.totalPurchaseInvoices]);
+    ws.addRow(['Total Credit Notes',      data.meta.totalCreditNotes]);
+    ws.addRow(['Total Debit Notes',       data.meta.totalDebitNotes]);
+  }
+
+  function addOutwardSheet() {
+    const ws = wb.addWorksheet('Table 4 - Outward Supplies');
+    ws.columns = [
+      { header: 'Supply Type', width: 32 },
+      { header: 'Taxable Value', width: 18 },
+      { header: 'IGST', width: 14 },
+      { header: 'CGST', width: 14 },
+      { header: 'SGST', width: 14 },
+      { header: 'CESS', width: 12 },
+    ];
+    ws.getRow(1).eachCell((c) => Object.assign(c, hdr, { font: { ...hdr.font, color: { argb: 'FFFFFFFF' } } }));
+    const rows = [
+      ['4A – B2B (Registered Customers)', data.table4.b2b.taxableValue, data.table4.b2b.igst, data.table4.b2b.cgst, data.table4.b2b.sgst, data.table4.b2b.cess],
+      ['4B – Zero Rated (Exports/SEZ)',   data.table4.exports.taxableValue, data.table4.exports.igst, data.table4.exports.cgst, data.table4.exports.sgst, data.table4.exports.cess],
+      ['4C – B2C Large (> ₹1L Inter-State)', data.table4.b2cLarge.taxableValue, data.table4.b2cLarge.igst, 0, 0, data.table4.b2cLarge.cess],
+      ['4E – B2C Small (Others)',         data.table4.b2cSmall.taxableValue, data.table4.b2cSmall.igst, data.table4.b2cSmall.cgst, data.table4.b2cSmall.sgst, data.table4.b2cSmall.cess],
+      ['TOTAL',                           data.table4.total.taxableValue, data.table4.total.igst, data.table4.total.cgst, data.table4.total.sgst, data.table4.total.cess],
+    ];
+    rows.forEach((r, i) => {
+      const row = ws.addRow(r);
+      if (i === rows.length - 1) row.eachCell((c) => Object.assign(c.style, subHdr));
+      row.getCell(2).numFmt = numFmt; row.getCell(3).numFmt = numFmt;
+      row.getCell(4).numFmt = numFmt; row.getCell(5).numFmt = numFmt; row.getCell(6).numFmt = numFmt;
+    });
+
+    ws.addRow([]);
+    ws.addRow(['Table 5 – Nil/Exempt/Non-GST Supplies']);
+    ws.addRow(['5A – Nil/Exempt', data.table5.nilExempt.taxableValue]);
+    ws.addRow(['5B – Non-GST',    data.table5.nonGST.taxableValue]);
+    ws.addRow(['TOTAL',           data.table5.total.taxableValue]);
+  }
+
+  function addItcSheet() {
+    const ws = wb.addWorksheet('Table 6 - ITC Availed');
+    ws.columns = [
+      { header: 'ITC Type', width: 32 }, { header: 'IGST', width: 16 }, { header: 'CGST', width: 16 }, { header: 'SGST', width: 16 },
+    ];
+    ws.getRow(1).eachCell((c) => Object.assign(c, hdr, { font: { ...hdr.font, color: { argb: 'FFFFFFFF' } } }));
+    [
+      ['6B – Regular ITC',    data.table6.regular.igst, data.table6.regular.cgst, data.table6.regular.sgst],
+      ['6C – RCM ITC',        data.table6.rcm.igst,     data.table6.rcm.cgst,     data.table6.rcm.sgst],
+      ['TOTAL',               data.table6.total.igst,   data.table6.total.cgst,   data.table6.total.sgst],
+    ].forEach((r, i) => {
+      const row = ws.addRow(r);
+      if (i === 2) row.eachCell((c) => Object.assign(c.style, subHdr));
+      [2, 3, 4].forEach((ci) => { row.getCell(ci).numFmt = numFmt; });
+    });
+  }
+
+  function addTaxPaidSheet() {
+    const ws = wb.addWorksheet('Table 9 - Tax Paid');
+    ws.columns = [
+      { header: 'Description', width: 32 }, { header: 'IGST', width: 16 }, { header: 'CGST', width: 16 }, { header: 'SGST', width: 16 }, { header: 'CESS', width: 14 },
+    ];
+    ws.getRow(1).eachCell((c) => Object.assign(c, hdr, { font: { ...hdr.font, color: { argb: 'FFFFFFFF' } } }));
+    [
+      ['Output Tax Liability', data.table9.outputTax.igst, data.table9.outputTax.cgst, data.table9.outputTax.sgst, data.table9.outputTax.cess],
+      ['(+) Debit Notes',      data.table10.igst, data.table10.cgst, data.table10.sgst, data.table10.cess],
+      ['(-) Credit Notes',     data.table11.igst, data.table11.cgst, data.table11.sgst, data.table11.cess],
+      ['NET TAX PAYABLE',      data.table9.netTax.igst, data.table9.netTax.cgst, data.table9.netTax.sgst, data.table9.netTax.cess],
+    ].forEach((r, i) => {
+      const row = ws.addRow(r);
+      if (i === 3) row.eachCell((c) => Object.assign(c.style, subHdr));
+      [2, 3, 4, 5].forEach((ci) => { row.getCell(ci).numFmt = numFmt; });
+    });
+  }
+
+  function addHsnSheet(title, rows) {
+    const ws = wb.addWorksheet(title);
+    ws.columns = [
+      { header: 'HSN/SAC', width: 14 }, { header: 'Description', width: 28 }, { header: 'UOM', width: 10 },
+      { header: 'Qty', width: 12 }, { header: 'Taxable Value', width: 16 }, { header: 'IGST', width: 14 },
+      { header: 'CGST', width: 14 }, { header: 'SGST', width: 14 }, { header: 'CESS', width: 12 }, { header: 'GST Rate %', width: 12 },
+    ];
+    ws.getRow(1).eachCell((c) => Object.assign(c, hdr, { font: { ...hdr.font, color: { argb: 'FFFFFFFF' } } }));
+    rows.forEach((r) => {
+      const row = ws.addRow([r.hsn, r.description, r.uom, r.qty, r.taxableValue, r.igst, r.cgst, r.sgst, r.cess, r.gstRate]);
+      [4, 5, 6, 7, 8, 9].forEach((ci) => { row.getCell(ci).numFmt = numFmt; });
+    });
+  }
+
+  addSummarySheet();
+  addOutwardSheet();
+  addItcSheet();
+  addTaxPaidSheet();
+  addHsnSheet('Table 17 - HSN Outward', data.table17);
+  addHsnSheet('Table 18 - HSN Inward',  data.table18);
+
+  return wb;
+}
+
+export async function generateIrn(invoice, companyProfile) {
+  const payload = await buildEInvoicePayload(invoice, companyProfile);
+
+  const apiUrl = process.env.EINVOICE_API_URL;
+  if (!apiUrl) {
+    // Return the payload for manual submission when IRP API is not configured
+    return { payload, irn: null, status: 'payload_ready', message: 'EINVOICE_API_URL not configured. Use payload for manual IRP submission.' };
+  }
+
+  try {
+    const { default: axios } = await import('axios');
+    const response = await axios.post(`${apiUrl}/generateIRN`, payload, {
+      headers: {
+        'client-id': process.env.EINVOICE_CLIENT_ID || '',
+        'client-secret': process.env.EINVOICE_CLIENT_SECRET || '',
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+    return { payload, irn: response.data?.data?.Irn, ackNo: response.data?.data?.AckNo, signedQrCode: response.data?.data?.SignedQRCode, status: 'generated', raw: response.data };
+  } catch (err) {
+    return { payload, irn: null, status: 'error', message: err.response?.data?.message || err.message };
+  }
+}

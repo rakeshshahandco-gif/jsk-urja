@@ -6,14 +6,21 @@
     "type": "module",
     "scripts": {
         "start": "node src/index.js",
+        "start:ipv4": "node --dns-result-order=ipv4first src/index.js",
         "build": "echo 'No build needed'",
-        "dev": "nodemon src/index.js",
-        "lint": "eslint ."
+        "dev": "node scripts/fixUtf16Encoding.mjs && nodemon src/index.js",
+        "dev:ipv4": "node scripts/fixUtf16Encoding.mjs && nodemon --exec \"node --dns-result-order=ipv4first\" src/index.js",
+        "lint": "eslint .",
+        "migrate:company-scope": "node src/scripts/backfillCompanyId.mjs",
+        "migrate:to-company": "node src/scripts/migrateDataToCompany.mjs",
+        "diag:customers": "node src/scripts/diagCustomerTenant.mjs",
+        "test": "node --test test/*.test.js"
     },
     "dependencies": {
         "@whiskeysockets/baileys": "^7.0.0-rc.9",
         "adm-zip": "^0.5.17",
         "bcryptjs": "^3.0.3",
+        "bwip-js": "^4.10.1",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",

@@ -4,6 +4,7 @@ import { initializeAccountingMasters } from '../utils/accountInitializer.js';
 import { AccountGroup } from '../models/accountGroup.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { Supplier } from '../models/supplier.model.js';
+import { Voucher } from '../models/voucher.model.js';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 import pick from '../utils/pick.js';
 
@@ -40,6 +41,10 @@ const getLedgers = catchAsync(async (req, res) => {
 
 const createLedger = catchAsync(async (req, res) => {
     const body = { ...req.body, createdBy: req.user._id };
+
+    if (body.tdsApplicable && !String(body.tdsSection || '').trim()) {
+        return res.status(400).send(new ApiResponse(400, null, 'When TDS Applicable is ON, TDS Section must be selected'));
+    }
 
     // Check if being created under Sundry Creditors
     let isSundryCreditor = false;
@@ -138,9 +143,41 @@ const deleteGroup = catchAsync(async (req, res) => {
 
 const updateLedger = catchAsync(async (req, res) => {
     const updateData = { ...req.body };
-    
+
     const oldLedger = await AccountLedger.findById(req.params.id);
     if (!oldLedger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
+
+    if (oldLedger.isTdsPayableLedger) {
+        const ugChanging = Object.prototype.hasOwnProperty.call(updateData, 'underGroup')
+            && String(updateData.underGroup || '') !== String(oldLedger.underGroup || '');
+        const secChanging = Object.prototype.hasOwnProperty.call(updateData, 'tdsPayableSectionCode')
+            && String(updateData.tdsPayableSectionCode || '').toUpperCase()
+                !== String(oldLedger.tdsPayableSectionCode || '').toUpperCase();
+        if (ugChanging || secChanging) {
+            const used = await Voucher.countDocuments({
+                status: { $ne: 'Cancelled' },
+                items: { $elemMatch: { ledgerId: oldLedger._id } },
+            });
+            if (used > 0 && !req.body.confirmTdsPayableMetaChange) {
+                return res.status(400).send(
+                    new ApiResponse(
+                        400,
+                        null,
+                        'This TDS payable ledger has posted vouchers. Confirm to change group or TDS section code, or edit only name / display name / status.',
+                    ),
+                );
+            }
+        }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'tdsApplicable') || Object.prototype.hasOwnProperty.call(updateData, 'tdsSection')) {
+        const mergedApplicable =
+            updateData.tdsApplicable !== undefined ? updateData.tdsApplicable : oldLedger.tdsApplicable;
+        const mergedSection = updateData.tdsSection !== undefined ? updateData.tdsSection : oldLedger.tdsSection;
+        if (mergedApplicable && !String(mergedSection || '').trim()) {
+            return res.status(400).send(new ApiResponse(400, null, 'When TDS Applicable is ON, TDS Section must be selected'));
+        }
+    }
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'openingBalance') || Object.prototype.hasOwnProperty.call(updateData, 'drCr')) {
         if (oldLedger) {

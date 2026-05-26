@@ -28,6 +28,10 @@ const voucherItemSchema = new mongoose.Schema({
     igstAmount: { type: Number, default: 0 },
 
     adjustments: [billAdjustmentSchema],
+
+    // Cost / Profit Centre tagging on each voucher line
+    costCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'CostCenter', default: null },
+    costCenterName: { type: String, default: '' },
 });
 
 const voucherSchema = new mongoose.Schema({
@@ -93,9 +97,35 @@ const voucherSchema = new mongoose.Schema({
 
     isSystemGenerated: { type: Boolean, default: false },
 
+    /** Expense TDS (194C etc.) — threshold + posting audit */
+    tdsSection: { type: String, trim: true, default: '' },
+    tdsAmount: { type: Number, default: 0, min: 0 },
+    tdsThresholdBaseAmount: { type: Number, default: 0, min: 0 },
+    tdsSupplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null },
+    tdsPayableLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    tdsExpenseLineLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    tdsUserConfirmed: { type: Boolean, default: false },
+    tdsPopupSkipped: { type: Boolean, default: false },
+    tdsDisabledReason: { type: String, trim: true, default: '' },
+
+    /** TDS deposited against ITNS 281 challans (partial / full). */
+    tdsChallanAllocations: [
+        {
+            challanId: { type: mongoose.Schema.Types.ObjectId, ref: 'TdsChallan', required: true },
+            amount: { type: Number, required: true, min: 0 },
+        },
+    ],
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
+
+    // Reversing Journal support
+    isReversingJournal: { type: Boolean, default: false },
+    reverseOnDate: { type: Date, default: null },   // auto-reverse on this date
+    reversedVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', default: null }, // the reverse voucher created
+    isReversed: { type: Boolean, default: false },
+    originalVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', default: null }, // set on the reverse entry
 }, { timestamps: true });
 
 voucherSchema.index({ voucherNo: 1 });

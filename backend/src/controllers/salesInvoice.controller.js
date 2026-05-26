@@ -19,6 +19,14 @@ import { AuditLog } from '../models/auditLog.model.js';
 import { Voucher } from '../models/voucher.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { autoLinkEntityLedger } from '../utils/ledgerLinking.utils.js';
+import { enrichSalesItemsWithGp } from '../services/productCostEngine.service.js';
+import { logCostingAudit } from '../services/costingAudit.service.js';
+import { ensureInvoicePublicToken } from '../services/invoiceBarcode.service.js';
+import {
+    getCompanyFeatureSettings,
+    shouldDeductStockOnSales,
+    shouldPostSalesLedger,
+} from '../services/companyFeatureSettings.service.js';
 
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
@@ -210,6 +218,20 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             invData.roundedTotal = Math.round(invData.grandTotal);
         }
 
+        if (invData.items && invData.items.length > 0 && invData.status !== 'Draft') {
+            try {
+                const gpResult = await enrichSalesItemsWithGp(invData.items, invData.invoiceDate || new Date());
+                invData.items = gpResult.items;
+                invData.totalCostValue = gpResult.invoiceTotals.totalCostValue;
+                invData.totalGpAmount = gpResult.invoiceTotals.totalGpAmount;
+                invData.totalGpPercent = gpResult.invoiceTotals.totalGpPercent;
+                invData.gpSnapshotAt = new Date();
+                invData.gpWarnings = (gpResult.invoiceTotals.gpWarnings || []).map((w) => `${w.itemCode}: ${w.warnings.join('; ')}`);
+            } catch (gpErr) {
+                console.warn('[GP] Sales invoice GP snapshot skipped:', gpErr.message);
+            }
+        }
+
         const isB2C = invData.customerRegistrationType === 'Unregistered' || invData.customerRegistrationType === 'Consumer';
         if (isB2C) {
             // August 2024 Portal Amendment: B2CL threshold is ₹1,00,000 for Interstate
@@ -223,11 +245,30 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 
         const [invoice] = await SalesInvoice.create([invData], { session });
 
+        const featureSettings = req.companyId
+            ? await getCompanyFeatureSettings(req.companyId)
+            : null;
+
+        if (featureSettings?.sales?.enableBarcodeQr !== false) {
+            try {
+                await ensureInvoicePublicToken(invoice, req.companyId, session);
+            } catch (tokenErr) {
+                console.warn('[InvoiceBarcode] public token skipped:', tokenErr.message);
+            }
+        }
+
         // Stock and Ledger Logic
-        if (invoice.items && invoice.items.length > 0) {
+        const deductStock = !featureSettings || shouldDeductStockOnSales(featureSettings);
+        if (deductStock && invoice.items && invoice.items.length > 0) {
+            const stockItemIds = invoice.items.map((i) => i.itemId).filter(Boolean);
+            const stockItemDocs = stockItemIds.length
+                ? await Item.find({ _id: { $in: stockItemIds } }).session(session)
+                : [];
+            const stockItemById = new Map(stockItemDocs.map((d) => [d._id.toString(), d]));
+
             for (const iItem of invoice.items) {
                 if (!iItem.itemId) continue;
-                const itemDoc = await Item.findById(iItem.itemId).session(session);
+                const itemDoc = stockItemById.get(iItem.itemId.toString());
                 if (itemDoc) {
                     itemDoc.currentStock = (itemDoc.currentStock || 0) - iItem.qty;
                     await itemDoc.save({ session });
@@ -260,19 +301,34 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         }
 
         // Financial Ledger Posting
-        try {
-            // Ensure customer ledger is linked before posting
-            const customer = await Customer.findById(invoice.customerId).session(session);
-            if (customer) {
-                await autoLinkEntityLedger(customer, 'Customer', session);
+        const postLedger = !featureSettings || shouldPostSalesLedger(featureSettings);
+        if (postLedger) {
+            try {
+                const customer = await Customer.findById(invoice.customerId).session(session);
+                if (customer) {
+                    await autoLinkEntityLedger(customer, 'Customer', session);
+                }
+                await postSalesInvoiceToLedger(invoice, req.user.id, session);
+            } catch (ledgerErr) {
+                console.warn(`[Ledger] Could not post invoice ${invoice.invoiceNumber}: ${ledgerErr.message}`);
             }
-            await postSalesInvoiceToLedger(invoice, req.user.id, session);
-        } catch (ledgerErr) {
-            console.warn(`[Ledger] Could not post invoice ${invoice.invoiceNumber}: ${ledgerErr.message}`);
         }
 
         if (body.soId) {
             await SalesOrder.findByIdAndUpdate(body.soId, { status: 'Invoiced', invoiceId: invoice._id }).session(session);
+        }
+
+        if (invoice.totalGpAmount != null) {
+            await logCostingAudit({
+                action: 'SALES_GP_SNAPSHOT',
+                salesInvoiceId: invoice._id,
+                userId: req.user.id,
+                details: {
+                    totalGpAmount: invoice.totalGpAmount,
+                    totalGpPercent: invoice.totalGpPercent,
+                    totalCostValue: invoice.totalCostValue,
+                },
+            });
         }
 
         await session.commitTransaction();

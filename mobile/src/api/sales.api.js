@@ -35,5 +35,15 @@ export const salesApi = {
   previewNextNo: async (seriesId, module) => {
     const response = await apiClient.get(`/invoice-series/${seriesId}/preview-next-no`, { params: { module } });
     return response.data?.data || response.data;
-  }
+  },
+
+  lookupInvoiceByCode: async (code) => {
+    const response = await apiClient.get('/sales-invoices/lookup', { params: { code } });
+    return response.data?.data || response.data;
+  },
+
+  getInvoiceBarcodeData: async (id) => {
+    const response = await apiClient.get(`/sales-invoices/${id}/barcode-data`);
+    return response.data?.data || response.data;
+  },
 };

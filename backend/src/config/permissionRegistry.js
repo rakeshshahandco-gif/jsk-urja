@@ -35,7 +35,8 @@ export const PERMISSION_REGISTRY = [
         name: 'CRM',
         submodules: [
             { id: 'customer_master', name: 'Customer Master', actions: [...EXTENDED_ACTIONS, { id: 'import', label: 'Import', type: 'boolean' }] },
-            { id: 'leads', name: 'Inquiry / Lead', actions: STANDARD_ACTIONS },
+            { id: 'leads', name: 'Inquiry / Lead', actions: [...STANDARD_ACTIONS, { id: 'convert_whatsapp', label: 'Convert WhatsApp Chat to Lead', type: 'boolean' }, { id: 'share_asset', label: 'Share Catalog / Datasheet', type: 'boolean' }] },
+            { id: 'product_catalog', name: 'Product Catalog', actions: [...STANDARD_ACTIONS, { id: 'share', label: 'Share to WhatsApp', type: 'boolean' }] },
             { id: 'follow_up', name: 'Follow-up Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'talk', label: 'Talk With Customer', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
         ]
     },
@@ -136,6 +137,21 @@ export const PERMISSION_REGISTRY = [
         ]
     },
     {
+        id: 'tds',
+        name: 'TDS',
+        submodules: [
+            { id: 'dashboard', name: 'TDS Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'master', name: 'TDS Master / Section Rates', actions: STANDARD_ACTIONS },
+            { id: 'ledger_mapping', name: 'TDS Ledger Mapping', actions: STANDARD_ACTIONS },
+            { id: 'deduction_register', name: 'TDS Deduction Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'payable_register', name: 'TDS Payable Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'challan', name: 'TDS Challan / Payment', actions: [...STANDARD_ACTIONS] },
+            { id: 'returns', name: 'TDS Return / Filing Data', actions: [...STANDARD_ACTIONS, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'reports', name: 'TDS Reports', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'settings', name: 'TDS Settings', actions: STANDARD_ACTIONS },
+        ],
+    },
+    {
         id: 'gst',
         name: 'GST',
         submodules: [
@@ -143,7 +159,9 @@ export const PERMISSION_REGISTRY = [
             { id: 'gstr3b', name: 'GSTR-3B', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'gst_reconciliation', name: '2A / 2B Reconciliation', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'import', label: 'Import', type: 'boolean' }] },
             { id: 'gst_payable', name: 'GST Payable Summary', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
-            { id: 'itc_register', name: 'ITC Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] }
+            { id: 'itc_register', name: 'ITC Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'hsn_summary', name: 'HSN Summary', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'gst_ledger', name: 'GST Ledger', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
         ]
     },
     {
@@ -151,6 +169,8 @@ export const PERMISSION_REGISTRY = [
         name: 'MIS Reports',
         submodules: [
             { id: 'dashboard', name: 'Sales MIS Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'sales_marketing', name: 'Sales & Marketing MIS', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'director_dashboard', name: 'Director MIS Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
             { id: 'product_gp', name: 'Product-wise GP Analysis', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
             { id: 'sales_conversion', name: 'Sales Conversion Analysis Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
         ]
@@ -161,8 +181,10 @@ export const PERMISSION_REGISTRY = [
         submodules: [
             { id: 'user_management', name: 'User Management', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Create User', type: 'boolean' }, { id: 'edit', label: 'Edit User', type: 'boolean' }, { id: 'delete', label: 'Delete User', type: 'boolean' }, { id: 'password', label: 'Change Password', type: 'boolean' }, { id: 'rights', label: 'Manage Rights', type: 'boolean' }] },
             { id: 'role_management', name: 'Role Management', actions: STANDARD_ACTIONS },
+            { id: 'security_control', name: 'Security & Control', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Manage', type: 'boolean' }, { id: 'approve', label: 'Approve', type: 'boolean' }] },
             { id: 'ledger_linking', name: 'Ledger Linking Utility', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'apply', label: 'Apply Linking', type: 'boolean' }] },
             { id: 'company_settings', name: 'Company Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'system_settings', name: 'System Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] }
         ]
     }

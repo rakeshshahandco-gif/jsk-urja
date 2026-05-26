@@ -1,0 +1,131 @@
+@import '@/styles/_variables';
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--page-bg, #f8fafc);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+
+  &.date {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #bbf7d0;
+  }
+
+  &.assignee {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+  }
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  line-height: 1;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.inputRow {
+  position: relative;
+}
+
+.input {
+  width: 100%;
+  height: 36px;
+  font-size: 13px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  outline: none;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  }
+}
+
+.dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover,
+  &.highlighted {
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+}
+
+.hint {
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.error {
+  font-size: 11px;
+  color: #dc2626;
+  font-weight: 600;
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createSalesInvoice, getSalesOrderById, getInvoiceSeries, createInvoiceSeries, previewNextInvoiceNo } from '@/services/salesApi';
+import { createEwayBillDraft } from '@/services/ewayBillApi';
 import { getItems } from '@/services/itemApi';
 import { getCustomers, getCustomer } from '@/services/customerApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
@@ -16,6 +17,9 @@ const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
 const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
 const lbl = { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase' };
+
+// E-Way Bill threshold (CGST Rule 138) — invoices at/above this need an EWB.
+const EWAY_BILL_THRESHOLD = 50000;
 
 const BLANK_ITEM = () => ({
     itemId: '',
@@ -156,6 +160,7 @@ export default function SalesInvoiceFormPage() {
         buyerOrderDate: '',
         paymentDueDate: '',
         customerName: '',
+        customerId: '',
         customerGstin: '',
         customerPhone: '',
         billingState: '',
@@ -199,7 +204,7 @@ export default function SalesInvoiceFormPage() {
             }
         }).catch(e => console.error('Error loading items:', e));
 
-        getCustomers({ limit: 1000 }).then(res => {
+        getCustomers({ limit: 5000 }).then(res => {
             const list = res?.results || res?.data || res || [];
             setAllCustomers(list);
         }).catch(e => console.error('Error loading customers:', e));
@@ -215,14 +220,24 @@ export default function SalesInvoiceFormPage() {
 
     const loadSeries = useCallback(() => {
         getInvoiceSeries({ active: true }).then(async s => {
-            setSeriesList(s || []);
-            if (!form.seriesId && s && s.length > 0) {
-                const autoSelect = s.find(x => x.isDefault) || s[0];
-                setForm(p => ({ ...p, seriesId: autoSelect._id, gstApplicable: autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true }));
-                await fetchPreviewNo(autoSelect._id);
+            const list = s || [];
+            setSeriesList(list);
+            // When creating from a Sales Order, the series will be inherited from the SO —
+            // skip default pick and the "no default" warning here.
+            if (soId) return;
+            if (!form.seriesId && list.length > 0) {
+                // Pick series marked as Default for Tax Invoice in Series Master.
+                // Do NOT fall back to any other series (no auto-Estimate selection).
+                const autoSelect = list.find(x => x.isDefaultForTaxInvoice);
+                if (autoSelect) {
+                    setForm(p => ({ ...p, seriesId: autoSelect._id, gstApplicable: autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true }));
+                    await fetchPreviewNo(autoSelect._id);
+                } else {
+                    toast.error('Please set default series in Series Master.', { id: 'inv-no-default' });
+                }
             }
         }).catch(() => { });
-    }, [form.seriesId]);
+    }, [form.seriesId, soId]);
 
     useEffect(() => {
         loadSeries();
@@ -231,11 +246,17 @@ export default function SalesInvoiceFormPage() {
     useEffect(() => {
         if (!soId) return;
         getSalesOrderById(soId).then(so => {
+            // Inherit series from the Sales Order — so.seriesId may be populated (object) or raw id.
+            const soSeries = so.seriesId && typeof so.seriesId === 'object' ? so.seriesId : null;
+            const soSeriesId = soSeries ? soSeries._id : (so.seriesId || '');
+            if (soSeriesId) fetchPreviewNo(soSeriesId);
             setForm(p => ({
                 ...p,
                 soId,
                 soNumber: so.soNumber,
+                seriesId: soSeriesId || p.seriesId,
                 customerName: so.customerName,
+                customerId: so.customerId || '',
                 customerGstin: so.customerGstin || '',
                 customerPhone: so.customerPhone || '',
                 billingAddress: so.billingAddress || '',
@@ -322,6 +343,7 @@ export default function SalesInvoiceFormPage() {
             setForm(p => ({
                 ...p,
                 customerName: fullCustomer.name,
+                customerId: customerId,
                 customerGstin: fullCustomer.gstin || '',
                 customerPhone: fullCustomer.mobile || '',
                 billingAddress: fullCustomer.billingAddress || '',
@@ -470,8 +492,38 @@ export default function SalesInvoiceFormPage() {
             };
             const inv = await createSalesInvoice(payload);
             toast.success('Invoice created!');
+
+            // E-Way Bill reminder: prompt only for GST tax invoices above the threshold.
+            const needsEwb = form.gstApplicable === true && Number(roundedTotal) >= EWAY_BILL_THRESHOLD;
+            if (needsEwb) {
+                const proceed = window.confirm(
+                    `E-Way Bill Required\n\n` +
+                    `Invoice Value: ₹${Number(roundedTotal).toLocaleString('en-IN')}\n` +
+                    `Threshold: ₹${EWAY_BILL_THRESHOLD.toLocaleString('en-IN')}\n\n` +
+                    `This invoice is above the E-Way Bill limit. ` +
+                    `Please insert transport details for Part A / Part B.\n\n` +
+                    `Click OK to open the E-Way Bill draft now, or Cancel to skip for later.`
+                );
+                if (proceed) {
+                    try {
+                        const draftRes = await createEwayBillDraft(inv._id);
+                        const draft = draftRes?.data || draftRes;
+                        if (draft && draft._id) {
+                            navigate(PATHS.EWAY_BILL.DRAFT(draft._id));
+                            return;
+                        }
+                    } catch (err) {
+                        toast.error('Could not open E-Way Bill draft. You can create it later from the invoice page.');
+                    }
+                }
+            }
             navigate(PATHS.SALES.INVOICE_DETAIL(inv._id));
-        } catch (e) { toast.error(e.response?.data?.message || 'Create failed'); }
+        } catch (e) {
+            const msg = e.code === 'ECONNABORTED'
+                ? 'Request timed out — the invoice may still have been created. Check the invoice list.'
+                : (e.response?.data?.message || 'Create failed');
+            toast.error(msg);
+        }
         finally { setSaving(false); }
     };
 
@@ -548,12 +600,23 @@ export default function SalesInvoiceFormPage() {
 
                     <Field label="Customer (Buyer) *">
                         <SearchableSelect
-                            options={allCustomers.map(c => ({
-                                value: c._id,
-                                label: `${c.name} ${c.gstin ? `(${c.gstin})` : ''}`,
-                                meta: `${c.name} ${c.gstin || ''} ${c.mobile || ''}`
-                            }))}
-                            value={allCustomers.find(c => c.name === form.customerName)?._id || ''}
+                            options={(() => {
+                                const base = allCustomers.map(c => ({
+                                    value: c._id,
+                                    label: `${c.name} ${c.gstin ? `(${c.gstin})` : ''}`,
+                                    meta: `${c.name} ${c.gstin || ''} ${c.mobile || ''}`
+                                }));
+                                // If current selection is not in list (e.g. pagination), add it
+                                if (form.customerId && !base.find(b => b.value === form.customerId)) {
+                                    base.unshift({
+                                        value: form.customerId,
+                                        label: `${form.customerName} ${form.customerGstin ? `(${form.customerGstin})` : ''}`,
+                                        meta: ''
+                                    });
+                                }
+                                return base;
+                            })()}
+                            value={form.customerId}
                             onChange={handleCustomerSelect}
                             placeholder="Search Customer..."
                             style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b' }}
@@ -608,11 +671,21 @@ export default function SalesInvoiceFormPage() {
                                         <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
                                         <td style={{ ...td, minWidth: 140 }}>
                                             <SearchableSelect
-                                                options={allItems.map(it => ({ 
-                                                    value: it._id, 
-                                                    label: `${it.itemCode} — ${it.itemName || ''}`, 
-                                                    meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}` 
-                                                }))}
+                                                options={(() => {
+                                                    const base = allItems.map(it => ({ 
+                                                        value: it._id, 
+                                                        label: `${it.itemCode} — ${it.itemName || ''}`, 
+                                                        meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}` 
+                                                    }));
+                                                    if (item.itemId && !base.find(b => b.value === item.itemId)) {
+                                                        base.unshift({
+                                                            value: item.itemId,
+                                                            label: `${item.itemCode} — ${item.itemName}`,
+                                                            meta: ''
+                                                        });
+                                                    }
+                                                    return base;
+                                                })()}
                                                 value={item.itemId}
                                                 onChange={v => handleItemSelect(v, i)}
                                                 onKeyDown={(e) => handleRowKeyDown(e, i, 1)}

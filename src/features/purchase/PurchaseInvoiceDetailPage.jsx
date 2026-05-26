@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPurchaseInvoiceById, cancelPurchaseInvoice, confirmPurchaseInvoice, deletePurchaseInvoice, getPaymentsByInvoice } from '@/services/purchaseApi';
+import { getPurchaseInvoiceById, cancelPurchaseInvoice, confirmPurchaseInvoice, deletePurchaseInvoice, getPaymentsByInvoice, createPaymentEntry, previewPaymentTds } from '@/services/purchaseApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { numberToWords } from '@/utils/numberToWords';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { getBillAdjustments } from '@/services/billWiseAdjustmentApi';
 
 const STATUS_COLORS = {
     Confirmed: { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
@@ -18,8 +19,11 @@ const PAY_COLORS = {
     Cancelled: { color: '#6b7280', bg: '#f9fafb', border: '#e2e8f0' },
 };
 const MODE_ICONS = { Cash: '💵', UPI: '📱', Cheque: '🏦', 'Net Banking': '🌐', 'NEFT/RTGS/IMPS': '⚡', Card: '💳', Other: '🔖' };
+const bwTh = { padding: '9px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
+const bwTd = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
 import { BrandedLoader } from '@/components/ui';
+import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
 
 export default function PurchaseInvoiceDetailPage() {
     const { id } = useParams();
@@ -30,6 +34,26 @@ export default function PurchaseInvoiceDetailPage() {
     const [loading, setLoading] = useState(true);
     const [cancelling, setCancelling] = useState(false);
     const [activeTab, setActiveTab] = useState('invoice'); // invoice | payments
+    const [payModal, setPayModal] = useState(false);
+    const [quickPaySubmitting, setQuickPaySubmitting] = useState(false);
+    const [quickPay, setQuickPay] = useState({
+        paymentMode: 'NEFT/RTGS/IMPS',
+        amountPaid: '',
+        paymentDate: new Date().toISOString().slice(0, 10),
+        transactionId: '',
+        tdsSection: '194J',
+        tdsAmount: '',
+        tdsBaseAmount: '',
+        notes: '',
+        skipTdsEngine: false,
+        fromAccount: '',
+        bankName: '',
+    });
+    const [tdsPreview, setTdsPreview] = useState(null);
+    const [tdsPreviewLoading, setTdsPreviewLoading] = useState(false);
+    const [tdsPreviewError, setTdsPreviewError] = useState('');
+    const [tdsAlertOpen, setTdsAlertOpen] = useState(false);
+    const [billWiseRows, setBillWiseRows] = useState([]);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -49,6 +73,47 @@ export default function PurchaseInvoiceDetailPage() {
     }, [id]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        if (!id) return;
+        getBillAdjustments({ billId: id, billType: 'PurchaseInvoice' })
+            .then((rows) => setBillWiseRows(Array.isArray(rows) ? rows : []))
+            .catch(() => setBillWiseRows([]));
+    }, [id]);
+
+    useEffect(() => {
+        if (!payModal || !inv?._id) {
+            setTdsPreview(null);
+            setTdsPreviewError('');
+            return undefined;
+        }
+        const amt = Number(quickPay.amountPaid);
+        if (!(amt > 0)) {
+            setTdsPreview(null);
+            setTdsPreviewError('');
+            return undefined;
+        }
+        const base = Number(quickPay.tdsBaseAmount || 0);
+        const t = setTimeout(async () => {
+            setTdsPreviewLoading(true);
+            setTdsPreviewError('');
+            try {
+                const data = await previewPaymentTds({
+                    invoiceId: inv._id,
+                    amountPaid: amt,
+                    tdsBaseAmount: base > 0 ? base : undefined,
+                    paymentDate: quickPay.paymentDate,
+                });
+                setTdsPreview(data);
+            } catch (err) {
+                setTdsPreview(null);
+                setTdsPreviewError(err.response?.data?.message || err.message || 'Preview failed');
+            } finally {
+                setTdsPreviewLoading(false);
+            }
+        }, 420);
+        return () => clearTimeout(t);
+    }, [payModal, inv?._id, quickPay.amountPaid, quickPay.tdsBaseAmount, quickPay.paymentDate]);
 
     const handleCancel = async () => {
         if (!window.confirm('Cancel this invoice? The record remains and the number is reserved. Side effects (stock/PO/GRN/Ledger) will be reversed.')) return;
@@ -87,6 +152,7 @@ export default function PurchaseInvoiceDetailPage() {
         hour12: true
     }) : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} `;
+    const fmtDay = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 
     if (loading) return <BrandedLoader size={120} />;
     if (!inv) return <div style={{ padding: '40px', textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>Invoice not found.</div>;
@@ -113,6 +179,100 @@ export default function PurchaseInvoiceDetailPage() {
     );
     const notCancelled = inv.status !== 'Cancelled';
     const notFullyPaid = livePaymentStatus !== 'Paid';
+
+    const openQuickPay = () => {
+        const remaining = Math.max(0, (inv.grandTotal || 0) - livePaidAmount);
+        setTdsPreview(null);
+        setTdsPreviewError('');
+        setQuickPay((p) => ({
+            ...p,
+            amountPaid: remaining > 0 ? String(remaining) : '',
+            paymentDate: new Date().toISOString().slice(0, 10),
+            skipTdsEngine: false,
+            fromAccount: '',
+            bankName: '',
+        }));
+        setPayModal(true);
+    };
+
+    const saveQuickPay = async ({ tdsUserConfirmed = false, tdsPopupSkipped = false } = {}) => {
+        const amt = Number(quickPay.amountPaid);
+        const engineActive = tdsPreview?.engineActive && !quickPay.skipTdsEngine;
+        const d = tdsPreview?.decision;
+        await createPaymentEntry({
+            invoiceId: inv._id,
+            paymentDate: quickPay.paymentDate,
+            paymentMode: quickPay.paymentMode,
+            amountPaid: amt,
+            transactionId: quickPay.transactionId || '',
+            notes: quickPay.notes || '',
+            fromAccount: (quickPay.fromAccount || '').trim(),
+            bankName: (quickPay.bankName || '').trim(),
+            skipTdsEngine: quickPay.skipTdsEngine,
+            tdsUserConfirmed,
+            tdsPopupSkipped,
+            tdsSection: engineActive && d && !tdsPopupSkipped ? (d.tdsSection || '') : (quickPay.tdsSection || '').trim(),
+            tdsAmount: engineActive && d && !tdsPopupSkipped ? Number(d.tdsAmount || 0) : Number(quickPay.tdsAmount || 0),
+            tdsBaseAmount: engineActive && d && !tdsPopupSkipped
+                ? (d.tdsBase > 0 ? Number(d.tdsBase) : 0)
+                : (quickPay.tdsBaseAmount ? Number(quickPay.tdsBaseAmount) : 0),
+        });
+        const tdsAmt = engineActive && d && !tdsPopupSkipped ? Number(d.tdsAmount || 0) : Number(quickPay.tdsAmount || 0);
+        toast.success(
+            tdsAmt > 0
+                ? `Payment recorded — TDS ${engineActive ? '(engine)' : '(manual)'} ₹${tdsAmt.toFixed(2)}`
+                : 'Payment recorded',
+        );
+        setTdsAlertOpen(false);
+        setPayModal(false);
+        load();
+        setActiveTab('payments');
+    };
+
+    const submitQuickPay = async (e) => {
+        e.preventDefault();
+        const amt = Number(quickPay.amountPaid);
+        if (!(amt > 0)) {
+            toast.error('Enter a valid payment amount');
+            return;
+        }
+        const engineActive = tdsPreview?.engineActive && !quickPay.skipTdsEngine;
+        const d = tdsPreview?.decision;
+        if (engineActive && d?.liabilityAlert && d?.tdsApplicable && !quickPay.skipTdsEngine) {
+            setTdsAlertOpen(true);
+            return;
+        }
+        setQuickPaySubmitting(true);
+        try {
+            await saveQuickPay({ tdsUserConfirmed: false, tdsPopupSkipped: false });
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to record payment');
+        } finally {
+            setQuickPaySubmitting(false);
+        }
+    };
+
+    const confirmTdsAndPay = async () => {
+        setQuickPaySubmitting(true);
+        try {
+            await saveQuickPay({ tdsUserConfirmed: true, tdsPopupSkipped: false });
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to record payment');
+        } finally {
+            setQuickPaySubmitting(false);
+        }
+    };
+
+    const skipTdsAndPay = async () => {
+        setQuickPaySubmitting(true);
+        try {
+            await saveQuickPay({ tdsUserConfirmed: false, tdsPopupSkipped: true });
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to record payment');
+        } finally {
+            setQuickPaySubmitting(false);
+        }
+    };
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -356,6 +516,16 @@ export default function PurchaseInvoiceDetailPage() {
                                     💳 Make Payment
                                 </button>
                             )}
+                            {notCancelled && notFullyPaid && (
+                                <button
+                                    type="button"
+                                    onClick={openQuickPay}
+                                    style={{ padding: '9px 18px', borderRadius: 8, background: '#1e40af', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}
+                                    title="Record bank/UPI payment on this invoice with optional TDS"
+                                >
+                                    💰 Quick pay + TDS
+                                </button>
+                            )}
                             <button onClick={() => window.print()} style={{ padding: '9px 18px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
                             {notCancelled && notFullyPaid && (
                                 <button
@@ -381,6 +551,31 @@ export default function PurchaseInvoiceDetailPage() {
                             <div style={{ height: 6, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}>
                                 <div style={{ height: '100%', width: `${Math.min(100, (livePaidAmount / inv.grandTotal) * 100)}% `, background: 'linear-gradient(90deg,#0d9488,#2563eb)', borderRadius: 99, transition: 'width 0.4s' }} />
                             </div>
+                        </div>
+                    )}
+                    {billWiseRows.length > 0 && (
+                        <div style={{ marginTop: 16, padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>Bill-wise adjustments</div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ ...bwTh, fontSize: 10 }}>Payment No.</th>
+                                        <th style={{ ...bwTh, fontSize: 10 }}>Date</th>
+                                        <th style={{ ...bwTh, fontSize: 10 }}>Amount</th>
+                                        <th style={{ ...bwTh, fontSize: 10 }}>Reversed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {billWiseRows.map((r) => (
+                                        <tr key={r._id}>
+                                            <td style={bwTd}>{r.paymentNo || '—'}</td>
+                                            <td style={bwTd}>{fmtDay(r.adjustmentDate)}</td>
+                                            <td style={bwTd}>{fmtCur(r.adjustedAmount)}</td>
+                                            <td style={bwTd}>{r.isReversed ? 'Yes' : 'No'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
@@ -487,7 +682,7 @@ export default function PurchaseInvoiceDetailPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                 <thead>
                                     <tr>
-                                        {['Date', 'Mode', 'Reference', 'Amount', 'Status', 'By'].map(h => (
+                                        {['Date', 'Mode', 'Reference', 'Amount', 'TDS', 'Engine', 'Posting', 'Status', 'By'].map(h => (
                                             <th key={h} style={{ padding: '10px 14px', textAlign: 'left', borderBottom: '2px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', fontSize: 11 }}>{h}</th>
                                         ))}
                                     </tr>
@@ -510,6 +705,16 @@ export default function PurchaseInvoiceDetailPage() {
                                                 </td>
                                                 <td style={{ padding: '11px 14px', color: '#9ca3af', fontFamily: 'monospace', fontSize: 12 }}>{ref}</td>
                                                 <td style={{ padding: '11px 14px', color: '#16a34a', fontWeight: 700 }}>{fmtCur(p.amountPaid)}</td>
+                                                <td style={{ padding: '11px 14px', fontSize: 12, color: '#475569' }}>
+                                                    {p.tdsAmount > 0 ? `₹${Number(p.tdsAmount).toFixed(2)}` : '—'}
+                                                    {p.tdsSection ? <span style={{ display: 'block', fontSize: 10, color: '#94a3b8' }}>{p.tdsSection}</span> : null}
+                                                </td>
+                                                <td style={{ padding: '11px 14px', fontSize: 11, color: '#64748b' }}>
+                                                    {p.tdsEngineApplied ? (p.tdsApplicableComputed ? 'Yes' : 'Off') : '—'}
+                                                </td>
+                                                <td style={{ padding: '11px 14px', fontSize: 11, color: '#64748b' }}>
+                                                    {p.tdsPostingStatus && p.tdsPostingStatus !== 'none' ? p.tdsPostingStatus : '—'}
+                                                </td>
                                                 <td style={{ padding: '11px 14px' }}><span style={{ color: statusC, background: statusBg, fontWeight: 700, fontSize: 11, padding: '2px 8px', borderRadius: 8 }}>{p.paymentStatus}</span></td>
                                                 <td style={{ padding: '11px 14px', color: '#9ca3af' }}>{p.createdBy?.name || '—'}</td>
                                             </tr>
@@ -518,9 +723,9 @@ export default function PurchaseInvoiceDetailPage() {
                                 </tbody>
                                 <tfoot>
                                     <tr style={{ background: '#f9fafb', borderTop: '2px solid #e5e7eb' }}>
-                                        <td colSpan={3} style={{ padding: '12px 14px', color: '#6b7280', fontWeight: 700 }}>Total Paid</td>
+                                        <td colSpan={4} style={{ padding: '12px 14px', color: '#6b7280', fontWeight: 700 }}>Total Paid</td>
                                         <td style={{ padding: '12px 14px', color: '#16a34a', fontWeight: 800, fontSize: 15 }}>{fmtCur(payments.filter(p => p.paymentStatus !== 'Failed').reduce((s, p) => s + p.amountPaid, 0))}</td>
-                                        <td colSpan={2} />
+                                        <td colSpan={4} />
                                     </tr>
                                 </tfoot>
                             </table>
@@ -529,7 +734,96 @@ export default function PurchaseInvoiceDetailPage() {
                 )}
             </div>
 
+            {payModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => !quickPaySubmitting && setPayModal(false)}>
+                    <form onClick={(e) => e.stopPropagation()} onSubmit={submitQuickPay} style={{ background: '#fff', borderRadius: 12, padding: 24, maxWidth: 560, width: '100%', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h3 style={{ margin: '0 0 16px' }}>Record payment (+ optional TDS)</h3>
+                        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>
+                            Net amount leaving bank/cash. When the supplier&apos;s linked ledger has <strong>TDS applicable</strong>, the engine fills section, base, and TDS from master + FY cumulative totals unless you choose manual override.
+                        </p>
+                        <div style={{ display: 'grid', gap: 12 }}>
+                            <label style={{ fontSize: 13 }}>Mode
+                                <select value={quickPay.paymentMode} onChange={(e) => setQuickPay((p) => ({ ...p, paymentMode: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }}>
+                                    {['NEFT/RTGS/IMPS', 'UPI', 'Cheque', 'Cash', 'Net Banking', 'Card', 'Other'].map((m) => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                            </label>
+                            <label style={{ fontSize: 13 }}>Amount paid (net) *
+                                <input type="number" required value={quickPay.amountPaid} onChange={(e) => setQuickPay((p) => ({ ...p, amountPaid: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>Date
+                                <input type="date" value={quickPay.paymentDate} onChange={(e) => setQuickPay((p) => ({ ...p, paymentDate: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>UTR / Ref
+                                <input value={quickPay.transactionId} onChange={(e) => setQuickPay((p) => ({ ...p, transactionId: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>Cash/Bank account name (match Cash &amp; Bank master)
+                                <input value={quickPay.fromAccount} onChange={(e) => setQuickPay((p) => ({ ...p, fromAccount: e.target.value }))} placeholder="e.g. HDFC Current" style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>Bank name (optional)
+                                <input value={quickPay.bankName} onChange={(e) => setQuickPay((p) => ({ ...p, bankName: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
 
+                            <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 8 }}>TDS STATUS</div>
+                                {tdsPreviewLoading && <div style={{ fontSize: 12, color: '#64748b' }}>Calculating…</div>}
+                                {tdsPreviewError && <div style={{ fontSize: 12, color: '#b91c1c' }}>{tdsPreviewError}</div>}
+                                {!tdsPreviewLoading && !tdsPreviewError && tdsPreview && !tdsPreview.engineActive && (
+                                    <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                                        TDS engine inactive (supplier has no linked ledger with TDS on, or ledger not found). Use manual TDS fields below if needed.
+                                    </p>
+                                )}
+                                {!tdsPreviewLoading && tdsPreview?.engineActive && tdsPreview.decision && (
+                                    <div style={{ fontSize: 12, color: '#1e293b', lineHeight: 1.6 }}>
+                                        <div><strong>Ledger:</strong> {tdsPreview.ledger?.name}</div>
+                                        <div><strong>Section:</strong> {tdsPreview.decision.tdsSection || '—'} | <strong>Rate:</strong> {tdsPreview.decision.tdsRate}% | <strong>Threshold (FY):</strong> ₹{Number(tdsPreview.decision.tdsThreshold || 0).toLocaleString('en-IN')}</div>
+                                        <div><strong>Cumulative before:</strong> ₹{Number(tdsPreview.decision.cumulativeBefore || 0).toLocaleString('en-IN')} → <strong>After this payment:</strong> ₹{Number(tdsPreview.decision.cumulativeAfter || 0).toLocaleString('en-IN')}</div>
+                                        <div><strong>TDS applicable:</strong> {tdsPreview.decision.tdsApplicable ? 'Yes' : 'No'} | <strong>Suggested TDS:</strong> ₹{Number(tdsPreview.decision.tdsAmount || 0).toFixed(2)} | <strong>Net payable:</strong> ₹{Number(tdsPreview.decision.netPayable || 0).toFixed(2)}</div>
+                                        <div><strong>PAN:</strong> {tdsPreview.decision.panOk ? 'OK' : <span style={{ color: '#b45309' }}>Missing / invalid</span>}{tdsPreview.decision.panBlock ? <span style={{ color: '#b91c1c' }}> — save will be blocked until PAN is fixed or you skip the engine.</span> : null}</div>
+                                        {(tdsPreview.decision.warnings || []).map((w, i) => (
+                                            <div key={i} style={{ color: '#b45309', marginTop: 4 }}>{w}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                                <input type="checkbox" checked={quickPay.skipTdsEngine} onChange={(e) => setQuickPay((p) => ({ ...p, skipTdsEngine: e.target.checked }))} />
+                                Use manual TDS (skip engine)
+                            </label>
+
+                            <label style={{ fontSize: 13 }}>TDS section
+                                <input value={quickPay.tdsSection} readOnly={tdsPreview?.engineActive && !quickPay.skipTdsEngine} onChange={(e) => setQuickPay((p) => ({ ...p, tdsSection: e.target.value.toUpperCase() }))} placeholder="194J" style={{ display: 'block', width: '100%', marginTop: 4, padding: 8, opacity: tdsPreview?.engineActive && !quickPay.skipTdsEngine ? 0.65 : 1 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>TDS amount
+                                <input type="number" value={quickPay.tdsAmount} readOnly={tdsPreview?.engineActive && !quickPay.skipTdsEngine} onChange={(e) => setQuickPay((p) => ({ ...p, tdsAmount: e.target.value }))} placeholder="0" style={{ display: 'block', width: '100%', marginTop: 4, padding: 8, opacity: tdsPreview?.engineActive && !quickPay.skipTdsEngine ? 0.65 : 1 }} />
+                            </label>
+                            <label style={{ fontSize: 13 }}>TDS base (optional)
+                                <input type="number" value={quickPay.tdsBaseAmount} readOnly={tdsPreview?.engineActive && !quickPay.skipTdsEngine} onChange={(e) => setQuickPay((p) => ({ ...p, tdsBaseAmount: e.target.value }))} placeholder="Defaults to payment amount" style={{ display: 'block', width: '100%', marginTop: 4, padding: 8, opacity: tdsPreview?.engineActive && !quickPay.skipTdsEngine ? 0.65 : 1 }} />
+                            </label>
+                            {tdsPreview?.engineActive && !quickPay.skipTdsEngine && (
+                                <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>Section / TDS / base are computed on save from the engine. Enable &quot;skip engine&quot; to type your own.</p>
+                            )}
+                            <label style={{ fontSize: 13 }}>Notes
+                                <input value={quickPay.notes} onChange={(e) => setQuickPay((p) => ({ ...p, notes: e.target.value }))} style={{ display: 'block', width: '100%', marginTop: 4, padding: 8 }} />
+                            </label>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={() => setPayModal(false)} disabled={quickPaySubmitting} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+                            <button type="submit" disabled={quickPaySubmitting} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0d9488', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>{quickPaySubmitting ? 'Saving...' : 'Save payment'}</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <TdsLiabilityAlertModal
+                open={tdsAlertOpen}
+                supplierName={inv?.supplierName || tdsPreview?.supplier?.supplierName}
+                decision={tdsPreview?.decision}
+                master={tdsPreview?.master}
+                onYes={confirmTdsAndPay}
+                onNo={skipTdsAndPay}
+                loading={quickPaySubmitting}
+            />
 
             {/* Print Styles */}
             <style>{`

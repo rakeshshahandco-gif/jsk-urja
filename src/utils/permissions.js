@@ -96,7 +96,22 @@ export const APP_MODULES = [
             { id: 'bank_book', name: 'Bank Book', actions: ['view', 'export'] },
             { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] },
             { id: 'credit_notes', name: 'Credit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] },
-            { id: 'debit_notes', name: 'Debit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] }
+            { id: 'debit_notes', name: 'Debit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] },
+        ]
+    },
+    {
+        id: 'tds',
+        name: 'TDS',
+        submodules: [
+            { id: 'dashboard', name: 'TDS Dashboard', actions: ['view'] },
+            { id: 'master', name: 'TDS Master / Section Rates', actions: ['view', 'edit'] },
+            { id: 'ledger_mapping', name: 'TDS Ledger Mapping', actions: ['view', 'edit'] },
+            { id: 'deduction_register', name: 'TDS Deduction Register', actions: ['view'] },
+            { id: 'payable_register', name: 'TDS Payable Register', actions: ['view'] },
+            { id: 'challan', name: 'TDS Challan / Payment', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'returns', name: 'TDS Return / Filing Data', actions: ['view', 'edit', 'export'] },
+            { id: 'reports', name: 'TDS Reports', actions: ['view', 'export'] },
+            { id: 'settings', name: 'TDS Settings', actions: ['view', 'edit'] },
         ]
     },
     {
@@ -118,6 +133,7 @@ export const APP_MODULES = [
         name: 'MIS',
         submodules: [
             { id: 'dashboard', name: 'MIS Dashboard', actions: ['view'] },
+            { id: 'director_dashboard', name: 'Director MIS Dashboard', actions: ['view'] },
             { id: 'trial_balance', name: 'Trial Balance', actions: ['view', 'export'] },
             { id: 'profit_loss', name: 'Profit & Loss', actions: ['view', 'export'] },
             { id: 'balance_sheet', name: 'Balance Sheet', actions: ['view', 'export'] },
@@ -171,6 +187,7 @@ export const ROLE_PERMISSIONS = {
         'sales',
         'service',
         'accounts',
+        'tds',
         'reports',
         'admin.whatsapp_settings.view',
         'whatsapp.whatsapp_settings.view',
@@ -249,6 +266,37 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
     if (userRole && ROLE_PERMISSIONS[userRole]) {
         const rolePerms = ROLE_PERMISSIONS[userRole];
         if (rolePerms.includes('*') || rolePerms.includes(requiredPermission)) return true;
+    }
+
+    // TDS sidebar parent: any granular TDS (or legacy Accounts TDS) right opens the module menu
+    if (requiredPermission === 'tds') {
+        const list = Array.isArray(userPermissions) ? userPermissions : [userPermissions].filter(Boolean);
+        if (list.some((p) => typeof p === 'string' && (p.startsWith('tds.') || p.startsWith('accounts.tds_compliance')))) {
+            return true;
+        }
+        if (additionalPermissions?.tds && typeof additionalPermissions.tds === 'object') return true;
+        if (additionalPermissions?.accounts?.tds_compliance && typeof additionalPermissions.accounts.tds_compliance === 'object') {
+            return true;
+        }
+    }
+
+    // Legacy: grants issued as Accounts — TDS Compliance still satisfy tds.* checks
+    if (typeof requiredPermission === 'string' && requiredPermission.startsWith('tds.')) {
+        const list = Array.isArray(userPermissions) ? userPermissions : [userPermissions].filter(Boolean);
+        const act = requiredPermission.split('.').pop();
+        if (act === 'view' && list.some((p) => p === 'accounts.tds_compliance.view')) return true;
+        if (['add', 'edit', 'manage'].includes(act) && list.some((p) => p === 'accounts.tds_compliance.edit' || p === 'accounts.tds_compliance.add')) {
+            return true;
+        }
+        if (act === 'export' && list.some((p) => p === 'accounts.tds_compliance.export')) return true;
+        if (act === 'delete' && list.some((p) => p === 'accounts.tds_compliance.delete')) return true;
+        const ap = additionalPermissions?.accounts?.tds_compliance;
+        if (ap && typeof ap === 'object') {
+            if (act === 'view' && ap.view) return true;
+            if (['add', 'edit', 'manage'].includes(act) && (ap.edit || ap.add)) return true;
+            if (act === 'export' && ap.export) return true;
+            if (act === 'delete' && ap.delete) return true;
+        }
     }
 
     return false;

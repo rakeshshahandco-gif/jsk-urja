@@ -1,68 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
-import { Search, RotateCcw, ChevronLeft, ChevronRight, LayoutList, Zap, Plus } from 'lucide-react';
+import { Search, RotateCcw, ChevronLeft, ChevronRight, LayoutList, Columns3, Plus } from 'lucide-react';
 import { apiClient as api } from '@/lib/apiClient';
 import { useToast } from '@/components/ui/Toast';
 import { ManageTasksTable } from './ManageTasksTable';
 import { TaskUpdateDrawer } from './TaskUpdateDrawer';
-import PriorityTaskView from './PriorityTaskView';
+import WorkboardTaskView from './WorkboardTaskView';
+import { TaskHubSummaryStrip } from './TaskHubSummaryStrip';
+import { TaskHubConfirmDialog } from './TaskHubConfirmDialog';
 import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
 import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { TABLE_TABS, VIEW_MODES } from './taskHubConstants';
+import { ViewTabs, FilterChips } from '@/components/ui';
+import pageStyles from './ManageTasksPage.module.scss';
 
-// ─── Shared compact styles ─────────────────────────────────────────────────
-const s = {
-    sel: {
-        height: 28, fontSize: 11, padding: '0 22px 0 6px', border: '1px solid #d1d5db',
-        borderRadius: 5, background: '#fff', color: '#374151', outline: 'none', cursor: 'pointer',
-        appearance: 'none', minWidth: 90,
-        backgroundImage: "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\")",
-        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 3px center', backgroundSize: '0.9em'
-    },
-    inp: {
-        height: 28, fontSize: 11, padding: '0 6px', border: '1px solid #d1d5db', color: '#374151',
-        borderRadius: 5, background: '#fff', outline: 'none', width: 88
-    },
-    tab: (active) => ({
-        padding: '3px 10px', fontSize: 11, fontWeight: 600, borderRadius: 5, border: 'none',
-        cursor: 'pointer',
-        background: active ? '#fff' : 'transparent',
-        color: active ? '#0d9488' : '#6b7280',
-        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-        transition: 'all 0.15s'
-    }),
-    resetBtn: {
-        height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600,
-        border: '1px solid #d1d5db', borderRadius: 5, background: '#fff',
-        color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
-    }
+const MONGO_ID_RE = /^[a-f\d]{24}$/i;
+
+const normalizeViewMode = (mode) => {
+    if (mode === 'priority' || mode === 'workboard') return 'workboard';
+    if (mode === 'existing' || mode === 'table') return 'table';
+    return mode === 'table' ? 'table' : 'workboard';
 };
 
-const TABS = [
-    { id: 'overdue', api: 'OVERDUE', label: 'Overdue' },
-    { id: 'today', api: 'TODAY', label: 'Today' },
-    { id: 'upcoming', api: 'UPCOMING', label: 'Upcoming' },
-    { id: 'all', api: 'ALL', label: 'All Tasks' },
-    { id: 'closed', api: 'CLOSED', label: 'Closed' },
-];
-
-const VIEW_MODES = [
-    { id: 'existing', label: 'Existing View', Icon: LayoutList },
-    { id: 'priority', label: 'Priority View', Icon: Zap },
-];
-
-// ─── Component ─────────────────────────────────────────────────────────────
 const ManageTasksPage = () => {
     const { addToast } = useToast();
     const navigate = useNavigate();
+    const location = useLocation();
+    const { id: routeTaskId } = useParams();
     const { user } = useAuth();
 
-    // Persistent Filter State
     const { filters, setFilter, resetFilters } = useFilterPersistence('crm-tasks', {
-        viewMode: 'priority',
+        viewMode: 'workboard',
         activeTab: 'overdue',
         searchTerm: '',
         priorityFilter: '',
@@ -72,12 +44,21 @@ const ManageTasksPage = () => {
         dateFrom: '',
         dateTo: '',
         page: 1,
-        limit: 25
+        limit: 25,
     });
 
-    const { 
-        viewMode, activeTab, searchTerm, priorityFilter, groupFilter, 
-        assigneeFilter, createdByFilter, dateFrom, dateTo, page, limit 
+    const viewMode = normalizeViewMode(filters.viewMode);
+    const {
+        activeTab,
+        searchTerm,
+        priorityFilter,
+        groupFilter,
+        assigneeFilter,
+        createdByFilter,
+        dateFrom,
+        dateTo,
+        page,
+        limit,
     } = filters;
 
     const [loading, setLoading] = useState(true);
@@ -87,37 +68,95 @@ const ManageTasksPage = () => {
     const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
     const [selectedTaskId, setSelectedTaskId] = useState(null);
+    const [summaryStats, setSummaryStats] = useState({ overdue: 0, today: 0, week: 0, open: 0 });
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [confirm, setConfirm] = useState(null);
+    const [workboardRefresh, setWorkboardRefresh] = useState(0);
 
     useEffect(() => {
-        // Load users from report options
-        getReportOptions()
-            .then(d => setOptions(prev => ({ ...prev, users: d.users || [] })))
-            .catch(() => { });
+        if (filters.viewMode !== viewMode) {
+            setFilter('viewMode', viewMode);
+        }
+    }, [filters.viewMode, viewMode, setFilter]);
 
-        // Load groups from dedicated filtered endpoint (respects user membership)
+    useEffect(() => {
+        if (routeTaskId && MONGO_ID_RE.test(routeTaskId)) {
+            setSelectedTaskId(routeTaskId);
+        }
+    }, [routeTaskId]);
+
+    useEffect(() => {
+        getReportOptions()
+            .then((d) => setOptions((prev) => ({ ...prev, users: d.users || [] })))
+            .catch(() => {});
+
         api.get('/task-groups/my')
-            .then(res => {
+            .then((res) => {
                 const groups = res.data?.data || res.data || [];
-                setOptions(prev => ({ ...prev, taskGroups: Array.isArray(groups) ? groups : [] }));
+                setOptions((prev) => ({ ...prev, taskGroups: Array.isArray(groups) ? groups : [] }));
             })
-            .catch(() => { });
+            .catch(() => {});
+    }, []);
+
+    const filterParams = useMemo(
+        () => ({
+            search: searchTerm || undefined,
+            priority: priorityFilter || undefined,
+            groupId: groupFilter || undefined,
+            assigneeId: assigneeFilter || undefined,
+            createdById: createdByFilter || undefined,
+            dateFrom: dateFrom || undefined,
+            dateTo: dateTo || undefined,
+        }),
+        [searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo]
+    );
+
+    const fetchTableSummary = useCallback(async () => {
+        setSummaryLoading(true);
+        try {
+            const base = { limit: 1, page: 1, ...filterParams };
+            const [overdueRes, todayRes, upcomingRes] = await Promise.all([
+                api.get('/reports/manage-tasks', { params: { ...base, tab: 'OVERDUE' } }),
+                api.get('/reports/manage-tasks', { params: { ...base, tab: 'TODAY' } }),
+                api.get('/reports/manage-tasks', { params: { ...base, tab: 'UPCOMING' } }),
+            ]);
+            const overdue = overdueRes.data?.meta?.total ?? 0;
+            const today = todayRes.data?.meta?.total ?? 0;
+            const upcoming = upcomingRes.data?.meta?.total ?? 0;
+            setSummaryStats({
+                overdue,
+                today,
+                week: upcoming,
+                open: overdue + today + upcoming,
+            });
+        } catch {
+            setSummaryStats({ overdue: 0, today: 0, week: 0, open: 0 });
+        } finally {
+            setSummaryLoading(false);
+        }
+    }, [filterParams]);
+
+    useEffect(() => {
+        if (viewMode === 'table') {
+            fetchTableSummary();
+        }
+    }, [viewMode, fetchTableSummary]);
+
+    const handleWorkboardSummary = useCallback((stats) => {
+        setSummaryStats(stats);
+        setSummaryLoading(false);
     }, []);
 
     const fetchTasks = useCallback(async () => {
         if (!activeTab) return;
         setLoading(true);
         try {
-            const tab = TABS.find(t => t.id === activeTab)?.api || 'ALL';
+            const tab = TABLE_TABS.find((t) => t.id === activeTab)?.api || 'ALL';
             const params = {
-                page, limit,
+                page,
+                limit,
                 tab,
-                search: searchTerm || undefined,
-                priority: priorityFilter || undefined,
-                groupId: groupFilter || undefined,
-                assigneeId: assigneeFilter || undefined,
-                createdById: createdByFilter || undefined,
-                dateFrom: dateFrom || undefined,
-                dateTo: dateTo || undefined,
+                ...filterParams,
             };
             const res = await api.get('/reports/manage-tasks', { params });
             setTasks(res.data.data || []);
@@ -128,216 +167,335 @@ const ManageTasksPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [activeTab, page, limit, searchTerm, priorityFilter, groupFilter, assigneeFilter, createdByFilter, dateFrom, dateTo, addToast]);
+    }, [activeTab, page, limit, filterParams, addToast]);
 
     useEffect(() => {
-        if (viewMode === 'existing') {
-            fetchTasks(); 
+        if (viewMode === 'table') {
+            fetchTasks();
         }
     }, [fetchTasks, viewMode]);
 
     const { socket } = useGlobalSync('task', (payload) => {
+        if (viewMode !== 'table') return;
         if (payload.action === 'create') {
-            setTasks(prev => {
-                if (prev.find(t => t._id === payload.recordId)) return prev;
-                // Since data is now fully populated from backend, we can add it directly
+            setTasks((prev) => {
+                if (prev.find((t) => t._id === payload.recordId)) return prev;
                 return [payload.data, ...prev].slice(0, limit);
             });
-            setTotal(p => p + 1);
+            setTotal((p) => p + 1);
+            fetchTableSummary();
         } else if (payload.action === 'update' || payload.action === 'assigned') {
-            setTasks(prev => prev.map(t => t._id === payload.recordId ? { ...t, ...payload.data } : t));
+            setTasks((prev) => prev.map((t) => (t._id === payload.recordId ? { ...t, ...payload.data } : t)));
+            fetchTableSummary();
         } else if (payload.action === 'delete') {
-            setTasks(prev => prev.filter(t => t._id !== payload.recordId));
-            setTotal(p => Math.max(0, p - 1));
+            setTasks((prev) => prev.filter((t) => t._id !== payload.recordId));
+            setTotal((p) => Math.max(0, p - 1));
+            fetchTableSummary();
         }
     });
 
-    // Reconnection Sync: Ensure we have the latest data if socket was offline
     useEffect(() => {
-        if (!socket) return;
-        const handleReconnect = () => {
-             console.log('🔄 Reconnected! Syncing task list...');
-             fetchTasks();
-        };
+        if (!socket || viewMode !== 'table') return;
+        const handleReconnect = () => fetchTasks();
         socket.on('connect', handleReconnect);
         return () => socket.off('connect', handleReconnect);
-    }, [socket, fetchTasks]);
+    }, [socket, fetchTasks, viewMode]);
 
-    const handleTab = (id) => { setFilter('activeTab', id); setFilter('page', 1); };
+    const openTask = useCallback(
+        (task) => {
+            setSelectedTaskId(task._id);
+            if (location.pathname !== `/tasks/${task._id}`) {
+                navigate(`/tasks/${task._id}`);
+            }
+        },
+        [navigate, location.pathname]
+    );
+
+    const closeDrawer = useCallback(() => {
+        setSelectedTaskId(null);
+        if (routeTaskId && MONGO_ID_RE.test(routeTaskId)) {
+            navigate('/tasks/list', { replace: true });
+        }
+    }, [navigate, routeTaskId]);
+
+    const handleTab = (id) => {
+        setFilter('activeTab', id);
+        setFilter('page', 1);
+    };
 
     const handleExtendConfirm = async (taskId, data) => {
-        try { await extendTask(taskId, data); addToast('Task extended!', 'success'); fetchTasks(); }
-        catch { addToast('Failed to extend task.', 'error'); throw new Error(); }
+        try {
+            await extendTask(taskId, data);
+            addToast('Task extended!', 'success');
+            if (viewMode === 'table') fetchTasks();
+        } catch {
+            addToast('Failed to extend task.', 'error');
+            throw new Error();
+        }
     };
 
-    const handleCloseTask = async (taskId) => {
-        if (!window.confirm('Close this task?')) return;
-        try { await closeTask(taskId); addToast('Task closed!', 'success'); fetchTasks(); }
-        catch { addToast('Failed to close task.', 'error'); }
+    const runCloseTask = async (taskId) => {
+        try {
+            await closeTask(taskId);
+            addToast('Task closed!', 'success');
+            if (viewMode === 'table') fetchTasks();
+        } catch {
+            addToast('Failed to close task.', 'error');
+        }
     };
 
-    const handleDeleteTask = async (taskId) => {
-        if (!window.confirm('Delete this task permanently?')) return;
-        try { await deleteTask(taskId); addToast('Task deleted.', 'success'); fetchTasks(); }
-        catch { addToast('Failed to delete task.', 'error'); }
+    const runDeleteTask = async (taskId) => {
+        try {
+            await deleteTask(taskId);
+            addToast('Task deleted.', 'success');
+            if (viewMode === 'table') fetchTasks();
+        } catch {
+            addToast('Failed to delete task.', 'error');
+        }
+    };
+
+    const handleCloseTask = (taskId) => {
+        setConfirm({
+            title: 'Complete task',
+            message: 'Mark this task as complete?',
+            confirmLabel: 'Complete',
+            onConfirm: async () => {
+                setConfirm(null);
+                await runCloseTask(taskId);
+            },
+        });
+    };
+
+    const handleDeleteTask = (taskId) => {
+        setConfirm({
+            title: 'Delete task',
+            message: 'Delete this task permanently? This cannot be undone.',
+            confirmLabel: 'Delete',
+            danger: true,
+            onConfirm: async () => {
+                setConfirm(null);
+                await runDeleteTask(taskId);
+            },
+        });
+    };
+
+    const activeFilterChips = useMemo(() => {
+        const chips = [];
+        if (groupFilter) {
+            const g = options.taskGroups.find((x) => x._id === groupFilter);
+            chips.push({ key: 'group', label: `Group: ${g?.name || 'Selected'}`, clear: () => setFilter('groupFilter', '') });
+        }
+        if (assigneeFilter) {
+            const u = options.users.find((x) => x._id === assigneeFilter);
+            chips.push({ key: 'assignee', label: `Assignee: ${u?.name || 'Selected'}`, clear: () => setFilter('assigneeFilter', '') });
+        }
+        if (createdByFilter) {
+            const u = options.users.find((x) => x._id === createdByFilter);
+            chips.push({ key: 'creator', label: `Creator: ${u?.name || 'Selected'}`, clear: () => setFilter('createdByFilter', '') });
+        }
+        if (priorityFilter) {
+            chips.push({ key: 'priority', label: `Priority: ${priorityFilter}`, clear: () => setFilter('priorityFilter', '') });
+        }
+        if (searchTerm) {
+            chips.push({ key: 'search', label: `Search: "${searchTerm}"`, clear: () => setFilter('searchTerm', '') });
+        }
+        return chips;
+    }, [groupFilter, assigneeFilter, createdByFilter, priorityFilter, searchTerm, options, setFilter]);
+
+    const clearAllChips = () => {
+        setFilter('searchTerm', '');
+        setFilter('priorityFilter', '');
+        setFilter('groupFilter', '');
+        setFilter('assigneeFilter', '');
+        setFilter('createdByFilter', '');
     };
 
     const totalPages = Math.ceil(total / limit) || 1;
 
     return (
-        <div style={{ padding: '16px 20px', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className={pageStyles.page}>
+            <div className={pageStyles.toolbar}>
+                <span className={pageStyles.title}>Task Hub</span>
 
-            {/* ── LINE 1: Title + View Toggle + Tabs + New Task ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>Manage Tasks</span>
+                <ViewTabs
+                    value={viewMode}
+                    onChange={(id) => setFilter('viewMode', id)}
+                    items={VIEW_MODES.map((vm) => ({
+                        id: vm.id,
+                        label: vm.label,
+                        icon: vm.id === 'workboard' ? Columns3 : LayoutList,
+                    }))}
+                    variant="accent"
+                />
 
-                {/* View Mode Toggle */}
-                <div style={{ display: 'flex', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: 3, gap: 2 }}>
-                    {VIEW_MODES.map(vm => {
-                        const active = viewMode === vm.id;
-                        return (
-                            <button
-                                key={vm.id}
-                                onClick={() => setFilter('viewMode', vm.id)}
-                                style={{
-                                    display: 'flex', alignItems: 'center', gap: 5,
-                                    padding: '4px 12px', fontSize: 11, fontWeight: 700,
-                                    borderRadius: 5, border: 'none', cursor: 'pointer',
-                                    background: active ? (vm.id === 'priority' ? '#0d9488' : '#fff') : 'transparent',
-                                    color: active ? (vm.id === 'priority' ? '#fff' : '#0d9488') : '#6b7280',
-                                    boxShadow: active ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
-                                    transition: 'all 0.18s',
-                                }}
-                            >
-                                <vm.Icon size={12} />
-                                {vm.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Existing View sub-tabs — only visible in existing mode */}
-                {viewMode === 'existing' && (
-                    <div style={{ display: 'flex', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: 3, gap: 2 }}>
-                        {TABS.map(t => (
-                            <button key={t.id} style={s.tab(activeTab === t.id)} onClick={() => handleTab(t.id)}>
-                                {t.label}
-                                {t.id === 'all' && <span style={{ marginLeft: 4, background: '#e2e8f0', borderRadius: 8, padding: '0 5px', fontSize: 10, color: '#64748b' }}>{total}</span>}
-                            </button>
-                        ))}
-                    </div>
+                {viewMode === 'table' && (
+                    <ViewTabs
+                        value={activeTab}
+                        onChange={handleTab}
+                        items={TABLE_TABS.map((t) => ({
+                            id: t.id,
+                            label: t.label,
+                            badge: t.id === 'all' ? total : undefined,
+                        }))}
+                    />
                 )}
 
-                {/* New Task Button */}
-                <div style={{ marginLeft: 'auto' }}>
-                    <button
-                        onClick={() => navigate('/tasks/create')}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: 5,
-                            height: 30, padding: '0 14px', fontSize: 11, fontWeight: 700,
-                            border: 'none', borderRadius: 6, cursor: 'pointer',
-                            background: '#0d9488', color: '#fff',
-                            boxShadow: '0 2px 6px rgba(13,148,136,0.3)',
-                        }}
-                    >
-                        <Plus size={13} /> New Task
+                <div className={pageStyles.toolbarSpacer}>
+                    <button type="button" className={pageStyles.newTaskBtn} onClick={() => navigate('/tasks/create')}>
+                        <Plus size={13} /> New task
                     </button>
                 </div>
             </div>
 
-            {/* ── LINE 2: Filters (shared for both views) ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <select style={s.sel} value={groupFilter} onChange={e => setFilter('groupFilter', e.target.value)}>
-                    <option value="">All Groups</option>
-                    {options.taskGroups.map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
-                </select>
 
-                {user?.role === 'admin' && (
-                    <select style={s.sel} value={assigneeFilter} onChange={e => setFilter('assigneeFilter', e.target.value)}>
-                        <option value="">All Assignees</option>
-                        {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+            <TaskHubSummaryStrip stats={summaryStats} loading={viewMode === 'table' ? summaryLoading : false} />
+
+            <div className={pageStyles.filterPanel}>
+                <div className={pageStyles.filterRow}>
+                    <select className={pageStyles.sel} value={groupFilter} onChange={(e) => setFilter('groupFilter', e.target.value)}>
+                        <option value="">All Groups</option>
+                        {options.taskGroups.map((g) => (
+                            <option key={g._id} value={g._id}>
+                                {g.name}
+                            </option>
+                        ))}
                     </select>
-                )}
 
-                {user?.role === 'admin' && (
-                    <select style={s.sel} value={createdByFilter} onChange={e => setFilter('createdByFilter', e.target.value)}>
-                        <option value="">All Creators</option>
-                        {options.users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+                    {user?.role === 'admin' && (
+                        <select className={pageStyles.sel} value={assigneeFilter} onChange={(e) => setFilter('assigneeFilter', e.target.value)}>
+                            <option value="">All Assignees</option>
+                            {options.users.map((u) => (
+                                <option key={u._id} value={u._id}>
+                                    {u.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+
+                    {user?.role === 'admin' && (
+                        <select className={pageStyles.sel} value={createdByFilter} onChange={(e) => setFilter('createdByFilter', e.target.value)}>
+                            <option value="">All Creators</option>
+                            {options.users.map((u) => (
+                                <option key={u._id} value={u._id}>
+                                    {u.name}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+
+                    <select className={pageStyles.sel} value={priorityFilter} onChange={(e) => setFilter('priorityFilter', e.target.value)}>
+                        <option value="">All Priority</option>
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="CRITICAL">Critical</option>
                     </select>
-                )}
 
-                <select style={s.sel} value={priorityFilter} onChange={e => setFilter('priorityFilter', e.target.value)}>
-                    <option value="">All Priority</option>
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
-                    <option value="CRITICAL">Critical</option>
-                </select>
+                    {viewMode === 'table' && (
+                        <>
+                            <input
+                                type="date"
+                                className={pageStyles.inp}
+                                value={dateFrom}
+                                onChange={(e) => setFilter('dateFrom', e.target.value)}
+                                title="From date"
+                            />
+                            <span className={pageStyles.dateSep}>–</span>
+                            <input
+                                type="date"
+                                className={pageStyles.inp}
+                                value={dateTo}
+                                onChange={(e) => setFilter('dateTo', e.target.value)}
+                                title="To date"
+                            />
+                        </>
+                    )}
 
-                {viewMode === 'existing' && (
-                    <>
-                        <input type="date" style={s.inp} value={dateFrom} onChange={e => setFilter('dateFrom', e.target.value)} title="From date" />
-                        <span style={{ fontSize: 10, color: '#9ca3af' }}>–</span>
-                        <input type="date" style={s.inp} value={dateTo} onChange={e => setFilter('dateTo', e.target.value)} title="To date" />
-                    </>
-                )}
+                    <div className={pageStyles.searchWrap}>
+                        <Search size={11} className={pageStyles.searchIcon} />
+                        <input
+                            className={`${pageStyles.inp} ${pageStyles.searchInp}`}
+                            placeholder="Search tasks…"
+                            value={searchTerm}
+                            onChange={(e) => setFilter('searchTerm', e.target.value)}
+                        />
+                    </div>
 
-                <div style={{ position: 'relative', flex: 1, minWidth: 110 }}>
-                    <Search size={11} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input
-                        style={{ ...s.inp, width: '100%', paddingLeft: 20 }}
-                        placeholder="Search..."
-                        value={searchTerm}
-                        onChange={e => setFilter('searchTerm', e.target.value)}
-                    />
+                    <button type="button" className={pageStyles.resetBtn} onClick={resetFilters} title="Reset all filters">
+                        <RotateCcw size={11} /> Reset
+                    </button>
+
+                    {viewMode === 'table' && (
+                        <select
+                            className={`${pageStyles.sel} ${pageStyles.limitSel}`}
+                            value={limit}
+                            onChange={(e) => setFilter('limit', Number(e.target.value))}
+                        >
+                            <option value={15}>15 / page</option>
+                            <option value={25}>25 / page</option>
+                            <option value={50}>50 / page</option>
+                        </select>
+                    )}
                 </div>
 
-                <button style={s.resetBtn} onClick={resetFilters} title="Reset all filters">
-                    <RotateCcw size={11} /> Reset
-                </button>
-
-                {viewMode === 'existing' && (
-                    <select style={{ ...s.sel, marginLeft: 'auto' }} value={limit} onChange={e => setFilter('limit', Number(e.target.value))}>
-                        <option value={15}>15 / page</option>
-                        <option value={25}>25 / page</option>
-                        <option value={50}>50 / page</option>
-                    </select>
-                )}
+                <FilterChips chips={activeFilterChips} onClearAll={clearAllChips} />
             </div>
 
-            {/* ── CONTENT AREA ── */}
-            {viewMode === 'priority' ? (
-                <PriorityTaskView
+            {viewMode === 'workboard' ? (
+                <WorkboardTaskView
                     searchTerm={searchTerm}
                     priorityFilter={priorityFilter}
                     groupFilter={groupFilter}
                     assigneeFilter={assigneeFilter}
+                    onExtend={(task) => {
+                        setSelectedTask(task);
+                        setIsExtendModalOpen(true);
+                    }}
+                    onCloseTask={handleCloseTask}
+                    onEdit={(task) => navigate(`/tasks/edit/${task._id}`)}
+                    onDelete={handleDeleteTask}
+                    onOpen={openTask}
+                    onSummaryChange={handleWorkboardSummary}
+                    refreshToken={workboardRefresh}
                 />
             ) : (
                 <>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, flex: 1, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                        <ManageTasksTable
+                    <ManageTasksTable
                             tasks={tasks}
                             loading={loading}
-                            onTaskClick={task => setSelectedTaskId(task._id)}
-                            onExtend={task => { setSelectedTask(task); setIsExtendModalOpen(true); }}
+                            onTaskClick={openTask}
+                            onExtend={(task) => {
+                                setSelectedTask(task);
+                                setIsExtendModalOpen(true);
+                            }}
                             onCloseTask={handleCloseTask}
-                            onEdit={task => navigate(`/tasks/edit/${task._id}`)}
+                            onEdit={(task) => navigate(`/tasks/edit/${task._id}`)}
                             onDelete={handleDeleteTask}
-                            onViewDetails={task => navigate(`/tasks/${task._id}`)}
                         />
-                    </div>
 
                     {!loading && total > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, color: '#6b7280' }}>
-                                {((page - 1) * limit) + 1}–{Math.min(page * limit, total)} of {total}
+                                {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total}
                             </span>
                             <button
+                                type="button"
                                 disabled={page <= 1}
                                 onClick={() => setFilter('page', page - 1)}
-                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: page <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page <= 1 ? 0.4 : 1 }}
+                                style={{
+                                    height: 26,
+                                    width: 26,
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: 5,
+                                    background: '#fff',
+                                    color: '#374151',
+                                    cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: page <= 1 ? 0.4 : 1,
+                                }}
                             >
                                 <ChevronLeft size={13} />
                             </button>
@@ -346,17 +504,42 @@ const ManageTasksPage = () => {
                                 return (
                                     <button
                                         key={pg}
+                                        type="button"
                                         onClick={() => setFilter('page', pg)}
-                                        style={{ height: 26, minWidth: 26, padding: '0 4px', border: '1px solid #d1d5db', borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: page === pg ? '#0d9488' : '#fff', color: page === pg ? '#fff' : '#374151' }}
+                                        style={{
+                                            height: 26,
+                                            minWidth: 26,
+                                            padding: '0 4px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: 5,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            background: page === pg ? '#0d9488' : '#fff',
+                                            color: page === pg ? '#fff' : '#374151',
+                                        }}
                                     >
                                         {pg}
                                     </button>
                                 );
                             })}
                             <button
+                                type="button"
                                 disabled={page >= totalPages}
                                 onClick={() => setFilter('page', page + 1)}
-                                style={{ height: 26, width: 26, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#374151', cursor: page >= totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: page >= totalPages ? 0.4 : 1 }}
+                                style={{
+                                    height: 26,
+                                    width: 26,
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: 5,
+                                    background: '#fff',
+                                    color: '#374151',
+                                    cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: page >= totalPages ? 0.4 : 1,
+                                }}
                             >
                                 <ChevronRight size={13} />
                             </button>
@@ -375,8 +558,21 @@ const ManageTasksPage = () => {
             <TaskUpdateDrawer
                 taskId={selectedTaskId}
                 isOpen={!!selectedTaskId}
-                onClose={() => setSelectedTaskId(null)}
-                onUpdate={fetchTasks}
+                onClose={closeDrawer}
+                onUpdate={() => {
+                    if (viewMode === 'table') fetchTasks();
+                    else setWorkboardRefresh((n) => n + 1);
+                }}
+            />
+
+            <TaskHubConfirmDialog
+                open={!!confirm}
+                title={confirm?.title}
+                message={confirm?.message}
+                confirmLabel={confirm?.confirmLabel}
+                danger={confirm?.danger}
+                onConfirm={confirm?.onConfirm}
+                onCancel={() => setConfirm(null)}
             />
         </div>
     );

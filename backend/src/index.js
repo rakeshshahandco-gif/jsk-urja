@@ -1,7 +1,8 @@
 console.log('--- BACKEND STARTING (v8.2 - Force Deploy) ---'); // Trigger restart: 2026-04-25T15:48:00Z
+// Load DB config first so global Mongoose plugins register before models (via app import).
+import { connectDB } from './config/db.js';
 import { app } from './app.js';
 import config from './config/config.js';
-import { connectDB } from './config/db.js';
 import logger from './utils/logger.js';
 import http from 'http';
 import { initSocket } from './config/socket.js';

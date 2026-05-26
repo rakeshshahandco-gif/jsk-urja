@@ -33,7 +33,8 @@ const roleSchema = new mongoose.Schema({
         ref: 'User'
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    disableTenant: true,
 });
 
 const Role = mongoose.model('Role', roleSchema);

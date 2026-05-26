@@ -199,6 +199,7 @@ const VoucherListPage = () => {
         else if (nature === 'Payment') path = `/accounts/payment-entry/edit/${v._id}`;
         else if (nature === 'Expense') path = `/accounts/expense-entry/edit/${v._id}`;
         else if (nature === 'Journal') path = `/accounts/journal-entry/edit/${v._id}`;
+        else if (nature === 'Contra') path = `/accounts/contra-entry/edit/${v._id}`;
         
         if (path) navigate(path);
         else toast.error('Edit not supported for this voucher type yet');

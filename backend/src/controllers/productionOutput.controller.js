@@ -4,6 +4,7 @@ import { StockLedger } from '../models/stockLedger.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { createProductionCostSnapshot } from '../services/productCostEngine.service.js';
 
 const generateEntryNo = async () => {
     const count = await ProductionOutput.countDocuments();
@@ -36,7 +37,23 @@ export const createProductionOutput = asyncHandler(async (req, res) => {
         createdBy: req.user._id,
     });
 
-    // Update stock — increase finished goods
+    const snapshot = await createProductionCostSnapshot({
+        finishedItemId,
+        qtyProduced: Number(qtyProduced),
+        workOrderId: workOrderId || null,
+        workOrderNo: workOrderNo || '',
+        productionOutputId: entry._id,
+        productionDate: entry.date,
+        userId: req.user._id,
+    });
+
+    if (snapshot) {
+        entry.productionCostSnapshotId = snapshot._id;
+        entry.fgCostPerUnit = snapshot.fgCalculatedCostPerUnit;
+        await entry.save();
+    }
+
+    // Update stock — increase finished goods (unchanged valuation logic)
     const oldStock = item.currentStock || 0;
     item.currentStock = oldStock + Number(qtyProduced);
     await item.save();

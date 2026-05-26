@@ -5,6 +5,7 @@ import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { TopMenuBar } from './components/layout/TopMenuBar/TopMenuBar';
 import { Button, Input, Select, ModalProvider, useModal } from '@/components/ui';
 import { SidebarProvider, useSidebar } from './context/SidebarContext';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -27,11 +28,16 @@ import FollowupTaskReport from '@/features/reports/FollowupTaskReport';
 import TaskReminderReport from '@/features/reports/TaskReminderReport';
 import ConsumableCostReport from '@/features/reports/ConsumableCostReport';
 import ProductGpReport from '@/features/reports/ProductGpReport';
+import GpAnalysisPage from '@/features/reports/GpAnalysisPage';
 const ReplacementReport = lazy(() => import('@/features/reports/ReplacementReport'));
 const SampleConversionReport = lazy(() => import('@/features/reports/SampleConversionReport'));
+const LeadListPage = lazy(() => import('@/features/leads/pages/LeadListPage'));
+const LeadFormPage = lazy(() => import('@/features/leads/pages/LeadFormPage'));
+const ProductCatalogListPage = lazy(() => import('@/features/productCatalog/pages/ProductCatalogListPage'));
+const ProductCatalogFormPage = lazy(() => import('@/features/productCatalog/pages/ProductCatalogFormPage'));
+const WhatsAppChatPage = lazy(() => import('@/features/whatsappChat/pages/WhatsAppChatPage'));
 import TaskChatDashboard from '@/features/taskChats/TaskChatDashboard';
 import { RemindersDashboard } from '@/features/reminders/RemindersDashboard';
-import { TaskList } from '@/features/tasks/components/TaskList';
 import { TaskCreatePage } from '@/features/tasks/components/TaskCreatePage';
 import { TaskEditPage } from '@/features/tasks/components/TaskEditPage';
 import ManageTasksPage from '@/features/tasks/components/ManageTasksPage';
@@ -68,6 +74,7 @@ import SalesOrderDetailPage from '@/features/sales/SalesOrderDetailPage';
 import SalesInvoiceListPage from '@/features/sales/SalesInvoiceListPage';
 import SalesInvoiceFormPage from '@/features/sales/SalesInvoiceFormPage';
 import SalesInvoiceDetailPage from '@/features/sales/SalesInvoiceDetailPage';
+import PublicInvoicePage from '@/features/sales/PublicInvoicePage';
 import ProductionSheetPage from '@/features/sales/ProductionSheetPage';
 import InvoiceSeriesPage from '@/features/sales/InvoiceSeriesPage';
 import InvoiceCleanupPage from '@/features/sales/InvoiceCleanupPage';
@@ -79,6 +86,8 @@ import CreditDebitNoteFormPage from '@/features/sales/pages/CreditDebitNoteFormP
 import CreditDebitNoteDetailPage from '@/features/sales/pages/CreditDebitNoteDetailPage';
 import EwayBillListPage from '@/features/eway-bill/EwayBillListPage';
 import EwayBillDraftPage from '@/features/eway-bill/EwayBillDraftPage';
+import EInvoiceListPage from '@/features/e-invoice/EInvoiceListPage';
+import EInvoiceDraftPage from '@/features/e-invoice/EInvoiceDraftPage';
 import TransporterListPage from '@/features/transporters/TransporterListPage';
 import DiagnosticDashboard from '@/features/admin/diagnostics/DiagnosticDashboard';
 import BackupRestorePage from '@/features/admin/backup/BackupRestorePage';
@@ -104,6 +113,9 @@ const ReceiptEntryPage = lazy(() => import('./features/accounts/ReceiptEntryPage
 const PaymentEntryPage = lazy(() => import('./features/accounts/PaymentEntryPage'));
 const ExpenseEntryPage = lazy(() => import('./features/accounts/ExpenseEntryPage'));
 const JournalEntryPage = lazy(() => import('./features/accounts/JournalEntryPage'));
+const ContraEntryPage = lazy(() => import('./features/accounts/ContraEntryPage'));
+const PeriodLockPage = lazy(() => import('./features/accounts/PeriodLockPage'));
+const AccountingAuditPage = lazy(() => import('./features/accounts/AccountingAuditPage'));
 const VoucherListPage = lazy(() => import('./features/accounts/VoucherListPage'));
 const CashBankMasterPage = lazy(() => import('./features/accounts/CashBankMasterPage'));
 const GroupMasterPage = lazy(() => import('./features/accounts/GroupMasterPage'));
@@ -119,10 +131,34 @@ const DayBookPage = lazy(() => import('./features/accounts/DayBookPage'));
 const LedgerReportPage = lazy(() => import('./features/accounts/LedgerReportPage'));
 const OutstandingReportPage = lazy(() => import('./features/accounts/OutstandingReportPage'));
 const InterestPayablePage = lazy(() => import('./features/accounts/InterestPayablePage'));
+const BillWiseAdjustmentPage = lazy(() => import('./features/accounts/BillWiseAdjustmentPage'));
+const BankReconciliationPage = lazy(() => import('./features/accounts/BankReconciliationPage'));
+const TdsCompliancePage = lazy(() => import('./features/accounts/TdsCompliancePage'));
+// ── SaaS Admin ─────────────────────────────────────────────────────────────────
+const SaasAdminPage = lazy(() => import('./features/superAdmin/SaasAdminPage'));
+
+// ── New Accounting Modules ─────────────────────────────────────────────────────
+const CostCentrePage = lazy(() => import('./features/accounts/CostCentrePage'));
+const CostCentrePLPage = lazy(() => import('./features/accounts/CostCentrePLPage'));
+const BudgetPage = lazy(() => import('./features/accounts/BudgetPage'));
+const PDCRegisterPage = lazy(() => import('./features/accounts/PDCRegisterPage'));
+const TcsCompliancePage = lazy(() => import('./features/accounts/TcsCompliancePage'));
+const CashFlowPage = lazy(() => import('./features/accounts/CashFlowPage'));
+const ComparativePLPage = lazy(() => import('./features/accounts/ComparativePLPage'));
+const ComparativeBSPage = lazy(() => import('./features/accounts/ComparativeBSPage'));
+const AgeingAnalysisPage = lazy(() => import('./features/accounts/AgeingAnalysisPage'));
+const MsmeReportPage = lazy(() => import('./features/accounts/MsmeReportPage'));
+const RatioAnalysisPage = lazy(() => import('./features/accounts/RatioAnalysisPage'));
+const FundFlowPage = lazy(() => import('./features/accounts/FundFlowPage'));
+const NarrationTemplatesPage = lazy(() => import('./features/accounts/NarrationTemplatesPage'));
+const Form26AsPage = lazy(() => import('./features/accounts/Form26AsPage'));
+const DepreciationPage = lazy(() => import('./features/fixedAssets/DepreciationPage'));
+const DepreciationSchedulePage = lazy(() => import('./features/fixedAssets/DepreciationSchedulePage'));
 const TrialBalancePage = lazy(() => import('./features/mis/TrialBalancePage'));
 const ProfitAndLossPage = lazy(() => import('./features/mis/ProfitAndLossPage'));
 const BalanceSheetPage = lazy(() => import('./features/mis/BalanceSheetPage'));
 const MISDashboard = lazy(() => import('./features/mis/MISDashboard'));
+const DirectorMisDashboard = lazy(() => import('./features/mis/DirectorMisDashboard'));
 const SalesMarketingDashboard = lazy(() => import('./features/mis/SalesMarketingDashboard'));
 const SalesConversionDashboard = lazy(() => import('./features/mis/SalesConversionDashboard'));
 const AssetCategoryPage = lazy(() => import('./features/fixedAssets/AssetCategoryPage'));
@@ -155,6 +191,22 @@ const RdProjectListPage = lazy(() => import('./features/rdSamples/pages/RdProjec
 const RdSampleListPage = lazy(() => import('./features/rdSamples/pages/RdSampleListPage'));
 const RdComparisonPage = lazy(() => import('./features/rdSamples/pages/RdComparisonPage'));
 
+// Optional Kanban / Workflow layer (default OFF, gated by workflow.* feature flags)
+const SalesInquiryKanbanPage = lazy(() => import('./features/kanban/pages/SalesInquiryKanbanPage'));
+const TaskKanbanPage = lazy(() => import('./features/kanban/pages/TaskKanbanPage'));
+const ComplaintKanbanPage = lazy(() => import('./features/kanban/pages/ComplaintKanbanPage'));
+const DispatchKanbanPage = lazy(() => import('./features/kanban/pages/DispatchKanbanPage'));
+const PurchaseKanbanPage = lazy(() => import('./features/kanban/pages/PurchaseKanbanPage'));
+const ProductionKanbanPage = lazy(() => import('./features/kanban/pages/ProductionKanbanPage'));
+const GstTdsKanbanPage = lazy(() => import('./features/kanban/pages/GstTdsKanbanPage'));
+const ApkKanbanPage = lazy(() => import('./features/kanban/pages/ApkKanbanPage'));
+const KanbanComingSoonPage = lazy(() => import('./features/kanban/pages/KanbanComingSoonPage'));
+
+// Optional per-user UI customization page (default OFF, gated by ui.advancedCustomizationEnabled).
+// The page itself also gracefully renders an "ask admin to enable" banner when the flag is off,
+// but we still wrap it in FeatureGuard for defense-in-depth.
+const UiPreferencesPage = lazy(() => import('./features/profile/UiPreferencesPage'));
+
 // WeChat Module
 const WechatListPage = lazy(() => import('./features/wechat/pages/WechatListPage'));
 const WechatGroupCreatePage = lazy(() => import('./features/wechat/pages/WechatGroupCreatePage'));
@@ -178,6 +230,7 @@ import MissingPunchReport from '@/features/hr/components/MissingPunchReport';
 import SalaryWorkingReport from '@/features/hr/components/SalaryWorkingReport';
 import GstrReportPage from '@/features/reports/GstrReportPage';
 import Gstr3bReportPage from '@/features/reports/Gstr3bReportPage';
+import Gstr9ReportPage from '@/features/reports/Gstr9ReportPage';
 import GstReconciliationPage from '@/features/gst-reconciliation/GstReconciliationPage';
 import ItcRegisterPage from '@/features/reports/gst/ItcRegisterPage';
 import GstPayableSummary from '@/features/reports/gst/GstPayableSummary';
@@ -190,6 +243,12 @@ import { SocketProvider } from '@/contexts/SocketContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { MessengerProvider } from '@/contexts/MessengerContext';
 import { FinancialYearProvider, useFinancialYear } from '@/contexts/FinancialYearContext';
+import { CompanyProvider } from '@/contexts/CompanyContext';
+import { FeatureSettingsProvider } from '@/contexts/FeatureSettingsContext';
+import { UiPreferencesProvider } from '@/contexts/UiPreferencesContext';
+import FeatureComplianceSettingsPage from '@/features/settings/FeatureComplianceSettingsPage';
+import PlatformFeatureDefaultsPage from '@/features/settings/PlatformFeatureDefaultsPage';
+import { FeatureGuard } from '@/components/FeatureGuard';
 import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
 
@@ -233,7 +292,10 @@ function App() {
         <BrowserRouter>
             <AuthProvider>
                 <FinancialYearProvider>
-                    <SocketProvider>
+                    <CompanyProvider>
+                        <FeatureSettingsProvider>
+                        <UiPreferencesProvider>
+                        <SocketProvider>
                     <LiveNotificationProvider>
                     <NotificationProvider>
                         <MessengerProvider>
@@ -253,6 +315,7 @@ function App() {
                                             <Route path="/login" element={<LoginPage />} />
                                             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                                             <Route path="/reset-password" element={<ResetPasswordPage />} />
+                                            <Route path="/public/invoice/:token" element={<PublicInvoicePage />} />
 
                                             {/* Full-screen pages without sidebar */}
                                             <Route
@@ -294,6 +357,9 @@ function App() {
                     </NotificationProvider>
                     </LiveNotificationProvider>
                     </SocketProvider>
+                        </UiPreferencesProvider>
+                        </FeatureSettingsProvider>
+                    </CompanyProvider>
                 </FinancialYearProvider>
             </AuthProvider>
         </BrowserRouter>
@@ -322,7 +388,7 @@ const AppLayout = () => {
             { path: '/inventory/stock/ledger', title: 'Stock Movement Ledger', id: 'stock-ledger', icon: 'inventory' },
             { path: '/inventory/items', title: 'Item Master', id: 'item-master', icon: 'inventory' },
             { path: '/followups', title: 'Follow-up', id: 'follow-up', icon: 'crm' },
-            { path: '/tasks/list', title: 'Manage Tasks', id: 'manage-tasks', icon: 'tasks' },
+            { path: '/tasks/list', title: 'Task Hub', id: 'manage-tasks', icon: 'tasks' },
         ];
         
         const form = forms.find(f => path === f.path);
@@ -340,7 +406,7 @@ const AppLayout = () => {
     }, [location.pathname, user?.id]);
 
     return (
-        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }} data-jsk-ui-component="app-shell">
             <Sidebar />
             <div style={{ 
                 display: 'flex', 
@@ -349,6 +415,7 @@ const AppLayout = () => {
                 minWidth: 0,
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}>
+                <TopMenuBar />
                 <Header />
                 <main 
                     key={selectedFY}
@@ -403,9 +470,22 @@ const AppLayout = () => {
                         <Route path="/admin/backups" element={<ProtectedRoute requireRole="admin"><BackupRestorePage /></ProtectedRoute>} />
 
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.FEATURE_COMPLIANCE} element={<ProtectedRoute requirePermission="admin"><FeatureComplianceSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedRoute requirePermission="admin"><PlatformFeatureDefaultsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
+                        <Route path="/whatsapp/chat" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppChatPage /></ProtectedRoute>} />
                         {/* Legacy redirect for old URL */}
                         <Route path="/settings/whatsapp" element={<Navigate to="/whatsapp" replace />} />
+
+                        {/* CRM — WhatsApp Leads + Product Catalog (gated by crm.whatsappToLeadEnabled / crm.productCatalogEnabled) */}
+                        <Route path="/crm/leads" element={<ProtectedRoute requirePermission="crm.leads.view"><FeatureGuard feature="crm.whatsappToLeadEnabled"><LeadListPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/leads/new" element={<ProtectedRoute requirePermission="crm.leads.add"><FeatureGuard feature="crm.whatsappToLeadEnabled"><LeadFormPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/leads/:id" element={<ProtectedRoute requirePermission="crm.leads.view"><FeatureGuard feature="crm.whatsappToLeadEnabled"><LeadFormPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/product-catalog" element={<ProtectedRoute requirePermission="crm.product_catalog.view"><FeatureGuard feature="crm.productCatalogEnabled"><ProductCatalogListPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/product-catalog/new" element={<ProtectedRoute requirePermission="crm.product_catalog.add"><FeatureGuard feature="crm.productCatalogEnabled"><ProductCatalogFormPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/product-catalog/:id" element={<ProtectedRoute requirePermission="crm.product_catalog.view"><FeatureGuard feature="crm.productCatalogEnabled"><ProductCatalogFormPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/reports/customer-master" element={<ProtectedRoute requirePermission="reports.customer_master_report.view"><CustomerMasterReport /></ProtectedRoute>} />
                         <Route path="/reports/followups" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowUpTrackerReport /></ProtectedRoute>} />
                         <Route path="/reports/reminders" element={<ProtectedRoute requirePermission="reports"><ReminderReport /></ProtectedRoute>} />
@@ -416,6 +496,7 @@ const AppLayout = () => {
                         {/* MIS Reports */}
                         <Route path={PATHS.MIS.SALES_DASHBOARD} element={<ProtectedRoute requirePermission="mis.sales_marketing.view"><SalesMarketingDashboard /></ProtectedRoute>} />
                         <Route path={PATHS.MIS.PRODUCT_GP} element={<ProtectedRoute requirePermission="mis.product_gp_analysis.view"><ProductGpReport /></ProtectedRoute>} />
+                        <Route path={PATHS.MIS.GP_ANALYSIS} element={<ProtectedRoute requirePermission="mis.product_gp_analysis.view"><GpAnalysisPage /></ProtectedRoute>} />
                         
                         {/* Redirects for MIS Reports */}
                         <Route path="/mis/sales-marketing" element={<Navigate to={PATHS.MIS.SALES_DASHBOARD} replace />} />
@@ -427,15 +508,23 @@ const AppLayout = () => {
                         <Route path="/reports/followup-dashboard" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupDashboardReport /></ProtectedRoute>} />
                         <Route path="/reports/followup-task-report" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowupTaskReport /></ProtectedRoute>} />
                         <Route path="/reports/incentive" element={<ProtectedRoute requirePermission="sales"><IncentiveReport /></ProtectedRoute>} />
-                        <Route path="/reports/gstr1" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstrReportPage /></ProtectedRoute>} />
-                        <Route path="/reports/gstr3b" element={<ProtectedRoute requirePermission="admin.company_profile.view"><Gstr3bReportPage /></ProtectedRoute>} />
-                        <Route path="/reports/gst-reconciliation" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstReconciliationPage /></ProtectedRoute>} />
-                        
-                        {/* New GST Reports */}
-                        <Route path="/reports/gst-payable" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstPayableSummary /></ProtectedRoute>} />
-                        <Route path="/reports/gst/itc-register" element={<ProtectedRoute requirePermission="admin.company_profile.view"><ItcRegisterPage /></ProtectedRoute>} />
-                        <Route path="/reports/gst/hsn-summary" element={<ProtectedRoute requirePermission="admin.company_profile.view"><HsnSummaryPage /></ProtectedRoute>} />
-                        <Route path="/reports/gst/ledger" element={<ProtectedRoute requirePermission="admin.company_profile.view"><GstLedgerPage /></ProtectedRoute>} />
+                        {/* GST module */}
+                        <Route path={PATHS.GST.GSTR1} element={<ProtectedRoute requirePermission="gst.gstr1.view"><GstrReportPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.GSTR3B} element={<ProtectedRoute requirePermission="gst.gstr3b.view"><Gstr3bReportPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.GSTR9} element={<ProtectedRoute requirePermission="gst.gstr3b.view"><Gstr9ReportPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.RECONCILIATION} element={<ProtectedRoute requirePermission="gst.gst_reconciliation.view"><GstReconciliationPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.PAYABLE} element={<ProtectedRoute requirePermission="gst.gst_payable.view"><GstPayableSummary /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.ITC_REGISTER} element={<ProtectedRoute requirePermission="gst.itc_register.view"><ItcRegisterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.HSN_SUMMARY} element={<ProtectedRoute requirePermission="gst.hsn_summary.view"><HsnSummaryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.LEDGER} element={<ProtectedRoute requirePermission="gst.gst_ledger.view"><GstLedgerPage /></ProtectedRoute>} />
+                        {/* Legacy /reports/gst* URLs → GST module */}
+                        <Route path="/reports/gstr1" element={<Navigate to={PATHS.GST.GSTR1} replace />} />
+                        <Route path="/reports/gstr3b" element={<Navigate to={PATHS.GST.GSTR3B} replace />} />
+                        <Route path="/reports/gst-reconciliation" element={<Navigate to={PATHS.GST.RECONCILIATION} replace />} />
+                        <Route path="/reports/gst-payable" element={<Navigate to={PATHS.GST.PAYABLE} replace />} />
+                        <Route path="/reports/gst/itc-register" element={<Navigate to={PATHS.GST.ITC_REGISTER} replace />} />
+                        <Route path="/reports/gst/hsn-summary" element={<Navigate to={PATHS.GST.HSN_SUMMARY} replace />} />
+                        <Route path="/reports/gst/ledger" element={<Navigate to={PATHS.GST.LEDGER} replace />} />
                         <Route path="/reports/task-reminders" element={<ProtectedRoute requirePermission="tasks"><TaskReminderReport /></ProtectedRoute>} />
                         <Route path="/task-chats" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
                         <Route path="/task-chats/:taskId" element={<ProtectedRoute requirePermission="tasks"><TaskChatDashboard /></ProtectedRoute>} />
@@ -444,6 +533,7 @@ const AppLayout = () => {
                         <Route path="/tasks/edit/:id" element={<ProtectedRoute requirePermission="tasks"><TaskEditPage /></ProtectedRoute>} />
                         <Route path="/tasks/list" element={<ProtectedRoute requirePermission="tasks"><ManageTasksPage /></ProtectedRoute>} />
                         <Route path="/tasks/groups" element={<ProtectedRoute requirePermission="tasks"><TaskGroupList /></ProtectedRoute>} />
+                        <Route path="/tasks/:id" element={<ProtectedRoute requirePermission="tasks"><ManageTasksPage /></ProtectedRoute>} />
                         <Route path="/groups" element={<ProtectedRoute requirePermission="tasks"><GroupList /></ProtectedRoute>} />
                         <Route path="/groups/:id" element={<ProtectedRoute requirePermission="tasks"><GroupDetails /></ProtectedRoute>} />
                         <Route path="/inventory/items" element={<ProtectedRoute requirePermission="inventory"><ItemListPage /></ProtectedRoute>} />
@@ -509,8 +599,8 @@ const AppLayout = () => {
                         <Route path="/sales/production-sheets/:id" element={<ProtectedRoute requirePermission="sales"><ProductionSheetPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.INVOICE_SERIES} element={<ProtectedRoute requirePermission="sales.invoice_series.view"><InvoiceSeriesPage /></ProtectedRoute>} />
                         <Route path={PATHS.SALES.BULK_RENUMBER} element={<ProtectedRoute requireRole="admin"><BulkInvoiceRenumber /></ProtectedRoute>} />
-                        <Route path={PATHS.EWAY_BILL.LIST} element={<ProtectedRoute requirePermission="sales"><EwayBillListPage /></ProtectedRoute>} />
-                        <Route path="/eway-bills/draft/:id" element={<ProtectedRoute requirePermission="sales"><EwayBillDraftPage /></ProtectedRoute>} />
+                        <Route path={PATHS.EWAY_BILL.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eWayBillRequired"><EwayBillListPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/eway-bills/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eWayBillRequired"><EwayBillDraftPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.TRANSPORTERS.LIST} element={<ProtectedRoute requirePermission="sales"><TransporterListPage /></ProtectedRoute>} />
 
                         <Route path={PATHS.SALES.INVOICE_CLEANUP} element={<ProtectedRoute requireRole="admin"><InvoiceCleanupPage /></ProtectedRoute>} />
@@ -527,6 +617,8 @@ const AppLayout = () => {
                         <Route path="/service/repaired-stock-inwards/new" element={<ProtectedRoute requirePermission="service"><RepairedStockInwardFormPage /></ProtectedRoute>} />
                         <Route path="/service/scrap-entries/new" element={<ProtectedRoute requirePermission="service"><ScrapEntryFormPage /></ProtectedRoute>} />
                         <Route path="/reports" element={<Navigate to="/reports/open-reminders" replace />} />
+                        <Route path={PATHS.ACCOUNTS.BILL_WISE_ADJUSTMENT} element={<ProtectedRoute requirePermission="accounts"><BillWiseAdjustmentPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.BANK_RECONCILIATION} element={<ProtectedRoute requirePermission="accounts"><BankReconciliationPage /></ProtectedRoute>} />
                         <Route path="/accounts/receipt-entry" element={<ProtectedRoute requirePermission="accounts"><ReceiptEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/receipt-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><ReceiptEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/payment-entry" element={<ProtectedRoute requirePermission="accounts"><PaymentEntryPage /></ProtectedRoute>} />
@@ -535,6 +627,10 @@ const AppLayout = () => {
                         <Route path="/accounts/expense-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><ExpenseEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/contra-entry" element={<ProtectedRoute requirePermission="accounts"><ContraEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/contra-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><ContraEntryPage /></ProtectedRoute>} />
+                        <Route path="/accounts/period-lock" element={<ProtectedRoute requirePermission="accounts"><PeriodLockPage /></ProtectedRoute>} />
+                        <Route path="/accounts/accounting-audit" element={<ProtectedRoute requirePermission="accounts"><AccountingAuditPage /></ProtectedRoute>} />
                         <Route path="/accounts/vouchers" element={<ProtectedRoute requirePermission="accounts"><VoucherListPage /></ProtectedRoute>} />
                         <Route path="/accounts/masters/cash-bank" element={<ProtectedRoute requirePermission="accounts"><CashBankMasterPage /></ProtectedRoute>} />
                         {/* Account Master Routes */}
@@ -559,7 +655,20 @@ const AppLayout = () => {
                         <Route path="/accounts/reports/bank-book" element={<ProtectedRoute requirePermission="accounts"><LedgerReportPage defaultType="Bank" /></ProtectedRoute>} />
                         <Route path="/accounts/reports/outstanding" element={<ProtectedRoute requirePermission="accounts"><OutstandingReportPage /></ProtectedRoute>} />
                         <Route path="/accounts/interest-payable" element={<ProtectedRoute requirePermission="accounts"><InterestPayablePage /></ProtectedRoute>} />
+                        <Route path="/tds" element={<Navigate to={PATHS.TDS.DASHBOARD} replace />} />
+                        <Route path={PATHS.TDS.DASHBOARD} element={<ProtectedRoute requirePermission="tds.dashboard.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.MASTER} element={<ProtectedRoute requirePermission="tds.master.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.LEDGER_MAPPING} element={<ProtectedRoute requirePermission="tds.ledger_mapping.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.DEDUCTIONS} element={<ProtectedRoute requirePermission="tds.deduction_register.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.PAYABLE_REGISTER} element={<ProtectedRoute requirePermission="tds.payable_register.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.CHALLANS} element={<ProtectedRoute requirePermission="tds.challan.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.RETURNS} element={<ProtectedRoute requirePermission="tds.returns.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.FORM16A} element={<ProtectedRoute requirePermission="tds.returns.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.SETTINGS} element={<ProtectedRoute requirePermission="tds.settings.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TDS.REPORTS} element={<ProtectedRoute requirePermission="tds.reports.view"><TdsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.TDS_COMPLIANCE} element={<Navigate to={PATHS.TDS.DASHBOARD} replace />} />
                         <Route path="/mis/dashboard" element={<ProtectedRoute requirePermission="mis.dashboard.view"><MISDashboard /></ProtectedRoute>} />
+                        <Route path={PATHS.MIS.DIRECTOR_DASHBOARD} element={<ProtectedRoute requirePermission="mis.director_dashboard.view"><DirectorMisDashboard /></ProtectedRoute>} />
                         <Route path="/mis/sales-marketing" element={<ProtectedRoute requirePermission="mis.sales_marketing.view"><SalesMarketingDashboard /></ProtectedRoute>} />
                         <Route path="/mis/sales-conversion" element={<ProtectedRoute requirePermission="mis.sales_conversion.view"><SalesConversionDashboard /></ProtectedRoute>} />
                         <Route path="/mis/reports/profit-loss" element={<ProtectedRoute requirePermission="mis.profit_loss.view"><ProfitAndLossPage /></ProtectedRoute>} />
@@ -575,6 +684,34 @@ const AppLayout = () => {
                         <Route path="/accounts/fixed-assets" element={<Navigate to={PATHS.FIXED_ASSETS.LIST} replace />} />
                         <Route path="/accounts/asset-categories" element={<Navigate to={PATHS.FIXED_ASSETS.CATEGORIES} replace />} />
                         <Route path="/accounts/asset-locations" element={<Navigate to={PATHS.FIXED_ASSETS.LOCATIONS} replace />} />
+                        {/* ── New Accounting Modules ──────────────────────────────────────────── */}
+                        <Route path={PATHS.COST_CENTERS.LIST} element={<ProtectedRoute requirePermission="accounts"><CostCentrePage /></ProtectedRoute>} />
+                        <Route path={PATHS.COST_CENTERS.PL_REPORT} element={<ProtectedRoute requirePermission="accounts"><CostCentrePLPage /></ProtectedRoute>} />
+                        <Route path={PATHS.BUDGETS.LIST} element={<ProtectedRoute requirePermission="accounts"><BudgetPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PDC.LIST} element={<ProtectedRoute requirePermission="accounts"><PDCRegisterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.NARRATION_TEMPLATES} element={<ProtectedRoute requirePermission="accounts"><NarrationTemplatesPage /></ProtectedRoute>} />
+                        <Route path={PATHS.CASH_FLOW} element={<ProtectedRoute requirePermission="accounts"><CashFlowPage /></ProtectedRoute>} />
+                        <Route path={PATHS.COMPARATIVE_PL} element={<ProtectedRoute requirePermission="accounts"><ComparativePLPage /></ProtectedRoute>} />
+                        <Route path={PATHS.COMPARATIVE_BS} element={<ProtectedRoute requirePermission="accounts"><ComparativeBSPage /></ProtectedRoute>} />
+                        <Route path={PATHS.AGEING} element={<ProtectedRoute requirePermission="accounts"><AgeingAnalysisPage /></ProtectedRoute>} />
+                        <Route path={PATHS.MSME_REPORT} element={<ProtectedRoute requirePermission="accounts"><MsmeReportPage /></ProtectedRoute>} />
+                        <Route path={PATHS.RATIO_ANALYSIS} element={<ProtectedRoute requirePermission="accounts"><RatioAnalysisPage /></ProtectedRoute>} />
+                        <Route path={PATHS.FUND_FLOW} element={<ProtectedRoute requirePermission="accounts"><FundFlowPage /></ProtectedRoute>} />
+                        <Route path={PATHS.TCS.DASHBOARD} element={<ProtectedRoute requirePermission="tds"><TcsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TCS.MASTER} element={<ProtectedRoute requirePermission="tds"><TcsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TCS.DEDUCTIONS} element={<ProtectedRoute requirePermission="tds"><TcsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TCS.CHALLANS} element={<ProtectedRoute requirePermission="tds"><TcsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TCS.REPORTS} element={<ProtectedRoute requirePermission="tds"><TcsCompliancePage /></ProtectedRoute>} />
+                        <Route path={PATHS.FORM_26AS.LIST} element={<ProtectedRoute requirePermission="tds"><Form26AsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DEPRECIATION.ROOT} element={<ProtectedRoute requirePermission="accounts"><DepreciationPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DEPRECIATION.SCHEDULE} element={<ProtectedRoute requirePermission="accounts"><DepreciationSchedulePage /></ProtectedRoute>} />
+                        <Route path={PATHS.EINVOICE} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
+                        <Route path={PATHS.E_INVOICE.ROOT} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
+                        {/* SaaS Super Admin Routes */}
+                        <Route path={PATHS.SAAS_ADMIN.DASHBOARD} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.COMPANIES} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.SUBSCRIPTIONS} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.ACTIVITY_LOGS} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
                         <Route path="prd/dashboard" element={<ProtectedRoute requirePermission="prd"><PrdDashboard /></ProtectedRoute>} />
                         <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
                         <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />
@@ -633,6 +770,19 @@ const AppLayout = () => {
                         <Route path="/production/component-replacements" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
                         <Route path="/production/rejections/new" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
                         <Route path="/production/rejections" element={<ProtectedRoute requirePermission="production"><ProductionRejectionFormPage /></ProtectedRoute>} />
+
+                        {/* Optional Kanban / Workflow layer (each route gated by its own workflow.* flag; flags default OFF) */}
+                        <Route path="/crm/kanban/sales-inquiry" element={<ProtectedRoute requirePermission="customers"><FeatureGuard feature="workflow.salesInquiryKanbanEnabled"><SalesInquiryKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/tasks" element={<ProtectedRoute requirePermission="tasks"><FeatureGuard feature="workflow.taskKanbanEnabled"><TaskKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/purchase-rfq" element={<ProtectedRoute requirePermission="purchase"><FeatureGuard feature="workflow.purchaseRfqKanbanEnabled"><PurchaseKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/production" element={<ProtectedRoute requirePermission="production"><FeatureGuard feature="workflow.productionKanbanEnabled"><ProductionKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/dispatch" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="workflow.dispatchKanbanEnabled"><DispatchKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/gst-tds" element={<ProtectedRoute requirePermission="gst"><FeatureGuard feature="workflow.gstTdsKanbanEnabled"><GstTdsKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/complaints" element={<ProtectedRoute requirePermission="service"><FeatureGuard feature="workflow.complaintKanbanEnabled"><ComplaintKanbanPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/crm/kanban/apk" element={<ProtectedRoute requirePermission="customers"><FeatureGuard feature="workflow.apkKanbanEnabled"><ApkKanbanPage /></FeatureGuard></ProtectedRoute>} />
+
+                        {/* Optional per-user UI customization (gated by ui.advancedCustomizationEnabled; defaults OFF) */}
+                        <Route path="/profile/ui-preferences" element={<ProtectedRoute><UiPreferencesPage /></ProtectedRoute>} />
                     </Routes>
                     </ErrorBoundary>
                 </main>
@@ -642,3 +792,4 @@ const AppLayout = () => {
 };
 
 export default App;
+

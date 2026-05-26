@@ -1,0 +1,312 @@
+/* ─── Single Company (Static Label) ──────────────── */
+.singleCompany {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(99, 102, 241, 0.05));
+    border: 1px solid rgba(79, 70, 229, 0.2);
+    border-radius: 8px;
+    max-width: 220px;
+    overflow: hidden;
+}
+
+.icon { color: #4F46E5; flex-shrink: 0; }
+
+.singleInfo {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.singleLabel {
+    font-size: 9px;
+    font-weight: 700;
+    color: #4F46E5;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    line-height: 1;
+}
+
+.singleName {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1E1B4B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    line-height: 1.4;
+}
+
+/* ─── Trigger Button (Multiple Companies) ─────── */
+.wrapper { position: relative; }
+
+.trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(99, 102, 241, 0.05));
+    border: 1px solid rgba(79, 70, 229, 0.25);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    max-width: 240px;
+    outline: none;
+    font-family: inherit;
+
+    &:hover {
+        background: rgba(79, 70, 229, 0.14);
+        border-color: rgba(79, 70, 229, 0.45);
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+    }
+}
+
+.triggerText {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    overflow: hidden;
+    flex: 1;
+}
+
+.label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #4F46E5;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    line-height: 1;
+}
+
+.name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1E1B4B;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    line-height: 1.4;
+}
+
+.switchIcon {
+    color: #6366F1;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.chevron {
+    color: #4F46E5;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+.chevron.open { transform: rotate(180deg); }
+
+/* ─── Dropdown ────────────────────────────────── */
+.dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);
+    min-width: 280px;
+    z-index: 9999;
+    overflow: hidden;
+    animation: fadeDown 0.15s ease;
+}
+
+@keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.dropdownHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+.companyItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: background 0.12s;
+    text-align: left;
+    font-family: inherit;
+
+    &:hover { background: #F5F3FF; }
+    &.selected { background: #EEF2FF; }
+}
+
+.companyItemLeft {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+}
+
+.itemLogo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid #E5E7EB;
+    flex-shrink: 0;
+}
+
+.itemLogoPlaceholder {
+    width: 32px;
+    height: 32px;
+    background: #F3F4F6;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9CA3AF;
+    flex-shrink: 0;
+}
+
+.itemName {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
+}
+
+.itemType {
+    font-size: 11px;
+    color: #6B7280;
+    margin-top: 1px;
+}
+
+.activePill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #D1FAE5;
+    color: #065F46;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 99px;
+    flex-shrink: 0;
+}
+
+.dropdownFooter {
+    border-top: 1px solid #F3F4F6;
+    padding: 8px 14px;
+}
+
+.manageLink {
+    font-size: 12px;
+    color: #4F46E5;
+    text-decoration: none;
+    font-weight: 600;
+
+    &:hover { text-decoration: underline; }
+}
+
+/* ─── Confirm Box ─────────────────────────────── */
+.confirmBox {
+    padding: 16px;
+}
+
+.confirmHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #D97706;
+    margin-bottom: 12px;
+}
+
+.confirmDetail {
+    background: #FFF7ED;
+    border: 1px solid #FED7AA;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+
+.companyChange {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.fromCompany {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6B7280;
+    text-decoration: line-through;
+}
+
+.arrowIcon { color: #D97706; flex-shrink: 0; }
+
+.toCompany {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1E1B4B;
+}
+
+.confirmNote {
+    font-size: 12px;
+    color: #6B7280;
+    line-height: 1.5;
+    margin: 0 0 14px;
+}
+
+.confirmActions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.btnNo {
+    padding: 7px 16px;
+    background: #fff;
+    border: 1px solid #D1D5DB;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    font-family: inherit;
+
+    &:hover { background: #F3F4F6; }
+}
+
+.btnYes {
+    padding: 7px 16px;
+    background: #4F46E5;
+    border: none;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+
+    &:hover { background: #4338CA; }
+}

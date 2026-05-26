@@ -1,0 +1,355 @@
+@import '@/styles/_variables';
+
+.wrap {
+    background: $surface-elevated;
+    border: 1px solid $border-color;
+    border-radius: $radius-xl;
+    overflow: hidden;
+    box-shadow: $shadow-sm;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.scroll {
+    overflow: auto;
+    max-height: calc(100vh - 280px);
+    flex: 1;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: $font-size-ui-md;
+}
+
+.thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: $bg-secondary;
+    border-bottom: 2px solid $border-color;
+}
+
+.th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+
+    &.center {
+        text-align: center;
+    }
+}
+
+.categoryRow {
+    td {
+        padding: 8px 14px;
+        border-bottom: 1px solid $border-light;
+    }
+}
+
+.categoryLabel {
+    font-size: $font-size-ui-sm;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.row {
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.12s ease;
+
+    &:hover {
+        background: $bg-secondary;
+    }
+
+    &.zebra {
+        background: #fafafa;
+
+        &:hover {
+            background: $bg-secondary;
+        }
+    }
+}
+
+.td {
+    padding: 10px 14px;
+    vertical-align: middle;
+    color: $text-color;
+}
+
+.taskTitle {
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+}
+
+.taskMeta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: $font-size-ui-sm;
+    color: $text-tertiary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.taskMetaSep {
+    color: #cbd5e1;
+}
+
+.priorityChip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.dueDate {
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.overdue {
+        color: #dc2626;
+    }
+
+    &.normal {
+        color: #1e293b;
+    }
+}
+
+.dueEmpty {
+    color: $text-tertiary;
+    font-style: italic;
+}
+
+.assigneeWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+}
+
+.assigneeName {
+    font-weight: 500;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.assigneeExtra {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: $bg-secondary;
+    color: $text-secondary;
+    flex-shrink: 0;
+}
+
+.assigneeUnassigned {
+    color: $text-tertiary;
+    font-style: italic;
+}
+
+.assigneeTooltip {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 50;
+    background: #1e293b;
+    color: $white;
+    font-size: $font-size-ui-sm;
+    border-radius: $radius-lg;
+    padding: 6px 10px;
+    box-shadow: $shadow-lg;
+    min-width: 120px;
+    white-space: nowrap;
+}
+
+.stateCell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.statusBadge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.priorityDot {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: $text-secondary;
+}
+
+.priorityDotIcon {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.actionsCell {
+    white-space: nowrap;
+    text-align: center;
+}
+
+.actionsInner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.completeBtn {
+    height: 28px;
+    padding: 0 10px;
+    font-size: $font-size-ui-sm;
+    font-weight: 700;
+    border: 1px solid #86efac;
+    border-radius: $radius-lg;
+    background: #f0fdf4;
+    color: #15803d;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.12s ease;
+
+    &:hover {
+        background: #dcfce7;
+    }
+}
+
+.menuWrap {
+    position: relative;
+}
+
+.menuTrigger {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid $border-color;
+    border-radius: $radius-lg;
+    background: $white;
+    color: $text-secondary;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.12s ease, color 0.12s ease;
+
+    &:hover {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
+}
+
+.menuDropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 50;
+    background: $white;
+    border-radius: $radius-xl;
+    box-shadow: $shadow-lg;
+    border: 1px solid $border-color;
+    padding: 4px 0;
+    min-width: 148px;
+}
+
+.menuItem {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: $font-size-ui-md;
+    color: $text-color;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease;
+
+    &:hover {
+        background: $bg-secondary;
+    }
+
+    &.danger {
+        color: #be123c;
+
+        &:hover {
+            background: #fef2f2;
+        }
+    }
+}
+
+.menuDivider {
+    height: 1px;
+    background: $border-color;
+    margin: 4px 0;
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: $text-secondary;
+    font-size: $font-size-ui-md;
+    gap: 8px;
+}
+
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid $border-color;
+    border-top-color: $accent-workboard;
+    border-radius: 50%;
+    animation: taskHubSpin 0.7s linear infinite;
+}
+
+@keyframes taskHubSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 140px;
+    color: $text-tertiary;
+    font-size: $font-size-ui-md;
+}

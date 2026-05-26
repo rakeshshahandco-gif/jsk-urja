@@ -20,9 +20,82 @@ import logger from '../utils/logger.js';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
+import { previewPurchaseInvoiceTds, resolveTdsPayableLedgerId } from '../services/tdsDecisionEngine.service.js';
+import * as tdsTh from '../services/tdsThreshold.service.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
+const r2v = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+/**
+ * PI bill TDS — same confirm/skip/disable pattern as PaymentEntry / expense voucher.
+ */
+async function resolvePurchaseInvoiceTdsForPosting(payload, { financialYear, invoiceSnapshot, excludePurchaseInvoiceId, userId }) {
+    const preview = await previewPurchaseInvoiceTds({
+        supplierId: payload.supplierId,
+        financialYear,
+        invoiceSnapshot,
+        excludePurchaseInvoiceId,
+    });
+    if (!preview.engineActive) return null;
+    if (preview.blocked) {
+        throw new ApiError(400, preview.blockReason || 'TDS validation failed');
+    }
+    const d = preview.decision;
+    if (d.panBlock) {
+        throw new ApiError(
+            400,
+            'PAN is mandatory for TDS on this transaction — update Supplier Master or adjust the vendor ledger.',
+        );
+    }
+    if (payload.tdsDisabledReason && String(payload.tdsDisabledReason).trim()) {
+        await tdsTh.logTdsAudit({
+            action: 'TDS_DISABLED_ON_PI',
+            supplierId: payload.supplierId,
+            section: d.tdsSection,
+            financialYear,
+            userId,
+            details: { reason: payload.tdsDisabledReason, flow: 'PurchaseInvoice' },
+        });
+        return { engineActive: true, skipTds: true, skipReason: 'disabled' };
+    }
+    if (payload.tdsPopupSkipped) {
+        await tdsTh.logTdsAudit({
+            action: 'POPUP_SKIPPED',
+            supplierId: payload.supplierId,
+            section: d.tdsSection,
+            financialYear,
+            userId,
+            details: { wouldBeTds: d.tdsAmount, flow: 'PurchaseInvoice' },
+        });
+        return { engineActive: true, skipTds: true, skipReason: 'popup_skipped' };
+    }
+    if (d.tdsApplicable && d.liabilityAlert && !payload.tdsUserConfirmed) {
+        throw new ApiError(
+            400,
+            'TDS liability alert — confirm deduction (tdsUserConfirmed: true) or explicitly skip (tdsPopupSkipped: true).',
+        );
+    }
+    let payableId = null;
+    if (d.tdsApplicable && d.tdsAmount > 0) {
+        payableId = await resolveTdsPayableLedgerId(d.tdsSection, preview.master);
+        if (!payableId) {
+            throw new ApiError(
+                400,
+                `Could not find TDS Payable ledger for section ${d.tdsSection}. Set tdsLedgerMapping on the TDS Master row or create a matching ledger.`,
+            );
+        }
+    }
+    return {
+        engineActive: true,
+        skipTds: false,
+        tdsAmount: d.tdsApplicable ? r2v(d.tdsAmount) : 0,
+        tdsSection: d.tdsSection,
+        thresholdBase: r2v(preview.tdsThresholdBaseAmount ?? d.tdsBase ?? 0),
+        payableLedgerId: payableId,
+        decision: d,
+    };
+}
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
     'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
@@ -115,7 +188,12 @@ const rollbackSideEffects = async (inv, userId, session) => {
     // 3) Rollback Stock Ledger (Hard delete and recalculate)
     await rollbackStockLedger(inv._id, session);
 
-    // 4) Reverse financial impacts
+    // 4) Reverse TDS FY aggregate if this invoice incremented threshold tracking
+    if (inv.tdsFYThresholdIncluded) {
+        await tdsTh.reversePurchaseInvoiceFromTdsBalance(inv.toObject(), userId, session);
+    }
+
+    // 5) Reverse financial impacts (purchase voucher + ledger lines)
     await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
 };
 
@@ -273,6 +351,9 @@ const createPISchema = Joi.object({
     seriesId: Joi.string().optional().allow('', null),
     isConsumable: Joi.boolean().default(false),
     items: Joi.array().items(piItemJoi).min(1).required(),
+    tdsUserConfirmed: Joi.boolean().optional().default(false),
+    tdsPopupSkipped: Joi.boolean().optional().default(false),
+    tdsDisabledReason: Joi.string().optional().allow(''),
 });
 
 const parseDate = (val) => {
@@ -355,6 +436,65 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             }
         }
 
+        const invoiceSnapshot = {
+            grandTotal: headerTotals.grandTotal,
+            totalTaxableAmount: headerTotals.totalTaxableAmount,
+            totalTax: headerTotals.totalTax,
+            totalCgst: headerTotals.totalCgst,
+            totalSgst: headerTotals.totalSgst,
+            totalIgst: headerTotals.totalIgst,
+            freightTotalGst: headerTotals.freightTotalGst,
+            roundOff: headerTotals.roundOff,
+        };
+
+        const tdsPatch = {
+            tdsSection: '',
+            tdsAmount: 0,
+            tdsThresholdBaseAmount: 0,
+            tdsPayableLedgerId: null,
+            tdsFYThresholdIncluded: false,
+            tdsUserConfirmed: !!value.tdsUserConfirmed,
+            tdsPopupSkipped: false,
+            tdsDisabledReason: (value.tdsDisabledReason && String(value.tdsDisabledReason)) || '',
+        };
+
+        const piTdsCtx = await resolvePurchaseInvoiceTdsForPosting(
+            {
+                supplierId: value.supplierId,
+                tdsUserConfirmed: value.tdsUserConfirmed,
+                tdsPopupSkipped: value.tdsPopupSkipped,
+                tdsDisabledReason: value.tdsDisabledReason,
+            },
+            {
+                financialYear: fy,
+                invoiceSnapshot,
+                excludePurchaseInvoiceId: undefined,
+                userId: req.user._id,
+            },
+        );
+
+        if (piTdsCtx?.skipTds) {
+            if (piTdsCtx.skipReason === 'popup_skipped') tdsPatch.tdsPopupSkipped = true;
+            if (piTdsCtx.skipReason === 'disabled') {
+                tdsPatch.tdsDisabledReason = (value.tdsDisabledReason && String(value.tdsDisabledReason)) || '';
+            }
+        } else if (piTdsCtx) {
+            tdsPatch.tdsSection = piTdsCtx.tdsSection || '';
+            tdsPatch.tdsAmount = piTdsCtx.tdsAmount || 0;
+            tdsPatch.tdsThresholdBaseAmount = piTdsCtx.thresholdBase || 0;
+            tdsPatch.tdsPayableLedgerId = piTdsCtx.payableLedgerId || null;
+        }
+
+        const shouldApplyTdsThreshold =
+            tdsPatch.tdsThresholdBaseAmount > 0 &&
+            tdsPatch.tdsSection &&
+            !tdsPatch.tdsPopupSkipped &&
+            !String(tdsPatch.tdsDisabledReason || '').trim();
+
+        if (shouldApplyTdsThreshold) {
+            tdsPatch.tdsFYThresholdIncluded = true;
+        }
+
         const inv = await PurchaseInvoice.create([{
             ...value, 
             items: updatedItems,
@@ -368,6 +508,7 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
             buyerName: value.buyerName || 'JSK URJA',
             poDate: parseDate(value.poDate) || (po ? po.poDate : null),
             ...headerTotals,
+            ...tdsPatch,
             financialYear: fy,
             status: 'Confirmed', paymentStatus: 'Unpaid',
             createdBy: req.user._id,
@@ -427,6 +568,9 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
                 await autoLinkEntityLedger(supplier, 'Supplier', session);
             }
             await postPurchaseInvoiceToLedger(invoice, req.user._id, session);
+            if (invoice.tdsFYThresholdIncluded) {
+                await tdsTh.applyPurchaseInvoiceToTdsBalance(invoice.toObject(), req.user._id, session);
+            }
         } catch (ledgerErr) {
             logger.error(`[Ledger] Could not post purchase invoice ${invoice.invoiceNumber}: ${ledgerErr.message}`);
         }
@@ -491,6 +635,17 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
         if (!inv) throw new ApiError(404, 'Invoice not found');
         if (inv.isDeleted) throw new ApiError(400, 'Cannot edit a deleted invoice');
 
+        const prevTdsLean = inv.tdsFYThresholdIncluded
+            ? {
+                  tdsFYThresholdIncluded: true,
+                  tdsThresholdBaseAmount: inv.tdsThresholdBaseAmount,
+                  tdsAmount: inv.tdsAmount,
+                  tdsSection: inv.tdsSection,
+                  supplierId: inv.supplierId,
+                  financialYear: inv.financialYear,
+              }
+            : null;
+
         const auditTrail = {};
         const updateData = req.body;
 
@@ -530,6 +685,13 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
         }
 
         if (Object.keys(auditTrail).length > 0) {
+            const financialChanged = !!(
+                auditTrail.items ||
+                auditTrail.freightAmount ||
+                auditTrail.freightGstRate ||
+                auditTrail.gstType
+            );
+
             // Recalculate if items or freight changed
             if (auditTrail.items || auditTrail.freightAmount || auditTrail.freightGstRate || auditTrail.gstType) {
                 const totals = calculateInvoiceTotals(inv.items, inv.gstType, inv.freightAmount, inv.freightGstRate);
@@ -537,7 +699,7 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
                 inv.items = updatedItems;
                 Object.assign(inv, headerTotals);
             }
-            
+
             // Final Safeguard for update
             if (inv.items?.length > 0 && inv.grandTotal === 0) {
                 const hasValue = inv.items.some(i => i.rate > 0 && i.qty > 0);
@@ -545,7 +707,91 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
             }
 
             inv.updatedBy = req.user._id;
-            await inv.save({ session });
+
+            if (financialChanged && inv.status !== 'Cancelled' && !inv.isDeleted) {
+                if (prevTdsLean) {
+                    await tdsTh.reversePurchaseInvoiceFromTdsBalance(prevTdsLean, req.user._id, session);
+                }
+                await reverseInvoiceLedgerImpact(inv.invoiceNumber, session);
+
+                const invoiceSnapshot = {
+                    grandTotal: inv.grandTotal,
+                    totalTaxableAmount: inv.totalTaxableAmount,
+                    totalTax: inv.totalTax,
+                    totalCgst: inv.totalCgst,
+                    totalSgst: inv.totalSgst,
+                    totalIgst: inv.totalIgst,
+                    freightTotalGst: inv.freightTotalGst,
+                    roundOff: inv.roundOff,
+                };
+                const fyUpd = inv.financialYear || getFYFromDate(inv.invoiceDate || new Date());
+
+                const piTdsCtx = await resolvePurchaseInvoiceTdsForPosting(
+                    {
+                        supplierId: inv.supplierId,
+                        tdsUserConfirmed:
+                            updateData.tdsUserConfirmed !== undefined
+                                ? !!updateData.tdsUserConfirmed
+                                : inv.tdsUserConfirmed,
+                        tdsPopupSkipped:
+                            updateData.tdsPopupSkipped !== undefined
+                                ? !!updateData.tdsPopupSkipped
+                                : inv.tdsPopupSkipped,
+                        tdsDisabledReason:
+                            updateData.tdsDisabledReason !== undefined
+                                ? updateData.tdsDisabledReason
+                                : inv.tdsDisabledReason,
+                    },
+                    { financialYear: fyUpd, invoiceSnapshot, excludePurchaseInvoiceId: undefined, userId: req.user._id },
+                );
+
+                inv.tdsFYThresholdIncluded = false;
+                inv.tdsSection = '';
+                inv.tdsAmount = 0;
+                inv.tdsThresholdBaseAmount = 0;
+                inv.tdsPayableLedgerId = null;
+                inv.tdsPopupSkipped = false;
+                inv.tdsDisabledReason = '';
+
+                if (piTdsCtx?.skipTds) {
+                    if (piTdsCtx.skipReason === 'popup_skipped') inv.tdsPopupSkipped = true;
+                    if (piTdsCtx.skipReason === 'disabled') {
+                        inv.tdsDisabledReason =
+                            (updateData.tdsDisabledReason && String(updateData.tdsDisabledReason)) || 'disabled';
+                    }
+                } else if (piTdsCtx) {
+                    inv.tdsSection = piTdsCtx.tdsSection || '';
+                    inv.tdsAmount = piTdsCtx.tdsAmount || 0;
+                    inv.tdsThresholdBaseAmount = piTdsCtx.thresholdBase || 0;
+                    inv.tdsPayableLedgerId = piTdsCtx.payableLedgerId || null;
+                }
+
+                if (updateData.tdsUserConfirmed !== undefined) {
+                    inv.tdsUserConfirmed = !!updateData.tdsUserConfirmed;
+                }
+
+                const shouldApplyUpd =
+                    inv.tdsThresholdBaseAmount > 0 &&
+                    inv.tdsSection &&
+                    !inv.tdsPopupSkipped &&
+                    !String(inv.tdsDisabledReason || '').trim();
+                if (shouldApplyUpd) inv.tdsFYThresholdIncluded = true;
+
+                await inv.save({ session });
+
+                try {
+                    const supplierRow = await Supplier.findById(inv.supplierId).session(session);
+                    if (supplierRow) await autoLinkEntityLedger(supplierRow, 'Supplier', session);
+                    await postPurchaseInvoiceToLedger(inv, req.user._id, session);
+                    if (inv.tdsFYThresholdIncluded) {
+                        await tdsTh.applyPurchaseInvoiceToTdsBalance(inv.toObject(), req.user._id, session);
+                    }
+                } catch (ledgerErr) {
+                    logger.error(`[Ledger] Could not repost purchase invoice ${inv.invoiceNumber}: ${ledgerErr.message}`);
+                }
+            } else {
+                await inv.save({ session });
+            }
 
             await AuditLog.create([{
                 user: req.user._id,

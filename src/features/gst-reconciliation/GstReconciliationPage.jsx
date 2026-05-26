@@ -23,7 +23,8 @@ const CUR_YEAR = new Date().getFullYear();
 const FYS = [`${CUR_YEAR - 1}-${CUR_YEAR}`, `${CUR_YEAR}-${CUR_YEAR + 1}`];
 
 export default function GstReconciliationPage() {
-  const [activeTab, setActiveTab] = useState('gstin'); // gstin or bill
+  const [activeTab, setActiveTab] = useState('gstin'); // gstin | bill | rcm
+  const [taxTolerance, setTaxTolerance] = useState(2);
   const [fy, setFy] = useState('2025-2026');
   const [month, setMonth] = useState('04');
   const [source, setSource] = useState('2B');
@@ -31,21 +32,25 @@ export default function GstReconciliationPage() {
   const [showImport, setShowImport] = useState(false);
   const [summary, setSummary] = useState(null);
   const [itcSummary, setItcSummary] = useState(null);
+  const [rcmSummary, setRcmSummary] = useState(null);
   const [selectedGstin, setSelectedGstin] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = async (persist = false) => {
     setLoading(true);
     try {
-      const params = { financialYear: fy, month, source };
+      const params = { financialYear: fy, month, source, taxTolerance };
+      if (persist) params.persist = 'true';
       
-      const [sumRes, itcRes] = await Promise.all([
+      const [sumRes, itcRes, rcmRes] = await Promise.all([
         api.get('/gst-reconciliation/gstin-summary', { params }),
-        api.get('/gst-reconciliation/itc-summary', { params })
+        api.get('/gst-reconciliation/itc-summary', { params }),
+        api.get('/gst-reconciliation/rcm-summary', { params }),
       ]);
       
       setSummary(sumRes.data.data);
       setItcSummary(itcRes.data.data);
-      toast.success('Reconciliation data loaded');
+      setRcmSummary(rcmRes.data.data);
+      toast.success(persist ? 'Reconciliation saved' : 'Reconciliation data loaded');
     } catch (e) {
       toast.error('Load failed: ' + (e?.response?.data?.message || e.message));
     } finally {
@@ -81,7 +86,7 @@ export default function GstReconciliationPage() {
            <button onClick={() => setShowImport(true)} style={btnSecondary}>
              <Upload size={18} /> Import Portal JSON/Excel
            </button>
-           <button onClick={fetchData} disabled={loading} style={btnPrimary}>
+           <button onClick={() => fetchData(true)} disabled={loading} style={btnPrimary}>
              {loading ? <RefreshCw size={18} className="spin" /> : <RefreshCw size={18} />} Run Reconciliation
            </button>
         </div>
@@ -107,6 +112,9 @@ export default function GstReconciliationPage() {
             <div style={tabStyle(activeTab === 'bill')} onClick={() => setActiveTab('bill')}>
               <List size={18} /> Bill-to-bill Detail
             </div>
+            <div style={tabStyle(activeTab === 'rcm')} onClick={() => setActiveTab('rcm')}>
+              <AlertCircle size={18} /> RCM
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <select value={fy} onChange={e => setFy(e.target.value)} style={selectStyle}>
@@ -119,15 +127,27 @@ export default function GstReconciliationPage() {
                <button onClick={() => setSource('2A')} style={toggleBtn(source === '2A')}>GSTR-2A</button>
                <button onClick={() => setSource('2B')} style={toggleBtn(source === '2B')}>GSTR-2B</button>
             </div>
+            <label style={{ fontSize: 12, color: '#475569' }}>
+              GST tol ₹
+              <input type="number" min={0} step={1} value={taxTolerance} onChange={(e) => setTaxTolerance(Number(e.target.value))} style={{ width: 48, marginLeft: 6, padding: 6, borderRadius: 6, border: '1px solid #cbd5e1' }} />
+            </label>
           </div>
         </div>
 
         {/* Tables */}
         <div style={{ padding: '0' }}>
-          {activeTab === 'gstin' ? (
-            <GstinWiseTable data={summary} onDrillDown={handleDrillDown} />
-          ) : (
-            <BillToBillTable fy={fy} month={month} source={source} preSelectedGstin={selectedGstin} />
+          {activeTab === 'gstin' && <GstinWiseTable data={summary} onDrillDown={handleDrillDown} />}
+          {activeTab === 'bill' && (
+            <BillToBillTable fy={fy} month={month} source={source} preSelectedGstin={selectedGstin} taxTolerance={taxTolerance} />
+          )}
+          {activeTab === 'rcm' && rcmSummary && (
+            <div style={{ padding: 24, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <SummaryCard label="RCM GST (Books)" value={rcmSummary.booksRcmGst} color="#2563eb" />
+              <SummaryCard label="RCM GST (Portal)" value={rcmSummary.portalRcmGst} color="#4f46e5" />
+              <SummaryCard label="Matched RCM" value={rcmSummary.matchedRcmGst} color="#059669" />
+              <SummaryCard label="Books only RCM" value={rcmSummary.booksOnlyRcmGst} color="#d97706" />
+              <SummaryCard label="Portal only RCM" value={rcmSummary.portalOnlyRcmGst} color="#dc2626" />
+            </div>
           )}
         </div>
       </div>

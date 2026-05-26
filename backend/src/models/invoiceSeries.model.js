@@ -9,6 +9,9 @@ const invoiceSeriesSchema = new mongoose.Schema({
     padLength: { type: Number, default: 5 },  // zero pad: 00001
     gstApplicable: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },
+    // Per-document-type defaults (only one active series can be default per type)
+    isDefaultForSalesOrder: { type: Boolean, default: false },
+    isDefaultForTaxInvoice: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     isEstimate: { type: Boolean, default: false }, // Legacy flag, mapping via documentType is preferred now
     documentType: { 

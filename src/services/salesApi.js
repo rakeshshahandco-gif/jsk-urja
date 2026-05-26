@@ -36,7 +36,7 @@ export const getSalesInvoiceById = (id) =>
     apiClient.get(`/sales-invoices/${id}`).then(r => r.data.data);
 
 export const createSalesInvoice = (data) =>
-    apiClient.post('/sales-invoices', data).then(r => r.data.data);
+    apiClient.post('/sales-invoices', data, { timeout: 120000 }).then(r => r.data.data);
 
 export const cancelSalesInvoice = (id) =>
     apiClient.post(`/sales-invoices/${id}/cancel`).then(r => r.data);
@@ -86,6 +86,18 @@ export const bulkLockInvoices = (data) =>
 
 export const getIncentiveReport = (params = {}) =>
     apiClient.get('/sales-invoices/incentive-report', { params }).then(r => r.data.data);
+
+export const getInvoiceBarcodeData = (id) =>
+    apiClient.get(`/sales-invoices/${id}/barcode-data`).then(r => r.data.data);
+
+export const lookupInvoiceByCode = (code) =>
+    apiClient.get('/sales-invoices/lookup', { params: { code } }).then(r => r.data.data);
+
+export const getInvoiceBarcodeSettings = () =>
+    apiClient.get('/sales-invoices/barcode-settings').then(r => r.data.data);
+
+export const updateInvoiceBarcodeSettings = (invoiceBarcodeSettings) =>
+    apiClient.put('/sales-invoices/barcode-settings', { invoiceBarcodeSettings }).then(r => r.data.data);
 
 // ─── INVOICE SERIES ───────────────────────────────────────────────────────────
 

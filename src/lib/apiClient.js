@@ -18,6 +18,17 @@ apiClient.interceptors.request.use(
         const authData = getAuthData();
         if (authData && authData.token) {
             config.headers.Authorization = `Bearer ${authData.token}`;
+            try {
+                const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('jsk_selected_company') : null;
+                if (raw) {
+                    const co = JSON.parse(raw);
+                    if (co && co._id) {
+                        config.headers['X-Company-Id'] = co._id;
+                    }
+                }
+            } catch {
+                /* ignore invalid stored company */
+            }
         }
         return config;
     },

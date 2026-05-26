@@ -31,7 +31,8 @@ const auditLogSchema = new mongoose.Schema({
         type: String
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    disableTenant: true,
 });
 
 const AuditLog = mongoose.model('AuditLog', auditLogSchema);

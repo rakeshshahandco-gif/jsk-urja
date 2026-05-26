@@ -1,15 +1,18 @@
+import './dnsBootstrap.js';
 import mongoose from 'mongoose';
 import config from './config.js';
 import logger from '../utils/logger.js';
 import { realtimeSyncPlugin } from '../plugins/realtimeSync.plugin.js';
+import { tenantSchemaPlugin } from '../plugins/tenantSchema.plugin.js';
+
+// Register global schema plugins before any models load (import order in index.js).
+mongoose.plugin(tenantSchemaPlugin);
+mongoose.plugin(realtimeSyncPlugin);
 
 export const connectDB = async () => {
     try {
         logger.info('🔄 Connecting to MongoDB...');
         logger.info(`Connection URL: ${config.mongoose.url.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')}`); // Hide password
-
-        // Apply global sync plugin
-        mongoose.plugin(realtimeSyncPlugin);
 
         const conn = await mongoose.connect(config.mongoose.url, config.mongoose.options);
 

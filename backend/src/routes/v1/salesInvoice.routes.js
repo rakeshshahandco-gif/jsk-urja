@@ -1,5 +1,6 @@
 import express from 'express';
 import * as siCtrl from '../../controllers/salesInvoice.controller.js';
+import * as ibCtrl from '../../controllers/invoiceBarcode.controller.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -14,6 +15,12 @@ router.use((req, res, next) => {
 router.route('/').get(siCtrl.getSalesInvoices).post(siCtrl.createSalesInvoice);
 
 router.get('/incentive-report', siCtrl.getIncentiveReport);
+
+// QR / Barcode (must be before /:id)
+router.get('/barcode-settings', ibCtrl.getBarcodeSettings);
+router.put('/barcode-settings', ibCtrl.updateBarcodeSettings);
+router.get('/lookup', ibCtrl.lookupInvoiceScan);
+router.get('/:id/barcode-data', ibCtrl.getInvoiceBarcodeData);
 
 // Administrative & Numbering Tools (Placed before /:id to avoid collisions)
 router.post('/resequence', authorize('admin', 'superadmin'), siCtrl.resequenceSeries);

@@ -111,6 +111,17 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     grandTotal: { type: Number, default: 0 },
     amountInWords: { type: String, default: '' },
 
+    // TDS (vendor ledger + engine) — bill posts net supplier + TDS payable; FY threshold uses tdsThresholdBaseAmount
+    tdsSection: { type: String, default: '' },
+    tdsAmount: { type: Number, default: 0 },
+    tdsThresholdBaseAmount: { type: Number, default: 0 },
+    tdsPayableLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    /** When true, PaymentEntry against this PI should not double-count FY threshold (see tdsThreshold.service applyPaymentToBalance) */
+    tdsFYThresholdIncluded: { type: Boolean, default: false },
+    tdsUserConfirmed: { type: Boolean, default: false },
+    tdsPopupSkipped: { type: Boolean, default: false },
+    tdsDisabledReason: { type: String, default: '' },
+
     // Payment
     paymentTerms: { type: String, default: '' },
     dueDate: { type: Date, default: null },

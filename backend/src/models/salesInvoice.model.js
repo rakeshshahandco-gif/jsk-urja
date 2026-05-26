@@ -31,6 +31,19 @@ const siItemSchema = new mongoose.Schema({
         enum: ['MANUFACTURED_SALE', 'TRADING_SALE'], 
         default: 'MANUFACTURED_SALE' 
     },
+    /** GP / costing snapshot at invoice posting (excludes GST) */
+    unitCost: { type: Number, default: 0, min: 0 },
+    totalCostValue: { type: Number, default: 0, min: 0 },
+    gpAmount: { type: Number, default: 0 },
+    gpPercent: { type: Number, default: 0 },
+    costSource: {
+        type: String,
+        enum: ['ACTUAL_FG', 'BOM_STANDARD', 'MANUAL', 'VALUATION', 'ESTIMATED', 'STORED', ''],
+        default: '',
+    },
+    costEstimated: { type: Boolean, default: false },
+    productionCostSnapshotId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductionCostSnapshot', default: null },
+    gpWarning: { type: String, trim: true, default: '' },
 }, { _id: true });
 
 const salesInvoiceSchema = new mongoose.Schema({
@@ -110,6 +123,13 @@ const salesInvoiceSchema = new mongoose.Schema({
     roundedTotal: { type: Number, default: 0 },
     amountInWords: { type: String, default: '' },
 
+    /** Invoice-level GP summary (taxable sales vs cost, excludes GST) */
+    totalCostValue: { type: Number, default: 0, min: 0 },
+    totalGpAmount: { type: Number, default: 0 },
+    totalGpPercent: { type: Number, default: 0 },
+    gpSnapshotAt: { type: Date, default: null },
+    gpWarnings: [{ type: String }],
+
     // Payment
     paymentType: { type: String, /* enum: ['Cash', 'Credit'], */ default: 'Credit' },
     paymentStatus: { type: String, /* enum: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'], */ default: 'Unpaid' },
@@ -179,6 +199,20 @@ const salesInvoiceSchema = new mongoose.Schema({
     incentivePaidAmount: { type: Number, default: 0 },
     incentivePaidDate: { type: Date, default: null },
     incentiveRemarks: { type: String, default: '' },
+
+    /** Secure token for public invoice view (QR link) — company-scoped via tenant plugin */
+    publicViewToken: { type: String, trim: true, default: '', index: true, sparse: true },
+
+    // E-Invoice (IRN) fields
+    irn: { type: String, trim: true, default: '' },
+    irnAckNo: { type: String, trim: true, default: '' },
+    irnAckDate: { type: Date, default: null },
+    signedQrCode: { type: String, default: '' },
+    eInvoiceStatus: {
+        type: String,
+        enum: ['Not Generated', 'Generated', 'Cancelled'],
+        default: 'Not Generated',
+    },
 }, { timestamps: true });
 
 salesInvoiceSchema.index({ invoiceNumber: 1 });

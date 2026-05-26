@@ -884,6 +884,23 @@ class PDFService {
      */
     static async generateSalesInvoicePDF(inv, company, user) {
         const logoBase64 = this.getLogoBase64();
+        let barcodeBlockHtml = '';
+        try {
+            const { buildInvoiceBarcodePayload } = await import('./invoiceBarcode.service.js');
+            const companyId = inv.companyId || company?.companyId;
+            const bc = await buildInvoiceBarcodePayload(inv, companyId);
+            if (bc.settings?.enableQr || bc.settings?.enableBarcode) {
+                const bcPart = bc.settings.enableBarcode && bc.barcodeDataUrl
+                    ? `<div style="text-align:center;"><img src="${bc.barcodeDataUrl}" alt="Barcode" style="height:${bc.settings.barcodeHeight || 40}px;max-width:220px;" /><div style="font-size:7pt;margin-top:2px;">${bc.barcodeValue || ""}</div></div>`
+                    : '';
+                const qrPart = bc.settings.enableQr && bc.qrDataUrl
+                    ? `<div style="text-align:center;"><img src="${bc.qrDataUrl}" alt="QR" style="width:${bc.settings.qrSize || 96}px;height:${bc.settings.qrSize || 96}px;" /><div style="font-size:7pt;margin-top:2px;">Scan for details</div>`
+                    : '';
+                barcodeBlockHtml = `<div class="barcode-footer" style="display:flex;justify-content:flex-end;align-items:flex-end;gap:16px;margin-top:8px;padding:8px 0;border-top:1px dashed #ccc;">${bcPart}${qrPart}</div>`;
+            }
+        } catch (bcErr) {
+            console.warn('[PDF] Invoice barcode skipped:', bcErr.message);
+        }
         const items = inv.items || [];
         
         const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB') : "—";
@@ -1120,7 +1137,7 @@ class PDFService {
                                     <span style="font-weight: 800; text-transform: uppercase; margin-right: 5px;">Amount in Words:</span>
                                     <span style="font-weight: 900; text-transform: capitalize;">${amountInWords} ONLY</span>
                                 </div>
-                                <div class="authorizer-row">
+                                ${barcodeBlockHtml}<div class="authorizer-row">
                                     <div class="receiver-box">
                                         <div style="font-weight: 900; margin-bottom: 4px;">Receiver's Signature:</div>
                                         <div style="position: absolute; bottom: 8px; left: 8px; font-size: 7pt; color: #666;">Checked and Received in Good Condition</div>

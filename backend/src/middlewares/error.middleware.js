@@ -23,6 +23,19 @@ export const errorHandler = (err, req, res, next) => {
         message = `Duplicate entry: A record with this "${field}" already exists.`;
     }
 
+    // DNS / network: Atlas hostname not resolved or cluster unreachable (avoid leaking hostnames on login UI)
+    const errMsg = typeof err.message === 'string' ? err.message : String(err);
+    if (
+        err.code === 'ENOTFOUND' ||
+        /getaddrinfo\s+ENOTFOUND/i.test(errMsg) ||
+        err.name === 'MongoServerSelectionError' ||
+        (err.name === 'MongoNetworkError' && /ECONNREFUSED|ETIMEDOUT|ENOTFOUND/i.test(errMsg))
+    ) {
+        statusCode = 503;
+        message =
+            'Cannot reach the database server. Check internet access, VPN, and firewall. In MongoDB Atlas, confirm the cluster is running and Network Access allows your IP. On Windows you can try DNS 1.1.1.1 or start Node with NODE_OPTIONS=--dns-result-order=ipv4first.';
+    }
+
     if (!statusCode) {
         statusCode = 500;
         message = err.message || 'Internal Server Error';
@@ -32,7 +45,10 @@ export const errorHandler = (err, req, res, next) => {
 
     const response = {
         code: statusCode,
-        message: err.message || message, // Forcing error message to frontend for debugging
+        message,
+        ...(config.env === 'development' &&
+            errMsg &&
+            errMsg !== message && { details: errMsg }),
         ...(config.env === 'development' && { stack: err.stack }),
     };
 

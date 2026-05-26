@@ -1,0 +1,17 @@
+---
+description: Mandatory backend startup validation after any backend code change
+alwaysApply: true
+---
+
+# Backend startup guard
+
+After any backend change (routes, controllers, services, models, imports, API):
+
+1. Imports - verify paths, exports, ESM, case-sensitive filenames.
+2. Start - run npm run dev in backend/ until no crash.
+3. Health - GET /api/v1/health (default port 5000).
+4. Do not finish with a crashed backend.
+
+Report: files changed, startup result, APIs checked, errors fixed.
+
+See CURSOR_SAFE_CHANGE_RULES.md Backend safety section.

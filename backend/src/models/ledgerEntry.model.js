@@ -17,6 +17,10 @@ const ledgerEntrySchema = new mongoose.Schema({
     cashBankAccountId: { type: mongoose.Schema.Types.ObjectId, ref: 'CashBankAccount' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"
 
+    // Cost / Profit Centre tagging
+    costCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'CostCenter', default: null },
+    costCenterName: { type: String, default: '' },
+
 }, { timestamps: true });
 
 ledgerEntrySchema.index({ ledgerId: 1, date: -1 });

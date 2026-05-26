@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { PermissionDenied } from './PermissionDenied';
-import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
+import { BrandedLoader } from '@/components/ui/BrandedLoading/BrandedLoader';
 
 export const ProtectedRoute = ({
     children,
@@ -11,9 +11,20 @@ export const ProtectedRoute = ({
 }) => {
     const { user, loading, isAuthenticated, hasRole, hasPermission } = useAuth();
 
-    // Show nothing while loading
     if (loading) {
-        return <BrandedModuleLoader />;
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '100vh',
+                    width: '100%',
+                }}
+            >
+                <BrandedLoader size={120} />
+            </div>
+        );
     }
 
     // Redirect to login if not authenticated

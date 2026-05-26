@@ -30,6 +30,33 @@ const supplierSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     ledgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    /** TDS — mirrored on linked ledger; used when ledger not yet linked */
+    tdsApplicable: { type: Boolean, default: false },
+    tdsSection: { type: String, trim: true, default: '' },
+    panVerificationStatus: { type: String, enum: ['', 'Verified', 'Pending', 'Invalid'], default: '' },
+    /** Income-tax deductee constitution — drives auto rate (Individual/HUF vs Others) from TDS Master */
+    deducteeConstitution: { type: String, trim: true, default: '' },
+    tdsDeductorType: { type: String, enum: ['', 'Individual', 'HUF', 'Others'], default: 'Others' },
+    tdsLowerDeductionPercent: { type: Number, default: 0, min: 0, max: 100 },
+    tdsLowerDeductionValidFrom: { type: Date, default: null },
+    tdsLowerDeductionValidTo: { type: Date, default: null },
+    tdsLowerDeductionCertificates: [
+        {
+            section: { type: String, trim: true, uppercase: true, default: '' },
+            certificateNo: { type: String, trim: true, default: '' },
+            rate: { type: Number, min: 0, max: 100, default: 0 },
+            validFrom: { type: Date, default: null },
+            validTo: { type: Date, default: null },
+            active: { type: Boolean, default: true },
+        },
+    ],
+    msmeApplicable: { type: Boolean, default: false },
+    msmeRegNo: { type: String, trim: true, default: '' },
+    msmeCategory: { type: String, enum: ['', 'Micro', 'Small', 'Medium'], default: '' },
+    tdsStartDate: { type: Date, default: null },
+    tdsExemptionApplicable: { type: Boolean, default: false },
+    tdsThresholdOverride: { type: Number, default: 0, min: 0 },
+    tdsIgnoreThreshold: { type: Boolean, default: false },
 }, { timestamps: true });
 
 supplierSchema.index({ supplierName: 'text', supplierCode: 'text' });

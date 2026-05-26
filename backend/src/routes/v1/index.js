@@ -1,4 +1,5 @@
 import express from 'express';
+import publicInvoiceRoute from './publicInvoice.routes.js';
 import productionPlanningRoute from './productionPlanning.routes.js';
 import creditDebitNoteRoute from './creditDebitNote.routes.js';
 import authRoute from './auth.routes.js';
@@ -27,6 +28,8 @@ import salesOrderRoute from './salesOrder.routes.js';
 import salesInvoiceRoute from './salesInvoice.routes.js';
 import accountReportRoutes from './accountReport.routes.js';
 import accountingReportRoutes from './accountingReport.routes.js';
+import gpAnalysisRoutes from './gpAnalysis.routes.js';
+import directorMisRoutes from './directorMis.routes.js';
 import invoiceSeriesRoute from './invoiceSeries.routes.js';
 import productionSheetRoute from './productionSheet.routes.js';
 import companyProfileRoute from './companyProfile.routes.js';
@@ -86,13 +89,40 @@ import analyticsRoute from './analytics.routes.js';
 import salesConversionRoute from './salesConversion.routes.js';
 import transporterRoute from './transporter.routes.js';
 import ewayBillRoute from './ewayBill.routes.js';
+import eInvoiceRoute from './eInvoice.routes.js';
 import gstReportRoute from './gstReport.routes.js';
 import gstReconciliationRoute from './gstReconciliation.routes.js';
 import backupRoute from './backup.routes.js';
 import distributorRoute from './distributor.route.js';
 import userHomePreferenceRoute from './userHomePreference.route.js';
+import userUiPreferencesRoute from './userUiPreferences.route.js';
+import companyRoute from './company.routes.js';
+import tdsRoute from './tds.routes.js';
+import tcsRoute from './tcs.routes.js';
+import billWiseAdjustmentRoute from './billWiseAdjustment.routes.js';
+import bankReconciliationRoute from './bankReconciliation.routes.js';
+import costCenterRoute from './costCenter.routes.js';
+import budgetRoute from './budget.routes.js';
+import pdcChequeRoute from './pdcCheque.routes.js';
+import depreciationRoute from './depreciation.routes.js';
+import narrationTemplateRoute from './narrationTemplate.routes.js';
+import form26AsRoute from './form26As.routes.js';
+import saasRoute from './saas.routes.js';
+import securityRoute from './security.routes.js';
+import companyFeatureSettingsRoute from './companyFeatureSettings.routes.js';
+import platformFeatureSettingsRoute from './platformFeatureSettings.routes.js';
+import leadRoute from './lead.routes.js';
+import productCatalogRoute from './productCatalog.routes.js';
+import whatsappChatRoute from './whatsappChat.routes.js';
+import { resolveCompanyScope } from '../../middlewares/companyScope.middleware.js';
+import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware.js';
 
 const router = express.Router();
+
+router.use('/public', publicInvoiceRoute);
+
+router.use(resolveCompanyScope);
+router.use(gateApiFeatureByPath);
 
 router.get('/health', (req, res) => {
     res.send({
@@ -305,6 +335,14 @@ const defaultRoutes = [
         route: voucherRoute,
     },
     {
+        path: '/bill-wise-adjustment',
+        route: billWiseAdjustmentRoute,
+    },
+    {
+        path: '/bank-reconciliation',
+        route: bankReconciliationRoute,
+    },
+    {
         path: '/ledgers',
         route: ledgerRoute,
     },
@@ -364,6 +402,14 @@ const defaultRoutes = [
     {
         path: '/accounting/reports',
         route: accountingReportRoutes,
+    },
+    {
+        path: '/gp-analysis',
+        route: gpAnalysisRoutes,
+    },
+    {
+        path: '/director-mis',
+        route: directorMisRoutes,
     },
     {
         path: '/permissions',
@@ -464,6 +510,10 @@ const defaultRoutes = [
     path: '/eway-bills',
     route: ewayBillRoute,
   },
+  {
+    path: '/e-invoices',
+    route: eInvoiceRoute,
+  },
   // ── GST Reports ──────────────────────────────────────────────────────────
   {
     path: '/gst-reports',
@@ -480,6 +530,78 @@ const defaultRoutes = [
     {
         path: '/user-home/preferences',
         route: userHomePreferenceRoute,
+    },
+    {
+        path: '/user-ui-preferences',
+        route: userUiPreferencesRoute,
+    },
+    {
+        path: '/companies',
+        route: companyRoute,
+    },
+    // ── SaaS Super Admin ───────────────────────────────────────────────────────
+    {
+        path: '/saas',
+        route: saasRoute,
+    },
+    {
+        path: '/tds',
+        route: tdsRoute,
+    },
+    // ── New Accounting Modules ─────────────────────────────────────────────────
+    {
+        path: '/tcs',
+        route: tcsRoute,
+    },
+    {
+        path: '/cost-centers',
+        route: costCenterRoute,
+    },
+    {
+        path: '/budgets',
+        route: budgetRoute,
+    },
+    {
+        path: '/pdc-cheques',
+        route: pdcChequeRoute,
+    },
+    {
+        path: '/depreciation',
+        route: depreciationRoute,
+    },
+    {
+        path: '/narration-templates',
+        route: narrationTemplateRoute,
+    },
+    {
+        path: '/form-26as',
+        route: form26AsRoute,
+    },
+    {
+        path: '/security',
+        route: securityRoute,
+    },
+    {
+        path: '/company-feature-settings',
+        route: companyFeatureSettingsRoute,
+    },
+    {
+        path: '/platform-feature-settings',
+        route: platformFeatureSettingsRoute,
+    },
+    // ── CRM: WhatsApp-driven Leads + Product Catalog (gated by feature flags) ─
+    {
+        path: '/leads',
+        route: leadRoute,
+    },
+    {
+        path: '/product-catalog',
+        route: productCatalogRoute,
+    },
+    // ── WhatsApp Chat Panel (additive: powers /whatsapp/chat UI) ─────────────
+    {
+        path: '/whatsapp-chat',
+        route: whatsappChatRoute,
     },
 ];
 

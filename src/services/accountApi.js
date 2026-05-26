@@ -86,11 +86,11 @@ export const getLedgerStatement = (ledgerId, params = {}) =>
 export const getCashBankBalances = () =>
     apiClient.get('/ledgers/balances').then(r => r.data.data);
 
-export const getOutstandingBills = (ledgerId) =>
-    apiClient.get(`/ledgers/${ledgerId}/outstanding`).then(r => r.data.data);
+export const getOutstandingBills = (ledgerId, params = {}) =>
+    apiClient.get(`/ledgers/${ledgerId}/outstanding`, { params }).then(r => r.data.data);
 
-export const getOutstandingSummary = (type, showAll = false) =>
-    apiClient.get('/ledgers/outstanding-summary', { params: { type, showAll } }).then(r => r.data.data);
+export const getOutstandingSummary = (params = {}) =>
+    apiClient.get('/ledgers/outstanding-summary', { params }).then(r => r.data.data);
 
 // ── Accounting Reports (Tally Style) ────────────────────────────────────────
 

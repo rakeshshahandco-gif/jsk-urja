@@ -8,12 +8,12 @@ import { useMessenger } from '@/contexts/MessengerContext';
 import { NotificationPanel } from './NotificationPanel';
 
 import { ROLE_CONFIG } from '@/utils/permissions';
+import { GlobalSearch } from './GlobalSearch';
 import { ChangePasswordForm } from '@/features/auth/ChangePasswordForm';
 import { NotificationSettingsForm } from './NotificationSettingsForm';
 import { menuConfig } from '@/config/menu.config';
 import { PATHS } from '@/routes/paths';
-import { useFinancialYear } from '@/contexts/FinancialYearContext';
-import { Calendar, Monitor, CheckCircle, AlertCircle, Settings } from 'lucide-react';
+import { Monitor, CheckCircle, AlertCircle, Settings } from 'lucide-react';
 import { getNotificationPermission, requestNotificationPermission, isNotificationSupported } from '@/utils/browserNotification';
 import styles from './Header.module.scss';
 
@@ -24,7 +24,6 @@ export const Header = () => {
     const { openModal } = useModal();
     const { unreadCount } = useNotification();
     const { unreadTotal } = useMessenger();
-    const { financialYears, selectedFY, setSelectedFY } = useFinancialYear();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
@@ -148,7 +147,7 @@ export const Header = () => {
     const roleConfig = ROLE_CONFIG[userRoleIdent] || {};
 
     return (
-        <header className={`${styles.header} no-print`}>
+        <header className={`${styles.header} no-print`} data-jsk-ui-component="header">
 
             <div className={styles.content}>
                 <div className={styles.pageHeader}>
@@ -174,28 +173,9 @@ export const Header = () => {
                     </h2>
                 </div>
 
+                <GlobalSearch />
+
                 <div className={styles.userSection}>
-                    <div className={styles.fySelectorContainer}>
-                        <Calendar size={14} className={styles.fyIcon} />
-                        <div className={styles.fyLabelGroup}>
-                            <span className={styles.fyLabel}>F.Y.</span>
-                            <select 
-                                className={styles.fySelect}
-                                value={selectedFY}
-                                onChange={(e) => setSelectedFY(e.target.value)}
-                                title="Switch Financial Year — affects accounting entries only (Sales, Purchase, Ledger). Does not affect Customers, Tasks, or Follow-ups."
-                            >
-                                {financialYears && financialYears.map(fy => (
-                                    <option key={fy._id} value={fy.name}>
-                                        {fy.name}{fy.isCurrent ? ' ✓' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        {financialYears.find(f => f.name === selectedFY)?.isCurrent && (
-                            <span className={styles.fyActiveDot} title="Current Active Year" />
-                        )}
-                    </div>
 
                     {isNotificationSupported() && (
                         <div className={styles.browserNotifyContainer}>

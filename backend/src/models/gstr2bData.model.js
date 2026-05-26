@@ -27,6 +27,8 @@ const gstr2bDataSchema = new mongoose.Schema({
     filingDate: { type: Date },
     filingPeriod: { type: String },
     itcAvailable: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
+    isReverseCharge: { type: Boolean, default: false, index: true },
+    importBatchId: { type: mongoose.Schema.Types.ObjectId, ref: 'GstrImportBatch', default: null },
     reason: { type: String, default: '' },
     
     // Reconciliation Meta
@@ -53,6 +55,9 @@ const gstr2bDataSchema = new mongoose.Schema({
 
 // Compound index for matching
 gstr2bDataSchema.index({ financialYear: 1, month: 1, source: 1 });
-gstr2bDataSchema.index({ supplierGstin: 1, invoiceNumber: 1, invoiceDate: 1 }, { unique: true });
+gstr2bDataSchema.index(
+    { financialYear: 1, month: 1, source: 1, supplierGstin: 1, invoiceNumber: 1, invoiceDate: 1 },
+    { unique: true },
+);
 
 export const Gstr2bData = mongoose.model('Gstr2bData', gstr2bDataSchema);

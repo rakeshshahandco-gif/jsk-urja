@@ -111,7 +111,16 @@ const createCustomer = async (body) => {
     }
 
     // Create/Link Ledger in Chart of Accounts
-    await autoLinkEntityLedger(customer, 'Customer');
+    const ledgerIdCreate = await autoLinkEntityLedger(customer, 'Customer');
+    if (ledgerIdCreate) {
+        await AccountLedger.findByIdAndUpdate(ledgerIdCreate, {
+            $set: {
+                msmeApplicable: customer.msmeApplicable || false,
+                msmeRegNo: customer.msmeRegNo || '',
+                msmeCategory: customer.msmeCategory || '',
+            },
+        });
+    }
 
     logger.info(`✅ Customer created successfully with ID: ${customer._id}, Code: ${customer.customerCode}`);
     return customer;
@@ -127,7 +136,7 @@ const createCustomer = async (body) => {
  * @returns {Promise<Object>}
  */
 const queryCustomers = async (filter, options) => {
-    const finalFilter = { ...filter, isDeleted: false };
+    const finalFilter = { ...filter, isDeleted: { $ne: true } };
 
     // Search logic
     if (options.search) {
@@ -186,7 +195,7 @@ const queryCustomers = async (filter, options) => {
  * @returns {Promise<Customer>}
  */
 const getCustomerById = async (id) => {
-    return Customer.findOne({ _id: id, isDeleted: false }).populate('stickers');
+    return Customer.findOne({ _id: id, isDeleted: { $ne: true } }).populate('stickers');
 };
 
 /**
@@ -224,7 +233,16 @@ const updateCustomerById = async (customerId, updateBody) => {
     const newName = customer.company || customer.customerName;
 
     // Ensure ledger exists and is linked
-    await autoLinkEntityLedger(customer, 'Customer');
+    const ledgerIdUpdate = await autoLinkEntityLedger(customer, 'Customer');
+    if (ledgerIdUpdate) {
+        await AccountLedger.findByIdAndUpdate(ledgerIdUpdate, {
+            $set: {
+                msmeApplicable: customer.msmeApplicable || false,
+                msmeRegNo: customer.msmeRegNo || '',
+                msmeCategory: customer.msmeCategory || '',
+            },
+        });
+    }
 
     if (oldName !== newName) {
         // 1. Sync name change to linked AccountLedger is now handled by autoLinkEntityLedger above if we want,

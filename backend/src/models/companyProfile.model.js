@@ -63,6 +63,13 @@ const companyProfileSchema = new mongoose.Schema(
             trim: true,
             default: '',
         },
+        /** Tax Deduction Account Number (TAN) — used on TDS challan / ITNS 281 */
+        tanNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: '',
+        },
         email: {
             type: String,
             trim: true,
@@ -126,6 +133,17 @@ const companyProfileSchema = new mongoose.Schema(
             provider: { type: String, enum: ['meta', 'ultramsg', 'none'], default: 'none' },
             instanceId: { type: String, trim: true, default: '' }, // For 3rd party like UltraMsg
         },
+        invoiceBarcodeSettings: {
+            enableQr: { type: Boolean, default: true },
+            enableBarcode: { type: Boolean, default: true },
+            qrSize: { type: Number, default: 96, min: 64, max: 200 },
+            barcodeHeight: { type: Number, default: 40, min: 20, max: 80 },
+            barcodeType: { type: String, enum: ['code128', 'qrcode'], default: 'code128' },
+            publicLinkEnabled: { type: Boolean, default: false },
+            paymentLink: { type: String, trim: true, default: '' },
+            websiteUrl: { type: String, trim: true, default: '' },
+            includeDispatchBarcode: { type: Boolean, default: false },
+        },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
@@ -133,5 +151,7 @@ const companyProfileSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+companyProfileSchema.index({ companyId: 1 }, { unique: true, sparse: true });
 
 export const CompanyProfile = mongoose.model('CompanyProfile', companyProfileSchema);

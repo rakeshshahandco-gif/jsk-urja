@@ -1,8 +1,10 @@
 import cron from 'node-cron';
 import Reminder from '../models/reminder.model.js';
+import { Company } from '../models/company.model.js';
 import { getIO } from '../config/socket.js';
 import logger from '../utils/logger.js';
 import moment from 'moment';
+import { companyScopeAls } from '../utils/companyScopeContext.js';
 
 /**
  * Start the Reminder Cron Job
@@ -20,38 +22,42 @@ export const startReminderCron = () => {
             // and haven't been notified yet.
             // Note: We use a small window to ensure reliability if the server was briefly down.
             
-            const dueReminders = await Reminder.find({
-                isClosed: false,
-                isNotified: { $ne: true },
-                reminderDate: currentDate,
-                reminderTime: { $lte: currentTime }
-            }).populate('customerId', 'customerName company');
-
-            if (dueReminders.length === 0) return;
-
+            const companies = await Company.find({ isActive: true }).select('_id').lean();
             const io = getIO();
-            logger.info(`⏰ Cron: Processing ${dueReminders.length} due reminders`);
 
-            for (const reminder of dueReminders) {
-                if (!reminder.createdBy) continue;
+            for (const co of companies) {
+                await companyScopeAls.run({ companyId: co._id }, async () => {
+                    const dueReminders = await Reminder.find({
+                        isClosed: false,
+                        isNotified: { $ne: true },
+                        reminderDate: currentDate,
+                        reminderTime: { $lte: currentTime }
+                    }).populate('customerId', 'customerName company');
 
-                const payload = {
-                    _id: `reminder-${reminder._id}`,
-                    type: 'REMINDER',
-                    title: `Reminder: ${reminder.followUpType}`,
-                    message: `${reminder.customerId?.customerName || 'Customer'}: ${reminder.taskNote || 'No notes'}`,
-                    priority: reminder.priority,
-                    createdAt: new Date(),
-                    link: `/reports/open-reminders`, // Link to reminder dashboard
-                    actor: { name: 'System' }
-                };
+                    if (dueReminders.length === 0) return;
 
-                // Emit to the creator of the reminder
-                io.to(`user_${reminder.createdBy.toString()}`).emit('notification:new', payload);
-                
-                // Mark as notified so we don't send it again
-                reminder.isNotified = true;
-                await reminder.save();
+                    logger.info(`⏰ Cron: Processing ${dueReminders.length} due reminders (company ${co._id})`);
+
+                    for (const reminder of dueReminders) {
+                        if (!reminder.createdBy) continue;
+
+                        const payload = {
+                            _id: `reminder-${reminder._id}`,
+                            type: 'REMINDER',
+                            title: `Reminder: ${reminder.followUpType}`,
+                            message: `${reminder.customerId?.customerName || 'Customer'}: ${reminder.taskNote || 'No notes'}`,
+                            priority: reminder.priority,
+                            createdAt: new Date(),
+                            link: `/reports/open-reminders`, // Link to reminder dashboard
+                            actor: { name: 'System' }
+                        };
+
+                        io.to(`user_${reminder.createdBy.toString()}`).emit('notification:new', payload);
+
+                        reminder.isNotified = true;
+                        await reminder.save();
+                    }
+                });
             }
 
         } catch (error) {
