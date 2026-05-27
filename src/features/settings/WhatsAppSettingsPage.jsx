@@ -324,6 +324,23 @@ export default function WhatsAppSettingsPage() {
                             <RefreshCw size={14} /> Refresh
                         </button>
 
+                        {isConnected && (
+                            <button
+                                onClick={() => navigate('/whatsapp/chat')}
+                                title="Open in-CRM WhatsApp Messenger"
+                                style={{
+                                    padding: '10px 18px',
+                                    background: '#25d366', color: '#fff', border: 'none',
+                                    borderRadius: 10, cursor: 'pointer',
+                                    fontWeight: 700, fontSize: 13,
+                                    display: 'flex', alignItems: 'center', gap: 8,
+                                    boxShadow: '0 4px 12px rgba(37,211,102,0.35)',
+                                }}
+                            >
+                                <MessageSquare size={15} /> Open Chat
+                            </button>
+                        )}
+
                         {!isConnected ? (
                             <button
                                 onClick={handleConnect}

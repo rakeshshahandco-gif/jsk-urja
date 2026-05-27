@@ -10,5 +10,8 @@ router.get('/chats', whatsappChatController.listChats);
 router.get('/chats/:jid/messages', whatsappChatController.listMessages);
 router.post('/chats/:jid/read', whatsappChatController.markRead);
 router.post('/chats/:jid/send', whatsappChatController.sendChatMessage);
+router.post('/sync', whatsappChatController.syncChats);
+router.post('/chats/new', whatsappChatController.startChat);
+router.get('/messages/:id/media', whatsappChatController.downloadMedia);
 
 export default router;
