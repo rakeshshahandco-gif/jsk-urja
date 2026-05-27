@@ -7,10 +7,15 @@ export const prodBackend = 'https://jsk-urja-backend.onrender.com';
 export const SOCKET_URL = env.SOCKET_URL;
 export const currentLocation = env.API_URL;
 
+const isRenderDeploy =
+    typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('.onrender.com');
+
 // Create axios instance
 const api = axios.create({
     baseURL: currentLocation.endsWith('/') ? currentLocation : `${currentLocation}/`,
-    timeout: 10000,
+    // Render free tier can take 30–90s to wake; 10s caused false "Cannot reach server".
+    timeout: isRenderDeploy ? 90000 : 10000,
     headers: {
         'Content-Type': 'application/json',
     },

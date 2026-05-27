@@ -58,9 +58,22 @@ export const AuthProvider = ({ children }) => {
             return { success: true };
         } catch (error) {
             console.error("Login error:", error);
-            const msg = !error.response
-                ? 'Cannot reach the server. Start the backend: cd backend && npm run dev (port 5000).'
-                : (error.response?.data?.message || error.message || 'Login failed');
+            const onRender =
+                typeof window !== 'undefined' &&
+                window.location.hostname.endsWith('.onrender.com');
+            const timedOut = error.code === 'ECONNABORTED' || /timeout/i.test(error.message || '');
+            let msg;
+            if (!error.response) {
+                if (onRender) {
+                    msg = timedOut
+                        ? 'Render server is waking up (can take 1–2 minutes on first visit). Wait, then try Login again. Tip: use https://jsk-urja-backend.onrender.com/login'
+                        : 'Cannot reach the Render backend. Check internet, wait 1 minute, then retry. Use https://jsk-urja-backend.onrender.com/login';
+                } else {
+                    msg = 'Cannot reach the server. Start the backend: cd backend && npm run dev (port 5000).';
+                }
+            } else {
+                msg = error.response?.data?.message || error.message || 'Login failed';
+            }
             return { success: false, error: msg };
         }
     }, []);

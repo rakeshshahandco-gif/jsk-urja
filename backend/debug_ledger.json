@@ -1,225 +1,32 @@
 {
-  "ledgerId": "69b43e3f73caad9b89392659",
+  "ledgerId": "69c238d04630f0dab9b54974",
   "voucherIds": [
-    "69f869cc64757228c538f8ec",
-    "69f878e164757228c5391e1f",
-    "69f87becc2138a5e90820304",
-    "69f8866b4c228014ac8bb34e",
-    "69f888654c228014ac8bbbdd",
-    "69d75a87d7ee6e5a795d096d",
-    "69d75b10d7ee6e5a795d0b4c",
+    "69d7985ad7ee6e5a795d5937",
     "69f86c2d64757228c538fe3f",
-    "69f87fd5c2138a5e908210f7",
-    "69f889084c228014ac8bbe0c",
-    "69dc9e595969646064684153",
-    "69dc9e965969646064684268",
-    "69dc9ec65969646064684355",
-    "69dc9ef3596964606468441c",
-    "69f0a4d0ecd8b1ea6a52b59e",
-    "69f8742d64757228c53912ee",
-    "69e3653b4e61f1ea28bf0e20",
-    "69e761bb37f5bf44832cc015",
-    "69ecb1f95cf44bfcad148210",
-    "69f88c464c228014ac8bc59e",
-    "69e7648b37f5bf44832cc2e5",
-    "69ecb0755cf44bfcad147811",
-    "69ec9b005921b058ca5a482a",
-    "69ecb11a5cf44bfcad147cc2",
     "69f86c7e64757228c538ff8d",
-    "69f88c6e4c228014ac8bc5d8",
-    "69f88f054c228014ac8bcf83",
-    "69f88f504c228014ac8bd051",
-    "69edf1228fb3f24cdb08fd3a",
-    "69f88c934c228014ac8bc629",
-    "69f09a99ecd8b1ea6a528207",
-    "69f890944c228014ac8bd380",
-    "69f5d42c5dbd3413b7f7e5f6",
-    "69f888c14c228014ac8bbd8e",
-    "69f8893d4c228014ac8bbe93",
-    "69f889f44c228014ac8bbfd7",
-    "69f8796ec2138a5e9081f902"
+    "69ff820323767e70842886e8"
   ],
-  "relatedEntriesCount": 74,
+  "relatedEntriesCount": 11,
   "relatedEntries": [
     {
-      "vId": "69d75a87d7ee6e5a795d096d",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
     },
     {
-      "vId": "69d75a87d7ee6e5a795d096d",
-      "lId": "69c239c1892c5bf4c4429d12",
-      "lName": "ACTIVESTAR LIGHTING LLP"
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
     },
     {
-      "vId": "69d75b10d7ee6e5a795d0b4c",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
     },
     {
-      "vId": "69d75b10d7ee6e5a795d0b4c",
-      "lId": "69d60613327a2684779297e2",
-      "lName": "DYNAM & CO."
-    },
-    {
-      "vId": "69dc9e595969646064684153",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69dc9e595969646064684153",
-      "lId": "69c238cc4630f0dab9b54799",
-      "lName": "SAMRAJ HOME AUTOMATIONS"
-    },
-    {
-      "vId": "69dc9e965969646064684268",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69dc9e965969646064684268",
-      "lId": "69c239c3892c5bf4c4429e2d",
-      "lName": "VARUN PRESSINGS PVT. LTD."
-    },
-    {
-      "vId": "69dc9ec65969646064684355",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69dc9ec65969646064684355",
-      "lId": "69c238cc4630f0dab9b54799",
-      "lName": "SAMRAJ HOME AUTOMATIONS"
-    },
-    {
-      "vId": "69dc9ef3596964606468441c",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69dc9ef3596964606468441c",
-      "lId": "69c239c2892c5bf4c4429dd2",
-      "lName": "TECH2THINK"
-    },
-    {
-      "vId": "69e3653b4e61f1ea28bf0e20",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69e3653b4e61f1ea28bf0e20",
-      "lId": "69c238cc4630f0dab9b54799",
-      "lName": "SAMRAJ HOME AUTOMATIONS"
-    },
-    {
-      "vId": "69e761bb37f5bf44832cc015",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69e761bb37f5bf44832cc015",
-      "lId": "69e35c624e61f1ea28bef726",
-      "lName": "MARUTI ENTERPRISES"
-    },
-    {
-      "vId": "69e7648b37f5bf44832cc2e5",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69e7648b37f5bf44832cc2e5",
-      "lId": "69b11770d443363146219921",
-      "lName": "FINE TRAK SYSTEMS"
-    },
-    {
-      "vId": "69ec9b005921b058ca5a482a",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69ec9b005921b058ca5a482a",
-      "lId": "69c238cc4630f0dab9b54799",
-      "lName": "SAMRAJ HOME AUTOMATIONS"
-    },
-    {
-      "vId": "69ecb0755cf44bfcad147811",
-      "lId": "69c238ce4630f0dab9b548cd",
-      "lName": "GLOWMAX ELECTRICALS"
-    },
-    {
-      "vId": "69ecb0755cf44bfcad147811",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69ecb11a5cf44bfcad147cc2",
-      "lId": "69e34d3bdff1be93e3d980ab",
-      "lName": "COGCONS IT INDIA PRIVATE LIMITED-"
-    },
-    {
-      "vId": "69ecb11a5cf44bfcad147cc2",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69ecb1f95cf44bfcad148210",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69ecb1f95cf44bfcad148210",
-      "lId": "69c239c2892c5bf4c4429db6",
-      "lName": "GLOBE13 DIGITAL PVT. LTD."
-    },
-    {
-      "vId": "69edf1228fb3f24cdb08fd3a",
-      "lId": "69b1187799f2e2305b4e8d36",
-      "lName": "RITZ TECHNOLOGY"
-    },
-    {
-      "vId": "69edf1228fb3f24cdb08fd3a",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f09a99ecd8b1ea6a528207",
-      "lId": "69c238cf4630f0dab9b5492c",
-      "lName": "VANGUARD CORPORATION"
-    },
-    {
-      "vId": "69f09a99ecd8b1ea6a528207",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f0a4d0ecd8b1ea6a52b59e",
-      "lId": "69c238cc4630f0dab9b54799",
-      "lName": "SAMRAJ HOME AUTOMATIONS"
-    },
-    {
-      "vId": "69f0a4d0ecd8b1ea6a52b59e",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f5d42c5dbd3413b7f7e5f6",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f5d42c5dbd3413b7f7e5f6",
-      "lId": "69e73e7f4d3f33aa320aff2c",
-      "lName": "HANU IMPEX"
-    },
-    {
-      "vId": "69f869cc64757228c538f8ec",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f869cc64757228c538f8ec",
-      "lId": "69f861368b8ddbd4176206d9",
-      "lName": "RAKESH SHAH"
+      "vId": "69d7985ad7ee6e5a795d5937",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
     },
     {
       "vId": "69f86c2d64757228c538fe3f",
@@ -242,287 +49,36 @@
       "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
     },
     {
-      "vId": "69f8742d64757228c53912ee",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
+      "vId": "69ff820323767e70842886e8",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
     },
     {
-      "vId": "69f8742d64757228c53912ee",
-      "lId": "69e1f56582fffc015d560c0b",
-      "lName": "#SMART LIVING HOME AUTOMATION PVT LTD."
+      "vId": "69ff820323767e70842886e8",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
     },
     {
-      "vId": "69f878e164757228c5391e1f",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f878e164757228c5391e1f",
-      "lId": "69b1187899f2e2305b4e8d95",
-      "lName": "PRISM ELECTRONICS"
-    },
-    {
-      "vId": "69f8796ec2138a5e9081f902",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f8796ec2138a5e9081f902",
-      "lId": "69f87946c2138a5e9081f8c8",
-      "lName": "SALARY PAYABLE"
-    },
-    {
-      "vId": "69f87becc2138a5e90820304",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f87becc2138a5e90820304",
-      "lId": "69f87bc6c2138a5e90820298",
-      "lName": "GO DADDY - DOMAIN CHARGES"
-    },
-    {
-      "vId": "69f87fd5c2138a5e908210f7",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f87fd5c2138a5e908210f7",
-      "lId": "69f87fc0c2138a5e908210d0",
-      "lName": "BANK CHARGES"
-    },
-    {
-      "vId": "69f8866b4c228014ac8bb34e",
-      "lId": "69b43f5173caad9b893926b4",
-      "lName": "HDFC BANK"
-    },
-    {
-      "vId": "69f8866b4c228014ac8bb34e",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f888654c228014ac8bbbdd",
-      "lId": "69b43f5173caad9b893926b4",
-      "lName": "HDFC BANK"
-    },
-    {
-      "vId": "69f888654c228014ac8bbbdd",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f888c14c228014ac8bbd8e",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f888c14c228014ac8bbd8e",
-      "lId": "69e75e0537f5bf44832cb9f1",
-      "lName": "PRANAV PUBLICITY"
-    },
-    {
-      "vId": "69f889084c228014ac8bbe0c",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f889084c228014ac8bbe0c",
-      "lId": "69f888f74c228014ac8bbde6",
-      "lName": "GEET MEHTA - DEPOSIT - B -34"
-    },
-    {
-      "vId": "69f8893d4c228014ac8bbe93",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f8893d4c228014ac8bbe93",
-      "lId": "69f8892a4c228014ac8bbe42",
-      "lName": "EMI - BANK OF BARODA MACHINERY LOAN"
-    },
-    {
-      "vId": "69f889f44c228014ac8bbfd7",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f889f44c228014ac8bbfd7",
-      "lId": "69f889c24c228014ac8bbf71",
-      "lName": "ADANI POWER - B 34"
-    },
-    {
-      "vId": "69f88c464c228014ac8bc59e",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f88c464c228014ac8bc59e",
-      "lId": "69f861368b8ddbd4176206d9",
-      "lName": "RAKESH SHAH"
-    },
-    {
-      "vId": "69f88c6e4c228014ac8bc5d8",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f88c6e4c228014ac8bc5d8",
-      "lId": "69e5fa883a88e05674e48101",
-      "lName": "GEETA RAJENDRA MEHTA"
-    },
-    {
-      "vId": "69f88c934c228014ac8bc629",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f88c934c228014ac8bc629",
-      "lId": "69f87fc0c2138a5e908210d0",
-      "lName": "BANK CHARGES"
-    },
-    {
-      "vId": "69f88f054c228014ac8bcf83",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f88f054c228014ac8bcf83",
-      "lId": "69e5f93c3a88e05674e46d5d",
-      "lName": "REKHA JAYANT MEHTA"
-    },
-    {
-      "vId": "69f88f504c228014ac8bd051",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f88f504c228014ac8bd051",
-      "lId": "69f88f3f4c228014ac8bcfee",
-      "lName": "RAJESH CHINA - PURCHASE"
-    },
-    {
-      "vId": "69f890944c228014ac8bd380",
-      "lId": "69b43e3f73caad9b89392659",
-      "lName": "BANK OF BARODA"
-    },
-    {
-      "vId": "69f890944c228014ac8bd380",
-      "lId": "69f87fc0c2138a5e908210d0",
-      "lName": "BANK CHARGES"
+      "vId": "69ff820323767e70842886e8",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
     }
   ],
   "oppositeNamesByVoucher": {
-    "69d75a87d7ee6e5a795d096d": [
-      "ACTIVESTAR LIGHTING LLP"
-    ],
-    "69d75b10d7ee6e5a795d0b4c": [
-      "DYNAM & CO."
-    ],
-    "69dc9e595969646064684153": [
-      "SAMRAJ HOME AUTOMATIONS"
-    ],
-    "69dc9e965969646064684268": [
-      "VARUN PRESSINGS PVT. LTD."
-    ],
-    "69dc9ec65969646064684355": [
-      "SAMRAJ HOME AUTOMATIONS"
-    ],
-    "69dc9ef3596964606468441c": [
-      "TECH2THINK"
-    ],
-    "69e3653b4e61f1ea28bf0e20": [
-      "SAMRAJ HOME AUTOMATIONS"
-    ],
-    "69e761bb37f5bf44832cc015": [
-      "MARUTI ENTERPRISES"
-    ],
-    "69e7648b37f5bf44832cc2e5": [
-      "FINE TRAK SYSTEMS"
-    ],
-    "69ec9b005921b058ca5a482a": [
-      "SAMRAJ HOME AUTOMATIONS"
-    ],
-    "69ecb0755cf44bfcad147811": [
-      "GLOWMAX ELECTRICALS"
-    ],
-    "69ecb11a5cf44bfcad147cc2": [
-      "COGCONS IT INDIA PRIVATE LIMITED-"
-    ],
-    "69ecb1f95cf44bfcad148210": [
-      "GLOBE13 DIGITAL PVT. LTD."
-    ],
-    "69edf1228fb3f24cdb08fd3a": [
-      "RITZ TECHNOLOGY"
-    ],
-    "69f09a99ecd8b1ea6a528207": [
-      "VANGUARD CORPORATION"
-    ],
-    "69f0a4d0ecd8b1ea6a52b59e": [
-      "SAMRAJ HOME AUTOMATIONS"
-    ],
-    "69f5d42c5dbd3413b7f7e5f6": [
-      "HANU IMPEX"
-    ],
-    "69f869cc64757228c538f8ec": [
-      "RAKESH SHAH"
+    "69d7985ad7ee6e5a795d5937": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
+      "IGST Output"
     ],
     "69f86c2d64757228c538fe3f": [
-      "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+      "BANK OF BARODA"
     ],
     "69f86c7e64757228c538ff8d": [
-      "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+      "BANK OF BARODA"
     ],
-    "69f8742d64757228c53912ee": [
-      "#SMART LIVING HOME AUTOMATION PVT LTD."
-    ],
-    "69f878e164757228c5391e1f": [
-      "PRISM ELECTRONICS"
-    ],
-    "69f8796ec2138a5e9081f902": [
-      "SALARY PAYABLE"
-    ],
-    "69f87becc2138a5e90820304": [
-      "GO DADDY - DOMAIN CHARGES"
-    ],
-    "69f87fd5c2138a5e908210f7": [
-      "BANK CHARGES"
-    ],
-    "69f8866b4c228014ac8bb34e": [
-      "HDFC BANK"
-    ],
-    "69f888654c228014ac8bbbdd": [
-      "HDFC BANK"
-    ],
-    "69f888c14c228014ac8bbd8e": [
-      "PRANAV PUBLICITY"
-    ],
-    "69f889084c228014ac8bbe0c": [
-      "GEET MEHTA - DEPOSIT - B -34"
-    ],
-    "69f8893d4c228014ac8bbe93": [
-      "EMI - BANK OF BARODA MACHINERY LOAN"
-    ],
-    "69f889f44c228014ac8bbfd7": [
-      "ADANI POWER - B 34"
-    ],
-    "69f88c464c228014ac8bc59e": [
-      "RAKESH SHAH"
-    ],
-    "69f88c6e4c228014ac8bc5d8": [
-      "GEETA RAJENDRA MEHTA"
-    ],
-    "69f88c934c228014ac8bc629": [
-      "BANK CHARGES"
-    ],
-    "69f88f054c228014ac8bcf83": [
-      "REKHA JAYANT MEHTA"
-    ],
-    "69f88f504c228014ac8bd051": [
-      "RAJESH CHINA - PURCHASE"
-    ],
-    "69f890944c228014ac8bd380": [
-      "BANK CHARGES"
+    "69ff820323767e70842886e8": [
+      "Sales Account",
+      "IGST Output"
     ]
   }
 }
