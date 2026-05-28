@@ -21,6 +21,32 @@ import moment from 'moment';
 import styles from './BackupRestorePage.module.scss';
 import { diagnosticService } from '@/services/diagnostic.service';
 
+/** Read counts from backup index (Mongo uses lowercase collection names). */
+const backupDisplayStats = (backup) => {
+    const ui = backup?.uiCounts || {};
+    const raw = backup?.counts || {};
+    const pick = (...keys) => {
+        for (const key of keys) {
+            if (ui[key] != null) return ui[key];
+            if (raw[key] != null) return raw[key];
+            const lower = key.toLowerCase();
+            const hit = Object.entries(raw).find(([k]) => k.toLowerCase() === lower);
+            if (hit) return hit[1];
+        }
+        return 0;
+    };
+    const totalDocs =
+        backup?.totalDocs ??
+        Object.values(raw).reduce((sum, n) => sum + (Number(n) || 0), 0);
+    return {
+        customers: pick('Customer', 'customers'),
+        invoices: pick('SalesInvoice', 'salesinvoices'),
+        totalDocs,
+        collections: backup?.collectionCount ?? Object.keys(raw).length,
+        dbName: backup?.dbName,
+    };
+};
+
 const BackupRestorePage = () => {
     const [backups, setBackups] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -173,7 +199,7 @@ const BackupRestorePage = () => {
                         </div>
                         <div className={styles.snapshotItem}>
                             <span>Sourcing</span>
-                            <strong>{dbCounts.ChinaSourcingGroup || 0}</strong>
+                            <strong>{dbCounts.WeChatGroup || 0}</strong>
                         </div>
                     </div>
                     <div className={styles.dbStatus}>
@@ -298,7 +324,10 @@ const BackupRestorePage = () => {
                                 <tr>
                                     <td colSpan="5" className={styles.empty}>No backup history found.</td>
                                 </tr>
-                            ) : backups.map((b) => (
+                            ) : backups.map((b) => {
+                                const stats = backupDisplayStats(b);
+                                const looksEmpty = stats.totalDocs < 50 && (b.size || 0) < 100_000;
+                                return (
                                 <tr key={b.id}>
                                     <td>
                                         <div style={{ fontWeight: 600 }}>{moment(b.date).format('DD MMM YYYY')}</div>
@@ -307,12 +336,19 @@ const BackupRestorePage = () => {
                                     <td>
                                         <div style={{ fontSize: '13px' }}>{b.reason}</div>
                                         <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>{b.id}</div>
+                                        {stats.dbName && (
+                                            <div style={{ fontSize: '10px', color: '#64748b' }}>DB: {stats.dbName}</div>
+                                        )}
                                     </td>
                                     <td style={{ color: '#1e293b', fontWeight: 500 }}>{formatSize(b.size)}</td>
                                     <td>
                                         <span className={styles.countInfo}>
-                                            {b.counts?.SalesInvoice || 0} Invoices | {b.counts?.Customer || 0} Cust.
+                                            {stats.invoices} invoices · {stats.customers} customers
                                         </span>
+                                        <div style={{ fontSize: '11px', color: looksEmpty ? '#dc2626' : '#64748b', marginTop: 2 }}>
+                                            {stats.totalDocs.toLocaleString()} docs · {stats.collections} collections
+                                            {looksEmpty ? ' — may be empty; download & check ZIP' : ''}
+                                        </div>
                                     </td>
                                     <td>
                                         <div className={styles.btnGroup}>
@@ -334,7 +370,7 @@ const BackupRestorePage = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            );})}
                         </tbody>
                     </table>
                 </div>

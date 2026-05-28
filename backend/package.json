@@ -13,6 +13,7 @@
         "lint": "eslint .",
         "migrate:company-scope": "node src/scripts/backfillCompanyId.mjs",
         "migrate:to-company": "node src/scripts/migrateDataToCompany.mjs",
+        "repair:from-zip": "node scripts/repairRestoreFromZip.mjs",
         "diag:customers": "node src/scripts/diagCustomerTenant.mjs",
         "test": "node --test test/*.test.js"
     },

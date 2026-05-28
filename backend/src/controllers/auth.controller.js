@@ -89,12 +89,33 @@ export const login = asyncHandler(async (req, res) => {
         throw new ApiError(401, 'Invalid credentials');
     }
 
-    // Update last login
-    user.lastLogin = Date.now();
-    await user.save({ validateBeforeSave: false });
+    const loginFilter = {
+        $or: [{ email: username }, { username: username }],
+    };
 
-    // Remove password from response
-    const populatedUser = await User.findById(user._id).populate('role', 'name');
+    // updateOne avoids user.save() which fails when restore left a broken/missing _id on the doc
+    await User.updateOne(loginFilter, { $set: { lastLogin: new Date() } });
+
+    let userId = user._id;
+    if (!userId) {
+        const raw = await User.collection.findOne(loginFilter, { projection: { _id: 1 } });
+        userId = raw?._id;
+    }
+    if (!userId) {
+        throw new ApiError(
+            500,
+            'User account has no valid id in the database after restore. Run repair: node scripts/repairRestoreFromZip.mjs "path-to-your-backup.zip"'
+        );
+    }
+
+    const populatedUser = await User.findById(userId).populate('role', 'name');
+    if (!populatedUser) {
+        throw new ApiError(
+            500,
+            'Could not load user profile. Re-import the backup ZIP using repairRestoreFromZip.mjs'
+        );
+    }
+
     const finalUserData = populatedUser.toObject();
     delete finalUserData.password;
     
