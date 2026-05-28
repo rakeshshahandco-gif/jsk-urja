@@ -1,10 +1,13 @@
 import apiClient from './api';
 
+/** Large prod→local restores can take several minutes */
+const BACKUP_LONG_TIMEOUT_MS = 15 * 60 * 1000;
+
 export const getBackups = () => 
     apiClient.get('/backups').then(r => r.data);
 
 export const triggerBackup = (reason) => 
-    apiClient.post('/backups/trigger', { reason }).then(r => r.data);
+    apiClient.post('/backups/trigger', { reason }, { timeout: BACKUP_LONG_TIMEOUT_MS }).then(r => r.data);
 
 export const downloadBackup = (id) => {
     // For download, we usually want to use a direct link or blob
@@ -23,12 +26,17 @@ export const downloadBackup = (id) => {
 };
 
 export const restoreBackup = (id) => 
-    apiClient.post(`/backups/restore/${id}`).then(r => r.data);
+    apiClient.post(`/backups/restore/${encodeURIComponent(id)}`, null, {
+        timeout: BACKUP_LONG_TIMEOUT_MS,
+    }).then(r => r.data);
 
 export const uploadBackup = (file) => {
     const formData = new FormData();
     formData.append('file', file);
     return apiClient.post('/backups/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: BACKUP_LONG_TIMEOUT_MS,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
     }).then(r => r.data);
 };
