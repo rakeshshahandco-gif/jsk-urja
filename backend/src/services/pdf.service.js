@@ -807,7 +807,7 @@ class PDFService {
                                         <div class="summary-left">
                                             <div>
                                                 <div style="font-size: 8pt; font-weight: 800; color: #666; margin-bottom: 2px;">REMARKS:</div>
-                                                <div style="font-size: 9pt; color: #333; font-style: italic;">${so.remarks || "—"}</div>
+                                                <div style="font-size: 9pt; color: #333; white-space: pre-wrap;">${so.remarks || "—"}</div>
                                             </div>
                                             <div style="margin-top: 10px;">
                                                 <div style="font-size: 8.5pt; font-weight: 800; color: #666; margin-bottom: 2px;">AMOUNT IN WORDS:</div>
@@ -1096,10 +1096,14 @@ class PDFService {
                                 <div class="summary-section">
                                     <div class="summary-left">
                                         <div style="margin-bottom: 8px;">
+                                            <div style="font-size: 8pt; font-weight: 900; text-transform: uppercase; color: #555; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 4px;">Remarks:</div>
+                                            <div style="font-size: 9pt; color: #333; white-space: pre-wrap; font-style: ${inv.remarks ? 'normal' : 'italic'};">${inv.remarks || '—'}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
                                             <div style="font-size: 8pt; font-weight: 900; text-transform: uppercase; color: #555; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 4px;">Bank Details:</div>
                                             <div style="font-size: 8.5pt; line-height: 1.3;">
                                                 <strong>${company.bankName || 'BANK OF BARODA'}</strong><br />
-                                                Account Name: {company.companyName}<br />
+                                                Account Name: ${company.companyName}<br />
                                                 Account No: ${company.accountNo || '—'}<br />
                                                 IFSC Code: ${company.ifscCode || '—'} | Branch: ${company.branchName || '—'}
                                             </div>

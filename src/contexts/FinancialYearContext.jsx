@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { AuthContext } from './AuthContext';
+import { useCompany } from './CompanyContext';
 import { getFinancialYears } from '../services/financialYearApi';
 import toast from 'react-hot-toast';
 
@@ -21,6 +22,26 @@ export const useFinancialYear = () => {
  * NOTE: This hook is intentionally NOT used by Customers, Tasks,
  * Follow-ups, or any CRM module — those are date-agnostic.
  */
+/** Pick current FY the same way on localhost and Render (2026-2027 when marked current). */
+const pickDefaultFYName = (fys) => {
+    if (!fys?.length) return '';
+    const current = fys.find((fy) => fy.isCurrent && fy.status === 'Active')
+        || fys.find((fy) => fy.isCurrentYear && fy.status === 'Active')
+        || fys.find((fy) => fy.isCurrent)
+        || fys.find((fy) => fy.isCurrentYear)
+        || fys.find((fy) => fy.status === 'Active')
+        || fys[0];
+    return current?.name || '';
+};
+
+// Accept both "2026-27" and "2026-2027" across environments.
+const normalizeFY = (name) => {
+    const s = String(name || '').trim();
+    const m = /^(\d{4})-(\d{2})$/.exec(s);
+    if (!m) return s;
+    return `${m[1]}-20${m[2]}`;
+};
+
 export const useFYDateRange = () => {
     const { financialYears, selectedFY } = useFinancialYear();
 
@@ -43,25 +64,32 @@ export const useFYDateRange = () => {
 };
 
 export const FinancialYearProvider = ({ children }) => {
+    const { selectedCompany, loading: companyLoading } = useCompany();
     const [financialYears, setFinancialYears] = useState([]);
     const [selectedFY, setSelectedFY] = useState(localStorage.getItem('selectedFY') || '');
     const [loading, setLoading] = useState(true);
 
     const refreshFYs = async () => {
+        if (!selectedCompany?._id) return;
         try {
             setLoading(true);
             const response = await getFinancialYears();
-            const fys = response.data || [];
+            const fys = Array.isArray(response?.data) ? response.data : [];
             setFinancialYears(fys);
 
-            // Auto-select: prefer isCurrent flag, then first Active, then first overall
-            const storedFY = localStorage.getItem('selectedFY');
-            if (!storedFY && fys.length > 0) {
-                const current = fys.find(fy => fy.isCurrent && fy.status === 'Active')
-                    || fys.find(fy => fy.isCurrentYear && fy.status === 'Active')
-                    || fys.find(fy => fy.status === 'Active')
-                    || fys[0];
-                handleFYChange(current.name);
+            if (fys.length === 0) return;
+
+            const storedFYRaw = (localStorage.getItem('selectedFY') || '').trim();
+            const storedFY = normalizeFY(storedFYRaw);
+            const storedValid = storedFY && fys.some((fy) => normalizeFY(fy.name) === storedFY);
+            if (storedValid) {
+                const exact = fys.find((fy) => normalizeFY(fy.name) === storedFY)?.name || storedFY;
+                setSelectedFY(exact);
+                localStorage.setItem('selectedFY', exact);
+            } else {
+                // Invalid / empty stored FY (new Render host) → same default as localhost
+                const defName = pickDefaultFYName(fys);
+                if (defName) handleFYChange(defName);
             }
         } catch (error) {
             console.error('Failed to fetch financial years:', error);
@@ -78,11 +106,12 @@ export const FinancialYearProvider = ({ children }) => {
 
     const { token } = useContext(AuthContext) || {};
 
+    // FY list requires X-Company-Id — load only after company is selected.
     useEffect(() => {
-        if (token) {
+        if (token && selectedCompany?._id && !companyLoading) {
             refreshFYs();
         }
-    }, [token]);
+    }, [token, selectedCompany?._id, companyLoading]);
 
     // Derive the full object for the selected FY
     const selectedFYObject = useMemo(

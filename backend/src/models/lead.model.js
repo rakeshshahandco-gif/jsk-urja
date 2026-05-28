@@ -74,6 +74,10 @@ const leadSchema = new mongoose.Schema(
             messageText: { type: String, trim: true, default: '' },
             receivedAt: { type: Date, default: null },
             threadRef: { type: String, trim: true, default: '' },
+            whatsappChatId: { type: String, trim: true, default: '' },
+            whatsappName: { type: String, trim: true, default: '' },
+            rawWhatsAppId: { type: String, trim: true, default: '' },
+            normalizedMobile: { type: String, trim: true, default: '' },
             attachments: [
                 {
                     url: { type: String, trim: true, default: '' },

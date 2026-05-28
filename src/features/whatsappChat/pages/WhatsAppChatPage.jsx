@@ -35,6 +35,49 @@ const chatDisplayName = (chat) => {
     return `+${chat.phone || chat.jid.split('@')[0]}`;
 };
 
+const normalizeLeadMobile = (raw = '') => {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length === 10) return `+91${digits}`;
+    if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    return '';
+};
+
+const MOBILE_JID_DOMAINS = new Set(['s.whatsapp.net', 'c.us']);
+
+function normalizeWhatsAppMobile(selectedChat) {
+    const jid = String(selectedChat?.jid || '');
+    const [jidLeft, jidDomain] = jid.includes('@') ? jid.split('@') : ['', ''];
+    const isGroup = jidDomain === 'g.us' || Boolean(selectedChat?.isGroup);
+
+    if (isGroup) {
+        return {
+            isGroup: true,
+            normalizedMobile: '',
+            rawWhatsAppId: jid || '',
+            warning: 'This is a WhatsApp group. Please select a participant/contact mobile before creating lead.',
+        };
+    }
+
+    const fromDirectJid = MOBILE_JID_DOMAINS.has(jidDomain) ? normalizeLeadMobile(jidLeft) : '';
+    const fromChatMeta = normalizeLeadMobile(
+        selectedChat?.phone
+        || selectedChat?.contactMobile
+        || selectedChat?.mobile
+        || selectedChat?.whatsappNumber
+        || selectedChat?.number
+        || ''
+    );
+    const normalizedMobile = fromDirectJid || fromChatMeta || '';
+    return {
+        isGroup: false,
+        normalizedMobile,
+        rawWhatsAppId: jid || '',
+        warning: normalizedMobile ? '' : 'Mobile number could not be detected from selected WhatsApp contact. Please enter mobile manually.',
+    };
+}
+
 const BADGE_LABELS = {
     group:    { label: 'Group',    color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
     customer: { label: 'Customer', color: '#0369a1', bg: '#eff6ff', border: '#bfdbfe' },
@@ -84,6 +127,9 @@ const MessageBubble = ({ m, onContextMenu }) => {
         <div
             className={`${styles.bubble} ${m.direction === 'out' ? styles.bubbleOut : styles.bubbleIn}`}
             onContextMenu={(e) => onContextMenu?.(e, m)}
+            onMouseDown={(e) => {
+                if (e.button === 2) onContextMenu?.(e, m);
+            }}
             title="Right-click for actions (Add as Lead, Copy)"
         >
             <div className={styles.bubbleText}>
@@ -146,10 +192,14 @@ const WhatsAppChatPage = () => {
     // generic "last 8 messages" preview — populated by the per-message
     // right-click "Add as Lead from this message" action.
     const [convertOverrideText, setConvertOverrideText] = useState(null);
+    const [convertOverrideMobile, setConvertOverrideMobile] = useState(null);
+    const [convertOverrideName, setConvertOverrideName] = useState(null);
+    const [convertMeta, setConvertMeta] = useState({ whatsappChatId: '', rawWhatsAppId: '', normalizedMobile: '', isGroup: false });
 
     // Right-click context menu state for individual message bubbles.
     // `{ x, y, message }` when open, null when closed.
     const [ctxMenu, setCtxMenu] = useState(null);
+    const ctxMenuRef = useRef(null);
 
     // ── Start-new-chat state ───────────────────────────────────────────────
     const [newChatOpen, setNewChatOpen] = useState(false);
@@ -361,7 +411,7 @@ const WhatsAppChatPage = () => {
 
     // ── Derive helpers for the active chat ─────────────────────────────────
     const activeChat = chats.find((c) => c.jid === activeJid);
-    const activePhone = activeChat?.phone || (activeJid ? activeJid.split('@')[0] : '');
+    const activePhone = activeChat?.phone || '';
     const recentChatText = useMemo(() => {
         // Last 8 messages as a single text block — used to pre-fill the
         // "Convert to Lead" modal so user doesn't have to copy/paste.
@@ -414,6 +464,8 @@ const WhatsAppChatPage = () => {
     const handleLeadCreated = (lead) => {
         setCreatedLead(lead);
         setConvertOpen(false);
+        setConvertOverrideMobile(null);
+        setConvertOverrideName(null);
         toast.success('Lead created from this chat.');
     };
 
@@ -427,6 +479,24 @@ const WhatsAppChatPage = () => {
             setFollowUpOpen(true);
             setConvertOpen(true);
         }
+    };
+
+    const openLeadModalForSelectedChat = () => {
+        const selected = activeChat || null;
+        const mobileInfo = normalizeWhatsAppMobile(selected);
+        if (mobileInfo.warning) {
+            toast.error(mobileInfo.warning);
+        }
+        setConvertOverrideName(selected?.isGroup ? chatDisplayName(selected) : null);
+        setConvertOverrideMobile(selected?.isGroup ? '' : (mobileInfo.normalizedMobile || ''));
+        setConvertOverrideText(null);
+        setConvertMeta({
+            whatsappChatId: selected?.jid || activeJid || '',
+            rawWhatsAppId: mobileInfo.rawWhatsAppId || selected?.jid || '',
+            normalizedMobile: selected?.isGroup ? '' : (mobileInfo.normalizedMobile || ''),
+            isGroup: Boolean(mobileInfo.isGroup),
+        });
+        setConvertOpen(true);
     };
 
     // ── Right-click menu on a chat bubble ──────────────────────────────────
@@ -444,14 +514,15 @@ const WhatsAppChatPage = () => {
     // Close the menu on any outside click / Escape / another right-click.
     useEffect(() => {
         if (!ctxMenu) return;
-        const onAnyClick = () => closeCtxMenu();
+        const onPointerDown = (e) => {
+            if (ctxMenuRef.current && ctxMenuRef.current.contains(e.target)) return;
+            closeCtxMenu();
+        };
         const onKey = (e) => { if (e.key === 'Escape') closeCtxMenu(); };
-        window.addEventListener('click', onAnyClick);
-        window.addEventListener('contextmenu', onAnyClick);
+        window.addEventListener('mousedown', onPointerDown);
         window.addEventListener('keydown', onKey);
         return () => {
-            window.removeEventListener('click', onAnyClick);
-            window.removeEventListener('contextmenu', onAnyClick);
+            window.removeEventListener('mousedown', onPointerDown);
             window.removeEventListener('keydown', onKey);
         };
     }, [ctxMenu]);
@@ -469,7 +540,23 @@ const WhatsAppChatPage = () => {
         const m = ctxMenu?.message;
         closeCtxMenu();
         if (!m) return;
+        const fromParticipant = m.direction === 'in' && activeChat?.isGroup
+            ? normalizeLeadMobile(String(m.participant || '').split('@')[0] || '')
+            : '';
+        const base = normalizeWhatsAppMobile(activeChat);
+        const selectedPhone = fromParticipant || base.normalizedMobile;
+        const selectedName = activeChat?.isGroup
+            ? (fromParticipant ? `WhatsApp ${normalizeLeadMobile(fromParticipant)}` : (activeChat?.chatName || ''))
+            : (activeChat?.crmCustomerName || activeChat?.chatName || (selectedPhone ? `WhatsApp ${normalizeLeadMobile(selectedPhone)}` : ''));
         setConvertOverrideText(oneMessageAsLeadText(m));
+        setConvertOverrideMobile(normalizeLeadMobile(selectedPhone));
+        setConvertOverrideName(selectedName);
+        setConvertMeta({
+            whatsappChatId: activeChat?.jid || activeJid || '',
+            rawWhatsAppId: String(m.participant || activeChat?.jid || activeJid || ''),
+            normalizedMobile: normalizeLeadMobile(selectedPhone),
+            isGroup: Boolean(activeChat?.isGroup),
+        });
         setConvertOpen(true);
     };
 
@@ -485,6 +572,12 @@ const WhatsAppChatPage = () => {
             toast.error('Could not copy');
         }
     };
+
+    useEffect(() => {
+        setConvertOverrideText(null);
+        setConvertOverrideName(null);
+        setConvertOverrideMobile(null);
+    }, [activeJid]);
 
     // ── Send composer ──────────────────────────────────────────────────────
     const handleSend = async (e) => {
@@ -744,7 +837,7 @@ const WhatsAppChatPage = () => {
                                 <button
                                     type="button"
                                     className={styles.actionBtn}
-                                    onClick={() => setConvertOpen(true)}
+                                    onClick={openLeadModalForSelectedChat}
                                     title="Convert this chat into a Lead"
                                 >
                                     <UserPlus size={15} />
@@ -828,10 +921,14 @@ const WhatsAppChatPage = () => {
                     setConvertOpen(false);
                     setFollowUpOpen(false);
                     setConvertOverrideText(null);
+                    setConvertOverrideMobile(null);
+                    setConvertOverrideName(null);
                 }}
                 onCreated={(lead) => {
                     handleLeadCreated(lead);
                     setConvertOverrideText(null);
+                    setConvertOverrideMobile(null);
+                    setConvertOverrideName(null);
                     if (followUpOpen && lead?._id) {
                         // user clicked "Follow-up" without a lead — now we have one,
                         // jump to the lead detail page to add the follow-up there.
@@ -843,13 +940,32 @@ const WhatsAppChatPage = () => {
                 // so the modal opens pre-filled with JUST that one message
                 // instead of the generic last-8-messages preview.
                 initialMessageText={convertOverrideText != null ? convertOverrideText : recentChatText}
-                initialCustomerMobile={activePhone ? `+${activePhone}` : ''}
-                initialCustomerName={activeChat?.isGroup ? '' : ''}
+                initialCustomerMobile={
+                    convertOverrideMobile != null
+                        ? convertOverrideMobile
+                        : normalizeWhatsAppMobile(activeChat).normalizedMobile
+                }
+                initialCustomerName={
+                    activeChat?.isGroup
+                        ? (chatDisplayName(activeChat) || activeChat?.chatName || '')
+                        : (
+                            convertOverrideName != null
+                                ? convertOverrideName
+                                : (activeChat?.crmCustomerName
+                                    || activeChat?.chatName
+                                    || (activePhone ? `WhatsApp +${activePhone}` : ''))
+                        )
+                }
+                whatsappChatId={convertMeta.whatsappChatId || activeChat?.jid || activeJid || ''}
+                rawWhatsAppId={convertMeta.rawWhatsAppId || activeChat?.jid || activeJid || ''}
+                normalizedMobile={convertMeta.normalizedMobile || normalizeWhatsAppMobile(activeChat).normalizedMobile}
+                isGroupChat={Boolean(convertMeta.isGroup || activeChat?.isGroup)}
             />
 
             {/* Right-click context menu over chat bubbles */}
             {ctxMenu && (
                 <div
+                    ref={ctxMenuRef}
                     className={styles.ctxMenu}
                     style={{ left: ctxMenu.x, top: ctxMenu.y }}
                     onClick={(e) => e.stopPropagation()}

@@ -5,7 +5,6 @@ import { rollbackStockLedger, recalculateStockLedger } from '../utils/stockUtils
 import { Item } from '../models/item.model.js';
 import Customer from '../models/customer.model.js';
 import Distributor from '../models/distributor.model.js';
-import { SalesOrder } from '../models/salesOrder.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -27,22 +26,51 @@ import {
     shouldDeductStockOnSales,
     shouldPostSalesLedger,
 } from '../services/companyFeatureSettings.service.js';
+import { EwayBill } from '../models/ewayBill.model.js';
+import { checkUserPermission } from '../utils/permissionUtils.js';
+import {
+    recalculateSalesOrderBillingFromInvoices,
+    prepareSalesOrderForInvoiceCreation,
+    resolveSalesOrderId,
+} from '../utils/salesOrderBilling.utils.js';
+import logger from '../utils/logger.js';
+
+/** Admin/superadmin by role, or explicit User Rights permission. */
+export function assertSalesInvoiceAdminAction(user, action) {
+    const roleName = (user?.role?.name || user?.roleName || '').toLowerCase();
+    if (roleName === 'superadmin' || roleName === 'admin') return;
+    const permissionKey = action === 'cancel'
+        ? 'sales.sales_invoices.cancel'
+        : 'sales.sales_invoices.delete';
+    if (!checkUserPermission(user, permissionKey)) {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            `Permission denied: ${permissionKey} required`
+        );
+    }
+}
 
 export const createSalesInvoice = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const body = req.body;
-        
+        const linkedSoId = resolveSalesOrderId(body);
+
+        if (linkedSoId) {
+            await prepareSalesOrderForInvoiceCreation(linkedSoId, session);
+        }
+
         // Financial Year Tagging
         const fy = body.financialYear || getFYFromDate(body.invoiceDate || new Date());
         
         let invoiceNumber = body.invoiceNumber;
         let sequenceNumber = body.sequenceNumber || 0;
         let displayInvoiceNumber = body.displayInvoiceNumber || '';
+        let seriesDoc = null;
 
         if (!invoiceNumber && body.seriesId) {
-            const seriesDoc = await InvoiceSeries.findById(body.seriesId).session(session);
+            seriesDoc = await InvoiceSeries.findById(body.seriesId).session(session);
             if (!seriesDoc) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice series not found');
 
             // --- STRICT RULE: Estimate series cannot have GST ---
@@ -50,8 +78,6 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 if (body.gstApplicable === true) {
                     throw new ApiError(httpStatus.BAD_REQUEST, 'Estimate document is a non-GST document and cannot be included in GSTR-1 or GSTR-3B.');
                 }
-                // Force it just in case frontend sent it as true but no tax was calculated
-                invData.gstApplicable = false;
             }
 
             const numbering = await getNextNumberFromSeries(SalesInvoice, body.seriesId, fy, session);
@@ -69,6 +95,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         
         const invData = {
             ...body,
+            soId: linkedSoId || body.soId || null,
             invoiceNumber,
             displayInvoiceNumber,
             sequenceNumber,
@@ -76,7 +103,11 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             createdBy: req.user.id,
             status: body.status || 'Confirmed',
             paymentStatus: 'Unpaid',
-            numberLocked: body.status === 'Confirmed' // Auto-lock if confirmed
+            numberLocked: body.status === 'Confirmed', // Auto-lock if confirmed
+            gstApplicable:
+                seriesDoc && (seriesDoc.isEstimate === true || seriesDoc.documentType === 'Estimate')
+                    ? false
+                    : body.gstApplicable !== false,
         };
 
         // Map Referral Details if present
@@ -162,8 +193,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 }
             }
         }
-        // Sanitize: ensure soId and other ObjectIds are valid or null
-        if (invData.soId === "" || invData.soId === "null" || invData.soId === "undefined") {
+        if (!invData.soId) {
             delete invData.soId;
         }
 
@@ -303,19 +333,15 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         // Financial Ledger Posting
         const postLedger = !featureSettings || shouldPostSalesLedger(featureSettings);
         if (postLedger) {
-            try {
-                const customer = await Customer.findById(invoice.customerId).session(session);
-                if (customer) {
-                    await autoLinkEntityLedger(customer, 'Customer', session);
-                }
-                await postSalesInvoiceToLedger(invoice, req.user.id, session);
-            } catch (ledgerErr) {
-                console.warn(`[Ledger] Could not post invoice ${invoice.invoiceNumber}: ${ledgerErr.message}`);
+            const customer = await Customer.findById(invoice.customerId).session(session);
+            if (customer) {
+                await autoLinkEntityLedger(customer, 'Customer', session);
             }
+            await postSalesInvoiceToLedger(invoice, req.user.id, session);
         }
 
-        if (body.soId) {
-            await SalesOrder.findByIdAndUpdate(body.soId, { status: 'Invoiced', invoiceId: invoice._id }).session(session);
+        if (invoice.soId) {
+            await recalculateSalesOrderBillingFromInvoices(invoice.soId, session);
         }
 
         if (invoice.totalGpAmount != null) {
@@ -336,6 +362,7 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 
     } catch (error) {
         await session.abortTransaction();
+        logger.error(`[createSalesInvoice] aborted: ${error.message}`, { stack: error.stack });
         throw error;
     } finally {
         session.endSession();
@@ -387,6 +414,14 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
         filter.financialYear = req.query.financialYear;
     }
 
+    if (req.query.estimateOnly === 'true') {
+        const estimateSeriesIds = await InvoiceSeries.find({
+            $or: [{ isEstimate: true }, { documentType: 'Estimate' }],
+        }).distinct('_id');
+        filter.$and = filter.$and || [];
+        filter.$and.push({ seriesId: { $in: estimateSeriesIds } });
+    }
+
     if (search) {
         filter.$and = filter.$and || [];
         filter.$and.push({
@@ -424,7 +459,8 @@ export const getSalesInvoiceById = asyncHandler(async (req, res) => {
         .populate('createdBy', 'name mobile');
         
     if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Invoice not found');
-    
+    if (inv.isDeleted) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Invoice not found');
+
     let ledger = await AccountLedger.findOne({ 
         referenceId: inv.customerId, 
         referenceModel: 'Customer' 
@@ -511,6 +547,11 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
 
         await postSalesInvoiceToLedger(inv, req.user.id, session);
         await inv.save({ session });
+
+        if (inv.soId) {
+            await recalculateSalesOrderBillingFromInvoices(inv.soId, session);
+        }
+
         await session.commitTransaction();
         res.json({ success: true, data: inv });
     } catch (error) {
@@ -522,60 +563,82 @@ export const restoreSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const cancelSalesInvoice = asyncHandler(async (req, res) => {
-    const { reason } = req.body;
-    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Cancellation reason is required');
+    assertSalesInvoiceAdminAction(req.user, 'cancel');
+
+    const {
+        reason,
+        ewayBillCancelStatus,
+        ewayBillCancelRef,
+        ewayBillCancelDate,
+    } = req.body;
+    if (!reason || !String(reason).trim()) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Cancellation reason is required');
+    }
 
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
+        if (inv.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel a deleted invoice');
         if (inv.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already cancelled');
-        
-        // Safety: If payments exist, they must be unlinked/deleted first to avoid mismatch
-        if (inv.paidAmount > 0) throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded. Please delete payments first.');
-        
+
+        if (inv.paidAmount > 0) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot cancel with payments recorded. Please delete payments first.');
+        }
+
+        const ewayDoc = await EwayBill.findOne({ salesInvoiceId: inv._id }).session(session).lean();
+        const hasEwayBill = !!ewayDoc && ewayDoc.status !== 'Cancelled';
+
         const oldStatus = inv.status;
         const invoiceNo = inv.invoiceNumber;
 
-        // 1. Update Invoice Status
         inv.status = 'Cancelled';
         inv.paymentStatus = 'Cancelled';
-        inv.cancelReason = reason;
+        inv.cancelReason = String(reason).trim();
         inv.cancelledAt = new Date();
         inv.cancelledBy = req.user.id;
+        if (ewayBillCancelStatus) inv.ewayBillCancelStatus = ewayBillCancelStatus;
+        if (ewayBillCancelRef) inv.ewayBillCancelRef = String(ewayBillCancelRef).trim();
+        if (ewayBillCancelDate) inv.ewayBillCancelDate = new Date(ewayBillCancelDate);
         inv.updatedBy = req.user.id;
         await inv.save({ session });
 
-        // 2. Reverse Stock Effects
         await rollbackStockLedger(inv._id, session);
-
-        // 3. Reverse Financial Ledger Impact (Vouchers/Ledger entries)
         await reverseInvoiceLedgerImpact(invoiceNo, session);
 
-        // 4. Audit Trail with Full Snapshot
         await AuditLog.create([{
             user: req.user.id,
             action: 'CANCEL',
             module: 'SalesInvoice',
             resourceId: inv._id,
             description: `CANCELLED Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER PERMANENTLY BLOCKED.`,
-            details: { 
-                reason, 
-                invoiceNo, 
-                snapshot: inv.toObject(),
-                previousStatus: oldStatus 
+            details: {
+                reason,
+                invoiceNo,
+                previousStatus: oldStatus,
+                hasEwayBill,
+                ewayBillStatus: ewayDoc?.status || null,
+                ewayBillNo: ewayDoc?.ewayBillNo || '',
+                ewayBillCancelStatus: inv.ewayBillCancelStatus,
+                ewayBillCancelRef: inv.ewayBillCancelRef,
+                ewayBillCancelDate: inv.ewayBillCancelDate,
             },
             ipAddress: req.ip,
-            userAgent: req.headers['user-agent']
+            userAgent: req.headers['user-agent'],
         }], { session });
 
-        // Link SO back if it was linked (Optional: User might want to re-invoice or SO stays cancelled)
-        // Leaving SO as 'Invoiced' but maybe user wants it back to 'Confirmed'? 
-        // Rule usually says Cancelled invoice means the transaction is DEAD.
-        
+        if (inv.soId) {
+            await recalculateSalesOrderBillingFromInvoices(inv.soId, session);
+        }
+
         await session.commitTransaction();
-        res.json({ success: true, data: inv, message: `Invoice ${invoiceNo} cancelled. This number will not be reused.` });
+        res.json({
+            success: true,
+            data: inv,
+            hasEwayBill,
+            message: `Invoice ${invoiceNo} cancelled. This number will not be reused.`,
+        });
     } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -585,88 +648,92 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const deleteSalesInvoice = asyncHandler(async (req, res) => {
+    assertSalesInvoiceAdminAction(req.user, 'delete');
+
     const { reason } = req.body;
-    if (!reason) throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required for administrative tracking');
+    if (!reason || !String(reason).trim()) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required for administrative tracking');
+    }
 
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const inv = await SalesInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
-        
-        const invoiceNo = inv.invoiceNumber;
+        if (inv.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already deleted');
 
-        // 1. Payment Check
+        const invoiceNo = inv.invoiceNumber;
+        const displayNo = inv.displayInvoiceNumber || invoiceNo;
+
         if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
             throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${invoiceNo} cannot be deleted because payments are linked.`);
         }
 
-        // 2. STRICT SEQUENCE CHECK (Rule 3)
-        // Reuse is ONLY allowed if this is the highest number in the series.
         if (inv.seriesId) {
-            const series = await InvoiceSeries.findById(inv.seriesId).session(session);
-            if (series) {
-                // Calculate what the current "last generated string" is
-                const currentLastStr = series.prefix + String(series.currentNumber).padStart(series.padLength, '0');
-                
-                if (invoiceNo !== currentLastStr) {
-                    throw new ApiError(httpStatus.BAD_REQUEST, 
-                        `STRICT RULE: Only the LATEST invoice (${currentLastStr}) can be DELETED to reuse its number. ` +
-                        `Invoice ${invoiceNo} is in the middle of the sequence. Please CANCEL it instead to block the number.`
-                    );
-                }
-                
-                // If it is the latest, we decrement the counter
-                series.currentNumber = Math.max((series.startNumber || 1) - 1, series.currentNumber - 1);
-                await series.save({ session });
+            const fy = inv.financialYear;
+            const lastSeq = await getLatestSequenceNumber(SalesInvoice, inv.seriesId, fy, session);
+            const thisSeq = inv.sequenceNumber || extractSequenceNumber(
+                (await InvoiceSeries.findById(inv.seriesId).session(session))?.prefix || '',
+                displayNo
+            );
+
+            if (thisSeq < lastSeq) {
+                throw new ApiError(
+                    httpStatus.BAD_REQUEST,
+                    `Only the latest invoice in the series can be deleted to reuse its number. ` +
+                    `Invoice ${invoiceNo} is not the latest (latest sequence: ${lastSeq}). Use Cancel instead to permanently block this number.`
+                );
             }
         }
 
-        // 3. Mark as Deleted & Free Number (Rename original doc for audit)
-        inv.isDeleted = true;
-        inv.deletedAt = new Date();
-        inv.deletedBy = req.user.id;
-        inv.deleteReason = reason;
-        inv.status = 'Cancelled';
-        
-        // Rename original invoice number in the record to allow reuse of the string in new creations
-        const renamedNumber = `${invoiceNo}-DEL-${Date.now()}`;
-        inv.invoiceNumber = renamedNumber;
-
-        // 4. Reverse All Impacts
         await rollbackStockLedger(inv._id, session);
         await reverseInvoiceLedgerImpact(invoiceNo, session);
 
+        inv.originalInvoiceNumber = invoiceNo;
+        inv.isDeleted = true;
+        inv.deletedAt = new Date();
+        inv.deletedBy = req.user.id;
+        inv.deleteReason = String(reason).trim();
+        inv.updatedBy = req.user.id;
+
+        const renamedNumber = `${invoiceNo}-DEL-${Date.now()}`;
+        inv.invoiceNumber = renamedNumber;
+        if (inv.displayInvoiceNumber) {
+            inv.displayInvoiceNumber = `${displayNo}-DEL-${Date.now()}`;
+        }
+
         await inv.save({ session });
-        
-        // 5. Audit Log with reason and original sequence info
+
+        if (inv.seriesId) {
+            await recomputeSeriesState(SalesInvoice, inv.seriesId, session);
+        }
+
         await AuditLog.create([{
             user: req.user.id,
             action: 'DELETE',
             module: 'SalesInvoice',
             resourceId: inv._id,
-            description: `DELETED latest Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER FREED FOR REUSE.`,
-            details: { 
-                reason, 
+            description: `DELETED Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER FREED FOR REUSE WHEN LATEST.`,
+            details: {
+                reason,
                 originalNumber: invoiceNo,
                 renamedTo: renamedNumber,
-                seriesId: inv.seriesId
+                seriesId: inv.seriesId,
+                sequenceNumber: inv.sequenceNumber,
             },
             ipAddress: req.ip,
-            userAgent: req.headers['user-agent']
+            userAgent: req.headers['user-agent'],
         }], { session });
 
-        // 6. Restore SO back to 'Confirmed' so it can be re-invoiced
         if (inv.soId) {
-            await SalesOrder.findByIdAndUpdate(inv.soId, { 
-                status: 'Confirmed', 
-                invoiceId: null 
-            }).session(session);
+            await recalculateSalesOrderBillingFromInvoices(inv.soId, session);
         }
 
         await session.commitTransaction();
-        res.json({ success: true, message: `Invoice ${invoiceNo} deleted successfully. The number is now available for the next entry.` });
-
+        res.json({
+            success: true,
+            message: `Invoice ${invoiceNo} deleted successfully. The number is now available for the next entry when it was the latest.`,
+        });
     } catch (error) {
         await session.abortTransaction();
         throw error;

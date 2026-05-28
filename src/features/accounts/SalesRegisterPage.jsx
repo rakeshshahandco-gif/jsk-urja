@@ -121,6 +121,7 @@ export default function SalesRegisterPage() {
   const filteredData = useMemo(() => {
     if (tab === "gstr1" || tab === "gstr3b") {
       return data.filter(inv => {
+        if (inv.status === 'Cancelled' || inv.registerStatus === 'CANCELLED') return false;
         const isEstimate = inv.seriesId?.isEstimate === true || inv.seriesId?.documentType === 'Estimate';
         if (isEstimate) return false;
         if (inv.seriesId?.gstApplicable === false) return false;
@@ -138,6 +139,7 @@ export default function SalesRegisterPage() {
   }, [data, tab]);
 
   const totals = filteredData.reduce((acc, inv) => {
+    if (inv.status === 'Cancelled' || inv.registerStatus === 'CANCELLED') return acc;
     acc.taxable += inv.totalTaxableAmount || inv.totalBeforeTax || 0;
     acc.tax += inv.totalTaxAmount || inv.totalGst || 0;
     acc.igst += inv.totalIgst || 0;
@@ -355,7 +357,16 @@ export default function SalesRegisterPage() {
                       return (
                         <tr key={`${inv._id}-${idx}`}>
                           <td className="font-bold text-slate-400">{idx === 0 ? fmtDate(inv.invoiceDate) : ""}</td>
-                          <td className={s.primaryId}>{idx === 0 ? inv.invoiceNumber : ""}</td>
+                          <td className={s.primaryId}>
+                            {idx === 0 ? (
+                              <>
+                                {inv.invoiceNumber}
+                                {(inv.status === 'Cancelled' || inv.registerStatus === 'CANCELLED') && (
+                                  <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: '#dc2626', background: '#fef2f2', padding: '2px 8px', borderRadius: 4, border: '1px solid #fca5a5' }}>CANCELLED</span>
+                                )}
+                              </>
+                            ) : ""}
+                          </td>
                           <td className={s.customerName}>{idx === 0 ? inv.customerName : ""}</td>
                           <td className="text-[10px] uppercase font-bold text-slate-400">{idx === 0 ? (inv.customerGstin || "URP") : ""}</td>
                           {tab === "register_inv" && (

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getCompanyProfile, updateCompanyProfile } from '@/services/settingsApi';
+import { useCompany } from '@/contexts/CompanyContext';
 import InvoiceBarcodeSettingsCard from './InvoiceBarcodeSettingsCard';
 import toast from 'react-hot-toast';
 
@@ -27,6 +28,7 @@ const lbl = {
 };
 
 export default function CompanyProfilePage() {
+    const { selectedCompany } = useCompany();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [profile, setProfile] = useState({
@@ -53,43 +55,46 @@ export default function CompanyProfilePage() {
         logoHeight: 65,
     });
 
-    useEffect(() => {
-        fetchProfile();
-    }, []);
-
-    const fetchProfile = async () => {
+    const fetchProfile = useCallback(async () => {
+        if (!selectedCompany?._id) return;
         try {
+            setLoading(true);
             const res = await getCompanyProfile();
-            if (res.data) {
+            const row = res?.data || res;
+            if (row) {
                 setProfile({
-                    companyName: res.data.companyName || '',
-                    address: res.data.address || '',
-                    city: res.data.city || '',
-                    state: res.data.state || '',
-                    stateCode: res.data.stateCode || '',
-                    pincode: res.data.pincode || '',
-                    gstNumber: res.data.gstNumber || '',
-                    panNumber: res.data.panNumber || '',
-                    email: res.data.email || '',
-                    phone: res.data.phone || '',
-                    urn: res.data.urn || '',
-                    cin: res.data.cin || '',
-                    aatoBracket: res.data.aatoBracket || 'Up to 5Cr',
-                    gstFilingFrequency: res.data.gstFilingFrequency || 'Monthly',
-                    bankName: res.data.bankName || '',
-                    accountNo: res.data.accountNo || '',
-                    branchName: res.data.branchName || '',
-                    ifscCode: res.data.ifscCode || '',
-                    logoUrl: res.data.logoUrl || '',
-                    logoHeight: res.data.logoHeight || 65,
+                    companyName: row.companyName || '',
+                    address: row.address || '',
+                    city: row.city || '',
+                    state: row.state || '',
+                    stateCode: row.stateCode || '',
+                    pincode: row.pincode || '',
+                    gstNumber: row.gstNumber || '',
+                    panNumber: row.panNumber || '',
+                    email: row.email || '',
+                    phone: row.phone || '',
+                    urn: row.urn || '',
+                    cin: row.cin || '',
+                    aatoBracket: row.aatoBracket || 'Up to 5Cr',
+                    gstFilingFrequency: row.gstFilingFrequency || 'Monthly',
+                    bankName: row.bankName || '',
+                    accountNo: row.accountNo || '',
+                    branchName: row.branchName || '',
+                    ifscCode: row.ifscCode || '',
+                    logoUrl: row.logoUrl || '',
+                    logoHeight: row.logoHeight || 65,
                 });
             }
         } catch (error) {
-            toast.error('Failed to load company profile');
+            toast.error(error.response?.data?.message || 'Failed to load company profile');
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedCompany?._id]);
+
+    useEffect(() => {
+        fetchProfile();
+    }, [fetchProfile]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;

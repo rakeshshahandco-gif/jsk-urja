@@ -1,5 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
 import catchAsync from '../utils/catchAsync.js';
 import WhatsAppMessage from '../models/whatsappMessage.model.js';
 import Customer from '../models/customer.model.js';
@@ -22,6 +24,97 @@ const companyIdFrom = (req) =>
 const last10 = (raw) => {
     const d = String(raw || '').replace(/\D/g, '');
     return d.length >= 10 ? d.slice(-10) : d;
+};
+
+const PHONE_JID_DOMAINS = new Set(['s.whatsapp.net', 'c.us']);
+const phoneFromJid = (jid) => {
+    const raw = String(jid || '');
+    if (!raw.includes('@')) return '';
+    const [left, domain] = raw.split('@');
+    if (!PHONE_JID_DOMAINS.has(domain)) return '';
+    const digits = String(left || '').replace(/\D/g, '');
+    if (digits.length === 10) return digits;
+    if (digits.length === 12 && digits.startsWith('91')) return digits;
+    return '';
+};
+
+const normalizeMobile = (raw) => {
+    const d = String(raw || '').replace(/\D/g, '');
+    if (!d) return '';
+    if (d.length === 10) return d;
+    if (d.length === 12 && d.startsWith('91')) return d;
+    return '';
+};
+
+const readLidReverseMobile = (userId, lid) => {
+    try {
+        const digits = String(lid || '').replace(/\D/g, '');
+        if (!digits) return '';
+        const directCandidates = [
+            // when backend runs from repo/backend
+            path.join(process.cwd(), '.whatsapp-auth', String(userId), `lid-mapping-${digits}_reverse.json`),
+            // when backend runs from repo root
+            path.join(process.cwd(), 'backend', '.whatsapp-auth', String(userId), `lid-mapping-${digits}_reverse.json`),
+        ];
+        const directPath = directCandidates.find((x) => fs.existsSync(x));
+        if (directPath) {
+            const raw = fs.readFileSync(directPath, 'utf8');
+            // file content is a JSON string like: "919323135895"
+            const parsed = JSON.parse(raw);
+            return normalizeMobile(parsed);
+        }
+
+        // Fallback: sometimes the active auth folder is not req.user.id (legacy session).
+        // Scan all auth dirs for reverse mapping by lid.
+        const authRoots = [
+            path.join(process.cwd(), '.whatsapp-auth'),
+            path.join(process.cwd(), 'backend', '.whatsapp-auth'),
+        ].filter((p) => fs.existsSync(p));
+
+        for (const root of authRoots) {
+            const dirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
+            for (const d of dirs) {
+                const rp = path.join(root, d.name, `lid-mapping-${digits}_reverse.json`);
+                if (fs.existsSync(rp)) {
+                    const raw = fs.readFileSync(rp, 'utf8');
+                    const parsed = JSON.parse(raw);
+                    const nm = normalizeMobile(parsed);
+                    if (nm) return nm;
+                }
+
+                // Forward-map fallback:
+                // file: lid-mapping-<phone>.json => "<lid>"
+                // If file content matches current lid, derive phone from filename.
+                const dirPath = path.join(root, d.name);
+                const files = fs.readdirSync(dirPath).filter((f) => /^lid-mapping-\d+\.json$/i.test(f));
+                for (const f of files) {
+                    const fp = path.join(dirPath, f);
+                    let mappedLid = '';
+                    try {
+                        mappedLid = String(JSON.parse(fs.readFileSync(fp, 'utf8')) || '').replace(/\D/g, '');
+                    } catch {
+                        mappedLid = '';
+                    }
+                    if (!mappedLid) continue;
+                    // Some JIDs/LIDs carry suffix fragments (device/addressing artifacts).
+                    // Accept direct, prefix, or suffix match so we still resolve true phone mapping.
+                    const lidMatched =
+                        mappedLid === digits
+                        || mappedLid.endsWith(digits)
+                        || digits.endsWith(mappedLid)
+                        || mappedLid.includes(digits)
+                        || digits.includes(mappedLid);
+                    if (!lidMatched) continue;
+                    const phoneFromFile = String(f.match(/^lid-mapping-(\d+)\.json$/i)?.[1] || '');
+                    const nm = normalizeMobile(phoneFromFile);
+                    if (nm) return nm;
+                }
+            }
+        }
+        return '';
+    } catch {
+        return '';
+    }
 };
 
 /**
@@ -53,6 +146,34 @@ const listChats = catchAsync(async (req, res) => {
                 mobile: {
                     $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
                 },
+                contactName: {
+                    $max: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $eq: ['$isContact', true] },
+                                    { $ne: [{ $ifNull: ['$chatName', ''] }, ''] },
+                                ],
+                            },
+                            '$chatName',
+                            null,
+                        ],
+                    },
+                },
+                contactMobile: {
+                    $max: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $eq: ['$isContact', true] },
+                                    { $ne: [{ $ifNull: ['$mobile', ''] }, ''] },
+                                ],
+                            },
+                            '$mobile',
+                            null,
+                        ],
+                    },
+                },
                 isContact: { $max: { $cond: ['$isContact', 1, 0] } },
                 lastText: { $first: '$text' },
                 lastDirection: { $first: '$direction' },
@@ -73,11 +194,67 @@ const listChats = catchAsync(async (req, res) => {
         { $limit: 500 },
     ]);
 
+    // Resolve phone per JID:
+    // 1) contactMobile/mobile columns
+    // 2) direct phone JID formats
+    // 3) WhatsApp LID reverse mapping files in auth state
+    const resolvedPhoneByJid = new Map();
+    const mobileFixBulk = [];
+    for (const r of rows) {
+        if (r.isGroup) {
+            resolvedPhoneByJid.set(r.jid, '');
+            // eslint-disable-next-line no-continue
+            continue;
+        }
+        const basePhone = normalizeMobile(r.contactMobile || r.mobile || phoneFromJid(r.jid));
+        if (basePhone) {
+            resolvedPhoneByJid.set(r.jid, basePhone);
+            if (normalizeMobile(r.mobile) !== basePhone) {
+                mobileFixBulk.push({
+                    updateMany: {
+                        filter: {
+                            userId: new mongoose.Types.ObjectId(userId),
+                            jid: r.jid,
+                            isGroup: false,
+                        },
+                        update: { $set: { mobile: basePhone } },
+                    },
+                });
+            }
+            // eslint-disable-next-line no-continue
+            continue;
+        }
+        const lidFromJid = String(r.jid || '').split('@')[0] || '';
+        const lidFromStoredMobile = String(r.mobile || '');
+        const mappedPhone = readLidReverseMobile(userId, lidFromJid) || readLidReverseMobile(userId, lidFromStoredMobile);
+        resolvedPhoneByJid.set(r.jid, mappedPhone);
+        if (mappedPhone) {
+            mobileFixBulk.push({
+                updateMany: {
+                    filter: {
+                        userId: new mongoose.Types.ObjectId(userId),
+                        jid: r.jid,
+                        isGroup: false,
+                    },
+                    update: { $set: { mobile: mappedPhone } },
+                },
+            });
+        }
+    }
+
+    if (mobileFixBulk.length) {
+        try {
+            await WhatsAppMessage.bulkWrite(mobileFixBulk, { ordered: false });
+        } catch (e) {
+            logger.warn(`[WhatsApp-Chat] mobile fix bulk failed for user=${userId}: ${e.message}`);
+        }
+    }
+
     // ── Map chats to last-10-digit keys for CRM customer lookup ────────────
     const phoneKeySet = new Set();
     for (const r of rows) {
         if (r.isGroup) continue;
-        const key = last10(r.mobile || (r.jid || '').split('@')[0]);
+        const key = last10(resolvedPhoneByJid.get(r.jid) || '');
         if (key && key.length >= 7) phoneKeySet.add(key);
     }
 
@@ -125,7 +302,7 @@ const listChats = catchAsync(async (req, res) => {
 
     // ── Build response rows ─────────────────────────────────────────────────
     const chats = rows.map((r) => {
-        const phone = r.isGroup ? '' : (r.mobile || (r.jid || '').split('@')[0] || '');
+        const phone = r.isGroup ? '' : (resolvedPhoneByJid.get(r.jid) || '');
         const key = last10(phone);
         const customer = !r.isGroup && key ? phoneByCustomer.get(key) : null;
         const isPlaceholder = r.lastMediaType === 'placeholder';
@@ -141,7 +318,7 @@ const listChats = catchAsync(async (req, res) => {
             jid: r.jid,
             isGroup: !!r.isGroup,
             phone,
-            chatName: r.chatName || '',
+            chatName: r.contactName || r.chatName || '',
             isContact: !!r.isContact,
             badge,
             crmCustomerId: customer?.id || null,

@@ -27,7 +27,7 @@ export const ALL_FORMS = [
     // Sales
     { id: 'sales-order', title: 'Sales Order', path: PATHS.SALES.ORDERS, icon: 'sales', permission: 'sales.sales_orders.view', module: 'Sales' },
     { id: 'sales-invoice', title: 'Tax Invoice (GST)', path: PATHS.SALES.INVOICES, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
-    { id: 'estimate', title: 'Estimate / Internal Sale', path: '/sales/estimates', icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
+    { id: 'estimate', title: 'Estimate / Internal Sale', path: PATHS.SALES.ESTIMATES, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'eway-bill', title: 'E-Way Bill Tracking', path: PATHS.EWAY_BILL.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'e-invoice', title: 'E-Invoice / IRN Tracking', path: PATHS.E_INVOICE.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
     { id: 'logistics', title: 'Logistics & Courier Master', path: PATHS.TRANSPORTERS.LIST, icon: 'sales', permission: 'sales.sales_invoices.view', module: 'Sales' },
@@ -35,6 +35,8 @@ export const ALL_FORMS = [
     { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, icon: 'settings', permission: 'admin', module: 'Sales' },
 
     // Purchase
+    { id: 'purchase-rfq', title: 'Purchase RFQ', path: PATHS.PURCHASE.RFQ, icon: 'purchase', permission: 'purchase.purchase_rfq.view', module: 'Purchase' },
+    { id: 'supplier-quotations', title: 'Supplier Quotations', path: PATHS.PURCHASE.SUPPLIER_QUOTATIONS, icon: 'purchase', permission: 'purchase.supplier_quotation.view', module: 'Purchase' },
     { id: 'purchase-order', title: 'Purchase Order', path: PATHS.PURCHASE.ORDERS, icon: 'purchase', permission: 'purchase.purchase_orders.view', module: 'Purchase' },
     { id: 'purchase-invoice', title: 'Purchase Invoice', path: PATHS.PURCHASE.INVOICES, icon: 'purchase', permission: 'purchase.purchase_invoices.view', module: 'Purchase' },
     { id: 'supplier-master', title: 'Supplier Master', path: PATHS.PURCHASE.SUPPLIERS, icon: 'supplier', permission: 'purchase', module: 'Purchase' },

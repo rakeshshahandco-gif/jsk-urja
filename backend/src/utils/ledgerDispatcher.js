@@ -1,6 +1,7 @@
 import { Voucher } from '../models/voucher.model.js';
 import { VoucherType } from '../models/voucherType.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
+import { LedgerEntry } from '../models/ledgerEntry.model.js';
 import { postAccountingEntry } from '../services/accounting/accountingPostingEngine.service.js';
 
 /**
@@ -30,6 +31,17 @@ export const postSalesInvoiceToLedger = async (invoice, userId, session) => {
 
     const voucherNo = invoice.invoiceNumber; // Use invoice number as voucher number for consistency
     const date = invoice.invoiceDate || new Date();
+    const financialYear = invoice.financialYear;
+
+    // Re-use after cancel/delete: remove orphan voucher (compound unique: FY + type + number)
+    const orphanVoucher = await Voucher.findOne({
+        voucherNo,
+        voucherType: vType._id,
+        financialYear,
+    }).session(session);
+    if (orphanVoucher) {
+        await reverseInvoiceLedgerImpact(voucherNo, session, { forceRemove: true });
+    }
 
     // 2. Identify Ledgers
     let customerLedger;
@@ -350,11 +362,12 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
 /**
  * Reverses Financial Impacts when Invoice is Cancelled
  */
-export const reverseInvoiceLedgerImpact = async (voucherNo, session) => {
+export const reverseInvoiceLedgerImpact = async (voucherNo, session, options = {}) => {
+    const { forceRemove = false } = options;
     const voucher = await Voucher.findOne({ voucherNo }).session(session);
     if (!voucher) return;
 
-    if (voucher.status === 'Cancelled') return;
+    if (!forceRemove && voucher.status === 'Cancelled') return;
 
     const entries = await LedgerEntry.find({ voucherId: voucher._id }).session(session);
     for (const entry of entries) {

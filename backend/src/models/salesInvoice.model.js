@@ -156,6 +156,9 @@ const salesInvoiceSchema = new mongoose.Schema({
     cancelledAt: { type: Date, default: null },
     cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     cancelReason: { type: String, default: '' },
+    ewayBillCancelStatus: { type: String, enum: ['', 'Yes', 'No'], default: '' },
+    ewayBillCancelRef: { type: String, default: '' },
+    ewayBillCancelDate: { type: Date, default: null },
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -180,6 +183,8 @@ const salesInvoiceSchema = new mongoose.Schema({
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     deleteReason: { type: String, default: '' },
+    /** Original invoice number preserved when soft-deleted (number released for reuse). */
+    originalInvoiceNumber: { type: String, default: '' },
 
     // Sales / Referral Details (Snapshot from Customer Master)
     salespersonId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

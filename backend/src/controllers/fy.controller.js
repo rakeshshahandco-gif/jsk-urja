@@ -24,7 +24,40 @@ export const createFY = asyncHandler(async (req, res) => {
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, fy, 'Financial Year created successfully'));
 });
 
+/** Ensure at least current + previous Indian FY exist (fresh / Render DB with no rows). */
+const ensureBaselineFinancialYears = async () => {
+    const count = await FinancialYear.countDocuments();
+    if (count > 0) return;
+    const now = new Date();
+    const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const prev = startYear - 1;
+    const rows = [
+        {
+            name: `${prev}-${startYear}`,
+            startDate: new Date(prev, 3, 1),
+            endDate: new Date(startYear, 2, 31, 23, 59, 59),
+            status: 'Active',
+            isCurrent: false,
+        },
+        {
+            name: `${startYear}-${startYear + 1}`,
+            startDate: new Date(startYear, 3, 1),
+            endDate: new Date(startYear + 1, 2, 31, 23, 59, 59),
+            status: 'Active',
+            isCurrent: true,
+        },
+    ];
+    for (const row of rows) {
+        await FinancialYear.findOneAndUpdate(
+            { name: row.name },
+            { $setOnInsert: row },
+            { upsert: true }
+        );
+    }
+};
+
 export const getFYs = asyncHandler(async (req, res) => {
+    await ensureBaselineFinancialYears();
     const fys = await FinancialYear.find().sort({ startDate: -1 });
     res.send(new ApiResponse(httpStatus.OK, fys, 'Financial Years fetched successfully'));
 });

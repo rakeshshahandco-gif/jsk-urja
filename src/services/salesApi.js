@@ -38,8 +38,8 @@ export const getSalesInvoiceById = (id) =>
 export const createSalesInvoice = (data) =>
     apiClient.post('/sales-invoices', data, { timeout: 120000 }).then(r => r.data.data);
 
-export const cancelSalesInvoice = (id) =>
-    apiClient.post(`/sales-invoices/${id}/cancel`).then(r => r.data);
+export const cancelSalesInvoice = (id, data) =>
+    apiClient.post(`/sales-invoices/${id}/cancel`, data).then(r => r.data);
 
 export const deleteSalesInvoice = (id, data) =>
     apiClient.delete(`/sales-invoices/${id}`, { data }).then(r => r.data);

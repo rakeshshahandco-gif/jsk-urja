@@ -49,6 +49,10 @@ export const DEFAULT_COMPANY_FEATURE_SETTINGS = {
         wipAccountingRequired: true,
         qcRequired: true,
     },
+    purchase: {
+        /** When false, RFQ menus/API are hidden; existing PO/GRN flow unchanged. */
+        enableRfqSupplierQuotation: false,
+    },
     saas: {
         moduleControlEnabled: true,
         userLimit: 0,

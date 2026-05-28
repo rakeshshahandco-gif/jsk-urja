@@ -149,9 +149,10 @@ export const syncWithCustomerMaster = asyncHandler(async (req, res) => {
 
 
 export const getEwayBills = asyncHandler(async (req, res) => {
-    const { status, customerId, transporterId, fromDate, toDate, limit = 50, page = 1 } = req.query;
+    const { status, customerId, transporterId, fromDate, toDate, salesInvoiceId, limit = 50, page = 1 } = req.query;
     
     const filter = {};
+    if (salesInvoiceId) filter.salesInvoiceId = salesInvoiceId;
     if (status) filter.status = status;
     if (customerId) filter.customerId = customerId;
     if (transporterId) filter.transporterId = transporterId;

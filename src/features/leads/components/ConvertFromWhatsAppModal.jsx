@@ -14,6 +14,10 @@ export default function ConvertFromWhatsAppModal({
     initialMessageText = '',
     initialCustomerName = '',
     initialCustomerMobile = '',
+    whatsappChatId = '',
+    rawWhatsAppId = '',
+    normalizedMobile = '',
+    isGroupChat = false,
 }) {
     const [messageText, setMessageText] = useState(initialMessageText);
     const [customerName, setCustomerName] = useState(initialCustomerName);
@@ -21,14 +25,25 @@ export default function ConvertFromWhatsAppModal({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
+    const normalizeInputMobile = (raw) => {
+        const val = String(raw || '').trim();
+        const digits = val.replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.length === 10) return `+91${digits}`;
+        if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+        if (val.startsWith('+') && digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+        if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+        return '';
+    };
+
     useEffect(() => {
         if (open) {
             setMessageText(initialMessageText);
             setCustomerName(initialCustomerName);
-            setCustomerMobile(initialCustomerMobile);
+            setCustomerMobile(isGroupChat ? '' : initialCustomerMobile);
             setError('');
         }
-    }, [open, initialMessageText, initialCustomerName, initialCustomerMobile]);
+    }, [open, initialMessageText, initialCustomerName, initialCustomerMobile, isGroupChat]);
 
     if (!open) return null;
 
@@ -45,13 +60,22 @@ export default function ConvertFromWhatsAppModal({
             setError('Paste at least one line of the WhatsApp chat.');
             return;
         }
+        const normalized = normalizeInputMobile(customerMobile);
+        if (!normalized) {
+            setError('Mobile number could not be detected from selected WhatsApp contact. Please enter valid mobile manually.');
+            return;
+        }
         setSaving(true);
         setError('');
         try {
             const lead = await leadApi.fromWhatsApp({
                 messageText: messageText.trim(),
                 customerName: customerName.trim() || undefined,
-                customerMobile: customerMobile.trim() || undefined,
+                customerMobile: normalized,
+                whatsappChatId: whatsappChatId || undefined,
+                whatsappName: customerName.trim() || initialCustomerName || undefined,
+                rawWhatsAppId: rawWhatsAppId || undefined,
+                normalizedMobile: normalizedMobile || normalized,
                 receivedAt: new Date().toISOString(),
             });
             reset();
@@ -74,6 +98,11 @@ export default function ConvertFromWhatsAppModal({
                     <div style={{ fontSize: 12, color: '#64748b' }}>
                         Manually paste the WhatsApp message text below. The conversation will be saved as a new Lead with source = whatsapp.
                     </div>
+                    {isGroupChat && (
+                        <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: 8 }}>
+                            This is a WhatsApp group. Group ID cannot be used as customer mobile. Enter participant mobile manually.
+                        </div>
+                    )}
                     <Row label="Customer Name">
                         <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} style={input} />
                     </Row>

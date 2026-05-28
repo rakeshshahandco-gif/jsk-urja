@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { createSalesOrder, getSalesOrderById, updateSalesOrder, getInvoiceSeries } from '@/services/salesApi';
+import { createSalesOrder, getSalesOrderById, updateSalesOrder, getInvoiceSeries, getInvoiceSeriesById, previewNextInvoiceNo } from '@/services/salesApi';
 import { getCustomers, searchCustomers, getCustomer } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
 import { getStickers } from '@/services/stickerApi';
@@ -19,6 +19,76 @@ const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeigh
 const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
 
 const BLANK_ITEM = () => ({ itemId: null, itemCode: '', itemName: '', modelNo: '', additionalNotes: '', hsnCode: '', uom: 'NOS', qty: '', rate: '', gstRate: 18 });
+
+const normalizeSeriesId = (seriesId) => {
+    if (!seriesId) return '';
+    if (typeof seriesId === 'object' && seriesId._id) return String(seriesId._id);
+    return String(seriesId);
+};
+
+const mergeSeriesList = (list, extra) => {
+    const base = list || [];
+    if (!extra) return base;
+    const id = String(extra._id || extra);
+    if (base.some(s => String(s._id) === id)) return base;
+    return [...base, {
+        _id: extra._id || id,
+        seriesName: extra.seriesName || 'Current series',
+        prefix: extra.prefix || '',
+        gstApplicable: extra.gstApplicable,
+        isActive: extra.isActive,
+    }];
+};
+
+/** Resolve saved series for edit — id, populated object, or prefix match on order number */
+const resolveOrderSeries = async (so, activeList) => {
+    let seriesId = normalizeSeriesId(so.seriesId);
+    let seriesDoc = so.seriesId && typeof so.seriesId === 'object' && so.seriesId.seriesName
+        ? so.seriesId
+        : null;
+
+    if (seriesId && !seriesDoc) {
+        try {
+            seriesDoc = await getInvoiceSeriesById(seriesId);
+        } catch {
+            seriesDoc = null;
+        }
+    }
+
+    if (!seriesId && activeList?.length) {
+        const num = String(so.soNumber || '');
+        let matched = [...activeList]
+            .filter(s => s.prefix && num.startsWith(s.prefix))
+            .sort((a, b) => (b.prefix?.length || 0) - (a.prefix?.length || 0))[0];
+        if (!matched && so.seriesName) {
+            const snap = String(so.seriesName).trim().toLowerCase();
+            matched = activeList.find(s => String(s.seriesName || '').trim().toLowerCase() === snap);
+        }
+        if (matched) {
+            seriesId = String(matched._id);
+            seriesDoc = matched;
+        }
+    }
+
+    if (!seriesId && so.seriesName) {
+        seriesDoc = {
+            _id: '',
+            seriesName: so.seriesName,
+            prefix: '',
+            gstApplicable: so.gstApplicable !== false,
+            isActive: false,
+        };
+    }
+
+    return { seriesId, seriesDoc };
+};
+
+/** Draft / Confirmed without invoice — series can be changed on edit */
+const canChangeSeriesOnEdit = (form) => {
+    if (form.invoiceId) return false;
+    const status = form.status || 'Draft';
+    return status === 'Draft' || status === 'Confirmed';
+};
 
 
 const Section = ({ title, children }) => (
@@ -60,6 +130,8 @@ export default function SalesOrderFormPage() {
 
     const [customerOptions, setCustomerOptions] = useState([]);
     const [seriesList, setSeriesList] = useState([]);
+    const [originalSeriesId, setOriginalSeriesId] = useState('');
+    const [previewSONo, setPreviewSONo] = useState('');
     const [showCustDropdown, setShowCustDropdown] = useState(false);
     const [custHighlightIndex, setCustHighlightIndex] = useState(-1);
     const custRef = useRef(null);
@@ -97,21 +169,6 @@ export default function SalesOrderFormPage() {
         getStickers().then(res => {
             if (Array.isArray(res)) setStickerOptions(res.map(s => s.name));
         }).catch(e => console.error('Error loading stickers:', e));
-
-        getInvoiceSeries({ active: true }).then(s => {
-            const list = s || [];
-            setSeriesList(list);
-            if (!isEdit) {
-                // Pick series marked as Default for Sales Order in Series Master
-                const def = list.find(x => x.isDefaultForSalesOrder);
-                if (def) {
-                    setForm(p => ({ ...p, seriesId: def._id, gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true }));
-                } else {
-                    // No default configured — warn (non-blocking; user can still select manually)
-                    toast.error('Please set default series in Series Master.', { id: 'so-no-default' });
-                }
-            }
-        }).catch(() => { });
 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
@@ -249,33 +306,66 @@ export default function SalesOrderFormPage() {
         });
     };
 
-    useEffect(() => {
-        if (isEdit) {
-            getSalesOrderById(id).then(so => {
-                setForm({
-                    ...so,
-                    soDate: so.soDate ? so.soDate.slice(0, 10) : '',
-                    deliveryDate: so.deliveryDate ? so.deliveryDate.slice(0, 10) : '',
-                    customerPODate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
-                    items: so.items?.length ? so.items : [BLANK_ITEM()],
-                });
-            }).catch(() => toast.error('Failed to load SO'))
-            .finally(() => setLoading(false));
-        } else {
-            setForm({
-                customerName: '', billingAddress: '', shippingAddress: '', customerGstin: '', customerState: '', customerStateCode: '',
-                customerPhone: '', customerEmail: '', customerPO: '', customerPODate: '', orderCategory: 'Order',
-                soDate: new Date().toISOString().split('T')[0],
-                deliveryDate: '', remarks: '', paymentType: 'Credit', gstType: 'CGST / SGST',
-                warrantyDetails: '',
-                freightAmount: '', freightGstRate: 18,
-                creditPeriod: 0,
-                stickerType: '',
-                items: [BLANK_ITEM()],
-            });
-            setCustHighlightIndex(-1);
-            setShowCustDropdown(false);
+    const fetchPreviewSONo = async (seriesId) => {
+        if (!seriesId) { setPreviewSONo(''); return; }
+        try {
+            const res = await previewNextInvoiceNo(seriesId, 'SalesOrder');
+            setPreviewSONo(res?.nextInvoiceNo || '');
+        } catch {
+            setPreviewSONo('');
         }
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                if (isEdit && id) {
+                    const [list, so] = await Promise.all([
+                        getInvoiceSeries({ active: true }),
+                        getSalesOrderById(id),
+                    ]);
+                    if (cancelled) return;
+                    const { seriesId, seriesDoc } = await resolveOrderSeries(so, list || []);
+                    const mergedList = mergeSeriesList(list || [], seriesDoc);
+                    setSeriesList(mergedList);
+                    setOriginalSeriesId(seriesId);
+                    setPreviewSONo('');
+                    const { seriesId: _popSeries, ...soRest } = so;
+                    setForm({
+                        ...soRest,
+                        seriesId,
+                        seriesName: seriesDoc?.seriesName || so.seriesName || '',
+                        gstApplicable: seriesDoc?.gstApplicable !== false ? (so.gstApplicable !== false) : false,
+                        soDate: so.soDate ? so.soDate.slice(0, 10) : '',
+                        deliveryDate: so.deliveryDate ? so.deliveryDate.slice(0, 10) : '',
+                        customerPODate: so.customerPODate ? so.customerPODate.slice(0, 10) : '',
+                        items: so.items?.length ? so.items : [BLANK_ITEM()],
+                    });
+                } else if (!isEdit) {
+                    const list = (await getInvoiceSeries({ active: true })) || [];
+                    if (cancelled) return;
+                    setSeriesList(list);
+                    const def = list.find(x => x.isDefaultForSalesOrder);
+                    if (def) {
+                        setForm(p => ({
+                            ...p,
+                            seriesId: String(def._id),
+                            gstApplicable: def.gstApplicable !== undefined ? def.gstApplicable : true,
+                        }));
+                    } else {
+                        toast.error('Please set default series in Series Master.', { id: 'so-no-default' });
+                    }
+                    setCustHighlightIndex(-1);
+                    setShowCustDropdown(false);
+                }
+            } catch {
+                if (isEdit) toast.error('Failed to load sales order');
+            } finally {
+                if (isEdit && !cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [id, isEdit]);
 
     const setItem = (i, k, v) => setForm(p => {
@@ -361,12 +451,16 @@ export default function SalesOrderFormPage() {
 
         if (!form.customerName) return toast.error('Customer name is required');
         if (!form.customerId) return toast.error('Please select customer from the list or create new customer.');
+        if (!form.seriesId) return toast.error('Please select an Invoice Series.');
         if (form.orderCategory === 'Replacement' && !form.warrantyDetails?.trim()) return toast.error('Please enter Warranty Details for Replacement order.');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
         setSaving(true);
         try {
+            const selectedSeries = seriesList.find(s => String(s._id) === normalizeSeriesId(form.seriesId));
             const payload = {
                 ...form,
+                seriesId: normalizeSeriesId(form.seriesId) || form.seriesId,
+                seriesName: selectedSeries?.seriesName || form.seriesName || '',
                 status: nextStatus || form.status || 'Draft',
                 items: form.items.map(i => ({ ...i, qty: Number(i.qty), rate: Number(i.rate), gstRate: Number(i.gstRate) || 18 }))
             };
@@ -409,18 +503,27 @@ export default function SalesOrderFormPage() {
                 )}
                 <Section title="Order Information">
                     <Grid cols={4}>
-                        <Field label="Order Series *">
+                        {isEdit && (
+                            <Field label="Order Number">
+                                <input value={form.soNumber || ''} readOnly style={{ ...inp, background: '#f9fafb', fontWeight: 700, color: '#2563eb' }} />
+                            </Field>
+                        )}
+                        <Field label="Invoice Series *">
                             <select
-                                value={form.seriesId}
-                                onChange={e => {
+                                value={normalizeSeriesId(form.seriesId)}
+                                onChange={async e => {
                                     const val = e.target.value;
-                                    const s = seriesList.find(x => x._id === val);
+                                    const s = seriesList.find(x => String(x._id) === String(val));
                                     const isGst = s ? (s.gstApplicable !== false) : true;
+                                    if (isEdit && val && val !== originalSeriesId && canChangeSeriesOnEdit(form)) {
+                                        await fetchPreviewSONo(val);
+                                    } else {
+                                        setPreviewSONo('');
+                                    }
                                     setForm(p => ({
                                         ...p,
                                         seriesId: val,
                                         gstApplicable: isGst,
-                                        // Reset GST rates on all items if switching to a non-GST series
                                         items: p.items.map(item => ({
                                             ...item,
                                             gstRate: isGst ? (item.gstRate || 18) : 0
@@ -428,15 +531,51 @@ export default function SalesOrderFormPage() {
                                         freightGstRate: isGst ? (p.freightGstRate || 18) : 0
                                     }));
                                 }}
-                                style={{ ...inp, cursor: 'pointer', borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db' }}
-                                disabled={isEdit}
+                                style={{
+                                    ...inp,
+                                    cursor: isEdit && !canChangeSeriesOnEdit(form) ? 'not-allowed' : 'pointer',
+                                    borderColor: !form.seriesId ? '#fca5a5' : '#d1d5db',
+                                    fontWeight: isEdit ? 700 : 400,
+                                }}
+                                disabled={isEdit && !canChangeSeriesOnEdit(form)}
                             >
-                                <option value="">-- Select Series --</option>
-                                {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix}NNNNN)</option>)}
+                                <option value="">-- Select Invoice Series --</option>
+                                {seriesList.map(s => (
+                                    <option key={String(s._id)} value={String(s._id)}>
+                                        {s.seriesName} ({s.prefix || ''})
+                                    </option>
+                                ))}
                             </select>
+                            {isEdit && form.seriesId && (() => {
+                                const cur = seriesList.find(s => String(s._id) === normalizeSeriesId(form.seriesId));
+                                return cur ? (
+                                    <div style={{ fontSize: 11, color: '#374151', marginTop: 4, fontWeight: 600 }}>
+                                        Saved series: <span style={{ color: '#0d9488' }}>{cur.seriesName}</span>
+                                        {cur.prefix ? ` (${cur.prefix})` : ''}
+                                        {cur.isActive === false ? ' — inactive' : ''}
+                                    </div>
+                                ) : null;
+                            })()}
                             {form.seriesId && !form.gstApplicable && (
                                 <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <span>⚠️</span> This series is non-GST. Tax will not be applied.
+                                </div>
+                            )}
+                            {isEdit && canChangeSeriesOnEdit(form) && form.seriesId && form.seriesId !== originalSeriesId && previewSONo && (
+                                <div style={{ fontSize: 11, color: '#0d9488', fontWeight: 700, marginTop: 6 }}>
+                                    New number on save: <span style={{ fontFamily: 'monospace' }}>{previewSONo}</span>
+                                </div>
+                            )}
+                            {isEdit && !form.seriesId && form.seriesName && (
+                                <div style={{ fontSize: 11, color: '#b45309', fontWeight: 700, marginTop: 6 }}>
+                                    Original series was <strong>{form.seriesName}</strong> — select it from the list above and save.
+                                </div>
+                            )}
+                            {isEdit && !canChangeSeriesOnEdit(form) && (
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                                    {form.invoiceId
+                                        ? 'Series cannot be changed — order is linked to an invoice.'
+                                        : 'Series cannot be changed for this status.'}
                                 </div>
                             )}
                         </Field>
@@ -562,6 +701,9 @@ export default function SalesOrderFormPage() {
                                 <textarea value={form.shippingAddress} onChange={e => setF('shippingAddress', e.target.value)} style={{ ...inp, height: 70, resize: 'vertical', background: form.customerId ? '#f9fafb' : '#fff' }} readOnly={Boolean(form.customerId)} disabled={form.status && form.status !== 'Draft'} />
                             </Field>
                         </div>
+                        <Field label="Customer PO No">
+                            <input value={form.customerPO || ''} onChange={e => setF('customerPO', e.target.value)} style={inp} placeholder="e.g. PO/2026/001" disabled={form.status && form.status !== 'Draft'} />
+                        </Field>
                         <Field label="Customer PO Date"><input type="date" value={form.customerPODate || ''} onChange={e => setF('customerPODate', e.target.value)} style={inp} disabled={form.status && form.status !== 'Draft'} /></Field>
                         <Field label="Payment Type">
                             <select value={form.paymentType} onChange={e => setF('paymentType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={form.status && form.status !== 'Draft'}>

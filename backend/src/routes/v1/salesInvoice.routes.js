@@ -34,9 +34,9 @@ router.delete('/force-cleanup/:id', authorize('admin', 'superadmin'), siCtrl.for
 
 router.route('/:id')
     .get(siCtrl.getSalesInvoiceById)
-    .delete(authorize('admin', 'superadmin'), siCtrl.deleteSalesInvoice);
+    .delete(siCtrl.deleteSalesInvoice);
 
-router.post('/:id/cancel', authorize('admin', 'superadmin'), siCtrl.cancelSalesInvoice);
+router.post('/:id/cancel', siCtrl.cancelSalesInvoice);
 router.post('/:id/restore', authorize('admin', 'superadmin'), siCtrl.restoreSalesInvoice);
 router.post('/:id/gst-correction', authorize('admin', 'superadmin'), siCtrl.updateGstDetails);
 router.post('/:id/record-payment', siCtrl.recordPayment);

@@ -4,9 +4,10 @@
     "69d7985ad7ee6e5a795d5937",
     "69f86c2d64757228c538fe3f",
     "69f86c7e64757228c538ff8d",
-    "69ff820323767e70842886e8"
+    "69ff820323767e70842886e8",
+    "6a170daa6b49db6f590fe2b4"
   ],
-  "relatedEntriesCount": 11,
+  "relatedEntriesCount": 15,
   "relatedEntries": [
     {
       "vId": "69d7985ad7ee6e5a795d5937",
@@ -62,6 +63,26 @@
       "vId": "69ff820323767e70842886e8",
       "lId": "69bcb30f32c5fc43f54059d2",
       "lName": "IGST Output"
+    },
+    {
+      "vId": "6a170daa6b49db6f590fe2b4",
+      "lId": "69c238d04630f0dab9b54974",
+      "lName": "HALOMAX LIGHTING SOLUTIONS PVT. LTD."
+    },
+    {
+      "vId": "6a170daa6b49db6f590fe2b4",
+      "lId": "69bcb30f32c5fc43f54059c9",
+      "lName": "Sales Account"
+    },
+    {
+      "vId": "6a170daa6b49db6f590fe2b4",
+      "lId": "69c38d1cd5bc45b4c6511c9d",
+      "lName": "Freight & Forwarding Charges"
+    },
+    {
+      "vId": "6a170daa6b49db6f590fe2b4",
+      "lId": "69bcb30f32c5fc43f54059d2",
+      "lName": "IGST Output"
     }
   ],
   "oppositeNamesByVoucher": {
@@ -78,6 +99,11 @@
     ],
     "69ff820323767e70842886e8": [
       "Sales Account",
+      "IGST Output"
+    ],
+    "6a170daa6b49db6f590fe2b4": [
+      "Sales Account",
+      "Freight & Forwarding Charges",
       "IGST Output"
     ]
   }

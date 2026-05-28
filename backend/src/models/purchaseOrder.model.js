@@ -53,6 +53,13 @@ const purchaseOrderSchema = new mongoose.Schema({
     complaintId: { type: mongoose.Schema.Types.ObjectId, ref: 'Complaint', default: null },
     complaintNo: { type: String, default: '' },
 
+    // Purchase RFQ / Supplier Quotation reference (optional)
+    rfqId: { type: mongoose.Schema.Types.ObjectId, ref: 'PurchaseRfq', default: null },
+    rfqNumber: { type: String, default: '' },
+    supplierQuotationId: { type: mongoose.Schema.Types.ObjectId, ref: 'SupplierQuotation', default: null },
+    supplierQuotationNo: { type: String, default: '' },
+    supplierQuotationDate: { type: Date, default: null },
+
     // Transportation & Freight
     transporterName: { type: String, default: '' },
     vehicleNo: { type: String, default: '' },

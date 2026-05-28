@@ -46,6 +46,9 @@ const DEFAULTS = {
         wipAccountingRequired: true,
         qcRequired: true,
     },
+    purchase: {
+        enableRfqSupplierQuotation: false,
+    },
     saas: {
         moduleControlEnabled: true,
         userLimit: 0,

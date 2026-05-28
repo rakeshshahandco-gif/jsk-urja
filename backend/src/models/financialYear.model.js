@@ -32,7 +32,12 @@ const financialYearSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
     },
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    // FY master is shared (2025-26, 2026-27) — not per-company. Without this,
+    // tenant scope hides legacy rows that have no companyId on Render.
+    disableTenant: true,
+});
 
 // Ensure only one FY is marked as current at a time
 financialYearSchema.pre('save', async function (next) {

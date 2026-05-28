@@ -7,6 +7,7 @@ export const FEATURE_SETTINGS_TABS = [
     { id: 'tdsTcs', label: 'TDS/TCS', platform: true },
     { id: 'manufacturing', label: 'Manufacturing', platform: true },
     { id: 'saas', label: 'SaaS/Permissions', platform: true },
+    { id: 'purchase', label: 'Purchase', platform: true },
     { id: 'workflow', label: 'Workflow / Kanban', platform: true },
     { id: 'ui', label: 'UI Customization', platform: true },
 ];
@@ -63,6 +64,9 @@ export const FEATURE_SETTINGS_FIELDS = {
         ['moduleControlEnabled', 'Module enable/disable company-wise'],
         ['companyFeatureAccessEnabled', 'Company-wise feature access'],
         ['subscriptionStatusActive', 'Subscription status active'],
+    ],
+    purchase: [
+        ['enableRfqSupplierQuotation', 'Enable Purchase RFQ / Supplier Quotation'],
     ],
     workflow: [
         ['enabled', 'Enable Kanban / Workflow (master toggle)'],

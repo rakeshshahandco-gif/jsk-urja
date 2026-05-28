@@ -38,9 +38,15 @@ import { useFilterPersistence } from '@/hooks/useFilterPersistence';
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
 const td = { padding: '11px 14px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
-export default function SalesInvoiceListPage() {
+function isEstimateSeries(s) {
+    return s?.isEstimate === true || s?.documentType === 'Estimate';
+}
+
+export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
+    const isEstimateList = listMode === 'estimate';
     const navigate = useNavigate();
-    const { hasRole } = useAuth();
+    const { hasRole, hasPermission } = useAuth();
+    const canDeleteInvoice = hasPermission('sales.sales_invoices.delete');
     const { selectedCompany, loading: companyLoading } = useCompany();
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -51,7 +57,9 @@ export default function SalesInvoiceListPage() {
     const [showScanner, setShowScanner] = useState(false);
 
     // Persistent Filter State
-    const { filters, setFilter, resetFilters } = useFilterPersistence('sales-invoices', {
+    const { filters, setFilter, resetFilters } = useFilterPersistence(
+        isEstimateList ? 'sales-estimates' : 'sales-invoices',
+        {
         search: '',
         payFilter: '',
         seriesFilter: '',
@@ -86,6 +94,7 @@ export default function SalesInvoiceListPage() {
             series: seriesFilter || undefined,
             view: viewMode,
             includeDeleted: true,
+            estimateOnly: isEstimateList ? 'true' : undefined,
             limit: 100,
         })
             .then((data) => {
@@ -112,9 +121,14 @@ export default function SalesInvoiceListPage() {
 
     useEffect(() => {
         getInvoiceSeries()
-            .then(data => setSeriesOptions(data || []))
+            .then((data) => {
+                const list = data || [];
+                setSeriesOptions(
+                    isEstimateList ? list.filter(isEstimateSeries) : list.filter((s) => !isEstimateSeries(s))
+                );
+            })
             .catch(() => { });
-    }, []);
+    }, [isEstimateList]);
 
     useEffect(() => {
         if (companyLoading) {
@@ -126,11 +140,9 @@ export default function SalesInvoiceListPage() {
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
-    const isAdmin = hasRole('admin') || hasRole('superadmin');
-
     const handleDelete = (e, inv) => {
         e.stopPropagation();
-        if (!isAdmin) return toast.error('Only administrators can delete invoices');
+        if (!canDeleteInvoice) return toast.error('You do not have permission to delete invoices');
         if (inv.paidAmount > 0) return toast.error('Delete Blocked: Payments exist.');
         const msg = `STRICT DELETE RULE (Rule 3):\n\nOnly the LATEST invoice can be DELETED to reuse its number.\n\nEnter reason for deletion:`;
         const reason = window.prompt(msg);
@@ -152,11 +164,17 @@ export default function SalesInvoiceListPage() {
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>🧾 Sales Invoices</h1>
-                    <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>Validated financial records with complete audit trails</p>
+                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>
+                        {isEstimateList ? '📄 Sales Estimates' : '🧾 Sales Invoices'}
+                    </h1>
+                    <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>
+                        {isEstimateList
+                            ? 'Non-GST estimates — excluded from GSTR-1 / GSTR-3B'
+                            : 'Validated financial records with complete audit trails'}
+                    </p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                    {(hasRole('admin') || hasRole('superadmin')) && (
+                    {!isEstimateList && (hasRole('admin') || hasRole('superadmin')) && (
                         <button onClick={() => navigate(PATHS.SALES.INVOICE_CLEANUP)}
                             style={{ 
                                 padding: '9px 18px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', 
@@ -166,13 +184,15 @@ export default function SalesInvoiceListPage() {
                             <Trash2 size={14} /> Cleanup Drafts
                         </button>
                     )}
-                    <button onClick={() => setShowScanner(true)}
-                        style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#1e3a5f', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <ScanLine size={16} /> Scan Invoice
-                    </button>
-                    <button onClick={() => navigate(PATHS.SALES.NEW_INVOICE)}
-                        style={{ padding: '9px 18px', borderRadius: 8, background: '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                        + New Invoice
+                    {!isEstimateList && (
+                        <button onClick={() => setShowScanner(true)}
+                            style={{ padding: '9px 18px', borderRadius: 8, background: '#fff', color: '#1e3a5f', border: '1px solid #cbd5e1', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <ScanLine size={16} /> Scan Invoice
+                        </button>
+                    )}
+                    <button onClick={() => navigate(isEstimateList ? PATHS.SALES.NEW_ESTIMATE : PATHS.SALES.NEW_INVOICE)}
+                        style={{ padding: '9px 18px', borderRadius: 8, background: isEstimateList ? '#7c3aed' : '#0d9488', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, boxShadow: isEstimateList ? '0 2px 8px rgba(124,58,237,0.3)' : '0 2px 8px rgba(13,148,136,0.3)' }}>
+                        {isEstimateList ? '+ New Estimate' : '+ New Invoice'}
                     </button>
                 </div>
             </div>
@@ -183,7 +203,7 @@ export default function SalesInvoiceListPage() {
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#e2e8f0', padding: 4, borderRadius: 10, width: 'fit-content' }}>
                 <button onClick={() => setFilter('viewMode', 'all')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'all' ? '#fff' : 'transparent', color: viewMode === 'all' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-                    All Invoices
+                    {isEstimateList ? 'All Estimates' : 'All Invoices'}
                 </button>
                 <button onClick={() => setFilter('viewMode', 'active')}
                     style={{ padding: '6px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, background: viewMode === 'active' ? '#fff' : 'transparent', color: viewMode === 'active' ? '#0f172a' : '#64748b', transition: 'all 0.2s', boxShadow: viewMode === 'active' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
@@ -253,7 +273,7 @@ export default function SalesInvoiceListPage() {
                             {invoices.length === 0 ? (
                                 <tr>
                                     <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: loadError ? '#b91c1c' : '#9ca3af' }}>
-                                        {loadError || `No ${viewMode === 'archived' ? 'archived' : ''} invoices found.`}
+                                        {loadError || `No ${viewMode === 'archived' ? 'archived' : ''} ${isEstimateList ? 'estimates' : 'invoices'} found.`}
                                     </td>
                                 </tr>
                             ) : invoices
@@ -272,8 +292,9 @@ export default function SalesInvoiceListPage() {
                             .map((inv) => {
                             const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS['Unpaid'];
                             const isDeleted = inv.isDeleted;
+                            const isCancelled = inv.status === 'Cancelled';
                             return (
-                                <tr key={inv._id} style={{ cursor: 'pointer', opacity: isDeleted ? 0.8 : 1, background: isDeleted ? '#fcfcfc' : 'transparent' }}
+                                <tr key={inv._id} style={{ cursor: 'pointer', opacity: isDeleted || isCancelled ? 0.85 : 1, background: isCancelled ? '#f8fafc' : isDeleted ? '#fcfcfc' : 'transparent' }}
                                     onClick={() => navigate(PATHS.SALES.INVOICE_DETAIL(inv._id))}
                                     onMouseEnter={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : '#f8f9fa'}
                                     onMouseLeave={e => e.currentTarget.style.background = isDeleted ? '#fcfcfc' : 'transparent'}>
@@ -286,7 +307,9 @@ export default function SalesInvoiceListPage() {
                                     <td style={td}>{fmt(inv.invoiceDate)}</td>
                                     <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{inv.customerName}</td>
                                     <td style={{ ...td, color: '#64748b' }}>{inv.soNumber || '—'}</td>
-                                    <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>₹{(inv.roundedTotal || inv.grandTotal || 0).toLocaleString('en-IN')}</td>
+                                    <td style={{ ...td, color: isCancelled ? '#94a3b8' : '#16a34a', fontWeight: 700 }}>
+                                        {isCancelled ? '₹0.00' : `₹${(inv.roundedTotal || inv.grandTotal || 0).toLocaleString('en-IN')}`}
+                                    </td>
                                     <td style={td}>
                                         {(() => {
                                             const sc = STATUS_COLORS[inv.status] || STATUS_COLORS['Confirmed'];
@@ -313,10 +336,12 @@ export default function SalesInvoiceListPage() {
                                                         style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                         View
                                                     </button>
-                                                    <button onClick={(e) => handleDelete(e, inv)}
-                                                        style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
-                                                        🗑
-                                                    </button>
+                                                    {canDeleteInvoice && inv.status !== 'Cancelled' && (
+                                                        <button onClick={(e) => handleDelete(e, inv)}
+                                                            style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                                                            🗑
+                                                        </button>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <button onClick={(e) => handleRestore(e, inv)}

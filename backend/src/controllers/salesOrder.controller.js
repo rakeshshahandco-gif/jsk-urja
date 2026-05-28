@@ -95,21 +95,18 @@ export const createSO = asyncHandler(async (req, res) => {
     const body = req.body;
     if (!body.customerName) throw new ApiError(httpStatus.BAD_REQUEST, 'Customer name is required');
     if (!body.items || body.items.length === 0) throw new ApiError(httpStatus.BAD_REQUEST, 'At least one item is required');
+    if (!body.seriesId) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice series is required');
 
-    // Get SO number from series if provided
-    let soNumber, sequenceNumber, gstApplicable = true;
+    // Get SO number from series
     const fy = body.financialYear || getFYFromDate(body.soDate || new Date());
 
-    if (body.seriesId) {
-        const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy, null, 'soNumber');
-        if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
-        soNumber = numbering.displayInvoiceNumber;
-        sequenceNumber = numbering.sequenceNumber;
-        const series = await InvoiceSeries.findById(body.seriesId);
-        gstApplicable = series.gstApplicable === false ? false : true;
-    } else {
-        soNumber = await genSONumber();
-    }
+    const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy, null, 'soNumber');
+    if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
+    let soNumber = numbering.displayInvoiceNumber;
+    const sequenceNumber = numbering.sequenceNumber;
+    const series = await InvoiceSeries.findById(body.seriesId);
+    const gstApplicable = series.gstApplicable === false ? false : true;
+    const seriesName = series?.seriesName || body.seriesName || '';
 
     // Defensive: ensure soNumber is a string and not overwritten by body
     if (typeof soNumber !== 'string') {
@@ -136,7 +133,8 @@ export const createSO = asyncHandler(async (req, res) => {
     const soData = {
         ...body,
         soNumber: String(soNumber),
-        seriesId: body.seriesId,
+        seriesId: body.seriesId || null,
+        seriesName,
         sequenceNumber,
         gstApplicable,
         stickerType,
@@ -206,6 +204,7 @@ export const getSOs = asyncHandler(async (req, res) => {
     if (search) filter.$or = [
         { soNumber: { $regex: search, $options: 'i' } },
         { customerName: { $regex: search, $options: 'i' } },
+        { customerPO: { $regex: search, $options: 'i' } },
     ];
     if (dateFrom || dateTo) {
         filter.soDate = {};
@@ -225,9 +224,36 @@ export const getSOs = asyncHandler(async (req, res) => {
 // ------- GET SINGLE SO -------
 export const getSOById = asyncHandler(async (req, res) => {
     const so = await SalesOrder.findById(req.params.id)
-        .populate('seriesId')
-        .populate('createdBy', 'name mobile');
+        .populate('createdBy', 'name mobile')
+        .lean();
     if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+
+    if (so.seriesId) {
+        const series = await InvoiceSeries.findById(so.seriesId)
+            .select('seriesName prefix gstApplicable isActive isDefaultForSalesOrder financialYear')
+            .lean();
+        so.seriesId = series || {
+            _id: so.seriesId,
+            seriesName: '',
+            prefix: '',
+            gstApplicable: so.gstApplicable !== false,
+        };
+    } else if (so.soNumber || so.seriesName) {
+        // Legacy rows: resolve series from snapshot name or order-number prefix
+        const allSeries = await InvoiceSeries.find({})
+            .select('seriesName prefix gstApplicable isActive financialYear')
+            .lean();
+        const num = String(so.soNumber || '');
+        let matched = allSeries
+            .filter(s => s.prefix && num.startsWith(s.prefix))
+            .sort((a, b) => (b.prefix.length || 0) - (a.prefix.length || 0))[0];
+        if (!matched && so.seriesName) {
+            const snap = String(so.seriesName).trim().toLowerCase();
+            matched = allSeries.find(s => String(s.seriesName || '').trim().toLowerCase() === snap);
+        }
+        if (matched) so.seriesId = matched;
+    }
+
     res.json({ success: true, data: so });
 });
 
@@ -243,8 +269,28 @@ export const updateSO = asyncHandler(async (req, res) => {
         const body = req.body;
         const changes = {};
 
+        // Series change (Draft / Confirmed, no invoice): assign next number from new series
+        if (body.seriesId && String(body.seriesId) !== String(so.seriesId || '')) {
+            const canChangeSeries = ['Draft', 'Confirmed'].includes(so.status) && !so.invoiceId;
+            if (!canChangeSeries) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice series can only be changed for Draft or Confirmed orders that are not yet invoiced');
+            }
+            const fy = so.financialYear || getFYFromDate(so.soDate || new Date());
+            const numbering = await getNextNumberFromSeries(SalesOrder, body.seriesId, fy, session, 'soNumber');
+            if (!numbering) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid or inactive series');
+            const series = await InvoiceSeries.findById(body.seriesId).session(session);
+            const gstApplicable = series?.gstApplicable === false ? false : true;
+            changes.seriesId = { old: so.seriesId, new: body.seriesId };
+            changes.soNumber = { old: so.soNumber, new: numbering.displayInvoiceNumber };
+            so.seriesId = body.seriesId;
+            so.seriesName = series?.seriesName || '';
+            so.soNumber = numbering.displayInvoiceNumber;
+            so.sequenceNumber = numbering.sequenceNumber;
+            so.gstApplicable = gstApplicable;
+        }
+
         for (const [key, newValue] of Object.entries(body)) {
-            if (['items', '_id', 'soNumber', 'createdBy', 'createdAt', 'updatedAt', '__v'].includes(key)) continue;
+            if (['items', '_id', 'soNumber', 'seriesId', 'sequenceNumber', 'gstApplicable', 'createdBy', 'createdAt', 'updatedAt', '__v'].includes(key)) continue;
             
             if (JSON.stringify(so[key]) !== JSON.stringify(newValue)) {
                 changes[key] = { old: so[key], new: newValue };

@@ -201,6 +201,10 @@ export const menuConfig = [
         permission: 'purchase',
         children: [
             { id: 'suppliers', title: 'Suppliers', path: PATHS.PURCHASE.SUPPLIERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.suppliers.view' },
+            { id: 'purchase-rfq', title: 'Purchase RFQ', path: PATHS.PURCHASE.RFQ, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_rfq.view' },
+            { id: 'supplier-quotations', title: 'Supplier Quotations', path: PATHS.PURCHASE.SUPPLIER_QUOTATIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.supplier_quotation.view' },
+            { id: 'quotation-comparison', title: 'Quotation Comparison', path: PATHS.PURCHASE.QUOTATION_COMPARISON_LIST, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.quotation_comparison.view' },
+            { id: 'purchase-rfq-reports', title: 'RFQ Reports', path: PATHS.PURCHASE.RFQ_REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_rfq.view' },
             { id: 'purchase-orders', title: 'Purchase Orders', path: PATHS.PURCHASE.ORDERS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_orders.view' },
             { id: 'grn', title: 'Goods Receipt (GRN)', path: PATHS.PURCHASE.GRN, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.grn.view' },
             { id: 'purchase-invoices', title: 'Purchase Invoices', path: PATHS.PURCHASE.INVOICES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_invoices.view' },

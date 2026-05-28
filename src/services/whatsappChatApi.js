@@ -21,14 +21,17 @@ export const listMessages = async (jid, { limit = 50, before } = {}) => {
     if (before) params.before = before;
     const response = await api.get(
         `/whatsapp-chat/chats/${encodeURIComponent(jid)}/messages`,
-        { params }
+        // Message history can be slow on large chat logs; avoid global 10s timeout.
+        { params, timeout: 45000 }
     );
     return response.data;
 };
 
 export const markRead = async (jid) => {
     const response = await api.post(
-        `/whatsapp-chat/chats/${encodeURIComponent(jid)}/read`
+        `/whatsapp-chat/chats/${encodeURIComponent(jid)}/read`,
+        {},
+        { timeout: 30000 }
     );
     return response.data;
 };
@@ -36,13 +39,14 @@ export const markRead = async (jid) => {
 export const sendChatMessage = async (jid, text) => {
     const response = await api.post(
         `/whatsapp-chat/chats/${encodeURIComponent(jid)}/send`,
-        { text }
+        { text },
+        { timeout: 45000 }
     );
     return response.data;
 };
 
 export const syncChats = async () => {
-    const response = await api.post('/whatsapp-chat/sync');
+    const response = await api.post('/whatsapp-chat/sync', {}, { timeout: 60000 });
     return response.data;
 };
 

@@ -1,12 +1,31 @@
 import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import { apiClient } from '@/config/apiClient';
 import { getAuthData } from '@/utils/auth';
+import { AuthContext } from './AuthContext';
 
 export const CompanyContext = createContext(null);
 
 const COMPANY_STORAGE_KEY = 'jsk_selected_company';
 
+/** Same rules as backend isJskUrjaCompany — pick JSK INNOVATIVE / default co. on fresh Render login. */
+const isJskUrjaCompany = (company) => {
+    if (!company) return false;
+    if (company.isDefault === true) return true;
+    const name = `${company.companyName || ''} ${company.brandName || ''} ${company.legalName || ''}`.toUpperCase();
+    return name.includes('JSK') && (name.includes('URJA') || name.includes('INNOVATIVE'));
+};
+
+const pickDefaultCompany = (list) => {
+    if (!list?.length) return null;
+    return (
+        list.find((c) => c.isDefault)
+        || list.find((c) => isJskUrjaCompany(c))
+        || list[0]
+    );
+};
+
 export const CompanyProvider = ({ children }) => {
+    const { token } = useContext(AuthContext) || {};
     const [companies, setCompanies] = useState([]);
     const [selectedCompany, setSelectedCompanyState] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -39,51 +58,68 @@ export const CompanyProvider = ({ children }) => {
         if (stored) {
             try {
                 const parsed = JSON.parse(stored);
-                const found = list.find(c => c._id === parsed._id);
-                if (found) {
-                    setSelectedCompanyState(found);
+                // Match by id (same browser / same DB)
+                const byId = list.find((c) => c._id === parsed._id);
+                if (byId) {
+                    setSelectedCompanyState(byId);
+                    localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(byId));
                     return;
+                }
+                // Match by name (Render DB ids differ from localhost but name is same)
+                const storedName = (parsed.companyName || '').trim().toLowerCase();
+                if (storedName) {
+                    const byName = list.find(
+                        (c) => (c.companyName || '').trim().toLowerCase() === storedName
+                    );
+                    if (byName) {
+                        setSelectedCompanyState(byName);
+                        localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(byName));
+                        return;
+                    }
                 }
             } catch {
                 // ignore parse errors
             }
         }
-        // Default: first company marked isDefault, or just first
-        const def = list.find(c => c.isDefault) || list[0];
+        // Fresh login on Render / new device: same as localhost — default JSK company
+        const def = pickDefaultCompany(list);
         setSelectedCompanyState(def);
         localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(def));
     }, []);
 
-    // ─── Initial load ─────────────────────────────────────────────────────────
+    // ─── Load / reload when auth token appears (login or page refresh) ────────
     useEffect(() => {
+        if (!token) {
+            setCompanies([]);
+            setSelectedCompanyState(null);
+            setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        const isRender =
+            typeof window !== 'undefined' &&
+            window.location.hostname.endsWith('.onrender.com');
+        const maxRetries = isRender ? 45 : 15;
+
         const init = async () => {
             setLoading(true);
-
-            // If no token, poll every second until we get one (user is logging in)
             let list = await fetchCompanies();
-            if (list.length === 0) {
-                // Retry up to 10 seconds (covers login flow)
-                let retries = 0;
-                const interval = setInterval(async () => {
-                    retries++;
-                    const retryList = await fetchCompanies();
-                    if (retryList.length > 0 || retries >= 10) {
-                        clearInterval(interval);
-                        if (retryList.length > 0) {
-                            resolveSelection(retryList);
-                        }
-                        setLoading(false);
-                    }
-                }, 1000);
-                return;
+            let retries = 0;
+            while (!cancelled && list.length === 0 && retries < maxRetries) {
+                await new Promise((r) => setTimeout(r, 1000));
+                retries += 1;
+                list = await fetchCompanies();
             }
-
-            resolveSelection(list);
-            setLoading(false);
+            if (!cancelled) {
+                if (list.length > 0) resolveSelection(list);
+                setLoading(false);
+            }
         };
+
         init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        return () => { cancelled = true; };
+    }, [token, fetchCompanies, resolveSelection]);
 
     // ─── Re-fetch whenever localStorage auth token changes (e.g. after login) ─
     useEffect(() => {

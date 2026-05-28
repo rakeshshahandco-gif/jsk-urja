@@ -34,6 +34,30 @@ const baileysLogger = {
 
 // Base directory for all per-user auth state
 const AUTH_BASE_DIR = path.join(process.cwd(), '.whatsapp-auth');
+const PHONE_JID_DOMAINS = new Set(['s.whatsapp.net', 'c.us']);
+
+const mobileFromJid = (jid) => {
+    const raw = String(jid || '');
+    if (!raw.includes('@')) return '';
+    const [left, domain] = raw.split('@');
+    // Ignore non-phone ids (e.g. LID/PN style identifiers) to avoid wrong numbers.
+    if (!PHONE_JID_DOMAINS.has(domain)) return '';
+    const digits = String(left || '').replace(/\D/g, '');
+    // Accept only realistic mobile formats used in this CRM.
+    if (digits.length === 10) return digits;
+    if (digits.length === 12 && digits.startsWith('91')) return digits;
+    return '';
+};
+
+const contactNameFrom = (c = {}) => (
+    c.name
+    || c.notify
+    || c.verifiedName
+    || c.fullName
+    || c.short
+    || c.subject
+    || ''
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsAppSession — one per logged-in user
@@ -183,6 +207,7 @@ class WhatsAppSession {
                         const timestamp = new Date(tsRaw * 1000);
                         const isGroup = remoteJid.endsWith('@g.us');
                         const participant = isGroup ? (m.key.participant || null) : null;
+                        const pushName = String(m.pushName || m.pushname || '').trim();
 
                         let text = '';
                         let mediaType = 'text';
@@ -227,7 +252,7 @@ class WhatsAppSession {
 
                         let doc = null;
                         try {
-                            const mobile = isGroup ? '' : (remoteJid.split('@')[0] || '').replace(/\D/g, '');
+                            const mobile = isGroup ? '' : mobileFromJid(remoteJid);
                             doc = await WhatsAppMessage.findOneAndUpdate(
                                 { userId: this.userId, messageId: messageId || `${remoteJid}:${tsRaw}:${direction}` },
                                 {
@@ -244,11 +269,15 @@ class WhatsAppSession {
                                         timestamp,
                                         read: fromMe, // outbound is always "read"
                                         ...(mobile ? { mobile } : {}),
+                                        ...(!isGroup && pushName ? { chatName: pushName } : {}),
                                         ...(isMedia ? {
                                             mediaFilename,
                                             mediaMime,
                                             rawMessage: m,
                                         } : {}),
+                                    },
+                                    $set: {
+                                        ...(!isGroup && pushName ? { chatName: pushName } : {}),
                                     },
                                 },
                                 { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -297,8 +326,8 @@ class WhatsAppSession {
                 for (const c of incoming) {
                     if (!c?.id || c.id === 'status@broadcast') continue;
                     const isGroup = c.id.endsWith('@g.us');
-                    const mobile = isGroup ? '' : (c.id.split('@')[0] || '').replace(/\D/g, '');
-                    const name = c.name || c.subject || c.notify || '';
+                    const mobile = isGroup ? '' : (mobileFromJid(c.id) || String(c.phoneNumber || c.phone || '').replace(/\D/g, ''));
+                    const name = contactNameFrom(c);
                     const ts = c.conversationTimestamp
                         ? new Date(Number(c.conversationTimestamp) * 1000)
                         : null;
@@ -357,8 +386,8 @@ class WhatsAppSession {
                     if (!c?.id || c.id === 'status@broadcast') continue;
                     const isGroup = c.id.endsWith('@g.us');
                     if (isGroup) continue;  // groups handled by chats.* events
-                    const mobile = (c.id.split('@')[0] || '').replace(/\D/g, '');
-                    const name = c.name || c.notify || c.verifiedName || '';
+                    const mobile = mobileFromJid(c.id) || String(c.phoneNumber || c.phone || '').replace(/\D/g, '');
+                    const name = contactNameFrom(c);
                     ops.push({
                         updateOne: {
                             filter: { userId: this.userId, messageId: `placeholder:${c.id}` },
@@ -463,6 +492,7 @@ class WhatsAppSession {
                             const timestamp = new Date(tsRaw * 1000);
                             const isGroup = remoteJid.endsWith('@g.us');
                             const participant = isGroup ? (m.key.participant || null) : null;
+                            const pushName = String(m.pushName || m.pushname || '').trim();
 
                             let text = '';
                             let mediaType = 'text';
@@ -485,6 +515,7 @@ class WhatsAppSession {
                                             direction, fromMe, messageId,
                                             text, mediaType, timestamp,
                                             read: fromMe,
+                                            ...(!isGroup && pushName ? { chatName: pushName } : {}),
                                         },
                                     },
                                     upsert: true,

@@ -14,6 +14,7 @@ import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import communicationApi from '@/services/communicationApi';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import GstCorrectionModal from './components/GstCorrectionModal';
+import SalesInvoiceCancelDeleteModal from './components/SalesInvoiceCancelDeleteModal';
 import InvoiceBarcodeBlock from '@/components/invoice/InvoiceBarcodeBlock';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
@@ -30,9 +31,11 @@ const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4f6
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 
 export default function SalesInvoiceDetailPage() {
-    const { hasRole } = useAuth();
+    const { hasRole, hasPermission } = useAuth();
     const { isFeatureEnabled } = useFeatureSettings();
     const isAdmin = hasRole('admin') || hasRole('superadmin');
+    const canCancelInvoice = hasPermission('sales.sales_invoices.cancel');
+    const canDeleteInvoice = hasPermission('sales.sales_invoices.delete');
     const { id } = useParams();
     const navigate = useNavigate();
     const [inv, setInv] = useState(null);
@@ -40,6 +43,7 @@ export default function SalesInvoiceDetailPage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('invoice');
     const [cancelling, setCancelling] = useState(false);
+    const [cancelDeleteModal, setCancelDeleteModal] = useState(null);
     const [seriesList, setSeriesList] = useState([]);
     const [showSeriesModal, setShowSeriesModal] = useState(false);
     const [showGstModal, setShowGstModal] = useState(false);
@@ -90,36 +94,22 @@ export default function SalesInvoiceDetailPage() {
     }) : '—';
     const fmtCur = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
-    const handleCancel = async () => {
-        if (!isAdmin) return toast.error('Only administrators can cancel invoices');
-        
-        const reason = window.prompt('CANCEL INVOICE (Rule 1 & 2):\n\nThis will reverse stock and ledger impacts but the INVOICE NUMBER WILL REMAIN RESERVED and cannot be reused.\n\nPlease enter the reason for cancellation:');
-        if (!reason || !reason.trim()) return;
-
-        setCancelling(true);
-        try { 
-            const res = await cancelSalesInvoice(id, { reason }); 
-            toast.success(res.message || 'Invoice cancelled. Number reserved.'); 
-            load(); 
-        }
-        catch (e) { toast.error(e.response?.data?.message || 'Failed to cancel'); }
-        finally { setCancelling(false); }
-    };
-
-    const handleDelete = async () => {
-        if (!isAdmin) return toast.error('Only administrators can delete invoices');
-
-        const msg = `STRICT DELETE RULE (Rule 3):\n\n1. You can ONLY delete the LATEST invoice in a series.\n2. Deletion will PERMANENTLY remove the record and FREE UP the number for reuse.\n\nPlease enter the reason for deletion:`;
-        const reason = window.prompt(msg);
-        if (!reason || !reason.trim()) return;
-        
+    const handleCancelDeleteConfirm = async (payload) => {
         setCancelling(true);
         try {
-            const res = await deleteSalesInvoice(id, { reason });
-            toast.success(res.message || 'Invoice deleted and number freed.');
-            navigate(PATHS.SALES.INVOICES);
+            if (cancelDeleteModal === 'cancel') {
+                const res = await cancelSalesInvoice(id, payload);
+                toast.success(res.message || 'Invoice cancelled. Number reserved.');
+                setCancelDeleteModal(null);
+                load();
+            } else {
+                const res = await deleteSalesInvoice(id, payload);
+                toast.success(res.message || 'Invoice deleted and number freed.');
+                setCancelDeleteModal(null);
+                navigate(PATHS.SALES.INVOICES);
+            }
         } catch (e) {
-            toast.error(e.response?.data?.message || 'Failed to delete. Sequence violation detected.');
+            toast.error(e.response?.data?.message || 'Action failed');
         } finally {
             setCancelling(false);
         }
@@ -391,6 +381,12 @@ export default function SalesInvoiceDetailPage() {
                                         <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', border: '1px solid #000' }}>
                                             <div style={{ borderRight: '1px solid #000', padding: '8px' }}>
                                                 <div style={{ marginBottom: '8px' }}>
+                                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Remarks:</div>
+                                                    <div style={{ fontSize: '9pt', color: '#333', whiteSpace: 'pre-wrap', fontStyle: inv.remarks ? 'normal' : 'italic' }}>
+                                                        {inv.remarks || '—'}
+                                                    </div>
+                                                </div>
+                                                <div style={{ marginBottom: '8px' }}>
                                                     <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Bank Details:</div>
                                                     <div style={{ fontSize: '8.5pt', lineHeight: '1.3' }}>
                                                         <strong>{company.bankName || 'BANK OF BARODA'}</strong><br />
@@ -612,9 +608,9 @@ export default function SalesInvoiceDetailPage() {
                              )}
 
                              {/* Cancel Invoice */}
-                             {notCancelled && isAdmin && (
+                             {notCancelled && canCancelInvoice && (
                                  <button
-                                     onClick={handleCancel}
+                                     onClick={() => setCancelDeleteModal('cancel')}
                                      disabled={cancelling}
                                      style={{ padding: '9px 18px', borderRadius: 8, background: '#f59e0b', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                                      title="Cancel this invoice (Preserves Number)"
@@ -623,10 +619,9 @@ export default function SalesInvoiceDetailPage() {
                                  </button>
                              )}
 
-                             {/* Delete Invoice */}
-                             {notCancelled && isAdmin && (
+                             {notCancelled && canDeleteInvoice && (
                                  <button
-                                     onClick={handleDelete}
+                                     onClick={() => setCancelDeleteModal('delete')}
                                      disabled={cancelling}
                                      style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                                      title="Delete Invoice (Frees Number, Latest Only)"
@@ -977,6 +972,16 @@ export default function SalesInvoiceDetailPage() {
                     onSuccess={() => { setShowGstModal(false); load(); }} 
                 />
             )}
+
+            <SalesInvoiceCancelDeleteModal
+                open={!!cancelDeleteModal}
+                mode={cancelDeleteModal || 'cancel'}
+                invoiceNumber={inv.displayInvoiceNumber || inv.invoiceNumber}
+                salesInvoiceId={id}
+                onClose={() => setCancelDeleteModal(null)}
+                onConfirm={handleCancelDeleteConfirm}
+                submitting={cancelling}
+            />
 
             {/* Print Styles */}
             <style>{`

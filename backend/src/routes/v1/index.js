@@ -21,6 +21,7 @@ import bomRoute from './bom.routes.js';
 import workOrderRoute from './workOrder.routes.js';
 import supplierRoute from './supplier.routes.js';
 import purchaseOrderRoute from './purchaseOrder.routes.js';
+import purchaseRfqRoute from './purchaseRfq.routes.js';
 import grnRoute from './grn.routes.js';
 import purchaseInvoiceRoute from './purchaseInvoice.routes.js';
 import paymentEntryRoute from './paymentEntry.routes.js';
@@ -226,6 +227,10 @@ const defaultRoutes = [
     {
         path: '/purchase-orders',
         route: purchaseOrderRoute,
+    },
+    {
+        path: '/purchase-rfqs',
+        route: purchaseRfqRoute,
     },
     {
         path: '/grns',

@@ -132,10 +132,15 @@ const AddSeriesModal = ({ isOpen, onClose, onSave }) => {
     );
 };
 
-export default function SalesInvoiceFormPage() {
+function isEstimateSeriesDoc(s) {
+    return s?.isEstimate === true || s?.documentType === 'Estimate';
+}
+
+export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
+    const isEstimateForm = listMode === 'estimate';
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const soId = searchParams.get('soId');
+    const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
@@ -220,24 +225,35 @@ export default function SalesInvoiceFormPage() {
 
     const loadSeries = useCallback(() => {
         getInvoiceSeries({ active: true }).then(async s => {
-            const list = s || [];
+            const all = s || [];
+            const list = isEstimateForm
+                ? all.filter(isEstimateSeriesDoc)
+                : all.filter((x) => !isEstimateSeriesDoc(x));
             setSeriesList(list);
             // When creating from a Sales Order, the series will be inherited from the SO —
             // skip default pick and the "no default" warning here.
             if (soId) return;
             if (!form.seriesId && list.length > 0) {
-                // Pick series marked as Default for Tax Invoice in Series Master.
-                // Do NOT fall back to any other series (no auto-Estimate selection).
-                const autoSelect = list.find(x => x.isDefaultForTaxInvoice);
+                const autoSelect = isEstimateForm
+                    ? (list.find((x) => x.isDefault) || list[0])
+                    : list.find((x) => x.isDefaultForTaxInvoice);
                 if (autoSelect) {
-                    setForm(p => ({ ...p, seriesId: autoSelect._id, gstApplicable: autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true }));
+                    const gstOn = isEstimateForm
+                        ? false
+                        : (autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true);
+                    setForm((p) => ({ ...p, seriesId: autoSelect._id, gstApplicable: gstOn }));
                     await fetchPreviewNo(autoSelect._id);
                 } else {
-                    toast.error('Please set default series in Series Master.', { id: 'inv-no-default' });
+                    toast.error(
+                        isEstimateForm
+                            ? 'Please create an active Estimate series in Invoice Series master.'
+                            : 'Please set default series in Series Master.',
+                        { id: 'inv-no-default' }
+                    );
                 }
             }
         }).catch(() => { });
-    }, [form.seriesId, soId]);
+    }, [form.seriesId, soId, isEstimateForm]);
 
     useEffect(() => {
         loadSeries();
@@ -494,7 +510,7 @@ export default function SalesInvoiceFormPage() {
             toast.success('Invoice created!');
 
             // E-Way Bill reminder: prompt only for GST tax invoices above the threshold.
-            const needsEwb = form.gstApplicable === true && Number(roundedTotal) >= EWAY_BILL_THRESHOLD;
+            const needsEwb = !isEstimateForm && form.gstApplicable === true && Number(roundedTotal) >= EWAY_BILL_THRESHOLD;
             if (needsEwb) {
                 const proceed = window.confirm(
                     `E-Way Bill Required\n\n` +
@@ -531,10 +547,12 @@ export default function SalesInvoiceFormPage() {
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <button onClick={() => navigate(PATHS.SALES.INVOICES)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Invoices</button>
+                <button onClick={() => navigate(isEstimateForm ? PATHS.SALES.ESTIMATES : PATHS.SALES.INVOICES)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← {isEstimateForm ? 'Sales Estimates' : 'Sales Invoices'}</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>
-                        {form.gstApplicable ? '🧾 New GST Tax Invoice' : '📄 New Estimate / Non-GST Document'}
+                        {isEstimateForm
+                            ? '📄 New Sales Estimate'
+                            : (form.gstApplicable ? '🧾 New GST Tax Invoice' : '📄 New Estimate / Non-GST Document')}
                     </h1>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>

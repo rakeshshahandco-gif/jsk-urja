@@ -16,9 +16,13 @@ const getInitialBaseUrl = () => {
 
 let currentBaseUrl = getInitialBaseUrl();
 
+const isRenderDeploy =
+    typeof window !== 'undefined' &&
+    window.location.hostname.endsWith('.onrender.com');
+
 const api = axios.create({
     baseURL: currentBaseUrl,
-    timeout: 10000,
+    timeout: isRenderDeploy ? 90000 : 10000,
     headers: {
         'Content-Type': 'application/json',
     },

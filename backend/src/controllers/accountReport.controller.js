@@ -18,13 +18,41 @@ export const getSalesRegister = asyncHandler(async (req, res) => {
         if (to) filter.invoiceDate.$lte = new Date(to);
     }
 
-    const invoices = await SalesInvoice.find({ ...filter, isDeleted: false })
+    const invoices = await SalesInvoice.find({ ...filter, isDeleted: { $ne: true } })
         .sort({ invoiceDate: -1, invoiceNumber: -1 })
         .populate('customerId', 'name')
         .populate('seriesId', 'seriesName isEstimate gstApplicable')
         .lean();
 
-    res.send(new ApiResponse(httpStatus.OK, invoices));
+    const registerRows = invoices.map((inv) => {
+        const isCancelled = inv.status === 'Cancelled';
+        if (!isCancelled) return inv;
+        return {
+            ...inv,
+            registerStatus: 'CANCELLED',
+            totalTaxableAmount: 0,
+            totalBeforeTax: 0,
+            totalTaxAmount: 0,
+            totalGst: 0,
+            totalCgst: 0,
+            totalSgst: 0,
+            totalIgst: 0,
+            totalCessAmount: 0,
+            grandTotal: 0,
+            roundedTotal: 0,
+            items: (inv.items || []).map((it) => ({
+                ...it,
+                taxableAmount: 0,
+                cgstAmount: 0,
+                sgstAmount: 0,
+                igstAmount: 0,
+                cessAmount: 0,
+                totalAmount: 0,
+            })),
+        };
+    });
+
+    res.send(new ApiResponse(httpStatus.OK, registerRows));
 });
 
 /**

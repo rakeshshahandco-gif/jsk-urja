@@ -20,6 +20,7 @@ const STATUS_COLORS = {
   Confirmed: { color: "#2563eb", bg: "#eff6ff", border: "#93c5fd" },
   Dispatched: { color: "#d97706", bg: "#fffbeb", border: "#fcd34d" },
   Invoiced: { color: "#059669", bg: "#f0fdf4", border: "#6ee7b7" },
+  "Partially Invoiced": { color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" },
   Closed: { color: "#16a34a", bg: "#f0fdf4", border: "#86efac" },
   Cancelled: { color: "#dc2626", bg: "#fef2f2", border: "#fca5a5" },
 };
@@ -1047,6 +1048,36 @@ export default function SalesOrderDetailPage() {
           </table>
 
           {isLastPage && (
+          <>
+          <div
+            style={{
+              marginTop: "14px",
+              border: "1px solid #000",
+              padding: "8px 10px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "8pt",
+                fontWeight: 900,
+                textTransform: "uppercase",
+                color: "#555",
+                marginBottom: "4px",
+              }}
+            >
+              Remarks:
+            </div>
+            <div
+              style={{
+                fontSize: "9pt",
+                color: "#333",
+                whiteSpace: "pre-wrap",
+                fontStyle: so.remarks ? "normal" : "italic",
+              }}
+            >
+              {so.remarks || "—"}
+            </div>
+          </div>
           <div
             style={{
               display: "flex",
@@ -1166,6 +1197,7 @@ export default function SalesOrderDetailPage() {
               </div>
             </div>
           </div>
+          </>
           )}
         </div>
              );
@@ -1333,7 +1365,7 @@ export default function SalesOrderDetailPage() {
                   📋 View Production Sheet
                 </button>
               )}
-              {so.status === "Confirmed" && !so.invoiceId && (
+              {(so.status === "Confirmed" || so.status === "Partially Invoiced" || so.status === "Dispatched") && so.status !== "Invoiced" && (
                 <button
                   onClick={() =>
                     navigate(`${PATHS.SALES.NEW_INVOICE}?soId=${id}`)

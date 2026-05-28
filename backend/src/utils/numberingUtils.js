@@ -49,9 +49,11 @@ export const getNextNumberFromSeries = async (TargetModel, seriesId, financialYe
 
     while (isDuplicate && attempts < MAX_ATTEMPTS) {
         // Double check: both by sequence number AND by the final formatted string
+        // Only ACTIVE and CANCELLED invoices block numbers; DELETED must not block reuse.
+        const blockingFilter = { isDeleted: { $ne: true } };
         const [seqExists, strExists] = await Promise.all([
-            TargetModel.exists({ seriesId, sequenceNumber: nextSeq }).session(session),
-            TargetModel.exists({ [numberField]: displayInvoiceNumber }).session(session)
+            TargetModel.exists({ seriesId, sequenceNumber: nextSeq, ...blockingFilter }).session(session),
+            TargetModel.exists({ [numberField]: displayInvoiceNumber, ...blockingFilter }).session(session)
         ]);
         
         if (seqExists || strExists) {

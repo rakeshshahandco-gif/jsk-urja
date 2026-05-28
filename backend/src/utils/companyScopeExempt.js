@@ -21,5 +21,9 @@ export function isCompanyScopeExempt(req) {
     if (m === 'PUT' && new RegExp(`^/companies/${OID}$`).test(p)) return true;
     if (m === 'PATCH' && new RegExp(`^/companies/${OID}/toggle-active$`).test(p)) return true;
 
+    // FY master is global (shared across companies) — must load without X-Company-Id
+    if (p === '/financial-years' && m === 'GET') return true;
+    if (p === '/financial-years/current' && m === 'GET') return true;
+
     return false;
 }

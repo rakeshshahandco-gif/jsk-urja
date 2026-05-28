@@ -4,7 +4,7 @@ import { useCompany } from '@/contexts/CompanyContext';
 import styles from './CompanySwitcher.module.scss';
 
 export const CompanySwitcher = () => {
-    const { companies, selectedCompany, switchCompany } = useCompany();
+    const { companies, selectedCompany, switchCompany, loading } = useCompany();
     const [open, setOpen] = useState(false);
     const [confirmTarget, setConfirmTarget] = useState(null);
     const ref = useRef(null);
@@ -21,8 +21,29 @@ export const CompanySwitcher = () => {
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    // Don't render until we have a selected company
-    if (!selectedCompany) return null;
+    if (loading) {
+        return (
+            <div className={styles.singleCompany} title="Loading companies">
+                <Building2 size={13} className={styles.icon} />
+                <div className={styles.singleInfo}>
+                    <span className={styles.singleLabel}>Active Company</span>
+                    <span className={styles.singleName}>Loading…</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (!selectedCompany) {
+        return (
+            <div className={styles.singleCompany} title="No active company">
+                <Building2 size={13} className={styles.icon} />
+                <div className={styles.singleInfo}>
+                    <span className={styles.singleLabel}>Active Company</span>
+                    <span className={styles.singleName}>Not set — open Company Master</span>
+                </div>
+            </div>
+        );
+    }
 
     // Only one company → show static label (no dropdown)
     if (companies.length <= 1) {

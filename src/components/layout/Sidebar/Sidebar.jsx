@@ -161,10 +161,13 @@ export const Sidebar = () => {
                             </div>
                             <select 
                                 className={styles.fySelect}
-                                value={selectedFY}
+                                value={selectedFY || ''}
                                 onChange={(e) => setSelectedFY(e.target.value)}
                                 title="Switch Financial Year"
                             >
+                                {(!financialYears || financialYears.length === 0) && (
+                                    <option value="">Loading F.Y…</option>
+                                )}
                                 {financialYears && financialYears.map(fy => (
                                     <option key={fy._id} value={fy.name}>
                                         {fy.name}{fy.isCurrent ? ' ✓' : ''}

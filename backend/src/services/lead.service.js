@@ -3,6 +3,17 @@ import { ProductCatalog } from '../models/productCatalog.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { logActivity } from './leadActivity.service.js';
 
+function normalizeWhatsAppLeadMobile(raw) {
+    const val = String(raw || '').trim();
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length === 10) return `+91${digits}`;
+    if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+    if (val.startsWith('+') && digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    return '';
+}
+
 function buildSort(sortBy) {
     if (!sortBy) return { createdAt: -1 };
     const parts = String(sortBy).split(',');
@@ -38,11 +49,15 @@ export async function createLead(body, userId) {
 }
 
 export async function createLeadFromWhatsApp(body, userId) {
+    const normalizedMobile = normalizeWhatsAppLeadMobile(body.customerMobile || body.normalizedMobile || '');
+    if (!normalizedMobile) {
+        throw new ApiError(400, 'Invalid or missing WhatsApp mobile number');
+    }
     const lead = await Lead.create({
         source: 'whatsapp',
         status: 'new',
         customerName: body.customerName || '',
-        customerMobile: body.customerMobile || '',
+        customerMobile: normalizedMobile,
         assignedTo: body.assignedTo || null,
         priority: body.priority || 'medium',
         notes: body.notes || '',
@@ -50,6 +65,10 @@ export async function createLeadFromWhatsApp(body, userId) {
             messageText: body.messageText,
             receivedAt: body.receivedAt || new Date(),
             threadRef: body.threadRef || '',
+            whatsappChatId: body.whatsappChatId || '',
+            whatsappName: body.whatsappName || body.customerName || '',
+            rawWhatsAppId: body.rawWhatsAppId || '',
+            normalizedMobile,
             attachments: Array.isArray(body.attachments) ? body.attachments : [],
         },
         createdBy: userId,
@@ -60,7 +79,7 @@ export async function createLeadFromWhatsApp(body, userId) {
         type: 'message_saved',
         payload: {
             messagePreview: String(body.messageText || '').slice(0, 200),
-            mobile: body.customerMobile || '',
+            mobile: normalizedMobile,
         },
         userId,
     });

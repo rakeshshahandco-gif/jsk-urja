@@ -63,7 +63,22 @@ export const PERMISSION_REGISTRY = [
         name: 'Sales',
         submodules: [
             { id: 'sales_orders', name: 'Sales Orders', actions: EXTENDED_ACTIONS },
-            { id: 'sales_invoices', name: 'Tax Invoice GST', actions: [...EXTENDED_ACTIONS, { id: 'whatsapp', label: 'WhatsApp Send', type: 'boolean' }, { id: 'email', label: 'Email Send', type: 'boolean' }] },
+            {
+                id: 'sales_invoices',
+                name: 'Tax Invoice GST',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Create', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Sales Invoice Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' },
+                    { id: 'cancel', label: 'Sales Invoice Cancel', type: 'boolean' },
+                    { id: 'approve', label: 'Approve', type: 'boolean' },
+                    { id: 'whatsapp', label: 'WhatsApp Send', type: 'boolean' },
+                    { id: 'email', label: 'Email Send', type: 'boolean' },
+                ],
+            },
             { id: 'internal_sales', name: 'Estimate / Internal Sale', actions: EXTENDED_ACTIONS },
             { id: 'eway_bills', name: 'E-Way Bill Tracking', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'logistics', name: 'Logistics & Courier Master', actions: STANDARD_ACTIONS }
@@ -76,7 +91,12 @@ export const PERMISSION_REGISTRY = [
             { id: 'purchase_orders', name: 'Purchase Order', actions: EXTENDED_ACTIONS },
             { id: 'purchase_invoices', name: 'Purchase Invoice', actions: EXTENDED_ACTIONS },
             { id: 'suppliers', name: 'Supplier Master', actions: [...STANDARD_ACTIONS, { id: 'export', label: 'Export', type: 'boolean' }] },
-            { id: 'grn', name: 'Goods Receipt (GRN)', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] }
+            { id: 'grn', name: 'Goods Receipt (GRN)', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] },
+            { id: 'purchase_rfq', name: 'Purchase RFQ', actions: [...STANDARD_ACTIONS, { id: 'cancel', label: 'Cancel', type: 'boolean' }] },
+            { id: 'supplier_quotation', name: 'Supplier Quotation Entry', actions: STANDARD_ACTIONS },
+            { id: 'quotation_comparison', name: 'Quotation Comparison', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit Selection', type: 'boolean' }] },
+            { id: 'quotation_approve', name: 'Quotation Approve', actions: [{ id: 'approve', label: 'Approve', type: 'boolean' }] },
+            { id: 'convert_rfq_to_po', name: 'Convert RFQ to Purchase Order', actions: [{ id: 'add', label: 'Convert', type: 'boolean' }] },
         ]
     },
     {

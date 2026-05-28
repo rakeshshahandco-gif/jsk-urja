@@ -58,6 +58,15 @@ import WorkOrderFormPage from '@/features/production/WorkOrderFormPage';
 import WorkOrderDetailPage from '@/features/production/WorkOrderDetailPage';
 import SupplierListPage from '@/features/purchase/SupplierListPage';
 import PurchaseOrderListPage from '@/features/purchase/PurchaseOrderListPage';
+import PurchaseRfqListPage from '@/features/purchase/rfq/PurchaseRfqListPage';
+import PurchaseRfqFormPage from '@/features/purchase/rfq/PurchaseRfqFormPage';
+import PurchaseRfqDetailPage from '@/features/purchase/rfq/PurchaseRfqDetailPage';
+import QuotationComparisonPage from '@/features/purchase/rfq/QuotationComparisonPage';
+import PurchaseRfqComparisonListPage from '@/features/purchase/rfq/PurchaseRfqComparisonListPage';
+import SupplierQuotationListPage from '@/features/purchase/rfq/SupplierQuotationListPage';
+import SupplierQuotationFormPage from '@/features/purchase/rfq/SupplierQuotationFormPage';
+import PurchaseRfqReportsPage from '@/features/purchase/rfq/PurchaseRfqReportsPage';
+import PurchaseRfqFeatureGate from '@/features/purchase/rfq/PurchaseRfqFeatureGate';
 import PurchaseOrderFormPage from '@/features/purchase/PurchaseOrderFormPage';
 import PurchaseOrderDetailPage from '@/features/purchase/PurchaseOrderDetailPage';
 import PurchaseInvoiceListPage from '@/features/purchase/PurchaseInvoiceListPage';
@@ -291,8 +300,8 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <FinancialYearProvider>
                     <CompanyProvider>
+                <FinancialYearProvider>
                         <FeatureSettingsProvider>
                         <UiPreferencesProvider>
                         <SocketProvider>
@@ -359,8 +368,8 @@ function App() {
                     </SocketProvider>
                         </UiPreferencesProvider>
                         </FeatureSettingsProvider>
-                    </CompanyProvider>
                 </FinancialYearProvider>
+                    </CompanyProvider>
             </AuthProvider>
         </BrowserRouter>
     );
@@ -552,6 +561,16 @@ const AppLayout = () => {
                         <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
                         <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
                         <Route path="/purchase/suppliers" element={<ProtectedRoute requirePermission="purchase"><SupplierListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.RFQ_REPORTS} element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqReportsPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.QUOTATION_COMPARISON_LIST} element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqComparisonListPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.RFQ_NEW} element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqFormPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path="/purchase/rfq/:id/edit" element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqFormPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path="/purchase/rfq/:id/comparison" element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><QuotationComparisonPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path="/purchase/rfq/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqDetailPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.RFQ} element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><PurchaseRfqListPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path="/purchase/supplier-quotations/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><SupplierQuotationFormPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path="/purchase/supplier-quotations/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><SupplierQuotationFormPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
+                        <Route path={PATHS.PURCHASE.SUPPLIER_QUOTATIONS} element={<ProtectedRoute requirePermission="purchase"><PurchaseRfqFeatureGate><SupplierQuotationListPage /></PurchaseRfqFeatureGate></ProtectedRoute>} />
                         <Route path="/distributors" element={<ProtectedRoute requirePermission="sales"><DistributorList /></ProtectedRoute>} />
                         <Route path="/purchase/orders" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderListPage /></ProtectedRoute>} />
                         <Route path="/purchase/orders/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseOrderFormPage /></ProtectedRoute>} />
@@ -573,6 +592,8 @@ const AppLayout = () => {
                         <Route path="/sales/invoices" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/new" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/sales/invoices/:id" element={<ProtectedRoute requirePermission="sales"><SalesInvoiceDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.ESTIMATES} element={<ProtectedRoute requirePermission="sales"><SalesInvoiceListPage listMode="estimate" /></ProtectedRoute>} />
+                        <Route path={PATHS.SALES.NEW_ESTIMATE} element={<ProtectedRoute requirePermission="sales"><SalesInvoiceFormPage listMode="estimate" /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.CREDIT_NOTES} element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditNoteListPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.DEBIT_NOTES} element={<ProtectedRoute requirePermission="accounts.debit_notes.view || sales.sales_invoices.view"><DebitNoteListPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.CREDIT_NOTE_DETAIL_PATTERN} element={<ProtectedRoute requirePermission="accounts.credit_notes.view || sales.sales_invoices.view"><CreditDebitNoteDetailPage /></ProtectedRoute>} />

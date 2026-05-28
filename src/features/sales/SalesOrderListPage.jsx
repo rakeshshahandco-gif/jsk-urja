@@ -15,6 +15,7 @@ const STATUS_COLORS = {
     Confirmed: { color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
     Dispatched: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
     Invoiced: { color: '#059669', bg: '#f0fdf4', border: '#6ee7b7' },
+    'Partially Invoiced': { color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
     Closed: { color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
     Cancelled: { color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
     Completed: { color: '#059669', bg: '#f0fdf4', border: '#86efac' },
@@ -157,13 +158,13 @@ export default function SalesOrderListPage() {
 
             {/* Filters */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <input placeholder="Search SO number, customer..." value={search} onChange={e => setFilter('search', e.target.value)}
+                <input placeholder="Search SO number, customer, PO no..." value={search} onChange={e => setFilter('search', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: 260 }} />
                 
                 <select value={statusFilter} onChange={e => setFilter('statusFilter', e.target.value)}
                     style={{ padding: '7px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
                     <option value="">All Statuses</option>
-                    {['Draft', 'Confirmed', 'Dispatched', 'Invoiced', 'Closed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
+                    {['Draft', 'Confirmed', 'Dispatched', 'Partially Invoiced', 'Invoiced', 'Closed', 'Cancelled'].map(s => <option key={s}>{s}</option>)}
                 </select>
 
                 <button onClick={resetFilters}
@@ -184,14 +185,14 @@ export default function SalesOrderListPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                             <tr>
-                                {['SO Number', 'Date', 'Customer', 'Items', 'Grand Total', 'Payment', 'Status', 'Actions'].map(h => (
+                                {['SO Number', 'Date', 'Cust. PO No', 'Customer', 'Items', 'Grand Total', 'Payment', 'Status', 'Actions'].map(h => (
                                     <th key={h} style={th}>{h}</th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {orders.length === 0 ? (
-                                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} sales orders found.</td></tr>
+                                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No {viewMode === 'archived' ? 'archived' : ''} sales orders found.</td></tr>
                             ) : orders.map((so) => {
                             const sc = STATUS_COLORS[so.status] || STATUS_COLORS.Draft;
                             const isDeleted = so.isDeleted;
@@ -204,6 +205,7 @@ export default function SalesOrderListPage() {
                                         {so.soNumber}
                                     </td>
                                     <td style={td}>{fmt(so.soDate)}</td>
+                                    <td style={{ ...td, color: '#6b7280', fontWeight: 500 }}>{so.customerPO || '—'}</td>
                                     <td style={{ ...td, fontWeight: 500, color: '#1e293b' }}>{so.customerName}</td>
                                     <td style={{ ...td, color: '#6b7280' }}>{so.items?.length || 0} items</td>
                                     <td style={{ ...td, color: '#16a34a', fontWeight: 700 }}>₹{(so.roundedTotal || so.grandTotal || 0).toLocaleString('en-IN')}</td>

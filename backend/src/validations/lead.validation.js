@@ -71,6 +71,10 @@ const fromWhatsApp = {
         messageText: Joi.string().min(1).max(20000).required(),
         customerMobile: Joi.string().allow('').max(40),
         customerName: Joi.string().allow('').max(200),
+        whatsappChatId: Joi.string().allow('').max(200),
+        whatsappName: Joi.string().allow('').max(200),
+        rawWhatsAppId: Joi.string().allow('').max(200),
+        normalizedMobile: Joi.string().allow('').max(40),
         receivedAt: Joi.date(),
         threadRef: Joi.string().allow('').max(200),
         attachments: Joi.array().items(

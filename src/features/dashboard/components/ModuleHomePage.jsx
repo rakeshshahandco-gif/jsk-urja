@@ -43,6 +43,8 @@ import clsx from 'clsx';
 import { toast } from 'react-hot-toast';
 import { userHomeService } from '@/services/userHome.service';
 import { ALL_FORMS } from '@/config/forms.config';
+import { MENU_FEATURE_BY_ID } from '@/config/menuFeatureMap';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 
 const ICON_MAP = {
     'crm': Users,
@@ -71,6 +73,13 @@ const ICON_MAP = {
 const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
     const navigate = useNavigate();
     const { user, hasPermission } = useAuth();
+    const { isFeatureEnabled, settings: featureSettings } = useFeatureSettings();
+
+    const isFormFeatureOn = (formId) => {
+        const path = MENU_FEATURE_BY_ID[formId];
+        if (!path) return true;
+        return isFeatureEnabled(path);
+    };
     const [pinnedFormsData, setPinnedFormsData] = useState([]);
     const [recentForms, setRecentForms] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +96,9 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
                 const normalizedModuleName = moduleName.toLowerCase().replace(/\s/g, '-');
                 const moduleForms = ALL_FORMS.filter(f => {
                     const normalizedFModule = f.module.toLowerCase().replace(/\s/g, '-');
-                    return normalizedFModule === normalizedModuleName || f.module === moduleName;
+                    if (normalizedFModule !== normalizedModuleName && f.module !== moduleName) return false;
+                    if (!isFormFeatureOn(f.id)) return false;
+                    return true;
                 });
                 
                 // Map to the same structure as preference data for compatibility
@@ -123,7 +134,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
                 }
             }
         }
-    }, [user, moduleName, isStatic]);
+    }, [user, moduleName, isStatic, featureSettings]);
 
     const savePreferences = async (newData) => {
         if (isStatic) return;
@@ -155,7 +166,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
         return pinnedFormsData
             .map(data => {
                 const form = ALL_FORMS.find(f => f.id === data.id);
-                if (!form || !hasPermission(form.permission)) return null;
+                if (!form || !hasPermission(form.permission) || !isFormFeatureOn(form.id)) return null;
                 
                 return { 
                     ...form, 
@@ -173,7 +184,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
             ? ALL_FORMS 
             : ALL_FORMS.filter(f => f.module.toLowerCase().replace(/\s/g, '-') === moduleName || f.module === moduleName);
 
-        const permitted = relevantForms.filter(f => hasPermission(f.permission));
+        const permitted = relevantForms.filter(f => hasPermission(f.permission) && isFormFeatureOn(f.id));
 
         if (!searchTerm) return permitted;
         return permitted.filter(f => 
