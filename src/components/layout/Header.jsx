@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
-import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare, LayoutDashboard } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare, LayoutDashboard, Menu } from 'lucide-react';
+import { useSidebar } from '@/context/SidebarContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useMessenger } from '@/contexts/MessengerContext';
 import { NotificationPanel } from './NotificationPanel';
@@ -24,6 +25,7 @@ export const Header = () => {
     const { openModal } = useModal();
     const { unreadCount } = useNotification();
     const { unreadTotal } = useMessenger();
+    const { isMobileLayout, toggleMobileMenu } = useSidebar();
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
@@ -151,6 +153,17 @@ export const Header = () => {
 
             <div className={styles.content}>
                 <div className={styles.pageHeader}>
+                    {isMobileLayout ? (
+                        <button
+                            type="button"
+                            className="jsk-mobile-menu-btn"
+                            onClick={toggleMobileMenu}
+                            title="Open menu"
+                            aria-label="Open menu"
+                        >
+                            <Menu size={20} />
+                        </button>
+                    ) : null}
                     {location.pathname !== '/' && (
                         <button 
                             className={styles.backToDashboard} 

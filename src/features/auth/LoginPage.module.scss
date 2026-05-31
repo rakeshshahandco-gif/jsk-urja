@@ -298,6 +298,31 @@
     }
 }
 
+@media (max-width: 767px) {
+    .loginContent {
+        padding: 1rem;
+    }
+
+    .loginCard {
+        padding: 2rem 1.5rem;
+        border-radius: 16px;
+    }
+
+    .loginHeader h2 {
+        font-size: 1.5rem;
+    }
+
+    .loginButton {
+        min-height: 48px;
+    }
+}
+
+@media (max-width: 430px) {
+    .loginCard {
+        padding: 1.5rem 1.25rem;
+    }
+}
+
 .passwordToggle {
     background: none;
     border: none;

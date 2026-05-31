@@ -173,3 +173,44 @@
     font-size: $font-size-ui-sm;
     color: $text-secondary;
 }
+
+@media (max-width: 1024px) {
+    .page {
+        padding: 12px 14px;
+    }
+
+    .filterRow {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 767px) {
+    .page {
+        padding: 10px 12px;
+    }
+
+    .toolbar {
+        gap: 8px;
+    }
+
+    .toolbarSpacer {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .newTaskBtn {
+        min-height: 40px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .filterPanel {
+        padding: 10px;
+    }
+
+    .sel,
+    .inp {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+}

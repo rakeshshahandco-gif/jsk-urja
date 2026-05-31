@@ -369,3 +369,76 @@
     color: #64748b !important;
     cursor: not-allowed;
 }
+
+// ─── Responsive layout ───────────────────────────────────────────────────────
+@media (max-width: 1024px) {
+    .form-body {
+        grid-template-columns: 1fr;
+        overflow: visible;
+    }
+
+    .form-sidebar {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 12px 8px;
+        gap: 4px;
+        -webkit-overflow-scrolling: touch;
+
+        .sidebar-label {
+            display: none;
+        }
+    }
+
+    .sidebar-item {
+        padding: 10px 16px;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        white-space: nowrap;
+        flex-shrink: 0;
+        width: auto;
+
+        &.active {
+            border-left-color: transparent;
+            border-bottom-color: $primary;
+        }
+    }
+
+    .form-content {
+        padding: 20px 16px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .form-actions {
+        padding: 16px;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 767px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-section {
+        padding: 20px 16px;
+    }
+
+    .form-actions {
+        justify-content: stretch;
+        gap: 10px;
+
+        :global(button) {
+            flex: 1;
+            min-height: 44px;
+        }
+    }
+
+    .contact-person-card .card-header {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+}

@@ -379,7 +379,7 @@ function App() {
 const AppLayout = () => {
     const { user } = useAuth();
     const { selectedFY } = useFinancialYear();
-    const { isCollapsed, isHoverOpen } = useSidebar();
+    const { isMobileLayout, isMobileMenuOpen, closeMobileMenu } = useSidebar();
 
     const location = useLocation();
 
@@ -416,17 +416,24 @@ const AppLayout = () => {
 
     return (
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }} data-jsk-ui-component="app-shell">
+            {isMobileLayout && isMobileMenuOpen ? (
+                <div className="jsk-mobile-backdrop" onClick={closeMobileMenu} aria-hidden="true" />
+            ) : null}
             <Sidebar />
-            <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                flex: 1, 
+            <div
+                data-jsk-ui-component="main-column"
+                style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
                 minWidth: 0,
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                width: '100%',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}>
                 <TopMenuBar />
                 <Header />
-                <main 
+                <main
+                    className="jsk-main-content"
                     key={selectedFY}
                     style={{ 
                         flex: 1, 

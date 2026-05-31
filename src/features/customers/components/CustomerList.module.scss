@@ -248,6 +248,72 @@
     .subText { font-size: 0.875rem; color: #9ca3af; }
 }
 
+@media (max-width: 1024px) {
+    .container {
+        padding: 16px;
+    }
+
+    .headerContainer {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .filtersCard {
+        flex-wrap: wrap;
+
+        .searchWrapper {
+            min-width: 0;
+            flex: 1 1 200px;
+        }
+
+        .statusSelect {
+            flex: 1 1 140px;
+            min-width: 0;
+        }
+    }
+
+    .pagination {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 767px) {
+    .container {
+        padding: 12px;
+    }
+
+    .headerContainer {
+        flex-direction: column;
+        align-items: stretch;
+
+        .actions {
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+    }
+
+    .filtersCard {
+        flex-direction: column;
+        align-items: stretch;
+
+        .searchWrapper,
+        .statusSelect {
+            width: 100%;
+            min-width: 0;
+        }
+    }
+
+    .pagination {
+        flex-direction: column;
+        align-items: stretch;
+
+        .controls {
+            justify-content: center;
+        }
+    }
+}
+
 .errorState {
     background: #fef2f2;
     padding: 24px;

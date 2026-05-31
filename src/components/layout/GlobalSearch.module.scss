@@ -25,6 +25,11 @@
     @media (max-width: 1024px) {
         width: 160px;
     }
+
+    @media (max-width: 767px) {
+        width: 120px;
+        min-width: 0;
+    }
 }
 
 .searchIcon {

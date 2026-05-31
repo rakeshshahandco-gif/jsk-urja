@@ -18,7 +18,7 @@ export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
     const { isFeatureEnabled } = useFeatureSettings();
     const { enabled: uiEnabled, preferences: uiPrefs } = useUiPreferences();
-    const { isCollapsed, isHoverOpen, setIsHovered, toggleSidebar } = useSidebar();
+    const { isCollapsed, isHoverOpen, isMobileLayout, isMobileMenuOpen, setIsHovered, toggleSidebar } = useSidebar();
     const location = useLocation();
     const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name) || ROLES.VIEWER;
 
@@ -104,17 +104,19 @@ export const Sidebar = () => {
     const { financialYears, selectedFY, setSelectedFY } = useFinancialYear();
 
     // Effective state for rendering labels
-    const showingFull = !isCollapsed || isHoverOpen;
+    const showingFull = isMobileLayout ? true : (!isCollapsed || isHoverOpen);
 
     return (
         <aside 
+            id="app-sidebar"
             className={clsx(styles.sidebar, {
-                [styles.collapsed]: isCollapsed && !isHoverOpen,
-                [styles.hoverOpen]: isHoverOpen
+                [styles.collapsed]: !isMobileLayout && isCollapsed && !isHoverOpen,
+                [styles.hoverOpen]: !isMobileLayout && isHoverOpen
             }, 'no-print')}
-            onMouseEnter={() => isCollapsed && setIsHovered(true)}
-            onMouseLeave={() => isCollapsed && setIsHovered(false)}
+            onMouseEnter={() => !isMobileLayout && isCollapsed && setIsHovered(true)}
+            onMouseLeave={() => !isMobileLayout && isCollapsed && setIsHovered(false)}
             data-jsk-ui-component="sidebar"
+            data-mobile-open={isMobileLayout && isMobileMenuOpen ? 'true' : 'false'}
             data-jsk-ui-sidebar-state={
                 isCollapsed && !isHoverOpen
                     ? 'collapsed'

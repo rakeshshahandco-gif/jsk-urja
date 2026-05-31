@@ -3,6 +3,11 @@
   overflow-x: auto;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+
+  @media (max-width: 1024px) {
+    max-width: 100%;
+  }
 }
 
 .table {

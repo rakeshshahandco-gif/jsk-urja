@@ -186,3 +186,36 @@
         }
     }
 }
+
+@media (max-width: 1024px) {
+    .pageContainer {
+        padding: 1.25rem;
+    }
+
+    .headerSection {
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 1.25rem;
+    }
+
+    .filterPanel {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    .pageContainer {
+        padding: 12px;
+    }
+
+    .headerSection {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1rem;
+    }
+
+    .filterPanel {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+}

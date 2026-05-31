@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
+import { useSidebar } from '@/context/SidebarContext';
 
 import { 
     ChevronDown, 
@@ -58,6 +59,7 @@ const IconRenderer = ({ name, title }) => {
 export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { closeMobileMenu } = useSidebar();
 
     // Helper to find module home path
     const getModuleHomePath = (it) => {
@@ -133,6 +135,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
                 || null;
             if (dest && location.pathname !== dest) {
                 navigate(dest);
+                closeMobileMenu();
             }
             return;
         }
@@ -143,6 +146,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
         }
         if (targetPath && location.pathname !== targetPath) {
             navigate(targetPath);
+            closeMobileMenu();
         }
     };
 

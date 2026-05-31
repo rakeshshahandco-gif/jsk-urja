@@ -61,6 +61,14 @@
     color: #0F172A;
     margin: 0;
     letter-spacing: -0.5px;
+
+    @media (max-width: 767px) {
+        font-size: 15px;
+        max-width: calc(100vw - 180px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 .userSection {

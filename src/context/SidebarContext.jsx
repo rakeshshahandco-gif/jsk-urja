@@ -10,10 +10,23 @@ export const SidebarProvider = ({ children }) => {
     });
 
     const [isHovered, setIsHovered] = useState(false);
+    const [isMobileLayout, setIsMobileLayout] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Derived state
     const isCollapsed = sidebarState === 'collapsed';
     const isHoverOpen = isCollapsed && isHovered;
+
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 1024px)');
+        const apply = () => {
+            setIsMobileLayout(mq.matches);
+            if (!mq.matches) setIsMobileMenuOpen(false);
+        };
+        apply();
+        mq.addEventListener('change', apply);
+        return () => mq.removeEventListener('change', apply);
+    }, []);
 
     // Persist preference
     useEffect(() => {
@@ -26,14 +39,21 @@ export const SidebarProvider = ({ children }) => {
         setSidebarState(prev => prev === 'expanded' ? 'collapsed' : 'expanded');
     };
 
+    const toggleMobileMenu = () => setIsMobileMenuOpen((open) => !open);
+    const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
     const value = {
         sidebarState,
         isCollapsed,
         isHovered,
         isHoverOpen,
+        isMobileLayout,
+        isMobileMenuOpen,
         setIsHovered,
         toggleSidebar,
-        setSidebarState
+        toggleMobileMenu,
+        closeMobileMenu,
+        setSidebarState,
     };
 
     return (
