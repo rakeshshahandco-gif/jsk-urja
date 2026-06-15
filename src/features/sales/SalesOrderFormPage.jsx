@@ -457,11 +457,16 @@ export default function SalesOrderFormPage() {
         setSaving(true);
         try {
             const selectedSeries = seriesList.find(s => String(s._id) === normalizeSeriesId(form.seriesId));
+            const effectiveFreightGstRate = gstApplicable
+                ? (Number(form.freightGstRate) || Number(form.items[0]?.gstRate) || 18)
+                : 0;
             const payload = {
                 ...form,
                 seriesId: normalizeSeriesId(form.seriesId) || form.seriesId,
                 seriesName: selectedSeries?.seriesName || form.seriesName || '',
                 status: nextStatus || form.status || 'Draft',
+                freightAmount: Number(form.freightAmount) || 0,
+                freightGstRate: effectiveFreightGstRate,
                 items: form.items.map(i => ({ ...i, qty: Number(i.qty), rate: Number(i.rate), gstRate: Number(i.gstRate) || 18 }))
             };
             if (isEdit) { await updateSalesOrder(id, payload); toast.success('Updated!'); navigate(PATHS.SALES.ORDER_DETAIL(id)); }

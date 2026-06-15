@@ -1720,17 +1720,20 @@ export default function SalesOrderDetailPage() {
             >
               <div style={{ minWidth: 280 }}>
                 {[
-                  ["Total Taxable Amount", fmtCur(so.totalAmount)],
+                  ["Total Item Amount", fmtCur(so.totalAmount)],
+                  ...(Number(so.freightAmount || 0) > 0
+                    ? [["Freight (Taxable)", fmtCur(so.freightAmount)]]
+                    : []),
+                  ["Total Taxable Amount", fmtCur(so.totalTaxableAmount ?? ((Number(so.totalAmount) || 0) + (Number(so.freightAmount) || 0)))],
                   ...(gstApplicable
-                    ? so.gstType === "CGST / SGST"
-                      ? [
+                    ? so.gstType === "IGST"
+                      ? [["IGST", fmtCur(so.totalIgst || so.totalGst)]]
+                      : [
                           ["CGST", fmtCur(so.totalCgst)],
                           ["SGST", fmtCur(so.totalSgst)],
                           ["Total Tax", fmtCur(so.totalGst)],
                         ]
-                      : [[so.gstType || "IGST", fmtCur(so.totalGst)]]
                     : []),
-                  ["Freight", fmtCur(so.freightAmount)],
                   ["Round Off", fmtCur(so.roundOff)],
                 ]
                   .filter(([, v]) => v !== "₹0")

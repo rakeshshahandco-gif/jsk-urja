@@ -80,14 +80,40 @@ const calcTotals = (items, freightAmount = 0, freightGstRate = 0, gstType = '', 
     });
 
     const freight = Number(freightAmount) || 0;
-    const freightGstCount = effectiveGstApplicable ? Number(freightGstRate) : 0;
-    const freightGst = effectiveGstApplicable && freight > 0 && freightGstCount > 0 ? Math.round(freight * freightGstCount / 100 * 100) / 100 : 0;
-    const totalGst = totalCgst + totalSgst + totalIgst + freightGst;
-    const grandTotal = totalTaxableSum + totalGst + freight;
+    const defaultFreightGstRate = processedItems.length ? (Number(processedItems[0].gstRate) || 18) : 18;
+    const resolvedFreightGstRate = effectiveGstApplicable && freight > 0
+        ? (Number(freightGstRate) || defaultFreightGstRate)
+        : 0;
+
+    if (effectiveGstApplicable && freight > 0 && resolvedFreightGstRate > 0) {
+        if (isIGST) {
+            totalIgst += Math.round(freight * resolvedFreightGstRate / 100 * 100) / 100;
+        } else {
+            totalCgst += Math.round(freight * (resolvedFreightGstRate / 2) / 100 * 100) / 100;
+            totalSgst += Math.round(freight * (resolvedFreightGstRate / 2) / 100 * 100) / 100;
+        }
+    }
+
+    const totalTaxableAmount = Math.round((totalTaxableSum + freight) * 100) / 100;
+    const totalGst = Math.round((totalCgst + totalSgst + totalIgst) * 100) / 100;
+    const grandTotal = Math.round((totalTaxableAmount + totalGst) * 100) / 100;
     const roundedTotal = Math.round(grandTotal);
     const roundOff = Math.round((roundedTotal - grandTotal) * 100) / 100;
 
-    return { processedItems, totalQty, totalAmount: totalTaxableSum, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff };
+    return {
+        processedItems,
+        totalQty,
+        totalAmount: totalTaxableSum,
+        totalTaxableAmount,
+        totalCgst,
+        totalSgst,
+        totalIgst,
+        totalGst,
+        resolvedFreightGstRate,
+        grandTotal,
+        roundedTotal,
+        roundOff,
+    };
 };
 
 // ------- CREATE SALES ORDER -------
@@ -113,9 +139,10 @@ export const createSO = asyncHandler(async (req, res) => {
         soNumber = String(soNumber?.displayInvoiceNumber || soNumber || '');
     }
 
-    const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
-        body.items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable
-    );
+    const {
+        processedItems, totalQty, totalAmount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst,
+        resolvedFreightGstRate, grandTotal, roundedTotal, roundOff,
+    } = calcTotals(body.items, body.freightAmount, body.freightGstRate, body.gstType, gstApplicable);
 
     // Pull sticker type from customer master
     let stickerType = body.stickerType || '';
@@ -142,6 +169,8 @@ export const createSO = asyncHandler(async (req, res) => {
         items: processedItems,
         totalQty,
         totalAmount,
+        totalTaxableAmount,
+        freightGstRate: resolvedFreightGstRate,
         totalCgst,
         totalSgst,
         totalIgst,
@@ -298,15 +327,33 @@ export const updateSO = asyncHandler(async (req, res) => {
             }
         }
 
-        if (body.items && JSON.stringify(so.items) !== JSON.stringify(body.items)) {
-            changes['items'] = { old: 'Previous Items', new: 'Updated Items' };
-            const { processedItems, totalQty, totalAmount, totalCgst, totalSgst, totalIgst, totalGst, grandTotal, roundedTotal, roundOff } = calcTotals(
-                body.items, so.freightAmount, so.freightGstRate, so.gstType, so.gstApplicable
+        const itemsInput = body.items || so.items;
+        const needsRecalc = body.items
+            || body.freightAmount !== undefined
+            || body.freightGstRate !== undefined
+            || body.gstType !== undefined
+            || changes.seriesId;
+
+        if (needsRecalc) {
+            if (body.items) changes.items = { old: 'Previous Items', new: 'Updated Items' };
+            const {
+                processedItems, totalQty, totalAmount, totalTaxableAmount, totalCgst, totalSgst, totalIgst, totalGst,
+                resolvedFreightGstRate, grandTotal, roundedTotal, roundOff,
+            } = calcTotals(
+                itemsInput,
+                body.freightAmount !== undefined ? body.freightAmount : so.freightAmount,
+                body.freightGstRate !== undefined ? body.freightGstRate : so.freightGstRate,
+                body.gstType !== undefined ? body.gstType : so.gstType,
+                so.gstApplicable,
             );
             so.items = processedItems;
             so.totalQty = totalQty;
             so.totalAmount = totalAmount;
-            so.totalCgst = totalCgst; so.totalSgst = totalSgst; so.totalIgst = totalIgst;
+            so.totalTaxableAmount = totalTaxableAmount;
+            so.freightGstRate = resolvedFreightGstRate;
+            so.totalCgst = totalCgst;
+            so.totalSgst = totalSgst;
+            so.totalIgst = totalIgst;
             so.totalGst = totalGst;
             so.grandTotal = grandTotal;
             so.roundedTotal = roundedTotal;
