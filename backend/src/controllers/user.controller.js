@@ -6,6 +6,11 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { syncPermissionsWithRegistry } from '../utils/permission.utils.js';
+import {
+    mongooseFilterUsersForCompany,
+    normalizeUserCompanyAssignment,
+    assertActingUserCanManageTargetUser,
+} from '../services/companyUserAccess.service.js';
 
 // --- ROLE CONTROLLERS ---
 
@@ -63,9 +68,13 @@ export const getDepartments = asyncHandler(async (req, res) => {
 // --- USER CONTROLLERS ---
 
 export const getUsers = asyncHandler(async (req, res) => {
-    const users = await User.find()
+    const companyId = req.companyId || req.query?.companyId;
+    const filter = companyId ? mongooseFilterUsersForCompany(companyId) : {};
+
+    const users = await User.find(filter)
         .populate('role')
         .populate('department', 'name')
+        .populate('assignedCompanyIds', 'companyName')
         .select('-password');
     
     // Sync permissions for each user's role and additionalPermissions
@@ -91,8 +100,15 @@ export const createUser = asyncHandler(async (req, res) => {
             req.body.roleName = roleDoc.name;
         }
     }
-    const user = await User.create(req.body);
-    const userResponse = await User.findById(user._id).select('-password').populate('role', 'name');
+    const payload = normalizeUserCompanyAssignment(req.body, {
+        activeCompanyId: req.companyId,
+        actingUser: req.user,
+    });
+    const user = await User.create(payload);
+    const userResponse = await User.findById(user._id)
+        .select('-password')
+        .populate('role', 'name')
+        .populate('assignedCompanyIds', 'companyName');
     res.status(httpStatus.CREATED).send(new ApiResponse(httpStatus.CREATED, userResponse, 'User created successfully'));
 });
 
@@ -101,12 +117,18 @@ export const getUser = asyncHandler(async (req, res) => {
         .populate('role')
         .populate('department')
         .populate('reportingManager', 'name')
+        .populate('assignedCompanyIds', 'companyName')
         .select('-password');
     if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    await assertActingUserCanManageTargetUser(req.user, user, req.companyId);
     res.send(new ApiResponse(httpStatus.OK, user));
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
+    const existing = await User.findById(req.params.id);
+    if (!existing) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    await assertActingUserCanManageTargetUser(req.user, existing, req.companyId);
+
     const { role } = req.body;
     if (role) {
         const roleDoc = await Role.findById(role);
@@ -114,16 +136,29 @@ export const updateUser = asyncHandler(async (req, res) => {
             req.body.roleName = roleDoc.name;
         }
     }
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    const payload = normalizeUserCompanyAssignment(req.body, {
+        activeCompanyId: req.companyId,
+        actingUser: req.user,
+    });
+    const user = await User.findByIdAndUpdate(req.params.id, payload, { new: true })
         .populate('role', 'name')
         .populate('department', 'name')
+        .populate('assignedCompanyIds', 'companyName')
         .select('-password');
     if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     res.send(new ApiResponse(httpStatus.OK, user, 'User updated successfully'));
 });
 
 export const deleteUser = asyncHandler(async (req, res) => {
+    const existing = await User.findById(req.params.id);
+    if (!existing) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    await assertActingUserCanManageTargetUser(req.user, existing, req.companyId);
+    if (req.companyId && existing.companyAccessConfigured === true) {
+        const assigned = (existing.assignedCompanyIds || []).map(String);
+        if (!assigned.includes(String(req.companyId)) && String(req.user?._id) !== String(existing._id)) {
+            throw new ApiError(httpStatus.FORBIDDEN, 'User is not assigned to the active company');
+        }
+    }
     const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
     res.send(new ApiResponse(httpStatus.OK, null, 'User deleted successfully'));
 });

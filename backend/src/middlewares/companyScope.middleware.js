@@ -7,6 +7,8 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { companyScopeAls } from '../utils/companyScopeContext.js';
 import { isCompanyScopeExempt } from '../utils/companyScopeExempt.js';
+import { User } from '../models/user.model.js';
+import { canUserAccessCompany } from '../services/companyUserAccess.service.js';
 
 /**
  * Extract roleName from Bearer JWT without full DB lookup.
@@ -19,6 +21,18 @@ function extractRoleFromToken(req) {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
         return decoded.roleName || null;
+    } catch {
+        return null;
+    }
+}
+
+function extractUserIdFromToken(req) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith('Bearer ')) return null;
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+        return decoded.id || decoded._id || null;
     } catch {
         return null;
     }
@@ -54,9 +68,19 @@ export const resolveCompanyScope = asyncHandler(async (req, res, next) => {
     req.companyId = company._id;
     req.company = company;
 
+    const roleName = extractRoleFromToken(req);
+    const userId = extractUserIdFromToken(req);
+    if (userId && roleName !== 'superadmin') {
+        const user = await User.findById(userId)
+            .select('assignedCompanyIds companyAccessConfigured roleName')
+            .lean();
+        if (user && !canUserAccessCompany(user, company._id)) {
+            throw new ApiError(httpStatus.FORBIDDEN, 'You do not have access to this company');
+        }
+    }
+
     // --- Subscription enforcement ---
     // Superadmin always bypasses subscription checks
-    const roleName = extractRoleFromToken(req);
     if (roleName !== 'superadmin') {
         const sub = await Subscription.findOne({ companyId: company._id }).lean();
         req.subscription = sub || null;

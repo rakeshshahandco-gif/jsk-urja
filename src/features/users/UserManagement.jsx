@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { Button, useModal } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
 import { AddUserForm } from './components/AddUserForm';
 import { UserPlus, RefreshCw } from 'lucide-react';
 import { userService } from '@/services/user.service';
@@ -12,10 +13,11 @@ import { toast } from 'react-hot-toast'; // Assuming toast is available or use c
 export const UserManagement = () => {
     const { openModal } = useModal();
     const { user: currentUser, updateUserProfile } = useAuth();
+    const { selectedCompany } = useCompany();
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
             setIsLoading(true);
             const response = await userService.getAllUsers();
@@ -29,11 +31,11 @@ export const UserManagement = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchUsers();
-    }, []);
+    }, [fetchUsers, selectedCompany?._id]);
 
     useGlobalSync('user', (payload) => {
         if (payload.action === 'create') setUsers(prev => [...prev, payload.data]);
@@ -201,12 +203,22 @@ export const UserManagement = () => {
         return `${count} permission${count !== 1 ? 's' : ''}`;
     };
 
+    const formatCompanies = (user) => {
+        if (!user.companyAccessConfigured) return 'All companies (legacy)';
+        const list = user.assignedCompanyIds || [];
+        if (!list.length) return '—';
+        return list.map((c) => c.companyName || c).join(', ');
+    };
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <div>
                     <h1 className={styles.title}>User Management</h1>
-                    <p className={styles.subtitle}>Manage system users and their permissions</p>
+                    <p className={styles.subtitle}>
+                        Manage users for <strong>{selectedCompany?.companyName || 'active company'}</strong>.
+                        {' '}Legacy JSK users (not company-restricted) appear in every company list until you assign companies on edit.
+                    </p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                     <Button onClick={handleSyncPermissions} variant="outline" startIcon={<RefreshCw size={18} />}>
@@ -227,6 +239,7 @@ export const UserManagement = () => {
                             <th>Role</th>
                             <th>Mobile</th>
                             <th>Status</th>
+                            <th>Companies</th>
                             <th>Permissions</th>
                             <th>Last Login</th>
                             <th>Actions</th>
@@ -234,9 +247,9 @@ export const UserManagement = () => {
                     </thead>
                     <tbody>
                         {isLoading ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading users...</td></tr>
+                            <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>Loading users...</td></tr>
                         ) : sortedUsers.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No users found</td></tr>
+                            <tr><td colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>No users found</td></tr>
                         ) : sortedUsers.map((user) => {
                             const roleConfig = ROLE_CONFIG[user.role] || {};
                             const isAdmin = user.role === ROLES.ADMIN;
@@ -264,6 +277,9 @@ export const UserManagement = () => {
                                         <span className={`${styles.statusBadge} ${user.isActive ? styles.active : styles.inactive}`}>
                                             {user.isActive ? '✓ Active' : '✕ Inactive'}
                                         </span>
+                                    </td>
+                                    <td className={styles.permissionsCell} style={{ fontSize: 12 }}>
+                                        {formatCompanies(user)}
                                     </td>
                                     <td className={styles.permissionsCell}>
                                         {getPermissionsSummary(user)}

@@ -93,6 +93,16 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    /** Companies this user may access (when companyAccessConfigured is true). */
+    assignedCompanyIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company',
+    }],
+    /** When false (default), legacy access to all companies — JSK unchanged. */
+    companyAccessConfigured: {
+        type: Boolean,
+        default: false,
+    },
     lastLogin: {
         type: Date,
         default: null

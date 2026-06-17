@@ -1,5 +1,8 @@
+import mongoose from 'mongoose';
 import { Company } from '../models/company.model.js';
 import { CompanyProfile } from '../models/companyProfile.model.js';
+import { IndustryTemplate } from '../models/industryTemplate.model.js';
+import { mongooseFilterCompaniesForUser, mongooseFilterActiveCompaniesForUser } from '../services/companyUserAccess.service.js';
 
 // ─── Helper: seed default company from existing CompanyProfile ───────────────
 const seedDefaultCompanyIfNeeded = async () => {
@@ -37,7 +40,10 @@ const seedDefaultCompanyIfNeeded = async () => {
 export const listCompanies = async (req, res) => {
     try {
         await seedDefaultCompanyIfNeeded();
-        const companies = await Company.find().sort({ isDefault: -1, createdAt: 1 });
+        const filter = mongooseFilterCompaniesForUser(req.user || {});
+        const companies = await Company.find(filter)
+            .sort({ isDefault: -1, createdAt: 1 })
+            .populate('industryTemplateRef', 'templateName templateCode isActive');
         res.json({ success: true, data: companies });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -48,7 +54,10 @@ export const listCompanies = async (req, res) => {
 export const listActiveCompanies = async (req, res) => {
     try {
         await seedDefaultCompanyIfNeeded();
-        const companies = await Company.find({ isActive: true }).sort({ isDefault: -1, companyName: 1 });
+        const filter = mongooseFilterActiveCompaniesForUser(req.user || {});
+        const companies = await Company.find(filter)
+            .sort({ isDefault: -1, companyName: 1 })
+            .populate('industryTemplateRef', 'templateName templateCode isActive');
         res.json({ success: true, data: companies });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -58,7 +67,9 @@ export const listActiveCompanies = async (req, res) => {
 // GET /companies/:id
 export const getCompany = async (req, res) => {
     try {
-        const company = await Company.findById(req.params.id);
+        const company = await Company.findById(req.params.id)
+            .populate('industryTemplateRef', 'templateName templateCode isActive')
+            .populate('assignedWorkflowRef', 'workflowName workflowCode isActive description');
         if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
         res.json({ success: true, data: company });
     } catch (err) {
@@ -69,13 +80,24 @@ export const getCompany = async (req, res) => {
 // POST /companies  — create new company
 export const createCompany = async (req, res) => {
     try {
-        const { isDefault, ...rest } = req.body;
-        const company = await Company.create({
-            ...rest,
-            isDefault: false, // new companies are never default
-            createdBy: req.user?._id,
-        });
-        res.status(201).json({ success: true, data: company, message: 'Company created successfully' });
+        const { isDefault, industryTemplateRef, ...rest } = req.body;
+        const payload = { ...rest, isDefault: false, createdBy: req.user?._id };
+
+        if (industryTemplateRef !== undefined && industryTemplateRef !== null && industryTemplateRef !== '') {
+            if (!mongoose.Types.ObjectId.isValid(String(industryTemplateRef))) {
+                return res.status(400).json({ success: false, message: 'Invalid industry template id' });
+            }
+            const tpl = await IndustryTemplate.findById(industryTemplateRef).lean();
+            if (!tpl || !tpl.isActive) {
+                return res.status(400).json({ success: false, message: 'Industry template not found or inactive' });
+            }
+            payload.industryTemplateRef = tpl._id;
+        }
+
+        const company = await Company.create(payload);
+        const populated = await Company.findById(company._id)
+            .populate('industryTemplateRef', 'templateName templateCode isActive');
+        res.status(201).json({ success: true, data: populated, message: 'Company created successfully' });
     } catch (err) {
         if (err.code === 11000) {
             return res.status(400).json({ success: false, message: 'A company with this name already exists' });
@@ -88,6 +110,20 @@ export const createCompany = async (req, res) => {
 export const updateCompany = async (req, res) => {
     try {
         const { isDefault, ...rest } = req.body; // cannot change isDefault via update
+        if (rest.industryTemplateRef !== undefined) {
+            const raw = rest.industryTemplateRef;
+            if (raw === null || raw === '' || raw === 'null') {
+                rest.industryTemplateRef = null;
+            } else if (!mongoose.Types.ObjectId.isValid(String(raw))) {
+                return res.status(400).json({ success: false, message: 'Invalid industry template id' });
+            } else {
+                const tpl = await IndustryTemplate.findById(raw).lean();
+                if (!tpl || !tpl.isActive) {
+                    return res.status(400).json({ success: false, message: 'Industry template not found or inactive' });
+                }
+                rest.industryTemplateRef = tpl._id;
+            }
+        }
         const company = await Company.findByIdAndUpdate(
             req.params.id,
             { ...rest, updatedBy: req.user?._id },

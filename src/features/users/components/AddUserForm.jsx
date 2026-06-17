@@ -2,18 +2,33 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Button, Input, Select } from '@/components/ui';
 import { userService } from '@/services/user.service';
+import { listCompanies } from '@/services/companyApi';
+import { useCompany } from '@/contexts/CompanyContext';
 import { hasPermission as checkRolePermission } from '@/utils/permissions';
 import styles from './AddUserForm.module.scss';
 import { toast } from 'react-hot-toast';
 import { getFlattenedMenu } from '@/config/menu.config';
+import { UserPermissionTable } from './UserPermissionTable';
+import { buildVisibleColumns, actionsForColumn, normalizeAction } from './permissionTableConfig';
+import {
+    mergePermissionMetadata,
+    DEFAULT_EXPANDED_MODULES,
+    sortModulesForTable,
+} from './permissionMetadataMerge';
 
 export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const isEdit = !!user;
+    const { selectedCompany } = useCompany();
     const [searchTerm, setSearchTerm] = useState('');
      const [metadata, setMetadata] = useState([]);
     const [roles, setRoles] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [users, setUsers] = useState([]);
+    const [companies, setCompanies] = useState([]);
+    const [assignedCompanyIds, setAssignedCompanyIds] = useState(
+        (user?.assignedCompanyIds || []).map((c) => String(c._id || c)),
+    );
+    const [companyAccessConfigured, setCompanyAccessConfigured] = useState(!!user?.companyAccessConfigured);
     const [isLoading, setIsLoading] = useState(true);
 
     // Permission groups: maps every module id to a human-friendly category.
@@ -38,7 +53,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         { id: 'admin', name: '⚙️ Admin & Settings', modules: ['admin'] }
     ];
 
-    const [expandedModules, setExpandedModules] = useState({});
+    const [expandedModules, setExpandedModules] = useState({ ...DEFAULT_EXPANDED_MODULES });
     const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
         defaultValues: user ? {
             ...user,
@@ -71,47 +86,22 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                     userService.getPermissionMetadata(),
                     userService.getRoles(),
                     userService.getDepartments(),
-                    userService.getAllUsers()
+                    userService.getAllUsers(),
+                    listCompanies(),
                 ]);
 
-                const [metaRes, rolesRes, deptsRes, usersRes] = results.map((r, i) => {
+                const [metaRes, rolesRes, deptsRes, usersRes, companiesList] = results.map((r, i) => {
                     if (r.status === 'fulfilled') return r.value;
                     console.error(`API Call failed index ${i}:`, r.reason);
                     return { success: false, data: [] };
                 });
 
-                // --- START REGISTRY AUGMENTATION ---
-                // Automatically add any module from menuConfig that is NOT in backend metadata
-                let augmentedMeta = metaRes.success ? [...metaRes.data] : [];
                 const flattenedMenu = getFlattenedMenu();
-                
-                flattenedMenu.forEach(item => {
-                    if (item.permission && item.permission.includes('.')) {
-                        const [moduleId, submoduleId, actionId] = item.permission.split('.');
-                        
-                        // Check if module exists in meta
-                        let moduleEntry = augmentedMeta.find(m => m.id === moduleId);
-                        if (!moduleEntry) {
-                            moduleEntry = { id: moduleId, name: item.moduleName || moduleId, submodules: [] };
-                            augmentedMeta.push(moduleEntry);
-                        }
-                        
-                        // Check if submodule exists
-                        let subEntry = moduleEntry.submodules.find(s => s.id === submoduleId);
-                        if (!subEntry) {
-                            subEntry = { id: submoduleId, name: item.title || submoduleId, actions: [] };
-                            moduleEntry.submodules.push(subEntry);
-                        }
-                        
-                        // Check if action exists
-                        if (!subEntry.actions.some(a => (typeof a === 'string' ? a : a.id) === actionId)) {
-                            subEntry.actions.push(actionId);
-                        }
-                    }
-                });
-                // --- END REGISTRY AUGMENTATION ---
-
-                setMetadata(augmentedMeta);
+                const merged = mergePermissionMetadata(
+                    metaRes.success ? metaRes.data : [],
+                    flattenedMenu,
+                );
+                setMetadata(merged);
 
                 if (rolesRes.success) setRoles(rolesRes.data);
                 else console.warn("Roles failed to load", rolesRes);
@@ -122,6 +112,13 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                 if (usersRes?.status === 'fulfilled' && usersRes.value?.success) setUsers(usersRes.value.data);
                 else if (usersRes?.success) setUsers(usersRes.data);
                 else console.warn("Users failed to load", usersRes);
+
+                setCompanies(Array.isArray(companiesList) ? companiesList : []);
+
+                if (!isEdit && selectedCompany?._id) {
+                    setAssignedCompanyIds([String(selectedCompany._id)]);
+                    setCompanyAccessConfigured(true);
+                }
 
                 if (!metaRes.success || !rolesRes.success || !deptsRes.success) {
                     toast.error("Partial data load: some features may be limited");
@@ -134,7 +131,14 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
             }
         };
         fetchData();
-    }, []);
+    }, [isEdit, selectedCompany?._id]);
+
+    const toggleAssignedCompany = (companyId) => {
+        const id = String(companyId);
+        setAssignedCompanyIds((prev) => (
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        ));
+    };
 
     // Default role permissions (if any) based on selectedRole
     const defaultRolePerms = useMemo(() => {
@@ -239,24 +243,19 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         });
     };
 
-    const handleGroupSelection = (group, isSelect) => {
-        const groupModuleIds = group.modules;
-        const groupModules = metadata.filter(m => groupModuleIds.includes(m.id));
-        
+    const handleModuleColumnToggle = (module, column, isSelect) => {
         setSelectedPermissions(prev => {
-            const updated = { ...prev };
-            groupModules.forEach(module => {
-                const moduleData = {};
-                module.submodules.forEach(sub => {
-                    const submoduleData = {};
-                    sub.actions.forEach(action => {
-                        const actionId = typeof action === 'string' ? action : action.id;
-                        submoduleData[actionId] = isSelect;
-                    });
-                    moduleData[sub.id] = submoduleData;
+            const moduleData = { ...(prev[module.id] || {}) };
+            module.submodules.forEach((sub) => {
+                const submoduleData = { ...(moduleData[sub.id] || {}) };
+                actionsForColumn(column, sub).forEach((action) => {
+                    if (!isGrantedByRole(module.id, sub.id, action.id)) {
+                        submoduleData[action.id] = isSelect;
+                    }
                 });
-                updated[module.id] = moduleData;
+                moduleData[sub.id] = submoduleData;
             });
+            const updated = { ...prev, [module.id]: moduleData };
             setValue('additionalPermissions', updated);
             return updated;
         });
@@ -280,9 +279,13 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         setValue('additionalPermissions', all);
     };
 
-    const handleClearAll = () => {
-        setSelectedPermissions({});
-        setValue('additionalPermissions', {});
+    const handleSelectAllGlobal = (isSelect) => {
+        if (!isSelect) {
+            setSelectedPermissions({});
+            setValue('additionalPermissions', {});
+            return;
+        }
+        handleSelectAll();
     };
 
     const handleUppercaseChange = (fieldName) => (e) => {
@@ -293,6 +296,8 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const onSubmit = async (data) => {
         const { confirmPassword, _id, createdAt, updatedAt, __v, lastLogin, preferences, permissions, ...userData } = data;
         userData.additionalPermissions = selectedPermissions;
+        userData.assignedCompanyIds = companyAccessConfigured ? assignedCompanyIds : [];
+        userData.companyAccessConfigured = companyAccessConfigured;
 
         if (!isEdit && data.password !== confirmPassword) {
             toast.error('Passwords do not match!');
@@ -313,15 +318,33 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         m.submodules?.some(s => s.name?.toLowerCase().includes(searchTerm.toLowerCase()))
     ) : metadata;
 
+    const tableModules = useMemo(
+        () => sortModulesForTable(filteredMetadata),
+        [filteredMetadata],
+    );
+
+    const visibleColumns = useMemo(() => buildVisibleColumns(filteredMetadata), [filteredMetadata]);
+
+    const globalAllChecked = useMemo(() => {
+        if (!tableModules.length) return false;
+        return tableModules.every((module) =>
+            module.submodules?.every((sub) =>
+                (sub.actions || []).map(normalizeAction).every(
+                    (a) => isGrantedByRole(module.id, sub.id, a.id)
+                        || !!selectedPermissions[module.id]?.[sub.id]?.[a.id],
+                ),
+            ),
+        );
+    }, [tableModules, selectedPermissions, selectedRole, roles]);
+
     if (isLoading) return <div className={styles.loading}>Loading form configuration...</div>;
 
     return (
         <div className={styles.container}>
             <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
 
-                {/* Basic Information */}
-                <section className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Basic Information</h3>
+                <section className={styles.card}>
+                    <h3 className={styles.sectionTitle}>User Details</h3>
                     <div className={styles.row2}>
                         <Input
                             label="Full Name"
@@ -343,14 +366,62 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                     </div>
                     <div className={styles.row2}>
                         <Input label="Email" type="email" {...register('email')} placeholder="Optional" />
-                        <Input label="Mobile" {...register('mobile')} placeholder="Optional" />
+                        <Input label="Mobile Number" {...register('mobile')} placeholder="Optional" />
                     </div>
-                </section>
-
-                {/* Password (only for new users) */}
-                {!isEdit && (
-                    <section className={styles.section}>
-                        <h3 className={styles.sectionTitle}>Password</h3>
+                    <div className={styles.row3}>
+                        <Select
+                            label="Role"
+                            {...register('role', { required: 'Role is required' })}
+                            options={roles.map(r => ({ value: r._id, label: r.name }))}
+                            error={errors.role}
+                            required
+                        />
+                        <Select
+                            label="Department"
+                            {...register('department')}
+                            options={[{ value: '', label: 'None' }, ...departments.map(d => ({ value: d._id, label: d.name }))]}
+                        />
+                        <div className={styles.statusField}>
+                            <span className={styles.statusLabel}>Status</span>
+                            <label className={styles.statusToggle}>
+                                <input type="checkbox" {...register('isActive')} className={styles.tableCheckbox} />
+                                <span>Active</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div className={styles.row2} style={{ marginTop: 12 }}>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <span className={styles.statusLabel}>Company Access</span>
+                            <label className={styles.statusToggle} style={{ display: 'flex', marginTop: 6, marginBottom: 8 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={companyAccessConfigured}
+                                    onChange={(e) => setCompanyAccessConfigured(e.target.checked)}
+                                />
+                                <span>Restrict user to selected companies only</span>
+                            </label>
+                            {companyAccessConfigured && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                                    {companies.map((c) => (
+                                        <label key={c._id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 8px', background: '#f8fafc', borderRadius: 6 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={assignedCompanyIds.includes(String(c._id))}
+                                                onChange={() => toggleAssignedCompany(c._id)}
+                                            />
+                                            {c.companyName}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {!companyAccessConfigured && (
+                                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>
+                                    Legacy mode — user can access all companies (JSK default).
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    {!isEdit && (
                         <div className={styles.row2}>
                             <Input
                                 label="Password"
@@ -370,267 +441,66 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                                 required
                             />
                         </div>
-                    </section>
-                )}
-
-                {/* Organization & Status */}
-                <section className={styles.section}>
-                    <h3 className={styles.sectionTitle}>Organization & Status</h3>
-                    <div className={styles.row3}>
-                        <Select
-                            label="Role"
-                            {...register('role', { required: 'Role is required' })}
-                            options={roles.map(r => ({ value: r._id, label: r.name }))}
-                            error={errors.role}
-                            required
-                        />
-                        <Select
-                            label="Department"
-                            {...register('department')}
-                            options={[{ value: '', label: 'None' }, ...departments.map(d => ({ value: d._id, label: d.name }))]}
-                        />
-                        <div className={styles.toggleGroup}>
-                            <label className={styles.toggleLabel}>
-                                <input type="checkbox" {...register('isActive')} className={styles.checkbox} />
-                                <span>Active User</span>
-                            </label>
-                        </div>
-                    </div>
+                    )}
                 </section>
 
-                {/* Permissions */}
-                <section className={styles.section}>
+                <section className={styles.card}>
                     <div className={styles.permissionHeader}>
                         <h3 className={styles.sectionTitle}>Module Permissions</h3>
                         <div className={styles.permissionActions}>
                             <div className={styles.searchWrapper}>
-                                <input 
-                                    type="text" 
-                                    placeholder="🔍 Search Module..." 
+                                <input
+                                    type="text"
+                                    placeholder="Search module..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className={styles.searchInput}
                                 />
                             </div>
-                            <div className={styles.copyRightsWrapper}>
-                                <select 
-                                    className={styles.copySelect}
-                                    onChange={(e) => {
-                                        const userId = e.target.value;
-                                        if (userId && window.confirm('Copy permissions from this user? This will overwrite current selections.')) {
-                                            const sourceUser = users.find(u => u._id === userId);
-                                            if (sourceUser) {
-                                                setSelectedPermissions(sourceUser.additionalPermissions || {});
-                                                setValue('additionalPermissions', sourceUser.additionalPermissions || {});
-                                                toast.success(`Copied permissions from ${sourceUser.name}`);
-                                            }
+                            <select
+                                className={styles.copySelect}
+                                onChange={(e) => {
+                                    const userId = e.target.value;
+                                    if (userId && window.confirm('Copy permissions from this user? This will overwrite current selections.')) {
+                                        const sourceUser = users.find(u => u._id === userId);
+                                        if (sourceUser) {
+                                            setSelectedPermissions(sourceUser.additionalPermissions || {});
+                                            setValue('additionalPermissions', sourceUser.additionalPermissions || {});
+                                            toast.success(`Copied permissions from ${sourceUser.name}`);
                                         }
-                                        e.target.value = '';
-                                    }}
-                                >
-                                    <option value="">📋 Copy Rights from User...</option>
-                                    {users.filter(u => u._id !== (user?._id || '')).map(u => (
-                                        <option key={u._id} value={u._id}>{u.name} ({u.roleName || u.role?.name})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <button type="button" onClick={handleSelectAll} className={styles.linkButton}>✅ Select All</button>
-                            <button type="button" onClick={handleClearAll} className={styles.linkButton}>❌ Clear All</button>
+                                    }
+                                    e.target.value = '';
+                                }}
+                            >
+                                <option value="">Copy from user...</option>
+                                {users.filter(u => u._id !== (user?._id || '')).map(u => (
+                                    <option key={u._id} value={u._id}>{u.name} ({u.roleName || u.role?.name})</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
-                    <div className={styles.modulesContainer}>
-                        {PERMISSION_GROUPS.map(group => {
-                            const groupModules = filteredMetadata.filter(m => group.modules.includes(m.id));
-                            if (groupModules.length === 0) return null;
-
-                            return (
-                                <div key={group.id} className={styles.groupSection}>
-                                    <div className={styles.groupHeader}>
-                                        <h4 className={styles.groupName}>{group.name}</h4>
-                                        <div className={styles.groupActionsQuick}>
-                                            <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(group, true)}>Allow Group</button>
-                                            <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(group, false)}>Deny Group</button>
-                                        </div>
-                                    </div>
-                                    <div className={styles.groupModuleList}>
-                                        {groupModules.map((module) => {
-                                            const isExpanded = expandedModules[module.id] || !!searchTerm;
-                                            const modulePerms = selectedPermissions[module.id] || {};
-                                            
-                                            // Safe check for hasAnyPermission
-                                            let hasAnyPermission = false;
-                                            try {
-                                                hasAnyPermission = typeof modulePerms === 'object' && modulePerms !== null && 
-                                                    Object.values(modulePerms).some(sub => 
-                                                        typeof sub === 'object' && sub !== null && Object.values(sub).some(val => !!val)
-                                                    );
-                                            } catch (e) {
-                                                console.warn(`Error checking permissions for module ${module.id}:`, e);
-                                            }
-
-                                            return (
-                                                <div key={module.id} className={`${styles.moduleGroup} ${isExpanded ? styles.expanded : ''}`}>
-                                                    <div className={styles.moduleHeader} onClick={() => toggleModuleExpansion(module.id)}>
-                                                        <div className={styles.moduleTitleRow}>
-                                                            <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
-                                                            <h4 className={`${styles.moduleTitle} ${hasAnyPermission ? styles.activeModule : ''}`}>
-                                                                {module.name || module.label || module.title || (module.id?.charAt(0).toUpperCase() + module.id?.slice(1)) || 'Untitled Module'}
-                                                            </h4>
-                                                        </div>
-                                                        <div className={styles.groupActions} onClick={e => e.stopPropagation()}>
-                                                            <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, true)}>ALLOW ALL</button>
-                                                            <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, false)}>DENY ALL</button>
-                                                        </div>
-                                                    </div>
-
-                                                    {isExpanded && (
-                                                        <div className={styles.submodulesList}>
-                                                            {module.submodules?.map((sub) => {
-                                                                const subPerms = modulePerms[sub.id] || {};
-                                                                
-                                                                let hasSubPermission = false;
-                                                                try {
-                                                                    hasSubPermission = typeof subPerms === 'object' && subPerms !== null && 
-                                                                        Object.values(subPerms).some(val => !!val);
-                                                                } catch (e) {
-                                                                    // subPerms might be a boolean in legacy data
-                                                                    hasSubPermission = !!subPerms;
-                                                                }
-
-                                                                return (
-                                                                    <div key={sub.id} className={styles.submoduleItem}>
-                                                                        <div className={styles.submoduleHeader}>
-                                                                            <span className={`${styles.submoduleTitle} ${hasSubPermission ? styles.activeSubmodule : ''}`}>
-                                                                                {sub.name || sub.label || sub.title || (sub.id?.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')) || 'Untitled'}
-                                                                            </span>
-                                                                            <div className={styles.submoduleActions}>
-                                                                                <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, true)}>All</button>
-                                                                                <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, false)}>None</button>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className={styles.actionGrid}>
-                                                                            {sub.actions?.map((action) => {
-                                                                                const actionId = typeof action === 'string' ? action : action.id;
-                                                                                const actionLabel = typeof action === 'string' ? (action.charAt(0).toUpperCase() + action.slice(1)) : action.label;
-                                                                                
-                                                                                const roleGranted = isGrantedByRole(module.id, sub.id, actionId);
-                                                                                const isChecked = roleGranted || !!subPerms[actionId];
-
-                                                                                return (
-                                                                                    <label key={actionId} className={`${styles.actionItem} ${roleGranted ? styles.roleGranted : ''}`} title={roleGranted ? "Granted by User Role" : "Additional Permission"}>
-                                                                                        <input
-                                                                                            type="checkbox"
-                                                                                            checked={isChecked}
-                                                                                            disabled={roleGranted}
-                                                                                            onChange={() => handlePermissionToggle(module.id, sub.id, actionId)}
-                                                                                            className={styles.checkbox}
-                                                                                        />
-                                                                                        <span>{actionLabel} {roleGranted && <small style={{color:'#6b7280', fontSize:'0.7rem'}}>(Role)</small>}</span>
-                                                                                    </label>
-                                                                                );
-                                                                            })}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-
-                        {/* Other Modules: catches anything new added to the registry or menu
-                            that hasn't been categorized yet. Ensures new modules always show up. */}
-                        {filteredMetadata.some(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id))) && (() => {
-                            const otherModules = filteredMetadata.filter(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id)));
-                            const otherGroup = { id: '__other__', name: 'Other Modules', modules: otherModules.map(m => m.id) };
-                            return (
-                             <div className={styles.groupSection}>
-                                <div className={styles.groupHeader}>
-                                    <h4 className={styles.groupName}>🆕 Other Modules</h4>
-                                    <div className={styles.groupActionsQuick}>
-                                        <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(otherGroup, true)}>Allow Group</button>
-                                        <button type="button" className={styles.groupActionBtn} onClick={() => handleGroupSelection(otherGroup, false)}>Deny Group</button>
-                                    </div>
-                                </div>
-                                <div className={styles.groupModuleList}>
-                                    {filteredMetadata.filter(m => !PERMISSION_GROUPS.some(g => g.modules.includes(m.id))).map((module) => {
-                                        const isExpanded = expandedModules[module.id] || !!searchTerm;
-                                        const modulePerms = selectedPermissions[module.id] || {};
-                                        
-                                        let hasAnyPermission = false;
-                                        try {
-                                             hasAnyPermission = typeof modulePerms === 'object' && modulePerms !== null && 
-                                                 Object.values(modulePerms).some(sub => 
-                                                     typeof sub === 'object' && sub !== null && Object.values(sub).some(val => !!val)
-                                                 );
-                                         } catch (e) { }
-
-                                        return (
-                                            <div key={module.id} className={`${styles.moduleGroup} ${isExpanded ? styles.expanded : ''}`}>
-                                                <div className={styles.moduleHeader} onClick={() => toggleModuleExpansion(module.id)}>
-                                                    <div className={styles.moduleTitleRow}>
-                                                        <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
-                                                        <h4 className={`${styles.moduleTitle} ${hasAnyPermission ? styles.activeModule : ''}`}>
-                                                            {module.name || module.label || module.title || (module.id?.charAt(0).toUpperCase() + module.id?.slice(1)) || 'Untitled Module'}
-                                                        </h4>
-                                                    </div>
-                                                    <div className={styles.groupActions} onClick={e => e.stopPropagation()}>
-                                                        <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, true)}>ALLOW ALL</button>
-                                                        <button type="button" className={styles.groupLinkButton} onClick={() => handleModuleSelection(module, false)}>DENY ALL</button>
-                                                    </div>
-                                                </div>
-                                                {isExpanded && (
-                                                    <div className={styles.submodulesList}>
-                                                        {module.submodules?.map((sub) => (
-                                                            <div key={sub.id} className={styles.submoduleItem}>
-                                                                <div className={styles.submoduleHeader}>
-                                                                    <span className={styles.submoduleTitle}>{sub.name}</span>
-                                                                    <div className={styles.submoduleActions}>
-                                                                        <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, true)}>All</button>
-                                                                        <button type="button" onClick={() => handleSubmoduleSelection(module.id, sub, false)}>None</button>
-                                                                    </div>
-                                                                </div>
-                                                                <div className={styles.actionGrid}>
-                                                                    {sub.actions?.map((action) => {
-                                                                        const actionId = typeof action === 'string' ? action : action.id;
-                                                                        const roleGranted = isGrantedByRole(module.id, sub.id, actionId);
-                                                                        const isChecked = roleGranted || !!(selectedPermissions[module.id]?.[sub.id]?.[actionId]);
-                                                                        
-                                                                        return (
-                                                                            <label key={actionId} className={`${styles.actionItem} ${roleGranted ? styles.roleGranted : ''}`} title={roleGranted ? "Granted by User Role" : "Additional Permission"}>
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    checked={isChecked}
-                                                                                    disabled={roleGranted}
-                                                                                    onChange={() => handlePermissionToggle(module.id, sub.id, actionId)}
-                                                                                    className={styles.checkbox}
-                                                                                />
-                                                                                <span>{typeof action === 'string' ? action : action.label} {roleGranted && <small style={{color:'#6b7280', fontSize:'0.7rem'}}>(Role)</small>}</span>
-                                                                            </label>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                             </div>
-                            );
-                        })()}
-                    </div>
+                    <UserPermissionTable
+                        modules={tableModules}
+                        columns={visibleColumns}
+                        expandedModules={{
+                            ...expandedModules,
+                            ...(searchTerm
+                                ? Object.fromEntries(tableModules.map((m) => [m.id, true]))
+                                : {}),
+                        }}
+                        selectedPermissions={selectedPermissions}
+                        isGrantedByRole={isGrantedByRole}
+                        onToggleModuleExpansion={toggleModuleExpansion}
+                        onPermissionToggle={handlePermissionToggle}
+                        onModuleColumnToggle={handleModuleColumnToggle}
+                        onModuleAllToggle={handleModuleSelection}
+                        onSubmoduleAllToggle={handleSubmoduleSelection}
+                        onSelectAllGlobal={handleSelectAllGlobal}
+                        globalAllChecked={globalAllChecked}
+                    />
                 </section>
 
-                {/* Actions */}
                 <div className={styles.actions}>
                     <Button type="button" variant="outline" onClick={() => { if (window.confirm('Discard changes?')) closeModal(); }}>Cancel</Button>
                     <Button type="submit" isLoading={isSubmitting}>{isEdit ? 'Update User' : 'Create User'}</Button>
