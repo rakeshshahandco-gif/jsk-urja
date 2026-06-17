@@ -4,8 +4,14 @@ const hostname =
 /** Hosted on Render (never use localhost:5000 on these hosts). */
 const isRenderHost = hostname.endsWith('.onrender.com');
 
-/** Backend service serves API + built frontend on the same origin. */
-const isBackendRenderService = hostname === 'jsk-urja-backend.onrender.com';
+/** Combined API + UI on same Render Web Service. */
+const isJskBackendRenderService = hostname === 'jsk-urja-backend.onrender.com';
+const isHandloomBackendRenderService = hostname === 'handloom-crm-backend.onrender.com';
+const isSameOriginRenderBackend = isJskBackendRenderService || isHandloomBackendRenderService;
+
+/** Handloom static frontend → dedicated Handloom backend (not JSK). */
+const isHandloomFrontendRenderService = hostname === 'handloom-crm-frontend.onrender.com';
+const HANDLOOM_BACKEND_ORIGIN = 'https://handloom-crm-backend.onrender.com';
 
 /** True when the UI is opened on a loopback / LAN host (not a public deploy hostname). */
 const isLocalHostname =
@@ -15,6 +21,7 @@ const isLocalHostname =
         hostname === '[::1]' ||
         hostname === '::1' ||
         hostname === '0.0.0.0' ||
+        hostname === '10.0.2.2' ||
         hostname.startsWith('192.168.'));
 
 /** Vite dev server — always talk to local backend even if hostname is unusual. */
@@ -25,19 +32,53 @@ const useLocalBackend = isViteDev || isLocalHostname;
 
 const prodBackend = 'https://jsk-urja-backend.onrender.com';
 
-// On Render: same-origin when API+UI share one service; otherwise call backend URL.
-// Local dev: always localhost:5000.
+const viteApiUrl =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
+        ? String(import.meta.env.VITE_API_URL).trim()
+        : '';
+const viteSocketUrl =
+    typeof import.meta !== 'undefined' && import.meta.env?.VITE_SOCKET_URL
+        ? String(import.meta.env.VITE_SOCKET_URL).trim()
+        : '';
+
+/** PC browser: localhost. Phone/emulator on LAN: same host as CRM page (e.g. 192.168.x.x or 10.0.2.2). */
+const localBackendHost =
+    typeof window !== 'undefined' &&
+    (hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '[::1]' ||
+        hostname === '::1')
+        ? 'localhost'
+        : hostname || 'localhost';
+
+function stripTrailingSlash(url) {
+    return String(url || '').replace(/\/$/, '');
+}
+
+function resolveProductionApiUrl() {
+    if (viteApiUrl) return stripTrailingSlash(viteApiUrl);
+    if (isSameOriginRenderBackend) return `${window.location.origin}/api/v1`;
+    if (isHandloomFrontendRenderService) return `${HANDLOOM_BACKEND_ORIGIN}/api/v1`;
+    return `${prodBackend}/api/v1`;
+}
+
+function resolveProductionSocketUrl() {
+    if (viteSocketUrl) return stripTrailingSlash(viteSocketUrl);
+    if (isSameOriginRenderBackend) return window.location.origin;
+    if (isHandloomFrontendRenderService) return HANDLOOM_BACKEND_ORIGIN;
+    return prodBackend;
+}
+
+// On Render: same-origin when API+UI share one service; Handloom static site → Handloom backend.
 export const env = {
     API_URL: useLocalBackend
-        ? 'http://localhost:5000/api/v1'
-        : isBackendRenderService
-            ? `${window.location.origin}/api/v1`
-            : `${prodBackend}/api/v1`,
+        ? `http://${localBackendHost}:5000/api/v1`
+        : resolveProductionApiUrl(),
     SOCKET_URL: useLocalBackend
-        ? 'http://localhost:5000'
-        : isBackendRenderService
-            ? window.location.origin
-            : prodBackend,
+        ? `http://${localBackendHost}:5000`
+        : resolveProductionSocketUrl(),
+    /** Textile FG transfer demo — localhost / LAN only, never on Render production. */
+    TEXTILE_DEMO_ENABLED: useLocalBackend,
 };
 
 if (typeof window !== 'undefined') {
