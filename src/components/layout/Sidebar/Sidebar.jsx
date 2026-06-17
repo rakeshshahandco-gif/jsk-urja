@@ -10,13 +10,19 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import { useSidebar } from '@/context/SidebarContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { CompanySwitcher } from '../CompanySwitcher';
+import { useCompany } from '@/contexts/CompanyContext';
+import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
+import { useModuleGuard } from '@/contexts/ModuleGuardContext';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
 
 export const Sidebar = () => {
     const { user, hasPermission } = useAuth();
+    const { selectedCompany } = useCompany();
+    const isTextileCo = isTextileIndustryCompany(selectedCompany);
     const { isFeatureEnabled } = useFeatureSettings();
+    const { isMenuItemEnabled } = useModuleGuard();
     const { enabled: uiEnabled, preferences: uiPrefs } = useUiPreferences();
     const { isCollapsed, isHoverOpen, isMobileLayout, isMobileMenuOpen, setIsHovered, toggleSidebar } = useSidebar();
     const location = useLocation();
@@ -44,6 +50,10 @@ export const Sidebar = () => {
         const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(userRole?.toLowerCase());
 
         return items.filter(item => {
+            if (item.textileOnly && !isTextileCo) return false;
+            if (item.electronicsOnly && isTextileCo) return false;
+            if (!isMenuItemEnabled(item.id)) return false;
+
             if (MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
                 // still apply permission below for non-admin
             } else {
@@ -69,7 +79,7 @@ export const Sidebar = () => {
             if (item.children && item.children.length === 0) return false;
             return true;
         });
-    }, [hasPermission, userRole, isFeatureEnabled]);
+    }, [hasPermission, userRole, isFeatureEnabled, isTextileCo, isMenuItemEnabled]);
 
     const visibleMenuItems = React.useMemo(() => {
         const items = filterItems(menuConfig);

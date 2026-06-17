@@ -46,7 +46,7 @@ export const resolveCompanyScope = asyncHandler(async (req, res, next) => {
     }
 
     const company = await Company.findOne({ _id: trimmed, isActive: true })
-        .select('_id companyName enabledModules subscriptionRef');
+        .select('_id companyName enabledModules disabledModules moduleGuardEnabled moduleAllocationConfigured subscriptionRef');
     if (!company) {
         throw new ApiError(httpStatus.FORBIDDEN, 'Company not found or inactive');
     }

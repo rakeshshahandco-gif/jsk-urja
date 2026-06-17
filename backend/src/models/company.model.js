@@ -55,9 +55,42 @@ const companySchema = new mongoose.Schema(
             type: [String],
             default: ['crm', 'accounts', 'inventory', 'gst', 'tds', 'production', 'service', 'hr', 'rd', 'reports', 'payroll'],
         },
+        disabledModules: { type: [String], default: [] },
+        /** When false (default), legacy full access — JSK URJA unchanged. */
+        moduleGuardEnabled: { type: Boolean, default: false },
+        /** Set true when admin explicitly configures modules for this company. */
+        moduleAllocationConfigured: { type: Boolean, default: false },
+        clientCode: { type: String, trim: true, default: '' },
+        deploymentConfig: {
+            databaseName: { type: String, trim: true, default: '' },
+            backendUrl: { type: String, trim: true, default: '' },
+            frontendUrl: { type: String, trim: true, default: '' },
+            deploymentStatus: {
+                type: String,
+                enum: ['', 'local', 'staging', 'live', 'pending'],
+                default: '',
+            },
+        },
 
         // SaaS — Subscription reference
         subscriptionRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', default: null },
+
+        // Industry Template (Phase 1 — reference only; null = use default Electronics template at runtime)
+        industryTemplateRef: { type: mongoose.Schema.Types.ObjectId, ref: 'IndustryTemplate', default: null },
+
+        // Phase 8 — Company Workflow Assignment (configuration only; does not drive production yet)
+        assignedWorkflowRef: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkflowMaster', default: null },
+        workflowVersion: { type: String, trim: true, default: '' },
+        activeWorkflow: { type: Boolean, default: false },
+        workflowAssignedAt: { type: Date, default: null },
+        workflowSnapshot: {
+            workflowName: { type: String, trim: true, default: '' },
+            workflowCode: { type: String, trim: true, default: '' },
+            description: { type: String, trim: true, default: '' },
+            industryTemplateRef: { type: mongoose.Schema.Types.ObjectId, ref: 'IndustryTemplate', default: null },
+            stages: { type: [mongoose.Schema.Types.Mixed], default: [] },
+            capturedAt: { type: Date, default: null },
+        },
 
         // Status
         isActive: { type: Boolean, default: true },

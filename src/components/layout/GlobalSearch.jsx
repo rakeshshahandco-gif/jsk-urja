@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ALL_FORMS } from '@/config/forms.config';
 import { menuConfig } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
-import { hasPermission } from '@/utils/permissions';
+import { useModuleGuard } from '@/contexts/ModuleGuardContext';
+import { moduleForFormId } from '@/config/menuModuleMap';
 import styles from './GlobalSearch.module.scss';
 
 /**
@@ -68,7 +69,8 @@ export const GlobalSearch = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
+    const { isModuleEnabled, moduleGuardEnabled } = useModuleGuard();
     const navigate = useNavigate();
     const inputRef = useRef(null);
     const searchRef = useRef(null);
@@ -78,22 +80,32 @@ export const GlobalSearch = () => {
         if (!query.trim()) return [];
 
         const q = query.toLowerCase();
-        const userPermissions = user?.permissions || [];
-        const userRole = user?.roleName || (typeof user?.role === 'string' ? user.role : user?.role?.name);
+        const canAccess = (form) => {
+            if (!user) return true;
+            const required = form.permissions?.length
+                ? form.permissions
+                : form.permission
+                    ? [form.permission]
+                    : [];
+            if (!required.length) return true;
+            return required.some((p) => hasPermission(p));
+        };
 
-        return SEARCH_CATALOG.filter(form => {
-            // 1. Permission check
-            if (form.permission && user) {
-                if (!hasPermission(userPermissions, form.permission, userRole)) return false;
+        return SEARCH_CATALOG.filter((form) => {
+            if (!canAccess(form)) return false;
+            if (moduleGuardEnabled) {
+                const code = moduleForFormId(form.id);
+                if (code && !isModuleEnabled(code)) return false;
             }
-            // 2. Query match — title, module, id, or keywords in path
+            const keywords = (form.keywords || []).map((k) => String(k).toLowerCase());
             return (
                 form.title.toLowerCase().includes(q) ||
                 form.module.toLowerCase().includes(q) ||
-                (form.id && form.id.toLowerCase().replace(/-/g, ' ').includes(q))
+                (form.id && form.id.toLowerCase().replace(/-/g, ' ').includes(q)) ||
+                keywords.some((k) => k.includes(q) || q.includes(k))
             );
         }).slice(0, 12);
-    }, [query, user]);
+    }, [query, user, hasPermission, moduleGuardEnabled, isModuleEnabled]);
 
     // Handle Keyboard Shortcuts
     useEffect(() => {

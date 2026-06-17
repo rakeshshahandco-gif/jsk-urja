@@ -13,6 +13,16 @@ export function isCompanyScopeExempt(req) {
     if (p.startsWith('/auth')) return true;
     if (p.startsWith('/saas')) return true;   // SaaS super admin routes are company-scope exempt
     if (p.startsWith('/platform-feature-settings')) return true;
+    if (p.startsWith('/industry-templates')) return true;
+    if (p.startsWith('/module-allocation')) return true;
+    if (p.startsWith('/customer-template-field-settings')) return true;
+    if (p.startsWith('/supplier-template-field-settings')) return true;
+    if (p.startsWith('/item-template-field-settings')) return true;
+    if (p === '/item-images/meta' && m === 'GET') return true;
+    if (p === '/item-images/eligibility' && m === 'GET') return true;
+    if (p.startsWith('/documents-kyc-template-settings')) return true;
+    if (p.startsWith('/workflow-masters')) return true;
+    if (p.startsWith('/company-workflow-assignment')) return true;
 
     if (p === '/companies/active' && m === 'GET') return true;
     if (p === '/companies' && (m === 'GET' || m === 'POST')) return true;

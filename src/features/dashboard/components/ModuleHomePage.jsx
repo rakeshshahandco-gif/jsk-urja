@@ -45,6 +45,10 @@ import { userHomeService } from '@/services/userHome.service';
 import { ALL_FORMS } from '@/config/forms.config';
 import { MENU_FEATURE_BY_ID } from '@/config/menuFeatureMap';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
+import { useModuleGuard } from '@/contexts/ModuleGuardContext';
+import { moduleForFormId } from '@/config/menuModuleMap';
 
 const ICON_MAP = {
     'crm': Users,
@@ -73,7 +77,20 @@ const ICON_MAP = {
 const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
     const navigate = useNavigate();
     const { user, hasPermission } = useAuth();
+    const { selectedCompany } = useCompany();
     const { isFeatureEnabled, settings: featureSettings } = useFeatureSettings();
+    const { isModuleEnabled, moduleGuardEnabled } = useModuleGuard();
+    const isTextileCo = isTextileIndustryCompany(selectedCompany);
+
+    const isFormAllowed = (form) => {
+        if (form.textileOnly && !isTextileCo) return false;
+        if (form.electronicsOnly && isTextileCo) return false;
+        if (moduleGuardEnabled) {
+            const code = moduleForFormId(form.id);
+            if (code && !isModuleEnabled(code)) return false;
+        }
+        return true;
+    };
 
     const isFormFeatureOn = (formId) => {
         const path = MENU_FEATURE_BY_ID[formId];
@@ -97,6 +114,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
                 const moduleForms = ALL_FORMS.filter(f => {
                     const normalizedFModule = f.module.toLowerCase().replace(/\s/g, '-');
                     if (normalizedFModule !== normalizedModuleName && f.module !== moduleName) return false;
+                    if (!isFormAllowed(f)) return false;
                     if (!isFormFeatureOn(f.id)) return false;
                     return true;
                 });
@@ -166,7 +184,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
         return pinnedFormsData
             .map(data => {
                 const form = ALL_FORMS.find(f => f.id === data.id);
-                if (!form || !hasPermission(form.permission) || !isFormFeatureOn(form.id)) return null;
+                if (!form || !isFormAllowed(form) || !hasPermission(form.permission) || !isFormFeatureOn(form.id)) return null;
                 
                 return { 
                     ...form, 
@@ -175,7 +193,7 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
             })
             .filter(Boolean)
             .sort((a, b) => (a.orderNo || 0) - (b.orderNo || 0));
-    }, [pinnedFormsData, hasPermission]);
+    }, [pinnedFormsData, hasPermission, isTextileCo]);
 
     const filteredAvailable = useMemo(() => {
         if (isStatic) return []; // Not used in static mode
@@ -184,14 +202,14 @@ const ModuleHomePage = ({ moduleName, title, subtitle, isStatic = false }) => {
             ? ALL_FORMS 
             : ALL_FORMS.filter(f => f.module.toLowerCase().replace(/\s/g, '-') === moduleName || f.module === moduleName);
 
-        const permitted = relevantForms.filter(f => hasPermission(f.permission) && isFormFeatureOn(f.id));
+        const permitted = relevantForms.filter(f => isFormAllowed(f) && hasPermission(f.permission) && isFormFeatureOn(f.id));
 
         if (!searchTerm) return permitted;
         return permitted.filter(f => 
             f.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
             f.module.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [moduleName, hasPermission, searchTerm, isStatic]);
+    }, [moduleName, hasPermission, searchTerm, isStatic, isTextileCo]);
 
     const groupedAvailable = useMemo(() => {
         const groups = {};

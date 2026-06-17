@@ -17,8 +17,11 @@ import { TalkWithCustomerForm } from '@/features/conversations/components/TalkWi
 import { UserManagement } from '@/features/users/UserManagement';
 import { LoginPage } from '@/features/auth/LoginPage';
 import CompanyProfilePage from '@/features/settings/CompanyProfilePage';
+import CompaniesListPage from '@/features/companies/CompaniesListPage';
 import WhatsAppSettingsPage from '@/features/settings/WhatsAppSettingsPage';
 import { CustomerMasterReport } from '@/features/reports/CustomerMasterReport';
+import CustomerKycReportsPage from '@/features/reports/CustomerKycReportsPage';
+import SupplierKycReportsPage from '@/features/reports/SupplierKycReportsPage';
 import { FollowUpTrackerReport } from '@/features/reports/FollowUpTrackerReport';
 import ReminderReport from '@/features/reports/ReminderReport';
 import OpenRemindersReport from '@/features/reports/OpenRemindersReport';
@@ -56,6 +59,45 @@ import ProductionDashboard from '@/features/production/ProductionDashboard';
 import WorkOrderListPage from '@/features/production/WorkOrderListPage';
 import WorkOrderFormPage from '@/features/production/WorkOrderFormPage';
 import WorkOrderDetailPage from '@/features/production/WorkOrderDetailPage';
+import WorkflowProductionListPage from '@/features/production/workflowProduction/WorkflowProductionListPage';
+import WorkflowProductionFormPage from '@/features/production/workflowProduction/WorkflowProductionFormPage';
+import WorkflowProductionDetailPage from '@/features/production/workflowProduction/WorkflowProductionDetailPage';
+import TextileProductionListPage from '@/features/production/textileProduction/TextileProductionListPage';
+import TextileProductionFormPage from '@/features/production/textileProduction/TextileProductionFormPage';
+import TextileStageProgressPage from '@/features/production/textileProduction/TextileStageProgressPage';
+import TextileDyeingIssuePage from '@/features/production/textileProduction/TextileDyeingIssuePage';
+import TextileDyeingReturnPage from '@/features/production/textileProduction/TextileDyeingReturnPage';
+import TextileLotReportPage from '@/features/production/textileProduction/TextileLotReportPage';
+import TextileJobWorkRatePage from '@/features/production/textileJobWork/TextileJobWorkRatePage';
+import TextileConversionMasterPage from '@/features/production/textileConversion/TextileConversionMasterPage';
+import TextileTransformationEntryPage from '@/features/production/textileConversion/TextileTransformationEntryPage';
+import TextileTransformationHistoryPage from '@/features/production/textileConversion/TextileTransformationHistoryPage';
+import TextileJobWorkReportsPage from '@/features/production/textileJobWork/TextileJobWorkReportsPage';
+import TextileJobWorkHomePage from '@/features/production/textileJobWork/TextileJobWorkHomePage';
+import TextileJobWorkIssuePage from '@/features/production/textileJobWork/TextileJobWorkIssuePage';
+import TextileJobWorkReturnEntryPage from '@/features/production/textileJobWork/TextileJobWorkReturnEntryPage';
+import TextileJobWorkStockWithVendorPage from '@/features/production/textileJobWork/TextileJobWorkStockWithVendorPage';
+import TextileJobWorkModuleReportsPage from '@/features/production/textileJobWork/TextileJobWorkModuleReportsPage';
+import TextileProcessOutputStockPage from '@/features/production/textileJobWork/TextileProcessOutputStockPage';
+import TextileProcessTracePage from '@/features/production/textileJobWork/TextileProcessTracePage';
+import TextileProcessOutputReportsPage from '@/features/production/textileJobWork/TextileProcessOutputReportsPage';
+import TextileDyeingChallanListPage from '@/features/production/textileDyeingChallan/TextileDyeingChallanListPage';
+import TextileDyeingChallanFormPage from '@/features/production/textileDyeingChallan/TextileDyeingChallanFormPage';
+import TextileDyeingChallanDetailPage from '@/features/production/textileDyeingChallan/TextileDyeingChallanDetailPage';
+import TextileDyeingChallanReturnPage from '@/features/production/textileDyeingChallan/TextileDyeingChallanReturnPage';
+import TextileStockWithDyersPage from '@/features/production/textileDyeingChallan/TextileStockWithDyersPage';
+import TextileEmbroideryChallanListPage from '@/features/production/textileEmbroideryChallan/TextileEmbroideryChallanListPage';
+import TextileEmbroideryChallanFormPage from '@/features/production/textileEmbroideryChallan/TextileEmbroideryChallanFormPage';
+import TextileEmbroideryChallanDetailPage from '@/features/production/textileEmbroideryChallan/TextileEmbroideryChallanDetailPage';
+import TextileEmbroideryChallanReturnPage from '@/features/production/textileEmbroideryChallan/TextileEmbroideryChallanReturnPage';
+import TextileStockWithEmbroideryPage from '@/features/production/textileEmbroideryChallan/TextileStockWithEmbroideryPage';
+import TextileProcessRouteMasterPage from '@/features/production/textileProductionWorkflow/TextileProcessRouteMasterPage';
+import TextileProductionDashboardPage from '@/features/production/textileProductionWorkflow/TextileProductionDashboardPage';
+import TextileProductionOrderFormPage from '@/features/production/textileProductionWorkflow/TextileProductionOrderFormPage';
+import TextileProductionOrderDetailPage from '@/features/production/textileProductionWorkflow/TextileProductionOrderDetailPage';
+import TextileProcessIssueChallanPage from '@/features/production/textileProductionWorkflow/TextileProcessIssueChallanPage';
+import TextileProcessReceiveChallanPage from '@/features/production/textileProductionWorkflow/TextileProcessReceiveChallanPage';
+import TextileProcessChallanDetailPage from '@/features/production/textileProductionWorkflow/TextileProcessChallanDetailPage';
 import SupplierListPage from '@/features/purchase/SupplierListPage';
 import PurchaseOrderListPage from '@/features/purchase/PurchaseOrderListPage';
 import PurchaseRfqListPage from '@/features/purchase/rfq/PurchaseRfqListPage';
@@ -72,6 +114,21 @@ import PurchaseOrderDetailPage from '@/features/purchase/PurchaseOrderDetailPage
 import PurchaseInvoiceListPage from '@/features/purchase/PurchaseInvoiceListPage';
 import PurchaseInvoiceFormPage from '@/features/purchase/PurchaseInvoiceFormPage';
 import PurchaseInvoiceDetailPage from '@/features/purchase/PurchaseInvoiceDetailPage';
+import ScanBillsPage from '@/features/documents/pages/ScanBillsPage';
+import MissingAttachmentsPage from '@/features/documents/pages/MissingAttachmentsPage';
+import MobileScanPage from '@/features/documents/pages/MobileScanPage';
+import PettyCashEntryPage from '@/features/pettyCash/PettyCashEntryPage';
+import PettyCashImportPage from '@/features/pettyCash/PettyCashImportPage';
+import PettyCashReportsPage from '@/features/pettyCash/PettyCashReportsPage';
+import PettyCashSettingsPage from '@/features/pettyCash/PettyCashSettingsPage';
+import ScanEntryDraftsPage from '@/features/scanEntry/ScanEntryDraftsPage';
+import ScanEntryReviewPage from '@/features/scanEntry/ScanEntryReviewPage';
+import BulkScanImportPage from '@/features/scanEntry/BulkScanImportPage';
+import ScanEntryReportsPage from '@/features/scanEntry/ScanEntryReportsPage';
+import ScanEntryKeywordSettingsPage from '@/features/scanEntry/ScanEntryKeywordSettingsPage';
+import SmartImportHubPage from '@/features/smartImport/SmartImportHubPage';
+import SmartImportBatchPage from '@/features/smartImport/SmartImportBatchPage';
+import ImportCenterPage from '@/features/importCenter/ImportCenterPage';
 import GRNListPage from '@/features/purchase/GRNListPage';
 import GRNFormPage from '@/features/purchase/GRNFormPage';
 import CashBookPage from '@/features/purchase/CashBookPage';
@@ -256,7 +313,13 @@ import { CompanyProvider } from '@/contexts/CompanyContext';
 import { FeatureSettingsProvider } from '@/contexts/FeatureSettingsContext';
 import { UiPreferencesProvider } from '@/contexts/UiPreferencesContext';
 import FeatureComplianceSettingsPage from '@/features/settings/FeatureComplianceSettingsPage';
+import FeatureConfigurationPage from '@/features/settings/FeatureConfigurationPage';
 import PlatformFeatureDefaultsPage from '@/features/settings/PlatformFeatureDefaultsPage';
+import IndustryTemplateMasterPage from '@/features/settings/IndustryTemplateMasterPage';
+import CompanyModuleAllocationPage from '@/features/settings/CompanyModuleAllocationPage';
+import ModuleDisabledPage from '@/features/settings/ModuleDisabledPage';
+import { ModuleGuardProvider } from '@/contexts/ModuleGuardContext';
+import WorkflowMasterPage from '@/features/settings/WorkflowMasterPage';
 import { FeatureGuard } from '@/components/FeatureGuard';
 import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
@@ -303,6 +366,7 @@ function App() {
                     <CompanyProvider>
                 <FinancialYearProvider>
                         <FeatureSettingsProvider>
+                        <ModuleGuardProvider>
                         <UiPreferencesProvider>
                         <SocketProvider>
                     <LiveNotificationProvider>
@@ -367,6 +431,7 @@ function App() {
                     </LiveNotificationProvider>
                     </SocketProvider>
                         </UiPreferencesProvider>
+                        </ModuleGuardProvider>
                         </FeatureSettingsProvider>
                 </FinancialYearProvider>
                     </CompanyProvider>
@@ -483,11 +548,22 @@ const AppLayout = () => {
                         <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
                         <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
                         <Route path="/admin/ledger-linking" element={<ProtectedRoute requirePermission="admin.ledger_linking.view"><AutoLinkLedgers /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.IMPORT_CENTER} element={<ProtectedRoute requirePermission="import_utility.import_utility.view"><ImportCenterPage /></ProtectedRoute>} />
                         <Route path="/admin/backups" element={<ProtectedRoute requireRole="admin"><BackupRestorePage /></ProtectedRoute>} />
 
+                        <Route path={PATHS.SETTINGS.COMPANIES_LIST} element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompaniesListPage /></ProtectedRoute>} />
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.FEATURE_CONFIGURATION} element={<ProtectedRoute requirePermission="admin"><FeatureConfigurationPage /></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.FEATURE_COMPLIANCE} element={<ProtectedRoute requirePermission="admin"><FeatureComplianceSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.CUSTOMER_MASTER_SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
+                        <Route path={PATHS.CUSTOMERS.SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
+                        <Route path={PATHS.SETTINGS.ACCOUNTS_SUNDRY_DEBTOR} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
+                        <Route path={PATHS.SETTINGS.CUSTOMER_SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedRoute requirePermission="admin"><PlatformFeatureDefaultsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.INDUSTRY_TEMPLATES} element={<ProtectedRoute requirePermission="admin"><IndustryTemplateMasterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION} element={<ProtectedRoute requirePermission="admin"><CompanyModuleAllocationPage /></ProtectedRoute>} />
+                        <Route path="/module-disabled" element={<ModuleDisabledPage />} />
+                        <Route path={PATHS.SETTINGS.WORKFLOW_MASTER} element={<ProtectedRoute requirePermission="admin"><WorkflowMasterPage /></ProtectedRoute>} />
                         <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
@@ -503,6 +579,8 @@ const AppLayout = () => {
                         <Route path="/crm/product-catalog/new" element={<ProtectedRoute requirePermission="crm.product_catalog.add"><FeatureGuard feature="crm.productCatalogEnabled"><ProductCatalogFormPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/crm/product-catalog/:id" element={<ProtectedRoute requirePermission="crm.product_catalog.view"><FeatureGuard feature="crm.productCatalogEnabled"><ProductCatalogFormPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/reports/customer-master" element={<ProtectedRoute requirePermission="reports.customer_master_report.view"><CustomerMasterReport /></ProtectedRoute>} />
+                        <Route path={PATHS.REPORTS.CUSTOMER_KYC} element={<ProtectedRoute requirePermission="reports.customer_kyc_reports.view"><CustomerKycReportsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.REPORTS.SUPPLIER_KYC} element={<ProtectedRoute requirePermission="reports.supplier_kyc_reports.view"><SupplierKycReportsPage /></ProtectedRoute>} />
                         <Route path="/reports/followups" element={<ProtectedRoute requirePermission="reports.followup_report.view"><FollowUpTrackerReport /></ProtectedRoute>} />
                         <Route path="/reports/reminders" element={<ProtectedRoute requirePermission="reports"><ReminderReport /></ProtectedRoute>} />
                         <Route path="/reports/open-reminders" element={<ProtectedRoute requirePermission="reports.reminder_report.view"><OpenRemindersReport /></ProtectedRoute>} />
@@ -564,6 +642,47 @@ const AppLayout = () => {
                         <Route path="/production/work-orders" element={<ProtectedRoute requirePermission="production"><WorkOrderListPage /></ProtectedRoute>} />
                         <Route path="/production/work-orders/new" element={<ProtectedRoute requirePermission="production"><WorkOrderFormPage /></ProtectedRoute>} />
                         <Route path="/production/work-orders/:id" element={<ProtectedRoute requirePermission="production"><WorkOrderDetailPage /></ProtectedRoute>} />
+                        <Route path="/production/workflow-lots" element={<ProtectedRoute requirePermission="production.workflow_production.view"><WorkflowProductionListPage /></ProtectedRoute>} />
+                        <Route path="/production/workflow-lots/new" element={<ProtectedRoute requirePermission="production.workflow_production.add"><WorkflowProductionFormPage /></ProtectedRoute>} />
+                        <Route path="/production/workflow-lots/:id" element={<ProtectedRoute requirePermission="production.workflow_production.view"><WorkflowProductionDetailPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots" element={<ProtectedRoute requirePermission="production.textile_production.view"><TextileProductionListPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots/new" element={<ProtectedRoute requirePermission="production.textile_production.add"><TextileProductionFormPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots/:id/dyeing-issue" element={<ProtectedRoute requirePermission="production.textile_production.edit"><TextileDyeingIssuePage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots/:id/dyeing-return" element={<ProtectedRoute requirePermission="production.textile_production.edit"><TextileDyeingReturnPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots/:id/report" element={<ProtectedRoute requirePermission="production.textile_production.view"><TextileLotReportPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-lots/:id" element={<ProtectedRoute requirePermission="production.textile_production.view"><TextileStageProgressPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-job-work-rates" element={<ProtectedRoute requirePermission="production.textile_job_work_rates.view"><TextileJobWorkRatePage /></ProtectedRoute>} />
+                        <Route path="/production/textile-job-work-reports" element={<ProtectedRoute requirePermission="production.textile_job_work_rates.view"><TextileJobWorkReportsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.ROOT} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileJobWorkHomePage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.ISSUE} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.add"><TextileJobWorkIssuePage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.RETURN} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.edit"><TextileJobWorkReturnEntryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.STOCK} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileJobWorkStockWithVendorPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.REPORTS} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileJobWorkModuleReportsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.PROCESS_OUTPUT_STOCK} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileProcessOutputStockPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.PROCESS_TRACE} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileProcessTracePage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_JOB_WORK.PROCESS_OUTPUT_REPORTS} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileProcessOutputReportsPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-conversion-master" element={<ProtectedRoute requirePermission="production.textile_conversion.view"><TextileConversionMasterPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-transformation-entry" element={<ProtectedRoute requirePermission="production.textile_conversion.add"><TextileTransformationEntryPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-transformation-history" element={<ProtectedRoute requirePermission="production.textile_conversion.view"><TextileTransformationHistoryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_DYEING_CHALLANS} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileDyeingChallanListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_DYEING_CHALLAN_NEW} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.ISSUE}?process=Dyeing`} replace />} />
+                        <Route path="/production/textile-dyeing-challans/:id" element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileDyeingChallanDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_DYEING_CHALLAN_RETURN} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.RETURN}?process=Dyeing`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_STOCK_WITH_DYERS} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.STOCK}?process=Dyeing`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_DYEING_REPORTS} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.REPORTS}?process=Dyeing`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_EMBROIDERY_CHALLANS} element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileEmbroideryChallanListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_EMBROIDERY_CHALLAN_NEW} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.ISSUE}?process=Embroidery`} replace />} />
+                        <Route path="/production/textile-embroidery-challans/:id" element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileEmbroideryChallanDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_EMBROIDERY_CHALLAN_RETURN} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.RETURN}?process=Embroidery`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_STOCK_WITH_EMBROIDERY} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.STOCK}?process=Embroidery`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_EMBROIDERY_REPORTS} element={<Navigate to={`${PATHS.PRODUCTION.TEXTILE_JOB_WORK.REPORTS}?process=Embroidery`} replace />} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_PRODUCTION_WORKFLOW} element={<ProtectedRoute requirePermission="production.textile_production_workflow.view"><TextileProductionDashboardPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_PROCESS_ROUTES} element={<ProtectedRoute requirePermission="production.textile_process_route.view"><TextileProcessRouteMasterPage /></ProtectedRoute>} />
+                        <Route path={PATHS.PRODUCTION.TEXTILE_PRODUCTION_ORDER_NEW} element={<ProtectedRoute requirePermission="production.textile_production_workflow.add"><TextileProductionOrderFormPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-production-orders/:id/issue" element={<ProtectedRoute requirePermission="production.textile_production_workflow.edit"><TextileProcessIssueChallanPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-production-orders/:id/receive" element={<ProtectedRoute requirePermission="production.textile_production_workflow.edit"><TextileProcessReceiveChallanPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-process-challans/:processType/:id" element={<ProtectedRoute requirePermission="production.textile_dyeing_challan.view"><TextileProcessChallanDetailPage /></ProtectedRoute>} />
+                        <Route path="/production/textile-production-orders/:id" element={<ProtectedRoute requirePermission="production.textile_production_workflow.view"><TextileProductionOrderDetailPage /></ProtectedRoute>} />
                         <Route path="/production/planning" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningListPage /></ProtectedRoute>} />
                         <Route path="/production/planning/new" element={<ProtectedRoute requirePermission="production.production_planning.add"><ProductionPlanningFormPage /></ProtectedRoute>} />
                         <Route path="/production/planning/:id" element={<ProtectedRoute requirePermission="production.production_planning.view"><ProductionPlanningFormPage /></ProtectedRoute>} />
@@ -589,6 +708,9 @@ const AppLayout = () => {
                         <Route path="/purchase/invoices/new" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/purchase/invoices/edit/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceFormPage /></ProtectedRoute>} />
                         <Route path="/purchase/invoices/:id" element={<ProtectedRoute requirePermission="purchase"><PurchaseInvoiceDetailPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SCAN_BILLS} element={<ProtectedRoute requirePermission="documents"><ScanBillsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.MISSING} element={<ProtectedRoute requirePermission="documents"><MissingAttachmentsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.MOBILE_SCAN} element={<ProtectedRoute requirePermission="documents"><MobileScanPage /></ProtectedRoute>} />
                         <Route path="/purchase/cash-book" element={<ProtectedRoute requirePermission="purchase"><CashBookPage /></ProtectedRoute>} />
                         <Route path="/purchase/bank-book" element={<ProtectedRoute requirePermission="purchase"><BankBookPage /></ProtectedRoute>} />
                         <Route path="/reports/purchase-comparison" element={<ProtectedRoute requirePermission="purchase"><PurchaseComparisonReportPage /></ProtectedRoute>} />
@@ -653,6 +775,17 @@ const AppLayout = () => {
                         <Route path="/accounts/payment-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><PaymentEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/expense-entry" element={<ProtectedRoute requirePermission="accounts"><ExpenseEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/expense-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><ExpenseEntryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.PETTY_CASH_ENTRY} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.view"><PettyCashEntryPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.PETTY_CASH_IMPORT} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.import"><PettyCashImportPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.PETTY_CASH_REPORTS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.view"><PettyCashReportsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.PETTY_CASH_SETTINGS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.edit"><PettyCashSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SMART_IMPORT_HUB} element={<ProtectedRoute requirePermission="import_utility.import_utility.view"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportHubPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/documents/smart-import/batch/:importType" element={<ProtectedRoute requirePermission="import_utility.import_utility.upload"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportBatchPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_DRAFTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryDraftsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path="/documents/scan-entry/review/:id" element={<ProtectedRoute requirePermission="scan_entry.scan_entry.review"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryReviewPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_BULK} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.upload"><FeatureGuard feature="accounting.enableAiSmartImport"><BulkScanImportPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_REPORTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryReportsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.review"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryKeywordSettingsPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/contra-entry" element={<ProtectedRoute requirePermission="accounts"><ContraEntryPage /></ProtectedRoute>} />

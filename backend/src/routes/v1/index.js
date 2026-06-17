@@ -5,6 +5,7 @@ import creditDebitNoteRoute from './creditDebitNote.routes.js';
 import authRoute from './auth.routes.js';
 import userRoute from './user.routes.js';
 import customerRoute from './customer.routes.js';
+import customerDocumentRoute from './customerDocument.routes.js';
 import followUpRoute from './followup.routes.js';
 import conversationRoute from './conversation.routes.js';
 import reminderRoute from './reminder.routes.js';
@@ -15,6 +16,7 @@ import taskGroupRoute from './taskGroup.routes.js';
 import groupRoute from './group.routes.js';
 import taskChatRoute from './taskChat.routes.js';
 import itemRoute from './item.routes.js';
+import itemImageRoute from './itemImage.routes.js';
 import itemTypeRoute from './itemType.routes.js';
 import itemGroupRoute from './itemGroup.routes.js';
 import bomRoute from './bom.routes.js';
@@ -114,16 +116,44 @@ import companyFeatureSettingsRoute from './companyFeatureSettings.routes.js';
 import platformFeatureSettingsRoute from './platformFeatureSettings.routes.js';
 import leadRoute from './lead.routes.js';
 import productCatalogRoute from './productCatalog.routes.js';
+import voucherAttachmentRoute from './voucherAttachment.routes.js';
+import pettyCashRoute from './pettyCash.routes.js';
+import sundryDebtorSettingsRoute from './sundryDebtorSettings.routes.js';
+import featureConfigurationRoute from './featureConfiguration.routes.js';
+import scanEntryRoute from './scanEntry.routes.js';
+import smartImportRoute from './smartImport.routes.js';
+import importCenterRoute from './importCenter.routes.js';
 import whatsappChatRoute from './whatsappChat.routes.js';
+import industryTemplateRoute from './industryTemplate.routes.js';
+import customerTemplateFieldSettingsRoute from './customerTemplateFieldSettings.routes.js';
+import supplierTemplateFieldSettingsRoute from './supplierTemplateFieldSettings.routes.js';
+import itemTemplateFieldSettingsRoute from './itemTemplateFieldSettings.routes.js';
+import documentsKycTemplateSettingsRoute from './documentsKycTemplateSettings.routes.js';
+import supplierDocumentRoute from './supplierDocument.routes.js';
+import workflowMasterRoute from './workflowMaster.routes.js';
+import companyWorkflowAssignmentRoute from './companyWorkflowAssignment.routes.js';
+import workflowProductionLotRoute from './workflowProductionLot.routes.js';
+import textileProductionLotRoute from './textileProductionLot.routes.js';
+import textileJobWorkRateRoute from './textileJobWorkRate.routes.js';
+import textileConversionRoute from './textileConversion.routes.js';
+import textileDyeingChallanRoute from './textileDyeingChallan.routes.js';
+import textileJobWorkChallanRoute from './textileJobWorkChallan.routes.js';
+import textileProcessRoute from './textileProcessRoute.routes.js';
+import textileProductionOrderRoute from './textileProductionOrder.routes.js';
+import textileProcessOutputRoute from './textileProcessOutput.routes.js';
 import { resolveCompanyScope } from '../../middlewares/companyScope.middleware.js';
 import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware.js';
+import { attachModuleContext, gateApiModuleByPath } from '../../middlewares/moduleGuard.middleware.js';
+import moduleAllocationRoute from './moduleAllocation.routes.js';
 
 const router = express.Router();
 
 router.use('/public', publicInvoiceRoute);
 
 router.use(resolveCompanyScope);
+router.use(attachModuleContext);
 router.use(gateApiFeatureByPath);
+router.use(gateApiModuleByPath);
 
 router.get('/health', (req, res) => {
     res.send({
@@ -165,6 +195,14 @@ const defaultRoutes = [
         route: customerRoute,
     },
     {
+        path: '/customer-documents',
+        route: customerDocumentRoute,
+    },
+    {
+        path: '/supplier-documents',
+        route: supplierDocumentRoute,
+    },
+    {
         path: '/followups',
         route: followUpRoute,
     },
@@ -203,6 +241,10 @@ const defaultRoutes = [
     {
         path: '/items',
         route: itemRoute,
+    },
+    {
+        path: '/item-images',
+        route: itemImageRoute,
     },
     {
         path: '/item-types',
@@ -602,6 +644,102 @@ const defaultRoutes = [
     {
         path: '/product-catalog',
         route: productCatalogRoute,
+    },
+    {
+        path: '/voucher-attachments',
+        route: voucherAttachmentRoute,
+    },
+    {
+        path: '/petty-cash',
+        route: pettyCashRoute,
+    },
+    {
+        path: '/sundry-debtor',
+        route: sundryDebtorSettingsRoute,
+    },
+    {
+        path: '/feature-configuration',
+        route: featureConfigurationRoute,
+    },
+    {
+        path: '/scan-entry',
+        route: scanEntryRoute,
+    },
+    {
+        path: '/smart-import',
+        route: smartImportRoute,
+    },
+    {
+        path: '/import-center',
+        route: importCenterRoute,
+    },
+    {
+        path: '/industry-templates',
+        route: industryTemplateRoute,
+    },
+    {
+        path: '/module-allocation',
+        route: moduleAllocationRoute,
+    },
+    {
+        path: '/customer-template-field-settings',
+        route: customerTemplateFieldSettingsRoute,
+    },
+    {
+        path: '/supplier-template-field-settings',
+        route: supplierTemplateFieldSettingsRoute,
+    },
+    {
+        path: '/item-template-field-settings',
+        route: itemTemplateFieldSettingsRoute,
+    },
+    {
+        path: '/documents-kyc-template-settings',
+        route: documentsKycTemplateSettingsRoute,
+    },
+    {
+        path: '/workflow-masters',
+        route: workflowMasterRoute,
+    },
+    {
+        path: '/company-workflow-assignment',
+        route: companyWorkflowAssignmentRoute,
+    },
+    {
+        path: '/workflow-production-lots',
+        route: workflowProductionLotRoute,
+    },
+    {
+        path: '/textile-production-lots',
+        route: textileProductionLotRoute,
+    },
+    {
+        path: '/textile-job-work-rates',
+        route: textileJobWorkRateRoute,
+    },
+    {
+        path: '/textile-conversions',
+        route: textileConversionRoute,
+    },
+    {
+        path: '/textile-dyeing-challans',
+        route: textileDyeingChallanRoute,
+    },
+    {
+        path: '/textile-job-work-challans/:processType',
+        route: textileJobWorkChallanRoute,
+    },
+    {
+        path: '/textile-process-routes',
+        route: textileProcessRoute,
+    },
+    {
+        path: '/textile-production-orders',
+        route: textileProductionOrderRoute,
+    },
+    {
+        path: '/textile-process-output',
+        route: textileProcessOutputRoute,
     },
     // ── WhatsApp Chat Panel (additive: powers /whatsapp/chat UI) ─────────────
     {
