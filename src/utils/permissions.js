@@ -31,6 +31,7 @@ export const APP_MODULES = [
         name: 'Inventory',
         submodules: [
             { id: 'item_master', name: 'Item Master', actions: ['view', 'add', 'edit', 'delete', 'export', 'import'] },
+            { id: 'item_images', name: 'Item Images (Textile)', actions: ['view', 'upload', 'delete', 'download'] },
             { id: 'item_types', name: 'Item Types', actions: ['view', 'manage'] },
             { id: 'item_groups', name: 'Item Groups', actions: ['view', 'manage'] },
             { id: 'bom', name: 'Bill of Materials (BOM)', actions: ['view', 'add', 'edit', 'delete', 'print', 'export'] },
@@ -58,6 +59,14 @@ export const APP_MODULES = [
             { id: 'purchase_orders', name: 'Purchase Orders', actions: ['view', 'add', 'edit', 'delete', 'print', 'approve'] },
             { id: 'grn', name: 'Goods Receipt (GRN)', actions: ['view', 'add'] },
             { id: 'purchase_invoices', name: 'Purchase Invoices', actions: ['view', 'add', 'edit', 'delete'] }
+        ]
+    },
+    {
+        id: 'documents',
+        name: 'Documents',
+        submodules: [
+            { id: 'scan_bills', name: 'Scan Bills', actions: ['view', 'add', 'edit', 'delete', 'scan'] },
+            { id: 'missing_attachments', name: 'Missing Attachments', actions: ['view', 'export'] },
         ]
     },
     {
@@ -97,6 +106,13 @@ export const APP_MODULES = [
             { id: 'outstanding', name: 'Outstanding Report', actions: ['view', 'export'] },
             { id: 'credit_notes', name: 'Credit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] },
             { id: 'debit_notes', name: 'Debit Notes', actions: ['view', 'add', 'edit', 'delete', 'print'] },
+        ]
+    },
+    {
+        id: 'voucher_entry',
+        name: 'Voucher Entry',
+        submodules: [
+            { id: 'petty_cash', name: 'Petty Cash', actions: ['view', 'add', 'edit', 'delete', 'import', 'export', 'approve'] },
         ]
     },
     {

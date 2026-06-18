@@ -12,6 +12,7 @@ import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import { numberToWords } from '@/utils/numberToWords';
 import toast from 'react-hot-toast';
+import VoucherEntryTallyLayout from '@/features/accounts/components/voucherEntryTally';
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -203,6 +204,7 @@ export default function CreditDebitNoteFormPage() {
     };
 
     return (
+        <VoucherEntryTallyLayout>
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{id ? 'Edit' : 'New'} {form.noteType}</h1>
@@ -328,5 +330,6 @@ export default function CreditDebitNoteFormPage() {
                 </div>
             </div>
         </div>
+        </VoucherEntryTallyLayout>
     );
 }

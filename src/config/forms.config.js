@@ -9,11 +9,35 @@ export const ALL_FORMS = [
 
     // CRM
     { id: 'customer-master', title: 'Customer Master', path: PATHS.CUSTOMERS.LIST, icon: 'crm', permission: 'customers.customer_master.view', module: 'CRM' },
-    { id: 'lead-inquiry', title: 'Lead / Inquiry', path: '/crm/leads', icon: 'crm', permission: 'customers', module: 'CRM' },
+    {
+        id: 'lead-inquiry',
+        title: 'Leads / Inquiries',
+        path: '/crm/leads',
+        icon: 'crm',
+        permissions: [
+            'crm.leads.view',
+            'crm.leads.view_all',
+            'crm.leads.add',
+            'crm.leads.edit',
+            'crm.leads.convert_whatsapp',
+        ],
+        keywords: ['lead', 'leads', 'inquiry', 'inquiries', 'whatsapp', 'crm'],
+        module: 'CRM',
+    },
+    {
+        id: 'lead-report',
+        title: 'Lead Report',
+        path: '/reports/leads',
+        icon: 'report',
+        permissions: ['reports.lead_report.view', 'reports.lead_report.view_all', 'crm.leads.report_view', 'crm.leads.report_view_all'],
+        keywords: ['lead', 'leads', 'inquiry', 'report'],
+        module: 'CRM',
+    },
     { id: 'follow-up', title: 'Follow-up Tracker', path: '/followups', icon: 'tasks', permission: 'customers.follow_up.view', module: 'CRM' },
     { id: 'reminders', title: 'Reminder / Follow-up', path: '/reminders', icon: 'tasks', permission: 'customers.reminder_tasks.view', module: 'CRM' },
     { id: 'distributors', title: 'Distributor Master', path: '/distributors', icon: 'crm', permission: 'sales.sales_invoices.view', module: 'CRM' },
     { id: 'report-customer-master', title: 'Customer Master Report', path: PATHS.REPORTS.CUSTOMER_MASTER, icon: 'report', permission: 'reports.customer_master_report.view', module: 'CRM' },
+    { id: 'report-customer-kyc', title: 'Customer KYC / Document Reports', path: PATHS.REPORTS.CUSTOMER_KYC, icon: 'report', permission: 'reports.customer_kyc_reports.view', module: 'CRM' },
     { id: 'report-followups', title: 'Follow-up Tracker Report', path: '/reports/followups', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
     { id: 'report-followup-dashboard', title: 'Follow-up Dashboard', path: '/reports/followup-dashboard', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
     { id: 'report-followup-tasks', title: 'Follow-up Task Report', path: '/reports/followup-task-report', icon: 'report', permission: 'reports.followup_report.view', module: 'CRM' },
@@ -51,12 +75,14 @@ export const ALL_FORMS = [
     { id: 'finished-goods-report', title: 'Finished Goods Stock Report', path: '/inventory/stock/finished-goods', icon: 'inventory', permission: 'inventory.finished_goods_report.view', module: 'Inventory' },
     { id: 'stock-ledger', title: 'Stock Movement Ledger', path: '/inventory/stock/ledger', icon: 'inventory', permission: 'inventory.stock_ledger.view', module: 'Inventory' },
 
-    // Production
-    { id: 'work-order', title: 'Work Order', path: PATHS.PRODUCTION.WORK_ORDERS, icon: 'production', permission: 'production.production_planning.view', module: 'Production' },
-    { id: 'production-entry', title: 'Production Entry', path: '/production/output/new', icon: 'production', permission: 'production.prod_output.add', module: 'Production' },
-    { id: 'bom-consumption', title: 'BOM Consumption', path: '/production/consumption', icon: 'production', permission: 'production.prod_output.add', module: 'Production' },
-    { id: 'finished-goods-inward', title: 'Finished Goods Inward', path: '/production/inward', icon: 'production', permission: 'production.prod_output.add', module: 'Production' },
-    { id: 'qc-testing', title: 'QC / Testing', path: '/production/qc', icon: 'security', permission: 'production.prod_output.add', module: 'Production' },
+    // Production — JSK / electronics (hidden for Textile / Handloom companies)
+    { id: 'work-order', title: 'Work Order', path: PATHS.PRODUCTION.WORK_ORDERS, icon: 'production', permission: 'production.production_planning.view', module: 'Production', electronicsOnly: true },
+    { id: 'production-entry', title: 'Production Entry', path: '/production/output/new', icon: 'production', permission: 'production.prod_output.add', module: 'Production', electronicsOnly: true },
+    { id: 'bom-consumption', title: 'BOM Consumption', path: '/production/consumption', icon: 'production', permission: 'production.prod_output.add', module: 'Production', electronicsOnly: true },
+    { id: 'finished-goods-inward', title: 'Finished Goods Inward', path: '/production/inward', icon: 'production', permission: 'production.prod_output.add', module: 'Production', electronicsOnly: true },
+    { id: 'qc-testing', title: 'QC / Testing', path: '/production/qc', icon: 'production', permission: 'production.prod_output.add', module: 'Production', electronicsOnly: true },
+    // Production — Textile / Handloom only
+    { id: 'textile-job-work', title: 'Textile Job Work', path: PATHS.PRODUCTION.TEXTILE_JOB_WORK.ROOT, icon: 'production', permission: 'production.textile_dyeing_challan.view', module: 'Production', textileOnly: true },
 
     // Voucher Entry
     { id: 'receipt-voucher', title: 'Receipt Voucher', path: PATHS.ACCOUNTS.RECEIPT_ENTRY, icon: 'receipt', permission: 'accounts.receipt_entry.view', module: 'Voucher Entry' },
@@ -185,8 +211,12 @@ export const ALL_FORMS = [
     { id: 'whatsapp-settings', title: 'WhatsApp Settings', path: '/whatsapp', icon: 'messenger', permission: 'whatsapp.whatsapp_settings.view', module: 'WhatsApp' },
 
     // Admin
+    { id: 'companies-list', title: 'Companies', path: PATHS.SETTINGS.COMPANIES_LIST, icon: 'settings', permission: 'admin.company_profile.view', module: 'Admin' },
     { id: 'company-profile', title: 'Company Profile', path: '/company-profile', icon: 'settings', permission: 'admin.company_profile.view', module: 'Admin' },
+    { id: 'feature-configuration', title: 'Feature Configuration', path: PATHS.SETTINGS.FEATURE_CONFIGURATION, icon: 'settings', permission: 'admin', module: 'Admin' },
     { id: 'feature-compliance-settings', title: 'Feature / Compliance Settings', path: PATHS.SETTINGS.FEATURE_COMPLIANCE, icon: 'settings', permission: 'admin', module: 'Admin' },
+    { id: 'industry-template-master', title: 'Industry Template Master', path: PATHS.SETTINGS.INDUSTRY_TEMPLATES, icon: 'settings', permission: 'admin', module: 'Admin' },
+    { id: 'workflow-master', title: 'Workflow Master', path: PATHS.SETTINGS.WORKFLOW_MASTER, icon: 'settings', permission: 'admin', module: 'Admin' },
     { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, icon: 'settings', permission: 'admin', module: 'Admin' },
     { id: 'user-management', title: 'User Management', path: '/admin/users', icon: 'crm', permission: 'admin.user_management.view', module: 'Admin' },
     { id: 'security-control', title: 'Security & Control', path: '/admin/security', icon: 'security', permission: 'admin.security_control.view', module: 'Admin' },

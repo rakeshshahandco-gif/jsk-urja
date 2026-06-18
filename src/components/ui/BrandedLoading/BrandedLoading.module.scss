@@ -1,3 +1,19 @@
+.simpleLoader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.simpleLoaderInline {
+  display: inline-block;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 @keyframes popIn {
   0% {
     transform: scale(0.2);

@@ -70,8 +70,8 @@ export default function PlatformFeatureDefaultsPage() {
         setApplying(true);
         try {
             const res = await applyPlatformDefaultsToAllCompanies();
-            const updated = res?.data?.updated ?? res?.updated;
-            toast.success(res?.message || `Applied to ${updated ?? 0} companies`);
+            const updated = res?.updated;
+            toast.success(`Applied to ${updated ?? 0} companies`);
         } catch (e) {
             toast.error(e.response?.data?.message || 'Failed to apply to all companies');
         } finally {
@@ -89,11 +89,11 @@ export default function PlatformFeatureDefaultsPage() {
         <div style={{ padding: '24px 30px', maxWidth: 900, margin: '0 auto' }}>
             <h1 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 800, color: '#1e293b' }}>Platform Default Settings</h1>
             <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
-                Common toggles for all companies. New companies inherit these defaults. Each company can override under
+                Common toggles for <strong>all companies and industries</strong>. New companies inherit these defaults. Each company can override under
                 Feature / Compliance Settings. Industry / production is always per company.
             </p>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', marginBottom: 20, paddingBottom: 6 }}>
                 {PLATFORM_FEATURE_TABS.map((t) => (
                     <button
                         key={t.id}
@@ -107,6 +107,8 @@ export default function PlatformFeatureDefaultsPage() {
                             fontWeight: 700,
                             fontSize: 13,
                             cursor: 'pointer',
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
                         }}
                     >
                         {t.label}
@@ -115,6 +117,11 @@ export default function PlatformFeatureDefaultsPage() {
             </div>
 
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+                {tab === 'customer' && (
+                    <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b', lineHeight: 1.6 }}>
+                        <strong>Customer</strong> — default visibility for Sundry Debtor / credit fields on Customer Master (all industries).
+                    </p>
+                )}
                 {section.map(([key, label]) => (
                     <ToggleRow
                         key={key}

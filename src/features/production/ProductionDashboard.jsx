@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardStats } from '@/services/workOrderApi';
+import { getCompanyWorkflowAssignment } from '@/services/companyWorkflowAssignmentApi';
 import { PATHS } from '@/routes/paths';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { useCompany } from '@/contexts/CompanyContext';
+import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
+import { getWorkOrderLabels, mapWorkflowPreviewToDisplayStages, JSK_WO_DEFAULT_STAGES } from '@/utils/textileWorkOrder';
 import { BrandedLoader } from '@/components/ui';
 
 const tiles_config = [
@@ -21,9 +25,13 @@ const tiles_config = [
 export default function ProductionDashboard() {
     const navigate = useNavigate();
     const { selectedFY } = useFinancialYear();
+    const { selectedCompany } = useCompany();
+    const isTextile = isTextileIndustryCompany(selectedCompany);
+    const labels = getWorkOrderLabels(isTextile);
     const [stats, setStats] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [flowStages, setFlowStages] = useState(isTextile ? [] : JSK_WO_DEFAULT_STAGES);
 
     // Date Filters - Default to current month
     const [dates, setDates] = useState(() => {
@@ -44,6 +52,16 @@ export default function ProductionDashboard() {
     useEffect(() => { 
         if (selectedFY) fetchDashboardData(); 
     }, [dates.from, dates.to, selectedFY]);
+
+    useEffect(() => {
+        if (!isTextile || !selectedCompany?._id) {
+            setFlowStages(JSK_WO_DEFAULT_STAGES);
+            return;
+        }
+        getCompanyWorkflowAssignment(selectedCompany._id)
+            .then((data) => setFlowStages(mapWorkflowPreviewToDisplayStages(data?.previewStages || [])))
+            .catch(() => setFlowStages(mapWorkflowPreviewToDisplayStages([])));
+    }, [isTextile, selectedCompany?._id]);
     
     useGlobalSync('workorder', () => { fetchDashboardData(true); });
 
@@ -58,10 +76,10 @@ export default function ProductionDashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, color: '#1e293b' }}>
-                        🏭 Production Dashboard
+                        {labels.dashboardTitle}
                     </h1>
                     <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 13 }}>
-                        Real-time overview of all Work Orders
+                        {labels.dashboardSubtitle}
                     </p>
                 </div>
 
@@ -83,7 +101,7 @@ export default function ProductionDashboard() {
                             boxShadow: '0 2px 8px rgba(13,148,136,0.3)',
                         }}
                     >
-                        + New Work Order
+                        {labels.newButton}
                     </button>
                 </div>
             </div>
@@ -127,11 +145,11 @@ export default function ProductionDashboard() {
 
             {/* Quick Nav */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <NavCard icon="📋" title="All Work Orders" sub="View & manage WOs" path={PATHS.PRODUCTION.WORK_ORDERS} navigate={navigate} />
-                <NavCard icon="➕" title="New Work Order" sub="Start from BOM" path={PATHS.PRODUCTION.NEW_WO} navigate={navigate} />
+                <NavCard icon="📋" title={labels.titleShort} sub={isTextile ? 'View & manage job orders' : 'View & manage WOs'} path={PATHS.PRODUCTION.WORK_ORDERS} navigate={navigate} />
+                <NavCard icon="➕" title={labels.newTitle} sub={isTextile ? 'Fabric + process route' : 'Start from BOM'} path={PATHS.PRODUCTION.NEW_WO} navigate={navigate} />
             </div>
 
-            <ProcessFlowInfo />
+            <ProcessFlowInfo stages={flowStages} isTextile={isTextile} labels={labels} />
         </div>
     );
 }
@@ -156,28 +174,19 @@ function NavCard({ icon, title, sub, path, navigate }) {
     );
 }
 
-function ProcessFlowInfo() {
-    const stages = [
-        { seq: 1, name: 'PCB', icon: '🔲' },
-        { seq: 2, name: 'SMD Pick & Place', icon: '🤖' },
-        { seq: 3, name: 'TH Mounting', icon: '🔩' },
-        { seq: 4, name: 'Wave Soldering', icon: '🌊' },
-        { seq: 5, name: 'Touch Up', icon: '✏️' },
-        { seq: 6, name: 'Wire Insert', icon: '🔌' },
-        { seq: 7, name: '1st QC', icon: '🔍', isGate: true },
-        { seq: 8, name: 'Dummy Load Testing', icon: '⚡', isGate: true },
-        { seq: 9, name: 'Final QC', icon: '✅', isGate: true },
-    ];
+function ProcessFlowInfo({ stages = [], isTextile, labels }) {
     return (
         <div style={{ marginTop: 28, background: '#fff', borderRadius: 14, padding: '20px 24px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>Production Flow</h2>
+            <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{labels.flowTitle}</h2>
             <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'center' }}>
                 {stages.map((s, i) => (
-                    <React.Fragment key={s.seq}>
+                    <React.Fragment key={`${s.seq}-${s.name}`}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 80 }}>
                             <div style={{
                                 width: 48, height: 48, borderRadius: '50%',
-                                background: s.isGate ? 'linear-gradient(135deg,#7c3aed,#4f46e5)' : 'linear-gradient(135deg,#2563eb,#0ea5e9)',
+                                background: s.isGate
+                                    ? 'linear-gradient(135deg,#7c3aed,#4f46e5)'
+                                    : (isTextile ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : 'linear-gradient(135deg,#2563eb,#0ea5e9)'),
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: 20,
                                 boxShadow: s.isGate ? '0 0 12px rgba(124,58,237,0.3)' : '0 2px 6px rgba(37,99,235,0.2)',
@@ -193,7 +202,7 @@ function ProcessFlowInfo() {
                 ))}
             </div>
             <div style={{ marginTop: 12, fontSize: 11, color: '#9ca3af' }}>
-                🔵 Assembly stages &nbsp;|&nbsp; 🟣 QC / Testing gates (mandatory pass to proceed)
+                {labels.flowLegend}
             </div>
         </div>
     );

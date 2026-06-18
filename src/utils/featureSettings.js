@@ -25,6 +25,8 @@ const DEFAULTS = {
         batchSerialBarcodeTracking: true,
         negativeStockAllowed: true,
         warehouseLocationTracking: true,
+        /** Textile / Handloom item image tab in Item Master (hidden for Electronics / JSK) */
+        textileItemImagesRequired: true,
     },
     accounting: {
         accountingRequired: true,
@@ -33,6 +35,10 @@ const DEFAULTS = {
         billWiseAdjustmentRequired: true,
         bankReconciliationRequired: true,
         interestPayableStatementRequired: true,
+        tallyVoucherShortcutsEnabled: false,
+        enablePettyCash: false,
+        enableScanEntry: false,
+        enableAiSmartImport: false,
     },
     tdsTcs: {
         tdsRequired: true,
@@ -48,6 +54,9 @@ const DEFAULTS = {
     },
     purchase: {
         enableRfqSupplierQuotation: false,
+        enableDocumentAttachments: false,
+        enableMobileScanBills: false,
+        enableOcrScanEntry: false,
     },
     saas: {
         moduleControlEnabled: true,
@@ -80,6 +89,8 @@ const DEFAULTS = {
     // UI in Profile -> UI Preferences (themes, colors, density, etc.).
     ui: {
         advancedCustomizationEnabled: false,
+        brandedSplashEnabled: true,
+        brandedLoaderEnabled: true,
     },
     // CRM extensions used by WhatsApp <-> Lead flow.
     // Defaults to true so the WhatsApp-driven lead capture and the product
@@ -87,6 +98,35 @@ const DEFAULTS = {
     crm: {
         whatsappToLeadEnabled: true,
         productCatalogEnabled: true,
+        leadVisibilityMode: 'own_only',
+    },
+    featureEngine: {
+        overrides: {},
+        customDefinitions: [],
+        industryFieldValues: {},
+    },
+    customer: {
+        enableCreditPeriod: false,
+        enableGracePeriod: false,
+        enableCustomerType: false,
+        enableTcsApplicable: false,
+        enableCreditLimit: false,
+        enablePaymentTerms: false,
+        enableInterestApplicable: false,
+        enableCollectionPerson: false,
+        enableRiskCategory: false,
+        enableGstNumber: true,
+        enableGstRegistrationType: true,
+        enableGstState: false,
+        enablePlaceOfSupply: false,
+        enablePanNumber: true,
+        enableTanNumber: false,
+        enableMsmeNumber: true,
+        enableIecNumber: false,
+        enableCinNumber: false,
+        enableBankDetails: false,
+        enableExportDetails: false,
+        enableDocumentsKyc: false,
     },
 };
 
@@ -108,8 +148,16 @@ export function mergeFeatureSettings(stored) {
     return deepMerge(DEFAULTS, stored || {});
 }
 
+export function isAiSmartImportEnabled(settings) {
+    const merged = mergeFeatureSettings(settings);
+    return Boolean(merged.accounting?.enableAiSmartImport || merged.accounting?.enableScanEntry);
+}
+
 export function isFeatureEnabled(settings, path) {
     if (!path) return true;
+    if (path === 'accounting.enableAiSmartImport') {
+        return isAiSmartImportEnabled(settings);
+    }
     const merged = mergeFeatureSettings(settings);
     const parts = String(path).split('.');
     let cur = merged;

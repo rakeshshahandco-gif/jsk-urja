@@ -7,6 +7,21 @@ import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import { useToast } from '@/components/ui/Toast';
 import SearchableSelect from '@/components/ui/SearchableSelect';
+import { useCompany } from '@/contexts/CompanyContext';
+import {
+    isTextileIndustryCompany,
+    getBomComponentTypes,
+    formatBomProcessLabel,
+} from '@/utils/industryInventoryLabels';
+import {
+    TEXTILE_BOM_LABOUR_PROCESSES,
+    TEXTILE_BOM_RATE_TYPES,
+    BLANK_TEXTILE_PROCESS_LABOUR,
+    calcTextileLabourAmount,
+    qtyBasisUomForRateType,
+    rateTypeLabel,
+} from '@/utils/textileBomLabour';
+import { listTextileJobWorkRates, lookupTextileJobWorkRate } from '@/services/textileJobWorkRateApi';
 
 // ── STYLES ────────────────────────────────────────────────────────────────────
 const s = {
@@ -68,6 +83,10 @@ const BOMFormPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToast } = useToast();
+    const { selectedCompany, companies } = useCompany();
+    const resolvedCompany = companies.find((c) => c._id === selectedCompany?._id) || selectedCompany;
+    const isTextile = isTextileIndustryCompany(resolvedCompany);
+    const bomComponentTypes = getBomComponentTypes(isTextile);
     const isEdit = Boolean(id);
 
     const [loading, setLoading] = useState(isEdit);
@@ -85,11 +104,14 @@ const BOMFormPage = () => {
         labourCost: '', labourCostPerPoint: 0.25, totalPointsLabourCost: 0,
         finalProductionCostPerUnit: 0,
         processes: { smtAssembly: false, manualAssembly: false, testingRequired: false, qcRequired: false, packingRequired: false },
+        textileProcessLabourCosts: [],
+        totalTextileProcessLabourCost: 0,
         isDefault: false, scrapAccount: '', remarks: ''
     });
 
     const [saving, setSaving] = useState(false);
     const [company, setCompany] = useState({});
+    const [jobWorkRates, setJobWorkRates] = useState([]);
 
     // ── FETCH DATA & AUTO REFRESH ─────────────────────────────────────────────
     const fetchItems = () => {
@@ -119,6 +141,13 @@ const BOMFormPage = () => {
     }, []);
 
     useEffect(() => {
+        if (!isTextile || !resolvedCompany?._id) return;
+        listTextileJobWorkRates({ companyId: resolvedCompany._id, isActive: 'true' })
+            .then(setJobWorkRates)
+            .catch(() => setJobWorkRates([]));
+    }, [isTextile, resolvedCompany?._id]);
+
+    useEffect(() => {
         if (!isEdit) return;
         getBOM(id).then(data => {
             setForm({
@@ -127,10 +156,16 @@ const BOMFormPage = () => {
                 finishedProductId: data.finishedProductId?._id || data.finishedProductId,
                 revisionDate: new Date(data.revisionDate).toISOString().split('T')[0],
                 components: data.components.map(c => ({
-                    ...BLANK_COMPONENT,   // ensures points/pointsLabourCost/remarks default to 0/''
+                    ...BLANK_COMPONENT,
                     ...c,
                     itemId: c.itemId?._id || c.itemId
-                }))
+                })),
+                textileProcessLabourCosts: (data.textileProcessLabourCosts || []).map((row) => ({
+                    ...BLANK_TEXTILE_PROCESS_LABOUR(),
+                    ...row,
+                    qtyBasis: row.qtyBasis ?? '',
+                    rate: row.rate ?? '',
+                })),
             });
         }).catch(() => {
             addToast('Failed to load BOM', 'error');
@@ -169,13 +204,13 @@ const BOMFormPage = () => {
                     points: pts,
                     rate: rate,
                     totalCost: qty * rate,
-                    componentType: comp.componentType || (masterItem.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (masterItem.itemType?.toUpperCase().includes('TH') ? 'TH' : '')),
+                    componentType: comp.componentType || (isTextile ? '' : (masterItem.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (masterItem.itemType?.toUpperCase().includes('TH') ? 'TH' : ''))),
                     pointsLabourCost: pts * labourRate
                 };
             });
             return { ...prev, components: updated };
         });
-    }, [items]); // runs once items are fetched
+    }, [items, isTextile]); // runs once items are fetched
 
     // ── COMPONENT CHANGE ──────────────────────────────────────────────────────
     const handleComponentChange = (index, field, value, labourRate) => {
@@ -189,7 +224,11 @@ const BOMFormPage = () => {
                 comp.itemId = value; comp.itemCode = item.itemCode;
                 comp.itemName = item.itemName; comp.category = item.itemCategory;
                 comp.uom = item.uom;
-                comp.componentType = item.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (item.itemType?.toUpperCase().includes('TH') ? 'TH' : '');
+                if (!isTextile) {
+                    comp.componentType = item.itemType?.toUpperCase().includes('SMD') ? 'SMD' : (item.itemType?.toUpperCase().includes('TH') ? 'TH' : '');
+                } else {
+                    comp.componentType = comp.componentType || '';
+                }
                 comp.rate = item.purchaseRate || item.valuationRate || 0;
                 
                 const qty = parseFloat(comp.quantity) || 0;
@@ -232,6 +271,62 @@ const BOMFormPage = () => {
         setForm(prev => ({ ...prev, components: prev.components.filter((_, i) => i !== index) }));
     };
 
+    const recalcProcessLabourRow = (row) => {
+        const amount = calcTextileLabourAmount(row.qtyBasis, row.rate, row.rateType);
+        return { ...row, amount, qtyBasisUom: qtyBasisUomForRateType(row.rateType) || row.qtyBasisUom };
+    };
+
+    const handleProcessLabourChange = async (index, field, value) => {
+        const rows = [...form.textileProcessLabourCosts];
+        let row = { ...rows[index], [field]: value };
+        if (field === 'rateType') {
+            row.qtyBasisUom = qtyBasisUomForRateType(value);
+        }
+        row = recalcProcessLabourRow(row);
+        rows[index] = row;
+        setForm((prev) => ({ ...prev, textileProcessLabourCosts: rows }));
+
+        if ((field === 'processName' || field === 'vendorWorker') && row.processName && row.vendorWorker?.trim() && resolvedCompany?._id) {
+            try {
+                const rate = await lookupTextileJobWorkRate({
+                    companyId: resolvedCompany._id,
+                    processName: row.processName,
+                    vendorWorker: row.vendorWorker.trim(),
+                });
+                if (rate?.defaultRate != null) {
+                    const updated = [...rows];
+                    updated[index] = recalcProcessLabourRow({
+                        ...updated[index],
+                        rateType: rate.rateType || updated[index].rateType,
+                        rate: rate.defaultRate,
+                        qtyBasisUom: qtyBasisUomForRateType(rate.rateType || updated[index].rateType),
+                    });
+                    setForm((prev) => ({ ...prev, textileProcessLabourCosts: updated }));
+                }
+            } catch {
+                /* manual rate entry */
+            }
+        }
+    };
+
+    const addProcessLabourRow = () => {
+        setForm((prev) => ({
+            ...prev,
+            textileProcessLabourCosts: [...prev.textileProcessLabourCosts, BLANK_TEXTILE_PROCESS_LABOUR()],
+        }));
+    };
+
+    const removeProcessLabourRow = (index) => {
+        setForm((prev) => ({
+            ...prev,
+            textileProcessLabourCosts: prev.textileProcessLabourCosts.filter((_, i) => i !== index),
+        }));
+    };
+
+    const vendorSuggestions = (processName) => jobWorkRates
+        .filter((r) => r.processName === processName)
+        .map((r) => r.vendorWorker);
+
     // ── LABOUR RATE CHANGE ────────────────────────────────────────────────────
     const handleLabourRateChange = (newRate) => {
         const rate = parseFloat(newRate) || 0;
@@ -246,17 +341,43 @@ const BOMFormPage = () => {
     useEffect(() => {
         const totalRM = form.components.reduce((sum, c) => sum + (parseFloat(c.totalCost) || 0), 0);
         const totalPointsLabour = form.components.reduce((sum, c) => sum + (parseFloat(c.pointsLabourCost) || 0), 0);
-        const totalProcess = parseFloat(form.totalProcessCost) || 0;
         const overhead = parseFloat(form.overheadCost) || 0;
         const labour = parseFloat(form.labourCost) || 0;
         const prodQty = parseFloat(form.productionQuantity) || 1;
-        setForm(prev => ({
+
+        let totalProcess;
+        let totalTextileProcessLabour = 0;
+        if (isTextile) {
+            totalTextileProcessLabour = form.textileProcessLabourCosts.reduce(
+                (sum, r) => sum + (parseFloat(r.amount) || 0),
+                0,
+            );
+            totalProcess = totalTextileProcessLabour;
+        } else {
+            totalProcess = parseFloat(form.totalProcessCost) || 0;
+        }
+
+        const finalUnit = isTextile
+            ? (totalRM + totalTextileProcessLabour + overhead + labour) / prodQty
+            : (totalRM + totalPointsLabour + totalProcess + overhead + labour) / prodQty;
+
+        setForm((prev) => ({
             ...prev,
             totalRawMaterialCost: totalRM,
             totalPointsLabourCost: totalPointsLabour,
-            finalProductionCostPerUnit: (totalRM + totalPointsLabour + totalProcess + overhead + labour) / prodQty
+            totalTextileProcessLabourCost: totalTextileProcessLabour,
+            totalProcessCost: totalProcess,
+            finalProductionCostPerUnit: finalUnit,
         }));
-    }, [form.components, form.totalProcessCost, form.overheadCost, form.labourCost, form.productionQuantity]);
+    }, [
+        form.components,
+        form.textileProcessLabourCosts,
+        form.totalProcessCost,
+        form.overheadCost,
+        form.labourCost,
+        form.productionQuantity,
+        isTextile,
+    ]);
 
     // ── SUBMIT ────────────────────────────────────────────────────────────────
     const onSubmit = async () => {
@@ -268,12 +389,25 @@ const BOMFormPage = () => {
                 totalProcessCost: parseFloat(form.totalProcessCost) || 0,
                 overheadCost: parseFloat(form.overheadCost) || 0,
                 labourCost: parseFloat(form.labourCost) || 0,
+                totalTextileProcessLabourCost: parseFloat(form.totalTextileProcessLabourCost) || 0,
                 components: form.components.map(c => ({
                     ...c,
                     quantity: parseFloat(c.quantity) || 0,
                     rate: parseFloat(c.rate) || 0,
                     points: parseFloat(c.points) || 0
-                }))
+                })),
+                textileProcessLabourCosts: isTextile
+                    ? form.textileProcessLabourCosts.map((row) => ({
+                        processName: row.processName,
+                        vendorWorker: row.vendorWorker || '',
+                        rateType: row.rateType,
+                        qtyBasis: parseFloat(row.qtyBasis) || 0,
+                        qtyBasisUom: row.qtyBasisUom || qtyBasisUomForRateType(row.rateType),
+                        rate: parseFloat(row.rate) || 0,
+                        amount: parseFloat(row.amount) || 0,
+                        remarks: row.remarks || '',
+                    }))
+                    : [],
             };
 
             if (isEdit) {
@@ -546,7 +680,10 @@ const BOMFormPage = () => {
                             <table style={s.table}>
                                 <thead>
                                     <tr>
-                                        {['#', 'Item Code', 'Item Name', 'Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', ''].map((h, i) => (
+                                        {(isTextile
+                                            ? ['#', 'Item Code', 'Item Name', 'Material Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Remark', '']
+                                            : ['#', 'Item Code', 'Item Name', 'Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', '']
+                                        ).map((h, i) => (
                                             <th key={i} style={{ ...s.th, ...(i === 0 || i === 4 ? s.thCenter : {}) }}>{h}</th>
                                         ))}
                                     </tr>
@@ -573,10 +710,10 @@ const BOMFormPage = () => {
                                             <td style={{ ...s.td, width: 85 }}>
                                                 <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, background: '#fff', padding: '4px 6px', height: 28, fontWeight: 600 }}
                                                     value={comp.componentType || ''} onChange={e => handleComponentChange(idx, 'componentType', e.target.value)}>
-                                                    <option value="">— Type —</option>
-                                                    <option value="SMD" style={{ fontWeight: 700 }}>SMD</option>
-                                                    <option value="TH" style={{ fontWeight: 700 }}>TH (Through-Hole)</option>
-                                                    <option value="OTHER">Other</option>
+                                                    <option value="">{isTextile ? '— Material —' : '— Type —'}</option>
+                                                    {bomComponentTypes.map((t) => (
+                                                        <option key={t.value} value={t.value}>{t.label}</option>
+                                                    ))}
                                                 </select>
                                             </td>
                                             <td style={{ ...s.td, width: 70 }}>
@@ -591,13 +728,17 @@ const BOMFormPage = () => {
                                             <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>
                                                 ₹{fmt(comp.totalCost)}
                                             </td>
-                                            <td style={{ ...s.td, width: 60 }}>
-                                                <input type="number" min="0" style={{ ...s.tdInput, border: '1px solid #bfdbfe', borderRadius: 6, width: 52, background: '#eff6ff', color: '#2563eb', fontWeight: 700, textAlign: 'center' }}
-                                                    value={comp.points === 0 ? '' : comp.points} onChange={e => handleComponentChange(idx, 'points', e.target.value)} />
-                                            </td>
-                                            <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>
-                                                ₹{fmt(comp.pointsLabourCost)}
-                                            </td>
+                                            {!isTextile && (
+                                                <td style={{ ...s.td, width: 60 }}>
+                                                    <input type="number" min="0" style={{ ...s.tdInput, border: '1px solid #bfdbfe', borderRadius: 6, width: 52, background: '#eff6ff', color: '#2563eb', fontWeight: 700, textAlign: 'center' }}
+                                                        value={comp.points === 0 ? '' : comp.points} onChange={e => handleComponentChange(idx, 'points', e.target.value)} />
+                                                </td>
+                                            )}
+                                            {!isTextile && (
+                                                <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>
+                                                    ₹{fmt(comp.pointsLabourCost)}
+                                                </td>
+                                            )}
                                             <td style={{ ...s.td, width: 90 }}>
                                                 <input type="text" style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', fontFamily: 'monospace', fontSize: 11 }}
                                                     value={comp.remarks || ''} onChange={e => handleComponentChange(idx, 'remarks', e.target.value)} placeholder="R25, U1..." />
@@ -624,7 +765,7 @@ const BOMFormPage = () => {
                                     <tr onClick={addComponent} style={{ cursor: 'pointer', borderTop: '2px dashed #e2e8f0' }}
                                         onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'}
                                         onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                        <td colSpan={12} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
+                                        <td colSpan={isTextile ? 10 : 12} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
                                             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                                 <Plus size={14} /> Click to add new component row
                                             </span>
@@ -634,6 +775,92 @@ const BOMFormPage = () => {
                             </table>
                         </div>
                     </div>
+
+                    {isTextile && (
+                        <div style={s.card}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <p style={{ ...s.cardTitle, margin: 0 }}><Activity size={14} /> Process-wise Labour / Job Work Cost</p>
+                                <button type="button" onClick={addProcessLabourRow}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 8, color: '#2563eb', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                    <Plus size={14} /> Add Labour Process Row
+                                </button>
+                            </div>
+                            <div style={s.tableWrap}>
+                                <table style={s.table}>
+                                    <thead>
+                                        <tr>
+                                            {['Process', 'Vendor / Worker', 'Rate Type', 'Qty Basis', 'Rate (₹)', 'Amount (₹)', 'Remarks', ''].map((h) => (
+                                                <th key={h} style={s.th}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {form.textileProcessLabourCosts.map((row, idx) => (
+                                            <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                                <td style={s.td}>
+                                                    <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', padding: '4px 6px' }}
+                                                        value={row.processName} onChange={(e) => handleProcessLabourChange(idx, 'processName', e.target.value)}>
+                                                        {TEXTILE_BOM_LABOUR_PROCESSES.map((p) => <option key={p} value={p}>{p}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td style={s.td}>
+                                                    <input list={`vendor-list-${idx}`} style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', padding: '4px 6px', minWidth: 120 }}
+                                                        value={row.vendorWorker} placeholder="ABC Dyeing / Worker A"
+                                                        onChange={(e) => handleProcessLabourChange(idx, 'vendorWorker', e.target.value)}
+                                                        onBlur={(e) => handleProcessLabourChange(idx, 'vendorWorker', e.target.value)} />
+                                                    <datalist id={`vendor-list-${idx}`}>
+                                                        {vendorSuggestions(row.processName).map((v) => <option key={v} value={v} />)}
+                                                    </datalist>
+                                                </td>
+                                                <td style={s.td}>
+                                                    <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', padding: '4px 6px' }}
+                                                        value={row.rateType} onChange={(e) => handleProcessLabourChange(idx, 'rateType', e.target.value)}>
+                                                        {TEXTILE_BOM_RATE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                                    </select>
+                                                </td>
+                                                <td style={s.td}>
+                                                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                                        <input type="number" min="0" step="any" style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', width: 70, padding: '4px 6px' }}
+                                                            value={row.qtyBasis === 0 ? '' : row.qtyBasis}
+                                                            onChange={(e) => handleProcessLabourChange(idx, 'qtyBasis', e.target.value)} />
+                                                        <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{row.qtyBasisUom || '—'}</span>
+                                                    </div>
+                                                </td>
+                                                <td style={s.td}>
+                                                    <input type="number" min="0" step="any" style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', width: 72, padding: '4px 6px' }}
+                                                        value={row.rate === 0 ? '' : row.rate}
+                                                        onChange={(e) => handleProcessLabourChange(idx, 'rate', e.target.value)} />
+                                                </td>
+                                                <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{fmt(row.amount)}</td>
+                                                <td style={s.td}>
+                                                    <input type="text" style={{ ...s.tdInput, border: '1px solid #e2e8f0', background: '#fff', padding: '4px 6px', minWidth: 80 }}
+                                                        value={row.remarks || ''} onChange={(e) => handleProcessLabourChange(idx, 'remarks', e.target.value)} />
+                                                </td>
+                                                <td style={s.td}>
+                                                    <button type="button" onClick={() => removeProcessLabourRow(idx)} title="Remove row"
+                                                        style={{ ...s.addRowBtn, color: '#94a3b8' }}
+                                                        onMouseOver={(e) => { e.currentTarget.style.color = '#dc2626'; }}
+                                                        onMouseOut={(e) => { e.currentTarget.style.color = '#94a3b8'; }}>
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {form.textileProcessLabourCosts.length === 0 && (
+                                            <tr>
+                                                <td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
+                                                    No process labour rows — add Dyeing ₹8/Meter, Embroidery ₹25/PCS, etc.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p style={{ ...s.hint, marginTop: 10 }}>
+                                Auto-fill from Job Work Rate Master when Vendor/Worker + Process match. Amount = Qty × Rate (or fixed rate).
+                            </p>
+                        </div>
+                    )}
 
                     {/* SETTINGS FOOTER */}
                     <div style={{ ...s.card, ...s.grid(3) }}>
@@ -647,13 +874,21 @@ const BOMFormPage = () => {
                             </label>
                         </div>
 
-                        {/* Labour Rate Per Point */}
-                        <Field label="⚡ Labour Rate Per Point (₹)">
-                            <input type="number" min="0" step="0.01"
-                                style={{ ...s.input, border: '2px solid #fcd34d', background: '#fffbeb', color: '#92400e', fontWeight: 700 }}
-                                value={form.labourCostPerPoint} onChange={e => handleLabourRateChange(e.target.value)} placeholder="0.25" />
-                            <p style={s.hint}>e.g. ₹0.25 × Total Points = labour</p>
-                        </Field>
+                        {!isTextile ? (
+                            <Field label="⚡ Labour Rate Per Point (₹)">
+                                <input type="number" min="0" step="0.01"
+                                    style={{ ...s.input, border: '2px solid #fcd34d', background: '#fffbeb', color: '#92400e', fontWeight: 700 }}
+                                    value={form.labourCostPerPoint} onChange={e => handleLabourRateChange(e.target.value)} placeholder="0.25" />
+                                <p style={s.hint}>e.g. ₹0.25 × Total Points = labour</p>
+                            </Field>
+                        ) : (
+                            <div>
+                                <label style={s.label}>Textile BOM Costing</label>
+                                <p style={{ fontSize: 12, color: '#64748b', margin: '6px 0 0', lineHeight: 1.5 }}>
+                                    Process labour is entered in the table above. Summary adds <strong>Total Process Labour Cost</strong> automatically.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Remarks */}
                         <Field label="Remarks / Notes">
@@ -671,8 +906,8 @@ const BOMFormPage = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {Object.entries(form.processes).map(([key, value]) => (
                                     <label key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: value ? '#eff6ff' : 'transparent', transition: 'background 0.15s' }}>
-                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', textTransform: 'capitalize' }}>
-                                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', textTransform: isTextile ? 'none' : 'capitalize' }}>
+                                            {formatBomProcessLabel(isTextile, key)}
                                         </span>
                                         <input type="checkbox" style={{ width: 16, height: 16, accentColor: '#2563eb', cursor: 'pointer' }}
                                             checked={value} onChange={e => setForm({ ...form, processes: { ...form.processes, [key]: e.target.checked } })} />
@@ -700,19 +935,26 @@ const BOMFormPage = () => {
                                 <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }}>₹{fmt(form.totalRawMaterialCost)}</span>
                             </div>
 
-                            {/* Component Labour */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
-                                <span style={{ fontSize: 12, color: '#fcd34d', fontWeight: 600 }}>Component Labour (Points)</span>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#fcd34d', fontSize: 13 }}>₹{fmt(form.totalPointsLabourCost)}</span>
-                            </div>
+                            {!isTextile && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
+                                    <span style={{ fontSize: 12, color: '#fcd34d', fontWeight: 600 }}>Component Labour (Points)</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#fcd34d', fontSize: 13 }}>₹{fmt(form.totalPointsLabourCost)}</span>
+                                </div>
+                            )}
+
+                            {isTextile && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(96,165,250,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
+                                    <span style={{ fontSize: 12, color: '#93c5fd', fontWeight: 600 }}>Total Process Labour</span>
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#93c5fd', fontSize: 13 }}>₹{fmt(form.totalTextileProcessLabourCost)}</span>
+                                </div>
+                            )}
 
                             {/* Editable costs */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                                {[
-                                    ['Process Cost', 'totalProcessCost'],
-                                    ['Overhead Cost', 'overheadCost'],
-                                    ['Other Labour', 'labourCost'],
-                                ].map(([label, key]) => (
+                                {(isTextile
+                                    ? [['Overhead Cost', 'overheadCost'], ['Other Labour', 'labourCost']]
+                                    : [['Process Cost', 'totalProcessCost'], ['Overhead Cost', 'overheadCost'], ['Other Labour', 'labourCost']]
+                                ).map(([label, key]) => (
                                     <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ fontSize: 12, opacity: 0.7 }}>{label}</span>
                                         <input type="number"
@@ -785,7 +1027,7 @@ const BOMFormPage = () => {
                         <tr>
                             <th style={{ width: 40 }}>#</th>
                             <th>Description</th>
-                            <th>Type</th>
+                            <th>{isTextile ? 'Material' : 'Type'}</th>
                             <th>Qty</th>
                             <th>UOM</th>
                             {showCostInPrint && (
@@ -794,7 +1036,7 @@ const BOMFormPage = () => {
                                     <th>Total</th>
                                 </>
                             )}
-                            <th>PTS</th>
+                            {!isTextile && <th>PTS</th>}
                             <th>Remark</th>
                         </tr>
                     </thead>
@@ -806,7 +1048,7 @@ const BOMFormPage = () => {
                                     <strong>{c.itemCode || '—'}</strong>
                                     <div style={{ fontSize: '8pt', color: '#444' }}>{c.itemName}</div>
                                 </td>
-                                <td style={{ textAlign: 'center' }}>{c.componentType}</td>
+                                <td style={{ textAlign: 'center' }}>{bomComponentTypes.find((t) => t.value === c.componentType)?.label || c.componentType || '—'}</td>
                                 <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
                                 <td style={{ textAlign: 'center' }}>{c.uom}</td>
                                 {showCostInPrint && (
@@ -815,12 +1057,40 @@ const BOMFormPage = () => {
                                         <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
                                     </>
                                 )}
-                                <td style={{ textAlign: 'center' }}>{c.points}</td>
+                                {!isTextile && <td style={{ textAlign: 'center' }}>{c.points}</td>}
                                 <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
+
+                {isTextile && form.textileProcessLabourCosts.length > 0 && (
+                    <div style={{ marginTop: 24 }}>
+                        <div className="p-label">Process-wise Labour / Job Work Cost</div>
+                        <table style={{ width: '100%', marginTop: 8 }}>
+                            <thead>
+                                <tr>
+                                    {['Process', 'Vendor/Worker', 'Rate Type', 'Qty Basis', 'Rate', 'Amount', 'Remarks'].map((h) => (
+                                        <th key={h} style={{ fontSize: 9, textAlign: 'left', borderBottom: '1px solid #ccc', padding: 4 }}>{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {form.textileProcessLabourCosts.map((row, idx) => (
+                                    <tr key={idx}>
+                                        <td style={{ fontSize: 9, padding: 4 }}>{row.processName}</td>
+                                        <td style={{ fontSize: 9, padding: 4 }}>{row.vendorWorker}</td>
+                                        <td style={{ fontSize: 9, padding: 4 }}>{rateTypeLabel(row.rateType)}</td>
+                                        <td style={{ fontSize: 9, padding: 4 }}>{row.qtyBasis} {row.qtyBasisUom}</td>
+                                        <td style={{ fontSize: 9, padding: 4 }}>₹{fmt(row.rate)}</td>
+                                        <td style={{ fontSize: 9, padding: 4, fontWeight: 700 }}>₹{fmt(row.amount)}</td>
+                                        <td style={{ fontSize: 9, padding: 4 }}>{row.remarks}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {form.remarks && (
                     <div style={{ marginBottom: 25, marginTop: 20 }}>
@@ -836,10 +1106,18 @@ const BOMFormPage = () => {
                                 <span>Raw Material Cost</span>
                                 <span>₹{fmt(form.totalRawMaterialCost)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
-                                <span>Labour Component</span>
-                                <span>₹{fmt(form.totalPointsLabourCost)}</span>
-                            </div>
+                            {!isTextile && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
+                                    <span>Labour Component</span>
+                                    <span>₹{fmt(form.totalPointsLabourCost)}</span>
+                                </div>
+                            )}
+                            {isTextile && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 }}>
+                                    <span>Total Process Labour</span>
+                                    <span>₹{fmt(form.totalTextileProcessLabourCost)}</span>
+                                </div>
+                            )}
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #000', paddingTop: 10, marginTop: 10 }}>
                                 <span style={{ fontSize: 11, fontWeight: 900 }}>FINAL UNIT COST</span>
                                 <span style={{ fontSize: 15, fontWeight: 950 }}>₹{fmt(form.finalProductionCostPerUnit)}</span>

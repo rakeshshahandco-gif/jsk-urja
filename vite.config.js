@@ -23,7 +23,22 @@ export default defineConfig({
   },
   server: {
     port: 4000,
-    host: '0.0.0.0', // Listen on all interfaces to ensure accessibility
+    strictPort: true,
+    host: '127.0.0.1',
     open: false,
+    proxy: {
+      '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: 'http://localhost:5000', changeOrigin: true },
+    },
+  },
+  preview: {
+    port: 4000,
+    strictPort: true,
+    host: '127.0.0.1',
+    open: false,
+    proxy: {
+      '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: 'http://localhost:5000', changeOrigin: true },
+    },
   },
 })

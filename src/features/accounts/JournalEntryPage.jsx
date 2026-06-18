@@ -10,6 +10,7 @@ import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
+import VoucherEntryTallyLayout from './components/voucherEntryTally';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 
@@ -202,6 +203,7 @@ const JournalEntryPage = () => {
     const handleSaveAndClose = () => handleSave(true);
 
     return (
+        <VoucherEntryTallyLayout>
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
@@ -419,6 +421,7 @@ const JournalEntryPage = () => {
                 </div>
             </div>
         </div>
+        </VoucherEntryTallyLayout>
     );
 };
 

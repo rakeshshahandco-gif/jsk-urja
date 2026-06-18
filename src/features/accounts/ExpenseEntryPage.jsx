@@ -18,6 +18,10 @@ import { PATHS } from '@/routes/paths';
 import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
 import { TdsPayableLedgerModal } from '@/features/accounts/components/TdsPayableLedgerModal';
 import { tdsComplianceApi } from '@/services/tdsComplianceApi';
+import VoucherEntryTallyLayout from './components/voucherEntryTally';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { scanEntryApi } from '@/services/scanEntryApi';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -34,6 +38,9 @@ const labelStyle = { fontSize: '11px', color: '#64748b', display: 'block', margi
 const ExpenseEntryPage = () => {
     const navigate = useNavigate();
     const { openModal, closeModal } = useModal();
+    const { isFeatureEnabled } = useFeatureSettings();
+    const { selectedFY } = useFinancialYear();
+    const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [cashBankAccounts, setCashBankAccounts] = useState([]);
@@ -41,6 +48,7 @@ const ExpenseEntryPage = () => {
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadingScan, setUploadingScan] = useState(false);
     const [tdsPreview, setTdsPreview] = useState(null);
     const [tdsAlertOpen, setTdsAlertOpen] = useState(false);
     const [payableModalOpen, setPayableModalOpen] = useState(false);
@@ -574,8 +582,25 @@ const ExpenseEntryPage = () => {
     const handleSaveAndNew = () => handleSave(false);
     const handleSaveAndClose = () => handleSave(true);
 
+    const onUploadExpenseScan = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingScan(true);
+        try {
+            const d = await scanEntryApi.upload({ file, moduleType: 'expense_bill', financialYear: selectedFY });
+            toast.success('Scan draft uploaded');
+            navigate(PATHS.DOCUMENTS.SCAN_ENTRY_REVIEW(d?._id || d?.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Scan upload failed');
+        } finally {
+            setUploadingScan(false);
+            e.target.value = '';
+        }
+    };
+
 
     return (
+        <VoucherEntryTallyLayout>
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1150px', margin: '0 auto' }}>
                 <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHER_LIST || PATHS.ACCOUNTS.VOUCHERS)}
@@ -590,7 +615,14 @@ const ExpenseEntryPage = () => {
                         <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Record business expenses with optional GST Input Credit</p>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', padding: '8px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {scanEntryEnabled && (
+                            <label style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #93c5fd', background: '#eff6ff', color: '#1d4ed8', cursor: uploadingScan ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 12, opacity: uploadingScan ? 0.7 : 1 }}>
+                                {uploadingScan ? 'Uploading…' : 'Upload / Scan Expense Bill'}
+                                <input type="file" accept=".pdf,image/*" onChange={onUploadExpenseScan} style={{ display: 'none' }} disabled={uploadingScan} />
+                            </label>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', padding: '8px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                         <span style={{ fontSize: '12px', fontWeight: 700, color: formData.isGstEnabled ? '#8b5cf6' : '#64748b' }}>
                             {formData.isGstEnabled ? 'GST Enabled' : 'Simple Mode'}
                         </span>
@@ -604,6 +636,7 @@ const ExpenseEntryPage = () => {
                             />
                             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
+                        </div>
                     </div>
                 </div>
 
@@ -993,6 +1026,7 @@ const ExpenseEntryPage = () => {
                 }}
             />
         </div>
+        </VoucherEntryTallyLayout>
     );
 };
 

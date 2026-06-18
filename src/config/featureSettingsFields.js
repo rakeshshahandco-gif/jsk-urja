@@ -1,4 +1,5 @@
 export const FEATURE_SETTINGS_TABS = [
+    { id: 'customer', label: 'Customer', platform: true },
     { id: 'industry', label: 'Industry / Production', platform: false },
     { id: 'sales', label: 'Sales', platform: true },
     { id: 'gst', label: 'GST', platform: true },
@@ -10,6 +11,7 @@ export const FEATURE_SETTINGS_TABS = [
     { id: 'purchase', label: 'Purchase', platform: true },
     { id: 'workflow', label: 'Workflow / Kanban', platform: true },
     { id: 'ui', label: 'UI Customization', platform: true },
+    { id: 'crm', label: 'CRM', platform: true },
 ];
 
 export const FEATURE_SETTINGS_FIELDS = {
@@ -47,6 +49,9 @@ export const FEATURE_SETTINGS_FIELDS = {
         ['billWiseAdjustmentRequired', 'Bill-wise adjustment required'],
         ['bankReconciliationRequired', 'Bank reconciliation required'],
         ['interestPayableStatementRequired', 'Interest payable statement required'],
+        ['tallyVoucherShortcutsEnabled', 'Tally-style voucher shortcuts (F4–F7, Ctrl+F8/F9, Alt+E) on entry screens'],
+        ['enablePettyCash', 'Enable Petty Cash (entry, import, reports, settings)'],
+        ['enableScanEntry', 'Enable AI Smart Import & Scan Entry'],
     ],
     tdsTcs: [
         ['tdsRequired', 'TDS required'],
@@ -67,6 +72,9 @@ export const FEATURE_SETTINGS_FIELDS = {
     ],
     purchase: [
         ['enableRfqSupplierQuotation', 'Enable Purchase RFQ / Supplier Quotation'],
+        ['enableDocumentAttachments', 'Attachment & Proof Storage'],
+        ['enableMobileScanBills', 'Mobile Scan Bills'],
+        ['enableOcrScanEntry', 'OCR Scan Entry (future)'],
     ],
     workflow: [
         ['enabled', 'Enable Kanban / Workflow (master toggle)'],
@@ -81,6 +89,98 @@ export const FEATURE_SETTINGS_FIELDS = {
     ],
     ui: [
         ['advancedCustomizationEnabled', 'Enable Advanced UI Customization (per-user themes, colors, density)'],
+        ['brandedSplashEnabled', 'Show JSK URJA logo splash on app open'],
+        ['brandedLoaderEnabled', 'Show JSK URJA logo on loading screens'],
+    ],
+    crm: [
+        ['whatsappToLeadEnabled', 'Enable WhatsApp to Lead / Inquiry module'],
+        ['productCatalogEnabled', 'Enable Product Catalog for CRM'],
+    ],
+    customer: [
+        ['enableCreditPeriod', 'Enable Credit Period'],
+        ['enableGracePeriod', 'Enable Grace Period'],
+        ['enableCustomerType', 'Enable Customer Type'],
+        ['enableTcsApplicable', 'Enable TCS Applicable'],
+        ['enableCreditLimit', 'Enable Credit Limit'],
+        ['enablePaymentTerms', 'Enable Payment Terms'],
+        ['enableInterestApplicable', 'Enable Interest Applicable'],
+        ['enableCollectionPerson', 'Enable Collection Person'],
+        ['enableRiskCategory', 'Enable Risk Category'],
+        ['enableGstNumber', 'Enable GST No'],
+        ['enableGstRegistrationType', 'Enable GST Registration Type'],
+        ['enableGstState', 'Enable GST State'],
+        ['enablePlaceOfSupply', 'Enable Place of Supply'],
+        ['enablePanNumber', 'Enable PAN No'],
+        ['enableTanNumber', 'Enable TAN No'],
+        ['enableMsmeNumber', 'Enable MSME / UDYAM No'],
+        ['enableIecNumber', 'Enable IEC Number'],
+        ['enableCinNumber', 'Enable CIN Number'],
+        ['enableBankDetails', 'Enable Banking Details Tab'],
+        ['enableExportDetails', 'Enable Export Details Tab'],
+        ['enableDocumentsKyc', 'Enable Documents / KYC Tab'],
+    ],
+};
+
+/** Grouped toggles for Customer Master Settings page (KYC / tax / banking). */
+export const CUSTOMER_FIELD_SECTIONS = [
+    {
+        id: 'credit',
+        title: 'Accounts / Credit (Basic tab)',
+        fields: [
+            ['enableCreditPeriod', 'Enable Credit Period'],
+            ['enableGracePeriod', 'Enable Grace Period'],
+            ['enableCustomerType', 'Enable Customer Type'],
+            ['enableTcsApplicable', 'Enable TCS Applicable'],
+            ['enableCreditLimit', 'Enable Credit Limit'],
+            ['enablePaymentTerms', 'Enable Payment Terms'],
+            ['enableInterestApplicable', 'Enable Interest Applicable'],
+            ['enableCollectionPerson', 'Enable Collection Person'],
+            ['enableRiskCategory', 'Enable Risk Category'],
+        ],
+    },
+    {
+        id: 'gstTax',
+        title: 'GST & Tax Details tab',
+        fields: [
+            ['enableGstNumber', 'Enable GST No'],
+            ['enableGstRegistrationType', 'Enable GST Registration Type'],
+            ['enableGstState', 'Enable GST State'],
+            ['enablePlaceOfSupply', 'Enable Place of Supply'],
+            ['enablePanNumber', 'Enable PAN No'],
+            ['enableTanNumber', 'Enable TAN No'],
+            ['enableMsmeNumber', 'Enable MSME / UDYAM No'],
+            ['enableIecNumber', 'Enable IEC Number'],
+            ['enableCinNumber', 'Enable CIN Number'],
+        ],
+    },
+    {
+        id: 'bankingExport',
+        title: 'Banking & Export tabs',
+        fields: [
+            ['enableBankDetails', 'Enable Banking Details Tab'],
+            ['enableExportDetails', 'Enable Export Details Tab'],
+        ],
+    },
+    {
+        id: 'documents',
+        title: 'Documents / KYC tab',
+        fields: [
+            ['enableDocumentsKyc', 'Enable Documents / KYC Tab'],
+        ],
+    },
+];
+
+/** Select fields for CRM tab (non-toggle). */
+export const FEATURE_SETTINGS_SELECTS = {
+    crm: [
+        {
+            key: 'leadVisibilityMode',
+            label: 'Lead Visibility Mode',
+            options: [
+                { value: 'own_only', label: 'Only Own Leads (default for sales users)' },
+                { value: 'all', label: 'All Leads (with Lead View permission)' },
+            ],
+        },
     ],
 };
 

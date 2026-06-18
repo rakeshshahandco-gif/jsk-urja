@@ -4,6 +4,12 @@ import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 import { Badge } from '@/components/ui';
 import axios from 'axios';
+import { useFeatureConfiguration } from '@/hooks/useFeatureConfiguration';
+import { useSupplierTemplateFieldSettings } from '@/hooks/useSupplierTemplateFieldSettings';
+import { useDocumentsKycTemplateSettings } from '@/hooks/useDocumentsKycTemplateSettings';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { SupplierDocumentsKycTab } from './components/SupplierDocumentsKycTab';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
@@ -38,6 +44,21 @@ const EMPTY = {
 };
 
 export default function SupplierListPage() {
+    const { selectedCompany } = useCompany();
+    const { selectedFYObject } = useFinancialYear();
+    const { isEnabled } = useFeatureConfiguration();
+    const { fieldCtrl } = useSupplierTemplateFieldSettings(selectedCompany?._id, isEnabled);
+    const { docCtrl: supplierDocCtrl } = useDocumentsKycTemplateSettings(selectedCompany?._id, 'supplier', isEnabled, fieldCtrl);
+    const show = (key) => fieldCtrl.isVisible(key);
+    const showDocumentsSection = supplierDocCtrl.anyVisible() || show('documentsKyc') || isEnabled('supplier.complianceDocuments');
+    const fieldLabel = (key, fallback) => {
+        if (fieldCtrl.isRequired(key)) return `${fallback} *`;
+        return fallback;
+    };
+    const fieldProps = (key) => ({
+        readOnly: fieldCtrl.isReadOnly(key),
+        disabled: fieldCtrl.isReadOnly(key),
+    });
     const [suppliers, setSuppliers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -49,12 +70,13 @@ export default function SupplierListPage() {
     const [selectedSupplierForLedger, setSelectedSupplierForLedger] = useState(null);
 
     const load = useCallback(() => {
+        if (!selectedCompany?._id) return;
         setLoading(true);
         getSuppliers({ search, limit: 100 })
             .then(d => setSuppliers(d.suppliers || []))
             .catch(() => toast.error('Failed to load suppliers'))
             .finally(() => setLoading(false));
-    }, [search]);
+    }, [search, selectedCompany?._id]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -74,6 +96,19 @@ export default function SupplierListPage() {
     });
 
     const handleSave = async () => {
+        const missing = [];
+        if (fieldCtrl.isRequired('supplierName') && !String(modal.data.supplierName || '').trim()) missing.push('Supplier Name');
+        if (show('mobile') && fieldCtrl.isRequired('mobile') && !String(modal.data.phone || '').trim()) missing.push('Mobile');
+        if (show('email') && fieldCtrl.isRequired('email') && !String(modal.data.email || '').trim()) missing.push('Email');
+        if (show('gstNumber') && fieldCtrl.isRequired('gstNumber') && !String(modal.data.gstNumber || '').trim()) missing.push('GST No');
+        if (show('panNumber') && fieldCtrl.isRequired('panNumber') && !String(modal.data.panNumber || '').trim()) missing.push('PAN No');
+        if (show('contactPerson') && fieldCtrl.isRequired('contactPerson') && !String(modal.data.contactPerson || '').trim()) missing.push('Contact Person');
+        if (show('address') && fieldCtrl.isRequired('address') && !String(modal.data.address || '').trim()) missing.push('Address');
+        if (show('state') && fieldCtrl.isRequired('state') && !String(modal.data.state || '').trim()) missing.push('State');
+        if (missing.length) {
+            toast.error(`Required: ${missing.join(', ')}`);
+            return;
+        }
         setSaving(true);
         try {
             if (modal.mode === 'create') {
@@ -268,8 +303,8 @@ export default function SupplierListPage() {
                                 </div>
                             </div>
                             <div style={{ gridColumn: 'span 2' }}>
-                                <label style={lbl}>Supplier Name *</label>
-                                <input value={modal.data.supplierName || ''} onChange={e => set('supplierName', e.target.value)} style={inp} placeholder="Full legal name of supplier" />
+                                <label style={lbl}>{fieldLabel('supplierName', 'Supplier Name')}</label>
+                                <input value={modal.data.supplierName || ''} onChange={e => set('supplierName', e.target.value)} style={inp} placeholder="Full legal name of supplier" {...fieldProps('supplierName')} />
                                 {modal.mode === 'edit' && modal.data.supplierName !== suppliers.find(s => s._id === modal.data._id)?.supplierName && (
                                     <div style={{ fontSize: '11px', color: '#e11d48', marginTop: '4px', background: '#fff1f2', padding: '6px 10px', borderRadius: '6px', border: '1px solid #fecdd3', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <span style={{ fontSize: '14px' }}>⚠️</span>
@@ -277,22 +312,30 @@ export default function SupplierListPage() {
                                     </div>
                                 )}
                             </div>
+                            {show('contactPerson') && (
                             <div>
-                                <label style={lbl}>Contact Person</label>
-                                <input value={modal.data.contactPerson || ''} onChange={e => set('contactPerson', e.target.value)} style={inp} />
+                                <label style={lbl}>{fieldLabel('contactPerson', 'Contact Person')}</label>
+                                <input value={modal.data.contactPerson || ''} onChange={e => set('contactPerson', e.target.value)} style={inp} {...fieldProps('contactPerson')} />
                             </div>
+                            )}
+                            {show('mobile') && (
                             <div>
-                                <label style={lbl}>Phone</label>
-                                <input value={modal.data.phone || ''} onChange={e => set('phone', e.target.value)} style={inp} />
+                                <label style={lbl}>{fieldLabel('mobile', 'Phone')}</label>
+                                <input value={modal.data.phone || ''} onChange={e => set('phone', e.target.value)} style={inp} {...fieldProps('mobile')} />
                             </div>
+                            )}
+                            {show('email') && (
                             <div>
-                                <label style={lbl}>Email</label>
-                                <input type="email" value={modal.data.email || ''} onChange={e => set('email', e.target.value)} style={inp} />
+                                <label style={lbl}>{fieldLabel('email', 'Email')}</label>
+                                <input type="email" value={modal.data.email || ''} onChange={e => set('email', e.target.value)} style={inp} {...fieldProps('email')} />
                             </div>
+                            )}
+                            {show('paymentTerms') && (
                             <div>
-                                <label style={lbl}>Payment Terms</label>
-                                <input value={modal.data.paymentTerms || ''} onChange={e => set('paymentTerms', e.target.value)} style={inp} placeholder="e.g. Net 30" />
+                                <label style={lbl}>{fieldLabel('paymentTerms', 'Payment Terms')}</label>
+                                <input value={modal.data.paymentTerms || ''} onChange={e => set('paymentTerms', e.target.value)} style={inp} placeholder="e.g. Net 30" {...fieldProps('paymentTerms')} />
                             </div>
+                            )}
                         </div>
 
                         {/* ── Section 2: Opening Balance ── */}
@@ -319,22 +362,28 @@ export default function SupplierListPage() {
                         {/* ── Section 3: GST & Tax ── */}
                         <div style={secTitle}>🔰 GST & Tax Details</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            {show('gstNumber') && (
                             <div>
-                                <label style={lbl}>GST Number (GSTIN)</label>
-                                <input value={modal.data.gstNumber || ''} onChange={e => set('gstNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="22AAAAA0000A1Z5" />
+                                <label style={lbl}>{fieldLabel('gstNumber', 'GST Number (GSTIN)')}</label>
+                                <input value={modal.data.gstNumber || ''} onChange={e => set('gstNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="22AAAAA0000A1Z5" {...fieldProps('gstNumber')} />
                             </div>
+                            )}
+                            {show('gstNumber') && (
                             <div>
                                 <label style={lbl}>GST Type</label>
-                                <select value={modal.data.gstType || ''} onChange={e => set('gstType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                <select value={modal.data.gstType || ''} onChange={e => set('gstType', e.target.value)} style={{ ...inp, cursor: 'pointer' }} disabled={fieldCtrl.isReadOnly('gstNumber')}>
                                     <option value="">— Select —</option>
                                     <option>CGST / SGST</option>
                                     <option>IGST</option>
                                 </select>
                             </div>
+                            )}
+                            {show('panNumber') && (
                             <div>
-                                <label style={lbl}>PAN Number</label>
-                                <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" />
+                                <label style={lbl}>{fieldLabel('panNumber', 'PAN Number')}</label>
+                                <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" {...fieldProps('panNumber')} />
                             </div>
+                            )}
                             <div style={{ gridColumn: 'span 3' }}>
                                 <label style={lbl}>Deductee type / constitution</label>
                                 <select value={modal.data.deducteeConstitution || ''} onChange={e => set('deducteeConstitution', e.target.value)} style={{ ...inp, cursor: 'pointer' }} title="Used with TDS Master to pick Individual/HUF vs company rate (e.g. 194C 1% vs 2%).">
@@ -349,12 +398,16 @@ export default function SupplierListPage() {
                         </div>
 
                         {/* ── Section 4: Address ── */}
+                        {(show('address') || show('state')) && (
+                        <>
                         <div style={secTitle}>📍 Address Details</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            {show('address') && (
                             <div style={{ gridColumn: 'span 2' }}>
-                                <label style={lbl}>Address / Street</label>
-                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} placeholder="Building, Street, Road..." />
+                                <label style={lbl}>{fieldLabel('address', 'Address / Street')}</label>
+                                <input value={modal.data.address || ''} onChange={e => set('address', e.target.value)} style={inp} placeholder="Building, Street, Road..." {...fieldProps('address')} />
                             </div>
+                            )}
                             <div>
                                 <label style={lbl}>Area / Locality</label>
                                 <input value={modal.data.area || ''} onChange={e => set('area', e.target.value)} style={inp} />
@@ -363,37 +416,53 @@ export default function SupplierListPage() {
                                 <label style={lbl}>City</label>
                                 <input value={modal.data.city || ''} onChange={e => set('city', e.target.value)} style={inp} />
                             </div>
+                            {show('state') && (
                             <div>
-                                <label style={lbl}>State</label>
-                                <input value={modal.data.state || ''} onChange={e => set('state', e.target.value)} style={inp} list="supp-state-list" />
+                                <label style={lbl}>{fieldLabel('state', 'State')}</label>
+                                <input value={modal.data.state || ''} onChange={e => set('state', e.target.value)} style={inp} list="supp-state-list" {...fieldProps('state')} />
                                 <datalist id="supp-state-list">
                                     {['Maharashtra','Gujarat','Rajasthan','Delhi','Karnataka','Tamil Nadu','Telangana','West Bengal','Uttar Pradesh','Madhya Pradesh','Punjab','Haryana','Bihar','Andhra Pradesh','Kerala','Odisha','Chhattisgarh','Jharkhand','Assam','Goa','Jammu and Kashmir','Chandigarh','Puducherry'].map(st => <option key={st} value={st} />)}
                                 </datalist>
                             </div>
+                            )}
                             <div>
                                 <label style={lbl}>Pincode</label>
                                 <input value={modal.data.pincode || ''} onChange={e => set('pincode', e.target.value)} style={inp} />
                             </div>
                         </div>
+                        </>
+                        )}
 
                         {/* ── Section 5: Bank Details ── */}
+                        {fieldCtrl.anyVisibleInGroup('banking') && (
+                        <>
                         <div style={secTitle}>🏦 Bank Details</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            {show('bankName') && (
                             <div>
-                                <label style={lbl}>Bank Name</label>
-                                <input value={modal.data.bankName || ''} onChange={e => set('bankName', e.target.value)} style={inp} placeholder="e.g. HDFC Bank" />
+                                <label style={lbl}>{fieldLabel('bankName', 'Bank Name')}</label>
+                                <input value={modal.data.bankName || ''} onChange={e => set('bankName', e.target.value)} style={inp} placeholder="e.g. HDFC Bank" {...fieldProps('bankName')} />
                             </div>
+                            )}
+                            {show('accountNumber') && (
                             <div>
-                                <label style={lbl}>Account No.</label>
-                                <input value={modal.data.bankAccountNo || ''} onChange={e => set('bankAccountNo', e.target.value)} style={{ ...inp, fontFamily: 'monospace' }} />
+                                <label style={lbl}>{fieldLabel('accountNumber', 'Account No.')}</label>
+                                <input value={modal.data.bankAccountNo || ''} onChange={e => set('bankAccountNo', e.target.value)} style={{ ...inp, fontFamily: 'monospace' }} {...fieldProps('accountNumber')} />
                             </div>
+                            )}
+                            {show('ifscCode') && (
                             <div>
-                                <label style={lbl}>IFSC Code</label>
-                                <input value={modal.data.bankIfsc || ''} onChange={e => set('bankIfsc', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="HDFC0001234" />
+                                <label style={lbl}>{fieldLabel('ifscCode', 'IFSC Code')}</label>
+                                <input value={modal.data.bankIfsc || ''} onChange={e => set('bankIfsc', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="HDFC0001234" {...fieldProps('ifscCode')} />
                             </div>
+                            )}
                         </div>
+                        </>
+                        )}
 
                         {/* ── Section 6: MSME Details ── */}
+                        {show('msmeNumber') && (
+                        <>
                         <div style={secTitle}>🏛️ MSME Details (MSMED Act)</div>
                         <div style={{ marginBottom: 20 }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
@@ -414,12 +483,13 @@ export default function SupplierListPage() {
                             {modal.data.msmeApplicable && (
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '16px 18px' }}>
                                     <div>
-                                        <label style={lbl}>Udyam Registration No.</label>
+                                        <label style={lbl}>{fieldLabel('msmeNumber', 'Udyam Registration No.')}</label>
                                         <input
                                             value={modal.data.msmeRegNo || ''}
                                             onChange={e => set('msmeRegNo', e.target.value.toUpperCase())}
                                             style={{ ...inp, fontFamily: 'monospace' }}
                                             placeholder="UDYAM-XX-00-0000000"
+                                            {...fieldProps('msmeNumber')}
                                         />
                                         <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
                                             As per Udyam Registration Certificate
@@ -444,12 +514,26 @@ export default function SupplierListPage() {
                                 </div>
                             )}
                         </div>
+                        </>
+                        )}
 
                         {/* ── Remarks ── */}
                         <div style={{ marginBottom: 20 }}>
                             <label style={lbl}>Remarks</label>
                             <textarea rows={2} value={modal.data.remarks || ''} onChange={e => set('remarks', e.target.value)} style={{ ...inp, resize: 'vertical' }} />
                         </div>
+
+                        {showDocumentsSection && (
+                            <div style={{ marginBottom: 20 }}>
+                                <div style={secTitle}>Documents / KYC</div>
+                                <SupplierDocumentsKycTab
+                                    supplierId={modal.data._id}
+                                    companyId={selectedCompany?._id}
+                                    financialYearId={selectedFYObject?._id}
+                                    docCtrl={supplierDocCtrl}
+                                />
+                            </div>
+                        )}
 
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
                             <button onClick={() => { if (window.confirm('Discard changes?')) setModal(null); }} style={{ padding: '9px 20px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Cancel</button>

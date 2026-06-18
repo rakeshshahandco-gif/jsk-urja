@@ -14,8 +14,8 @@ const isRenderDeploy =
 // Create axios instance
 const api = axios.create({
     baseURL: currentLocation.endsWith('/') ? currentLocation : `${currentLocation}/`,
-    // Render free tier can take 30–90s to wake; 10s caused false "Cannot reach server".
-    timeout: isRenderDeploy ? 90000 : 10000,
+    // Localhost + Atlas can exceed 10s on stock/ledger writes (PI, job-work challan, etc.).
+    timeout: isRenderDeploy ? 90000 : 120000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -44,7 +44,7 @@ api.interceptors.request.use(
         const selectedFY = localStorage.getItem('selectedFY');
         if (selectedFY && config.method === 'get') {
             // Skip for specific global routes
-            const skipRoutes = ['/financial-years', '/company-profile', '/auth'];
+            const skipRoutes = ['/financial-years', '/company-profile', '/auth', '/scan-entry/drafts/'];
             const shouldSkip = skipRoutes.some(route => config.url.includes(route));
             
             if (!shouldSkip) {

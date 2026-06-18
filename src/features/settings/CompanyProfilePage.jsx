@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 import { getCompanyProfile, updateCompanyProfile } from '@/services/settingsApi';
+import { getIndustryTemplates } from '@/services/industryTemplateApi';
+import { getCompanyById, updateCompanyRecord, createCompanyRecord } from '@/services/companyApi';
+import {
+    getCompanyWorkflowAssignment,
+    assignCompanyWorkflow,
+    getCompanyWorkflowOptions,
+} from '@/services/companyWorkflowAssignmentApi';
 import { useCompany } from '@/contexts/CompanyContext';
 import InvoiceBarcodeSettingsCard from './InvoiceBarcodeSettingsCard';
 import toast from 'react-hot-toast';
@@ -28,9 +37,25 @@ const lbl = {
 };
 
 export default function CompanyProfilePage() {
-    const { selectedCompany } = useCompany();
+    const navigate = useNavigate();
+    const { selectedCompany, companies, switchCompany, refreshCompanies } = useCompany();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [showCreateCompany, setShowCreateCompany] = useState(false);
+    const [creatingCompany, setCreatingCompany] = useState(false);
+    const [newCompany, setNewCompany] = useState({
+        companyName: '',
+        companyType: 'Pvt Ltd',
+        industryTemplateRef: '',
+        assignDefaultWorkflow: true,
+    });
+    const [industryTemplates, setIndustryTemplates] = useState([]);
+    const [industryTemplateRef, setIndustryTemplateRef] = useState('');
+    const [assignedWorkflowRef, setAssignedWorkflowRef] = useState('');
+    const [activeWorkflow, setActiveWorkflow] = useState(false);
+    const [workflowVersion, setWorkflowVersion] = useState('');
+    const [workflowOptions, setWorkflowOptions] = useState([]);
+    const [workflowPreview, setWorkflowPreview] = useState({ description: '', stages: [], warnings: [] });
     const [profile, setProfile] = useState({
         companyName: '',
         address: '',
@@ -56,10 +81,51 @@ export default function CompanyProfilePage() {
     });
 
     const fetchProfile = useCallback(async () => {
-        if (!selectedCompany?._id) return;
         try {
             setLoading(true);
-            const res = await getCompanyProfile();
+            const templates = await getIndustryTemplates({ isActive: true });
+            setIndustryTemplates(templates || []);
+
+            if (!selectedCompany?._id) {
+                return;
+            }
+
+            const [res, companyRecord] = await Promise.all([
+                getCompanyProfile(),
+                getCompanyById(selectedCompany._id),
+            ]);
+            const savedRef = companyRecord?.industryTemplateRef;
+            const savedId = savedRef?._id || savedRef || '';
+            if (savedId) {
+                setIndustryTemplateRef(String(savedId));
+            } else {
+                const defaultTpl = (templates || []).find((t) => t.templateCode === 'ELECTRONICS_JSK');
+                setIndustryTemplateRef(defaultTpl?._id ? String(defaultTpl._id) : '');
+            }
+
+            try {
+                const wfData = await getCompanyWorkflowAssignment(selectedCompany._id);
+                setAssignedWorkflowRef(wfData?.assignment?.assignedWorkflowRef ? String(wfData.assignment.assignedWorkflowRef) : '');
+                setActiveWorkflow(!!wfData?.assignment?.activeWorkflow);
+                setWorkflowVersion(wfData?.assignment?.workflowVersion || '');
+                setWorkflowPreview({
+                    description: wfData?.workflow?.description || '',
+                    stages: wfData?.previewStages || [],
+                    warnings: wfData?.warnings || [],
+                });
+            } catch {
+                setAssignedWorkflowRef('');
+                setActiveWorkflow(false);
+                setWorkflowVersion('');
+                setWorkflowPreview({ description: '', stages: [], warnings: [] });
+            }
+
+            try {
+                const opts = await getCompanyWorkflowOptions(selectedCompany._id, savedId || industryTemplateRef);
+                setWorkflowOptions(opts || []);
+            } catch {
+                setWorkflowOptions([]);
+            }
             const row = res?.data || res;
             if (row) {
                 setProfile({
@@ -96,9 +162,70 @@ export default function CompanyProfilePage() {
         fetchProfile();
     }, [fetchProfile]);
 
+    useEffect(() => {
+        if (!selectedCompany?._id || !industryTemplateRef) {
+            setWorkflowOptions([]);
+            return undefined;
+        }
+        let cancelled = false;
+        getCompanyWorkflowOptions(selectedCompany._id, industryTemplateRef)
+            .then((opts) => { if (!cancelled) setWorkflowOptions(opts || []); })
+            .catch(() => { if (!cancelled) setWorkflowOptions([]); });
+        return () => { cancelled = true; };
+    }, [industryTemplateRef, selectedCompany?._id]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setProfile(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleCreateCompany = async (e) => {
+        e.preventDefault();
+        if (!newCompany.companyName.trim()) {
+            toast.error('Company name is required');
+            return;
+        }
+        if (!newCompany.industryTemplateRef) {
+            toast.error('Select an industry template for the new company');
+            return;
+        }
+        setCreatingCompany(true);
+        try {
+            const created = await createCompanyRecord({
+                companyName: newCompany.companyName.trim(),
+                companyType: newCompany.companyType,
+                industryTemplateRef: newCompany.industryTemplateRef,
+                isActive: true,
+            });
+
+            if (newCompany.assignDefaultWorkflow) {
+                try {
+                    await assignCompanyWorkflow(created._id, {
+                        useSuggestedDefault: true,
+                        activeWorkflow: true,
+                    });
+                } catch (wfErr) {
+                    toast.error(wfErr?.response?.data?.message || 'Company created but workflow assignment failed');
+                }
+            }
+
+            const list = await refreshCompanies();
+            const fresh = list.find((c) => c._id === created._id) || created;
+            switchCompany(fresh);
+            toast.success(`Company "${created.companyName}" created. Switching…`);
+            setShowCreateCompany(false);
+            setNewCompany({
+                companyName: '',
+                companyType: 'Pvt Ltd',
+                industryTemplateRef: '',
+                assignDefaultWorkflow: true,
+            });
+            window.location.reload();
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to create company');
+        } finally {
+            setCreatingCompany(false);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -134,6 +261,22 @@ export default function CompanyProfilePage() {
 
             const data = await updateCompanyProfile(formData);
 
+            await updateCompanyRecord(selectedCompany._id, {
+                companyName: profile.companyName.trim(),
+                industryTemplateRef: industryTemplateRef || null,
+            });
+
+            const wfResult = await assignCompanyWorkflow(selectedCompany._id, {
+                assignedWorkflowRef: assignedWorkflowRef || null,
+                activeWorkflow,
+            });
+            setWorkflowVersion(wfResult?.assignment?.workflowVersion || '');
+            setWorkflowPreview({
+                description: wfResult?.workflow?.description || '',
+                stages: wfResult?.previewStages || [],
+                warnings: wfResult?.warnings || [],
+            });
+
             // Re-fetch profile to get updated URLs
             if (data?.data) {
                 setProfile(prev => ({
@@ -144,6 +287,7 @@ export default function CompanyProfilePage() {
                 }));
             }
 
+            await refreshCompanies();
             toast.success('Company profile updated successfully!');
         } catch (error) {
             toast.error(error?.response?.data?.message || 'Failed to update profile');
@@ -168,7 +312,230 @@ export default function CompanyProfilePage() {
                     </p>
                 </div>
 
+                <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px 24px', marginBottom: '20px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                        <div>
+                            <h3 style={{ margin: '0 0 6px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Active Company</h3>
+                            <p style={{ margin: 0, fontSize: '14px', color: '#334155' }}>
+                                <strong>{selectedCompany?.companyName || '—'}</strong>
+                                {selectedCompany?.industryTemplateRef?.templateName && (
+                                    <span style={{ color: '#64748b' }}> · {selectedCompany.industryTemplateRef.templateName}</span>
+                                )}
+                            </p>
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>
+                                {companies.length > 1
+                                    ? 'Switch from the header dropdown, browse all companies, or create another below.'
+                                    : 'Browse all companies or create another below.'}
+                            </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={() => navigate(PATHS.SETTINGS.COMPANIES_LIST)}
+                            style={{
+                                padding: '8px 14px',
+                                background: '#fff',
+                                color: '#2563eb',
+                                border: '1px solid #93c5fd',
+                                borderRadius: 8,
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            View All Companies
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowCreateCompany((v) => !v)}
+                            style={{
+                                padding: '8px 14px',
+                                background: showCreateCompany ? '#f1f5f9' : '#2563eb',
+                                color: showCreateCompany ? '#334155' : '#fff',
+                                border: showCreateCompany ? '1px solid #cbd5e1' : 'none',
+                                borderRadius: 8,
+                                fontWeight: 600,
+                                fontSize: 13,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {showCreateCompany ? 'Cancel' : '+ Create New Company'}
+                        </button>
+                        </div>
+                    </div>
+
+                    {showCreateCompany && (
+                        <form onSubmit={handleCreateCompany} style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
+                            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#64748b' }}>
+                                Add a separate company for another industry (e.g. Textile) without changing JSK URJA electronics settings.
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                    <span style={lbl}>Company Name *</span>
+                                    <input
+                                        value={newCompany.companyName}
+                                        onChange={(e) => setNewCompany((p) => ({ ...p, companyName: e.target.value }))}
+                                        placeholder="e.g. HETPL Textile Pvt Ltd"
+                                        style={inp}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <span style={lbl}>Company Type</span>
+                                    <select
+                                        value={newCompany.companyType}
+                                        onChange={(e) => setNewCompany((p) => ({ ...p, companyType: e.target.value }))}
+                                        style={{ ...inp, cursor: 'pointer' }}
+                                    >
+                                        {['Pvt Ltd', 'Partnership', 'Proprietorship', 'LLP', 'Other'].map((t) => (
+                                            <option key={t} value={t}>{t}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <span style={lbl}>Industry Template *</span>
+                                    <select
+                                        value={newCompany.industryTemplateRef}
+                                        onChange={(e) => setNewCompany((p) => ({ ...p, industryTemplateRef: e.target.value }))}
+                                        style={{ ...inp, cursor: 'pointer' }}
+                                        required
+                                    >
+                                        <option value="">Select industry…</option>
+                                        {industryTemplates.map((t) => (
+                                            <option key={t._id} value={t._id}>
+                                                {t.templateName} ({t.templateCode})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={newCompany.assignDefaultWorkflow}
+                                    onChange={(e) => setNewCompany((p) => ({ ...p, assignDefaultWorkflow: e.target.checked }))}
+                                />
+                                Assign default workflow for selected industry (recommended for Textile / Handloom)
+                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+                                <button
+                                    type="submit"
+                                    disabled={creatingCompany}
+                                    style={{
+                                        padding: '10px 18px',
+                                        background: '#059669',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        cursor: creatingCompany ? 'not-allowed' : 'pointer',
+                                        opacity: creatingCompany ? 0.7 : 1,
+                                    }}
+                                >
+                                    {creatingCompany ? 'Creating…' : 'Create Company & Switch'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+
                 <form onSubmit={handleSubmit} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '28px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+
+                    <div style={{ marginBottom: '24px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                            Industry &amp; Workflow
+                        </h3>
+                        {workflowPreview.warnings?.length > 0 && (
+                            <div style={{ marginBottom: 12, padding: 12, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, fontSize: 12, color: '#9a3412' }}>
+                                {workflowPreview.warnings.includes('workflow_deleted') && <div>Assigned workflow was deleted. Showing last saved snapshot only.</div>}
+                                {workflowPreview.warnings.includes('workflow_inactive') && <div>Assigned workflow is inactive.</div>}
+                                {workflowPreview.warnings.includes('workflow_version_outdated') && <div>Workflow master was updated after assignment. Historical records keep the snapshot from assignment time.</div>}
+                                {workflowPreview.warnings.includes('template_mismatch') && <div>Workflow industry template differs from company industry template.</div>}
+                            </div>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div>
+                                <span style={lbl}>Industry Template</span>
+                                <select
+                                    value={industryTemplateRef}
+                                    onChange={(e) => setIndustryTemplateRef(e.target.value)}
+                                    style={{ ...inp, cursor: 'pointer' }}
+                                >
+                                    {industryTemplates.length === 0 && (
+                                        <option value="">Loading templates…</option>
+                                    )}
+                                    {industryTemplates.map((t) => (
+                                        <option key={t._id} value={t._id}>
+                                            {t.templateName} ({t.templateCode})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <span style={lbl}>Assigned Workflow</span>
+                                <select
+                                    value={assignedWorkflowRef}
+                                    onChange={(e) => setAssignedWorkflowRef(e.target.value)}
+                                    style={{ ...inp, cursor: 'pointer' }}
+                                >
+                                    <option value="">— None / use template default later —</option>
+                                    {workflowOptions.map((w) => (
+                                        <option key={w._id} value={w._id}>
+                                            {w.workflowName}{w.isActive ? '' : ' (inactive)'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginTop: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                                <input type="checkbox" checked={activeWorkflow} onChange={(e) => setActiveWorkflow(e.target.checked)} />
+                                Active Workflow
+                            </label>
+                            <span style={{ fontSize: 12, color: '#64748b' }}>
+                                Version: {workflowVersion ? new Date(workflowVersion).toLocaleString('en-IN') : '—'}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    try {
+                                        const data = await assignCompanyWorkflow(selectedCompany._id, { useSuggestedDefault: true, activeWorkflow: true });
+                                        setAssignedWorkflowRef(data?.assignment?.assignedWorkflowRef ? String(data.assignment.assignedWorkflowRef) : '');
+                                        setActiveWorkflow(!!data?.assignment?.activeWorkflow);
+                                        setWorkflowVersion(data?.assignment?.workflowVersion || '');
+                                        setWorkflowPreview({
+                                            description: data?.workflow?.description || '',
+                                            stages: data?.previewStages || [],
+                                            warnings: data?.warnings || [],
+                                        });
+                                        toast.success('Suggested workflow applied');
+                                    } catch (err) {
+                                        toast.error(err?.response?.data?.message || 'No suggested workflow for this template');
+                                    }
+                                }}
+                                style={{ height: 30, padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#f8fafc', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                            >
+                                Use template default workflow
+                            </button>
+                        </div>
+                        {workflowPreview.description && (
+                            <p style={{ margin: '12px 0 8px', fontSize: 13, color: '#475569' }}>{workflowPreview.description}</p>
+                        )}
+                        {workflowPreview.stages?.length > 0 && (
+                            <div style={{ marginTop: 8, border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                                <div style={{ padding: '8px 12px', background: '#f8fafc', fontSize: 11, fontWeight: 700, color: '#64748b' }}>Workflow Stages Preview</div>
+                                <ol style={{ margin: 0, padding: '12px 12px 12px 28px', fontSize: 13, color: '#334155' }}>
+                                    {workflowPreview.stages.map((s, i) => (
+                                        <li key={s._id || i} style={{ marginBottom: 4 }}>{s.stageName}</li>
+                                    ))}
+                                </ol>
+                            </div>
+                        )}
+                        <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 8 }}>
+                            JSK URJA: leave unset to preserve existing behavior. Assignment is configuration only — production is not driven by this yet.
+                        </span>
+                    </div>
 
                     <div style={{ marginBottom: '24px' }}>
                         <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: 700, color: '#2563eb', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>

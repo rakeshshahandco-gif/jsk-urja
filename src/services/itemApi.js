@@ -21,8 +21,9 @@ export const updateItem = async (id, data) => {
     return res.data.data;
 };
 
-export const deleteItem = async (id) => {
-    const res = await api.delete(`/items/${id}`);
+export const deleteItem = async (id, options = {}) => {
+    const params = options.permanent ? { permanent: 'true' } : {};
+    const res = await api.delete(`/items/${id}`, { params });
     return res.data;
 };
 

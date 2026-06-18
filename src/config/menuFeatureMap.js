@@ -39,6 +39,19 @@ export const MENU_FEATURE_BY_ID = {
     'bill-wise-adjustment': 'accounting.billWiseAdjustmentRequired',
     'bank-reconciliation': 'accounting.bankReconciliationRequired',
 
+    'petty-cash-group': 'accounting.enablePettyCash',
+    'petty-cash-entry': 'accounting.enablePettyCash',
+    'petty-cash-import': 'accounting.enablePettyCash',
+    'petty-cash-reports': 'accounting.enablePettyCash',
+    'petty-cash-settings': 'accounting.enablePettyCash',
+
+    'scan-entry-group': 'accounting.enableAiSmartImport',
+    'scan-entry-drafts': 'accounting.enableAiSmartImport',
+    'scan-entry-bulk': 'accounting.enableAiSmartImport',
+    'scan-entry-reports': 'accounting.enableAiSmartImport',
+    'scan-entry-keywords': 'accounting.enableAiSmartImport',
+    'smart-import-hub': 'accounting.enableAiSmartImport',
+
     tds: 'tdsTcs.tdsRequired',
     'tds-dashboard': 'tdsTcs.tdsRequired',
     'tds-master': 'tdsTcs.tdsRequired',
@@ -62,6 +75,11 @@ export const MENU_FEATURE_BY_ID = {
     'supplier-quotations': 'purchase.enableRfqSupplierQuotation',
     'quotation-comparison': 'purchase.enableRfqSupplierQuotation',
     'purchase-rfq-reports': 'purchase.enableRfqSupplierQuotation',
+    /** Show Documents when AI/Scan import is on (not only Attachment & Proof on Purchase tab). */
+    'documents-menu': 'accounting.enableAiSmartImport',
+    'scan-bills': 'purchase.enableDocumentAttachments',
+    'missing-attachments': 'purchase.enableDocumentAttachments',
+    'mobile-scan-bills': 'purchase.enableMobileScanBills',
     'crm-kanban-production': 'workflow.productionKanbanEnabled',
     'crm-kanban-dispatch': 'workflow.dispatchKanbanEnabled',
     'crm-kanban-gst-tds': 'workflow.gstTdsKanbanEnabled',
@@ -75,8 +93,14 @@ export const MENU_FEATURE_BY_ID = {
 /** Never hide these menu ids based on feature flags */
 export const MENU_FEATURE_ALWAYS_VISIBLE = new Set([
     'admin',
+    'companies-list',
     'company-profile',
+    'feature-configuration',
     'feature-compliance-settings',
+    'industry-template-master',
+    'company-module-allocation',
+    'workflow-master',
+    'platform-feature-defaults',
     'user-management',
     'dashboard',
 ]);

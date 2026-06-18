@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFilterPersistence } from '@/hooks/useFilterPersistence';
-import { useNavigate } from 'react-router-dom';
-import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload, ArrowUp, ArrowDown, FileDown, FileText } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Plus, Search, RotateCcw, Pencil, Trash2, ChevronLeft, ChevronRight, Package, Upload, ArrowUp, ArrowDown, FileDown, FileText, X } from 'lucide-react';
 import { getItems, deleteItem, exportItemsExcel, exportItemsPDF, importItemsExcel, exportItemTemplate } from '@/services/itemApi';
 import { getItemTypes } from '@/services/itemTypeApi';
 import { getItemGroups } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
+import { useIndustryInventoryLabels } from '@/hooks/useIndustryInventoryLabels';
+import { useCompany } from '@/contexts/CompanyContext';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
 
 const CATEGORIES = [
@@ -16,22 +18,6 @@ const CATEGORIES = [
     { value: 'FINISHED_GOOD', label: 'Finished Goods' },
     { value: 'TRADING', label: 'Trading Item' },
     { value: 'CONSUMABLE', label: 'Consumable' },
-];
-
-// Initial static types as fallback, will be augmented by API
-const STATIC_TYPES = [
-    { value: '', label: 'All Types' },
-    { value: 'ELECTRICAL', label: 'Electrical' },
-    { value: 'PCB', label: 'PCB' },
-    { value: 'HOUSING', label: 'Housing' },
-    { value: 'IC', label: 'IC' },
-    { value: 'RESISTOR', label: 'Resistor' },
-    { value: 'CAPACITOR', label: 'Capacitor' },
-    { value: 'TRANSFORMER', label: 'Transformer' },
-    { value: 'WIRE', label: 'Wire' },
-    { value: 'PACKAGING', label: 'Packaging' },
-    { value: 'FINISHED_PRODUCT', label: 'Finished Product' },
-    { value: 'OTHER', label: 'Other' },
 ];
 
 const catColors = {
@@ -56,16 +42,19 @@ const s = {
 
 const ItemListPage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { addToast } = useToast();
+    const { selectedCompany, loading: companyLoading } = useCompany();
+    const invLabels = useIndustryInventoryLabels();
     const [items, setItems] = useState([]);
-    const [types, setTypes] = useState(STATIC_TYPES);
+    const [types, setTypes] = useState([]);
     const [groups, setGroups] = useState([{ value: '', label: 'All Groups' }]);
     const [loading, setLoading] = useState(true);
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
 
     // Persistent Filter State
-    const { filters, setFilter, resetFilters } = useFilterPersistence('inventory-items', {
+    const { filters, setFilter, updateFilters, resetFilters } = useFilterPersistence('inventory-items', {
         search: '',
         catFilter: '',
         typeFilter: '',
@@ -77,43 +66,98 @@ const ItemListPage = () => {
     });
 
     const { search, catFilter, typeFilter, groupFilter, activeFilter, sortBy, page, limit } = filters;
+    const [searchInput, setSearchInput] = useState(() => filters.search || '');
+    const searchInputRef = useRef(null);
+    const appliedCreatedCodeRef = useRef(false);
+    const loadRequestRef = useRef(0);
+    const addToastRef = useRef(addToast);
+    addToastRef.current = addToast;
     const [meta, setMeta] = useState({ total: 0, pages: 1 });
 
+    const setPage = useCallback((valueOrFn) => {
+        setFilter('page', typeof valueOrFn === 'function' ? valueOrFn(page) : valueOrFn);
+    }, [page, setFilter]);
+
+    const setSortBy = useCallback((value) => {
+        setFilter('sortBy', value);
+    }, [setFilter]);
+
+    const handleSearchChange = useCallback((value) => {
+        setSearchInput(value);
+        updateFilters({ search: value, page: 1 });
+    }, [updateFilters]);
+
+    const clearSearch = useCallback(() => {
+        setSearchInput('');
+        updateFilters({ search: '', page: 1 });
+        searchInputRef.current?.focus();
+    }, [updateFilters]);
+
+    const handleResetAll = useCallback(() => {
+        resetFilters();
+        setSearchInput('');
+    }, [resetFilters]);
+
     const handleLimitChange = (e) => {
-        const newLimit = parseInt(e.target.value);
-        setFilter('limit', newLimit);
-        setFilter('page', 1);
+        const newLimit = parseInt(e.target.value, 10);
+        updateFilters({ limit: newLimit, page: 1 });
     };
 
     const load = useCallback(async () => {
+        if (!selectedCompany?._id) return;
+        const reqId = ++loadRequestRef.current;
         setLoading(true);
         try {
             const params = {
                 page,
                 limit,
-                search: search || undefined,
+                search: searchInput.trim() || undefined,
                 itemCategory: catFilter || undefined,
                 itemType: typeFilter || undefined,
                 itemGroupName: groupFilter || undefined,
-                isActive: activeFilter,
+                ...(activeFilter === 'true' || activeFilter === 'false' ? { isActive: activeFilter } : {}),
                 sortBy
             };
             const res = await getItems(params);
+            if (reqId !== loadRequestRef.current) return;
             setItems(res.data || []);
             setMeta(res.meta || { total: 0, pages: 1 });
         } catch (err) {
+            if (reqId !== loadRequestRef.current) return;
             console.error('Load Items Error:', err);
-            addToast(err?.response?.data?.message || 'Failed to load items', 'error');
-        } finally { setLoading(false); }
-    }, [page, limit, search, catFilter, typeFilter, groupFilter, activeFilter, sortBy]);
+            addToastRef.current(err?.response?.data?.message || 'Failed to load items', 'error');
+        } finally {
+            if (reqId === loadRequestRef.current) setLoading(false);
+        }
+    }, [page, limit, searchInput, catFilter, typeFilter, groupFilter, activeFilter, sortBy, selectedCompany?._id]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        const createdCode = location.state?.createdItemCode;
+        if (!createdCode || appliedCreatedCodeRef.current) return;
+        appliedCreatedCodeRef.current = true;
+        handleSearchChange(createdCode);
+        navigate(location.pathname, { replace: true, state: {} });
+    }, [location.state?.createdItemCode, location.pathname, navigate, handleSearchChange]);
+
+    useEffect(() => {
+        if (companyLoading) return;
+        if (!selectedCompany?._id) {
+            setLoading(false);
+            return;
+        }
+        const timer = setTimeout(load, 150);
+        return () => clearTimeout(timer);
+    }, [load, companyLoading, selectedCompany?._id]);
 
     useGlobalSync('item', (payload) => {
         if (payload.action === 'create') setItems(prev => [payload.data, ...prev].slice(0, limit));
         else if (payload.action === 'update') setItems(prev => prev.map(i => i._id === payload.recordId ? { ...i, ...payload.data } : i));
         else if (payload.action === 'delete') setItems(prev => prev.filter(i => i._id !== payload.recordId));
     });
+
+    useEffect(() => {
+        setTypes(invLabels.itemTypeFilterExamples);
+    }, [invLabels]);
 
     useEffect(() => {
         getItemTypes().then(data => {
@@ -136,12 +180,22 @@ const ItemListPage = () => {
         }).catch(err => console.error('Failed to fetch item groups', err));
     }, [catFilter]);
 
-    const reset = () => { setSearch(''); setCatFilter(''); setTypeFilter(''); setGroupFilter(''); setActiveFilter('true'); setSortBy('itemCode:asc'); setLimit(25); setPage(1); };
-
-    const handleDelete = async (id, name) => {
-        if (!window.confirm(`Deactivate "${name}"?`)) return;
-        try { await deleteItem(id); addToast('Item deactivated', 'success'); load(); }
-        catch { addToast('Failed to deactivate item', 'error'); }
+    const handleDelete = async (item) => {
+        const stock = Number(item.currentStock) || 0;
+        const faulty = Number(item.faultyStock) || 0;
+        if (stock > 0 || faulty > 0) {
+            addToast(`Cannot remove "${item.itemName}" — stock is ${stock} Mtr/Pcs (${faulty} faulty). Clear stock first.`, 'error');
+            return;
+        }
+        if (!window.confirm(`Remove "${item.itemName}" (${item.itemCode}) from Item Master?`)) return;
+        try {
+            await deleteItem(item._id, { permanent: true });
+            setItems((prev) => prev.filter((i) => i._id !== item._id));
+            setMeta((m) => ({ ...m, total: Math.max(0, (m.total || 1) - 1) }));
+            addToast(`${item.itemCode} removed from Item Master`, 'success');
+        } catch (err) {
+            addToast(err?.response?.data?.message || err?.message || 'Failed to remove item', 'error');
+        }
     };
 
     const toggleSort = (field) => {
@@ -161,7 +215,7 @@ const ItemListPage = () => {
                 itemCategory: catFilter || undefined,
                 itemType: typeFilter || undefined,
                 itemGroupName: groupFilter || undefined,
-                isActive: activeFilter,
+                ...(activeFilter === 'true' || activeFilter === 'false' ? { isActive: activeFilter } : {}),
                 sortBy
             };
             const blob = await exportItemsExcel(params);
@@ -185,7 +239,7 @@ const ItemListPage = () => {
                 itemCategory: catFilter || undefined,
                 itemType: typeFilter || undefined,
                 itemGroupName: groupFilter || undefined,
-                isActive: activeFilter,
+                ...(activeFilter === 'true' || activeFilter === 'false' ? { isActive: activeFilter } : {}),
                 sortBy
             };
             const blob = await exportItemsPDF(params);
@@ -330,8 +384,47 @@ const ItemListPage = () => {
             {/* Filter bar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 140 }}>
-                    <Search size={11} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input style={s.inp} placeholder="Search code, name, HSN…" value={search} onChange={e => { setFilter('search', e.target.value); setFilter('page', 1); }} />
+                    <Search size={11} style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        style={{ ...s.inp, paddingRight: searchInput ? 28 : 8 }}
+                        placeholder="Search code, name, HSN…"
+                        value={searchInput}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                clearSearch();
+                            }
+                        }}
+                    />
+                    {searchInput ? (
+                        <button
+                            type="button"
+                            onClick={clearSearch}
+                            title="Clear search"
+                            aria-label="Clear search"
+                            style={{
+                                position: 'absolute',
+                                right: 4,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: 22,
+                                height: 22,
+                                border: 'none',
+                                borderRadius: 4,
+                                background: '#f1f5f9',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#64748b',
+                            }}
+                        >
+                            <X size={12} />
+                        </button>
+                    ) : null}
                 </div>
                 <select style={s.sel} value={catFilter} onChange={e => { setFilter('catFilter', e.target.value); setFilter('page', 1); }}>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -356,12 +449,6 @@ const ItemListPage = () => {
                     <option value="valuationRate:asc">Sort: Rate (Low-High)</option>
                 </select>
 
-                <button 
-                    onClick={resetFilters}
-                    style={{ ...s.sel, backgroundImage: 'none', background: '#f1f5f9', color: '#475569', fontWeight: 700, width: 'auto', padding: '0 12px', minWidth: 'unset' }}
-                >
-                    <RotateCcw size={12} style={{ marginRight: 4 }} /> Reset
-                </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                     <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Show:</span>
                     <select style={{ ...s.sel, width: 65, minWidth: 'auto', paddingRight: 20 }} value={limit} onChange={handleLimitChange}>
@@ -372,7 +459,11 @@ const ItemListPage = () => {
                         <option value={1000}>1000</option>
                     </select>
                 </div>
-                <button onClick={reset} style={{ height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                    type="button"
+                    onClick={handleResetAll}
+                    style={{ height: 28, padding: '0 10px', fontSize: 11, fontWeight: 600, border: '1px solid #d1d5db', borderRadius: 5, background: '#fff', color: '#6b7280', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                >
                     <RotateCcw size={11} /> Reset
                 </button>
             </div>
@@ -459,8 +550,8 @@ const ItemListPage = () => {
                                                         title="Edit" style={{ width: 24, height: 24, border: '1px solid #dbeafe', borderRadius: 4, background: '#eff6ff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
                                                         <Pencil size={11} />
                                                     </button>
-                                                    <button onClick={() => handleDelete(item._id, item.itemName)}
-                                                        title="Deactivate" style={{ width: 24, height: 24, border: '1px solid #fee2e2', borderRadius: 4, background: '#fef2f2', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
+                                                    <button onClick={() => handleDelete(item)}
+                                                        title="Remove item" style={{ width: 24, height: 24, border: '1px solid #fee2e2', borderRadius: 4, background: '#fef2f2', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
                                                         <Trash2 size={11} />
                                                     </button>
                                                 </div>

@@ -13,6 +13,7 @@ import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
+import VoucherEntryTallyLayout from './components/voucherEntryTally';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 
@@ -128,6 +129,21 @@ const PaymentEntryPage = () => {
         };
         fetchData();
     }, [location.state]);
+
+    useEffect(() => {
+        if (!location.state?.tallyPrefill || !location.state?.ledgerId || !ledgers?.length) return;
+        const { ledgerId, ledgerName, amount } = location.state;
+        const name = ledgerName || ledgers.find((l) => String(l._id) === String(ledgerId))?.name || '';
+        setFormData((prev) => ({
+            ...prev,
+            totalAmount: amount ?? prev.totalAmount,
+            items: [{ ...prev.items[0], ledgerId, ledgerName: name, amount: amount ?? prev.items[0]?.amount ?? 0, type: 'Debit', adjustments: [] }],
+        }));
+    }, [location.state?.tallyPrefill, location.state?.ledgerId, location.state?.ledgerName, location.state?.amount, ledgers]);
+
+    const tallyTransferContext = formData.items?.[0]?.ledgerId
+        ? { ledgerId: formData.items[0].ledgerId, ledgerName: formData.items[0].ledgerName, amount: formData.totalAmount }
+        : null;
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;
@@ -563,6 +579,7 @@ const PaymentEntryPage = () => {
 
     // ── FULL FORM for normal (non-invoice) payment entry ────────────────────
     return (
+        <VoucherEntryTallyLayout fromInvoice={fromInvoice} transferContext={tallyTransferContext}>
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
                 <button onClick={() => navigate(PATHS.ACCOUNTS.VOUCHERS)}
@@ -811,6 +828,7 @@ const PaymentEntryPage = () => {
                 </div>
             </div>
         </div>
+        </VoucherEntryTallyLayout>
     );
 };
 

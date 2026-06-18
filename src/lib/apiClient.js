@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAuthData, clearAuthData } from '../utils/auth';
+import { getActiveCompanyId } from '../utils/activeCompany';
 import { useLoadingStore } from '../store/useLoadingStore';
 
 import { env } from '../config/env';
@@ -18,16 +19,9 @@ apiClient.interceptors.request.use(
         const authData = getAuthData();
         if (authData && authData.token) {
             config.headers.Authorization = `Bearer ${authData.token}`;
-            try {
-                const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('jsk_selected_company') : null;
-                if (raw) {
-                    const co = JSON.parse(raw);
-                    if (co && co._id) {
-                        config.headers['X-Company-Id'] = co._id;
-                    }
-                }
-            } catch {
-                /* ignore invalid stored company */
+            const companyId = getActiveCompanyId();
+            if (companyId) {
+                config.headers['X-Company-Id'] = companyId;
             }
         }
         return config;

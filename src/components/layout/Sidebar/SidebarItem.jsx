@@ -48,6 +48,7 @@ const iconMap = {
     'VoucherIcon': FileText,
     'GlobeIcon': Globe,
     'ReceiptLongIcon': Receipt,
+    'DocumentIcon': FileText,
     '💬': MessageCircle,
 };
 
@@ -96,7 +97,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // Expansion state for nested children. Auto-expand on mount if any
     // descendant matches the current route. After the user manually toggles
     // we stop overriding their choice so it never re-opens itself.
-    const [isExpanded, setIsExpanded] = useState(isActive && hasChildren);
+    const [isExpanded, setIsExpanded] = useState((isActive && hasChildren) || (item.id === 'admin' && hasChildren));
     const userToggledRef = useRef(false);
 
     useEffect(() => {
@@ -126,6 +127,8 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
     const isTopLevelParent = level === 1 && hasChildren;
+    /** Admin sub-items (Industry Template Master, etc.) must stay visible — other modules use home tiles only. */
+    const alwaysShowChildren = item.id === 'admin';
 
     const handleClick = () => {
         if (isTopLevelParent) {
@@ -185,7 +188,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
                     </span>
                 )}
             </div>
-            {!collapsed && hasChildren && isExpanded && !isTopLevelParent && (
+            {!collapsed && hasChildren && isExpanded && (!isTopLevelParent || alwaysShowChildren) && (
                 <div className={styles.subMenuContainer}>
                     <ul className={styles.subMenu}>
                         {item.children.map((child) => (

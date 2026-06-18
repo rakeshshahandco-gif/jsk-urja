@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback, useContext } from 'react';
 import { apiClient } from '@/config/apiClient';
 import { getAuthData } from '@/utils/auth';
+import { setActiveCompanyId } from '@/utils/activeCompany';
 import { AuthContext } from './AuthContext';
 
 export const CompanyContext = createContext(null);
@@ -142,10 +143,16 @@ export const CompanyProvider = ({ children }) => {
         return () => window.removeEventListener('storage', handleStorageChange);
     }, [fetchCompanies, resolveSelection]);
 
+    // Keep API clients in sync with the selected company (before localStorage read on first paint).
+    useEffect(() => {
+        setActiveCompanyId(selectedCompany?._id || selectedCompany?.id || null);
+    }, [selectedCompany]);
+
     // ─── Switch company (with confirmation in the switcher UI) ───────────────
     const switchCompany = useCallback((company) => {
         setSelectedCompanyState(company);
         localStorage.setItem(COMPANY_STORAGE_KEY, JSON.stringify(company));
+        setActiveCompanyId(company?._id || company?.id || null);
     }, []);
 
     // ─── Refresh list (called after add/edit in Company Master) ──────────────

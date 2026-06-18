@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Layers, Plus, Pencil, Trash2, Check, X, Search } from 'lucide-react';
 import { getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup } from '@/services/itemGroupApi';
 import { useToast } from '@/components/ui/Toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
+import { useIndustryInventoryLabels } from '@/hooks/useIndustryInventoryLabels';
 
 const BLANK = { name: '', code: '', description: '' };
 
@@ -17,6 +18,9 @@ const iconBtn = (color) => ({ width: 28, height: 28, border: `1px solid ${color}
 
 const ItemGroupPage = () => {
     const { addToast } = useToast();
+    const invLabels = useIndustryInventoryLabels();
+    const namePlaceholder = useMemo(() => invLabels.itemGroupPlaceholder, [invLabels]);
+    const codePlaceholder = useMemo(() => invLabels.itemGroupCodePlaceholder, [invLabels]);
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState({ ...BLANK });
@@ -150,11 +154,11 @@ const ItemGroupPage = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
                         <div>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3 }}>Group Name *</label>
-                            <input style={inp} value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g. Drivers, LED Chips, Controllers…" autoFocus />
+                            <input style={inp} value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder={namePlaceholder} autoFocus />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3 }}>Code *</label>
-                            <input style={{ ...inp, fontFamily: 'monospace', fontWeight: 700 }} value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="DRIVERS" />
+                            <input style={{ ...inp, fontFamily: 'monospace', fontWeight: 700 }} value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder={codePlaceholder} />
                         </div>
                     </div>
 

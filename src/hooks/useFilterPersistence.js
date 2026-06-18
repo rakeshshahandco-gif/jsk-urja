@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * A custom hook to persist list filters in localStorage
@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
  */
 export const useFilterPersistence = (pageKey, initialFilters) => {
     const storageKey = `crm_filter_${pageKey}`;
+    const initialFiltersRef = useRef(initialFilters);
 
     const [filters, setFilters] = useState(() => {
         const saved = localStorage.getItem(storageKey);
@@ -34,24 +35,29 @@ export const useFilterPersistence = (pageKey, initialFilters) => {
      * @param {string} key 
      * @param {any} value 
      */
-    const setFilter = (key, value) => {
+    const setFilter = useCallback((key, value) => {
         setFilters(prev => ({
             ...prev,
             [key]: value
         }));
-    };
+    }, []);
 
-    /**
-     * Reset all filters to initial state and clear storage
-     */
-    const resetFilters = () => {
-        setFilters(initialFilters);
+    const updateFilters = useCallback((patch) => {
+        setFilters(prev => ({
+            ...prev,
+            ...patch
+        }));
+    }, []);
+
+    const resetFilters = useCallback(() => {
+        setFilters(initialFiltersRef.current);
         localStorage.removeItem(storageKey);
-    };
+    }, [storageKey]);
 
     return {
         filters,
         setFilter,
+        updateFilters,
         resetFilters
     };
 };

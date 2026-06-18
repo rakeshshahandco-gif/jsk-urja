@@ -3,6 +3,7 @@ import { Tag, Plus, Pencil, Trash2, Check, X, Zap } from 'lucide-react';
 import { getItemTypes, createItemType, updateItemType, deleteItemType } from '@/services/itemTypeApi';
 import { useToast } from '@/components/ui/Toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
+import { useIndustryInventoryLabels } from '@/hooks/useIndustryInventoryLabels';
 
 const BLANK = { name: '', code: '', description: '', isElectrical: false };
 
@@ -17,6 +18,7 @@ const iconBtn = (color) => ({ width: 28, height: 28, border: `1px solid ${color}
 
 const ItemTypePage = () => {
     const { addToast } = useToast();
+    const invLabels = useIndustryInventoryLabels();
     const [types, setTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState({ ...BLANK });
@@ -116,20 +118,21 @@ const ItemTypePage = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
                         <div>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3 }}>Type Name *</label>
-                            <input style={inp} value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g. Electrical, PCB, Housing…" autoFocus />
+                            <input style={inp} value={form.name} onChange={e => handleNameChange(e.target.value)} placeholder={invLabels.itemTypePlaceholder} autoFocus />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3 }}>Code *</label>
-                            <input style={{ ...inp, fontFamily: 'monospace', fontWeight: 700 }} value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="ELECTRICAL" />
+                            <input style={{ ...inp, fontFamily: 'monospace', fontWeight: 700 }} value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder={invLabels.itemTypeCodePlaceholder} />
                         </div>
                     </div>
 
                     {/* Row 2: Description + Toggle */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: invLabels.showElectricalToggle ? '1fr auto' : '1fr', gap: 10, alignItems: 'end' }}>
                         <div>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 3 }}>Description (optional)</label>
                             <input style={inp} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Short description for this item type" />
                         </div>
+                        {invLabels.showElectricalToggle && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <label style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>
                                 <Zap size={10} style={{ verticalAlign: 'middle', marginRight: 2 }} />Electrical?
@@ -145,6 +148,7 @@ const ItemTypePage = () => {
                                 </span>
                             </div>
                         </div>
+                        )}
                     </div>
 
                     {/* Actions */}
@@ -178,7 +182,7 @@ const ItemTypePage = () => {
                                 <th style={th}>Code</th>
                                 <th style={th}>Type Name</th>
                                 <th style={th}>Description</th>
-                                <th style={{ ...th, textAlign: 'center' }}>⚡ Electrical</th>
+                                {invLabels.showElectricalColumn && <th style={{ ...th, textAlign: 'center' }}>⚡ Electrical</th>}
                                 <th style={{ ...th, textAlign: 'center' }}>Status</th>
                                 <th style={{ ...th, textAlign: 'center' }}>Actions</th>
                             </tr>
@@ -196,11 +200,13 @@ const ItemTypePage = () => {
                                         </td>
                                         <td style={{ ...td, fontWeight: 600 }}>{t.name}</td>
                                         <td style={{ ...td, color: '#6b7280', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description || '—'}</td>
+                                        {invLabels.showElectricalColumn && (
                                         <td style={{ ...td, textAlign: 'center' }}>
                                             {t.isElectrical
                                                 ? <span style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', padding: '1px 8px', borderRadius: 4 }}>⚡ Yes</span>
                                                 : <span style={{ color: '#9ca3af', fontSize: 11 }}>—</span>}
                                         </td>
+                                        )}
                                         <td style={{ ...td, textAlign: 'center' }}>
                                             <button onClick={() => handleToggleActive(t)}
                                                 style={{ fontSize: 10, fontWeight: 700, padding: '1px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', background: t.isActive ? '#dcfce7' : '#fee2e2', color: t.isActive ? '#166534' : '#991b1b' }}>

@@ -1,16 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { PATHS } from '@/routes/paths';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Plus, Trash2, Star, MapPin, Loader2 } from 'lucide-react';
 import { INDIAN_STATES } from '@/utils/constants';
 import { getCustomerTypes, generateCustomerCode } from '@/services/customerApi';
+import { listCustomerTypeMaster } from '@/services/sundryDebtorSettingsApi';
+import { useFeatureConfiguration } from '@/hooks/useFeatureConfiguration';
+import { useCustomerTemplateFieldSettings } from '@/hooks/useCustomerTemplateFieldSettings';
+import { useDocumentsKycTemplateSettings } from '@/hooks/useDocumentsKycTemplateSettings';
+import { computeCustomerDueDays } from '@/constants/customerMasterTemplateFields';
 import { getStickers } from '@/services/stickerApi';
 import { fetchGeocodeAddress } from '@/services/locationApi';
 import { AddStickerModal } from './AddStickerModal';
+import { AddCustomerTypeModal } from './AddCustomerTypeModal';
 import { MultiSelect } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { getDistributors } from '@/services/distributorApi';
 import { getUsers } from '@/services/userApi';
+import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { listCustomerDocuments } from '@/services/customerDocumentApi';
+import { CUSTOMER_FORM_TABS } from '@/config/customerKyc.config';
+import { CustomerGstTaxTab, CustomerBankingTab, CustomerExportTab } from './CustomerKycTabSections';
+import { CustomerDocumentsKycTab } from './CustomerDocumentsKycTab';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -37,6 +52,77 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const [showAddSticker, setShowAddSticker] = useState(false);
     const [salesTeam, setSalesTeam] = useState([]);
     const [distributors, setDistributors] = useState([]);
+    const { isEnabled, registry, settings, refreshAll } = useFeatureConfiguration();
+    const { hasPermission } = useAuth();
+    const { selectedCompany } = useCompany();
+    const { fieldCtrl } = useCustomerTemplateFieldSettings(selectedCompany?._id, isEnabled);
+    const { docCtrl: customerDocCtrl } = useDocumentsKycTemplateSettings(selectedCompany?._id, 'customer', isEnabled, fieldCtrl);
+    const { selectedFYObject } = useFinancialYear();
+    const [activeTab, setActiveTab] = useState('basic');
+    const [kycDocuments, setKycDocuments] = useState([]);
+
+    const showGstTaxTab = fieldCtrl.isVisible('gstNumber') || fieldCtrl.isVisible('panNumber') || fieldCtrl.isVisible('tanNumber')
+        || fieldCtrl.isVisible('msmeNumber') || fieldCtrl.isVisible('iecNumber')
+        || isEnabled('customer.gstRegistrationType') || isEnabled('customer.gstState') || isEnabled('customer.placeOfSupply')
+        || isEnabled('customer.cinNumber') || isEnabled('customer.tcsApplicable');
+    const showBankingTab = fieldCtrl.anyVisibleInGroup('banking') || isEnabled('customer.bankDetails');
+    const showExportTab = fieldCtrl.anyVisibleInGroup('export') || isEnabled('customer.exportDetails');
+    const showDocumentsTab = customerDocCtrl.anyVisible() || fieldCtrl.anyVisibleInGroup('document') || isEnabled('customer.documentsKyc');
+    const hideGstInBusiness = showGstTaxTab;
+
+    const visibleTabs = useMemo(() => CUSTOMER_FORM_TABS.filter((t) => {
+        if (t.id === 'basic') return true;
+        if (t.id === 'gstTax') return showGstTaxTab;
+        if (t.id === 'banking') return showBankingTab;
+        if (t.id === 'export') return showExportTab;
+        if (t.id === 'documents') return showDocumentsTab;
+        return false;
+    }), [showGstTaxTab, showBankingTab, showExportTab, showDocumentsTab]);
+
+    const docPerms = useMemo(() => ({
+        canView: hasPermission('customers.customer_documents.view'),
+        canUpload: hasPermission('customers.customer_documents.upload'),
+        canDelete: hasPermission('customers.customer_documents.delete'),
+        canDownload: hasPermission('customers.customer_documents.download'),
+        canScan: hasPermission('customers.customer_documents.scan'),
+    }), [hasPermission]);
+
+    const refreshKycDocuments = async () => {
+        if (!customer?._id || !docPerms.canView) return;
+        try {
+            const list = await listCustomerDocuments(customer._id);
+            setKycDocuments(list);
+        } catch {
+            setKycDocuments([]);
+        }
+    };
+
+    useEffect(() => {
+        refreshAll?.();
+    }, [refreshAll]);
+
+    useEffect(() => {
+        refreshKycDocuments();
+    }, [customer?._id, docPerms.canView]);
+
+    useEffect(() => {
+        const ids = visibleTabs.map((t) => t.id);
+        if (!ids.includes(activeTab)) setActiveTab('basic');
+    }, [visibleTabs, activeTab]);
+    const industryFieldDefs = useMemo(() => {
+        const custom = settings?.featureEngine?.customDefinitions || [];
+        const fromReg = (registry || []).filter((r) => r.category === 'industry' && r.module === 'customer');
+        const merged = [...fromReg, ...custom.filter((c) => c.category === 'industry' || c.module === 'customer')];
+        const seen = new Set();
+        return merged.filter((d) => {
+            if (!d?.featureKey || seen.has(d.featureKey)) return false;
+            seen.add(d.featureKey);
+            return true;
+        });
+    }, [registry, settings]);
+    const visibleIndustryFields = industryFieldDefs.filter((d) => isEnabled(d.featureKey));
+    const [masterCustomerTypes, setMasterCustomerTypes] = useState([]);
+    const [showAddCustomerType, setShowAddCustomerType] = useState(false);
     // Normalize customer data for form display
     const normalizeCustomerData = (customerData) => {
         console.log('🔄 Normalizing customer data:', customerData);
@@ -78,12 +164,45 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     }
                 ],
                 creditPeriod: 0,
+                gracePeriodDays: 0,
                 creditLimit: 0,
                 creditLimitAction: 'Warn',
                 paymentType: 'Credit',
+                paymentTerms: '',
+                tcsApplicable: false,
+                tcsSection: '',
+                tcsRate: 0,
+                tcsThresholdLimit: 0,
+                panAvailable: false,
+                openingBalance: 0,
+                drCr: 'Dr',
+                billWiseTracking: false,
+                interestApplicable: false,
+                collectionPersonId: '',
+                assignedSalesperson: '',
+                riskCategory: '',
+                creditRemarks: '',
                 msmeApplicable: false,
                 msmeRegNo: '',
                 msmeCategory: '',
+                panNumber: '',
+                tanNumber: '',
+                cinNumber: '',
+                iecNumber: '',
+                gstState: '',
+                defaultPlaceOfSupply: '',
+                bankName: '',
+                bankBranch: '',
+                bankAccountNumber: '',
+                bankIfsc: '',
+                bankSwift: '',
+                bankUpi: '',
+                exportBuyerCode: '',
+                exportPort: '',
+                exportCurrency: '',
+                exportLcTerms: '',
+                exportPaymentTerms: '',
+                isExportCustomer: false,
             };
 
         }
@@ -141,13 +260,53 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     email: '',
                     isPrimary: true,
                 }],
-            creditPeriod: customerData.creditPeriod || 0,
-            creditLimit: customerData.creditLimit || 0,
+            creditPeriod: customerData.creditPeriod ?? 0,
+            gracePeriodDays: customerData.gracePeriodDays ?? 0,
+            creditLimit: customerData.creditLimit ?? 0,
             creditLimitAction: customerData.creditLimitAction || 'Warn',
             paymentType: customerData.paymentType || 'Credit',
+            paymentTerms: customerData.paymentTerms || '',
+            tcsApplicable: !!customerData.tcsApplicable,
+            tcsSection: customerData.tcsSection || '',
+            tcsRate: customerData.tcsRate ?? 0,
+            tcsThresholdLimit: customerData.tcsThresholdLimit ?? 0,
+            panAvailable: !!customerData.panAvailable,
+            openingBalance: customerData.openingBalance ?? 0,
+            drCr: customerData.drCr || 'Dr',
+            billWiseTracking: !!customerData.billWiseTracking,
+            interestApplicable: !!customerData.interestApplicable,
+            collectionPersonId: customerData.collectionPersonId?._id || customerData.collectionPersonId || '',
+            assignedSalesperson: customerData.assignedSalesperson?._id || customerData.assignedSalesperson || '',
+            riskCategory: customerData.riskCategory || '',
+            creditRemarks: customerData.creditRemarks || '',
             msmeApplicable: customerData.msmeApplicable || false,
             msmeRegNo: customerData.msmeRegNo || '',
             msmeCategory: customerData.msmeCategory || '',
+            panNumber: customerData.panNumber || '',
+            tanNumber: customerData.tanNumber || '',
+            cinNumber: customerData.cinNumber || '',
+            iecNumber: customerData.iecNumber || '',
+            gstState: customerData.gstState || '',
+            defaultPlaceOfSupply: customerData.defaultPlaceOfSupply || '',
+            bankName: customerData.bankName || '',
+            bankBranch: customerData.bankBranch || '',
+            bankAccountNumber: customerData.bankAccountNumber || '',
+            bankIfsc: customerData.bankIfsc || '',
+            bankSwift: customerData.bankSwift || '',
+            bankUpi: customerData.bankUpi || '',
+            exportBuyerCode: customerData.exportBuyerCode || '',
+            exportPort: customerData.exportPort || '',
+            exportCurrency: customerData.exportCurrency || '',
+            exportLcTerms: customerData.exportLcTerms || '',
+            exportPaymentTerms: customerData.exportPaymentTerms || '',
+            isExportCustomer: !!customerData.isExportCustomer,
+            industryCustomFields: (() => {
+                const raw = customerData.industryCustomFields;
+                if (!raw) return {};
+                if (raw instanceof Map) return Object.fromEntries(raw);
+                if (typeof raw === 'object') return { ...raw };
+                return {};
+            })(),
             referralDetails: customerData.referralDetails || {
                 sourceType: 'Direct',
                 salespersonId: null,
@@ -179,6 +338,23 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const initialCompanyName = customer?.company || '';
     const currentCompanyName = watch('company');
     const isNameChanged = customer && initialCompanyName && currentCompanyName && initialCompanyName !== currentCompanyName;
+    const creditPeriodVal = watch('creditPeriod');
+    const gracePeriodVal = watch('gracePeriodDays');
+    const totalDueDays = computeCustomerDueDays(creditPeriodVal, gracePeriodVal, fieldCtrl.isVisible('gracePeriod'));
+
+    const handleFormSubmit = (data) => {
+        const missing = [];
+        if (fieldCtrl.isRequired('creditPeriod') && (data.creditPeriod === undefined || data.creditPeriod === null || data.creditPeriod === '')) missing.push('Credit Period');
+        if (fieldCtrl.isRequired('gracePeriod') && (data.gracePeriodDays === undefined || data.gracePeriodDays === null || data.gracePeriodDays === '')) missing.push('Grace Period');
+        if (fieldCtrl.isRequired('creditLimit') && (data.creditLimit === undefined || data.creditLimit === null || data.creditLimit === '')) missing.push('Credit Limit');
+        if (fieldCtrl.isRequired('gstNumber') && !String(data.gstNumber || '').trim()) missing.push('GST No');
+        if (fieldCtrl.isRequired('panNumber') && !String(data.panNumber || '').trim()) missing.push('PAN No');
+        if (missing.length) {
+            addToast(`Required fields: ${missing.join(', ')}`, 'error');
+            return;
+        }
+        onSubmit(data);
+    };
 
     const handleFetchPin = async () => {
         const addressText = watch('address');
@@ -295,8 +471,23 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         }
     }, [gstNumberValue, setValue]);
 
-    // Fetch dynamic customer types
     useEffect(() => {
+        if (!isEnabled('customer.customerType')) return;
+        (async () => {
+            try {
+                const types = await listCustomerTypeMaster();
+                if (types?.length) {
+                    setMasterCustomerTypes(types.map((t) => ({ value: t.name, label: t.name })));
+                }
+            } catch (error) {
+                console.error('Failed to load customer type master:', error);
+            }
+        })();
+    }, [isEnabled]);
+
+    // Fetch dynamic customer types (legacy free-text types when master toggle off)
+    useEffect(() => {
+        if (isEnabled('customer.customerType')) return;
         const fetchTypes = async () => {
             try {
                 const types = await getCustomerTypes();
@@ -320,7 +511,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             }
         };
         fetchTypes();
-    }, []);
+    }, [isEnabled]);
 
     // Fetch dynamic stickers
     useEffect(() => {
@@ -397,7 +588,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
     return (
         <>
-            <form onSubmit={handleSubmit(onSubmit)} className={styles['customer-form']}>
+            <form onSubmit={handleSubmit(handleFormSubmit)} className={styles['customer-form']}>
 
                 {/* Two-column layout */}
                 <div className={styles['form-body']}>
@@ -414,6 +605,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         <a className={styles['sidebar-item']} href="#sec-business" onClick={e => { e.preventDefault(); document.getElementById('sec-business')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>💼</span> Business Details
                         </a>
+                        <a className={styles['sidebar-item']} href="#sec-credit" onClick={e => { e.preventDefault(); document.getElementById('sec-credit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+                            <span className={styles['sidebar-icon']}>💳</span> Accounts / Credit
+                        </a>
                         <a className={styles['sidebar-item']} href="#sec-additional" onClick={e => { e.preventDefault(); document.getElementById('sec-additional')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>📝</span> Additional Info
                         </a>
@@ -427,7 +621,42 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
                     {/* Right Form Content */}
                     <div className={styles['form-content']}>
+                        {(!showBankingTab && !showExportTab && !showDocumentsTab) && (
+                            <div style={{ marginBottom: 14, padding: '12px 14px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, fontSize: 13, color: '#9a3412', lineHeight: 1.5 }}>
+                                <strong>KYC tabs are off.</strong> Enable them under{' '}
+                                <Link to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} style={{ fontWeight: 700, color: '#c2410c' }}>
+                                    Admin → Feature / Compliance → Customer
+                                </Link>
+                                {' '}(e.g. Banking, Documents / KYC) → <strong>Save settings</strong> → reload this page (Ctrl+Shift+R).
+                                {showGstTaxTab ? ' GST & Tax tab is on.' : ''}
+                            </div>
+                        )}
+                        {visibleTabs.length > 1 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, borderBottom: '2px solid #e2e8f0', paddingBottom: 8 }}>
+                                {visibleTabs.map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.id)}
+                                        style={{
+                                            padding: '8px 14px',
+                                            borderRadius: 8,
+                                            border: activeTab === tab.id ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                                            background: activeTab === tab.id ? '#eff6ff' : '#fff',
+                                            fontWeight: 700,
+                                            fontSize: 12,
+                                            color: activeTab === tab.id ? '#1d4ed8' : '#64748b',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
+                        {(activeTab === 'basic' || visibleTabs.length === 1) && (
+                        <>
                         {/* Basic Information */}
                         <div id="sec-basic" className={styles['form-section']}>
                             <h3>Basic Information</h3>
@@ -821,9 +1050,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         <div id="sec-business" className={styles['form-section']}>
                     <h3>Business Details</h3>
 
-                    {/* Customer Type */}
                     <div className={styles.grid4}>
-                        {/* Customer Type */}
+                        {!isEnabled('customer.customerType') && (
                         <div className={styles['form-group']}>
                             <label htmlFor="customerType">TYPE</label>
                             {!isCustomType ? (
@@ -860,8 +1088,10 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 </div>
                             )}
                         </div>
+                        )}
 
-                        {/* GST Details */}
+                        {!hideGstInBusiness && fieldCtrl.isVisible('gstNumber') && (
+                        <>
                         <div className={styles['form-group']}>
                             <label htmlFor="gstNumber">GST NUMBER</label>
                             <Input
@@ -945,56 +1175,279 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 onChange={handleUppercaseChange('exportCountry')}
                             />
                         </div>
+                        </>
+                        )}
 
-                        {/* Credit Period */}
-                        <div className={styles['form-group']}>
-                            <label htmlFor="creditPeriod">CREDIT PERIOD (DAYS)</label>
-                            <Input
-                                id="creditPeriod"
-                                type="number"
-                                {...register('creditPeriod', { valueAsNumber: true })}
-                                placeholder="0"
-                                min="0"
-                            />
-                        </div>
+                    </div>{/* end grid business */}
 
-                        {/* Credit Limit */}
-                        <div className={styles['form-group']}>
-                            <label htmlFor="creditLimit">CREDIT LIMIT (₹)</label>
-                            <Input
-                                id="creditLimit"
-                                type="number"
-                                {...register('creditLimit', { valueAsNumber: true })}
-                                placeholder="0 = No limit"
-                                min="0"
-                            />
-                            <small className={styles['help-text']}>0 means no credit limit enforced</small>
+                        {isEnabled('customer.industrySpecificFields') && visibleIndustryFields.length > 0 && (
+                        <div id="sec-industry" className={styles['form-section']} style={{ marginTop: '1rem' }}>
+                            <h3>Industry Specific Fields</h3>
+                            <div className={styles.grid4}>
+                                {visibleIndustryFields.map((def) => (
+                                    <div key={def.featureKey} className={styles['form-group']}>
+                                        <label htmlFor={`icf-${def.featureKey}`}>{def.featureName}</label>
+                                        <Input
+                                            id={`icf-${def.featureKey}`}
+                                            {...register(`industryCustomFields.${def.featureKey}`)}
+                                            placeholder={def.featureName}
+                                            onChange={handleUppercaseChange(`industryCustomFields.${def.featureKey}`)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
                         </div>
+                        )}
 
-                        {/* Credit Limit Action */}
-                        <div className={styles['form-group']}>
-                            <label htmlFor="creditLimitAction">ON LIMIT BREACH</label>
-                            <select id="creditLimitAction" {...register('creditLimitAction')} className={styles['form-select']}>
-                                <option value="None">No Action</option>
-                                <option value="Warn">Warn (allow with warning)</option>
-                                <option value="Block">Block (cannot save invoice)</option>
-                            </select>
-                        </div>
-
-                        {/* Payment Type */}
-                        <div className={styles['form-group']}>
-                            <label htmlFor="paymentType">PAYMENT TYPE</label>
-                            <select
-                                id="paymentType"
-                                {...register('paymentType')}
-                                className={styles['form-select']}
-                            >
-                                <option value="Credit">Credit</option>
-                                <option value="Cash">Cash</option>
-                            </select>
-                        </div>
-                    </div>{/* end grid (paymentType) */}
                         </div>{/* end sec-business */}
+
+                        {/* Accounts / Credit Details */}
+                        <div id="sec-credit" className={styles['form-section']}>
+                            <h3>Accounts / Credit Details</h3>
+                            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>
+                                Enable fields under Admin →{' '}
+                                <Link to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} style={{ color: '#2563eb', fontWeight: 600 }}>
+                                    Feature / Compliance → Customer
+                                </Link>
+                                {' '}tab (or Feature Configuration → Customer Master).
+                            </p>
+                            <div className={styles.grid4}>
+                                <div className={styles['form-group']}>
+                                    <label>LEDGER GROUP</label>
+                                    <Input value="Sundry Debtors" readOnly disabled style={{ background: '#f8fafc', fontWeight: 600 }} />
+                                </div>
+
+                                {fieldCtrl.isVisible('creditPeriod') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="creditPeriod">CREDIT PERIOD (DAYS){fieldCtrl.isRequired('creditPeriod') ? ' *' : ''}</label>
+                                        <Input
+                                            id="creditPeriod"
+                                            type="number"
+                                            {...register('creditPeriod', {
+                                                valueAsNumber: true,
+                                                required: fieldCtrl.isRequired('creditPeriod') ? 'Credit Period is required' : false,
+                                            })}
+                                            placeholder="0"
+                                            min="0"
+                                            readOnly={fieldCtrl.isReadOnly('creditPeriod')}
+                                            disabled={fieldCtrl.isReadOnly('creditPeriod')}
+                                        />
+                                    </div>
+                                )}
+
+                                {fieldCtrl.isVisible('gracePeriod') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="gracePeriodDays">GRACE PERIOD (DAYS){fieldCtrl.isRequired('gracePeriod') ? ' *' : ''}</label>
+                                        <Input
+                                            id="gracePeriodDays"
+                                            type="number"
+                                            {...register('gracePeriodDays', {
+                                                valueAsNumber: true,
+                                                required: fieldCtrl.isRequired('gracePeriod') ? 'Grace Period is required' : false,
+                                            })}
+                                            placeholder="0"
+                                            min="0"
+                                            readOnly={fieldCtrl.isReadOnly('gracePeriod')}
+                                            disabled={fieldCtrl.isReadOnly('gracePeriod')}
+                                        />
+                                        <small className={styles['help-text']}>
+                                            Total due days: {totalDueDays}
+                                            {fieldCtrl.isVisible('gracePeriod') && Number(gracePeriodVal) > 0
+                                                ? ' (Credit Period + Grace Period)'
+                                                : ' (Credit Period only)'}
+                                        </small>
+                                    </div>
+                                )}
+
+                                {fieldCtrl.isVisible('creditLimit') && (
+                                    <>
+                                        <div className={styles['form-group']}>
+                                            <label htmlFor="creditLimit">CREDIT LIMIT (₹)</label>
+                                            <Input
+                                                id="creditLimit"
+                                                type="number"
+                                            {...register('creditLimit', {
+                                                valueAsNumber: true,
+                                                required: fieldCtrl.isRequired('creditLimit') ? 'Credit Limit is required' : false,
+                                            })}
+                                            placeholder="0"
+                                            min="0"
+                                            readOnly={fieldCtrl.isReadOnly('creditLimit')}
+                                            disabled={fieldCtrl.isReadOnly('creditLimit')}
+                                        />
+                                        </div>
+                                        <div className={styles['form-group']}>
+                                            <label htmlFor="creditLimitAction">ON LIMIT BREACH</label>
+                                            <select id="creditLimitAction" {...register('creditLimitAction')} className={styles['form-select']}>
+                                                <option value="None">No Action</option>
+                                                <option value="Warn">Warn</option>
+                                                <option value="Block">Block</option>
+                                            </select>
+                                        </div>
+                                    </>
+                                )}
+
+                                {isEnabled('customer.customerType') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="customerTypeCredit">CUSTOMER TYPE</label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <select
+                                                id="customerTypeCredit"
+                                                {...register('customerType')}
+                                                className={styles['form-select']}
+                                                style={{ flex: 1 }}
+                                            >
+                                                <option value="">-- Select Type --</option>
+                                                {masterCustomerTypes.map((type) => (
+                                                    <option key={type.value} value={type.value}>{type.label}</option>
+                                                ))}
+                                                {watch('customerType') && !masterCustomerTypes.some((t) => t.value === watch('customerType')) && (
+                                                    <option value={watch('customerType')}>{watch('customerType')}</option>
+                                                )}
+                                            </select>
+                                            <Button type="button" variant="outline" onClick={() => setShowAddCustomerType(true)} title="Add Customer Type" style={{ padding: '0 12px' }}>
+                                                <Plus size={18} />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {isEnabled('customer.paymentTerms') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="paymentTerms">PAYMENT TERMS</label>
+                                        <Input id="paymentTerms" {...register('paymentTerms')} placeholder="e.g. Net 30, 50% advance" />
+                                    </div>
+                                )}
+
+                                <div className={styles['form-group']}>
+                                    <label htmlFor="paymentType">PAYMENT TYPE</label>
+                                    <select id="paymentType" {...register('paymentType')} className={styles['form-select']}>
+                                        <option value="Credit">Credit</option>
+                                        <option value="Cash">Cash</option>
+                                    </select>
+                                </div>
+
+                                {!showGstTaxTab && isEnabled('customer.tcsApplicable') && (
+                                    <>
+                                        <div className={styles['form-group']}>
+                                            <label htmlFor="tcsApplicable">TCS APPLICABLE</label>
+                                            <select id="tcsApplicable" {...register('tcsApplicable')} className={styles['form-select']}>
+                                                <option value={false}>No</option>
+                                                <option value={true}>Yes</option>
+                                            </select>
+                                        </div>
+                                        {watch('tcsApplicable') === true || watch('tcsApplicable') === 'true' ? (
+                                            <>
+                                                <div className={styles['form-group']}>
+                                                    <label htmlFor="tcsSection">TCS SECTION</label>
+                                                    <Input id="tcsSection" {...register('tcsSection')} placeholder="e.g. 206C(1H)" />
+                                                </div>
+                                                {isEnabled('customer.tcsRate') && (
+                                                    <>
+                                                        <div className={styles['form-group']}>
+                                                            <label htmlFor="tcsRate">TCS RATE (%)</label>
+                                                            <Input id="tcsRate" type="number" step="0.01" {...register('tcsRate', { valueAsNumber: true })} min="0" />
+                                                        </div>
+                                                        <div className={styles['form-group']}>
+                                                            <label htmlFor="tcsThresholdLimit">TCS THRESHOLD LIMIT (₹)</label>
+                                                            <Input id="tcsThresholdLimit" type="number" {...register('tcsThresholdLimit', { valueAsNumber: true })} min="0" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </>
+                                        ) : null}
+                                    </>
+                                )}
+
+                                {!showGstTaxTab && fieldCtrl.isVisible('panNumber') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="panAvailable">PAN AVAILABLE</label>
+                                        <select id="panAvailable" {...register('panAvailable')} className={styles['form-select']}>
+                                            <option value={false}>No</option>
+                                            <option value={true}>Yes</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className={styles['form-group']}>
+                                    <label htmlFor="openingBalance">OPENING BALANCE (₹)</label>
+                                    <Input id="openingBalance" type="number" {...register('openingBalance', { valueAsNumber: true })} min="0" />
+                                </div>
+
+                                <div className={styles['form-group']}>
+                                    <label htmlFor="drCr">BALANCE TYPE</label>
+                                    <select id="drCr" {...register('drCr')} className={styles['form-select']}>
+                                        <option value="Dr">Dr</option>
+                                        <option value="Cr">Cr</option>
+                                    </select>
+                                </div>
+
+                                <div className={styles['form-group']}>
+                                    <label htmlFor="billWiseTracking">BILL-WISE TRACKING</label>
+                                    <select id="billWiseTracking" {...register('billWiseTracking')} className={styles['form-select']}>
+                                        <option value={false}>No</option>
+                                        <option value={true}>Yes</option>
+                                    </select>
+                                </div>
+
+                                {isEnabled('customer.interestApplicable') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="interestApplicable">INTEREST APPLICABLE</label>
+                                        <select id="interestApplicable" {...register('interestApplicable')} className={styles['form-select']}>
+                                            <option value={false}>No</option>
+                                            <option value={true}>Yes</option>
+                                        </select>
+                                    </div>
+                                )}
+
+                                {isEnabled('customer.salesPerson') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="assignedSalesperson">SALES PERSON</label>
+                                        <select id="assignedSalesperson" {...register('assignedSalesperson')} className={styles['form-select']}>
+                                            <option value="">-- Select --</option>
+                                            {salesTeam.map((user) => (
+                                                <option key={user._id} value={user._id}>{user.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {isEnabled('customer.collectionPerson') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="collectionPersonId">COLLECTION PERSON</label>
+                                        <select id="collectionPersonId" {...register('collectionPersonId')} className={styles['form-select']}>
+                                            <option value="">-- Select --</option>
+                                            {salesTeam.map((user) => (
+                                                <option key={user._id} value={user._id}>{user.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {isEnabled('customer.riskCategory') && (
+                                    <div className={styles['form-group']}>
+                                        <label htmlFor="riskCategory">RISK CATEGORY</label>
+                                        <select id="riskCategory" {...register('riskCategory')} className={styles['form-select']}>
+                                            <option value="">-- Select --</option>
+                                            <option value="Low">Low</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="High">High</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className={styles['form-group']} style={{ marginTop: '1rem' }}>
+                                <label htmlFor="creditRemarks">REMARKS</label>
+                                <textarea
+                                    id="creditRemarks"
+                                    {...register('creditRemarks')}
+                                    placeholder="Credit / accounts remarks..."
+                                    rows={2}
+                                    className={styles['form-textarea']}
+                                />
+                            </div>
+                        </div>{/* end sec-credit */}
 
                         {/* Additional Information */}
                         <div id="sec-additional" className={styles['form-section']}>
@@ -1025,45 +1478,46 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                         </div>{/* end sec-additional */}
 
                         {/* MSME Details */}
-                        <div id="sec-msme" className={styles['form-section']}>
-                            <h3>🏛️ MSME Details (MSMED Act)</h3>
-                            <div className={styles['form-group']}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        {...register('msmeApplicable')}
-                                        style={{ width: 16, height: 16, accentColor: '#0d9488', cursor: 'pointer' }}
-                                    />
-                                    <span style={{ fontWeight: 600, fontSize: 13 }}>MSME Registered Customer</span>
-                                    <span className={styles['help-text']}>(Enables MSME compliance tracking)</span>
-                                </label>
-                            </div>
-
-                            {watch('msmeApplicable') && (
-                                <div className={styles.grid4}>
-                                    <div className={styles['form-group']}>
-                                        <label>UDYAM REGISTRATION NO.</label>
-                                        <Input
-                                            {...register('msmeRegNo')}
-                                            placeholder="UDYAM-XX-00-0000000"
-                                            style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
-                                            onChange={e => setValue('msmeRegNo', e.target.value.toUpperCase())}
+                        {!showGstTaxTab && fieldCtrl.isVisible('msmeNumber') ? (
+                            <div id="sec-msme" className={styles['form-section']}>
+                                <h3>MSME Details (MSMED Act)</h3>
+                                <div className={styles['form-group']}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            {...register('msmeApplicable')}
+                                            style={{ width: 16, height: 16, accentColor: '#0d9488', cursor: 'pointer' }}
                                         />
-                                        <small className={styles['help-text']}>As per Udyam Registration Certificate</small>
-                                    </div>
-                                    <div className={styles['form-group']}>
-                                        <label>MSME CATEGORY</label>
-                                        <select {...register('msmeCategory')} className={styles['form-select']}>
-                                            <option value="">— Select Category —</option>
-                                            <option value="Micro">Micro Enterprise</option>
-                                            <option value="Small">Small Enterprise</option>
-                                            <option value="Medium">Medium Enterprise</option>
-                                        </select>
-                                        <small className={styles['help-text']}>As classified under MSMED Act</small>
-                                    </div>
+                                        <span style={{ fontWeight: 600, fontSize: 13 }}>MSME Registered Customer</span>
+                                        <span className={styles['help-text']}>(Enables MSME compliance tracking)</span>
+                                    </label>
                                 </div>
-                            )}
-                        </div>{/* end sec-msme */}
+                                {watch('msmeApplicable') ? (
+                                    <div className={styles.grid4}>
+                                        <div className={styles['form-group']}>
+                                            <label>UDYAM REGISTRATION NO.</label>
+                                            <Input
+                                                {...register('msmeRegNo')}
+                                                placeholder="UDYAM-XX-00-0000000"
+                                                style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
+                                                onChange={(e) => setValue('msmeRegNo', e.target.value.toUpperCase())}
+                                            />
+                                            <small className={styles['help-text']}>As per Udyam Registration Certificate</small>
+                                        </div>
+                                        <div className={styles['form-group']}>
+                                            <label>MSME CATEGORY</label>
+                                            <select {...register('msmeCategory')} className={styles['form-select']}>
+                                                <option value="">— Select Category —</option>
+                                                <option value="Micro">Micro Enterprise</option>
+                                                <option value="Small">Small Enterprise</option>
+                                                <option value="Medium">Medium Enterprise</option>
+                                            </select>
+                                            <small className={styles['help-text']}>As classified under MSMED Act</small>
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
 
                         {/* Sales / Referral Details */}
                         <div id="sec-referral" className={styles['form-section']}>
@@ -1147,6 +1601,73 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                                 />
                             </div>
                         </div>{/* end sec-referral */}
+                        </>
+                        )}
+
+                        {activeTab === 'gstTax' && showGstTaxTab && (
+                            <div id="sec-gst-tax" className={styles['form-section']}>
+                                <h3>GST &amp; Tax Details</h3>
+                                <CustomerGstTaxTab
+                                    register={register}
+                                    errors={errors}
+                                    watch={watch}
+                                    setValue={setValue}
+                                    isEnabled={isEnabled}
+                                    fieldCtrl={fieldCtrl}
+                                    handleUppercaseChange={handleUppercaseChange}
+                                    customerId={customer?._id}
+                                    documents={kycDocuments}
+                                    onDocRefresh={refreshKycDocuments}
+                                    docPerms={docPerms}
+                                    companyId={selectedCompany?._id}
+                                    financialYearId={selectedFYObject?._id}
+                                />
+                            </div>
+                        )}
+
+                        {activeTab === 'banking' && showBankingTab && (
+                            <div id="sec-banking" className={styles['form-section']}>
+                                <h3>Banking Details</h3>
+                                <CustomerBankingTab
+                                    register={register}
+                                    handleUppercaseChange={handleUppercaseChange}
+                                    isEnabled={isEnabled}
+                                    fieldCtrl={fieldCtrl}
+                                    customerId={customer?._id}
+                                    documents={kycDocuments}
+                                    onDocRefresh={refreshKycDocuments}
+                                    docPerms={docPerms}
+                                    companyId={selectedCompany?._id}
+                                    financialYearId={selectedFYObject?._id}
+                                />
+                            </div>
+                        )}
+
+                        {activeTab === 'export' && showExportTab && (
+                            <div id="sec-export" className={styles['form-section']}>
+                                <h3>Export Details</h3>
+                                <CustomerExportTab
+                                    register={register}
+                                    watch={watch}
+                                    handleUppercaseChange={handleUppercaseChange}
+                                    isEnabled={isEnabled}
+                                    fieldCtrl={fieldCtrl}
+                                />
+                            </div>
+                        )}
+
+                        {activeTab === 'documents' && showDocumentsTab && (
+                            <div id="sec-documents" className={styles['form-section']}>
+                                <h3>Documents / KYC</h3>
+                                <CustomerDocumentsKycTab
+                                    customerId={customer?._id}
+                                    companyId={selectedCompany?._id}
+                                    financialYearId={selectedFYObject?._id}
+                                    fieldCtrl={fieldCtrl}
+                                    docCtrl={customerDocCtrl}
+                                />
+                            </div>
+                        )}
                     </div>{/* end form-content */}
                 </div>{/* end form-body */}
 
@@ -1167,6 +1688,19 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     setDynamicStickers(prev => [...prev, { value: newSticker._id, label: newSticker.name }]);
                     const current = watch('stickers') || [];
                     setValue('stickers', [...current, newSticker._id], { shouldDirty: true });
+                }}
+            />
+            <AddCustomerTypeModal
+                isOpen={showAddCustomerType}
+                onClose={() => setShowAddCustomerType(false)}
+                onSave={(newType) => {
+                    const name = newType?.name || '';
+                    if (!name) return;
+                    setMasterCustomerTypes((prev) => {
+                        if (prev.some((t) => t.value === name)) return prev;
+                        return [...prev, { value: name, label: name }];
+                    });
+                    setValue('customerType', name, { shouldDirty: true });
                 }}
             />
         </>

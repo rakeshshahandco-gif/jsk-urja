@@ -5,6 +5,9 @@ import {
     addProductionLog, deleteProductionLog
 } from '@/services/workOrderApi';
 import { PATHS } from '@/routes/paths';
+import { useCompany } from '@/contexts/CompanyContext';
+import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
+import { getWorkOrderLabels, isTextileWorkOrder } from '@/utils/textileWorkOrder';
 import toast from 'react-hot-toast';
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
@@ -27,7 +30,8 @@ const STAGE_STATUS_COLORS = {
     'Rework': { color: '#000000', bg: '#ddd6fe', icon: '↺' },
 };
 
-const TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing', 'WIP & Exceptions', 'Material History'];
+const ELECTRONICS_TABS = ['Overview', 'BOM & Material', 'Process Execution', 'QC & Testing', 'WIP & Exceptions', 'Material History'];
+const TEXTILE_TABS = ['Overview', 'BOM & Material', 'Process Execution', 'Process QC', 'WIP & Exceptions', 'Material History'];
 
 // ─── Input style ─────────────────────────────────────────────────────────────
 const inp = {
@@ -41,6 +45,7 @@ import { BrandedLoader } from '@/components/ui/BrandedLoading';
 export default function WorkOrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { selectedCompany } = useCompany();
     const [wo, setWo] = useState(null);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState(0);
@@ -64,6 +69,10 @@ export default function WorkOrderDetailPage() {
 
     if (loading) return <BrandedLoader size={120} />;
     if (!wo) return <div style={{ padding: '60px', textAlign: 'center', color: '#ef4444', background: '#f8f9fa', minHeight: '100vh' }}>Work Order not found</div>;
+
+    const isTextile = isTextileWorkOrder(wo) || isTextileIndustryCompany(selectedCompany);
+    const labels = getWorkOrderLabels(isTextile);
+    const TABS = isTextile ? TEXTILE_TABS : ELECTRONICS_TABS;
 
     const handlePrintProductionSheet = () => {
         const printWindow = window.open('', '', 'width=900,height=800');
@@ -94,10 +103,14 @@ export default function WorkOrderDetailPage() {
             </tr>`;
         }
 
+        const textileProcessRows = (wo.stages || []).map(s => `
+            <tr><td style="font-weight:bold; height:45px;">${s.stageName}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+        `).join('');
+
         const html = `
             <html>
             <head>
-                <title>Production Sheet - ${wo.woNumber}</title>
+                <title>${isTextile ? 'Textile Job Sheet' : 'Production Sheet'} - ${wo.woNumber}</title>
                 <style>
                     body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 20px; box-sizing: border-box; }
                     .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #000; }
@@ -116,22 +129,50 @@ export default function WorkOrderDetailPage() {
                 <table class="header-table">
                     <tr>
                         <td>Status : ${wo.status}</td>
-                        <td>Company : JSK Innovative Technology Pvt Ltd</td>
+                        <td>Company : ${selectedCompany?.companyName || '—'}</td>
                     </tr>
                     <tr>
-                        <td>Item to Manufacture : ${wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}</td>
-                        <td>Qty to Manufacture : ${wo.targetQty}</td>
+                        <td>${isTextile ? 'Finished Item' : 'Item to Manufacture'} : ${wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}</td>
+                        <td>${isTextile ? 'Order Qty (PCS)' : 'Qty to Manufacture'} : ${wo.targetQty}</td>
                     </tr>
+                    ${isTextile ? `
+                    <tr>
+                        <td>Design No : ${wo.textile?.designNo || '—'}</td>
+                        <td>Colour / Size : ${wo.textile?.colour || '—'} / ${wo.textile?.size || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td>Fabric Required : ${wo.textile?.requiredFabricMeter || '—'} Meter</td>
+                        <td>Fabric Item : ${wo.textile?.fabricItemName || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td>Lot / Than / Roll : ${wo.textile?.lotNo || '—'} / ${wo.textile?.thanNo || '—'} / ${wo.textile?.rollNo || '—'}</td>
+                        <td>Process Route : ${wo.textile?.processRoute || '—'}</td>
+                    </tr>
+                    <tr>
+                        <td>Vendor / Worker : ${wo.textile?.assignedVendorWorker || wo.supervisor || '—'}</td>
+                        <td>Expected Completion : ${wo.plannedEnd ? new Date(wo.plannedEnd).toLocaleDateString() : '—'}</td>
+                    </tr>
+                    ` : `
                     <tr>
                         <td>Bom No : ${wo.bomVersion || '—'}</td>
-                        <td>Target Warehouse : ${wo.targetWarehouse || 'Finished Goods - JITPL'}</td>
+                        <td>Target Warehouse : ${wo.targetWarehouse || 'Finished Goods'}</td>
                     </tr>
                     <tr>
                         <td>Planned Start Date : ${wo.plannedStart ? new Date(wo.plannedStart).toLocaleString() : 'None'}</td>
                         <td>Actual Start Date : ${wo.actualStart ? new Date(wo.actualStart).toLocaleString() : 'None'}</td>
                     </tr>
+                    `}
                 </table>
 
+                ${isTextile ? `
+                <table class="grid-table">
+                    <tr>
+                        <th style="width:120px;">Process</th>
+                        <th>Issue Date</th><th>Return Date</th><th>Issue Qty</th><th>Return Qty</th><th>Worker</th><th>Sign</th>
+                    </tr>
+                    ${textileProcessRows || '<tr><td colspan="7">No process stages</td></tr>'}
+                </table>
+                ` : `
                 <table class="grid-table">
                     <tr>
                         <th style="width:120px;"></th>
@@ -164,6 +205,7 @@ export default function WorkOrderDetailPage() {
                     </tr>
                     ${emptyRows2}
                 </table>
+                `}
             </body>
             </html>
         `;
@@ -187,7 +229,7 @@ export default function WorkOrderDetailPage() {
                 <button
                     onClick={() => navigate(PATHS.PRODUCTION.WORK_ORDERS)}
                     style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '8px' }}
-                >← Work Orders</button>
+                >{labels.backLink}</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -196,7 +238,10 @@ export default function WorkOrderDetailPage() {
                             <span style={{ fontSize: '13px', color: '#94a3b8' }}>Priority: <strong style={{ color: '#f59e0b' }}>{wo.priority}</strong></span>
                         </div>
                         <div style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                            {wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'} · Target: {wo.targetQty} pcs · Supervisor: {wo.supervisor || '—'}
+                            {wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'}
+                            {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
+                            {' · '}{isTextile ? 'Qty' : 'Target'}: {wo.targetQty}{isTextile ? ' PCS' : ' pcs'}
+                            {' · '}{labels.detailSupervisor}: {wo.textile?.assignedVendorWorker || wo.supervisor || '—'}
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -257,7 +302,7 @@ export default function WorkOrderDetailPage() {
 
             {/* Tab Content */}
             <div style={{ padding: '28px' }}>
-                {tab === 0 && <OverviewTab wo={wo} load={load} />}
+                {tab === 0 && <OverviewTab wo={wo} load={load} isTextile={isTextile} labels={labels} />}
                 {tab === 1 && <BomMaterialTab wo={wo} load={load} />}
                 {tab === 2 && <ProcessExecutionTab wo={wo} load={load} />}
                 {tab === 3 && <QcTestingTab wo={wo} load={load} />}
@@ -304,7 +349,7 @@ function NavigationGuides() {
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ wo, load }) {
+function OverviewTab({ wo, load, isTextile, labels }) {
     const fmt = (d) => d ? new Date(d).toLocaleDateString() : '—';
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -348,12 +393,26 @@ function OverviewTab({ wo, load }) {
         borderRadius: '6px', color: '#1e293b', fontSize: '13px', outline: 'none'
     };
 
+    const textileRows = isTextile ? [
+        ['Design No', wo.textile?.designNo || '—'],
+        ['Colour', wo.textile?.colour || '—'],
+        ['Size', wo.textile?.size || '—'],
+        ['Required Fabric (Meter)', wo.textile?.requiredFabricMeter || '—'],
+        ['Fabric Item', wo.textile?.fabricItemName || '—'],
+        ['Lot No', wo.textile?.lotNo || '—'],
+        ['Than No', wo.textile?.thanNo || '—'],
+        ['Roll No', wo.textile?.rollNo || '—'],
+        ['Process Route', wo.textile?.processRoute || '—'],
+        ['Assigned Vendor / Worker', wo.textile?.assignedVendorWorker || wo.supervisor || '—'],
+    ] : [];
+
     const rows = [
         ['WO Number', wo.woNumber],
         ['Status', wo.status],
         ['BOM Version', wo.bomVersion || '—'],
         ['Finished Product', wo.finishedProductName || wo.finishedProductId?.name || wo.finishedProductId?.itemCode || '—'],
-        ['Target Qty', editing ? (
+        ...textileRows,
+        [isTextile ? 'Order Qty (PCS)' : 'Target Qty', editing ? (
             <div>
                 <input type="number" min="1" value={form.targetQty} onChange={e => set('targetQty', Number(e.target.value))} style={{ ...inputStyle, borderColor: hasStarted ? '#ef4444' : '#3b82f6' }} disabled={hasStarted} />
                 {hasStarted && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>Cannot edit: Production started</div>}
@@ -368,7 +427,7 @@ function OverviewTab({ wo, load }) {
         ['Planned End', editing ? <input type="date" value={form.plannedEnd} onChange={e => set('plannedEnd', e.target.value)} style={inputStyle} /> : fmt(wo.plannedEnd)],
         ['Actual Start', fmt(wo.actualStart)],
         ['Actual End', fmt(wo.actualEnd)],
-        ['Supervisor', editing ? <input type="text" value={form.supervisor} onChange={e => set('supervisor', e.target.value)} style={inputStyle} /> : (wo.supervisor || '—')],
+        ...(!isTextile ? [['Supervisor', editing ? <input type="text" value={form.supervisor} onChange={e => set('supervisor', e.target.value)} style={inputStyle} /> : (wo.supervisor || '—')]] : []),
         ['Remarks', editing ? <textarea value={form.remarks} onChange={e => set('remarks', e.target.value)} style={{ ...inputStyle, resize: 'vertical' }} /> : (wo.remarks || '—')],
         ['Created', fmt(wo.createdAt)],
     ];
@@ -376,7 +435,7 @@ function OverviewTab({ wo, load }) {
     return (
         <div style={{ maxWidth: '800px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>Work Order Details</h2>
+                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{isTextile ? 'Textile Job Order Details' : 'Work Order Details'}</h2>
                 {wo.status !== 'Closed' && (
                     editing ? (
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -892,8 +951,8 @@ function StageCard({ stage, wo, woId, targetQty, canEdit, load }) {
 }
 
 // ─── QC & Testing Tab ─────────────────────────────────────────────────────────
-function QcTestingTab({ wo, load }) {
-    const qcStages = (wo.stages || []).filter(s => s.isQcGate || s.isTestGate);
+function QcTestingTab({ wo, load, isTextile }) {
+    const qcStages = (wo.stages || []).filter(s => s.isQcGate || (!isTextile && s.isTestGate));
     const canEdit = ['Released', 'In Process', 'WIP – Waiting Material'].includes(wo.status);
 
     return (

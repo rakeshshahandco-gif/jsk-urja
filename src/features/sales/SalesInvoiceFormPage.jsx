@@ -9,6 +9,9 @@ import { PATHS } from '@/routes/paths';
 import { numberToWords } from '@/utils/numberToWords';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { scanEntryApi } from '@/services/scanEntryApi';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -140,8 +143,12 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const isEstimateForm = listMode === 'estimate';
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const { isFeatureEnabled } = useFeatureSettings();
+    const { selectedFY } = useFinancialYear();
+    const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
     const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
+    const [uploadingScan, setUploadingScan] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
 
@@ -543,6 +550,22 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
         finally { setSaving(false); }
     };
 
+    const onUploadSalesScan = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingScan(true);
+        try {
+            const d = await scanEntryApi.upload({ file, moduleType: 'sales_invoice', financialYear: selectedFY });
+            toast.success('Scan draft uploaded');
+            navigate(PATHS.DOCUMENTS.SCAN_ENTRY_REVIEW(d?._id || d?.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Scan upload failed');
+        } finally {
+            setUploadingScan(false);
+            e.target.value = '';
+        }
+    };
+
 
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
@@ -555,6 +578,12 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                             : (form.gstApplicable ? '🧾 New GST Tax Invoice' : '📄 New Estimate / Non-GST Document')}
                     </h1>
                     <div style={{ display: 'flex', gap: 8 }}>
+                        {scanEntryEnabled && (
+                            <label style={{ padding: '8px 14px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: 7, cursor: uploadingScan ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13, opacity: uploadingScan ? 0.7 : 1 }}>
+                                {uploadingScan ? 'Uploading…' : 'Upload / Import Sales Data / Customer PO'}
+                                <input type="file" accept=".pdf,image/*" onChange={onUploadSalesScan} style={{ display: 'none' }} disabled={uploadingScan} />
+                            </label>
+                        )}
                         <button onClick={() => { if (window.confirm('Discard changes?')) navigate(-1); }} style={{ padding: '8px 16px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 13 }}>Cancel</button>
                         <button onClick={handleSubmit} disabled={saving} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                             {saving ? 'Creating...' : '✓ Create Invoice'}

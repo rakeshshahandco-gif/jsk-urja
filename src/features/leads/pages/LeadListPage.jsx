@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { leadApi } from '@/services/leadApi';
+import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
 import ConvertFromWhatsAppModal from '../components/ConvertFromWhatsAppModal';
 
 const STATUS = ['new', 'contacted', 'qualified', 'quotation', 'negotiation', 'won', 'lost', 'hold'];
@@ -8,13 +10,27 @@ const SOURCE = ['whatsapp', 'manual', 'call', 'email', 'visit', 'other'];
 
 export default function LeadListPage() {
     const navigate = useNavigate();
+    const { user, hasPermission } = useAuth();
+    const { selectedCompany, loading: companyLoading } = useCompany();
+    const companyId = selectedCompany?._id || selectedCompany?.id;
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState('');
     const [source, setSource] = useState('');
+    const [scope, setScope] = useState('');
+    const [ownerUserId, setOwnerUserId] = useState('');
+    const [visibilityScope, setVisibilityScope] = useState('own');
+    const [meta, setMeta] = useState({ canFilterUsers: false, users: [] });
     const [showConvert, setShowConvert] = useState(false);
+
+    const canCreate = hasPermission(user, 'crm.leads.add');
+
+    useEffect(() => {
+        if (companyLoading || !companyId) return;
+        leadApi.visibilityMeta().then(setMeta).catch(() => {});
+    }, [companyId, companyLoading]);
 
     const load = async () => {
         setLoading(true);
@@ -24,8 +40,11 @@ export default function LeadListPage() {
             if (search) params.search = search;
             if (status) params.status = status;
             if (source) params.source = source;
+            if (scope) params.scope = scope;
+            if (ownerUserId) params.ownerUserId = ownerUserId;
             const data = await leadApi.list(params);
             setRows(data?.results || []);
+            setVisibilityScope(data?.visibilityScope || 'own');
         } catch (e) {
             setError(e.response?.data?.message || e.message || 'Failed to load leads');
         } finally {
@@ -33,7 +52,15 @@ export default function LeadListPage() {
         }
     };
 
-    useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+    useEffect(() => {
+        if (companyLoading || !companyId) return;
+        load();
+        /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [companyId, companyLoading]);
+
+    const scopeBadge = visibilityScope === 'all' && scope !== 'my'
+        ? 'Showing: All Leads'
+        : 'Showing: My Leads';
 
     return (
         <div style={{ padding: 24 }}>
@@ -43,6 +70,12 @@ export default function LeadListPage() {
                     <div style={{ fontSize: 12, color: '#64748b' }}>
                         Convert WhatsApp chats into leads. Share catalog and datasheet links per lead.
                     </div>
+                    <span style={{
+                        display: 'inline-block', marginTop: 6, fontSize: 11, fontWeight: 600,
+                        background: '#eff6ff', color: '#1d4ed8', padding: '3px 10px', borderRadius: 12,
+                    }}>
+                        {scopeBadge}
+                    </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -51,11 +84,20 @@ export default function LeadListPage() {
                     >
                         + Convert WhatsApp Chat
                     </button>
+                    {canCreate && (
+                        <button
+                            onClick={() => navigate('/crm/leads/new')}
+                            style={{ background: '#1e3a8a', color: 'white', padding: '8px 14px', border: 'none', borderRadius: 6 }}
+                        >
+                            + Manual Lead
+                        </button>
+                    )}
                     <button
-                        onClick={() => navigate('/crm/leads/new')}
-                        style={{ background: '#1e3a8a', color: 'white', padding: '8px 14px', border: 'none', borderRadius: 6 }}
+                        type="button"
+                        onClick={() => navigate('/reports/leads')}
+                        style={{ padding: '8px 14px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff' }}
                     >
-                        + Manual Lead
+                        Lead Report
                     </button>
                 </div>
             </div>
@@ -76,6 +118,24 @@ export default function LeadListPage() {
                     <option value="">All sources</option>
                     {SOURCE.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {(meta.canFilterUsers || visibilityScope === 'all') && (
+                    <>
+                        <select value={scope} onChange={(e) => setScope(e.target.value)} style={{ padding: 8 }}>
+                            <option value="">Scope</option>
+                            <option value="my">My Leads</option>
+                            {visibilityScope === 'all' && <option value="all">All Leads</option>}
+                        </select>
+                        {meta.canFilterUsers && (
+                            <select value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)} style={{ padding: 8, minWidth: 140 }}>
+                                <option value="">All Users</option>
+                                <option value="unassigned">Unassigned</option>
+                                {meta.users.map((u) => (
+                                    <option key={u._id} value={u._id}>{u.name}</option>
+                                ))}
+                            </select>
+                        )}
+                    </>
+                )}
                 <button onClick={load} style={{ padding: '8px 14px' }}>Search</button>
             </div>
 
@@ -89,18 +149,18 @@ export default function LeadListPage() {
                             <th style={th}>Mobile</th>
                             <th style={th}>Source</th>
                             <th style={th}>Status</th>
-                            <th style={th}>Products</th>
-                            <th style={th}>Assigned To</th>
+                            <th style={th}>Created By</th>
+                            <th style={th}>Owner</th>
                             <th style={th}>Next Follow-up</th>
                             <th style={th}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center' }}>Loading...</td></tr>
+                            <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center' }}>Loading...</td></tr>
                         )}
                         {!loading && rows.length === 0 && (
-                            <tr><td colSpan={8} style={{ padding: 16, textAlign: 'center', color: '#64748b' }}>
+                            <tr><td colSpan={9} style={{ padding: 16, textAlign: 'center', color: '#64748b' }}>
                                 No leads yet. Click "+ Convert WhatsApp Chat" to add one.
                             </td></tr>
                         )}
@@ -110,8 +170,8 @@ export default function LeadListPage() {
                                 <td style={td}>{r.customerMobile || '-'}</td>
                                 <td style={td}>{r.source}</td>
                                 <td style={td}><Badge value={r.status} /></td>
-                                <td style={td}>{(r.products || []).length}</td>
-                                <td style={td}>{r.assignedTo?.name || '-'}</td>
+                                <td style={td}>{r.createdByName || '-'}</td>
+                                <td style={td}>{r.ownerName || r.assignedToName || r.assignedTo?.name || 'Unassigned'}</td>
                                 <td style={td}>
                                     {r.nextFollowUpDate ? new Date(r.nextFollowUpDate).toLocaleDateString() : '-'}
                                 </td>

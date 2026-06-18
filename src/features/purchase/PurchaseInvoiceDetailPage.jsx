@@ -24,6 +24,7 @@ const bwTd = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4
 
 import { BrandedLoader } from '@/components/ui';
 import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
+import VoucherAttachmentPanel from '@/features/documents/components/VoucherAttachmentPanel';
 
 export default function PurchaseInvoiceDetailPage() {
     const { id } = useParams();
@@ -732,6 +733,10 @@ export default function PurchaseInvoiceDetailPage() {
                         )}
                     </div>
                 )}
+            </div>
+
+            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 28px 24px' }}>
+                <VoucherAttachmentPanel voucherType="purchase_invoice" voucherId={id} title="Supplier Bill & Attachments" />
             </div>
 
             {payModal && (

@@ -247,7 +247,9 @@ const LedgerReportPage = ({ defaultType = null }) => {
                                         <td>
                                             <div className={s.voucherInfo}>
                                                 <div className="font-bold text-slate-800 tracking-wide mb-1 text-[13px]">
-                                                    {entry.oppositeName || 'Various Accounts'}
+                                                    {entry.oppositeName && entry.oppositeName !== 'Various Accounts'
+                                                        ? entry.oppositeName
+                                                        : (entry.narration && entry.narration !== '-' ? entry.narration : 'Various Accounts')}
                                                 </div>
                                                 <div className={s.voucherNo}>{entry.voucherNumber || entry.voucherNo}</div>
                                                 <div className={s.narration}>{entry.narration || '-'}</div>

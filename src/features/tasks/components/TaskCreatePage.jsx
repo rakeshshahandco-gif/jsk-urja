@@ -9,6 +9,7 @@ export const TaskCreatePage = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const customerId = searchParams.get('customerId');
+    const leadId = searchParams.get('leadId');
 
     const handleSuccess = () => {
         navigate('/tasks/list');
@@ -32,7 +33,7 @@ export const TaskCreatePage = () => {
 
             <div className={styles.formCard}>
                 <TaskForm
-                    task={customerId ? { customerId } : null}
+                    task={customerId || leadId ? { customerId: customerId || undefined, leadId: leadId || undefined } : null}
                     onSuccess={handleSuccess}
                     onCancel={() => navigate(-1)}
                 />

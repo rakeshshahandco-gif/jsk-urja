@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useGlobalSync } from '@/hooks/useGlobalSync';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getWorkOrders, deleteWorkOrder, releaseWorkOrder } from '@/services/workOrderApi';
+import { useCompany } from '@/contexts/CompanyContext';
+import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
+import { getWorkOrderLabels } from '@/utils/textileWorkOrder';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { TableSkeleton } from '@/components/ui/BrandedLoading';
@@ -88,7 +91,7 @@ export default function WorkOrderListPage() {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>Work Orders</h1>
+                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{labels.title}</h1>
                     <p style={{ margin: '4px 0 0', color: '#9ca3af', fontSize: 13 }}>
                         {wos.length} record{wos.length !== 1 ? 's' : ''}
                     </p>
@@ -101,7 +104,7 @@ export default function WorkOrderListPage() {
                         cursor: 'pointer', boxShadow: '0 2px 8px rgba(13,148,136,0.3)',
                     }}
                 >
-                    + New Work Order
+                    {labels.newButton}
                 </button>
             </div>
 
@@ -137,8 +140,8 @@ export default function WorkOrderListPage() {
             ) : wos.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 80, color: '#9ca3af' }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#6b7280' }}>No Work Orders</div>
-                    <div style={{ fontSize: 14 }}>Create your first WO to start production</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#6b7280' }}>{labels.listEmpty}</div>
+                    <div style={{ fontSize: 14 }}>{labels.listEmptyHint}</div>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -182,9 +185,16 @@ export default function WorkOrderListPage() {
                                                 }}>⚠️ Material Shortage</span>
                                             )}
                                         </div>
-                                        <div style={{ marginTop: 6, color: '#6b7280', fontSize: 13 }}>
-                                            {wo.finishedProductName || 'N/A'} · Qty: {wo.targetQty} · Supervisor: {wo.supervisor || '—'}
+                                        <div style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 13 }}>
+                                            {wo.finishedProductName || 'N/A'}
+                                            {isTextile && wo.textile?.designNo ? ` · Design: ${wo.textile.designNo}` : ''}
+                                            {isTextile && wo.textile?.requiredFabricMeter ? ` · Fabric: ${wo.textile.requiredFabricMeter} m` : ''}
+                                            {' · Qty: '}{wo.targetQty}{isTextile ? ' PCS' : ''}
+                                            {' · '}{isTextile ? 'Worker' : 'Supervisor'}: {wo.textile?.assignedVendorWorker || wo.supervisor || '—'}
                                         </div>
+                                        {isTextile && wo.textile?.processRoute && (
+                                            <div style={{ marginTop: 4, fontSize: 11, color: '#7c3aed' }}>{wo.textile.processRoute}</div>
+                                        )}
                                         {/* Progress bar */}
                                         <div style={{ marginTop: 10 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

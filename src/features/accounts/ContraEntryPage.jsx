@@ -7,6 +7,7 @@ import {
 } from '@/services/accountApi';
 import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModuleLoader';
 import { PATHS } from '@/routes/paths';
+import VoucherEntryTallyLayout from './components/voucherEntryTally';
 
 const inp = {
     padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0',
@@ -143,6 +144,7 @@ const ContraEntryPage = () => {
     const missingLedger = (fromAcc && !fromAcc.ledgerId) || (toAcc && !toAcc.ledgerId);
 
     return (
+        <VoucherEntryTallyLayout>
         <div style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
             {/* Header */}
             <div style={{ marginBottom: 28 }}>
@@ -264,6 +266,7 @@ const ContraEntryPage = () => {
                 </div>
             </div>
         </div>
+        </VoucherEntryTallyLayout>
     );
 };
 

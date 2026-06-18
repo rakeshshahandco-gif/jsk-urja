@@ -32,17 +32,20 @@ export const updateGRN = async (id, data) => { const r = await api.put(`${GRN}/$
 export const deleteGRN = async (id, reason) => { const r = await api.delete(`${GRN}/${id}`, { data: { reason } }); return r.data; };
 export const restoreGRN = async (id) => { const r = await api.post(`${GRN}/${id}/restore`); return r.data; };
 
+// Purchase invoice save runs ledger posting + stock updates — allow extra time on localhost.
+const PI_WRITE_TIMEOUT_MS = 120000;
+
 // ── Purchase Invoices ─────────────────────────────────────────────────────────
 const PI = '/purchase-invoices';
 export const getPurchaseInvoices = async (params) => { const r = await api.get(PI, { params }); return r.data.data; };
 export const getPurchaseInvoiceById = async (id) => { const r = await api.get(`${PI}/${id}`); return r.data.data; };
 export const getInvoicesByPO = async (poId) => { const r = await api.get(`${PI}/by-po/${poId}`); return r.data.data; };
 export const getInvoicesByGRN = async (grnId) => { const r = await api.get(`${PI}/by-grn/${grnId}`); return r.data.data; };
-export const createPurchaseInvoice = async (data) => { const r = await api.post(PI, data); return r.data.data; };
+export const createPurchaseInvoice = async (data) => { const r = await api.post(PI, data, { timeout: PI_WRITE_TIMEOUT_MS }); return r.data.data; };
 export const updateInvoicePayment = async (id, data) => { const r = await api.patch(`${PI}/${id}/payment`, data); return r.data.data; };
 export const confirmPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/confirm`); return r.data.data; };
 export const cancelPurchaseInvoice = async (id) => { const r = await api.patch(`${PI}/${id}/cancel`); return r.data.data; };
-export const updatePurchaseInvoice = async (id, data) => { const r = await api.put(`${PI}/${id}`, data); return r.data.data; };
+export const updatePurchaseInvoice = async (id, data) => { const r = await api.put(`${PI}/${id}`, data, { timeout: PI_WRITE_TIMEOUT_MS }); return r.data.data; };
 export const deletePurchaseInvoice = async (id, reason) => { const r = await api.delete(`${PI}/${id}`, { data: { reason } }); return r.data; };
 export const restorePurchaseInvoice = async (id) => { const r = await api.post(`${PI}/${id}/restore`); return r.data; };
 

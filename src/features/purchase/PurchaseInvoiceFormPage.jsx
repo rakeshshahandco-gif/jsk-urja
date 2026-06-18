@@ -15,6 +15,12 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import { BrandedLoader } from '@/components/ui';
 import { TdsLiabilityAlertModal } from '@/features/accounts/components/TdsLiabilityAlertModal';
 import { tdsComplianceApi } from '@/services/tdsComplianceApi';
+import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { DOCUMENT_ATTACHMENTS_FEATURE } from '@/features/documents/DocumentsFeatureGate';
+import VoucherAttachmentPanel from '@/features/documents/components/VoucherAttachmentPanel';
+import PostSaveAttachModal from '@/features/documents/components/PostSaveAttachModal';
+import { scanEntryApi } from '@/services/scanEntryApi';
 
 
 const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
@@ -50,6 +56,13 @@ export default function PurchaseInvoiceFormPage() {
     const [loadingRef, setLoadingRef] = useState(false);
     const [loading, setLoading] = useState(isEdit);
     const prefillProcessed = useRef(false);
+    const scanInputRef = useRef(null);
+    const { isFeatureEnabled } = useFeatureSettings();
+    const { selectedFY } = useFinancialYear();
+    const attachmentsEnabled = isFeatureEnabled(DOCUMENT_ATTACHMENTS_FEATURE);
+    const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
+    const [showAttachPrompt, setShowAttachPrompt] = useState(false);
+    const [savedInvoiceId, setSavedInvoiceId] = useState(null);
 
     const [header, setHeader] = useState({
         supplierId: '', invoiceDate: new Date().toISOString().split('T')[0],
@@ -577,6 +590,12 @@ export default function PurchaseInvoiceFormPage() {
             toast.success(`Invoice ${inv.invoiceNumber} posted!`);
             result = inv;
         }
+        if (!isEdit && attachmentsEnabled) {
+            setSavedInvoiceId(result?._id);
+            setShowAttachPrompt(true);
+            setTdsAlertOpen(false);
+            return;
+        }
         navigate(PATHS.PURCHASE.INVOICE_DETAIL(result?._id));
         setTdsAlertOpen(false);
     };
@@ -664,6 +683,20 @@ export default function PurchaseInvoiceFormPage() {
         }
     };
 
+    const onScanFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const d = await scanEntryApi.upload({ file, moduleType: 'purchase_invoice', financialYear: selectedFY });
+            toast.success('Scan draft uploaded');
+            navigate(PATHS.DOCUMENTS.SCAN_ENTRY_REVIEW(d?._id || d?.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Scan upload failed');
+        } finally {
+            e.target.value = '';
+        }
+    };
+
     return (
         <div style={{ padding: '28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
 
@@ -672,6 +705,18 @@ export default function PurchaseInvoiceFormPage() {
                 <h1 style={{ margin: '0 0 20px', fontSize: '22px', fontWeight: 700 }}>
                     {isEdit ? '✎ Edit Purchase Invoice' : '🧾 New Purchase Invoice'}
                 </h1>
+                {scanEntryEnabled && !isEdit && (
+                    <div style={{ marginBottom: '12px' }}>
+                        <input ref={scanInputRef} type="file" accept=".pdf,image/*" onChange={onScanFileChange} style={{ display: 'none' }} />
+                        <button
+                            type="button"
+                            onClick={() => scanInputRef.current?.click()}
+                            style={{ padding: '9px 12px', borderRadius: '8px', border: '1px solid #2563eb', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', fontWeight: 700 }}
+                        >
+                            Upload / Scan Supplier Invoice
+                        </button>
+                    </div>
+                )}
                 {loading ? <BrandedLoader size={120} /> : (
                     <>
                         {isEdit ? (
@@ -953,6 +998,10 @@ export default function PurchaseInvoiceFormPage() {
                             </div>
 
 
+                            {attachmentsEnabled && isEdit && (
+                                <VoucherAttachmentPanel voucherType="purchase_invoice" voucherId={id} title="Bill Attachments" />
+                            )}
+
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button type="button" onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(-1); }} style={{ padding: '10px 20px', borderRadius: '8px', background: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
                                 <button type="submit" disabled={saving} style={{ padding: '10px 24px', borderRadius: '8px', background: saving ? '#e2e8f0' : 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(37,99,235,0.2)' }}>
@@ -973,6 +1022,16 @@ export default function PurchaseInvoiceFormPage() {
                 onYes={confirmTdsAndSubmit}
                 onNo={skipTdsAndSubmit}
                 loading={saving}
+            />
+
+            <PostSaveAttachModal
+                open={showAttachPrompt}
+                voucherType="purchase_invoice"
+                voucherId={savedInvoiceId}
+                onSkip={() => {
+                    setShowAttachPrompt(false);
+                    if (savedInvoiceId) navigate(PATHS.PURCHASE.INVOICE_DETAIL(savedInvoiceId));
+                }}
             />
 
         </div>

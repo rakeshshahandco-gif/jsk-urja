@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { leadApi } from '@/services/leadApi';
+import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
 import ProductCatalogPicker from '@/features/productCatalog/components/ProductCatalogPicker';
+import CreateTaskFromLeadModal from '../components/CreateTaskFromLeadModal';
 
 const STATUS = ['new', 'contacted', 'qualified', 'quotation', 'negotiation', 'won', 'lost', 'hold'];
 const PRIORITY = ['high', 'medium', 'low'];
@@ -40,6 +43,12 @@ export default function LeadFormPage() {
     const [pickerOpen, setPickerOpen] = useState(false);
     const [sharing, setSharing] = useState('');
     const [whatsappLink, setWhatsappLink] = useState('');
+    const [linkedTasks, setLinkedTasks] = useState([]);
+    const [visibilityMeta, setVisibilityMeta] = useState({ canAssign: false, users: [] });
+    const [showCreateTask, setShowCreateTask] = useState(false);
+    const { hasPermission } = useAuth();
+    const { selectedCompany, loading: companyLoading } = useCompany();
+    const companyId = selectedCompany?._id || selectedCompany?.id;
 
     const reload = async () => {
         if (!isEdit) return;
@@ -71,7 +80,11 @@ export default function LeadFormPage() {
         }
     };
 
-    useEffect(() => { reload(); /* eslint-disable-next-line */ }, [id]);
+    useEffect(() => {
+        if (companyLoading || !companyId) return;
+        reload();
+        /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [id, companyId, companyLoading]);
 
     const update = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
@@ -160,6 +173,25 @@ export default function LeadFormPage() {
                     <button type="button" onClick={() => navigate('/crm/leads')}>Back to leads</button>
                 </div>
                 {error && <div style={{ color: '#dc2626' }}>{error}</div>}
+
+                {isEdit && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, background: '#f8fafc', padding: 10, borderRadius: 6 }}>
+                        <div><strong>Created By:</strong> {form.createdByName || '—'}</div>
+                        <div><strong>Owner:</strong> {form.ownerName || form.assignedToName || 'Unassigned'}</div>
+                        <div><strong>Created:</strong> {form.createdAt ? new Date(form.createdAt).toLocaleString() : '—'}</div>
+                        <div><strong>Source:</strong> {form.source}</div>
+                    </div>
+                )}
+
+                {isEdit && hasPermission('crm.leads.create_task') && (
+                    <button
+                        type="button"
+                        onClick={() => setShowCreateTask(true)}
+                        style={{ background: '#0f766e', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 6, width: 'fit-content' }}
+                    >
+                        Create Task
+                    </button>
+                )}
 
                 <fieldset style={fs}>
                     <legend style={lg}>Customer</legend>
@@ -299,7 +331,23 @@ export default function LeadFormPage() {
             </form>
 
             <aside style={{ background: 'white', padding: 16, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: 14 }}>Activity History</h3>
+                {isEdit && (
+                    <>
+                        <h3 style={{ margin: '0 0 8px 0', fontSize: 14 }}>Linked Tasks</h3>
+                        {linkedTasks.length === 0 && (
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>No tasks linked yet.</div>
+                        )}
+                        {linkedTasks.map((t) => (
+                            <div key={t._id} style={{ fontSize: 12, marginBottom: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 6 }}>
+                                <div style={{ fontWeight: 600 }}>{t.title}</div>
+                                <div style={{ color: '#64748b' }}>
+                                    {t.status} · Due {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
+                <h3 style={{ margin: '16px 0 8px 0', fontSize: 14 }}>Activity History</h3>
                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>
                     Chat imported, products selected, catalog / datasheet shared, follow-up scheduled, status changes.
                 </div>
@@ -328,6 +376,16 @@ export default function LeadFormPage() {
                 onClose={() => setPickerOpen(false)}
                 onConfirm={addPickedProducts}
                 initialIds={form.products.map((p) => p.catalogProductId)}
+            />
+
+            <CreateTaskFromLeadModal
+                open={showCreateTask}
+                lead={form}
+                onClose={() => setShowCreateTask(false)}
+                onCreated={() => {
+                    setShowCreateTask(false);
+                    reload();
+                }}
             />
         </div>
     );
