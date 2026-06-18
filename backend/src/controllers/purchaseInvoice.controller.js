@@ -576,12 +576,17 @@ export const createPurchaseInvoice = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
-        await syncPurchaseRatesToBOMs(value.items, req.user._id);
 
         res.status(201).json(new ApiResponse(201, invoice, `Invoice ${invoiceNumber} posted`));
 
+        syncPurchaseRatesToBOMs(value.items, req.user._id).catch((err) => {
+            logger.error(`[BOM Sync] Failed after PI ${invoice.invoiceNumber}: ${err.message}`);
+        });
+
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();
@@ -603,7 +608,7 @@ export const getPurchaseInvoices = asyncHandler(async (req, res) => {
     if (status) query.status = status;
     if (flowType) query.flowType = flowType;
     if (isConsumable !== undefined) query.isConsumable = isConsumable === 'true';
-    if (req.query.financialYear) {
+    if (req.query.financialYear && req.query.financialYear !== 'all') {
         query.financialYear = req.query.financialYear;
     }
     if (search) query.$or = [
@@ -808,7 +813,9 @@ export const updatePurchaseInvoice = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         res.json(new ApiResponse(200, inv, 'Purchase Invoice updated'));
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();
@@ -850,7 +857,9 @@ export const cancelPurchaseInvoice = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         res.json(new ApiResponse(200, inv, 'Purchase Invoice cancelled successfully. Number remains reserved.'));
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();
@@ -929,7 +938,9 @@ export const deletePurchaseInvoice = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         res.json(new ApiResponse(200, null, `Purchase Invoice ${oldNumber} deleted successfully and number freed.`));
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();
@@ -966,7 +977,9 @@ export const restorePurchaseInvoice = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         res.json(new ApiResponse(200, inv, 'Purchase Invoice restored'));
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();
@@ -1005,7 +1018,9 @@ export const updatePaymentStatus = asyncHandler(async (req, res) => {
         await session.commitTransaction();
         res.json(new ApiResponse(200, inv, 'Payment updated'));
     } catch (error) {
-        await session.abortTransaction();
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
         throw error;
     } finally {
         session.endSession();

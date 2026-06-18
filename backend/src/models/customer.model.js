@@ -294,6 +294,10 @@ const customerSchema = mongoose.Schema(
             type: Number,
             default: 0,
         },
+        gracePeriodDays: {
+            type: Number,
+            default: 0,
+        },
         creditLimit: {
             type: Number,
             default: 0,
@@ -307,6 +311,96 @@ const customerSchema = mongoose.Schema(
             type: String,
             enum: ['Cash', 'Credit'],
             default: 'Credit',
+        },
+        paymentTerms: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        tcsApplicable: {
+            type: Boolean,
+            default: false,
+        },
+        tcsSection: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        tcsRate: {
+            type: Number,
+            default: 0,
+        },
+        tcsThresholdLimit: {
+            type: Number,
+            default: 0,
+        },
+        panAvailable: {
+            type: Boolean,
+            default: false,
+        },
+        panNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: '',
+        },
+        tanNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: '',
+        },
+        cinNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: '',
+        },
+        iecNumber: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: '',
+        },
+        gstState: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        bankName: { type: String, trim: true, default: '' },
+        bankBranch: { type: String, trim: true, default: '' },
+        bankAccountNumber: { type: String, trim: true, default: '' },
+        bankIfsc: { type: String, trim: true, uppercase: true, default: '' },
+        bankSwift: { type: String, trim: true, uppercase: true, default: '' },
+        bankUpi: { type: String, trim: true, default: '' },
+        exportBuyerCode: { type: String, trim: true, default: '' },
+        exportPort: { type: String, trim: true, default: '' },
+        exportCurrency: { type: String, trim: true, default: '' },
+        exportLcTerms: { type: String, trim: true, default: '' },
+        exportPaymentTerms: { type: String, trim: true, default: '' },
+        isExportCustomer: { type: Boolean, default: false },
+        billWiseTracking: {
+            type: Boolean,
+            default: false,
+        },
+        interestApplicable: {
+            type: Boolean,
+            default: false,
+        },
+        collectionPersonId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        riskCategory: {
+            type: String,
+            enum: ['', 'Low', 'Medium', 'High'],
+            default: '',
+        },
+        creditRemarks: {
+            type: String,
+            trim: true,
+            default: '',
         },
         openingBalance: {
             type: Number,
@@ -369,6 +463,8 @@ const customerSchema = mongoose.Schema(
         msmeApplicable: { type: Boolean, default: false },
         msmeRegNo: { type: String, trim: true, default: '' },
         msmeCategory: { type: String, enum: ['', 'Micro', 'Small', 'Medium'], default: '' },
+        /** Dynamic industry / feature-config custom fields (featureKey → value) */
+        industryCustomFields: { type: Map, of: String, default: {} },
     },
     {
         timestamps: true,

@@ -5,7 +5,6 @@ const accountGroupSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Group name is required'],
         trim: true,
-        unique: true
     },
     parentGroup: {
         type: mongoose.Schema.Types.ObjectId,
@@ -40,6 +39,7 @@ const accountGroupSchema = new mongoose.Schema({
 // Index for fast hierarchy lookups
 accountGroupSchema.index({ parentGroup: 1 });
 accountGroupSchema.index({ nature: 1 });
+accountGroupSchema.index({ companyId: 1, name: 1 }, { unique: true });
 
 const AccountGroup = mongoose.model('AccountGroup', accountGroupSchema);
 

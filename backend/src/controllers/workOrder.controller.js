@@ -1,6 +1,6 @@
 import { WorkOrder, PRODUCTION_STAGES } from '../models/workOrder.model.js';
 import { getCompanyFeatureSettings } from '../services/companyFeatureSettings.service.js';
-import { resolveProductionStages } from '../services/productionTemplate.service.js';
+import { resolveWorkOrderStagesForCompany } from '../services/productionTemplate.service.js';
 import { BOM } from '../models/bom.model.js';
 import { Item } from '../models/item.model.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -123,6 +123,22 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         };
     });
 
+    const textilePayload = productionModule === 'textile' && value.textile
+        ? {
+            designNo: value.textile.designNo || '',
+            colour: value.textile.colour || '',
+            size: value.textile.size || '',
+            requiredFabricMeter: Number(value.textile.requiredFabricMeter) || 0,
+            fabricItemId: value.textile.fabricItemId || undefined,
+            fabricItemName: value.textile.fabricItemName || '',
+            lotNo: value.textile.lotNo || '',
+            thanNo: value.textile.thanNo || '',
+            rollNo: value.textile.rollNo || '',
+            processRoute: value.textile.processRoute || '',
+            assignedVendorWorker: value.textile.assignedVendorWorker || value.supervisor || '',
+        }
+        : undefined;
+
     const wo = await WorkOrder.create({
         woNumber,
         bomId: bom._id,
@@ -135,6 +151,8 @@ export const createWorkOrder = asyncHandler(async (req, res) => {
         plannedEnd: value.plannedEnd,
         supervisor: value.supervisor,
         remarks: value.remarks,
+        productionModule,
+        ...(textilePayload ? { textile: textilePayload } : {}),
         stages,
         materialStatus,
         financialYear: value.financialYear || getFYFromDate(value.plannedStart || new Date()),

@@ -36,6 +36,7 @@ const baseLeadBody = {
     status: Joi.string().valid(...STATUS),
     priority: Joi.string().valid(...PRIORITY),
     assignedTo: objectId.allow(null, ''),
+    ownerUserId: objectId.allow(null, ''),
     nextFollowUpDate: Joi.date().allow(null),
     whatsapp: whatsappBlock,
     products: Joi.array().items(productItem),
@@ -54,17 +55,27 @@ const update = {
 const getOne = { params: Joi.object().keys({ id: objectId.required() }) };
 const remove = { params: Joi.object().keys({ id: objectId.required() }) };
 
-const list = {
-    query: Joi.object().keys({
-        search: Joi.string().allow(''),
-        status: Joi.string().valid(...STATUS),
-        source: Joi.string().valid(...SOURCE),
-        assignedTo: objectId,
-        page: Joi.number().integer().min(1),
-        limit: Joi.number().integer().min(1).max(200),
-        sortBy: Joi.string(),
-    }),
+const reportQuery = {
+    search: Joi.string().allow(''),
+    status: Joi.string().valid(...STATUS),
+    source: Joi.string().valid(...SOURCE),
+    assignedTo: objectId,
+    ownerUserId: Joi.alternatives().try(objectId, Joi.string().valid('unassigned')),
+    createdByUserId: objectId,
+    scope: Joi.string().valid('my', 'all'),
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    page: Joi.number().integer().min(1),
+    limit: Joi.number().integer().min(1).max(10000),
+    sortBy: Joi.string(),
 };
+
+const list = {
+    query: Joi.object().keys(reportQuery),
+};
+
+const report = { query: Joi.object().keys(reportQuery) };
+const reportExport = { query: Joi.object().keys(reportQuery) };
 
 const fromWhatsApp = {
     body: Joi.object().keys({
@@ -107,4 +118,20 @@ const activities = {
     }),
 };
 
-export default { create, update, getOne, remove, list, fromWhatsApp, shareAsset, activities };
+const createTaskFromLead = {
+    params: Joi.object().keys({ id: objectId.required() }),
+    body: Joi.object().keys({
+        title: Joi.string().allow('').max(500),
+        description: Joi.string().allow('').max(10000),
+        priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT', 'CRITICAL'),
+        status: Joi.string().valid('OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'OVERDUE'),
+        dueDate: Joi.date(),
+        assigneeId: objectId,
+        remarks: Joi.string().allow('').max(5000),
+    }),
+};
+
+export default {
+    create, update, getOne, remove, list, fromWhatsApp, shareAsset, activities,
+    report, reportExport, createTaskFromLead,
+};

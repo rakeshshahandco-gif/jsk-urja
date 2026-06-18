@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const supplierSchema = new mongoose.Schema({
-    supplierCode: { type: String, unique: true, trim: true, uppercase: true },
+    supplierCode: { type: String, trim: true, uppercase: true },
     supplierName: { type: String, required: true, trim: true },
     contactPerson: { type: String, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
@@ -60,6 +60,7 @@ const supplierSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 supplierSchema.index({ supplierName: 'text', supplierCode: 'text' });
+supplierSchema.index({ companyId: 1, supplierCode: 1 }, { unique: true, sparse: true });
 
 /**
  * 🛡️  SAFETY HOOK: Block isDeleted from being set via findOneAndUpdate / updateMany

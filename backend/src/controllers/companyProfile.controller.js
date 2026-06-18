@@ -126,5 +126,23 @@ export const updateCompanyProfile = asyncHandler(async (req, res) => {
     profile.updatedBy = req.user._id;
     await profile.save();
 
+    // Keep Company master in sync (sidebar switcher reads Company.companyName).
+    if (value.companyName) {
+        const company = await Company.findById(req.companyId);
+        if (company) {
+            const nextName = value.companyName.trim();
+            const prevName = (company.companyName || '').trim();
+            if (prevName !== nextName) {
+                const legal = (company.legalName || '').trim();
+                if (!legal || legal === prevName) {
+                    company.legalName = nextName;
+                }
+                company.companyName = nextName;
+                company.updatedBy = req.user._id;
+                await company.save();
+            }
+        }
+    }
+
     res.status(200).json(new ApiResponse(200, profile, 'Company profile updated successfully'));
 });

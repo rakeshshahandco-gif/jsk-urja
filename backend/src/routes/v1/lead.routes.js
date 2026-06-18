@@ -8,9 +8,11 @@ import * as leadController from '../../controllers/lead.controller.js';
 const router = express.Router();
 
 router.use(protect);
-// All Lead endpoints are gated by the WhatsApp-to-Lead feature flag so the
-// module is invisible to companies that have not enabled it.
 router.use(requireCompanyFeature('crm.whatsappToLeadEnabled'));
+
+router.get('/visibility-meta', leadController.getLeadVisibilityMeta);
+router.get('/report/export/excel', validate(leadValidation.reportExport), leadController.exportLeadReportExcel);
+router.get('/report', validate(leadValidation.report), leadController.getLeadReport);
 
 router
     .route('/')
@@ -23,11 +25,23 @@ router.post(
     leadController.createLeadFromWhatsApp,
 );
 
-router
-    .route('/:id')
-    .get(validate(leadValidation.getOne), leadController.getLead)
-    .patch(validate(leadValidation.update), leadController.updateLead)
-    .delete(validate(leadValidation.remove), leadController.deleteLead);
+router.get(
+    '/:id/activities',
+    validate(leadValidation.activities),
+    leadController.getActivities,
+);
+
+router.get(
+    '/:id/tasks',
+    validate(leadValidation.getOne),
+    leadController.getLeadTasks,
+);
+
+router.post(
+    '/:id/create-task',
+    validate(leadValidation.createTaskFromLead),
+    leadController.createTaskFromLead,
+);
 
 router.post(
     '/:id/share-asset',
@@ -35,10 +49,10 @@ router.post(
     leadController.shareAsset,
 );
 
-router.get(
-    '/:id/activities',
-    validate(leadValidation.activities),
-    leadController.getActivities,
-);
+router
+    .route('/:id')
+    .get(validate(leadValidation.getOne), leadController.getLead)
+    .patch(validate(leadValidation.update), leadController.updateLead)
+    .delete(validate(leadValidation.remove), leadController.deleteLead);
 
 export default router;

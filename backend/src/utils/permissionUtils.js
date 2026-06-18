@@ -32,9 +32,11 @@ export const getUserPermissions = (user) => {
  * @param {string} permissionKey (e.g. "inventory.item_master.view")
  */
 export const checkUserPermission = (user, permissionKey) => {
-    // Superadmin Bypass
-    const roleName = user.roleName || user.role?.name;
+    const rawRole = user.roleName || user.role?.name || '';
+    const roleName = String(rawRole).trim().toLowerCase();
     if (roleName === 'superadmin') return true;
+    // Routes use checkPermission('admin') as module gate (feature / customer settings)
+    if (permissionKey === 'admin' && roleName === 'admin') return true;
     
     // Legacy support for fixed permission array if exists
     if (Array.isArray(user.permissions)) {

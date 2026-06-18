@@ -19,7 +19,7 @@ const voucherTypeSchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
-voucherTypeSchema.index({ name: 1, financialYear: 1 }, { unique: true });
+voucherTypeSchema.index({ companyId: 1, name: 1, financialYear: 1 }, { unique: true, sparse: true });
 
 const VoucherType = mongoose.model('VoucherType', voucherTypeSchema);
 export { VoucherType };

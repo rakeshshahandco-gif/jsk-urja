@@ -171,6 +171,11 @@ const taskSchema = new mongoose.Schema({
         ref: 'Customer',
         default: null
     },
+    leadId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Lead',
+        default: null
+    },
     updates: [
         {
             text: { type: String, required: true },

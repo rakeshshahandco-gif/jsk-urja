@@ -1,4 +1,27 @@
 import mongoose from 'mongoose';
+import { TEXTILE_JOB_WORK_PROCESSES, TEXTILE_RATE_TYPES } from '../constants/textileJobWorkRate.constants.js';
+
+const TEXTILE_BOM_LABOUR_PROCESSES = [...TEXTILE_JOB_WORK_PROCESSES, 'Finishing', 'Other'];
+
+const textileProcessLabourSchema = new mongoose.Schema({
+    processName: {
+        type: String,
+        required: true,
+        trim: true,
+        enum: TEXTILE_BOM_LABOUR_PROCESSES,
+    },
+    vendorWorker: { type: String, trim: true, default: '' },
+    rateType: {
+        type: String,
+        required: true,
+        enum: TEXTILE_RATE_TYPES,
+    },
+    qtyBasis: { type: Number, min: 0, default: 0 },
+    qtyBasisUom: { type: String, trim: true, default: '' },
+    rate: { type: Number, min: 0, default: 0 },
+    amount: { type: Number, min: 0, default: 0 },
+    remarks: { type: String, trim: true, default: '' },
+});
 
 const bomComponentSchema = new mongoose.Schema({
     itemId: {
@@ -17,7 +40,7 @@ const bomComponentSchema = new mongoose.Schema({
     },
     componentType: {
         type: String,
-        enum: ['SMD', 'TH', 'OTHER', ''],
+        enum: ['SMD', 'TH', 'OTHER', '', 'GREY_FABRIC', 'DYED_FABRIC', 'PRINTED_FABRIC', 'TRIM', 'PACKING'],
         default: ''
     },
     rate: {
@@ -89,6 +112,9 @@ const bomSchema = new mongoose.Schema({
     labourCost: { type: Number, default: 0 },
     labourCostPerPoint: { type: Number, default: 0.25 },
     totalPointsLabourCost: { type: Number, default: 0 },
+    /** Textile / Handloom only — process-wise job work labour rows. */
+    textileProcessLabourCosts: { type: [textileProcessLabourSchema], default: [] },
+    totalTextileProcessLabourCost: { type: Number, default: 0 },
     finalProductionCostPerUnit: { type: Number, default: 0 },
     standardCostUpdatedAt: { type: Date, default: null },
 

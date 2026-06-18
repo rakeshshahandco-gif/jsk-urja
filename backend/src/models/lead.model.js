@@ -92,6 +92,13 @@ const leadSchema = new mongoose.Schema(
 
         notes: { type: String, trim: true, default: '' },
 
+        createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        createdByName: { type: String, trim: true, default: '' },
+        ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        ownerName: { type: String, trim: true, default: '' },
+        assignedToUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        assignedToName: { type: String, trim: true, default: '' },
+
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     },
@@ -101,6 +108,8 @@ const leadSchema = new mongoose.Schema(
 leadSchema.index({ companyId: 1, status: 1, nextFollowUpDate: 1 });
 leadSchema.index({ companyId: 1, customerMobile: 1 });
 leadSchema.index({ companyId: 1, source: 1, createdAt: -1 });
+leadSchema.index({ companyId: 1, ownerUserId: 1, createdAt: -1 });
+leadSchema.index({ companyId: 1, createdByUserId: 1, createdAt: -1 });
 
 const Lead = mongoose.model('Lead', leadSchema);
 export { Lead };

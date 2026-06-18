@@ -182,6 +182,27 @@ const workOrderSchema = new mongoose.Schema({
     },
 
     remarks: { type: String, default: '' },
+
+    /** electronics (JSK default) | textile (Handloom / TEXTILE template) */
+    productionModule: {
+        type: String,
+        enum: ['electronics', 'textile'],
+        default: 'electronics',
+    },
+    textile: {
+        designNo: { type: String, default: '' },
+        colour: { type: String, default: '' },
+        size: { type: String, default: '' },
+        requiredFabricMeter: { type: Number, default: 0 },
+        fabricItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' },
+        fabricItemName: { type: String, default: '' },
+        lotNo: { type: String, default: '' },
+        thanNo: { type: String, default: '' },
+        rollNo: { type: String, default: '' },
+        processRoute: { type: String, default: '' },
+        assignedVendorWorker: { type: String, default: '' },
+    },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     financialYear: { type: String, trim: true }, // e.g. "2025-2026"

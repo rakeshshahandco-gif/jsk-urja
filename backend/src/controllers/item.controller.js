@@ -3,11 +3,40 @@ import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { Item } from '../models/item.model.js';
 import { ItemGroup } from '../models/itemGroup.model.js';
+import { Company } from '../models/company.model.js';
+import { FinancialYear } from '../models/financialYear.model.js';
 import reportService from '../services/report.service.js';
 import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 import logger from '../utils/logger.js';
+import { recalculateStockLedger } from '../utils/stockUtils.js';
+
+const normalizeFYName = (name) => {
+    const s = String(name || '').trim();
+    const m = /^(\d{4})-(\d{2})$/.exec(s);
+    if (!m) return s;
+    return `${m[1]}-20${m[2]}`;
+};
+
+async function resolveFinancialYearId(req) {
+    const raw = req.body?.financialYearId
+        || req.body?.financialYear
+        || req.query?.financialYear;
+    if (!raw || raw === 'all') return null;
+    if (typeof raw === 'string' && /^[a-fA-F0-9]{24}$/.test(raw)) return raw;
+    const name = normalizeFYName(raw);
+    const fy = await FinancialYear.findOne({
+        $or: [{ name: raw }, { name }],
+    }).select('_id').lean();
+    return fy?._id || null;
+}
+
+async function resolveIndustryTemplateRef(req) {
+    if (req.company?.industryTemplateRef) return req.company.industryTemplateRef;
+    const co = await Company.findById(req.companyId).select('industryTemplateRef').lean();
+    return co?.industryTemplateRef || null;
+}
 
 // ── Auto-generate item code ─────────────────────────────────────────────────
 const generateItemCode = async () => {
@@ -46,7 +75,20 @@ const generateItemCode = async () => {
 
 // ── CREATE ──────────────────────────────────────────────────────────────────
 export const createItem = asyncHandler(async (req, res) => {
-    const data = { ...req.body, createdBy: req.user.id };
+    const companyId = req.companyId;
+    if (!companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company context is required');
+
+    const financialYearId = await resolveFinancialYearId(req);
+    const industryTemplateRef = await resolveIndustryTemplateRef(req);
+
+    const data = {
+        ...req.body,
+        createdBy: req.user.id,
+        companyId,
+        financialYearId,
+        industryTemplateRef,
+    };
+    delete data.financialYear;
 
     // Auto-generate code if not provided
     if (!data.itemCode || String(data.itemCode).trim() === '') {
@@ -55,14 +97,23 @@ export const createItem = asyncHandler(async (req, res) => {
         data.itemCode = String(data.itemCode).trim().toUpperCase();
     }
 
-    // Check unique code
-    const exists = await Item.findOne({ itemCode: data.itemCode });
+    // Check unique code within active company
+    const exists = await Item.findOne({ itemCode: data.itemCode, companyId });
     if (exists) throw new ApiError(httpStatus.CONFLICT, `Item code "${data.itemCode}" already exists`);
 
     // Seed currentStock from openingStock
     data.currentStock = data.openingStock ?? 0;
 
     const item = await Item.create(data);
+
+    logger.info('[Item Create] saved', {
+        id: item._id?.toString(),
+        itemCode: item.itemCode,
+        companyId: item.companyId?.toString(),
+        financialYearId: item.financialYearId?.toString() || null,
+        industryTemplateRef: item.industryTemplateRef?.toString() || null,
+    });
+
     res.status(httpStatus.CREATED).send({ success: true, data: item });
 });
 
@@ -75,7 +126,8 @@ export const getItems = asyncHandler(async (req, res) => {
 
     console.log('GET /items full query:', JSON.stringify(req.query, null, 2));
 
-    const filter = {};
+    const filter = { companyId: req.companyId };
+    if (!filter.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company context is required');
     if (itemCategory) {
         if (itemCategory === 'FINISHED_GOOD') {
             filter.itemCategory = { $in: ['FINISHED_GOOD', 'FINISHED', 'Finished Good', 'Finished Goods'] };
@@ -85,7 +137,10 @@ export const getItems = asyncHandler(async (req, res) => {
     }
     if (itemType) filter.itemType = itemType;
     if (itemGroupName) filter.itemGroupName = itemGroupName;
-    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    // Only filter when explicitly true/false — empty string means "All Status"
+    if (isActive === 'true' || isActive === 'false') {
+        filter.isActive = isActive === 'true';
+    }
     if (req.query.isManufacturable !== undefined) filter.isManufacturable = req.query.isManufacturable === 'true';
 
     if (search) {
@@ -175,24 +230,31 @@ export const updateItem = asyncHandler(async (req, res) => {
     const item = await Item.findById(req.params.id);
     if (!item) throw new ApiError(httpStatus.NOT_FOUND, 'Item not found');
 
-    // Prevent changing itemCode to one that already exists
+    // Prevent changing itemCode to one that already exists in this company
     if (req.body.itemCode && req.body.itemCode !== item.itemCode) {
-        const clash = await Item.findOne({ itemCode: req.body.itemCode.toUpperCase() });
+        const clash = await Item.findOne({
+            itemCode: req.body.itemCode.toUpperCase(),
+            companyId: req.companyId,
+            _id: { $ne: item._id },
+        });
         if (clash) throw new ApiError(httpStatus.CONFLICT, `Item code "${req.body.itemCode}" already in use`);
     }
 
     if (req.body.openingStock !== undefined) {
-        const newOpeningStock = Number(req.body.openingStock);
-        if (newOpeningStock !== item.openingStock) {
-            const diff = newOpeningStock - (item.openingStock || 0);
-            item.currentStock = (item.currentStock || 0) + diff;
-        }
+        item.openingStock = Number(req.body.openingStock) || 0;
     }
 
+    // Stock qty is ledger-driven — never overwrite from Item Master save payload
     const oldItemName = item.itemName;
-    Object.assign(item, req.body);
-    item.updatedBy = req.user.id;
+    const payload = { ...req.body };
+    delete payload.currentStock;
+    delete payload.faultyStock;
+    delete payload.openingStock;
+
+    Object.assign(item, payload);
+    item.updatedBy = req.user._id || req.user.id;
     await item.save();
+    await recalculateStockLedger(item._id);
 
     // Propagate item name change globally
     if (oldItemName !== item.itemName) {
@@ -208,12 +270,29 @@ export const updateItem = asyncHandler(async (req, res) => {
     res.send({ success: true, data: item });
 });
 
-// ── DELETE (soft) ────────────────────────────────────────────────────────────
+// ── DELETE ───────────────────────────────────────────────────────────────────
 export const deleteItem = asyncHandler(async (req, res) => {
     const item = await Item.findById(req.params.id);
     if (!item) throw new ApiError(httpStatus.NOT_FOUND, 'Item not found');
+
+    const stock = Number(item.currentStock) || 0;
+    const faulty = Number(item.faultyStock) || 0;
+    const permanent = req.query.permanent === 'true' || req.query.permanent === '1';
+
+    if (stock > 0 || faulty > 0) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            `Cannot remove item with stock on hand (${stock} + ${faulty} faulty). Clear stock first.`,
+        );
+    }
+
+    if (permanent) {
+        await Item.deleteOne({ _id: item._id });
+        return res.send({ success: true, message: 'Item removed from Item Master' });
+    }
+
     item.isActive = false;
-    item.updatedBy = req.user.id;
+    item.updatedBy = req.user._id || req.user.id;
     await item.save();
     res.send({ success: true, message: 'Item deactivated successfully' });
 });

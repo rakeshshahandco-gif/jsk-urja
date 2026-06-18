@@ -6,7 +6,6 @@ const itemSchema = new mongoose.Schema({
     itemCode: {
         type: String,
         required: [true, 'Item code is required'],
-        unique: true,
         trim: true,
         uppercase: true
     },
@@ -99,7 +98,26 @@ const itemSchema = new mongoose.Schema({
     useManualBOMCost: { type: Boolean, default: false },
     manualBOMCostPerUnit: { type: Number, default: 0 },
 
-    // ── 6. TECHNICAL SPECIFICATIONS (Electrical items only) ────────────────────
+    // ── 6. TEXTILE SPECIFICATIONS (Textile / Handloom items) ───────────────────
+    textile: {
+        fabricType: { type: String, trim: true, default: '' },
+        quality: { type: String, trim: true, default: '' },
+        gsm: { type: String, trim: true, default: '' },
+        width: { type: String, trim: true, default: '' },
+        colour: { type: String, trim: true, default: '' },
+        designNo: { type: String, trim: true, default: '' },
+        pattern: { type: String, trim: true, default: '' },
+        season: { type: String, trim: true, default: '' },
+        brand: { type: String, trim: true, default: '' },
+        shade: { type: String, trim: true, default: '' },
+        lotNo: { type: String, trim: true, default: '' },
+        rollNo: { type: String, trim: true, default: '' },
+        than: { type: String, trim: true, default: '' },
+        meter: { type: String, trim: true, default: '' },
+        barcodeRequired: { type: Boolean, default: false },
+    },
+
+    // ── 7. TECHNICAL SPECIFICATIONS (Electrical items only) ────────────────────
     technical: {
         wattage: { type: String, trim: true, default: '' },
         inputVoltage: { type: String, trim: true, default: '' },
@@ -128,6 +146,16 @@ const itemSchema = new mongoose.Schema({
     remarks: { type: String, trim: true, default: '' },
 
     // Meta
+    financialYearId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'FinancialYear',
+        default: null,
+    },
+    industryTemplateRef: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'IndustryTemplate',
+        default: null,
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
@@ -140,6 +168,7 @@ const itemSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Index for fast lookups
+itemSchema.index({ companyId: 1, itemCode: 1 }, { unique: true });
 itemSchema.index({ itemCategory: 1, isActive: 1 });
 itemSchema.index({ itemName: 'text', itemCode: 'text' });
 

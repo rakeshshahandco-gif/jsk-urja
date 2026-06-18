@@ -1,0 +1,113 @@
+import Joi from 'joi';
+import { TEXTILE_PRODUCTION_ORDER_STATUS } from '../constants/textileProcessRoute.constants.js';
+
+export default {
+    list: {
+        query: Joi.object({
+            companyId: Joi.string().optional(),
+            status: Joi.string().valid(...TEXTILE_PRODUCTION_ORDER_STATUS).optional(),
+            search: Joi.string().optional(),
+        }),
+    },
+    create: {
+        body: Joi.object({
+            companyId: Joi.string().optional(),
+            designNo: Joi.string().allow('').optional(),
+            itemId: Joi.string().required(),
+            outputItemId: Joi.string().allow('', null).optional(),
+            qty: Joi.number().min(0.0001).required(),
+            qtyUom: Joi.string().allow('').optional(),
+            colour: Joi.string().allow('').optional(),
+            size: Joi.string().allow('').optional(),
+            lotNo: Joi.string().allow('').optional(),
+            thanNo: Joi.string().allow('').optional(),
+            processRouteId: Joi.string().required(),
+            orderDate: Joi.date().optional(),
+            startImmediately: Joi.boolean().optional(),
+            remarks: Joi.string().allow('').optional(),
+        }),
+    },
+    skipStage: {
+        body: Joi.object({
+            companyId: Joi.string().optional(),
+            stageIndex: Joi.number().min(0).optional(),
+            reason: Joi.string().allow('').optional(),
+        }),
+    },
+    completeStage: {
+        body: Joi.object({
+            companyId: Joi.string().optional(),
+            stageIndex: Joi.number().min(0).optional(),
+            rateType: Joi.string().allow('').optional(),
+            rate: Joi.number().min(0).optional(),
+            labourCost: Joi.number().min(0).optional(),
+            vendorCost: Joi.number().min(0).optional(),
+            actualCost: Joi.number().min(0).optional(),
+            vendorName: Joi.string().allow('').optional(),
+        }),
+    },
+    issueStage: {
+        body: Joi.object({
+            companyId: Joi.string().optional(),
+            vendorName: Joi.string().optional(),
+            dyerName: Joi.string().optional(),
+            issueDate: Joi.date().optional(),
+            expectedReturnDate: Joi.date().allow(null, '').optional(),
+            labourProcessName: Joi.string().allow('').optional(),
+            remarks: Joi.string().allow('').optional(),
+            inputItemId: Joi.string().optional(),
+            outputItemId: Joi.string().allow('', null).optional(),
+            issuedMeter: Joi.number().min(0).optional(),
+            issuedQty: Joi.number().min(0).optional(),
+            issuedUom: Joi.string().allow('').optional(),
+            expectedOutputUom: Joi.string().allow('').optional(),
+            labourRateType: Joi.string().allow('').optional(),
+            labourRate: Joi.number().min(0).optional(),
+            lines: Joi.array().items(Joi.object({
+                lotNo: Joi.string().allow('').optional(),
+                thanNo: Joi.string().allow('').optional(),
+                fabricItemId: Joi.string().required(),
+                fabricType: Joi.string().allow('').optional(),
+                colourInstructionType: Joi.string().allow('').optional(),
+                colourName: Joi.string().allow('').optional(),
+                designPattern: Joi.string().allow('').optional(),
+                issuedQty: Joi.number().min(0).optional(),
+                issuedUom: Joi.string().allow('').optional(),
+                issuedMeter: Joi.number().min(0).optional(),
+                meterPerPcs: Joi.number().min(0).optional(),
+                pcsRoundMode: Joi.string().allow('').optional(),
+                expectedLossPercent: Joi.number().min(0).optional(),
+                labourProcessName: Joi.string().allow('').optional(),
+                labourRateType: Joi.string().allow('').optional(),
+                labourRate: Joi.number().min(0).optional(),
+                expectedOutputItemId: Joi.string().allow('', null).optional(),
+                expectedOutputUom: Joi.string().allow('').optional(),
+                remarks: Joi.string().allow('').optional(),
+            })).optional(),
+        }).or('vendorName', 'dyerName'),
+    },
+    receiveStage: {
+        body: Joi.object({
+            companyId: Joi.string().optional(),
+            challanLineId: Joi.string().optional(),
+            returnedQty: Joi.number().min(0.0001).optional(),
+            returnUom: Joi.string().allow('').optional(),
+            outputItemId: Joi.string().allow('', null).optional(),
+            creditedMeter: Joi.number().min(0).optional(),
+            remarks: Joi.string().allow('').optional(),
+            lines: Joi.array().items(Joi.object({
+                challanLineId: Joi.string().required(),
+                returnedQty: Joi.number().min(0.0001).required(),
+                returnUom: Joi.string().allow('').optional(),
+                outputItemId: Joi.string().allow('', null).optional(),
+                creditedMeter: Joi.number().min(0).optional(),
+            })).optional(),
+        }).or('returnedQty', 'lines'),
+    },
+    dashboard: {
+        query: Joi.object({
+            companyId: Joi.string().optional(),
+            status: Joi.string().optional(),
+        }),
+    },
+};

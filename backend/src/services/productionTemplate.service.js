@@ -1,10 +1,50 @@
 import { PRODUCTION_STAGES } from '../models/workOrder.model.js';
+import { Company } from '../models/company.model.js';
 import {
     BEHAVIOR_MODES,
     DEFAULT_JSK_INDUSTRY_CONFIG,
     INDUSTRY_TEMPLATES,
     JSK_ELECTRONICS_STANDARD_STAGES,
 } from '../constants/industryTemplates.defaults.js';
+import { TEXTILE_INDUSTRY_CODES } from '../constants/textileProductionLot.constants.js';
+import { resolveCompanyWorkflowAssignment } from './companyWorkflowAssignment.service.js';
+import { isJskUrjaCompany } from './companyIndustryBootstrap.service.js';
+
+/** Fallback textile WO stages when no workflow is assigned (Handloom / TEXTILE template). */
+export const TEXTILE_DEFAULT_WO_STAGES = [
+    { seq: 1, stageName: 'Grey Fabric Inward', isQcGate: false, isTestGate: false },
+    { seq: 2, stageName: 'Dyeing', isQcGate: false, isTestGate: false },
+    { seq: 3, stageName: 'Printing', isQcGate: false, isTestGate: false },
+    { seq: 4, stageName: 'Embroidery', isQcGate: false, isTestGate: false },
+    { seq: 5, stageName: 'Stitching', isQcGate: false, isTestGate: false },
+    { seq: 6, stageName: 'Washing', isQcGate: false, isTestGate: false },
+    { seq: 7, stageName: 'Pressing', isQcGate: false, isTestGate: false },
+    { seq: 8, stageName: 'Finishing', isQcGate: false, isTestGate: false },
+    { seq: 9, stageName: 'Packing', isQcGate: false, isTestGate: false },
+    { seq: 10, stageName: 'Finished Stock', isQcGate: false, isTestGate: false },
+];
+
+function mapWorkflowStageToWoStage(s, idx) {
+    const stageType = s.stageType || 'general';
+    return {
+        seq: s.sequenceNo || idx + 1,
+        stageName: s.stageName,
+        isQcGate: ['quality_control', 'inspection'].includes(stageType),
+        isTestGate: stageType === 'testing',
+    };
+}
+
+async function isTextileCompanyId(companyId) {
+    if (!companyId) return false;
+    const company = await Company.findById(companyId)
+        .populate('industryTemplateRef', 'templateCode templateName')
+        .lean();
+    if (!company) return false;
+    if (isJskUrjaCompany(company)) return false;
+    const code = String(company.industryTemplateRef?.templateCode || '').toUpperCase();
+    const name = `${company.companyName || ''} ${company.industryTemplateRef?.templateName || ''}`.toLowerCase();
+    return TEXTILE_INDUSTRY_CODES.includes(code) || name.includes('textile') || name.includes('handloom');
+}
 
 /**
  * Resolve production stages for a work order.
@@ -63,4 +103,39 @@ export function getTemplateStagesPreview(industryTemplate, productionProcessTemp
     const industry = INDUSTRY_TEMPLATES[industryTemplate];
     const process = industry?.productionProcesses?.[productionProcessTemplate];
     return process?.stages || JSK_ELECTRONICS_STANDARD_STAGES;
+}
+
+/**
+ * Resolve work-order production stages from active company template + assigned workflow.
+ * JSK / electronics → legacy PRODUCTION_STAGES (unchanged). Textile → workflow stages.
+ */
+export async function resolveWorkOrderStagesForCompany(companyId, industryConfig = {}) {
+    const isTextile = await isTextileCompanyId(companyId);
+    if (!isTextile) {
+        return {
+            stages: resolveProductionStages(industryConfig),
+            productionModule: 'electronics',
+        };
+    }
+
+    try {
+        const assignment = await resolveCompanyWorkflowAssignment(companyId);
+        const preview = assignment.previewStages || [];
+        if (preview.length > 0) {
+            return {
+                stages: preview.map(mapWorkflowStageToWoStage),
+                productionModule: 'textile',
+                workflowName: assignment.workflow?.workflowName
+                    || assignment.suggestedWorkflow?.workflowName
+                    || null,
+            };
+        }
+    } catch {
+        // fall through to textile defaults
+    }
+
+    return {
+        stages: TEXTILE_DEFAULT_WO_STAGES,
+        productionModule: 'textile',
+    };
 }

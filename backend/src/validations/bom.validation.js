@@ -22,6 +22,20 @@ const bomComponent = Joi.object().keys({
     remarks: Joi.string().allow('').optional()
 }).unknown(true);
 
+const textileProcessLabour = Joi.object().keys({
+    _id: Joi.any().optional(),
+    processName: Joi.string().trim().required(),
+    vendorWorker: Joi.string().allow('').optional(),
+    rateType: Joi.string().valid(
+        'PER_METER', 'PER_PCS', 'PER_THAN', 'PER_KG', 'PER_ROLL', 'PER_DESIGN', 'FIXED_AMOUNT',
+    ).required(),
+    qtyBasis: Joi.number().min(0).default(0),
+    qtyBasisUom: Joi.string().allow('').optional(),
+    rate: Joi.number().min(0).default(0),
+    amount: Joi.number().min(0).default(0),
+    remarks: Joi.string().allow('').optional(),
+});
+
 const createBOM = {
     body: Joi.object().keys({
         bomNumber: Joi.string().allow('').optional(), // If empty, auto-generate
@@ -38,6 +52,8 @@ const createBOM = {
         labourCost: Joi.number().default(0),
         labourCostPerPoint: Joi.number().min(0).default(0.25),
         totalPointsLabourCost: Joi.number().default(0),
+        textileProcessLabourCosts: Joi.array().items(textileProcessLabour).optional(),
+        totalTextileProcessLabourCost: Joi.number().default(0),
         finalProductionCostPerUnit: Joi.number().default(0),
         processes: Joi.object().keys({
             smtAssembly: Joi.boolean().default(false),
@@ -91,6 +107,8 @@ const updateBOM = {
         labourCost: Joi.number(),
         labourCostPerPoint: Joi.number().min(0),
         totalPointsLabourCost: Joi.number(),
+        textileProcessLabourCosts: Joi.array().items(textileProcessLabour).optional(),
+        totalTextileProcessLabourCost: Joi.number(),
         finalProductionCostPerUnit: Joi.number(),
         processes: Joi.object().keys({
             smtAssembly: Joi.boolean(),

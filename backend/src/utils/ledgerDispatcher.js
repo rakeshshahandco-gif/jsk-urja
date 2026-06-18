@@ -2,7 +2,35 @@ import { Voucher } from '../models/voucher.model.js';
 import { VoucherType } from '../models/voucherType.model.js';
 import { AccountLedger } from '../models/accountLedger.model.js';
 import { LedgerEntry } from '../models/ledgerEntry.model.js';
+import { Supplier } from '../models/supplier.model.js';
+import { ApiError } from '../utils/ApiError.js';
 import { postAccountingEntry } from '../services/accounting/accountingPostingEngine.service.js';
+
+const escLedgerName = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+async function resolveSupplierLedgerForPurchase(invoice, session) {
+    if (invoice.supplierId) {
+        let ledger = await AccountLedger.findOne({ referenceId: invoice.supplierId }).session(session);
+        if (ledger) return ledger;
+
+        const supplier = await Supplier.findById(invoice.supplierId).select('ledgerId supplierName').session(session);
+        if (supplier?.ledgerId) {
+            ledger = await AccountLedger.findById(supplier.ledgerId).session(session);
+            if (ledger) return ledger;
+        }
+    }
+
+    const name = String(invoice.supplierName || '').trim();
+    if (!name) return null;
+
+    let ledger = await AccountLedger.findOne({ name }).session(session);
+    if (ledger) return ledger;
+
+    ledger = await AccountLedger.findOne({
+        name: new RegExp(`^${escLedgerName(name)}(\\s|-|$)`, 'i'),
+    }).session(session);
+    return ledger;
+}
 
 /**
  * Universal posting hook — delegates to accounting foundation engine.
@@ -171,9 +199,7 @@ export const postPurchaseInvoiceToLedger = async (invoice, userId, session) => {
     const date = invoice.invoiceDate || new Date();
 
     // 2. Identify Ledgers
-    let supplierLedger;
-    if (invoice.supplierId) supplierLedger = await AccountLedger.findOne({ referenceId: invoice.supplierId }).session(session);
-    if (!supplierLedger && invoice.supplierName) supplierLedger = await AccountLedger.findOne({ name: invoice.supplierName }).session(session);
+    let supplierLedger = await resolveSupplierLedgerForPurchase(invoice, session);
 
     const purchaseLedger = await AccountLedger.findOne({ name: 'Purchase Account' }).session(session);
     const cgstInputLedger = await AccountLedger.findOne({ name: 'CGST Input' }).session(session);

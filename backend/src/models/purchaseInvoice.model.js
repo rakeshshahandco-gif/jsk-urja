@@ -38,7 +38,7 @@ const piItemSchema = new mongoose.Schema({
 }, { _id: true });
 
 const purchaseInvoiceSchema = new mongoose.Schema({
-    invoiceNumber: { type: String, required: true, unique: true, trim: true },
+    invoiceNumber: { type: String, required: true, trim: true },
     seriesId: { type: mongoose.Schema.Types.ObjectId, ref: 'InvoiceSeries', default: null },
     sequenceNumber: { type: Number },
     invoiceDate: { type: Date, required: true, default: Date.now },
@@ -158,6 +158,7 @@ const purchaseInvoiceSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 purchaseInvoiceSchema.index({ supplierId: 1, invoiceDate: -1 });
+purchaseInvoiceSchema.index({ companyId: 1, invoiceNumber: 1 }, { unique: true });
 purchaseInvoiceSchema.index({ paymentStatus: 1 });
 purchaseInvoiceSchema.index({ isDeleted: 1 });
 purchaseInvoiceSchema.index({ financialYear: 1 });

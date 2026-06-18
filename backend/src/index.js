@@ -7,6 +7,7 @@ import logger from './utils/logger.js';
 import http from 'http';
 import { initSocket } from './config/socket.js';
 import { initializeUserManagement } from './utils/userInitializer.js';
+import { ensureDefaultIndustryTemplates } from './services/industryTemplate.service.js';
 import { startTaskCron } from './cron/taskCron.js';
 import { startReminderCron } from './cron/reminderCron.js';
 import WhatsAppService from './services/whatsapp.service.js';
@@ -19,6 +20,7 @@ connectDB().then((connected) => {
     } else {
         // Initialize User Management system on startup
         initializeUserManagement().catch(err => logger.error('User Init Error:', err));
+        ensureDefaultIndustryTemplates().catch(err => logger.error('Industry Template Seed Error:', err));
         
         // Start Cron Jobs
         startTaskCron();
@@ -42,6 +44,17 @@ connectDB().then((connected) => {
                 logger.error(`[WhatsApp] Session init error: ${e.message}`)
             );
         }, 5000);
+    });
+
+    httpServer.on('error', (err) => {
+        if (err && err.code === 'EADDRINUSE') {
+            const msg = `Port ${config.port} is already in use. Close duplicate backend terminal or run: npm run dev:safe (from project root)`;
+            console.error(`\n❌ ${msg}\n`);
+            logger.error(msg);
+            process.exit(1);
+        }
+        logger.error(err);
+        process.exit(1);
     });
 }).catch((err) => {
     logger.error('Unexpected error during startup', err);

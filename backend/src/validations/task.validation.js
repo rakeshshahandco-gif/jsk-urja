@@ -28,6 +28,7 @@ const createTask = {
         }).optional(),
         previousTaskId: Joi.string().allow(null, '').custom(objectId).optional(),
         customerId: Joi.string().allow(null, '').custom(objectId).optional(),
+        leadId: Joi.string().allow(null, '').custom(objectId).optional(),
         taskMasterId: Joi.string().allow(null, '').custom(objectId).optional(),
         amount: Joi.number().min(0).optional(),
         billNumber: Joi.string().allow('').optional(),

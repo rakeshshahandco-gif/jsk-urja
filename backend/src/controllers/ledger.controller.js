@@ -132,6 +132,11 @@ export const getLedgerReport = asyncHandler(async (req, res) => {
         if (upperNar.includes('PURCHASED FROM') || upperNar.includes('SOLD TO')) {
             narration = '-';
         }
+
+        if (oppositeName === 'Various Accounts' && narration && narration !== '-') {
+            oppositeName = narration;
+            narration = '-';
+        }
         // ---------------------------------
 
         return {

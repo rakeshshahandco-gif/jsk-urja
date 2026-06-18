@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const accountLedgerSchema = new mongoose.Schema({
-    name: { type: String, required: true, trim: true, unique: true },
+    name: { type: String, required: true, trim: true },
     printName: { type: String, trim: true },
     alias: { type: String, trim: true },
 
@@ -124,7 +124,7 @@ const accountLedgerSchema = new mongoose.Schema({
     tdsPayableSectionCode: { type: String, trim: true, uppercase: true, default: '' },
 }, { timestamps: true });
 
-accountLedgerSchema.index({ name: 1 });
+accountLedgerSchema.index({ companyId: 1, name: 1 }, { unique: true });
 accountLedgerSchema.index({ underGroup: 1 });
 accountLedgerSchema.index({ type: 1 });
 accountLedgerSchema.index(

@@ -42,9 +42,12 @@ export const protect = asyncHandler(async (req, res, next) => {
 
 export const authorize = (...roles) => {
     return (req, res, next) => {
-        const roleName = req.user.role?.name || req.user.roleName;
-        if (!roles.includes(roleName)) {
-            throw new ApiError(403, `User role ${roleName} is not authorized to access this route`);
+        // Prefer denormalized roleName; populated Role.name may be "Admin" while enum is "admin"
+        const raw = req.user.roleName || req.user.role?.name || '';
+        const roleName = String(raw).trim().toLowerCase();
+        const allowed = roles.map((r) => String(r).trim().toLowerCase());
+        if (!allowed.includes(roleName)) {
+            throw new ApiError(403, `User role ${raw || 'unknown'} is not authorized to access this route`);
         }
         next();
     };

@@ -1,5 +1,19 @@
 import Joi from 'joi';
 
+const textileFieldsSchema = Joi.object({
+    designNo: Joi.string().optional().allow(''),
+    colour: Joi.string().optional().allow(''),
+    size: Joi.string().optional().allow(''),
+    requiredFabricMeter: Joi.number().min(0).optional().allow(null, ''),
+    fabricItemId: Joi.string().optional().allow('', null),
+    fabricItemName: Joi.string().optional().allow(''),
+    lotNo: Joi.string().optional().allow(''),
+    thanNo: Joi.string().optional().allow(''),
+    rollNo: Joi.string().optional().allow(''),
+    processRoute: Joi.string().optional().allow(''),
+    assignedVendorWorker: Joi.string().optional().allow(''),
+});
+
 const createWorkOrderSchema = Joi.object({
     woNumber: Joi.string().optional().allow(''),
     bomId: Joi.string().required(),
@@ -9,6 +23,7 @@ const createWorkOrderSchema = Joi.object({
     plannedEnd: Joi.date().optional().allow(null, ''),
     supervisor: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
+    textile: textileFieldsSchema.optional(),
 });
 
 const updateWorkOrderSchema = Joi.object({
@@ -19,6 +34,7 @@ const updateWorkOrderSchema = Joi.object({
     supervisor: Joi.string().optional().allow(''),
     remarks: Joi.string().optional().allow(''),
     status: Joi.string().valid('On Hold', 'Released').optional(),
+    textile: textileFieldsSchema.optional(),
 });
 
 const updateStageSchema = Joi.object({
