@@ -14,7 +14,9 @@
     "dev:build": "npm run build && npm run dev",
     "dev:safe": "node scripts/dev-preflight.cjs --ports 5000,4000 && node scripts/start-dev-local.cjs",
     "dev:stable-frontend": "node scripts/start-frontend-stable.cjs",
-    "build": "node scripts/render-production-build.cjs",
+    "prebuild": "node scripts/render-ensure-devdeps.cjs",
+    "build": "vite build",
+    "build:render": "npm install --include=dev && vite build",
     "lint": "eslint \"src/**/*.{js,jsx}\" vite.config.js",
     "preview": "vite preview",
     "preview:web": "vite preview --port 4000 --host localhost --strictPort"
