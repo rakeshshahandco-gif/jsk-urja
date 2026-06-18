@@ -5,10 +5,19 @@
   "type": "module",
   "scripts": {
     "fix-encoding": "node backend/scripts/fixUtf16Encoding.mjs",
-    "dev": "node backend/scripts/fixUtf16Encoding.mjs && vite",
-    "build": "vite build",
+    "preflight": "node scripts/dev-preflight.cjs --ports 5000,4000",
+    "dev": "node scripts/start-frontend-stable.cjs",
+    "dev:vite": "node backend/scripts/fixUtf16Encoding.mjs && node scripts/dev-preflight.cjs --ports 4000 && vite --port 4000 --host 127.0.0.1 --strictPort",
+    "dev:preview": "node backend/scripts/fixUtf16Encoding.mjs && node scripts/dev-preflight.cjs --ports 4000 && vite preview --port 4000 --host 127.0.0.1 --strictPort",
+    "dev:fast": "npm run dev",
+    "dev:hot": "npm run dev:vite",
+    "dev:build": "npm run build && npm run dev",
+    "dev:safe": "node scripts/dev-preflight.cjs --ports 5000,4000 && node scripts/start-dev-local.cjs",
+    "dev:stable-frontend": "node scripts/start-frontend-stable.cjs",
+    "build": "node scripts/render-production-build.cjs",
     "lint": "eslint \"src/**/*.{js,jsx}\" vite.config.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:web": "vite preview --port 4000 --host localhost --strictPort"
   },
   "dependencies": {
     "axios": "^1.13.4",
