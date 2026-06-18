@@ -17,6 +17,7 @@
     "prebuild": "node scripts/render-ensure-devdeps.cjs",
     "build": "vite build",
     "build:render": "npm install --include=dev && vite build",
+    "build:handloom-backend": "npm install --include=dev && npm run build",
     "lint": "eslint \"src/**/*.{js,jsx}\" vite.config.js",
     "preview": "vite preview",
     "preview:web": "vite preview --port 4000 --host localhost --strictPort"

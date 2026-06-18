@@ -17,6 +17,20 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const HANDLOOM_FRONTEND_ORIGIN = 'https://handloom-crm-frontend.onrender.com';
+
+function isHandloomBackendHost(req) {
+    return (req.get('host') || '').toLowerCase() === 'handloom-crm-backend.onrender.com';
+}
+
+// Handloom: backend URL serves an old embedded dist/ — send browser UI to the live static frontend.
+app.use((req, res, next) => {
+    if (!isHandloomBackendHost(req)) return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    return res.redirect(302, `${HANDLOOM_FRONTEND_ORIGIN}${req.originalUrl}`);
+});
+
 // Global Middlewares
 app.use(helmet({
     contentSecurityPolicy: false,
@@ -32,7 +46,8 @@ app.use(cors({
             'http://localhost:4001', 
             'http://localhost:5173', 
             'http://localhost:8081',
-            'https://jsk-urja.onrender.com'
+            'https://jsk-urja.onrender.com',
+            'https://handloom-crm-frontend.onrender.com',
         ];
         
         if (allowed.includes(origin) || origin.startsWith('http://localhost:')) {
