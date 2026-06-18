@@ -1,7 +1,8 @@
 import express from 'express';
 import multer from 'multer';
 import * as backupCtrl from '../../controllers/backup.controller.js';
-import { protect, authorize } from '../../middlewares/auth.middleware.js';
+import { protect } from '../../middlewares/auth.middleware.js';
+import { requirePlatformAdmin } from '../../middlewares/platformAdmin.middleware.js';
 
 const router = express.Router();
 
@@ -21,9 +22,9 @@ const upload = multer({
     },
 });
 
-// All backup routes are admin/superadmin only
+// All backup routes are platform admin only
 router.use(protect);
-router.use(authorize('admin', 'superadmin'));
+router.use(requirePlatformAdmin);
 
 router.get('/', backupCtrl.getBackups);
 router.post('/trigger', backupCtrl.triggerBackup);

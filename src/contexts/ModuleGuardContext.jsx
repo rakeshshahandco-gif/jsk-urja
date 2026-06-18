@@ -2,6 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CompanyContext } from './CompanyContext';
 import { getCompanyModuleAllocation } from '@/services/moduleAllocationApi';
+import { useAuth } from '@/hooks/useAuth';
+import { isPlatformAdminUser, isPlatformPath } from '@/constants/platformAccess';
 import {
     MODULE_MENU_ALWAYS_VISIBLE,
     moduleForMenuId,
@@ -12,6 +14,7 @@ const ModuleGuardContext = createContext(null);
 
 export const ModuleGuardProvider = ({ children }) => {
     const { selectedCompany } = useContext(CompanyContext) || {};
+    const { user } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -62,20 +65,25 @@ export const ModuleGuardProvider = ({ children }) => {
     }, [moduleGuardEnabled, isModuleEnabled]);
 
     const isPathEnabled = useCallback((pathname) => {
+        if (!isPlatformAdminUser(user) && isPlatformPath(pathname)) return false;
         if (!moduleGuardEnabled) return true;
         const p = String(pathname || '');
-        if (p.startsWith('/admin/module-allocation') || p.startsWith('/admin/industry-templates')) return true;
         const code = moduleForPath(p);
         if (!code) return true;
         return isModuleEnabled(code);
-    }, [moduleGuardEnabled, isModuleEnabled]);
+    }, [moduleGuardEnabled, isModuleEnabled, user]);
 
     useEffect(() => {
-        if (!moduleGuardEnabled || loading) return;
+        if (loading) return;
+        if (!isPlatformAdminUser(user) && isPlatformPath(location.pathname)) {
+            navigate('/platform-access-denied', { replace: true, state: { from: location.pathname } });
+            return;
+        }
+        if (!moduleGuardEnabled) return;
         if (!isPathEnabled(location.pathname)) {
             navigate('/module-disabled', { replace: true, state: { from: location.pathname } });
         }
-    }, [location.pathname, moduleGuardEnabled, loading, isPathEnabled, navigate]);
+    }, [location.pathname, moduleGuardEnabled, loading, isPathEnabled, navigate, user]);
 
     const value = useMemo(() => ({
         loading,

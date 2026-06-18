@@ -10,6 +10,7 @@ import {
     mongooseFilterUsersForCompany,
     normalizeUserCompanyAssignment,
     assertActingUserCanManageTargetUser,
+    assertRoleAssignmentAllowed,
 } from '../services/companyUserAccess.service.js';
 
 // --- ROLE CONTROLLERS ---
@@ -29,9 +30,12 @@ export const createRole = asyncHandler(async (req, res) => {
 
 export const getRoles = asyncHandler(async (req, res) => {
     const roles = await Role.find({ isActive: true });
+    const isSuperadmin = String(req.user?.roleName || '').toLowerCase() === 'superadmin';
     
     // Sync each role's permissions with the current registry
-    const syncedRoles = roles.map(role => {
+    const syncedRoles = roles
+        .filter((role) => isSuperadmin || String(role.name || '').toLowerCase() !== 'superadmin')
+        .map(role => {
         const roleObj = role.toObject();
         const isFullAccess = roleObj.name?.toLowerCase().includes('admin') || roleObj.isSystemRole;
         roleObj.permissions = syncPermissionsWithRegistry(roleObj.permissions || {}, isFullAccess);
@@ -100,6 +104,7 @@ export const createUser = asyncHandler(async (req, res) => {
             req.body.roleName = roleDoc.name;
         }
     }
+    await assertRoleAssignmentAllowed(req.user, { roleName: req.body.roleName, roleId: role });
     const payload = normalizeUserCompanyAssignment(req.body, {
         activeCompanyId: req.companyId,
         actingUser: req.user,
@@ -127,6 +132,10 @@ export const getUser = asyncHandler(async (req, res) => {
 export const updateUser = asyncHandler(async (req, res) => {
     const existing = await User.findById(req.params.id);
     if (!existing) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    if (String(existing.roleName || '').toLowerCase() === 'superadmin'
+        && String(req.user?.roleName || '').toLowerCase() !== 'superadmin') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only Platform Admin can manage superadmin users');
+    }
     await assertActingUserCanManageTargetUser(req.user, existing, req.companyId);
 
     const { role } = req.body;
@@ -136,6 +145,7 @@ export const updateUser = asyncHandler(async (req, res) => {
             req.body.roleName = roleDoc.name;
         }
     }
+    await assertRoleAssignmentAllowed(req.user, { roleName: req.body.roleName, roleId: role });
     const payload = normalizeUserCompanyAssignment(req.body, {
         activeCompanyId: req.companyId,
         actingUser: req.user,
@@ -152,6 +162,10 @@ export const updateUser = asyncHandler(async (req, res) => {
 export const deleteUser = asyncHandler(async (req, res) => {
     const existing = await User.findById(req.params.id);
     if (!existing) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+    if (String(existing.roleName || '').toLowerCase() === 'superadmin'
+        && String(req.user?.roleName || '').toLowerCase() !== 'superadmin') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only Platform Admin can manage superadmin users');
+    }
     await assertActingUserCanManageTargetUser(req.user, existing, req.companyId);
     if (req.companyId && existing.companyAccessConfigured === true) {
         const assigned = (existing.assignedCompanyIds || []).map(String);

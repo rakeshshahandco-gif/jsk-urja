@@ -1,5 +1,6 @@
 import express from 'express';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
+import { requirePlatformAdmin } from '../../middlewares/platformAdmin.middleware.js';
 import {
     getModuleRegistry,
     getCompanyModuleAllocation,
@@ -11,7 +12,7 @@ import {
 const router = express.Router();
 
 router.use(protect);
-router.use(authorize('superadmin', 'admin'));
+router.use(requirePlatformAdmin);
 
 router.get('/registry', getModuleRegistry);
 router.get('/company/:companyId', getCompanyModuleAllocation);

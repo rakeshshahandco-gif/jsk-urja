@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 import { Company } from '../models/company.model.js';
 import { CompanyProfile } from '../models/companyProfile.model.js';
 import { IndustryTemplate } from '../models/industryTemplate.model.js';
-import { mongooseFilterCompaniesForUser, mongooseFilterActiveCompaniesForUser } from '../services/companyUserAccess.service.js';
+import { mongooseFilterCompaniesForUser, mongooseFilterActiveCompaniesForUser, canUserAccessCompany } from '../services/companyUserAccess.service.js';
+import { isPlatformAdminUser } from '../constants/platformAccess.constants.js';
 
 // ─── Helper: seed default company from existing CompanyProfile ───────────────
 const seedDefaultCompanyIfNeeded = async () => {
@@ -71,6 +72,9 @@ export const getCompany = async (req, res) => {
             .populate('industryTemplateRef', 'templateName templateCode isActive')
             .populate('assignedWorkflowRef', 'workflowName workflowCode isActive description');
         if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+        if (!isPlatformAdminUser(req.user) && !canUserAccessCompany(req.user, company._id)) {
+            return res.status(403).json({ success: false, message: 'Access denied for this company' });
+        }
         res.json({ success: true, data: company });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

@@ -4,6 +4,7 @@ import { Button, Input, Select } from '@/components/ui';
 import { userService } from '@/services/user.service';
 import { listCompanies } from '@/services/companyApi';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 import { hasPermission as checkRolePermission } from '@/utils/permissions';
 import styles from './AddUserForm.module.scss';
 import { toast } from 'react-hot-toast';
@@ -15,10 +16,12 @@ import {
     DEFAULT_EXPANDED_MODULES,
     sortModulesForTable,
 } from './permissionMetadataMerge';
+import { isPlatformAdminUser } from '@/constants/platformAccess';
 
 export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const isEdit = !!user;
     const { selectedCompany } = useCompany();
+    const { user: actingUser } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
      const [metadata, setMetadata] = useState([]);
     const [roles, setRoles] = useState([]);
@@ -103,7 +106,13 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                 );
                 setMetadata(merged);
 
-                if (rolesRes.success) setRoles(rolesRes.data);
+                if (rolesRes.success) {
+                    const allRoles = rolesRes.data || [];
+                    const visibleRoles = isPlatformAdminUser(actingUser)
+                        ? allRoles
+                        : allRoles.filter((r) => String(r.name || '').toLowerCase() !== 'superadmin');
+                    setRoles(visibleRoles);
+                }
                 else console.warn("Roles failed to load", rolesRes);
 
                 if (deptsRes.success) setDepartments(deptsRes.data);

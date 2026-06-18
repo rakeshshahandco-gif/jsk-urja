@@ -1,7 +1,8 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-import { protect } from '../../middlewares/auth.middleware.js';
+import { protect, authorize } from '../../middlewares/auth.middleware.js';
+import { requirePlatformAdmin } from '../../middlewares/platformAdmin.middleware.js';
 import {
     listCompanies,
     listActiveCompanies,
@@ -36,9 +37,9 @@ router.use(protect);
 router.get('/', listCompanies);
 router.get('/active', listActiveCompanies);
 router.get('/:id', getCompany);
-router.post('/', createCompany);
-router.put('/:id', updateCompany);
-router.patch('/:id/toggle-active', toggleCompanyActive);
+router.post('/', requirePlatformAdmin, createCompany);
+router.put('/:id', requirePlatformAdmin, updateCompany);
+router.patch('/:id/toggle-active', requirePlatformAdmin, toggleCompanyActive);
 router.post('/upload-logo', upload.single('logoFile'), uploadCompanyLogo);
 
 export default router;

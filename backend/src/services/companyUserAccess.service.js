@@ -111,3 +111,27 @@ export async function assertActingUserCanManageTargetUser(actingUser, targetUser
         }
     }
 }
+
+/** Client admins cannot assign or elevate users to superadmin. */
+export async function assertRoleAssignmentAllowed(actingUser, { roleName, roleId } = {}) {
+    if (isPlatformAdminUser(actingUser)) return;
+    const name = String(roleName || '').trim().toLowerCase();
+    if (name === 'superadmin') {
+        const err = new Error('Only Platform Admin can assign the superadmin role');
+        err.statusCode = 403;
+        throw err;
+    }
+    if (roleId) {
+        const { Role } = await import('../models/role.model.js');
+        const roleDoc = await Role.findById(roleId).select('name').lean();
+        if (String(roleDoc?.name || '').trim().toLowerCase() === 'superadmin') {
+            const err = new Error('Only Platform Admin can assign the superadmin role');
+            err.statusCode = 403;
+            throw err;
+        }
+    }
+}
+
+function isPlatformAdminUser(user) {
+    return String(user?.roleName || '').trim().toLowerCase() === 'superadmin';
+}

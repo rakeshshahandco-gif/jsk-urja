@@ -13,6 +13,7 @@ import { CompanySwitcher } from '../CompanySwitcher';
 import { useCompany } from '@/contexts/CompanyContext';
 import { isTextileIndustryCompany } from '@/utils/industryInventoryLabels';
 import { useModuleGuard } from '@/contexts/ModuleGuardContext';
+import { isPlatformAdminUser, isPlatformMenuId } from '@/constants/platformAccess';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
@@ -46,40 +47,39 @@ export const Sidebar = () => {
 
     // Filter items based on user role and permissions
     const filterItems = React.useCallback((items) => {
-        // System Admin / Superadmin bypass - they see everything
         const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(userRole?.toLowerCase());
 
-        return items.filter(item => {
-            if (item.textileOnly && !isTextileCo) return false;
-            if (item.electronicsOnly && isTextileCo) return false;
-            if (!isMenuItemEnabled(item.id)) return false;
+        const process = (list) => list.map((item) => {
+            if (!isPlatformAdminUser(user) && isPlatformMenuId(item.id)) return null;
+            if (item.textileOnly && !isTextileCo) return null;
+            if (item.electronicsOnly && isTextileCo) return null;
 
-            if (MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
-                // still apply permission below for non-admin
-            } else {
+            const children = item.children ? process(item.children).filter(Boolean) : undefined;
+            const hasVisibleChildren = Boolean(children?.length);
+            const moduleOk = isMenuItemEnabled(item.id);
+
+            if (!moduleOk && !hasVisibleChildren) return null;
+
+            if (!MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
                 const featurePath = MENU_FEATURE_BY_ID[item.id];
-                if (featurePath && !isFeatureEnabled(featurePath)) return false;
+                if (featurePath && !isFeatureEnabled(featurePath)) return null;
             }
 
-            if (isAdmin) return true;
+            if (!isAdmin) {
+                if (item.permission && !hasPermission(item.permission)) return null;
+                if (item.roles && !item.roles.includes(userRole)) return null;
+            }
 
-            if (item.permission) {
-                return hasPermission(item.permission);
-            } else if (item.roles) {
-                return item.roles.includes(userRole);
+            if (children) {
+                if (!children.length) return null;
+                return { ...item, children };
             }
-            return true; // No restriction
-        }).map(item => {
-            if (item.children) {
-                const filteredChildren = filterItems(item.children);
-                return { ...item, children: filteredChildren };
-            }
+
             return item;
-        }).filter((item) => {
-            if (item.children && item.children.length === 0) return false;
-            return true;
-        });
-    }, [hasPermission, userRole, isFeatureEnabled, isTextileCo, isMenuItemEnabled]);
+        }).filter(Boolean);
+
+        return process(items);
+    }, [hasPermission, userRole, isFeatureEnabled, isTextileCo, isMenuItemEnabled, user]);
 
     const visibleMenuItems = React.useMemo(() => {
         const items = filterItems(menuConfig);

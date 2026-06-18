@@ -1,5 +1,5 @@
 // Version: 1.0.9 - Deploy: 2026-04-25T15:48:00Z
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
@@ -326,9 +326,11 @@ import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup'
 
 import { useAuth } from '@/hooks/useAuth';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { ProtectedPlatformRoute } from '@/components/auth/ProtectedPlatformRoute';
+import { PlatformAccessDenied } from '@/components/auth/PlatformAccessDenied';
 import { ToastProvider } from '@/components/ui/Toast';
 import './styles/main.scss';
-import { BrandedSplashScreen, BrandedModuleLoader, BrandedLoader } from '@/components/ui/BrandedLoading';
+import { BrandedSplashGate, BrandedModuleLoader, BrandedLoader } from '@/components/ui/BrandedLoading';
 
 import { Toaster } from 'react-hot-toast';
 
@@ -347,25 +349,13 @@ const ParamRedirect = ({ to }) => {
 };
 
 function App() {
-    const [showSplash, setShowSplash] = useState(true);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setShowSplash(false);
-        }, 800);
-        return () => clearTimeout(timer);
-    }, []);
-
-    if (showSplash) {
-        return <BrandedSplashScreen />;
-    }
-
     return (
         <BrowserRouter>
             <AuthProvider>
                     <CompanyProvider>
                 <FinancialYearProvider>
                         <FeatureSettingsProvider>
+                        <BrandedSplashGate>
                         <ModuleGuardProvider>
                         <UiPreferencesProvider>
                         <SocketProvider>
@@ -432,6 +422,7 @@ function App() {
                     </SocketProvider>
                         </UiPreferencesProvider>
                         </ModuleGuardProvider>
+                        </BrandedSplashGate>
                         </FeatureSettingsProvider>
                 </FinancialYearProvider>
                     </CompanyProvider>
@@ -546,24 +537,25 @@ const AppLayout = () => {
                         <Route path="/followup" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/talk" element={<Navigate to="/customers/list" replace />} />
                         <Route path="/admin/users" element={<ProtectedRoute requireRole="admin"><UserManagement /></ProtectedRoute>} />
-                        <Route path="/admin/diagnostics" element={<ProtectedRoute requireRole="admin"><DiagnosticDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/diagnostics" element={<ProtectedPlatformRoute><DiagnosticDashboard /></ProtectedPlatformRoute>} />
                         <Route path="/admin/ledger-linking" element={<ProtectedRoute requirePermission="admin.ledger_linking.view"><AutoLinkLedgers /></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.IMPORT_CENTER} element={<ProtectedRoute requirePermission="import_utility.import_utility.view"><ImportCenterPage /></ProtectedRoute>} />
-                        <Route path="/admin/backups" element={<ProtectedRoute requireRole="admin"><BackupRestorePage /></ProtectedRoute>} />
+                        <Route path="/admin/backups" element={<ProtectedPlatformRoute><BackupRestorePage /></ProtectedPlatformRoute>} />
 
-                        <Route path={PATHS.SETTINGS.COMPANIES_LIST} element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompaniesListPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.COMPANIES_LIST} element={<ProtectedPlatformRoute><CompaniesListPage /></ProtectedPlatformRoute>} />
                         <Route path="/company-profile" element={<ProtectedRoute requirePermission="admin.company_profile.view"><CompanyProfilePage /></ProtectedRoute>} />
-                        <Route path={PATHS.SETTINGS.FEATURE_CONFIGURATION} element={<ProtectedRoute requirePermission="admin"><FeatureConfigurationPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.FEATURE_CONFIGURATION} element={<ProtectedPlatformRoute><FeatureConfigurationPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.FEATURE_COMPLIANCE} element={<ProtectedRoute requirePermission="admin"><FeatureComplianceSettingsPage /></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.CUSTOMER_MASTER_SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.CUSTOMERS.SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.SETTINGS.ACCOUNTS_SUNDRY_DEBTOR} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.SETTINGS.CUSTOMER_SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
-                        <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedRoute requirePermission="admin"><PlatformFeatureDefaultsPage /></ProtectedRoute>} />
-                        <Route path={PATHS.SETTINGS.INDUSTRY_TEMPLATES} element={<ProtectedRoute requirePermission="admin"><IndustryTemplateMasterPage /></ProtectedRoute>} />
-                        <Route path={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION} element={<ProtectedRoute requirePermission="admin"><CompanyModuleAllocationPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedPlatformRoute><PlatformFeatureDefaultsPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.INDUSTRY_TEMPLATES} element={<ProtectedPlatformRoute><IndustryTemplateMasterPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION} element={<ProtectedPlatformRoute><CompanyModuleAllocationPage /></ProtectedPlatformRoute>} />
                         <Route path="/module-disabled" element={<ModuleDisabledPage />} />
-                        <Route path={PATHS.SETTINGS.WORKFLOW_MASTER} element={<ProtectedRoute requirePermission="admin"><WorkflowMasterPage /></ProtectedRoute>} />
+                        <Route path="/platform-access-denied" element={<PlatformAccessDenied />} />
+                        <Route path={PATHS.SETTINGS.WORKFLOW_MASTER} element={<ProtectedPlatformRoute><WorkflowMasterPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
@@ -869,10 +861,10 @@ const AppLayout = () => {
                         <Route path={PATHS.EINVOICE} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         <Route path={PATHS.E_INVOICE.ROOT} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         {/* SaaS Super Admin Routes */}
-                        <Route path={PATHS.SAAS_ADMIN.DASHBOARD} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
-                        <Route path={PATHS.SAAS_ADMIN.COMPANIES} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
-                        <Route path={PATHS.SAAS_ADMIN.SUBSCRIPTIONS} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
-                        <Route path={PATHS.SAAS_ADMIN.ACTIVITY_LOGS} element={<ProtectedRoute><SaasAdminPage /></ProtectedRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.DASHBOARD} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.COMPANIES} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.SUBSCRIPTIONS} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SAAS_ADMIN.ACTIVITY_LOGS} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
                         <Route path="prd/dashboard" element={<ProtectedRoute requirePermission="prd"><PrdDashboard /></ProtectedRoute>} />
                         <Route path="/prd/projects" element={<ProtectedRoute requirePermission="prd"><PrdProjectListPage /></ProtectedRoute>} />
                         <Route path="/prd/projects/:id" element={<ProtectedRoute requirePermission="prd"><PrdProjectDetailPage /></ProtectedRoute>} />

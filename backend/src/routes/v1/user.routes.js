@@ -2,6 +2,7 @@ import express from 'express';
 import * as userController from '../../controllers/user.controller.js';
 import { getPermissionMetadata, syncPermissions } from '../../controllers/permission.controller.js';
 import { protect, authorize } from '../../middlewares/auth.middleware.js';
+import { requirePlatformAdmin } from '../../middlewares/platformAdmin.middleware.js';
 
 const router = express.Router();
 
@@ -9,16 +10,16 @@ router.use(protect);
 
 // 1. SPECIFIC ROUTES (Must be BEFORE :id)
 router.get('/permissions/metadata', getPermissionMetadata);
-router.post('/permissions/sync', protect, authorize('superadmin', 'admin'), syncPermissions);
+router.post('/permissions/sync', protect, requirePlatformAdmin, syncPermissions);
 router.get('/roles', userController.getRoles);
 router.get('/departments', userController.getDepartments);
 
 // 2. RESOURCE ROUTES
 router.route('/roles')
-    .post(authorize('superadmin', 'admin'), userController.createRole);
+    .post(requirePlatformAdmin, userController.createRole);
 
 router.route('/roles/:id')
-    .patch(authorize('superadmin', 'admin'), userController.updateRole);
+    .patch(requirePlatformAdmin, userController.updateRole);
 
 router.route('/departments')
     .post(authorize('superadmin', 'admin'), userController.createDepartment);

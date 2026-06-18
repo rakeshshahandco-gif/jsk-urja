@@ -5,6 +5,7 @@ import { ALL_FORMS } from '@/config/forms.config';
 import { menuConfig } from '@/config/menu.config';
 import { useAuth } from '@/hooks/useAuth';
 import { useModuleGuard } from '@/contexts/ModuleGuardContext';
+import { isPlatformAdminUser, isPlatformPath, isPlatformMenuId } from '@/constants/platformAccess';
 import { moduleForFormId } from '@/config/menuModuleMap';
 import styles from './GlobalSearch.module.scss';
 
@@ -92,6 +93,7 @@ export const GlobalSearch = () => {
         };
 
         return SEARCH_CATALOG.filter((form) => {
+            if (!isPlatformAdminUser(user) && (isPlatformPath(form.path) || isPlatformMenuId(form.id))) return false;
             if (!canAccess(form)) return false;
             if (moduleGuardEnabled) {
                 const code = moduleForFormId(form.id);
