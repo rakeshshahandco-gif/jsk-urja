@@ -210,17 +210,24 @@ export const ALL_FORMS = [
     // WhatsApp
     { id: 'whatsapp-settings', title: 'WhatsApp Settings', path: '/whatsapp', icon: 'messenger', permission: 'whatsapp.whatsapp_settings.view', module: 'WhatsApp' },
 
-    // Admin
-    { id: 'companies-list', title: 'Companies', path: PATHS.SETTINGS.COMPANIES_LIST, icon: 'settings', permission: 'admin.company_profile.view', module: 'Admin' },
+    // Admin (client tenant admin)
     { id: 'company-profile', title: 'Company Profile', path: '/company-profile', icon: 'settings', permission: 'admin.company_profile.view', module: 'Admin' },
-    { id: 'feature-configuration', title: 'Feature Configuration', path: PATHS.SETTINGS.FEATURE_CONFIGURATION, icon: 'settings', permission: 'admin', module: 'Admin' },
-    { id: 'feature-compliance-settings', title: 'Feature / Compliance Settings', path: PATHS.SETTINGS.FEATURE_COMPLIANCE, icon: 'settings', permission: 'admin', module: 'Admin' },
-    { id: 'industry-template-master', title: 'Industry Template Master', path: PATHS.SETTINGS.INDUSTRY_TEMPLATES, icon: 'settings', permission: 'admin', module: 'Admin' },
-    { id: 'workflow-master', title: 'Workflow Master', path: PATHS.SETTINGS.WORKFLOW_MASTER, icon: 'settings', permission: 'admin', module: 'Admin' },
-    { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, icon: 'settings', permission: 'admin', module: 'Admin' },
+    { id: 'feature-compliance-settings', title: 'Feature Configuration Engine', path: PATHS.SETTINGS.FEATURE_COMPLIANCE, icon: 'settings', permission: 'admin', module: 'Admin', keywords: ['feature', 'compliance', 'configuration', 'settings', 'gst', 'modules'] },
     { id: 'user-management', title: 'User Management', path: '/admin/users', icon: 'crm', permission: 'admin.user_management.view', module: 'Admin' },
-    { id: 'security-control', title: 'Security & Control', path: '/admin/security', icon: 'security', permission: 'admin.security_control.view', module: 'Admin' },
+    { id: 'import-center', title: 'Import Center', path: PATHS.SETTINGS.IMPORT_CENTER, icon: 'settings', permission: 'import_utility.import_utility.view', module: 'Admin' },
     { id: 'ledger-linking', title: 'Ledger Linking Utility', path: '/admin/ledger-linking', icon: 'settings', permission: 'admin.ledger_linking.view', module: 'Admin' },
-    { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', icon: 'settings', permission: 'admin', module: 'Admin' },
-    { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', icon: 'settings', permission: 'admin', module: 'Admin' },
+
+    // Super Admin / Platform
+    { id: 'companies-list', title: 'All Companies (Platform)', path: PATHS.SETTINGS.COMPANIES_LIST, icon: 'settings', permission: 'admin.company_profile.view', module: 'Super Admin' },
+    { id: 'feature-configuration', title: 'Feature Configuration Engine (legacy URL)', path: PATHS.SETTINGS.FEATURE_CONFIGURATION, icon: 'settings', permission: 'admin', module: 'Super Admin', keywords: ['feature', 'engine', 'registry'] },
+    { id: 'industry-template-master', title: 'Industry Template Master', path: PATHS.SETTINGS.INDUSTRY_TEMPLATES, icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'company-module-allocation', title: 'Company Module Allocation', path: PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION, icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'workflow-master', title: 'Workflow Master', path: PATHS.SETTINGS.WORKFLOW_MASTER, icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'saas-dashboard', title: 'SaaS Dashboard', path: PATHS.SAAS_ADMIN.DASHBOARD, icon: 'settings', permission: null, module: 'Super Admin' },
+    { id: 'saas-companies', title: 'Companies & Subscriptions', path: PATHS.SAAS_ADMIN.COMPANIES, icon: 'settings', permission: null, module: 'Super Admin' },
+    { id: 'saas-subscriptions', title: 'Subscriptions', path: PATHS.SAAS_ADMIN.SUBSCRIPTIONS, icon: 'settings', permission: null, module: 'Super Admin' },
+    { id: 'saas-activity', title: 'Activity Logs', path: PATHS.SAAS_ADMIN.ACTIVITY_LOGS, icon: 'settings', permission: null, module: 'Super Admin' },
 ];

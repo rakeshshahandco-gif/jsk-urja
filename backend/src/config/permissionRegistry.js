@@ -96,6 +96,34 @@ export const PERMISSION_REGISTRY = [
         ],
     },
     {
+        id: 'whatsapp_bulk',
+        name: 'WhatsApp Bulk Messaging',
+        submodules: [
+            { id: 'campaigns', name: 'Bulk Campaigns', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'matter_master', name: 'Matter Master', actions: STANDARD_ACTIONS },
+            { id: 'blacklist', name: 'Blacklist / Opt-out', actions: STANDARD_ACTIONS },
+            { id: 'settings', name: 'Bulk Messaging Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'email',
+        name: 'Platform Email',
+        submodules: [
+            { id: 'settings', name: 'Email SMTP Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'test', label: 'Test Connection', type: 'boolean' }] },
+            { id: 'communication_history', name: 'Communication History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'email_bulk',
+        name: 'Email Bulk Messaging',
+        submodules: [
+            { id: 'campaigns', name: 'Bulk Campaigns', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'templates', name: 'Email Templates', actions: STANDARD_ACTIONS },
+            { id: 'blacklist', name: 'Blacklist / Opt-out', actions: STANDARD_ACTIONS },
+            { id: 'settings', name: 'Bulk Email Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+        ],
+    },
+    {
         id: 'tasks',
         name: 'Task Management',
         submodules: [

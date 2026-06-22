@@ -12,6 +12,7 @@ export const FEATURE_SETTINGS_TABS = [
     { id: 'workflow', label: 'Workflow / Kanban', platform: true },
     { id: 'ui', label: 'UI Customization', platform: true },
     { id: 'crm', label: 'CRM', platform: true },
+    { id: 'communication', label: 'Communication', platform: true },
 ];
 
 export const FEATURE_SETTINGS_FIELDS = {
@@ -95,6 +96,11 @@ export const FEATURE_SETTINGS_FIELDS = {
     crm: [
         ['whatsappToLeadEnabled', 'Enable WhatsApp to Lead / Inquiry module'],
         ['productCatalogEnabled', 'Enable Product Catalog for CRM'],
+    ],
+    communication: [
+        ['enableWhatsappBulk', 'Enable WhatsApp Bulk Messaging Utility (campaigns, matter master, blacklist)'],
+        ['enableEmail', 'Enable Platform Email (SMTP settings, communication history)'],
+        ['enableEmailBulk', 'Enable Email Bulk Messaging Utility (campaigns, templates, blacklist)'],
     ],
     customer: [
         ['enableCreditPeriod', 'Enable Credit Period'],

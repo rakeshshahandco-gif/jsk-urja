@@ -610,8 +610,8 @@ class WhatsAppSession {
         this._assertConnected();
         const jid = this._toJid(phone);
         logger.info(`[WhatsApp] User ${this.userId}: Sending text to ${jid}`);
-        await this.sock.sendMessage(jid, { text: message });
-        return { success: true };
+        const sent = await this.sock.sendMessage(jid, { text: message });
+        return { success: true, key: sent?.key || null, jid };
     }
 
     // ── Send to a raw JID (used by /whatsapp/chat panel) ──────────────────────
@@ -698,6 +698,34 @@ class WhatsAppSession {
             logger.warn(`[WhatsApp-Chat] User ${this.userId}: syncChats groupFetch error: ${e.message}`);
         }
         return { groupCount };
+    }
+
+    // ── Send Image to Number (bulk / catalog) ─────────────────────────────────
+    async sendImageMessage({ phone, filePath, caption = '', mimeType }) {
+        this._assertConnected();
+        const jid = this._toJid(phone);
+        if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+        const fileBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mimetype = mimeType
+            || (ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg');
+        logger.info(`[WhatsApp] User ${this.userId}: Sending image to ${jid}`);
+        const sent = await this.sock.sendMessage(jid, {
+            image: fileBuffer,
+            mimetype,
+            caption: caption || undefined,
+        });
+        return { success: true, key: sent?.key || null, jid };
+    }
+
+    /** Revoke a message sent from this session (Delete for everyone — WhatsApp time limits apply). */
+    async revokeMessage({ jid, key }) {
+        this._assertConnected();
+        if (!key?.id) throw new Error('Message key missing — cannot revoke');
+        const targetJid = jid || key.remoteJid;
+        if (!targetJid) throw new Error('Invalid JID for revoke');
+        await this.sock.sendMessage(targetJid, { delete: key });
+        return { success: true };
     }
 
     // ── Send Document to Number ───────────────────────────────────────────────
@@ -802,6 +830,14 @@ class WhatsAppServiceManager {
 
     async sendDocument(userId, params) {
         return this._getOrCreate(userId).sendDocument(params);
+    }
+
+    async sendImageMessage(userId, params) {
+        return this._getOrCreate(userId).sendImageMessage(params);
+    }
+
+    async revokeMessage(userId, params) {
+        return this._getOrCreate(userId).revokeMessage(params);
     }
 
     async sendDocumentToGroup(userId, params) {

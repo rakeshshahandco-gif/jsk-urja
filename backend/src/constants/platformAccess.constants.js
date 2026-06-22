@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Platform-level screens and API prefixes - superadmin / platform owner only.
  */
 
@@ -17,6 +17,11 @@ export const PLATFORM_API_PREFIXES = [
 ];
 
 export const PLATFORM_MENU_IDS = new Set([
+    'super-admin',
+    'super-admin-saas',
+    'super-admin-platform-setup',
+    'super-admin-tenant',
+    'super-admin-system',
     'saas-admin',
     'saas-dashboard',
     'saas-companies',

@@ -121,6 +121,18 @@ import PettyCashEntryPage from '@/features/pettyCash/PettyCashEntryPage';
 import PettyCashImportPage from '@/features/pettyCash/PettyCashImportPage';
 import PettyCashReportsPage from '@/features/pettyCash/PettyCashReportsPage';
 import PettyCashSettingsPage from '@/features/pettyCash/PettyCashSettingsPage';
+import WhatsappBulkCampaignsPage from '@/features/whatsappBulk/WhatsappBulkCampaignsPage';
+import WhatsappBulkMatterPage from '@/features/whatsappBulk/WhatsappBulkMatterPage';
+import WhatsappBulkBlacklistPage from '@/features/whatsappBulk/WhatsappBulkBlacklistPage';
+import WhatsappBulkHistoryPage from '@/features/whatsappBulk/WhatsappBulkHistoryPage';
+import WhatsappBulkSettingsPage from '@/features/whatsappBulk/WhatsappBulkSettingsPage';
+import EmailSettingsPage from '@/features/emailSettings/EmailSettingsPage';
+import EmailBulkCampaignsPage from '@/features/emailBulk/EmailBulkCampaignsPage';
+import EmailBulkTemplatesPage from '@/features/emailBulk/EmailBulkTemplatesPage';
+import EmailBulkBlacklistPage from '@/features/emailBulk/EmailBulkBlacklistPage';
+import EmailBulkHistoryPage from '@/features/emailBulk/EmailBulkHistoryPage';
+import EmailBulkSettingsPage from '@/features/emailBulk/EmailBulkSettingsPage';
+import CommunicationHistoryPage from '@/features/communicationHistory/CommunicationHistoryPage';
 import ScanEntryDraftsPage from '@/features/scanEntry/ScanEntryDraftsPage';
 import ScanEntryReviewPage from '@/features/scanEntry/ScanEntryReviewPage';
 import BulkScanImportPage from '@/features/scanEntry/BulkScanImportPage';
@@ -562,6 +574,22 @@ const AppLayout = () => {
                         <Route path="/whatsapp/chat" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppChatPage /></ProtectedRoute>} />
                         {/* Legacy redirect for old URL */}
                         <Route path="/settings/whatsapp" element={<Navigate to="/whatsapp" replace />} />
+
+                        {/* WhatsApp Bulk Messaging Utility (isolated module; feature + permissions gated) */}
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.CAMPAIGNS} element={<ProtectedRoute requirePermission="whatsapp_bulk.campaigns.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkCampaignsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.MATTERS} element={<ProtectedRoute requirePermission="whatsapp_bulk.matter_master.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkMatterPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST} element={<ProtectedRoute requirePermission="whatsapp_bulk.blacklist.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkBlacklistPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.HISTORY} element={<ProtectedRoute requirePermission="whatsapp_bulk.campaigns.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkHistoryPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS} element={<ProtectedRoute requirePermission="whatsapp_bulk.settings.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkSettingsPage /></FeatureGuard></ProtectedRoute>} />
+
+                        {/* Platform Email Communication */}
+                        <Route path={PATHS.SETTINGS.EMAIL} element={<ProtectedRoute requirePermission="email.settings.view"><FeatureGuard feature="communication.enableEmail"><EmailSettingsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.COMMUNICATION_HISTORY} element={<ProtectedRoute requirePermission="email.communication_history.view"><FeatureGuard feature="communication.enableEmail"><CommunicationHistoryPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.EMAIL_BULK.CAMPAIGNS} element={<ProtectedRoute requirePermission="email_bulk.campaigns.view"><FeatureGuard feature="communication.enableEmailBulk"><EmailBulkCampaignsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.EMAIL_BULK.TEMPLATES} element={<ProtectedRoute requirePermission="email_bulk.templates.view"><FeatureGuard feature="communication.enableEmailBulk"><EmailBulkTemplatesPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.EMAIL_BULK.BLACKLIST} element={<ProtectedRoute requirePermission="email_bulk.blacklist.view"><FeatureGuard feature="communication.enableEmailBulk"><EmailBulkBlacklistPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.EMAIL_BULK.HISTORY} element={<ProtectedRoute requirePermission="email_bulk.campaigns.view"><FeatureGuard feature="communication.enableEmailBulk"><EmailBulkHistoryPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.EMAIL_BULK.SETTINGS} element={<ProtectedRoute requirePermission="email_bulk.settings.view"><FeatureGuard feature="communication.enableEmailBulk"><EmailBulkSettingsPage /></FeatureGuard></ProtectedRoute>} />
 
                         {/* CRM — WhatsApp Leads + Product Catalog (gated by crm.whatsappToLeadEnabled / crm.productCatalogEnabled) */}
                         <Route path="/crm/leads" element={<ProtectedRoute requirePermission="crm.leads.view"><FeatureGuard feature="crm.whatsappToLeadEnabled"><LeadListPage /></FeatureGuard></ProtectedRoute>} />

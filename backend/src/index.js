@@ -10,6 +10,8 @@ import { initializeUserManagement } from './utils/userInitializer.js';
 import { ensureDefaultIndustryTemplates } from './services/industryTemplate.service.js';
 import { startTaskCron } from './cron/taskCron.js';
 import { startReminderCron } from './cron/reminderCron.js';
+import { startWhatsappBulkCron } from './cron/whatsappBulkCron.js';
+import { startEmailBulkCron } from './cron/emailBulkCron.js';
 import WhatsAppService from './services/whatsapp.service.js';
 
 // Connect to Database
@@ -25,6 +27,8 @@ connectDB().then((connected) => {
         // Start Cron Jobs
         startTaskCron();
         startReminderCron();
+        startWhatsappBulkCron();
+        startEmailBulkCron();
     }
 
     // Create HTTP server wrapping Express app

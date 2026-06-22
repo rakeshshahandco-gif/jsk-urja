@@ -43,6 +43,22 @@ export const PATHS = {
         ACCOUNTS_SUNDRY_DEBTOR: '/admin/accounts-settings/sundry-debtor',
         CUSTOMER_SETTINGS: '/customers/settings',
         WHATSAPP: '/whatsapp',
+        WHATSAPP_BULK: {
+            CAMPAIGNS: '/communication/whatsapp-bulk/campaigns',
+            MATTERS: '/communication/whatsapp-bulk/matters',
+            BLACKLIST: '/communication/whatsapp-bulk/blacklist',
+            HISTORY: '/communication/whatsapp-bulk/history',
+            SETTINGS: '/communication/whatsapp-bulk/settings',
+        },
+        EMAIL: '/communication/email-settings',
+        COMMUNICATION_HISTORY: '/communication/history',
+        EMAIL_BULK: {
+            CAMPAIGNS: '/communication/email-bulk/campaigns',
+            TEMPLATES: '/communication/email-bulk/templates',
+            BLACKLIST: '/communication/email-bulk/blacklist',
+            HISTORY: '/communication/email-bulk/history',
+            SETTINGS: '/communication/email-bulk/settings',
+        },
     },
     GROUPS: {
         ROOT: '/groups',

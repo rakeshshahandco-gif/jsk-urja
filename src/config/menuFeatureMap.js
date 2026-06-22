@@ -45,6 +45,22 @@ export const MENU_FEATURE_BY_ID = {
     'petty-cash-reports': 'accounting.enablePettyCash',
     'petty-cash-settings': 'accounting.enablePettyCash',
 
+    'communication-bulk-group': 'communication.enableWhatsappBulk',
+    'communication-bulk-campaigns': 'communication.enableWhatsappBulk',
+    'communication-bulk-matter': 'communication.enableWhatsappBulk',
+    'communication-bulk-blacklist': 'communication.enableWhatsappBulk',
+    'communication-bulk-history': 'communication.enableWhatsappBulk',
+    'communication-bulk-settings': 'communication.enableWhatsappBulk',
+
+    'communication-email-settings': 'communication.enableEmail',
+    'communication-history': 'communication.enableEmail',
+    'communication-email-bulk-group': 'communication.enableEmailBulk',
+    'communication-email-bulk-campaigns': 'communication.enableEmailBulk',
+    'communication-email-bulk-templates': 'communication.enableEmailBulk',
+    'communication-email-bulk-blacklist': 'communication.enableEmailBulk',
+    'communication-email-bulk-history': 'communication.enableEmailBulk',
+    'communication-email-bulk-settings': 'communication.enableEmailBulk',
+
     'scan-entry-group': 'accounting.enableAiSmartImport',
     'scan-entry-drafts': 'accounting.enableAiSmartImport',
     'scan-entry-bulk': 'accounting.enableAiSmartImport',
@@ -62,6 +78,8 @@ export const MENU_FEATURE_BY_ID = {
     tcs: 'tdsTcs.tcsRequired',
     'tcs-dashboard': 'tdsTcs.tcsRequired',
 
+    'super-admin': 'saas.moduleControlEnabled',
+    /** @deprecated — use super-admin */
     'saas-admin': 'saas.moduleControlEnabled',
 
     // Optional Kanban / Workflow layer (all default to false).

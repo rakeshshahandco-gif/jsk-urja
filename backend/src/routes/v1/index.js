@@ -118,6 +118,10 @@ import leadRoute from './lead.routes.js';
 import productCatalogRoute from './productCatalog.routes.js';
 import voucherAttachmentRoute from './voucherAttachment.routes.js';
 import pettyCashRoute from './pettyCash.routes.js';
+import whatsappBulkRoute from './whatsappBulk.routes.js';
+import emailSettingsRoute from './emailSettings.routes.js';
+import emailBulkRoute from './emailBulk.routes.js';
+import communicationHistoryRoute from './communicationHistory.routes.js';
 import sundryDebtorSettingsRoute from './sundryDebtorSettings.routes.js';
 import featureConfigurationRoute from './featureConfiguration.routes.js';
 import scanEntryRoute from './scanEntry.routes.js';
@@ -740,6 +744,24 @@ const defaultRoutes = [
     {
         path: '/textile-process-output',
         route: textileProcessOutputRoute,
+    },
+    // ── WhatsApp Bulk Messaging Utility (isolated from chat module) ─────────
+    {
+        path: '/whatsapp-bulk',
+        route: whatsappBulkRoute,
+    },
+    // ── Platform Email Communication ────────────────────────────────────────
+    {
+        path: '/email-settings',
+        route: emailSettingsRoute,
+    },
+    {
+        path: '/email-bulk',
+        route: emailBulkRoute,
+    },
+    {
+        path: '/communication-history',
+        route: communicationHistoryRoute,
     },
     // ── WhatsApp Chat Panel (additive: powers /whatsapp/chat UI) ─────────────
     {

@@ -134,4 +134,12 @@ export const DEFAULT_COMPANY_FEATURE_SETTINGS = {
         enableExportDetails: false,
         enableDocumentsKyc: false,
     },
+    communication: {
+        /** WhatsApp Bulk Message Utility — off by default; separate from WhatsApp chat module. */
+        enableWhatsappBulk: false,
+        /** Platform Email SMTP settings — off by default. */
+        enableEmail: false,
+        /** Platform Email Bulk campaigns — off by default. */
+        enableEmailBulk: false,
+    },
 };
