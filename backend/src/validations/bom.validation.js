@@ -7,6 +7,11 @@ const objectId = (value, helpers) => {
     return value;
 };
 
+const bomSection = Joi.object().keys({
+    sectionNo: Joi.number().integer().min(1).required(),
+    sectionName: Joi.string().trim().allow('').optional(),
+});
+
 const bomComponent = Joi.object().keys({
     _id: Joi.any().optional(),
     itemId: Joi.string().custom(objectId).required(),
@@ -19,7 +24,9 @@ const bomComponent = Joi.object().keys({
     totalCost: Joi.number().min(0).default(0),
     points: Joi.number().min(0).default(0),
     pointsLabourCost: Joi.number().min(0).default(0),
-    remarks: Joi.string().allow('').optional()
+    remarks: Joi.string().allow('').optional(),
+    sectionNo: Joi.number().integer().min(1).default(1),
+    sectionName: Joi.string().allow('').optional(),
 }).unknown(true);
 
 const textileProcessLabour = Joi.object().keys({
@@ -46,6 +53,8 @@ const createBOM = {
         productionQuantity: Joi.number().required().min(1).default(1),
         bomType: Joi.string().valid('Production', 'Sub-Assembly', 'Service BOM').default('Production'),
         components: Joi.array().items(bomComponent).min(1).required(),
+        sectionCount: Joi.number().integer().min(1).default(1),
+        sections: Joi.array().items(bomSection).optional(),
         totalRawMaterialCost: Joi.number().default(0),
         totalProcessCost: Joi.number().default(0),
         overheadCost: Joi.number().default(0),
@@ -101,6 +110,8 @@ const updateBOM = {
         productionQuantity: Joi.number().min(1),
         bomType: Joi.string().valid('Production', 'Sub-Assembly', 'Service BOM'),
         components: Joi.array().items(bomComponent).min(1),
+        sectionCount: Joi.number().integer().min(1),
+        sections: Joi.array().items(bomSection).optional(),
         totalRawMaterialCost: Joi.number(),
         totalProcessCost: Joi.number(),
         overheadCost: Joi.number(),

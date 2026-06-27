@@ -1187,8 +1187,66 @@ class PDFService {
     static async generateBOMPDF(bom, company, includeCost = true) {
         const logoBase64 = this.getLogoBase64();
         const items = bom.components || [];
+        const sectionCount = parseInt(bom.sectionCount, 10) || 1;
+        const isMultiSection = sectionCount > 1;
         const fmt = (n) => (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const dateFmt = (d) => d ? new Date(d).toLocaleDateString('en-GB') : "—";
+
+        const renderItemRow = (it, sr) => `
+            <tr>
+                <td style="text-align: center; color: #64748b; font-weight: 700;">${sr}</td>
+                <td>
+                    <div style="font-weight: 800; text-transform: uppercase;">${it.itemName}</div>
+                    <div style="font-size: 7.5pt; color: #64748b; margin-top: 1px; font-family: monospace;">${it.itemCode}</div>
+                </td>
+                <td style="text-align: center; font-weight: 700; font-size: 8pt; color: #1e40af;">${it.componentType || "—"}</td>
+                <td style="text-align: center; font-weight: 900;">${it.quantity}</td>
+                <td style="text-align: center; font-size: 8pt; color: #64748b;">${it.uom || "NOS"}</td>
+                ${includeCost ? `
+                    <td style="text-align: right;">${fmt(it.rate)}</td>
+                    <td style="text-align: right; font-weight: 700;">₹ ${fmt(it.totalCost)}</td>
+                ` : ''}
+                <td style="text-align: center; font-weight: 700; color: #b45309;">${it.points || 0}</td>
+                <td style="font-size: 8pt; color: #475569;">${it.remarks || "—"}</td>
+            </tr>`;
+
+        let itemsTableBody;
+        if (isMultiSection) {
+            const sections = Array.isArray(bom.sections) && bom.sections.length
+                ? bom.sections
+                : Array.from({ length: sectionCount }, (_, i) => ({ sectionNo: i + 1, sectionName: i === 0 ? 'Main BOM' : '' }));
+            const colSpan = includeCost ? 9 : 7;
+            itemsTableBody = sections.map((sec) => {
+                const groupItems = items.filter((it) => (Number(it.sectionNo) || 1) === sec.sectionNo);
+                const subtotal = groupItems.reduce((s, it) => s + (parseFloat(it.totalCost) || 0), 0);
+                return `
+                    <tr>
+                        <td colspan="${colSpan}" style="background:#f1f5f9;font-weight:900;font-size:8.5pt;padding:8px;border:1px solid #000;">
+                            Section ${sec.sectionNo}: ${sec.sectionName || '—'}
+                            ${includeCost ? `<span style="float:right;font-family:monospace;">Subtotal: ₹ ${fmt(subtotal)}</span>` : ''}
+                        </td>
+                    </tr>
+                    ${groupItems.map((it, i) => renderItemRow(it, i + 1)).join('')}
+                `;
+            }).join('');
+        } else {
+            itemsTableBody = items.map((it, i) => renderItemRow(it, i + 1)).join('');
+        }
+
+        const sectionCostRows = isMultiSection && includeCost
+            ? (() => {
+                const map = new Map();
+                for (const it of items) {
+                    const no = Number(it.sectionNo) || 1;
+                    const prev = map.get(no) || { name: it.sectionName || `Section ${no}`, total: 0 };
+                    prev.total += parseFloat(it.totalCost) || 0;
+                    map.set(no, prev);
+                }
+                return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([no, v]) => `
+                    <tr><td class="cost-label">Section ${no} — ${v.name}</td><td class="cost-value">₹ ${fmt(v.total)}</td></tr>
+                `).join('');
+            })()
+            : '';
         
         const htmlContent = `
             <!DOCTYPE html>
@@ -1305,24 +1363,7 @@ class PDFService {
                             </tr>
                         </thead>
                         <tbody>
-                            ${items.map((it, i) => `
-                                <tr>
-                                    <td style="text-align: center; color: #64748b; font-weight: 700;">${i + 1}</td>
-                                    <td>
-                                        <div style="font-weight: 800; text-transform: uppercase;">${it.itemName}</div>
-                                        <div style="font-size: 7.5pt; color: #64748b; margin-top: 1px; font-family: monospace;">${it.itemCode}</div>
-                                    </td>
-                                    <td style="text-align: center; font-weight: 700; font-size: 8pt; color: #1e40af;">${it.componentType || "—"}</td>
-                                    <td style="text-align: center; font-weight: 900;">${it.quantity}</td>
-                                    <td style="text-align: center; font-size: 8pt; color: #64748b;">${it.uom || "NOS"}</td>
-                                    ${includeCost ? `
-                                        <td style="text-align: right;">${fmt(it.rate)}</td>
-                                        <td style="text-align: right; font-weight: 700;">₹ ${fmt(it.totalCost)}</td>
-                                    ` : ''}
-                                    <td style="text-align: center; font-weight: 700; color: #b45309;">${it.points || 0}</td>
-                                    <td style="font-size: 8pt; color: #475569;">${it.remarks || "—"}</td>
-                                </tr>
-                            `).join('')}
+                            ${itemsTableBody}
                         </tbody>
                     </table>
 
@@ -1351,6 +1392,7 @@ class PDFService {
                                         <td class="cost-label">Total Raw Material Cost</td>
                                         <td class="cost-value">₹ ${fmt(bom.totalRawMaterialCost)}</td>
                                     </tr>
+                                    ${sectionCostRows}
                                     <tr>
                                         <td class="cost-label">Component Labour (Points)</td>
                                         <td class="cost-value">₹ ${fmt(bom.totalPointsLabourCost)}</td>

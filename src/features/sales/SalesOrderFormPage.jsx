@@ -83,11 +83,11 @@ const resolveOrderSeries = async (so, activeList) => {
     return { seriesId, seriesDoc };
 };
 
-/** Draft / Confirmed without invoice — series can be changed on edit */
+/** Draft without invoice — series can be changed on edit */
 const canChangeSeriesOnEdit = (form) => {
     if (form.invoiceId) return false;
     const status = form.status || 'Draft';
-    return status === 'Draft' || status === 'Confirmed';
+    return status === 'Draft';
 };
 
 
@@ -326,6 +326,13 @@ export default function SalesOrderFormPage() {
                         getSalesOrderById(id),
                     ]);
                     if (cancelled) return;
+                    if (so.status !== 'Draft' || so.invoiceId) {
+                        toast.error(so.invoiceId
+                            ? 'This sales order is linked to an invoice and cannot be edited.'
+                            : 'Submitted sales orders cannot be edited.');
+                        navigate(PATHS.SALES.ORDER_DETAIL(id));
+                        return;
+                    }
                     const { seriesId, seriesDoc } = await resolveOrderSeries(so, list || []);
                     const mergedList = mergeSeriesList(list || [], seriesDoc);
                     setSeriesList(mergedList);
@@ -366,7 +373,7 @@ export default function SalesOrderFormPage() {
             }
         })();
         return () => { cancelled = true; };
-    }, [id, isEdit]);
+    }, [id, isEdit, navigate]);
 
     const setItem = (i, k, v) => setForm(p => {
         const items = p.items.map((item, idx) => {
@@ -500,12 +507,6 @@ export default function SalesOrderFormPage() {
             <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
                 {loading ? <BrandedLoader size={120} /> : (
                 <>
-                {form.status && form.status !== 'Draft' && (
-                    <div style={{ background: '#ecfdf5', color: '#065f46', padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13, border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 18 }}>🔒</span>
-                        <span>This order is <strong>{form.status}</strong>. General details are locked, but items can still be updated.</span>
-                    </div>
-                )}
                 <Section title="Order Information">
                     <Grid cols={4}>
                         {isEdit && (
@@ -858,9 +859,9 @@ export default function SalesOrderFormPage() {
                             {saving ? 'Saving...' : isEdit ? 'Save Draft' : 'Save as Draft'}
                         </button>
                     )}
-                    {(isEdit || form.id) && (form.status === 'Draft' || form.status === 'Confirmed') && (
+                    {isEdit && form.status === 'Draft' && (
                         <button onClick={() => handleSubmit('Confirmed')} disabled={saving} style={{ padding: '10px 24px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14, boxShadow: '0 2px 8px rgba(13,148,136,0.3)' }}>
-                            {saving ? 'Processing...' : form.status === 'Draft' ? '✓ Submit Order' : '✓ Update Order'}
+                            {saving ? 'Processing...' : '✓ Submit Order'}
                         </button>
                     )}
                 </div>

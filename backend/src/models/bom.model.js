@@ -63,7 +63,9 @@ const bomComponentSchema = new mongoose.Schema({
         type: String,
         trim: true,
         default: ''
-    }
+    },
+    sectionNo: { type: Number, default: 1, min: 1 },
+    sectionName: { type: String, trim: true, default: 'Main BOM' },
 });
 
 const bomSchema = new mongoose.Schema({
@@ -104,6 +106,13 @@ const bomSchema = new mongoose.Schema({
         default: 'Production'
     },
     components: [bomComponentSchema],
+
+    /** Board-wise BOM: default 1 section (legacy BOMs behave as single section). */
+    sectionCount: { type: Number, default: 1, min: 1 },
+    sections: [{
+        sectionNo: { type: Number, required: true, min: 1 },
+        sectionName: { type: String, trim: true, default: 'Main BOM' },
+    }],
 
     // Cost Summary
     totalRawMaterialCost: { type: Number, default: 0 },

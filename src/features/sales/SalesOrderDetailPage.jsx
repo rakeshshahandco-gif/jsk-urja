@@ -151,6 +151,8 @@ export default function SalesOrderDetailPage() {
 
   const sc = STATUS_COLORS[so.status] || STATUS_COLORS.Draft;
   const notCancelled = so.status !== "Cancelled";
+  const isDraft = so.status === "Draft";
+  const canEdit = isDraft && !so.invoiceId;
   const isIGST = so.gstType === "IGST";
   const gstApplicable = so.gstApplicable !== false;
 
@@ -1400,7 +1402,7 @@ export default function SalesOrderDetailPage() {
               >
                 🖨️ Print
               </button>
-              {notCancelled && (
+              {canEdit && (
                 <button
                   onClick={() => navigate(`/sales/orders/${id}/edit`)}
                   style={{
@@ -1417,7 +1419,7 @@ export default function SalesOrderDetailPage() {
                   ✏️ Edit
                 </button>
               )}
-              {notCancelled && (user?.roleName === "admin" || user?.roleName === "superadmin") && (
+              {isDraft && (user?.roleName === "admin" || user?.roleName === "superadmin") && (
                 <button
                   onClick={handleCancel}
                   disabled={cancelling}

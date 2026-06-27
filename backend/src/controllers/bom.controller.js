@@ -7,10 +7,11 @@ import pick from '../utils/pick.js';
 import ExcelJS from 'exceljs';
 import PDFService from '../services/pdf.service.js';
 import { CompanyProfile } from '../models/companyProfile.model.js';
+import { normalizeBomSectionsForRead, normalizeBomSectionsForWrite } from '../utils/bomSection.utils.js';
 
 // ── CREATE ────────────────────────────────────────────────────────────────────
 export const createBOM = asyncHandler(async (req, res) => {
-    const bomBody = req.body;
+    const bomBody = normalizeBomSectionsForWrite(req.body);
 
     // Generate BOM Number if not provided
     if (!bomBody.bomNumber) {
@@ -65,7 +66,7 @@ export const getBOMs = asyncHandler(async (req, res) => {
 
     res.send({
         success: true,
-        data: boms,
+        data: boms.map((b) => normalizeBomSectionsForRead(b)),
         page,
         limit,
         totalPages: Math.ceil(totalResults / limit),
@@ -80,7 +81,7 @@ export const getBOM = asyncHandler(async (req, res) => {
         .populate('components.itemId', 'itemName itemCode uom itemCategory purchaseRate');
 
     if (!bom) throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
-    res.send({ success: true, data: bom });
+    res.send({ success: true, data: normalizeBomSectionsForRead(bom) });
 });
 
 // ── UPDATE ────────────────────────────────────────────────────────────────────
@@ -93,13 +94,15 @@ export const updateBOM = asyncHandler(async (req, res) => {
         await BOM.updateMany({ finishedProductId: bom.finishedProductId }, { isDefault: false });
     }
 
+    const updateBody = normalizeBomSectionsForWrite(req.body);
+
     const updatedBOM = await BOM.findByIdAndUpdate(
         req.params.id,
-        { ...req.body, updatedBy: req.user.id },
+        { ...updateBody, updatedBy: req.user.id },
         { new: true, runValidators: true }
     );
 
-    res.send({ success: true, data: updatedBOM });
+    res.send({ success: true, data: normalizeBomSectionsForRead(updatedBOM) });
 });
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
@@ -123,7 +126,8 @@ export const downloadBOMPDF = asyncHandler(async (req, res) => {
     if (!bom) throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
     if (!company) throw new ApiError(httpStatus.NOT_FOUND, 'Company profile not found');
 
-    const pdfBuffer = await PDFService.generateBOMPDF(bom, company, includeCost);
+    const normalizedBom = normalizeBomSectionsForRead(bom);
+    const pdfBuffer = await PDFService.generateBOMPDF(normalizedBom, company, includeCost);
 
     const fileName = `${bom.bomNumber}_${includeCost ? 'Full' : 'Specification'}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');

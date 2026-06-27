@@ -6,6 +6,41 @@ import { ApiError } from './ApiError.js';
 
 const ORDER_TERMINAL_STATUSES = new Set(['Cancelled', 'Closed', 'Completed']);
 
+/** Draft-only — all other statuses are treated as submitted/finalized. */
+export function isSalesOrderDraft(so) {
+    return (so?.status || 'Draft') === 'Draft';
+}
+
+/**
+ * Reject Sales Order field updates when submitted or linked to an active invoice.
+ * Allows updates only while status is Draft (including Draft → Confirmed submit).
+ */
+export async function assertSalesOrderCanBeUpdated(so, session = null) {
+    if (!so) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+    }
+    if (so.status === 'Cancelled') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update a cancelled SO');
+    }
+
+    if (so.invoiceId) {
+        const inv = await SalesInvoice.findById(so.invoiceId)
+            .session(session)
+            .select('isDeleted status invoiceNumber')
+            .lean();
+        if (inv && inv.isDeleted !== true && inv.status !== 'Cancelled') {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                'Sales Order cannot be edited because invoice is already created. Delete the linked invoice first if correction is required.'
+            );
+        }
+    }
+
+    if (!isSalesOrderDraft(so)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Submitted Sales Order cannot be edited.');
+    }
+}
+
 /** Accept soId / sold / salesOrderId from API body or query aliases. */
 export function resolveSalesOrderId(source) {
     if (!source) return null;

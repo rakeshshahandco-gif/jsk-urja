@@ -22,6 +22,16 @@ import {
     rateTypeLabel,
 } from '@/utils/textileBomLabour';
 import { listTextileJobWorkRates, lookupTextileJobWorkRate } from '@/services/textileJobWorkRateApi';
+import {
+    DEFAULT_SECTION_COUNT,
+    DEFAULT_SECTION_NAME,
+    buildDefaultSections,
+    normalizeBomFormFromApi,
+    groupComponentsBySection,
+    calcSectionSubtotals,
+    sectionLabel,
+    resolveSectionCount,
+} from '@/utils/bomSections';
 
 // ── STYLES ────────────────────────────────────────────────────────────────────
 const s = {
@@ -67,7 +77,8 @@ const s = {
 
 const BLANK_COMPONENT = {
     itemId: '', itemCode: '', itemName: '', category: '', uom: '',
-    quantity: '', componentType: '', rate: '', totalCost: 0, points: '', pointsLabourCost: 0, remarks: ''
+    quantity: '', componentType: '', rate: '', totalCost: 0, points: '', pointsLabourCost: 0, remarks: '',
+    sectionNo: DEFAULT_SECTION_COUNT, sectionName: DEFAULT_SECTION_NAME,
 };
 
 // ── FIELD WRAPPER ─────────────────────────────────────────────────────────────
@@ -106,7 +117,9 @@ const BOMFormPage = () => {
         processes: { smtAssembly: false, manualAssembly: false, testingRequired: false, qcRequired: false, packingRequired: false },
         textileProcessLabourCosts: [],
         totalTextileProcessLabourCost: 0,
-        isDefault: false, scrapAccount: '', remarks: ''
+        isDefault: false, scrapAccount: '', remarks: '',
+        sectionCount: DEFAULT_SECTION_COUNT,
+        sections: buildDefaultSections(DEFAULT_SECTION_COUNT),
     });
 
     const [saving, setSaving] = useState(false);
@@ -150,12 +163,14 @@ const BOMFormPage = () => {
     useEffect(() => {
         if (!isEdit) return;
         getBOM(id).then(data => {
+            const sectionMeta = normalizeBomFormFromApi(data);
             setForm({
                 ...data,
+                ...sectionMeta,
                 labourCostPerPoint: data.labourCostPerPoint ?? 0.25,
                 finishedProductId: data.finishedProductId?._id || data.finishedProductId,
                 revisionDate: new Date(data.revisionDate).toISOString().split('T')[0],
-                components: data.components.map(c => ({
+                components: sectionMeta.components.map(c => ({
                     ...BLANK_COMPONENT,
                     ...c,
                     itemId: c.itemId?._id || c.itemId
@@ -175,6 +190,63 @@ const BOMFormPage = () => {
 
     const handleCreateNewItem = () => {
         window.open(PATHS.INVENTORY.NEW_ITEM, '_blank');
+    };
+
+    const handleSectionCountChange = (rawValue) => {
+        const nextCount = Math.max(1, parseInt(rawValue, 10) || DEFAULT_SECTION_COUNT);
+        const prevCount = resolveSectionCount(form);
+
+        if (nextCount < prevCount) {
+            const orphaned = form.components.filter((c) => Number(c.sectionNo) > nextCount);
+            if (orphaned.length > 0) {
+                const ok = window.confirm(
+                    `${orphaned.length} component(s) are assigned to sections above ${nextCount}. ` +
+                    'They will be moved to the last section. Continue?'
+                );
+                if (!ok) return;
+            }
+        }
+
+        const nextSections = buildDefaultSections(nextCount).map((def, i) => ({
+            sectionNo: def.sectionNo,
+            sectionName: form.sections?.[i]?.sectionName || def.sectionName,
+        }));
+
+        const remappedComponents = form.components.map((c) => {
+            let sectionNo = Number(c.sectionNo) || DEFAULT_SECTION_COUNT;
+            if (sectionNo > nextCount) sectionNo = nextCount;
+            const sectionName = nextSections.find((s) => s.sectionNo === sectionNo)?.sectionName
+                || (sectionNo === 1 ? DEFAULT_SECTION_NAME : '');
+            return { ...c, sectionNo, sectionName };
+        });
+
+        setForm((prev) => ({
+            ...prev,
+            sectionCount: nextCount,
+            sections: nextSections,
+            components: remappedComponents,
+        }));
+    };
+
+    const handleSectionNameChange = (sectionNo, name) => {
+        setForm((prev) => ({
+            ...prev,
+            sections: prev.sections.map((s) => (s.sectionNo === sectionNo ? { ...s, sectionName: name } : s)),
+            components: prev.components.map((c) => (
+                Number(c.sectionNo) === sectionNo ? { ...c, sectionName: name } : c
+            )),
+        }));
+    };
+
+    const handleComponentSectionChange = (index, sectionNo) => {
+        const sec = form.sections.find((s) => s.sectionNo === Number(sectionNo));
+        const newComponents = [...form.components];
+        newComponents[index] = {
+            ...newComponents[index],
+            sectionNo: Number(sectionNo),
+            sectionName: sec?.sectionName || DEFAULT_SECTION_NAME,
+        };
+        setForm((prev) => ({ ...prev, components: newComponents }));
     };
 
     // ── AUTO-FILL POINTS & RATES FROM ITEM MASTER WHEN ITEMS LOAD ──────────────
@@ -383,9 +455,22 @@ const BOMFormPage = () => {
     const onSubmit = async () => {
         setSaving(true);
         try {
+            const count = resolveSectionCount(form);
+            if (count > 1) {
+                const missing = (form.sections || []).filter((s) => !String(s.sectionName || '').trim());
+                if (missing.length) {
+                    addToast(`Please enter names for all ${count} BOM sections`, 'error');
+                    setSaving(false);
+                    return;
+                }
+            }
             // Sanitize numeric fields: convert empty strings to 0 for backend validation
             const sanitizedForm = {
                 ...form,
+                sectionCount: resolveSectionCount(form),
+                sections: resolveSectionCount(form) === 1
+                    ? [{ sectionNo: 1, sectionName: DEFAULT_SECTION_NAME }]
+                    : form.sections,
                 totalProcessCost: parseFloat(form.totalProcessCost) || 0,
                 overheadCost: parseFloat(form.overheadCost) || 0,
                 labourCost: parseFloat(form.labourCost) || 0,
@@ -394,7 +479,11 @@ const BOMFormPage = () => {
                     ...c,
                     quantity: parseFloat(c.quantity) || 0,
                     rate: parseFloat(c.rate) || 0,
-                    points: parseFloat(c.points) || 0
+                    points: parseFloat(c.points) || 0,
+                    sectionNo: resolveSectionCount(form) === 1 ? DEFAULT_SECTION_COUNT : (parseInt(c.sectionNo, 10) || DEFAULT_SECTION_COUNT),
+                    sectionName: resolveSectionCount(form) === 1
+                        ? DEFAULT_SECTION_NAME
+                        : (form.sections.find((s) => s.sectionNo === (parseInt(c.sectionNo, 10) || DEFAULT_SECTION_COUNT))?.sectionName || c.sectionName || ''),
                 })),
                 textileProcessLabourCosts: isTextile
                     ? form.textileProcessLabourCosts.map((row) => ({
@@ -487,6 +576,10 @@ const BOMFormPage = () => {
     if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontSize: 15 }}>Loading BOM...</div>;
 
     const fmt = (n) => (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const isMultiSection = resolveSectionCount(form) > 1;
+    const sectionGroups = isMultiSection ? groupComponentsBySection(form.components, form.sections) : [];
+    const sectionSubtotals = isMultiSection ? calcSectionSubtotals(form.components) : [];
+    const componentColSpan = (isTextile ? 10 : 12) + (isMultiSection ? 1 : 0);
 
     return (
         <div style={s.page}>
@@ -662,8 +755,43 @@ const BOMFormPage = () => {
                                     <option value="Service BOM">Service BOM</option>
                                 </select>
                             </Field>
+                            <Field label="Number of BOM Sections">
+                                <input type="number" min="1" max="10" style={{ ...s.input, fontWeight: 700 }}
+                                    value={form.sectionCount ?? DEFAULT_SECTION_COUNT}
+                                    onChange={e => handleSectionCountChange(e.target.value)} />
+                                <p style={s.hint}>{isMultiSection ? 'Multi-section / board-wise BOM' : 'Single section (default)'}</p>
+                            </Field>
                         </div>
                     </div>
+
+                    {isMultiSection && (
+                        <div style={s.card}>
+                            <p style={s.cardTitle}><Settings size={14} /> BOM Section Setup</p>
+                            <div style={s.tableWrap}>
+                                <table style={s.table}>
+                                    <thead>
+                                        <tr>
+                                            <th style={s.th}>Section No</th>
+                                            <th style={s.th}>Section Name *</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {form.sections.map((sec) => (
+                                            <tr key={sec.sectionNo}>
+                                                <td style={{ ...s.td, fontWeight: 700, width: 100 }}>{sec.sectionNo}</td>
+                                                <td style={s.td}>
+                                                    <input style={{ ...s.input, padding: '7px 10px' }}
+                                                        value={sec.sectionName}
+                                                        placeholder={sec.sectionNo === 1 ? 'Main Board / Power Side' : 'Daughter Board / Control Board'}
+                                                        onChange={e => handleSectionNameChange(sec.sectionNo, e.target.value)} />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     {/* COMPONENTS TABLE CARD */}
                     <div style={s.card}>
@@ -681,8 +809,8 @@ const BOMFormPage = () => {
                                 <thead>
                                     <tr>
                                         {(isTextile
-                                            ? ['#', 'Item Code', 'Item Name', 'Material Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Remark', '']
-                                            : ['#', 'Item Code', 'Item Name', 'Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', '']
+                                            ? ['#', ...(isMultiSection ? ['Section'] : []), 'Item Code', 'Item Name', 'Material Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Remark', '']
+                                            : ['#', ...(isMultiSection ? ['Section'] : []), 'Item Code', 'Item Name', 'Type', 'Qty', 'UOM', 'Rate (₹)', 'Total Cost', 'Pts', 'Labour Cost', 'Remark', '']
                                         ).map((h, i) => (
                                             <th key={i} style={{ ...s.th, ...(i === 0 || i === 4 ? s.thCenter : {}) }}>{h}</th>
                                         ))}
@@ -692,6 +820,17 @@ const BOMFormPage = () => {
                                     {form.components.map((comp, idx) => (
                                         <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={{ ...s.td, textAlign: 'center', color: '#94a3b8', fontWeight: 700, fontSize: 11 }}>{idx + 1}</td>
+                                            {isMultiSection && (
+                                                <td style={{ ...s.td, minWidth: 150 }}>
+                                                    <select style={{ ...s.tdInput, border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 11, background: '#fff', padding: '4px 6px', fontWeight: 600 }}
+                                                        value={comp.sectionNo || DEFAULT_SECTION_COUNT}
+                                                        onChange={e => handleComponentSectionChange(idx, e.target.value)}>
+                                                        {form.sections.map((sec) => (
+                                                            <option key={sec.sectionNo} value={sec.sectionNo}>{sectionLabel(sec)}</option>
+                                                        ))}
+                                                    </select>
+                                                </td>
+                                            )}
                                             <td style={{ ...s.td, minWidth: 140 }}>
                                                 <SearchableSelect
                                                     options={items.map(i => ({ value: i._id, label: i.itemCode, meta: i.itemName }))}
@@ -765,7 +904,7 @@ const BOMFormPage = () => {
                                     <tr onClick={addComponent} style={{ cursor: 'pointer', borderTop: '2px dashed #e2e8f0' }}
                                         onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'}
                                         onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                        <td colSpan={isTextile ? 10 : 12} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
+                                        <td colSpan={componentColSpan} style={{ padding: '10px 12px', textAlign: 'center', color: '#16a34a', fontSize: 12, fontWeight: 600 }}>
                                             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                                 <Plus size={14} /> Click to add new component row
                                             </span>
@@ -935,6 +1074,13 @@ const BOMFormPage = () => {
                                 <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 14 }}>₹{fmt(form.totalRawMaterialCost)}</span>
                             </div>
 
+                            {isMultiSection && sectionSubtotals.map((sub) => (
+                                <div key={sub.sectionNo} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, opacity: 0.75, marginBottom: 6, paddingLeft: 8 }}>
+                                    <span>Sec {sub.sectionNo}: {sub.sectionName}</span>
+                                    <span style={{ fontFamily: 'monospace' }}>₹{fmt(sub.rawMaterialCost)}</span>
+                                </div>
+                            ))}
+
                             {!isTextile && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.15)', borderRadius: 8, padding: '8px 10px', marginBottom: 10 }}>
                                     <span style={{ fontSize: 12, color: '#fcd34d', fontWeight: 600 }}>Component Labour (Points)</span>
@@ -1041,26 +1187,64 @@ const BOMFormPage = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {form.components.map((c, idx) => (
-                            <tr key={idx}>
-                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
-                                <td>
-                                    <strong>{c.itemCode || '—'}</strong>
-                                    <div style={{ fontSize: '8pt', color: '#444' }}>{c.itemName}</div>
-                                </td>
-                                <td style={{ textAlign: 'center' }}>{bomComponentTypes.find((t) => t.value === c.componentType)?.label || c.componentType || '—'}</td>
-                                <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
-                                <td style={{ textAlign: 'center' }}>{c.uom}</td>
-                                {showCostInPrint && (
-                                    <>
-                                        <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
-                                    </>
-                                )}
-                                {!isTextile && <td style={{ textAlign: 'center' }}>{c.points}</td>}
-                                <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
-                            </tr>
-                        ))}
+                        {isMultiSection ? (
+                            sectionGroups.map((group) => (
+                                <React.Fragment key={group.sectionNo}>
+                                    <tr>
+                                        <td colSpan={showCostInPrint ? (isTextile ? 8 : 9) : (isTextile ? 6 : 7)}
+                                            style={{ background: '#f1f5f9', fontWeight: 800, fontSize: 10, padding: '8px 6px', borderTop: '2px solid #000' }}>
+                                            Section {group.sectionNo}: {group.sectionName}
+                                            {showCostInPrint && (
+                                                <span style={{ float: 'right', fontFamily: 'monospace' }}>
+                                                    Subtotal: ₹{fmt(group.items.reduce((s, c) => s + (parseFloat(c.totalCost) || 0), 0))}
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                    {group.items.map((c, idx) => (
+                                        <tr key={`${group.sectionNo}-${idx}`}>
+                                            <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                            <td>
+                                                <strong>{c.itemCode || '—'}</strong>
+                                                <div style={{ fontSize: '8pt', color: '#444' }}>{c.itemName}</div>
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>{bomComponentTypes.find((t) => t.value === c.componentType)?.label || c.componentType || '—'}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
+                                            <td style={{ textAlign: 'center' }}>{c.uom}</td>
+                                            {showCostInPrint && (
+                                                <>
+                                                    <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
+                                                    <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
+                                                </>
+                                            )}
+                                            {!isTextile && <td style={{ textAlign: 'center' }}>{c.points}</td>}
+                                            <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            ))
+                        ) : (
+                            form.components.map((c, idx) => (
+                                <tr key={idx}>
+                                    <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                    <td>
+                                        <strong>{c.itemCode || '—'}</strong>
+                                        <div style={{ fontSize: '8pt', color: '#444' }}>{c.itemName}</div>
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>{bomComponentTypes.find((t) => t.value === c.componentType)?.label || c.componentType || '—'}</td>
+                                    <td style={{ textAlign: 'center', fontWeight: 800 }}>{c.quantity}</td>
+                                    <td style={{ textAlign: 'center' }}>{c.uom}</td>
+                                    {showCostInPrint && (
+                                        <>
+                                            <td style={{ textAlign: 'right' }}>₹{fmt(c.rate)}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 800 }}>₹{fmt(c.totalCost)}</td>
+                                        </>
+                                    )}
+                                    {!isTextile && <td style={{ textAlign: 'center' }}>{c.points}</td>}
+                                    <td style={{ fontSize: '7.5pt' }}>{c.remarks}</td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
 

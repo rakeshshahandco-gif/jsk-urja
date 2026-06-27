@@ -143,6 +143,9 @@ const workOrderSchema = new mongoose.Schema({
     },
     finishedProductName: { type: String },
     bomVersion: { type: String },
+    /** Optional — for multi-section BOMs: which board/section to build (null = full product). */
+    bomSectionNo: { type: Number, default: null, min: 1 },
+    bomSectionName: { type: String, default: '', trim: true },
 
     targetQty: { type: Number, required: true, default: 1 },
     priority: {

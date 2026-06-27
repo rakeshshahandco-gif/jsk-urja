@@ -9,6 +9,7 @@ import { AuditLog } from '../models/auditLog.model.js';
 import mongoose from 'mongoose';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
+import { assertSalesOrderCanBeUpdated } from '../utils/salesOrderBilling.utils.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -293,7 +294,7 @@ export const updateSO = asyncHandler(async (req, res) => {
     try {
         const so = await SalesOrder.findById(req.params.id).session(session);
         if (!so) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
-        if (so.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot update a cancelled SO');
+        await assertSalesOrderCanBeUpdated(so, session);
 
         const body = req.body;
         const changes = {};
@@ -475,6 +476,9 @@ export const cancelSO = asyncHandler(async (req, res) => {
     const isAdmin = ['admin', 'superadmin'].includes(req.user.roleName);
     if (!isAdmin) {
         throw new ApiError(httpStatus.FORBIDDEN, 'Only Admins can cancel Sales Orders');
+    }
+    if (so.status !== 'Draft') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Submitted Sales Order cannot be cancelled.');
     }
 
     so.status = 'Cancelled';
