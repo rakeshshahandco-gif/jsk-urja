@@ -105,7 +105,11 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             paymentStatus: 'Unpaid',
             numberLocked: body.status === 'Confirmed', // Auto-lock if confirmed
             gstApplicable:
-                seriesDoc && (seriesDoc.isEstimate === true || seriesDoc.documentType === 'Estimate')
+                seriesDoc && (
+                    seriesDoc.isEstimate === true
+                    || seriesDoc.documentType === 'Estimate'
+                    || seriesDoc.gstApplicable === false
+                )
                     ? false
                     : body.gstApplicable !== false,
         };
@@ -207,45 +211,91 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 
         // 2. Recalculate Totals (Prevent 0 taxable amount bugs)
         if (invData.items && invData.items.length > 0) {
+            const gstOn = invData.gstApplicable !== false;
+            const isIGST = invData.gstType === 'IGST';
             let calcTotalTaxable = 0;
             let calcTotalQty = 0;
-            let calcTotalGst = 0;
+            let calcTotalCgst = 0;
+            let calcTotalSgst = 0;
+            let calcTotalIgst = 0;
 
             invData.items = invData.items.map(itm => {
                 const qty = Number(itm.qty) || 0;
                 const rate = Number(itm.rate) || 0;
                 const discAmount = Number(itm.discountAmount) || 0;
-                
+
                 const taxable = (qty * rate) - discAmount;
-                const cgst = itm.cgstRate ? (taxable * itm.cgstRate) / 100 : 0;
-                const sgst = itm.sgstRate ? (taxable * itm.sgstRate) / 100 : 0;
-                const igst = itm.igstRate ? (taxable * itm.igstRate) / 100 : 0;
-                
+                let gstRate = 0;
+                let cgstRate = 0;
+                let sgstRate = 0;
+                let igstRate = 0;
+                let cgst = 0;
+                let sgst = 0;
+                let igst = 0;
+
+                if (gstOn) {
+                    gstRate = Number(itm.gstRate) || (Number(itm.igstRate) || 0) || (Number(itm.cgstRate) || 0) * 2 || 18;
+                    if (isIGST) {
+                        igstRate = Number(itm.igstRate) || gstRate;
+                        igst = (taxable * igstRate) / 100;
+                    } else {
+                        cgstRate = Number(itm.cgstRate) || gstRate / 2;
+                        sgstRate = Number(itm.sgstRate) || gstRate / 2;
+                        cgst = (taxable * cgstRate) / 100;
+                        sgst = (taxable * sgstRate) / 100;
+                    }
+                }
+
                 calcTotalTaxable += taxable;
                 calcTotalQty += qty;
-                calcTotalGst += (cgst + sgst + igst);
+                calcTotalCgst += cgst;
+                calcTotalSgst += sgst;
+                calcTotalIgst += igst;
 
                 return {
                     ...itm,
                     qty,
                     rate,
                     taxableAmount: taxable,
+                    gstRate: gstOn ? gstRate : 0,
+                    cgstRate: gstOn ? cgstRate : 0,
+                    sgstRate: gstOn ? sgstRate : 0,
+                    igstRate: gstOn ? igstRate : 0,
                     cgstAmount: Number(cgst.toFixed(2)),
                     sgstAmount: Number(sgst.toFixed(2)),
                     igstAmount: Number(igst.toFixed(2)),
-                    totalAmount: Number((taxable + cgst + sgst + igst).toFixed(2))
+                    totalAmount: Number((taxable + cgst + sgst + igst).toFixed(2)),
                 };
             });
 
-            invData.totalTaxableAmount = Number(calcTotalTaxable.toFixed(2));
-            invData.totalQty = calcTotalQty;
-            invData.totalGst = Number(calcTotalGst.toFixed(2));
-            
-            // Grand Total Calculation
             const freight = Number(invData.freightAmount) || 0;
-            const freightGst = Number(invData.freightGstAmount) || 0;
-            invData.grandTotal = Number((invData.totalTaxableAmount + invData.totalGst + freight + freightGst).toFixed(2));
+            let freightGst = 0;
+            if (gstOn && freight > 0) {
+                const freightGstRate = Number(invData.freightGstRate) || (invData.items[0]?.gstRate || 18);
+                if (isIGST) {
+                    const igstOnFreight = Math.round(freight * freightGstRate / 100 * 100) / 100;
+                    calcTotalIgst += igstOnFreight;
+                    freightGst = igstOnFreight;
+                } else {
+                    const cgstOnFreight = Math.round(freight * (freightGstRate / 2) / 100 * 100) / 100;
+                    const sgstOnFreight = Math.round(freight * (freightGstRate / 2) / 100 * 100) / 100;
+                    calcTotalCgst += cgstOnFreight;
+                    calcTotalSgst += sgstOnFreight;
+                    freightGst = Number((cgstOnFreight + sgstOnFreight).toFixed(2));
+                }
+            }
+
+            const calcTotalGst = calcTotalCgst + calcTotalSgst + calcTotalIgst;
+            invData.totalTaxableAmount = Number((calcTotalTaxable + freight).toFixed(2));
+            invData.totalQty = calcTotalQty;
+            invData.totalCgst = Number(calcTotalCgst.toFixed(2));
+            invData.totalSgst = Number(calcTotalSgst.toFixed(2));
+            invData.totalIgst = Number(calcTotalIgst.toFixed(2));
+            invData.totalGst = Number(calcTotalGst.toFixed(2));
+            invData.freightGstAmount = freightGst;
+            invData.grandTotal = Number((invData.totalTaxableAmount + calcTotalGst).toFixed(2));
             invData.roundedTotal = Math.round(invData.grandTotal);
+            invData.roundOff = Number((invData.roundedTotal - invData.grandTotal).toFixed(2));
         }
 
         if (invData.items && invData.items.length > 0 && invData.status !== 'Draft') {
