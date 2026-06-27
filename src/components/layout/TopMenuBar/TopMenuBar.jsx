@@ -135,29 +135,36 @@ export const TopMenuBar = () => {
         || (typeof user?.role === 'string' ? user.role : user?.role?.name)
         || ROLES.VIEWER;
 
-    /* Filter top-level by role + permission + feature, recurse into children. */
+    /* Filter by role + permission + feature; recurse into children first (matches Sidebar). */
     const filterItems = useCallback((items) => {
         const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin']
             .includes(String(userRole).toLowerCase());
 
-        return items
-            .filter((item) => {
-                if (!MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
-                    const featurePath = MENU_FEATURE_BY_ID[item.id];
-                    if (featurePath && !isFeatureEnabled(featurePath)) return false;
+        const process = (list) => list.map((item) => {
+            const children = item.children ? process(item.children).filter(Boolean) : undefined;
+            const hasVisibleChildren = Boolean(children?.length);
+
+            if (!MENU_FEATURE_ALWAYS_VISIBLE.has(item.id)) {
+                const featurePath = MENU_FEATURE_BY_ID[item.id];
+                if (featurePath && !isFeatureEnabled(featurePath)) return null;
+            }
+
+            if (!isAdmin) {
+                const hasPerm = item.permission ? hasPermission(item.permission) : false;
+                if (item.permission && !hasPerm) return null;
+                if (item.roles && !item.roles.includes(userRole) && !hasPerm && !hasVisibleChildren) {
+                    return null;
                 }
-                if (isAdmin) return true;
-                if (item.permission) return hasPermission(item.permission);
-                if (item.roles) return item.roles.includes(userRole);
-                return true;
-            })
-            .map((item) => {
-                if (item.children) {
-                    return { ...item, children: filterItems(item.children) };
-                }
-                return item;
-            })
-            .filter((item) => !(item.children && item.children.length === 0 && !item.path));
+            }
+
+            if (children) {
+                if (!children.length) return null;
+                return { ...item, children };
+            }
+            return item;
+        }).filter(Boolean);
+
+        return process(items);
     }, [hasPermission, userRole, isFeatureEnabled]);
 
     /* Apply user's hide/reorder layout (same logic as Sidebar). */

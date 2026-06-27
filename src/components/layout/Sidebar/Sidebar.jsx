@@ -66,8 +66,12 @@ export const Sidebar = () => {
             }
 
             if (!isAdmin) {
-                if (item.permission && !hasPermission(item.permission)) return null;
-                if (item.roles && !item.roles.includes(userRole)) return null;
+                const hasPerm = item.permission ? hasPermission(item.permission) : false;
+                if (item.permission && !hasPerm) return null;
+                // Permission grant overrides role list (e.g. Staff with WhatsApp / Communication access)
+                if (item.roles && !item.roles.includes(userRole) && !hasPerm && !hasVisibleChildren) {
+                    return null;
+                }
             }
 
             if (children) {
