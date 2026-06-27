@@ -6,6 +6,10 @@ import Lead from '../models/lead.model.js';
 import WhatsAppBulkBlacklist from '../models/whatsappBulkBlacklist.model.js';
 import WhatsAppBulkCampaignRecipient from '../models/whatsappBulkCampaignRecipient.model.js';
 import WhatsAppBulkCampaign from '../models/whatsappBulkCampaign.model.js';
+import {
+    applyBusinessCategoryFilter,
+    applyLeadBusinessCategoryFilter,
+} from './whatsappBulkBusinessCategory.service.js';
 
 export async function syncCampaignSendStats(campaignId, companyId) {
     const [sentCount, failedCount, pendingCount] = await Promise.all([
@@ -34,60 +38,186 @@ export async function getBlacklistedSet(companyId) {
     return new Set(rows.map((r) => r.mobile));
 }
 
-export async function buildRecipientsFromCustomers(companyId, filters = {}, blacklist = new Set()) {
+export function extractCustomerMobiles(customer) {
+    const rows = [];
+    for (const cp of customer.contactPersons || []) {
+        const displayName = cp.name || customer.customerName || '';
+        for (const key of ['mobile', 'mobile2', 'mobile3', 'mobile4', 'mobile5', 'whatsApp']) {
+            if (cp[key]) rows.push({ raw: cp[key], displayName });
+        }
+    }
+    return rows;
+}
+
+export function extractLeadMobiles(lead) {
+    const rows = [];
+    const displayName = lead.customerName || '';
+    for (const raw of [
+        lead.customerMobile,
+        lead.whatsapp?.normalizedMobile,
+        lead.mobile,
+        lead.phone,
+        lead.whatsappNumber,
+    ]) {
+        if (raw) rows.push({ raw, displayName });
+    }
+    return rows;
+}
+
+export function buildCustomerQuery(filters = {}) {
     const query = { isDeleted: { $ne: true } };
-    if (filters.activeOnly) query.isActive = true;
-    if (filters.inactiveOnly) query.isActive = false;
-    if (filters.customerTypes?.length) query.customerType = { $in: filters.customerTypes };
+    if (filters.activeOnly) query.status = { $ne: 'inactive' };
+    if (filters.inactiveOnly) query.status = 'inactive';
+    const category = filters.businessCategory
+        || (filters.customerTypes?.length === 1 ? filters.customerTypes[0] : '');
+    applyBusinessCategoryFilter(query, category);
+    if (filters.customerTypes?.length > 1) query.customerType = { $in: filters.customerTypes };
     if (filters.states?.length) query.state = { $in: filters.states };
     if (filters.cities?.length) query.city = { $in: filters.cities };
     if (filters.selectedCustomerIds?.length) query._id = { $in: filters.selectedCustomerIds };
+    return query;
+}
 
+export function buildLeadQuery(filters = {}) {
+    const query = {};
+    const category = filters.businessCategory
+        || (filters.customerTypes?.length === 1 ? filters.customerTypes[0] : '');
+    applyLeadBusinessCategoryFilter(query, category);
+    if (filters.selectedCustomerIds?.length) query._id = { $in: filters.selectedCustomerIds };
+    return query;
+}
+
+export function resolveEntityCategory(entity, sourceType) {
+    if (sourceType === 'lead') {
+        return entity.businessCategory || '';
+    }
+    return entity.customerType || entity.businessCategory || '';
+}
+
+/**
+ * Process raw mobile candidates into preview rows with dedupe, invalid, and opt-out stats.
+ */
+export function processRecipientCandidates(candidates = [], blacklist = new Set(), options = {}) {
+    const selectedKeys = options.selectedRecipientKeys;
+    const hasExplicitSelection = Array.isArray(selectedKeys) && selectedKeys.length > 0;
+    const selectedSet = hasExplicitSelection ? new Set(selectedKeys) : null;
+
+    const seenMobiles = new Set();
+    let duplicateSkipped = 0;
+    let invalidSkipped = 0;
+    let optOutSkipped = 0;
+    const recipients = [];
+
+    for (const candidate of candidates) {
+        const mobile = normalizeMobile(candidate.mobile);
+        if (!mobile) {
+            invalidSkipped += 1;
+            continue;
+        }
+        const recipientKey = candidate.recipientKey || `${candidate.sourceRef || 'manual'}:${mobile}`;
+        if (seenMobiles.has(mobile)) {
+            duplicateSkipped += 1;
+            continue;
+        }
+        seenMobiles.add(mobile);
+
+        const base = {
+            recipientKey,
+            mobile,
+            displayName: candidate.displayName || '',
+            city: candidate.city || '',
+            state: candidate.state || '',
+            category: candidate.category || '',
+            entityStatus: candidate.entityStatus || '',
+            sourceRef: candidate.sourceRef || '',
+            sourceType: candidate.sourceType || '',
+        };
+
+        if (blacklist.has(mobile)) {
+            optOutSkipped += 1;
+            recipients.push({ ...base, status: 'blacklisted', selected: false });
+            continue;
+        }
+
+        const selected = !selectedSet || selectedSet.has(recipientKey) || selectedSet.has(mobile);
+        recipients.push({ ...base, status: 'pending', selected });
+    }
+
+    const validNumbers = recipients.filter((r) => r.status === 'pending').length;
+    const finalSelected = recipients.filter((r) => r.status === 'pending' && r.selected).length;
+
+    return {
+        totalFound: candidates.length,
+        validNumbers,
+        duplicateSkipped,
+        invalidSkipped,
+        optOutSkipped,
+        finalSelected,
+        recipients,
+        total: finalSelected || validNumbers,
+        valid: validNumbers,
+        blacklisted: optOutSkipped,
+    };
+}
+
+export async function buildRecipientsFromCustomers(companyId, filters = {}, blacklist = new Set()) {
+    const query = buildCustomerQuery(filters);
     const customers = await Customer.find(query)
-        .select('customerName mobile contactPersons state city customerType')
+        .select('customerName contactPersons state city customerType businessCategory status')
         .lean();
 
-    const out = [];
-    const seen = new Set();
+    const candidates = [];
     for (const c of customers) {
-        const mobiles = [];
-        if (c.mobile) mobiles.push(c.mobile);
-        for (const cp of c.contactPersons || []) {
-            if (cp.mobile) mobiles.push(cp.mobile);
-        }
-        for (const raw of mobiles) {
-            const mobile = normalizeMobile(raw);
-            if (!mobile || seen.has(mobile) || blacklist.has(mobile)) continue;
-            seen.add(mobile);
-            out.push({
-                mobile,
-                displayName: c.customerName || '',
+        const category = resolveEntityCategory(c, 'customer');
+        const entityStatus = c.status || '';
+        for (const { raw, displayName } of extractCustomerMobiles(c)) {
+            candidates.push({
+                mobile: raw,
+                displayName: displayName || c.customerName || '',
+                city: c.city || '',
+                state: c.state || '',
+                category,
+                entityStatus,
                 sourceRef: String(c._id),
+                sourceType: 'customer',
+                recipientKey: `${c._id}:${normalizeMobile(raw) || raw}`,
             });
         }
     }
-    return out;
+
+    return processRecipientCandidates(candidates, blacklist, {
+        selectedRecipientKeys: filters.selectedRecipientKeys,
+    });
 }
 
 export async function buildRecipientsFromLeads(companyId, filters = {}, blacklist = new Set()) {
-    const query = {};
-    if (filters.selectedCustomerIds?.length) query._id = { $in: filters.selectedCustomerIds };
-    const leads = await Lead.find(query).select('customerName mobile phone whatsappNumber').lean();
-    const out = [];
-    const seen = new Set();
+    const query = buildLeadQuery(filters);
+    const leads = await Lead.find(query)
+        .select('customerName customerMobile whatsapp status businessCategory city state mobile phone whatsappNumber')
+        .lean();
+
+    const candidates = [];
     for (const l of leads) {
-        for (const raw of [l.mobile, l.phone, l.whatsappNumber]) {
-            const mobile = normalizeMobile(raw);
-            if (!mobile || seen.has(mobile) || blacklist.has(mobile)) continue;
-            seen.add(mobile);
-            out.push({
-                mobile,
-                displayName: l.customerName || '',
+        const category = resolveEntityCategory(l, 'lead');
+        const entityStatus = l.status || '';
+        for (const { raw, displayName } of extractLeadMobiles(l)) {
+            candidates.push({
+                mobile: raw,
+                displayName: displayName || l.customerName || '',
+                city: l.city || '',
+                state: l.state || '',
+                category,
+                entityStatus,
                 sourceRef: String(l._id),
+                sourceType: 'lead',
+                recipientKey: `${l._id}:${normalizeMobile(raw) || raw}`,
             });
         }
     }
-    return out;
+
+    return processRecipientCandidates(candidates, blacklist, {
+        selectedRecipientKeys: filters.selectedRecipientKeys,
+    });
 }
 
 export function parseTxtNumbers(content) {
@@ -126,31 +256,29 @@ export async function parseExcelNumbers(filePath) {
 }
 
 export function dedupeRecipients(list, blacklist = new Set()) {
-    const seen = new Set();
-    const out = [];
-    for (const item of list) {
-        const mobile = normalizeMobile(item.mobile || item);
-        if (!mobile || seen.has(mobile)) continue;
-        if (blacklist.has(mobile)) {
-            seen.add(mobile);
-            out.push({ mobile, displayName: item.displayName || '', sourceRef: item.sourceRef || '', status: 'blacklisted' });
-            continue;
-        }
-        seen.add(mobile);
-        out.push({ mobile, displayName: item.displayName || '', sourceRef: item.sourceRef || '', status: 'pending' });
-    }
-    return out;
+    const candidates = (list || []).map((item) => ({
+        mobile: item.mobile || item,
+        displayName: item.displayName || '',
+        sourceRef: item.sourceRef || '',
+        recipientKey: item.recipientKey || normalizeMobile(item.mobile || item) || '',
+        category: item.category || '',
+        city: item.city || '',
+        state: item.state || '',
+        entityStatus: item.entityStatus || '',
+    }));
+    return processRecipientCandidates(candidates, blacklist).recipients;
 }
 
 export async function persistCampaignRecipients(companyId, campaignId, recipients) {
-    if (!recipients.length) return 0;
-    const docs = recipients.map((r) => ({
+    const rows = (recipients || []).filter((r) => r.status === 'pending' && r.selected !== false);
+    if (!rows.length) return 0;
+    const docs = rows.map((r) => ({
         companyId,
         campaignId,
         mobile: r.mobile,
         displayName: r.displayName || '',
         sourceRef: r.sourceRef || '',
-        status: r.status === 'blacklisted' ? 'blacklisted' : 'pending',
+        status: 'pending',
     }));
     await WhatsAppBulkCampaignRecipient.insertMany(docs, { ordered: false }).catch(() => {});
     return docs.length;

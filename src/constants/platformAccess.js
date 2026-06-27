@@ -3,6 +3,12 @@
  */
 
 export const PLATFORM_MENU_IDS = new Set([
+    'super-admin',
+    'super-admin-saas',
+    'super-admin-platform-setup',
+    'super-admin-tenant',
+    'super-admin-system',
+    /** @deprecated sidebar id — kept for UI preference migrations */
     'saas-admin',
     'saas-dashboard',
     'saas-companies',

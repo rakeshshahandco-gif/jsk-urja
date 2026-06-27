@@ -8,9 +8,10 @@ alwaysApply: true
 After any backend change (routes, controllers, services, models, imports, API):
 
 1. Imports - verify paths, exports, ESM, case-sensitive filenames.
-2. Start - run npm run dev in backend/ until no crash.
+2. Start - run npm run dev in backend/ until no crash. Do **not** start a second backend in another terminal/background (causes EADDRINUSE on 5000). Reuse an already-running instance when healthy.
 3. Health - GET /api/v1/health (default port 5000).
 4. Do not finish with a crashed backend.
+5. `npm run dev:safe` (project root) or `npm run dev` (backend/) runs `dev-preflight.cjs` first — clears duplicate **CRM Node** on PORT 5000/4000 only.
 
 Report: files changed, startup result, APIs checked, errors fixed.
 

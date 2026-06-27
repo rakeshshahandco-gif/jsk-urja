@@ -80,9 +80,27 @@ export default function PlatformFeatureDefaultsPage() {
     };
 
     const section = FEATURE_SETTINGS_FIELDS[tab] || [];
+    const tabCheckboxKeys = section.map(([key]) => key);
+    const checkedCount = tabCheckboxKeys.filter((key) => !!draft[tab]?.[key]).length;
+    const allChecked = tabCheckboxKeys.length > 0 && checkedCount === tabCheckboxKeys.length;
+    const someChecked = checkedCount > 0 && !allChecked;
+    const tabLabel = PLATFORM_FEATURE_TABS.find((t) => t.id === tab)?.label || tab;
 
-    if (loading) {
-        return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading platform defaults…</div>;
+    const setAllInTab = (val) => {
+        setDraft((p) => {
+            const next = { ...p, [tab]: { ...p[tab] } };
+            for (const [key] of section) {
+                next[tab][key] = val;
+                if (tab === 'accounting' && key === 'enableScanEntry') {
+                    next.accounting = { ...next.accounting, enableAiSmartImport: val, enableScanEntry: val };
+                }
+            }
+            return next;
+        });
+        toast.success(val ? `All ${tabLabel} toggles ON — click Save platform defaults` : `All ${tabLabel} toggles OFF — click Save platform defaults`);
+    };
+
+    if (loading) {        return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading platform defaults…</div>;
     }
 
     return (
@@ -122,8 +140,34 @@ export default function PlatformFeatureDefaultsPage() {
                         <strong>Customer</strong> — default visibility for Sundry Debtor / credit fields on Customer Master (all industries).
                     </p>
                 )}
-                {section.map(([key, label]) => (
-                    <ToggleRow
+                {section.length > 0 && (
+                    <label
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 0 12px',
+                            marginBottom: 8,
+                            borderBottom: '2px solid #e2e8f0',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            fontSize: 13,
+                            color: '#1e40af',
+                        }}
+                    >
+                        <span>Select all in {tabLabel}</span>
+                        <input
+                            type="checkbox"
+                            checked={allChecked}
+                            ref={(el) => {
+                                if (el) el.indeterminate = someChecked;
+                            }}
+                            onChange={(e) => setAllInTab(e.target.checked)}
+                            style={{ width: 18, height: 18 }}
+                        />
+                    </label>
+                )}
+                {section.map(([key, label]) => (                    <ToggleRow
                         key={key}
                         label={label}
                         checked={draft[tab]?.[key]}

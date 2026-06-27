@@ -13,7 +13,7 @@ export const ReminderListScreen = ({ navigation }) => {
 
   const fetchReminders = useCallback(async () => {
     try {
-      const res = await reminderApi.getReminders({ limit: 1000 });
+      const res = await reminderApi.getReminders({ limit: 50, page: 1 });
       const data = res?.docs || res?.data?.docs || res?.results || res?.data?.results || res?.data || (Array.isArray(res) ? res : []);
       setReminders(data);
     } catch (e) {

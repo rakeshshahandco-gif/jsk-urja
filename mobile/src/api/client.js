@@ -1,12 +1,14 @@
 import axios from 'axios';
 import ENV from '../config/env';
 import { storage } from '../utils/storage';
+import { getActiveCompanyId } from '../utils/activeCompany';
+import { clampListParams } from '../utils/pagination';
 
 const BASE_URL = ENV.apiUrl;
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: ENV.envName === 'PRODUCTION' ? 90000 : 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,6 +21,13 @@ apiClient.interceptors.request.use(
       const token = await storage.getItem('auth_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      }
+      const companyId = await getActiveCompanyId(storage);
+      if (companyId) {
+        config.headers['X-Company-Id'] = companyId;
+      }
+      if (config.params && typeof config.params === 'object') {
+        config.params = clampListParams(config.params);
       }
     } catch (e) {
       console.warn('Could not read token from storage:', e.message);

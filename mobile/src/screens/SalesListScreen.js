@@ -5,123 +5,158 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { salesApi } from '../api/sales.api';
+import { useCompany } from '../context/CompanyContext';
+import { navigateParent } from '../navigation/rootNavigation';
 import { SalesCard } from '../components/SalesCard';
 import { EmptyState } from '../components/EmptyState';
+import { DEFAULT_LIMIT } from '../utils/pagination';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
 export const SalesListScreen = ({ navigation }) => {
+  const { selectedCompany, loading: companyLoading } = useCompany();
+  const companyId = selectedCompany?._id || selectedCompany?.id;
   const [data, setData] = useState([]);
   const [activeTab, setActiveTab] = useState('invoices');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [error, setError] = useState('');
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const fetchData = useCallback(async (pageNum = 1, append = false) => {
+    if (!companyId) return;
+    setError('');
     try {
-      let res;
+      const params = { page: pageNum, limit: DEFAULT_LIMIT };
+      if (debouncedSearch) params.search = debouncedSearch;
+
+      let list = [];
       if (activeTab === 'invoices') {
-        res = await salesApi.getInvoices({ limit: 500 });
+        const res = await salesApi.getInvoices(params);
+        list = res?.invoices || [];
+        const total = res?.total ?? list.length;
+        setHasMore(pageNum * DEFAULT_LIMIT < total);
       } else {
-        res = await salesApi.getSalesOrders({ limit: 500 });
+        const res = await salesApi.getSalesOrders(params);
+        list = res?.salesOrders || [];
+        const total = res?.total ?? list.length;
+        setHasMore(pageNum * DEFAULT_LIMIT < total);
       }
-      
-      // Handle backend keys: 'invoices' or 'salesOrders'
-      const results = res?.results || res?.invoices || res?.salesOrders || res?.data || (Array.isArray(res) ? res : []);
-      setData(results);
+      setPage(pageNum);
+      setData((prev) => (append ? [...prev, ...list] : list));
     } catch (e) {
-      console.error('Sales fetch error:', e.message);
+      const msg = e.response?.data?.message || e.message || 'Failed to load sales data';
+      setError(msg);
+      if (!append) setData([]);
+      console.error('Sales fetch error:', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
-  }, [activeTab]);
+  }, [activeTab, companyId, debouncedSearch]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (companyLoading || !companyId) return;
+    setLoading(true);
+    fetchData(1, false);
+  }, [fetchData, companyId, companyLoading]);
 
-  const onRefresh = () => { setRefreshing(true); fetchData(); };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData(1, false);
+  };
 
-  const filteredData = data.filter(item => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    // Use correct backend fields: invoiceNumber, soNumber, customerName
-    const no = (item.invoiceNumber || item.soNumber || item.invoiceNo || item.orderNo || '').toLowerCase();
-    const cust = (item.customerName || item.customer?.companyName || item.customer?.name || '').toLowerCase();
-    return no.includes(q) || cust.includes(q);
-  });
+  const loadMore = () => {
+    if (loadingMore || loading || !hasMore) return;
+    setLoadingMore(true);
+    fetchData(page + 1, true);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Sales Register</Text>
           <Text style={styles.subtitle}>{activeTab === 'invoices' ? 'Tax Invoices' : 'Sales Orders'}</Text>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-             style={styles.addBtn}
-             onPress={() => navigation.navigate(activeTab === 'invoices' ? 'CreateInvoice' : 'CreateOrder')}
-          >
-            <Text style={styles.addBtnText}>+ {activeTab === 'invoices' ? 'Invoice' : 'Order'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => navigateParent(navigation, activeTab === 'invoices' ? 'CreateInvoice' : 'CreateOrder')}
+        >
+          <Text style={styles.addBtnText}>+ {activeTab === 'invoices' ? 'Invoice' : 'Order'}</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Tab Switcher */}
       <View style={styles.tabRow}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'invoices' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'invoices' && styles.activeTab]}
           onPress={() => { setLoading(true); setActiveTab('invoices'); }}
         >
           <Text style={[styles.tabText, activeTab === 'invoices' && styles.activeTabText]}>INVOICES</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'orders' && styles.activeTab]} 
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'orders' && styles.activeTab]}
           onPress={() => { setLoading(true); setActiveTab('orders'); }}
         >
           <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>ORDERS</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorHint}>Pull down to retry</Text>
+        </View>
+      ) : null}
+
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder={`🔍 Search ${activeTab === 'invoices' ? 'Inv' : 'Order'} No or Customer...`}
+          placeholder={`Search ${activeTab === 'invoices' ? 'invoice' : 'order'} no or customer…`}
           placeholderTextColor={COLORS.gray400}
           value={search}
           onChangeText={setSearch}
         />
       </View>
 
-      {/* List */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Fetching {activeTab}...</Text>
+          <Text style={styles.loadingText}>Fetching {activeTab}…</Text>
         </View>
       ) : (
         <FlatList
-          data={filteredData}
-          keyExtractor={(item) => item._id || Math.random().toString()}
+          data={data}
+          keyExtractor={(item) => item._id}
           renderItem={({ item }) => (
             <SalesCard
               invoice={item}
               type={activeTab === 'invoices' ? 'invoice' : 'order'}
-              onPress={(val) => navigation.navigate('SalesDetail', { [activeTab === 'invoices' ? 'invoice' : 'order']: val })}
+              onPress={(val) => navigateParent(navigation, 'SalesDetail', {
+                docId: val._id,
+                docType: activeTab === 'invoices' ? 'invoice' : 'order',
+              })}
             />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} /> : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="📄"
-              message={search ? "No matching invoices found" : "No invoices found"}
+              message={debouncedSearch ? 'No matching records' : 'No records found'}
               subtext="Pull down to refresh"
             />
           }
@@ -145,17 +180,14 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: FONT.lg, fontWeight: FONT.bold, color: COLORS.white },
   subtitle: { fontSize: FONT.xs, color: COLORS.white + '99', marginTop: 1 },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  addBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8, ...SHADOW.sm },
+  addBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 6, ...SHADOW.sm },
   addBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
-  backBtn: { backgroundColor: COLORS.white + '20', borderRadius: RADIUS.md, paddingHorizontal: 10, paddingVertical: 6 },
-  backText: { color: COLORS.white, fontSize: 13, fontWeight: FONT.semibold },
-  searchRow: { 
-    padding: SPACING.base, 
-    backgroundColor: COLORS.white, 
-    borderBottomWidth: 1, 
+  searchRow: {
+    padding: SPACING.base,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
     borderBottomColor: COLORS.gray100,
-    ...SHADOW.card 
+    ...SHADOW.card,
   },
   searchInput: {
     height: 42, backgroundColor: COLORS.gray50, borderWidth: 1.5,
@@ -169,4 +201,15 @@ const styles = StyleSheet.create({
   activeTabText: { color: COLORS.primary },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: SPACING.sm, color: COLORS.gray400, fontSize: FONT.sm },
+  errorBanner: {
+    marginHorizontal: SPACING.base,
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    backgroundColor: '#fef2f2',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: { color: '#b91c1c', fontSize: FONT.sm, fontWeight: FONT.semibold },
+  errorHint: { color: '#991b1b', fontSize: FONT.xs, marginTop: 4 },
 });

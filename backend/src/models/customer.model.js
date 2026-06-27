@@ -87,6 +87,11 @@ const customerSchema = mongoose.Schema(
             type: String,
             default: '',
         },
+        businessCategory: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         sticker: {
             type: String,
             trim: true,

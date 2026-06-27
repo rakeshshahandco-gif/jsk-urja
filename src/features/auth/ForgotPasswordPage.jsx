@@ -4,9 +4,14 @@ import { useForm } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { sendResetEmail } from '@/utils/passwordReset';
+import { LoginBrandingHeader } from '@/features/auth/LoginBrandingPanel';
+import { useLoginBranding } from '@/hooks/useLoginBranding';
+import { buildLoginPath, buildResetPasswordPath } from '@/utils/authPaths';
 import styles from './ForgotPasswordPage.module.scss';
 
 export const ForgotPasswordPage = () => {
+    const { slug } = useLoginBranding();
+    const loginPath = buildLoginPath(slug);
     const { register, handleSubmit, formState: { errors } } = useForm();
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -46,13 +51,13 @@ export const ForgotPasswordPage = () => {
                         {resetToken && (
                             <div className={styles.testLink}>
                                 <p><strong>For Testing:</strong></p>
-                                <Link to={`/reset-password?token=${resetToken}`} className={styles.resetLink}>
+                                <Link to={buildResetPasswordPath(slug, resetToken)} className={styles.resetLink}>
                                     Click here to reset password
                                 </Link>
                             </div>
                         )}
 
-                        <Link to="/login" className={styles.backLink}>
+                        <Link to={loginPath} className={styles.backLink}>
                             <ArrowLeft size={16} />
                             Back to Login
                         </Link>
@@ -66,7 +71,7 @@ export const ForgotPasswordPage = () => {
         <div className={styles.container}>
             <div className={styles.card}>
                 <div className={styles.header}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
+                    <LoginBrandingHeader />
                     <h2 className={styles.title}>Forgot Password?</h2>
                     <p className={styles.subtitle}>
                         Enter your email address and we&apos;ll send you a link to reset your password.
@@ -100,7 +105,7 @@ export const ForgotPasswordPage = () => {
                         {loading ? 'Sending...' : 'Send Reset Link'}
                     </Button>
 
-                    <Link to="/login" className={styles.backLink}>
+                    <Link to={loginPath} className={styles.backLink}>
                         <ArrowLeft size={16} />
                         Back to Login
                     </Link>

@@ -100,6 +100,11 @@ const DEFAULTS = {
         productCatalogEnabled: true,
         leadVisibilityMode: 'own_only',
     },
+    communication: {
+        enableWhatsappBulk: false,
+        enableEmail: false,
+        enableEmailBulk: false,
+    },
     featureEngine: {
         overrides: {},
         customDefinitions: [],

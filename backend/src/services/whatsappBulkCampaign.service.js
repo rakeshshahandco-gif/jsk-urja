@@ -27,18 +27,68 @@ import {
     parseTxtNumbers,
     parseCsvNumbers,
     parseExcelNumbers,
-    dedupeRecipients,
+    processRecipientCandidates,
     persistCampaignRecipients,
     getBlacklistedSet,
     normalizeMobile,
     syncCampaignSendStats,
 } from './whatsappBulkRecipient.service.js';
 
-function customerMatchesIndustry(customer, industryTypes = []) {
-    if (!industryTypes?.length) return true;
-    const fields = customer.industryCustomFields || {};
-    const values = fields instanceof Map ? [...fields.values()] : Object.values(fields);
-    return industryTypes.some((t) => values.includes(t));
+function normalizeBulkFilters(filters = {}) {
+    const f = { ...filters };
+    if (!f.businessCategory && f.customerTypes?.length === 1) {
+        f.businessCategory = f.customerTypes[0];
+    }
+    if (!f.businessCategory && f.industryTypes?.length === 1) {
+        f.businessCategory = f.industryTypes[0];
+    }
+    return f;
+}
+
+export async function previewRecipients(companyId, payload) {
+    await assertModuleEnabled(companyId);
+    const blacklist = await getBlacklistedSet(companyId);
+    const filters = normalizeBulkFilters(payload.filters || {});
+
+    if (payload.recipientSource === 'customer_master') {
+        const result = await buildRecipientsFromCustomers(companyId, filters, blacklist);
+        return { ...result, recipients: result.recipients.slice(0, 500) };
+    }
+    if (payload.recipientSource === 'lead_master') {
+        const result = await buildRecipientsFromLeads(companyId, filters, blacklist);
+        return { ...result, recipients: result.recipients.slice(0, 500) };
+    }
+
+    let candidates = [];
+    if (payload.recipientSource === 'manual') {
+        candidates = (payload.manualNumbers || []).map((m) => ({
+            mobile: m,
+            sourceType: 'manual',
+            recipientKey: normalizeMobile(m) || String(m),
+        }));
+    } else if (payload.uploadFilePath) {
+        const full = path.isAbsolute(payload.uploadFilePath)
+            ? payload.uploadFilePath
+            : path.join(process.cwd(), payload.uploadFilePath);
+        let numbers = [];
+        if (payload.recipientSource === 'txt_upload') {
+            numbers = parseTxtNumbers(fs.readFileSync(full, 'utf8'));
+        } else if (payload.recipientSource === 'csv_upload') {
+            numbers = await parseCsvNumbers(full);
+        } else if (payload.recipientSource === 'excel_upload') {
+            numbers = await parseExcelNumbers(full);
+        }
+        candidates = numbers.map((m) => ({
+            mobile: m,
+            sourceType: 'upload',
+            recipientKey: normalizeMobile(m) || String(m),
+        }));
+    }
+
+    const preview = processRecipientCandidates(candidates, blacklist, {
+        selectedRecipientKeys: filters.selectedRecipientKeys,
+    });
+    return { ...preview, recipients: preview.recipients.slice(0, 500) };
 }
 
 export async function listCampaigns(companyId, { status, limit = 50 } = {}) {
@@ -168,77 +218,30 @@ async function dispatchWhatsAppSend(mobile, resolved, userId, campaign = null) {
     return dispatchBulkWhatsAppSend(mobile, resolved, { userId, campaign });
 }
 
-export async function previewRecipients(companyId, payload) {
-    await assertModuleEnabled(companyId);
-    const blacklist = await getBlacklistedSet(companyId);
-    let raw = [];
-
-    if (payload.recipientSource === 'customer_master') {
-        const q = payload.filters || {};
-        if (q.industryTypes?.length) {
-            const Customer = (await import('../models/customer.model.js')).default;
-            const query = { isDeleted: { $ne: true } };
-            if (q.activeOnly) query.isActive = true;
-            if (q.inactiveOnly) query.isActive = false;
-            if (q.customerTypes?.length) query.customerType = { $in: q.customerTypes };
-            if (q.states?.length) query.state = { $in: q.states };
-            if (q.cities?.length) query.city = { $in: q.cities };
-            if (q.selectedCustomerIds?.length) query._id = { $in: q.selectedCustomerIds };
-            const rows = await Customer.find(query).select('customerName mobile contactPersons industryCustomFields').lean();
-            const seen = new Set();
-            for (const c of rows) {
-                if (!customerMatchesIndustry(c, q.industryTypes)) continue;
-                const mobiles = [c.mobile, ...(c.contactPersons || []).map((cp) => cp.mobile)].filter(Boolean);
-                for (const m of mobiles) {
-                    const mobile = normalizeMobile(m);
-                    if (!mobile || seen.has(mobile) || blacklist.has(mobile)) continue;
-                    seen.add(mobile);
-                    raw.push({ mobile, displayName: c.customerName || '', sourceRef: String(c._id) });
-                }
-            }
-        } else {
-            raw = await buildRecipientsFromCustomers(companyId, q, blacklist);
-        }
-    } else if (payload.recipientSource === 'lead_master') {
-        raw = await buildRecipientsFromLeads(companyId, payload.filters || {}, blacklist);
-    } else if (payload.recipientSource === 'manual') {
-        raw = (payload.manualNumbers || []).map((m) => ({ mobile: m }));
-    } else if (payload.uploadFilePath) {
-        const full = path.isAbsolute(payload.uploadFilePath)
-            ? payload.uploadFilePath
-            : path.join(process.cwd(), payload.uploadFilePath);
-        let numbers = [];
-        if (payload.recipientSource === 'txt_upload') {
-            numbers = parseTxtNumbers(fs.readFileSync(full, 'utf8'));
-        } else if (payload.recipientSource === 'csv_upload') {
-            numbers = await parseCsvNumbers(full);
-        } else if (payload.recipientSource === 'excel_upload') {
-            numbers = await parseExcelNumbers(full);
-        }
-        raw = numbers.map((m) => ({ mobile: m }));
-    }
-
-    const recipients = dedupeRecipients(raw, blacklist);
-    return {
-        total: recipients.length,
-        valid: recipients.filter((r) => r.status !== 'blacklisted').length,
-        blacklisted: recipients.filter((r) => r.status === 'blacklisted').length,
-        recipients: recipients.slice(0, 500),
-    };
-}
-
 export async function saveRecipientsForCampaign(companyId, campaignId) {
     const campaign = await WhatsAppBulkCampaign.findOne({ _id: campaignId, companyId });
     if (!campaign) throw new ApiError(404, 'Campaign not found');
     await WhatsAppBulkCampaignRecipient.deleteMany({ campaignId, companyId });
     const preview = await previewRecipients(companyId, campaign.toObject());
-    const count = await persistCampaignRecipients(companyId, campaignId, preview.recipients);
-    campaign.totalRecipients = preview.total;
-    campaign.skippedCount = preview.blacklisted;
+    const selected = preview.recipients.filter((r) => r.status === 'pending' && r.selected !== false);
+    const count = await persistCampaignRecipients(companyId, campaignId, selected);
+    campaign.totalRecipients = selected.length;
+    campaign.skippedCount = (preview.duplicateSkipped || 0) + (preview.invalidSkipped || 0) + (preview.optOutSkipped || 0);
     campaign.sentCount = 0;
     campaign.failedCount = 0;
     await campaign.save();
-    return { total: preview.total, saved: count };
+    return {
+        total: selected.length,
+        saved: count,
+        summary: {
+            totalFound: preview.totalFound,
+            validNumbers: preview.validNumbers,
+            duplicateSkipped: preview.duplicateSkipped,
+            invalidSkipped: preview.invalidSkipped,
+            optOutSkipped: preview.optOutSkipped,
+            finalSelected: selected.length,
+        },
+    };
 }
 
 export async function listCampaignRecipients(companyId, campaignId, { status, limit = 200 } = {}) {

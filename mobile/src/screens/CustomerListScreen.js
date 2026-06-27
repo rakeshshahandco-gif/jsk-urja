@@ -4,81 +4,87 @@ import {
   ActivityIndicator, RefreshControl, TextInput, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { customersApi } from '../api/customers.api';
+import { useCompany } from '../context/CompanyContext';
+import { extractList } from '../utils/apiResponse';
+import { DEFAULT_LIMIT, getTotalPages } from '../utils/pagination';
 import { CustomerCard } from '../components/CustomerCard';
 import { EmptyState } from '../components/EmptyState';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
-export const CustomerListScreen = ({ navigation }) => {
+export const CustomerListScreen = ({ navigation: navigationProp }) => {
+  const navigation = useNavigation() || navigationProp;
+  const { selectedCompany, loading: companyLoading } = useCompany();
+  const companyId = selectedCompany?._id || selectedCompany?.id;
   const [customers, setCustomers] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [error, setError] = useState('');
 
-  const fetchCustomers = useCallback(async () => {
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const fetchCustomers = useCallback(async (pageNum = 1, append = false) => {
+    if (!companyId) return;
+    setError('');
     try {
-      const res = await customersApi.getCustomers({ 
-        limit: 1000,
-        sortBy: 'company:asc' 
-      });
-      // Handle various backend response formats (docs, results, data.results, customers)
-      const data = res?.docs || res?.data?.docs || res?.results || res?.customers || res?.data?.results || (Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []));
-      setCustomers(data);
+      const params = {
+        page: pageNum,
+        limit: DEFAULT_LIMIT,
+        sortBy: 'company:asc',
+      };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (activeFilter !== 'all') params.status = activeFilter;
+
+      const res = await customersApi.getCustomers(params);
+      const list = extractList(res, ['results', 'docs', 'customers']);
+      setTotalPages(getTotalPages(res));
+      setTotalResults(res?.totalResults ?? res?.total ?? list.length);
+      setPage(pageNum);
+      setCustomers((prev) => (append ? [...prev, ...list] : list));
     } catch (e) {
-      console.error('Customer fetch error:', e.message);
+      const msg = e.response?.data?.message || e.message || 'Failed to load customers';
+      setError(msg);
+      if (!append) setCustomers([]);
+      console.error('Customer fetch error:', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }, [companyId, debouncedSearch, activeFilter]);
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+  useEffect(() => {
+    if (companyLoading || !companyId) return;
+    setLoading(true);
+    fetchCustomers(1, false);
+  }, [fetchCustomers, companyId, companyLoading]);
 
-  const onRefresh = () => { setRefreshing(true); fetchCustomers(); };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchCustomers(1, false);
+  };
 
-  const filteredCustomers = customers.filter(c => {
-    if (!c) return false;
-    // 1. Status Filter
-    if (activeFilter !== 'all' && c.status !== activeFilter) return false;
-
-    // 2. Multi-field Search (Mirror of CRM Search)
-    if (!search) return true;
-    const q = search.toLowerCase();
-    
-    const company = (c.company || '').toLowerCase();
-    const brand = (c.companyBrand || '').toLowerCase();
-    const code = (c.customerCode || '').toLowerCase();
-    const gst = (c.gstNumber || '').toLowerCase();
-    const city = (c.city || '').toLowerCase();
-    const state = (c.state || '').toLowerCase();
-    
-    // Search in contacts
-    const contactMatch = c.contactPersons?.some(cp => 
-      (cp.name || '').toLowerCase().includes(q) || 
-      (cp.mobile || '').includes(q) ||
-      (cp.email || '').toLowerCase().includes(q)
-    );
-
-    // Search in stickers/tags
-    const tagMatch = c.stickers?.some(s => 
-      (s.name || '').toLowerCase().includes(q)
-    );
-
-    return company.includes(q) || 
-           brand.includes(q) || 
-           code.includes(q) || 
-           gst.includes(q) || 
-           city.includes(q) || 
-           state.includes(q) ||
-           contactMatch ||
-           tagMatch;
-  });
+  const loadMore = () => {
+    if (loadingMore || loading || page >= totalPages) return;
+    setLoadingMore(true);
+    fetchCustomers(page + 1, true);
+  };
 
   const FilterTab = ({ label, value }) => (
     <TouchableOpacity 
       style={[styles.filterTab, activeFilter === value && styles.filterTabActive]}
-      onPress={() => setActiveFilter(value)}
+      onPress={() => { setActiveFilter(value); setLoading(true); }}
     >
       <Text style={[styles.filterTabText, activeFilter === value && styles.filterTabTextActive]}>
         {label}
@@ -92,15 +98,19 @@ export const CustomerListScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Customer Master</Text>
-          <Text style={styles.subtitle}>{customers.length} Sync'd Records</Text>
+          <Text style={styles.subtitle}>
+            {totalResults > 0 ? `${totalResults} customers` : `${customers.length} loaded`}
+            {totalPages > 1 ? ` · page ${page}/${totalPages}` : ''}
+          </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
       </View>
+
+      {error ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorHint}>Pull down to retry · check company on Home screen</Text>
+        </View>
+      ) : null}
 
       {/* Mirror Search Bar */}
       <View style={styles.searchRow}>
@@ -138,20 +148,32 @@ export const CustomerListScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={filteredCustomers}
-          keyExtractor={(item) => item._id || Math.random().toString()}
+          data={customers}
+          keyExtractor={(item) => item._id || String(item.customerCode)}
           renderItem={({ item }) => (
             <CustomerCard
               customer={item}
-              onPress={(customer) => navigation.navigate('CustomerDetail', { customer })}
+              onPress={(customer) => navigation.navigate('CustomerDetail', {
+                customerId: customer._id,
+                customer,
+              })}
             />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: 16 }} color={COLORS.primary} />
+            ) : page < totalPages ? (
+              <Text style={styles.loadMoreHint}>Scroll for more…</Text>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="👤"
-              message={search ? "No matching records" : "No customers found"}
-              subtext="Pull down to refresh live data"
+              message={debouncedSearch ? 'No matching records' : 'No customers found'}
+              subtext="Pull down to refresh · search uses server"
             />
           }
           contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
@@ -219,4 +241,16 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: SPACING.sm, color: COLORS.gray400, fontSize: FONT.sm },
+  errorBanner: {
+    marginHorizontal: SPACING.base,
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    backgroundColor: '#fef2f2',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: { color: '#b91c1c', fontSize: FONT.sm, fontWeight: FONT.semibold },
+  errorHint: { color: '#991b1b', fontSize: FONT.xs, marginTop: 4 },
+  loadMoreHint: { textAlign: 'center', color: COLORS.gray400, fontSize: FONT.xs, paddingVertical: 12 },
 });

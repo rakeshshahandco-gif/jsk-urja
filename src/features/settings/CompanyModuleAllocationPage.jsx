@@ -26,6 +26,9 @@ export default function CompanyModuleAllocationPage() {
     const [companyId, setCompanyId] = useState(selectedCompany?._id || '');
     const [form, setForm] = useState({
         clientCode: '',
+        loginSlug: '',
+        loginTagline: '',
+        loginPrimaryColor: '',
         industryTemplateRef: '',
         enabledModules: [],
         disabledModules: [],
@@ -58,6 +61,9 @@ export default function CompanyModuleAllocationPage() {
             const c = data?.company || {};
             setForm({
                 clientCode: c.clientCode || '',
+                loginSlug: c.loginSlug || '',
+                loginTagline: c.loginTagline || '',
+                loginPrimaryColor: c.loginPrimaryColor || '',
                 industryTemplateRef: c.industryTemplateRef?._id || c.industryTemplateRef || '',
                 enabledModules: c.enabledModules || [],
                 disabledModules: c.disabledModules || [],
@@ -171,6 +177,39 @@ export default function CompanyModuleAllocationPage() {
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Client Code</label>
                             <input value={form.clientCode} onChange={(e) => setForm((p) => ({ ...p, clientCode: e.target.value }))} style={{ ...inp, marginTop: 6 }} />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Login URL Slug</label>
+                            <input
+                                value={form.loginSlug}
+                                onChange={(e) => setForm((p) => ({ ...p, loginSlug: e.target.value }))}
+                                placeholder="e.g. jsk, handloom"
+                                style={{ ...inp, marginTop: 6 }}
+                            />
+                            <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>
+                                Branded login: /login/
+                                {form.loginSlug || form.clientCode || 'your-slug'}
+                                {' '}
+                                (logo from Company Profile)
+                            </p>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Login Tagline</label>
+                            <input
+                                value={form.loginTagline}
+                                onChange={(e) => setForm((p) => ({ ...p, loginTagline: e.target.value }))}
+                                placeholder="CRM Application"
+                                style={{ ...inp, marginTop: 6 }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Login Accent Color</label>
+                            <input
+                                value={form.loginPrimaryColor}
+                                onChange={(e) => setForm((p) => ({ ...p, loginPrimaryColor: e.target.value }))}
+                                placeholder="#2563eb"
+                                style={{ ...inp, marginTop: 6 }}
+                            />
                         </div>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Industry Template</label>

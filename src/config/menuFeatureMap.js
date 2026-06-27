@@ -45,7 +45,7 @@ export const MENU_FEATURE_BY_ID = {
     'petty-cash-reports': 'accounting.enablePettyCash',
     'petty-cash-settings': 'accounting.enablePettyCash',
 
-    'communication-bulk-group': 'communication.enableWhatsappBulk',
+    // Parent communication-bulk-group: no feature flag — visibility follows enabled children (WhatsApp / email).
     'communication-bulk-campaigns': 'communication.enableWhatsappBulk',
     'communication-bulk-matter': 'communication.enableWhatsappBulk',
     'communication-bulk-blacklist': 'communication.enableWhatsappBulk',

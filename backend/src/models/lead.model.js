@@ -50,10 +50,11 @@ const leadSchema = new mongoose.Schema(
         customerName: { type: String, trim: true, default: '' },
         customerMobile: { type: String, trim: true, default: '' },
         customerEmail: { type: String, trim: true, default: '' },
+        businessCategory: { type: String, trim: true, default: '' },
 
         source: {
             type: String,
-            enum: ['whatsapp', 'manual', 'call', 'email', 'visit', 'other'],
+            enum: ['whatsapp', 'manual', 'call', 'email', 'visit', 'other', 'data_extractor'],
             default: 'whatsapp',
         },
         status: {
@@ -91,6 +92,14 @@ const leadSchema = new mongoose.Schema(
         sharedAssets: { type: [sharedAssetSchema], default: [] },
 
         notes: { type: String, trim: true, default: '' },
+
+        /** Back-link when created from Data Extractor (Phase 3 — additive only). */
+        extractorRef: {
+            extractedLeadId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExtractedLead', default: null },
+            sourcePlatform: { type: String, trim: true, default: '' },
+            sourceUrl: { type: String, trim: true, default: '' },
+            convertedAt: { type: Date, default: null },
+        },
 
         createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         createdByName: { type: String, trim: true, default: '' },

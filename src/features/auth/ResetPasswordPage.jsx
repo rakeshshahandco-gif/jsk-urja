@@ -4,10 +4,16 @@ import { useForm } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
 import { Lock, Eye, EyeOff, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { validateResetToken, resetPasswordWithToken } from '@/utils/passwordReset';
+import { LoginBrandingHeader } from '@/features/auth/LoginBrandingPanel';
+import { useLoginBranding } from '@/hooks/useLoginBranding';
+import { buildLoginPath, buildForgotPasswordPath } from '@/utils/authPaths';
 import styles from './ResetPasswordPage.module.scss';
 
 export const ResetPasswordPage = () => {
     const navigate = useNavigate();
+    const { slug } = useLoginBranding();
+    const loginPath = buildLoginPath(slug);
+    const forgotPath = buildForgotPasswordPath(slug);
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token');
 
@@ -62,7 +68,7 @@ export const ResetPasswordPage = () => {
                 setSuccess(true);
                 // Redirect to login after 3 seconds
                 setTimeout(() => {
-                    navigate('/login', { state: { message: 'Password reset successful! Please login with your new password.' } });
+                    navigate(loginPath, { state: { message: 'Password reset successful! Please login with your new password.' } });
                 }, 3000);
             } else {
                 setTokenError(result.error);
@@ -85,10 +91,10 @@ export const ResetPasswordPage = () => {
                         <AlertCircle size={64} className={styles.errorIcon} />
                         <h1 className={styles.title}>Invalid or Expired Link</h1>
                         <p className={styles.subtitle}>{tokenError}</p>
-                        <Link to="/forgot-password" className={styles.link}>
+                        <Link to={forgotPath} className={styles.link}>
                             <Button>Request New Reset Link</Button>
                         </Link>
-                        <Link to="/login" className={styles.backLink}>
+                        <Link to={loginPath} className={styles.backLink}>
                             Back to Login
                         </Link>
                     </div>
@@ -130,7 +136,7 @@ export const ResetPasswordPage = () => {
         <div className={styles.container}>
             <div className={styles.card}>
                 <div className={styles.header}>
-                    <h1 className={styles.companyName}>JSK URJA</h1>
+                    <LoginBrandingHeader />
                     <h2 className={styles.title}>Reset Password</h2>
                     <p className={styles.subtitle}>Enter your new password below</p>
                 </div>
@@ -228,7 +234,7 @@ export const ResetPasswordPage = () => {
                         {loading ? 'Resetting...' : 'Reset Password'}
                     </Button>
 
-                    <Link to="/login" className={styles.backLink}>
+                    <Link to={loginPath} className={styles.backLink}>
                         Back to Login
                     </Link>
                 </form>

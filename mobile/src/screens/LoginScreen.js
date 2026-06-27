@@ -41,8 +41,7 @@ export const LoginScreen = () => {
               <Text style={styles.logoText}>JSK</Text>
             </View>
             <Text style={styles.brand}>JSK URJA</Text>
-            <Text style={{ fontSize: 20, color: 'red', fontWeight: 'bold' }}>[MOBILE APK TEST MODE]</Text>
-            <Text style={styles.subtitle}>Task Management</Text>
+            <Text style={styles.subtitle}>CRM · Tasks · Sales</Text>
           </View>
 
           {/* Form Card */}

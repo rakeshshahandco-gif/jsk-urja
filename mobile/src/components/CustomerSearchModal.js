@@ -9,26 +9,37 @@ export const CustomerSearchModal = ({ visible, onClose, onSelect }) => {
   const [loading, setLoading] = useState(false);
 
   const searchCustomers = useCallback(async (q) => {
+    const term = (q || '').trim();
+    if (term.length > 0 && term.length < 2) {
+      setResults([]);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await customersApi.getCustomers({ search: q, limit: 50 });
-      const data = res?.docs || res?.data?.docs || res?.results || res?.data?.results || res?.data || (Array.isArray(res) ? res : []);
-      setResults(data);
+      const res = await customersApi.getCustomers({
+        search: term || undefined,
+        page: 1,
+        limit: 25,
+      });
+      const data = res?.results || res?.docs || res?.data?.results || (Array.isArray(res) ? res : []);
+      setResults(Array.isArray(data) ? data : []);
     } catch (e) {
       console.warn('Customer search error', e);
+      setResults([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (visible) searchCustomers('');
-  }, [visible, searchCustomers]);
+    if (!visible) return;
+    setSearch('');
+    setResults([]);
+  }, [visible]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (visible) searchCustomers(search);
-    }, 400);
+    if (!visible) return;
+    const timer = setTimeout(() => searchCustomers(search), 400);
     return () => clearTimeout(timer);
   }, [search, visible, searchCustomers]);
 
@@ -48,7 +59,7 @@ export const CustomerSearchModal = ({ visible, onClose, onSelect }) => {
         <View style={styles.searchBox}>
           <TextInput
             style={styles.input}
-            placeholder="Search company, brand, code, GST..."
+            placeholder="Type 2+ chars: name, mobile, GST…"
             value={search}
             onChangeText={setSearch}
             autoFocus

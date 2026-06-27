@@ -885,18 +885,25 @@ class PDFService {
     static async generateSalesInvoicePDF(inv, company, user) {
         const logoBase64 = this.getLogoBase64();
         let barcodeBlockHtml = '';
+        const isEstimate = inv.seriesId?.isEstimate === true ||
+            (inv.seriesId?.seriesName || '').toLowerCase().includes('estimate') ||
+            (inv.invoiceNumber || '').toLowerCase().includes('est');
+        const docTitle = isEstimate ? 'ESTIMATE' : (inv.gstApplicable !== false ? 'TAX INVOICE' : 'SALES INVOICE');
+        const docNumberLabel = isEstimate ? 'Estimate No' : 'Invoice No';
         try {
-            const { buildInvoiceBarcodePayload } = await import('./invoiceBarcode.service.js');
-            const companyId = inv.companyId || company?.companyId;
-            const bc = await buildInvoiceBarcodePayload(inv, companyId);
-            if (bc.settings?.enableQr || bc.settings?.enableBarcode) {
-                const bcPart = bc.settings.enableBarcode && bc.barcodeDataUrl
-                    ? `<div style="text-align:center;"><img src="${bc.barcodeDataUrl}" alt="Barcode" style="height:${bc.settings.barcodeHeight || 40}px;max-width:220px;" /><div style="font-size:7pt;margin-top:2px;">${bc.barcodeValue || ""}</div></div>`
-                    : '';
-                const qrPart = bc.settings.enableQr && bc.qrDataUrl
-                    ? `<div style="text-align:center;"><img src="${bc.qrDataUrl}" alt="QR" style="width:${bc.settings.qrSize || 96}px;height:${bc.settings.qrSize || 96}px;" /><div style="font-size:7pt;margin-top:2px;">Scan for details</div>`
-                    : '';
-                barcodeBlockHtml = `<div class="barcode-footer" style="display:flex;justify-content:flex-end;align-items:flex-end;gap:16px;margin-top:8px;padding:8px 0;border-top:1px dashed #ccc;">${bcPart}${qrPart}</div>`;
+            if (!isEstimate) {
+                const { buildInvoiceBarcodePayload } = await import('./invoiceBarcode.service.js');
+                const companyId = inv.companyId || company?.companyId;
+                const bc = await buildInvoiceBarcodePayload(inv, companyId);
+                if (bc.settings?.enableQr || bc.settings?.enableBarcode) {
+                    const bcPart = bc.settings.enableBarcode && bc.barcodeDataUrl
+                        ? `<div style="text-align:center;"><img src="${bc.barcodeDataUrl}" alt="Barcode" style="height:${bc.settings.barcodeHeight || 40}px;max-width:220px;" /><div style="font-size:7pt;margin-top:2px;">${bc.barcodeValue || ""}</div></div>`
+                        : '';
+                    const qrPart = bc.settings.enableQr && bc.qrDataUrl
+                        ? `<div style="text-align:center;"><img src="${bc.qrDataUrl}" alt="QR" style="width:${bc.settings.qrSize || 96}px;height:${bc.settings.qrSize || 96}px;" /><div style="font-size:7pt;margin-top:2px;">Scan for details</div>`
+                        : '';
+                    barcodeBlockHtml = `<div class="barcode-footer" style="display:flex;justify-content:flex-end;align-items:flex-end;gap:16px;margin-top:8px;padding:8px 0;border-top:1px dashed #ccc;">${bcPart}${qrPart}</div>`;
+                }
             }
         } catch (bcErr) {
             console.warn('[PDF] Invoice barcode skipped:', bcErr.message);
@@ -908,7 +915,6 @@ class PDFService {
         const amountInWords = inv.amountInWords || numberToWords(grandTotal);
         const gstApplicable = inv.gstApplicable !== false;
         const isIGST = inv.gstType === "IGST";
-        const isEstimate = inv.seriesId?.isEstimate === true;
 
         // Multi-page logic matching frontend
         const itemsPerPageFirst = 8;
@@ -922,6 +928,80 @@ class PDFService {
             while (remaining.length > 0) {
                 pages.push(remaining.slice(0, itemsPerPageOthers));
                 remaining = remaining.slice(itemsPerPageOthers);
+            }
+        }
+
+        if (isEstimate) {
+            const itemRows = items.map((it) => `
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:10px 0;vertical-align:top;">
+                        <div style="font-weight:700;font-size:10pt;">${it.description || it.itemName || ''}</div>
+                        ${it.additionalNotes ? `<div style="font-size:8pt;color:#64748b;margin-top:3px;">Note: ${it.additionalNotes}</div>` : ''}
+                    </td>
+                    <td style="text-align:center;padding:10px 8px;">${it.qty} ${it.uom || 'NOS'}</td>
+                    <td style="text-align:right;padding:10px 8px;">${Number(it.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right;padding:10px 0;font-weight:700;">${Number(it.taxableAmount || (it.qty * it.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+            `).join('');
+            const estimateHtml = `
+                <!DOCTYPE html><html><head><meta charset="UTF-8">
+                <style>
+                    * { box-sizing: border-box; font-family: sans-serif; }
+                    body { margin: 0; padding: 0; color: #000; background: #fff; }
+                    .page { width: 210mm; min-height: 297mm; padding: 15mm; position: relative; }
+                    @page { margin: 0; size: A4 portrait; }
+                </style></head><body>
+                <div class="page">
+                    <div style="display:flex;justify-content:flex-end;border-bottom:2px solid #eee;padding-bottom:12px;margin-bottom:20px;">
+                        <div style="text-align:right;">
+                            <div style="font-size:16pt;font-weight:900;color:#64748b;text-transform:uppercase;">ESTIMATE</div>
+                            <div style="font-size:11pt;font-weight:700;margin-top:6px;">ESTIMATE NO: ${inv.invoiceNumber}</div>
+                            <div style="font-size:10pt;color:#475569;margin-top:4px;">Date: ${fmt(inv.invoiceDate)}</div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:24px;">
+                        <div style="font-size:9pt;font-weight:800;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">Estimate For</div>
+                        <div style="font-size:14pt;font-weight:800;text-transform:uppercase;">${inv.customerName || ''}</div>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+                        <thead>
+                            <tr style="border-bottom:2px solid #000;">
+                                <th style="text-align:left;padding:8px 0;font-size:9pt;text-transform:uppercase;color:#64748b;">Item &amp; Description</th>
+                                <th style="text-align:center;padding:8px;font-size:9pt;text-transform:uppercase;color:#64748b;width:70px;">Qty</th>
+                                <th style="text-align:right;padding:8px;font-size:9pt;text-transform:uppercase;color:#64748b;width:90px;">Rate</th>
+                                <th style="text-align:right;padding:8px 0;font-size:9pt;text-transform:uppercase;color:#64748b;width:100px;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>${itemRows}</tbody>
+                    </table>
+                    <div style="margin-top:40px;">
+                        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;font-size:10pt;">
+                            <span style="color:#64748b;margin-right:40px;">Total Estimated Price</span>
+                            <span style="font-weight:700;min-width:100px;text-align:right;">₹ ${(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;border-top:2px solid #000;padding-top:10px;font-size:12pt;font-weight:900;">
+                            <span style="margin-right:40px;">Total Estimated Price</span>
+                            <span style="min-width:100px;text-align:right;">₹ ${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>
+                    ${inv.status === 'Cancelled' ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:72pt;font-weight:900;color:rgba(239,68,68,0.12);">CANCELLED</div>' : ''}
+                </div>
+                </body></html>
+            `;
+            const browser = await puppeteer.launch({
+                headless: 'new',
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            });
+            try {
+                const page = await browser.newPage();
+                await page.setContent(estimateHtml, { waitUntil: 'domcontentloaded' });
+                return await page.pdf({
+                    format: 'A4',
+                    printBackground: true,
+                    margin: { top: '0', right: '0', bottom: '0', left: '0' },
+                });
+            } finally {
+                await browser.close();
             }
         }
 
@@ -1000,7 +1080,7 @@ class PDFService {
                                             <div class="company-addr">
                                                 ${company.address}, ${company.city} - ${company.pincode}, ${company.state} (Code: ${company.stateCode})<br />
                                                 ${company.phone && `Contact: ${company.phone}`} ${company.email && ` | Email: ${company.email}`}<br />
-                                                ${gstApplicable && company.gstNumber ? `<strong>GSTIN: ${company.gstNumber}</strong> | ` : ""}
+                                                ${(gstApplicable || isEstimate) && company.gstNumber ? `<strong>GSTIN: ${company.gstNumber}</strong> | ` : ""}
                                                 ${company.panNumber ? `PAN: ${company.panNumber}` : ""}<br />
                                                 ${company.cin ? `CIN: ${company.cin} | ` : ""}
                                                 ${company.urn ? `MSME/URN: ${company.urn}` : ""}
@@ -1008,8 +1088,8 @@ class PDFService {
                                         </div>
                                     </div>
                                     <div class="doc-meta">
-                                        <div class="doc-title-box">${isEstimate ? 'ESTIMATE' : (gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE')}</div>
-                                        <div class="doc-number">Invoice No: ${inv.invoiceNumber}</div>
+                                        <div class="doc-title-box">${docTitle}</div>
+                                        <div class="doc-number">${docNumberLabel}: ${inv.invoiceNumber}</div>
                                         <div style="font-size: 10pt; font-weight: 600;">Date: ${fmt(inv.invoiceDate)}</div>
                                     </div>
                                 </div>
@@ -1051,7 +1131,7 @@ class PDFService {
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #000; padding-bottom: 5px;">
                                     <div style="font-size: 14pt; font-weight: 900; text-transform: uppercase;">${company.companyName}</div>
                                     <div style="text-align: right; font-size: 9pt;">
-                                        <strong>Invoice No:</strong> ${inv.invoiceNumber} | <strong>Date:</strong> ${fmt(inv.invoiceDate)}
+                                        <strong>${docNumberLabel}:</strong> ${inv.invoiceNumber} | <strong>Date:</strong> ${fmt(inv.invoiceDate)}
                                     </div>
                                 </div>
                             `}
@@ -1111,16 +1191,22 @@ class PDFService {
                                         <div>
                                             <div style="font-size: 8pt; font-weight: 900; text-transform: uppercase; color: #555; border-bottom: 1px solid #eee; padding-bottom: 2px; margin-bottom: 4px;">Terms & Declaration:</div>
                                             <div style="font-size: 7.5pt; color: #333; line-height: 1.2;">
-                                                1. Goods once sold will not be taken back.<br />
-                                                2. Subject to MUMBAI Jurisdiction.<br />
-                                                3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                                                ${isEstimate ? `
+                                                    1. This is a quotation/estimate only — not a tax invoice.<br />
+                                                    2. Prices are subject to confirmation at the time of order.<br />
+                                                    3. Subject to MUMBAI Jurisdiction.
+                                                ` : `
+                                                    1. Goods once sold will not be taken back.<br />
+                                                    2. Subject to MUMBAI Jurisdiction.<br />
+                                                    3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                                                `}
                                             </div>
                                         </div>
                                     </div>
                                     <div class="summary-right">
                                         <table class="summary-table">
-                                            <tr><td>Total Taxable Value</td><td style="text-align: right; font-weight: 700;">₹ ${(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-                                            ${gstApplicable ? (
+                                            <tr><td>${isEstimate ? 'Total Estimated Price' : 'Total Taxable Value'}</td><td style="text-align: right; font-weight: 700;">₹ ${(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
+                                            ${!isEstimate && gstApplicable ? (
                                                 isIGST ? `
                                                     <tr><td>+ IGST @ ${inv.items?.[0]?.taxRate || 18}%</td><td style="text-align: right;">₹ ${(inv.totalIgst || inv.totalTaxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
                                                 ` : `

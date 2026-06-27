@@ -93,7 +93,6 @@ export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
             paymentStatus: payFilter,
             series: seriesFilter || undefined,
             view: viewMode,
-            includeDeleted: true,
             estimateOnly: isEstimateList ? 'true' : undefined,
             limit: 100,
         })

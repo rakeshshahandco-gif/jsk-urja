@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/auth.api';
 import apiClient from '../api/client';
 import { storage } from '../utils/storage';
+import { hasPermission as checkPermission } from '../utils/permissions';
 
 const AuthContext = createContext(null);
 
@@ -10,59 +11,91 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const clearSession = async () => {
+    setUser(null);
+    setToken(null);
+    await storage.removeItem('auth_token');
+    await storage.removeItem('auth_user');
+    await storage.removeItem('jsk_selected_company');
+  };
+
   // On app start, restore session from storage
   useEffect(() => {
+    let cancelled = false;
+
     const restoreSession = async () => {
       try {
         const storedToken = await storage.getItem('auth_token');
         const storedUser = await storage.getItem('auth_user');
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
-          // Validate token is still valid
+          let parsedUser = null;
+          try {
+            parsedUser = JSON.parse(storedUser);
+          } catch {
+            await clearSession();
+            return;
+          }
+          if (!cancelled) {
+            setToken(storedToken);
+            setUser(parsedUser);
+          }
           try {
             const res = await authApi.getMe();
             const freshUser = res?.data || res;
-            if (freshUser?._id) {
+            if (!cancelled && freshUser?._id) {
               setUser(freshUser);
               await storage.setItem('auth_user', JSON.stringify(freshUser));
             }
           } catch {
-            // Token expired — force logout
-            await logout();
+            await clearSession();
           }
         }
       } catch (e) {
         console.warn('Session restore error:', e.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    restoreSession();
+
+    const timeout = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 12000);
+
+    restoreSession().finally(() => clearTimeout(timeout));
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, []);
 
   const login = async (username, password) => {
     try {
       const normalizedUsername = username.trim().toLowerCase();
       const apiResponse = await authApi.login(normalizedUsername, password);
-      
-      const newToken = 
-        apiResponse?.data?.token || 
-        apiResponse?.token || 
-        apiResponse?.data?.accessToken ||
-        apiResponse?.accessToken;
+      const body = apiResponse?.data ?? apiResponse;
 
-      const userData = apiResponse?.data || apiResponse;
+      const newToken =
+        body?.token ||
+        apiResponse?.token ||
+        body?.accessToken ||
+        apiResponse?.accessToken;
 
       if (!newToken) {
         throw new Error('Server response missing token.');
       }
+
+      const userData = { ...body };
+      delete userData.token;
+      delete userData.accessToken;
 
       setToken(newToken);
       setUser(userData);
 
       await storage.setItem('auth_token', newToken);
       await storage.setItem('auth_user', JSON.stringify(userData));
+      // Drop stale company from another server (localhost vs Render).
+      await storage.removeItem('jsk_selected_company');
 
       return { success: true };
     } catch (error) {
@@ -71,33 +104,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    setUser(null);
-    setToken(null);
-    await storage.removeItem('auth_token');
-    await storage.removeItem('auth_user');
-  };
+  const logout = clearSession;
 
-  const hasPermission = (permission) => {
-    if (!user) return false;
-    const role = user?.roleName || user?.role?.name || user?.role || 'viewer';
-    if (role === 'admin' || role === 'superadmin') return true;
-    const additionalPerms = user?.additionalPermissions || {};
-    const parts = permission.split('.');
-    if (parts.length >= 2) {
-      const [mod, sub, act] = parts;
-      if (act) return !!additionalPerms?.[mod]?.[sub]?.[act];
-      return !!additionalPerms?.[mod]?.[sub];
-    }
-    const modData = additionalPerms[permission];
-    if (modData === true) return true;
-    if (modData && typeof modData === 'object') {
-      return Object.values(modData).some(v =>
-        typeof v === 'object' ? Object.values(v).some(Boolean) : !!v
-      );
-    }
-    return false;
-  };
+  const hasPermission = (permission) => checkPermission(user, permission);
 
   const testRemoteConnection = async () => {
     try {

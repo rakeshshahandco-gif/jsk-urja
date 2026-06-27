@@ -1,28 +1,32 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useLoginBranding } from '@/hooks/useLoginBranding';
 import { Button, Input } from '@/components/ui';
-import { Eye, EyeOff, Lock, User } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import { LoginBrandingPanel } from '@/features/auth/LoginBrandingPanel';
 import styles from './LoginPage.module.scss';
 
 export const LoginPage = () => {
     const navigate = useNavigate();
     const { login } = useAuth();
+    const { branding } = useLoginBranding();
+    const accentColor = branding.primaryColor || '#2563eb';
 
     const [formData, setFormData] = useState({
         username: '',
-        password: ''
+        password: '',
     });
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
-        setFormData(prev => ({
+        setFormData((prev) => ({
             ...prev,
-            [e.target.name]: e.target.value
+            [e.target.name]: e.target.value,
         }));
-        setError(''); // Clear error when user types
+        setError('');
     };
 
     const handleSubmit = async (e) => {
@@ -43,28 +47,13 @@ export const LoginPage = () => {
 
     return (
         <div className={styles.loginContainer}>
-            {/* Abstract background shapes */}
-            <div className={`${styles.bgShape} ${styles.bgShape1}`}></div>
-            <div className={`${styles.bgShape} ${styles.bgShape2}`}></div>
-            <div className={`${styles.bgShape} ${styles.bgShape3}`}></div>
+            <div className={`${styles.bgShape} ${styles.bgShape1}`} />
+            <div className={`${styles.bgShape} ${styles.bgShape2}`} />
+            <div className={`${styles.bgShape} ${styles.bgShape3}`} />
 
             <div className={styles.loginContent}>
-                {/* Left side content */}
-                <div className={styles.brandingSection}>
-                    <div className={styles.logoWrapper}>
-                        <div className={styles.brandText}>
-                            <span className={styles.focus}>JSK <span className={styles.one}>URJA</span></span>
-                            <span className={styles.tagline}>CRM Application</span>
-                        </div>
-                    </div>
+                <LoginBrandingPanel />
 
-                    <div className={styles.heroText}>
-                        <h1 className={styles.mainHeading}>Login into <br /> your account</h1>
-                        <p className={styles.subHeading}>Elevating your business efficiency with modern CRM solutions.</p>
-                    </div>
-                </div>
-
-                {/* Right side login form */}
                 <div className={styles.cardSection}>
                     <div className={styles.loginCard}>
                         <div className={styles.loginHeader}>
@@ -99,7 +88,7 @@ export const LoginPage = () => {
                                     value={formData.password}
                                     onChange={handleChange}
                                     placeholder="Your password"
-                                    endIcon={
+                                    endIcon={(
                                         <button
                                             type="button"
                                             onClick={() => setShowPassword(!showPassword)}
@@ -107,7 +96,7 @@ export const LoginPage = () => {
                                         >
                                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                         </button>
-                                    }
+                                    )}
                                     required
                                 />
                             </div>
@@ -118,6 +107,7 @@ export const LoginPage = () => {
                                     className={styles.loginButton}
                                     isLoading={loading}
                                     disabled={loading}
+                                    style={{ backgroundColor: accentColor, borderColor: accentColor }}
                                 >
                                     {loading ? 'Logging in...' : 'Login'}
                                 </Button>

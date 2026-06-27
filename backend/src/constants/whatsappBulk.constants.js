@@ -32,16 +32,21 @@ export const WHATSAPP_BULK_RECIPIENT_STATUSES = [
 ];
 
 export const WHATSAPP_BULK_CUSTOMER_TYPES = [
-    'LED Manufacturer',
+    'LED Light Manufacturer',
     'Home Automation',
     'System Integrator',
-    'Lighting Dealer',
-    'Electrical Contractor',
+    'Dealer',
+    'Contractor',
     'OEM',
     'Trader',
-    'Architect',
-    'Consultant',
-    'Custom Types',
+    'Textile',
+    'Handloom',
+    'Exporter',
+];
+
+/** Default business categories for bulk recipient filter (merged with master + DB values). */
+export const WHATSAPP_BULK_DEFAULT_BUSINESS_CATEGORIES = [
+    ...WHATSAPP_BULK_CUSTOMER_TYPES,
 ];
 
 export const WHATSAPP_BULK_INDUSTRY_TYPES = [

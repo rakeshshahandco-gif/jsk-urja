@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { extractList } from '../utils/apiResponse';
 
 // All calls go to the SAME backend/database as the desktop CRM
 // Any update from mobile instantly reflects on desktop and vice versa
@@ -7,7 +8,11 @@ export const tasksApi = {
   // Get all tasks with optional filters
   getTasks: async (params = {}) => {
     const response = await apiClient.get('/tasks', { params });
-    return response.data;
+    const body = response.data;
+    return {
+      results: extractList(body, ['data', 'results', 'tasks']),
+      meta: body?.meta || body?.data?.meta,
+    };
   },
 
   // Get single task detail

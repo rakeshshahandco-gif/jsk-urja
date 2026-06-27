@@ -30,6 +30,33 @@ export default function IndustryTemplateModulesPanel({ template, onSaved, sectio
         ));
     };
 
+    const groupModuleCodes = (mods) => mods.map((m) => m.code);
+
+    const isGroupAllSelected = (mods) => {
+        const codes = groupModuleCodes(mods);
+        return codes.length > 0 && codes.every((code) => enabledModules.includes(code));
+    };
+
+    const isGroupPartiallySelected = (mods) => {
+        const codes = groupModuleCodes(mods);
+        const count = codes.filter((code) => enabledModules.includes(code)).length;
+        return count > 0 && count < codes.length;
+    };
+
+    const toggleGroup = (mods) => {
+        const codes = groupModuleCodes(mods);
+        setEnabledModules((prev) => {
+            if (isGroupAllSelected(mods)) {
+                return prev.filter((code) => !codes.includes(code));
+            }
+            return [...new Set([...prev, ...codes])];
+        });
+    };
+
+    const setGroupCheckboxRef = (el, mods) => {
+        if (el) el.indeterminate = isGroupPartiallySelected(mods);
+    };
+
     const handleSave = async () => {
         if (!template?._id) return;
         setSaving(true);
@@ -68,7 +95,18 @@ export default function IndustryTemplateModulesPanel({ template, onSaved, sectio
             </label>
             {Object.entries(grouped).map(([group, mods]) => (
                 <div key={group} style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 6 }}>{group}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{group}</div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '4px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <input
+                                type="checkbox"
+                                ref={(el) => setGroupCheckboxRef(el, mods)}
+                                checked={isGroupAllSelected(mods)}
+                                onChange={() => toggleGroup(mods)}
+                            />
+                            Select all in {group}
+                        </label>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 6 }}>
                         {mods.map((m) => (
                             <label key={m.code} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '4px 6px', background: '#f8fafc', borderRadius: 4 }}>

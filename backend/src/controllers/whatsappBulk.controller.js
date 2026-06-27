@@ -7,8 +7,6 @@ import * as blacklistService from '../services/whatsappBulkBlacklist.service.js'
 import * as campaignService from '../services/whatsappBulkCampaign.service.js';
 import * as auditService from '../services/whatsappBulkAudit.service.js';
 import {
-    WHATSAPP_BULK_CUSTOMER_TYPES,
-    WHATSAPP_BULK_INDUSTRY_TYPES,
     WHATSAPP_BULK_ATTACHMENT_TYPES,
     WHATSAPP_BULK_CAMPAIGN_STATUSES,
     WHATSAPP_BULK_SEND_MODES,
@@ -16,6 +14,7 @@ import {
     WHATSAPP_BULK_SEND_CONTENT_TYPES,
     WHATSAPP_BULK_IMAGE_EXTENSIONS,
 } from '../constants/whatsappBulk.constants.js';
+import { getBusinessCategoryOptions } from '../services/whatsappBulkBusinessCategory.service.js';
 import { WHATSAPP_BULK_UPLOAD_DIR } from '../constants/whatsappBulk.constants.js';
 import path from 'path';
 import { buildImageAttachmentRef } from '../services/whatsappBulkAttachment.service.js';
@@ -25,10 +24,12 @@ const companyId = (req) => {
     return req.companyId;
 };
 
-export const getMeta = asyncHandler(async (_req, res) => {
+export const getMeta = asyncHandler(async (req, res) => {
+    const businessCategories = await getBusinessCategoryOptions();
     res.send(new ApiResponse(200, {
-        customerTypes: WHATSAPP_BULK_CUSTOMER_TYPES,
-        industryTypes: WHATSAPP_BULK_INDUSTRY_TYPES,
+        customerTypes: businessCategories,
+        businessCategories,
+        industryTypes: businessCategories.filter((c) => c !== 'All'),
         attachmentTypes: WHATSAPP_BULK_ATTACHMENT_TYPES,
         sendContentTypes: WHATSAPP_BULK_SEND_CONTENT_TYPES,
         imageExtensions: WHATSAPP_BULK_IMAGE_EXTENSIONS,
@@ -115,7 +116,13 @@ export const previewRecipients = asyncHandler(async (req, res) => {
 });
 
 export const saveRecipients = asyncHandler(async (req, res) => {
-    const data = await campaignService.saveRecipientsForCampaign(companyId(req), req.params.id);
+    const cid = companyId(req);
+    if (req.body?.filters?.selectedRecipientKeys) {
+        await campaignService.updateCampaign(cid, req.params.id, {
+            filters: req.body.filters,
+        }, req.user?.id);
+    }
+    const data = await campaignService.saveRecipientsForCampaign(cid, req.params.id);
     res.send(new ApiResponse(200, data, 'Recipients saved'));
 });
 

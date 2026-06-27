@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -8,6 +8,7 @@ import { format, parseISO } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
 import { tasksApi } from '../api/tasks.api';
 import { useAuth } from '../context/AuthContext';
+import { navigateParent } from '../navigation/rootNavigation';
 import { UpdateItem } from '../components/UpdateItem';
 import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusChip } from '../components/StatusChip';
@@ -21,15 +22,16 @@ const InfoRow = ({ label, value }) => (
 );
 
 export const TaskDetailScreen = ({ route, navigation }) => {
-  const { task: initialTask } = route.params;
+  const { taskId, task: legacyTask } = route.params || {};
+  const id = taskId || legacyTask?._id;
   const { user } = useAuth();
-  const [task, setTask] = useState(initialTask);
-  const [loading, setLoading] = useState(false);
+  const [task, setTask] = useState(legacyTask || null);
+  const [loading, setLoading] = useState(!legacyTask && !!id);
+  const [error, setError] = useState('');
   const [updateNote, setUpdateNote] = useState('');
   const [savingUpdate, setSavingUpdate] = useState(false);
-  const [activeAction, setActiveAction] = useState(null); // 'update' | 'extend' | null
+  const [activeAction, setActiveAction] = useState(null);
 
-  // Quick-note options
   const QUICK_NOTES = [
     'Called but not picked',
     'Called again, no answer',
@@ -39,22 +41,40 @@ export const TaskDetailScreen = ({ route, navigation }) => {
     'Follow up required',
   ];
 
-  const refreshTask = useCallback(async () => {
+  const loadTask = useCallback(async () => {
+    if (!id) {
+      setError('Missing task');
+      setLoading(false);
+      return;
+    }
     try {
-      setLoading(true);
-      const res = await tasksApi.getTask(task._id);
+      setError('');
+      const res = await tasksApi.getTask(id);
       const t = res?.data || res;
       if (t?._id) setTask(t);
+      else setError('Task not found');
     } catch (e) {
-      console.warn('Task refresh error:', e.message);
+      setError(e.response?.data?.message || e.message || 'Failed to load task');
     } finally {
       setLoading(false);
     }
-  }, [task._id]);
+  }, [id]);
 
-  useFocusEffect(useCallback(() => { refreshTask(); }, [refreshTask]));
+  useEffect(() => {
+    if (legacyTask?._id) return;
+    if (id) loadTask();
+    else {
+      setError('Missing task');
+      setLoading(false);
+    }
+  }, [id, legacyTask, loadTask]);
+
+  useFocusEffect(useCallback(() => {
+    if (id) loadTask();
+  }, [loadTask, id]));
 
   const handleAddUpdate = async () => {
+    if (!task?._id) return;
     if (!updateNote.trim()) {
       Alert.alert('Empty Note', 'Please enter an update note.');
       return;
@@ -64,8 +84,8 @@ export const TaskDetailScreen = ({ route, navigation }) => {
       await tasksApi.addUpdate(task._id, updateNote.trim());
       setUpdateNote('');
       setActiveAction(null);
-      await refreshTask();
-      Alert.alert('✅ Done', 'Update saved successfully!');
+      await loadTask();
+      Alert.alert('Done', 'Update saved successfully.');
     } catch (e) {
       Alert.alert('Error', e.response?.data?.message || e.message || 'Failed to save update');
     } finally {
@@ -74,6 +94,7 @@ export const TaskDetailScreen = ({ route, navigation }) => {
   };
 
   const handleClose = () => {
+    if (!task?._id) return;
     Alert.alert(
       'Close Task',
       'Are you sure you want to close/conclude this task?',
@@ -85,8 +106,8 @@ export const TaskDetailScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await tasksApi.closeTask(task._id, 'Closed from mobile app');
-              await refreshTask();
-              Alert.alert('✅ Task Closed', 'Task has been concluded successfully.');
+              await loadTask();
+              Alert.alert('Task Closed', 'Task has been concluded successfully.');
             } catch (e) {
               Alert.alert('Error', e.response?.data?.message || e.message);
             }
@@ -101,8 +122,36 @@ export const TaskDetailScreen = ({ route, navigation }) => {
     try {
       const d = typeof date === 'string' ? parseISO(date) : new Date(date);
       return format(d, 'dd MMM yyyy');
-    } catch { return '—'; }
+    } catch {
+      return '—';
+    }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading task…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !task) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error || 'Task not found'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const updates = task.updates || task.history || [];
   const isClosed = task.status === 'Closed' || task.status === 'Concluded';
@@ -110,16 +159,13 @@ export const TaskDetailScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {/* Header Bar */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          {loading && <ActivityIndicator color={COLORS.white} />}
         </View>
 
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Task Title Card */}
           <View style={styles.titleCard}>
             <Text style={styles.taskTitle}>{task.title || task.name || 'Task'}</Text>
             <View style={styles.chipRow}>
@@ -129,49 +175,43 @@ export const TaskDetailScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Task Info */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Details</Text>
             <InfoRow label="Due Date" value={formatDate(task.nextDueDate || task.dueDate)} />
             {(task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency) && (
-              <InfoRow 
-                label="Recurrence" 
-                value={`${(task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency).replace(/_/g, ' ')} (Every ${task.recurrence?.interval || task.taskMasterId?.recurrence?.interval || 1})`} 
+              <InfoRow
+                label="Recurrence"
+                value={`${(task.recurrence?.frequency || task.taskMasterId?.recurrence?.frequency).replace(/_/g, ' ')} (Every ${task.recurrence?.interval || task.taskMasterId?.recurrence?.interval || 1})`}
               />
             )}
             <InfoRow label="Assigned To" value={task.assignedTo?.name || task.assignedTo} />
             <InfoRow label="Created By" value={task.createdBy?.name || task.createdBy} />
             <InfoRow label="Group" value={task.group?.name || task.group} />
-            {task.description && (
+            {task.description ? (
               <View style={styles.descBox}>
                 <Text style={styles.infoLabel}>Description</Text>
                 <Text style={styles.descText}>{task.description}</Text>
               </View>
-            )}
+            ) : null}
           </View>
 
-          {/* Updates History */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Updates ({updates.length})</Text>
             {updates.length === 0
               ? <Text style={styles.noUpdates}>No updates yet</Text>
               : updates.slice().reverse().map((u, i) => (
                 <UpdateItem key={i} update={u} isLast={i === updates.length - 1} />
-              ))
-            }
+              ))}
           </View>
 
-          {/* Action Panel */}
           {!isClosed && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Actions</Text>
-
-              {/* Quick Notes */}
               {activeAction === 'update' && (
                 <View style={styles.updatePanel}>
                   <Text style={styles.panelTitle}>Quick Notes</Text>
                   <View style={styles.quickNotes}>
-                    {QUICK_NOTES.map(note => (
+                    {QUICK_NOTES.map((note) => (
                       <TouchableOpacity
                         key={note}
                         style={styles.quickNote}
@@ -205,14 +245,11 @@ export const TaskDetailScreen = ({ route, navigation }) => {
                     >
                       {savingUpdate
                         ? <ActivityIndicator color={COLORS.white} />
-                        : <Text style={styles.saveBtnText}>Save Update</Text>
-                      }
+                        : <Text style={styles.saveBtnText}>Save Update</Text>}
                     </TouchableOpacity>
                   </View>
                 </View>
               )}
-
-              {/* Action Buttons */}
               {activeAction === null && (
                 <View style={styles.actionBtns}>
                   <TouchableOpacity
@@ -223,7 +260,7 @@ export const TaskDetailScreen = ({ route, navigation }) => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: COLORS.accent }]}
-                    onPress={() => navigation.navigate('ExtendTask', { task, onExtended: refreshTask })}
+                    onPress={() => navigateParent(navigation, 'ExtendTask', { taskId: task._id, task, onExtended: loadTask })}
                   >
                     <Text style={styles.actionBtnText}>⏰ Extend Task</Text>
                   </TouchableOpacity>
@@ -253,6 +290,9 @@ export const TaskDetailScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl },
+  loadingText: { marginTop: SPACING.sm, color: COLORS.gray500 },
+  errorText: { color: '#b91c1c', fontSize: FONT.md, textAlign: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.primary, paddingHorizontal: SPACING.base, paddingVertical: SPACING.md,

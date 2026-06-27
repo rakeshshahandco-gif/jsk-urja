@@ -199,14 +199,78 @@ export default function SalesInvoiceDetailPage() {
     const isEstimate = inv.seriesId?.isEstimate === true || 
                        inv.seriesId?.seriesName?.toLowerCase().includes('estimate') ||
                        (inv.invoiceNumber || '').toLowerCase().includes('est');
+    const docTitle = isEstimate ? 'ESTIMATE' : (gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE');
+    const docNumberLabel = isEstimate ? 'Estimate No' : 'Invoice No';
     const notCancelled = inv.status !== 'Cancelled';
     const notFullyPaid = inv.paymentStatus !== 'Paid';
 
     return (
         <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
             {/* PRINT ONLY LAYOUT (PROFESSIONAL TAX INVOICE) */}
-            <div className="print-only" style={{ display: 'none', width: '210mm', padding: 0, color: '#000', fontSize: '10pt' }}>
-                {(() => {
+            <div className="print-only sales-invoice-print" style={{ width: '210mm', padding: 0, color: '#000', fontSize: '10pt' }}>
+                {isEstimate ? (
+                    <div className="print-page" style={{
+                        width: '210mm',
+                        minHeight: '297mm',
+                        padding: '15mm',
+                        boxSizing: 'border-box',
+                        background: '#fff',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        position: 'relative',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '12px' }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '16pt', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>ESTIMATE</div>
+                                <div style={{ fontSize: '11pt', fontWeight: 700, marginTop: '6px' }}>ESTIMATE NO: {inv.invoiceNumber}</div>
+                                <div style={{ fontSize: '10pt', color: '#475569', marginTop: '4px' }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: '24px' }}>
+                            <div style={{ fontSize: '9pt', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: '6px' }}>Estimate For</div>
+                            <div style={{ fontSize: '14pt', fontWeight: 800, textTransform: 'uppercase' }}>{inv.customerName}</div>
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', flex: 1 }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #000' }}>
+                                    <th style={{ textAlign: 'left', padding: '8px 0', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b' }}>Item &amp; Description</th>
+                                    <th style={{ textAlign: 'center', padding: '8px', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '70px' }}>Qty</th>
+                                    <th style={{ textAlign: 'right', padding: '8px', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '90px' }}>Rate</th>
+                                    <th style={{ textAlign: 'right', padding: '8px 0', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '100px' }}>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(inv.items || []).map((it, i) => (
+                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                                        <td style={{ padding: '10px 0', verticalAlign: 'top' }}>
+                                            <div style={{ fontWeight: 700, fontSize: '10pt' }}>{it.description || it.itemName}</div>
+                                            {it.additionalNotes && <div style={{ fontSize: '8pt', color: '#64748b', marginTop: '3px' }}>Note: {it.additionalNotes}</div>}
+                                        </td>
+                                        <td style={{ textAlign: 'center', padding: '10px 8px', fontSize: '10pt' }}>{it.qty} {it.uom || 'NOS'}</td>
+                                        <td style={{ textAlign: 'right', padding: '10px 8px', fontSize: '10pt' }}>{Number(it.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ textAlign: 'right', padding: '10px 0', fontSize: '10pt', fontWeight: 700 }}>{Number(it.taxableAmount || (it.qty * it.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px', fontSize: '10pt' }}>
+                                <span style={{ color: '#64748b', marginRight: '40px' }}>Total Estimated Price</span>
+                                <span style={{ fontWeight: 700, minWidth: '100px', textAlign: 'right' }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '2px solid #000', paddingTop: '10px', fontSize: '12pt', fontWeight: 900 }}>
+                                <span style={{ marginRight: '40px' }}>Total Estimated Price</span>
+                                <span style={{ minWidth: '100px', textAlign: 'right' }}>₹ {(inv.roundedTotal || inv.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                        </div>
+                        {inv.status === 'Cancelled' && (
+                            <div style={{
+                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-45deg)',
+                                fontSize: '72pt', fontWeight: 900, color: 'rgba(239, 68, 68, 0.12)', pointerEvents: 'none', textTransform: 'uppercase',
+                            }}>CANCELLED</div>
+                        )}
+                    </div>
+                ) : (() => {
                     const items = inv.items || [];
                     const itemsPerPageFirst = 8; 
                     const itemsPerPageOthers = 20; 
@@ -255,7 +319,7 @@ export default function SalesInvoiceDetailPage() {
                                                         <div>{company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})</div>
                                                         <div>{company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}</div>
                                                         <div style={{ marginTop: '3px', fontWeight: 600 }}>
-                                                            {gstApplicable && company.gstNumber && <span>GSTIN: {company.gstNumber} | </span>}
+                                                            {(gstApplicable || isEstimate) && company.gstNumber && <span>GSTIN: {company.gstNumber} | </span>}
                                                             {company.panNumber && <span>PAN: {company.panNumber}</span>}
                                                         </div>
                                                         {company.cin && <span>CIN: {company.cin} | </span>}
@@ -265,9 +329,9 @@ export default function SalesInvoiceDetailPage() {
                                             </div>
                                             <div style={{ textAlign: 'right', minWidth: '150px' }}>
                                                 <div style={{ fontSize: '13pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '4px 12px', display: 'inline-block', marginBottom: '8px', textTransform: 'uppercase' }}>
-                                                    {gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE'}
+                                                    {docTitle}
                                                 </div>
-                                                <div style={{ fontSize: '10pt', fontWeight: 800 }}>Invoice No: {inv.invoiceNumber}</div>
+                                                <div style={{ fontSize: '10pt', fontWeight: 800 }}>{docNumberLabel}: {inv.invoiceNumber}</div>
                                                 <div style={{ fontSize: '10pt', fontWeight: 700 }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
                                             </div>
                                         </div>
@@ -277,7 +341,7 @@ export default function SalesInvoiceDetailPage() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName}</div>
                                             <div style={{ textAlign: 'right', fontSize: '9pt' }}>
-                                                <strong>Invoice No:</strong> {inv.invoiceNumber} | <strong>Date:</strong> {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}
+                                                <strong>{docNumberLabel}:</strong> {inv.invoiceNumber} | <strong>Date:</strong> {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}
                                             </div>
                                         </div>
                                     </div>
@@ -398,9 +462,19 @@ export default function SalesInvoiceDetailPage() {
                                                 <div>
                                                     <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Terms & Declaration:</div>
                                                     <div style={{ fontSize: '7.5pt', color: '#333', lineHeight: '1.2' }}>
-                                                        1. Goods once sold will not be taken back.<br />
-                                                        2. Subject to MUMBAI Jurisdiction.<br />
-                                                        3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                                                        {isEstimate ? (
+                                                            <>
+                                                                1. This is a quotation/estimate only — not a tax invoice.<br />
+                                                                2. Prices are subject to confirmation at the time of order.<br />
+                                                                3. Subject to MUMBAI Jurisdiction.
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                1. Goods once sold will not be taken back.<br />
+                                                                2. Subject to MUMBAI Jurisdiction.<br />
+                                                                3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -465,7 +539,7 @@ export default function SalesInvoiceDetailPage() {
                                             <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{inv.amountInWords}</span>
                                         </div>
 
-                                        {isLastPage && <InvoiceBarcodeBlock invoiceId={id} variant="print" />}
+                                        {isLastPage && !isEstimate && <InvoiceBarcodeBlock invoiceId={id} variant="print" />}
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderTop: 'none', minHeight: '100px' }}>
                                             <div style={{ borderRight: '1px solid #000', padding: '8px', fontSize: '8pt', position: 'relative' }}>
@@ -505,6 +579,29 @@ export default function SalesInvoiceDetailPage() {
                     });
                 })()}
             </div>
+
+            {/* Print Styles — outside no-print so rules always apply */}
+            <style>{`
+                .sales-invoice-print { display: none; }
+                @media print {
+                    html, body, #root, #root * {
+                        max-height: none !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                    }
+                    .no-print, .no-print * { display: none !important; }
+                    .sales-invoice-print, .sales-invoice-print.print-only {
+                        display: block !important;
+                        visibility: visible !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        width: 100% !important;
+                    }
+                    .sales-invoice-print * { visibility: visible !important; }
+                    @page { size: A4; margin: 0; }
+                    body { background: #fff !important; }
+                }
+            `}</style>
 
             <div className="no-print">
 
@@ -704,7 +801,7 @@ export default function SalesInvoiceDetailPage() {
                             </div>
                         </div>
                     )}
-                    {isFeatureEnabled('sales.enableBarcodeQr') && (
+                    {isFeatureEnabled('sales.enableBarcodeQr') && !isEstimate && (
                     <div style={{ marginTop: 16, padding: 14, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
                         <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>QR & Barcode</div>
                         <InvoiceBarcodeBlock invoiceId={id} variant="screen" />
@@ -743,18 +840,18 @@ export default function SalesInvoiceDetailPage() {
                         
                         {/* Header: Logo & Company */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px', borderBottom: '2px solid #eee', paddingBottom: '15px' }}>
+                            {!isEstimate ? (
                             <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                                {!isEstimate && <img src="/logo.jpeg" style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />}
+                                <img src="/logo.jpeg" style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, textTransform: 'uppercase' }}>{company.companyName}</h2>
-                                    {!isEstimate && (
-                                        <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>
-                                            {company.address}, {company.city}<br/>
-                                            {gstApplicable && <strong>GSTIN: {company.gstNumber}</strong>}
-                                        </div>
-                                    )}
+                                    <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>
+                                        {company.address}, {company.city}<br/>
+                                        {gstApplicable && <strong>GSTIN: {company.gstNumber}</strong>}
+                                    </div>
                                 </div>
                             </div>
+                            ) : <div />}
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: 18, fontWeight: 900, color: '#64748b' }}>{isEstimate ? 'ESTIMATE' : (gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE')}</div>
                                 <div style={{ fontSize: 15, fontWeight: 700, marginTop: 5 }}>{isEstimate ? 'ESTIMATE NO' : 'INVOICE NO'}: {inv.invoiceNumber}</div>
@@ -983,15 +1080,6 @@ export default function SalesInvoiceDetailPage() {
                 submitting={cancelling}
             />
 
-            {/* Print Styles */}
-            <style>{`
-                @media print {
-                    .no-print { display: none !important; }
-                    .print-only { display: block !important; padding: 0 !important; }
-                    @page { size: A4; margin: 0; }
-                    body { background: #fff !important; }
-                }
-            `}</style>
         </div>
     );
 }

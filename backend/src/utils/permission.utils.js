@@ -1,4 +1,4 @@
-import { PERMISSION_REGISTRY } from '../config/permissionRegistry.js';
+import { getEffectivePermissionRegistry } from './permissionRegistryEnricher.js';
 
 /**
  * Synchronizes a role or user's permissions object with the latest PERMISSION_REGISTRY.
@@ -20,7 +20,7 @@ export const syncPermissionsWithRegistry = (existingPermissions = {}, isFullAcce
         synced = {};
     }
 
-    PERMISSION_REGISTRY.forEach(module => {
+    getEffectivePermissionRegistry().forEach(module => {
         // Ensure module exists and is an object
         if (!synced[module.id] || typeof synced[module.id] !== 'object') {
             synced[module.id] = {};

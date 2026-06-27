@@ -138,6 +138,15 @@ import ScanEntryReviewPage from '@/features/scanEntry/ScanEntryReviewPage';
 import BulkScanImportPage from '@/features/scanEntry/BulkScanImportPage';
 import ScanEntryReportsPage from '@/features/scanEntry/ScanEntryReportsPage';
 import ScanEntryKeywordSettingsPage from '@/features/scanEntry/ScanEntryKeywordSettingsPage';
+import DataExtractorGuard from '@/features/dataExtractor/DataExtractorGuard';
+import DataExtractorLayout from '@/features/dataExtractor/DataExtractorLayout';
+import DataExtractorKeywordSearchPage from '@/features/dataExtractor/DataExtractorKeywordSearchPage';
+import DataExtractorManualUrlPage from '@/features/dataExtractor/DataExtractorManualUrlPage';
+import DataExtractorImportPage from '@/features/dataExtractor/DataExtractorImportPage';
+import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHistoryPage';
+import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
+import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
+import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
 import SmartImportHubPage from '@/features/smartImport/SmartImportHubPage';
 import SmartImportBatchPage from '@/features/smartImport/SmartImportBatchPage';
 import ImportCenterPage from '@/features/importCenter/ImportCenterPage';
@@ -388,8 +397,11 @@ function App() {
                                         <Routes>
                                             {/* Public routes - Login, Forgot Password, Reset Password */}
                                             <Route path="/login" element={<LoginPage />} />
+                                            <Route path="/login/:slug" element={<LoginPage />} />
                                             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                                            <Route path="/forgot-password/:slug" element={<ForgotPasswordPage />} />
                                             <Route path="/reset-password" element={<ResetPasswordPage />} />
+                                            <Route path="/reset-password/:slug" element={<ResetPasswordPage />} />
                                             <Route path="/public/invoice/:token" element={<PublicInvoicePage />} />
 
                                             {/* Full-screen pages without sidebar */}
@@ -806,6 +818,16 @@ const AppLayout = () => {
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_BULK} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.upload"><FeatureGuard feature="accounting.enableAiSmartImport"><BulkScanImportPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_REPORTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryReportsPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.review"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryKeywordSettingsPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DATA_EXTRACTOR.ROOT} element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorLayout /></DataExtractorGuard></ProtectedRoute>}>
+                            <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH} replace />} />
+                            <Route path="keyword-search" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorKeywordSearchPage /></ProtectedRoute>} />
+                            <Route path="manual-url" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorManualUrlPage /></ProtectedRoute>} />
+                            <Route path="import" element={<ProtectedRoute requirePermission="data_extractor.extractor.import"><DataExtractorImportPage /></ProtectedRoute>} />
+                            <Route path="history" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorHistoryPage /></ProtectedRoute>} />
+                            <Route path="leads" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorLeadsPage /></ProtectedRoute>} />
+                        </Route>
+                        <Route path="/data-extractor/preview/:jobId" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorPreviewPage /></DataExtractorGuard></ProtectedRoute>} />
+                        <Route path={PATHS.DATA_EXTRACTOR.SETTINGS} element={<ProtectedRoute requirePermission="data_extractor.extractor.settings"><DataExtractorSettingsPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/contra-entry" element={<ProtectedRoute requirePermission="accounts"><ContraEntryPage /></ProtectedRoute>} />

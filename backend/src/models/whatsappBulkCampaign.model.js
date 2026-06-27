@@ -11,11 +11,13 @@ const filterSchema = new mongoose.Schema(
     {
         customerTypes: [{ type: String }],
         industryTypes: [{ type: String }],
+        businessCategory: { type: String, trim: true, default: '' },
         states: [{ type: String }],
         cities: [{ type: String }],
         activeOnly: { type: Boolean, default: false },
         inactiveOnly: { type: Boolean, default: false },
         selectedCustomerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Customer' }],
+        selectedRecipientKeys: [{ type: String }],
     },
     { _id: false },
 );

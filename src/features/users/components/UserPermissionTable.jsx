@@ -43,6 +43,9 @@ const MODULE_ICONS = {
     home: Home,
     production: Factory,
     whatsapp: MessageCircle,
+    whatsapp_bulk: MessageCircle,
+    email: MessageCircle,
+    email_bulk: MessageCircle,
     messenger: MessageCircle,
     wechat: MessageCircle,
     service: Wrench,
@@ -117,6 +120,7 @@ function moduleAllIndeterminate(module, column, selectedPermissions, isGrantedBy
 }
 
 export function UserPermissionTable({
+    moduleGroups,
     modules,
     columns,
     expandedModules,
@@ -132,175 +136,192 @@ export function UserPermissionTable({
 }) {
     const visibleColumns = useMemo(() => columns || [], [columns]);
 
-    return (
-        <div className={styles.permissionTableWrap}>
-            <table className={styles.permissionTable}>
-                <thead>
-                    <tr>
-                        <th className={styles.colName}>Module / Permission</th>
-                        {visibleColumns.map((col) => (
-                            <th key={col.key} className={styles.colAction}>
-                                {col.key === 'all' ? (
-                                    <label className={styles.headerAllLabel}>
+    const groups = useMemo(() => {
+        if (moduleGroups?.length) return moduleGroups;
+        if (modules?.length) return [{ id: 'all', name: 'All Modules', modules }];
+        return [];
+    }, [moduleGroups, modules]);
+
+    const renderModuleRows = (groupModules) => groupModules.map((module) => {
+        const isExpanded = expandedModules[module.id];
+        const modulePerms = selectedPermissions[module.id] || {};
+        const hasSubs = (module.submodules?.length || 0) > 0;
+
+        return (
+            <React.Fragment key={module.id}>
+                <tr className={styles.tableRowModule}>
+                    <td className={styles.colName}>
+                        <button
+                            type="button"
+                            className={styles.tableExpandBtn}
+                            onClick={() => onToggleModuleExpansion(module.id)}
+                            disabled={!hasSubs}
+                            aria-expanded={isExpanded}
+                        >
+                            {hasSubs ? (
+                                isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                            ) : (
+                                <span className={styles.tableExpandSpacer} />
+                            )}
+                            <ModuleIcon moduleId={module.id} />
+                            <span className={styles.tableModuleName}>
+                                {module.name || module.id}
+                            </span>
+                        </button>
+                    </td>
+                    {visibleColumns.map((col) => {
+                        if (col.key === 'all') {
+                            const allOn = module.submodules?.every((sub) => {
+                                const acts = (sub.actions || []).map(normalizeAction);
+                                return acts.length > 0 && acts.every(
+                                    (a) => isGrantedByRole(module.id, sub.id, a.id)
+                                        || !!modulePerms[sub.id]?.[a.id],
+                                );
+                            });
+                            const anyAct = module.submodules?.some((s) => (s.actions?.length || 0) > 0);
+                            return (
+                                <td key={col.key} className={styles.colAction}>
+                                    {anyAct ? (
                                         <input
                                             type="checkbox"
                                             className={styles.tableCheckbox}
-                                            checked={globalAllChecked}
-                                            onChange={(e) => onSelectAllGlobal(e.target.checked)}
-                                            aria-label="Select all permissions"
+                                            checked={!!allOn}
+                                            onChange={(e) => onModuleAllToggle(module, e.target.checked)}
+                                            aria-label={`All permissions for ${module.name}`}
                                         />
-                                        <span>All</span>
-                                    </label>
-                                ) : (
-                                    col.label
-                                )}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {modules.map((module) => {
-                        const isExpanded = expandedModules[module.id];
-                        const modulePerms = selectedPermissions[module.id] || {};
-                        const hasSubs = (module.submodules?.length || 0) > 0;
+                                    ) : (
+                                        <span className={styles.tableCellEmpty}>—</span>
+                                    )}
+                                </td>
+                            );
+                        }
+
+                        const checked = moduleAllChecked(module, col, selectedPermissions, isGrantedByRole);
+                        const indet = moduleAllIndeterminate(module, col, selectedPermissions, isGrantedByRole);
+                        const hasColActions = module.submodules?.some(
+                            (sub) => actionsForColumn(col, sub).length > 0,
+                        );
 
                         return (
-                            <React.Fragment key={module.id}>
-                                <tr className={styles.tableRowModule}>
-                                    <td className={styles.colName}>
-                                        <button
-                                            type="button"
-                                            className={styles.tableExpandBtn}
-                                            onClick={() => onToggleModuleExpansion(module.id)}
-                                            disabled={!hasSubs}
-                                            aria-expanded={isExpanded}
-                                        >
-                                            {hasSubs ? (
-                                                isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-                                            ) : (
-                                                <span className={styles.tableExpandSpacer} />
-                                            )}
-                                            <ModuleIcon moduleId={module.id} />
-                                            <span className={styles.tableModuleName}>
-                                                {module.name || module.id}
-                                            </span>
-                                        </button>
-                                    </td>
-                                    {visibleColumns.map((col) => {
-                                        if (col.key === 'all') {
-                                            const allOn = module.submodules?.every((sub) => {
-                                                const acts = (sub.actions || []).map(normalizeAction);
-                                                return acts.length > 0 && acts.every(
-                                                    (a) => isGrantedByRole(module.id, sub.id, a.id)
-                                                        || !!modulePerms[sub.id]?.[a.id],
-                                                );
-                                            });
-                                            const anyAct = module.submodules?.some((s) => (s.actions?.length || 0) > 0);
-                                            return (
-                                                <td key={col.key} className={styles.colAction}>
-                                                    {anyAct ? (
-                                                        <input
-                                                            type="checkbox"
-                                                            className={styles.tableCheckbox}
-                                                            checked={!!allOn}
-                                                            onChange={(e) => onModuleAllToggle(module, e.target.checked)}
-                                                            aria-label={`All permissions for ${module.name}`}
-                                                        />
-                                                    ) : (
-                                                        <span className={styles.tableCellEmpty}>—</span>
-                                                    )}
-                                                </td>
-                                            );
-                                        }
-
-                                        const checked = moduleAllChecked(module, col, selectedPermissions, isGrantedByRole);
-                                        const indet = moduleAllIndeterminate(module, col, selectedPermissions, isGrantedByRole);
-                                        const hasColActions = module.submodules?.some(
-                                            (sub) => actionsForColumn(col, sub).length > 0,
-                                        );
-
-                                        return (
-                                            <td key={col.key} className={styles.colAction}>
-                                                {hasColActions ? (
-                                                    <input
-                                                        type="checkbox"
-                                                        className={styles.tableCheckbox}
-                                                        checked={checked}
-                                                        ref={(el) => {
-                                                            if (el) el.indeterminate = indet;
-                                                        }}
-                                                        onChange={(e) => onModuleColumnToggle(module, col, e.target.checked)}
-                                                        aria-label={`${col.label} for ${module.name}`}
-                                                    />
-                                                ) : (
-                                                    <span className={styles.tableCellEmpty}>—</span>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-
-                                {isExpanded && module.submodules?.map((sub) => {
-                                    const subPerms = modulePerms[sub.id] || {};
-                                    const subLabel = sub.id === 'leads'
-                                        ? (sub.name || 'Inquiry / Lead')
-                                        : (sub.name || sub.id);
-
-                                    return (
-                                        <tr key={`${module.id}-${sub.id}`} className={styles.tableRowChild}>
-                                            <td className={styles.colName}>
-                                                <span className={styles.tableChildName}>{subLabel}</span>
-                                            </td>
-                                            {visibleColumns.map((col) => {
-                                                if (col.key === 'all') {
-                                                    const acts = (sub.actions || []).map(normalizeAction);
-                                                    const allOn = acts.length > 0 && acts.every(
-                                                        (a) => isGrantedByRole(module.id, sub.id, a.id)
-                                                            || !!subPerms[a.id],
-                                                    );
-                                                    return (
-                                                        <td key={col.key} className={styles.colAction}>
-                                                            {acts.length ? (
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className={styles.tableCheckbox}
-                                                                    checked={allOn}
-                                                                    onChange={(e) => onSubmoduleAllToggle(
-                                                                        module.id,
-                                                                        sub,
-                                                                        e.target.checked,
-                                                                    )}
-                                                                    aria-label={`All for ${subLabel}`}
-                                                                />
-                                                            ) : (
-                                                                <span className={styles.tableCellEmpty}>—</span>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <td key={col.key} className={styles.colAction}>
-                                                        <CellCheckboxes
-                                                            moduleId={module.id}
-                                                            submodule={sub}
-                                                            column={col}
-                                                            subPerms={subPerms}
-                                                            isGrantedByRole={isGrantedByRole}
-                                                            onToggle={onPermissionToggle}
-                                                            compact
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
-                            </React.Fragment>
+                            <td key={col.key} className={styles.colAction}>
+                                {hasColActions ? (
+                                    <input
+                                        type="checkbox"
+                                        className={styles.tableCheckbox}
+                                        checked={checked}
+                                        ref={(el) => {
+                                            if (el) el.indeterminate = indet;
+                                        }}
+                                        onChange={(e) => onModuleColumnToggle(module, col, e.target.checked)}
+                                        aria-label={`${col.label} for ${module.name}`}
+                                    />
+                                ) : (
+                                    <span className={styles.tableCellEmpty}>—</span>
+                                )}
+                            </td>
                         );
                     })}
-                </tbody>
-            </table>
+                </tr>
+
+                {isExpanded && module.submodules?.map((sub) => {
+                    const subPerms = modulePerms[sub.id] || {};
+                    const subLabel = sub.id === 'leads'
+                        ? (sub.name || 'Inquiry / Lead')
+                        : (sub.name || sub.id);
+
+                    return (
+                        <tr key={`${module.id}-${sub.id}`} className={styles.tableRowChild}>
+                            <td className={styles.colName}>
+                                <span className={styles.tableChildName}>{subLabel}</span>
+                            </td>
+                            {visibleColumns.map((col) => {
+                                if (col.key === 'all') {
+                                    const acts = (sub.actions || []).map(normalizeAction);
+                                    const allOn = acts.length > 0 && acts.every(
+                                        (a) => isGrantedByRole(module.id, sub.id, a.id)
+                                            || !!subPerms[a.id],
+                                    );
+                                    return (
+                                        <td key={col.key} className={styles.colAction}>
+                                            {acts.length ? (
+                                                <input
+                                                    type="checkbox"
+                                                    className={styles.tableCheckbox}
+                                                    checked={allOn}
+                                                    onChange={(e) => onSubmoduleAllToggle(
+                                                        module.id,
+                                                        sub,
+                                                        e.target.checked,
+                                                    )}
+                                                    aria-label={`All for ${subLabel}`}
+                                                />
+                                            ) : (
+                                                <span className={styles.tableCellEmpty}>—</span>
+                                            )}
+                                        </td>
+                                    );
+                                }
+
+                                return (
+                                    <td key={col.key} className={styles.colAction}>
+                                        <CellCheckboxes
+                                            moduleId={module.id}
+                                            submodule={sub}
+                                            column={col}
+                                            subPerms={subPerms}
+                                            isGrantedByRole={isGrantedByRole}
+                                            onToggle={onPermissionToggle}
+                                            compact
+                                        />
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    );
+                })}
+            </React.Fragment>
+        );
+    });
+
+    return (
+        <div className={styles.permissionTableWrap}>
+            {groups.map((group) => (
+                <div key={group.id} className={styles.groupSection}>
+                    <div className={styles.groupHeader}>
+                        <h4 className={styles.groupName}>{group.name}</h4>
+                    </div>
+                    <table className={styles.permissionTable}>
+                        <thead>
+                            <tr>
+                                <th className={styles.colName}>Module / Permission</th>
+                                {visibleColumns.map((col) => (
+                                    <th key={col.key} className={styles.colAction}>
+                                        {col.key === 'all' && group.id === groups[0]?.id ? (
+                                            <label className={styles.headerAllLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    className={styles.tableCheckbox}
+                                                    checked={globalAllChecked}
+                                                    onChange={(e) => onSelectAllGlobal(e.target.checked)}
+                                                    aria-label="Select all permissions"
+                                                />
+                                                <span>All</span>
+                                            </label>
+                                        ) : col.key === 'all' ? (
+                                            'All'
+                                        ) : (
+                                            col.label
+                                        )}
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {renderModuleRows(group.modules)}
+                        </tbody>
+                    </table>
+                </div>
+            ))}
         </div>
     );
 }

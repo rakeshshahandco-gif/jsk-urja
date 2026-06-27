@@ -48,7 +48,7 @@ export const whatsappBulkApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         }));
     },
-    saveRecipients: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/recipients`)),
+    saveRecipients: async (id, body) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/recipients`, body || {})),
     listRecipients: async (id, params = {}) => unwrap(await apiClient.get(`/whatsapp-bulk/campaigns/${id}/recipients`, { params }))?.results || [],
     testSend: async (id, mobile) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/test-send`, { mobile })),
     scheduleCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/schedule`)),

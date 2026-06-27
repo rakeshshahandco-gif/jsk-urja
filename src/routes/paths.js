@@ -410,6 +410,16 @@ export const PATHS = {
     },
     /** @deprecated use E_INVOICE.LIST — kept for redirects */
     EINVOICE: '/gst/einvoice',
+    DATA_EXTRACTOR: {
+        ROOT: '/data-extractor',
+        KEYWORD_SEARCH: '/data-extractor/keyword-search',
+        MANUAL_URL: '/data-extractor/manual-url',
+        IMPORT: '/data-extractor/import',
+        HISTORY: '/data-extractor/history',
+        LEADS: '/data-extractor/leads',
+        PREVIEW: (jobId) => `/data-extractor/preview/${jobId}`,
+        SETTINGS: '/data-extractor/settings',
+    },
     // ── SaaS Super Admin ──────────────────────────────────────────────────
     SAAS_ADMIN: {
         ROOT: '/saas-admin',

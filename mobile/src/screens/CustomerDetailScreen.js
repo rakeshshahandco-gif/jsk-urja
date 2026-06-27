@@ -1,33 +1,51 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Share, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Share, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { conversationApi } from '../api/interaction.api';
 import { customersApi } from '../api/customers.api';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/colors';
 import { useFocusEffect } from '@react-navigation/native';
+import { navigateParent } from '../navigation/rootNavigation';
 
 export const CustomerDetailScreen = ({ route, navigation }) => {
-  const { customer: initialCustomer } = route.params;
-  const [customer, setCustomer] = useState(initialCustomer);
+  const { customer: initialCustomer, customerId } = route.params || {};
+  const resolvedId = customerId || initialCustomer?._id;
+  const [customer, setCustomer] = useState(initialCustomer || null);
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialCustomer);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchFullData = useCallback(async () => {
+    if (!resolvedId) {
+      setError('Customer not found');
+      setLoading(false);
+      return;
+    }
+    setError('');
     try {
       const [freshData, timelineData] = await Promise.all([
-        customersApi.getCustomer(initialCustomer._id),
-        conversationApi.getConversationHistory(initialCustomer._id)
+        customersApi.getCustomer(resolvedId),
+        conversationApi.getConversationHistory(resolvedId).catch(() => []),
       ]);
-      setCustomer(freshData);
-      setHistory(timelineData?.results || timelineData?.data || timelineData || []);
+      const c = freshData?.data || freshData;
+      if (!c?._id) {
+        setError('Customer not found');
+        setCustomer(null);
+      } else {
+        setCustomer(c);
+      }
+      const hist = timelineData?.results || timelineData?.data?.results || timelineData?.data;
+      setHistory(Array.isArray(hist) ? hist : Array.isArray(timelineData) ? timelineData : []);
     } catch (e) {
-      console.error('Data sync error:', e);
+      const msg = e.response?.data?.message || e.message || 'Failed to load customer';
+      setError(msg);
+      console.error('Data sync error:', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [initialCustomer._id]);
+  }, [resolvedId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,7 +67,17 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const formatAddress = (addr) => {
+    if (!addr) return '—';
+    if (typeof addr === 'string') return addr;
+    if (typeof addr === 'object') {
+      return [addr.line1, addr.line2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ') || '—';
+    }
+    return String(addr);
+  };
+
   const handleShare = async () => {
+    if (!customer) return;
     try {
       const primaryContact = customer.contactPersons?.find(c => c.isPrimary) || customer.contactPersons?.[0];
       await Share.share({
@@ -79,7 +107,33 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
     </View>
   );
 
-  const name = customer.company || customer.customerName || 'Customer';
+  if (loading && !customer) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading customer…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !customer) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>❮ Back</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error || 'Customer not found'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const name = customer.company || customer.companyName || customer.customerName || 'Customer';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -124,11 +178,11 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
           </View>
 
           {/* Stickers */}
-          {customer.stickers && customer.stickers.length > 0 && (
+          {Array.isArray(customer.stickers) && customer.stickers.length > 0 && (
             <View style={styles.stickerRow}>
-              {customer.stickers.map(s => (
-                <View key={s._id} style={[styles.sticker, { backgroundColor: (s.color || '#64748b') + '15', borderColor: s.color }]}>
-                  <Text style={[styles.stickerText, { color: s.color }]}>{s.name}</Text>
+              {customer.stickers.filter((s) => s && typeof s === 'object').map((s) => (
+                <View key={s._id || s.name} style={[styles.sticker, { backgroundColor: (s.color || '#64748b') + '15', borderColor: s.color || '#64748b' }]}>
+                  <Text style={[styles.stickerText, { color: s.color || '#64748b' }]}>{s.name || 'Tag'}</Text>
                 </View>
               ))}
             </View>
@@ -170,11 +224,11 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
             ) : (
               <Text style={styles.emptyText}>No recent interaction history synced.</Text>
             )}
-            <TouchableOpacity 
-              style={styles.logBtn} 
-              onPress={() => navigation.navigate('CustomerInteraction', { customer })}
+            <TouchableOpacity
+              style={styles.logBtn}
+              onPress={() => Alert.alert('Coming soon', 'Add interaction is available on web CRM for now.')}
             >
-              <Text style={styles.logBtnText}>+ Add New Interaction</Text>
+              <Text style={styles.logBtnText}>+ Add New Interaction (Web)</Text>
             </TouchableOpacity>
         </InfoCard>
 
@@ -206,7 +260,7 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
 
         {/* Section: Location */}
         <InfoCard title="Location" icon="📍">
-            <InfoRow label="Address" value={customer.address} />
+            <InfoRow label="Address" value={formatAddress(customer.address)} />
             <InfoRow label="City & State" value={`${customer.city}, ${customer.state}`} />
             <InfoRow label="Pincode" value={customer.pincode} />
         </InfoCard>
@@ -217,7 +271,7 @@ export const CustomerDetailScreen = ({ route, navigation }) => {
       {/* Floating Quick Task Button */}
       <TouchableOpacity 
         style={styles.fab}
-        onPress={() => navigation.navigate('CreateTask', { customerId: customer._id })}
+        onPress={() => navigateParent(navigation, 'CreateTask', { customerId: customer._id })}
       >
         <Text style={styles.fabText}>+ Task</Text>
       </TouchableOpacity>
@@ -293,4 +347,7 @@ const styles = StyleSheet.create({
   contactActionText: { fontSize: 13, color: COLORS.secondary, fontWeight: FONT.bold },
   fab: { position: 'absolute', right: 20, bottom: 30, backgroundColor: COLORS.secondary, width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', ...SHADOW.lg },
   fabText: { color: COLORS.white, fontWeight: FONT.extraBold, fontSize: 12 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl },
+  loadingText: { marginTop: SPACING.sm, color: COLORS.gray500 },
+  errorText: { color: '#b91c1c', fontSize: FONT.md, textAlign: 'center', paddingHorizontal: SPACING.xl },
 });

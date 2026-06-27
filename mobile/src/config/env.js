@@ -13,30 +13,36 @@ import Constants from 'expo-constants';
 const ENV = {
   local: {
     // For Web Browser testing:
-    apiUrl: 'http://localhost:5100/api/v1', 
+    apiUrl: 'http://localhost:5000/api/v1', 
     name: 'JSK CRM LOCAL',
     envName: 'LOCAL',
-    version: '1.0.8',
+    version: '2.1.7',
   },
   staging: {
-    // For Physical APK testing (Real Phone):
-    // Using your Computer IP so the phone can reach your local backend.
-    apiUrl: 'http://192.168.0.118:5100/api/v1', 
+    // Staging APK still uses Render live DB (same as production).
+    apiUrl: 'https://jsk-urja-backend.onrender.com/api/v1',
     name: 'JSK CRM TEST',
     envName: 'STAGING',
-    version: '1.0.8',
+    version: '2.1.7',
   },
   production: {
     apiUrl: 'https://jsk-urja-backend.onrender.com/api/v1',
     name: 'JSK CRM',
     envName: 'PRODUCTION',
-    version: '1.0.8',
+    version: '2.1.7',
   }
 };
 
 const getEnvConfig = () => {
-  const environment = Constants.expoConfig?.extra?.env || 'local';
-  return ENV[environment] || ENV.local;
+  const baked = Constants.expoConfig?.extra?.env;
+  const webApiOverride = typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_MOBILE_API;
+  // Release APK must always use Render unless explicitly built as "local".
+  const environment = baked || webApiOverride || (__DEV__ ? 'local' : 'production');
+  const cfg = ENV[environment] || ENV.production;
+  if (!__DEV__ && environment !== 'local' && !String(cfg.apiUrl).includes('onrender.com')) {
+    return ENV.production;
+  }
+  return cfg;
 };
 
 export default getEnvConfig();

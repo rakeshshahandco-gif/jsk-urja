@@ -37,6 +37,8 @@ const END_RULES = [
   { value: 'ON_COUNT', label: 'After N occurrences' },
 ];
 
+const pickerMode = Platform.OS === 'android' ? 'dropdown' : undefined;
+
 export const TaskCreateScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loadingMeta, setLoadingMeta] = useState(true);
@@ -134,6 +136,7 @@ export const TaskCreateScreen = ({ navigation }) => {
     if (!groupId) { Alert.alert('Required', 'Please select a group.'); return; }
 
     setSaving(true);
+    try {
       // LOG THE PAYLOAD FOR DEBUGGING
       console.log('--- SAVING TASK ---');
       console.log('isRecurring:', isRecurring);
@@ -246,7 +249,7 @@ export const TaskCreateScreen = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>CATEGORY</Text>
                 <View style={styles.pickerWrap}>
-                  <Picker selectedValue={taskCategoryId} onValueChange={setTaskCategoryId} style={styles.picker}>
+                  <Picker mode={pickerMode} selectedValue={taskCategoryId} onValueChange={setTaskCategoryId} style={styles.picker}>
                     <Picker.Item label="No Category" value="" />
                     {categories.map(c => <Picker.Item key={c._id} label={c.name} value={c._id} />)}
                   </Picker>
@@ -255,7 +258,7 @@ export const TaskCreateScreen = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.label}>PRIORITY</Text>
                 <View style={styles.pickerWrap}>
-                  <Picker selectedValue={priority} onValueChange={setPriority} style={styles.picker}>
+                  <Picker mode={pickerMode} selectedValue={priority} onValueChange={setPriority} style={styles.picker}>
                     {PRIORITIES.map(p => <Picker.Item key={p} label={p} value={p} />)}
                   </Picker>
                 </View>
@@ -304,7 +307,7 @@ export const TaskCreateScreen = ({ navigation }) => {
               <View style={styles.field}>
                 <Text style={styles.label}>SELECT TEAM *</Text>
                 <View style={styles.pickerWrap}>
-                  <Picker selectedValue={assignedGroupId} onValueChange={setAssignedGroupId} style={styles.picker}>
+                  <Picker mode={pickerMode} selectedValue={assignedGroupId} onValueChange={setAssignedGroupId} style={styles.picker}>
                     <Picker.Item label="— Select Team —" value="" />
                     {teams.map(t => <Picker.Item key={t._id} label={t.name} value={t._id} />)}
                   </Picker>
@@ -331,8 +334,9 @@ export const TaskCreateScreen = ({ navigation }) => {
                     <View style={{ flex: 1 }}>
                        <Text style={styles.label}>FREQUENCY</Text>
                        <View style={styles.pickerWrap}>
-                          <Picker 
-                            selectedValue={recurrence.frequency} 
+                          <Picker
+                            mode={pickerMode}
+                            selectedValue={recurrence.frequency}
                             onValueChange={(v) => setRecurrence(p => ({ ...p, frequency: v }))}
                             style={styles.picker}
                           >
@@ -353,8 +357,9 @@ export const TaskCreateScreen = ({ navigation }) => {
 
                  <Text style={styles.label}>END RULE</Text>
                  <View style={styles.pickerWrap}>
-                    <Picker 
-                      selectedValue={recurrence.recurrenceEndType} 
+                    <Picker
+                      mode={pickerMode}
+                      selectedValue={recurrence.recurrenceEndType}
                       onValueChange={(v) => setRecurrence(p => ({ ...p, recurrenceEndType: v }))}
                       style={styles.picker}
                     >

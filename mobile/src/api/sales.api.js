@@ -1,10 +1,17 @@
 import apiClient from './client';
+import { extractList } from '../utils/apiResponse';
 
 export const salesApi = {
   getInvoices: async (params = {}) => {
     const response = await apiClient.get('/sales-invoices', { params });
-    // Structure: { statusCode, data: { invoices: [], meta: {} }, message }
-    return response.data?.data || response.data;
+    const body = response.data?.data ?? response.data;
+    const invoices = extractList(body, ['invoices']);
+    return {
+      invoices,
+      total: body?.total ?? invoices.length,
+      page: body?.page,
+      limit: body?.limit,
+    };
   },
 
   getInvoice: async (id) => {
@@ -19,6 +26,18 @@ export const salesApi = {
 
   getSalesOrders: async (params = {}) => {
     const response = await apiClient.get('/sales-orders', { params });
+    const body = response.data?.data ?? response.data;
+    const salesOrders = extractList(body, ['salesOrders', 'orders']);
+    return {
+      salesOrders,
+      total: body?.total ?? salesOrders.length,
+      page: body?.page,
+      limit: body?.limit,
+    };
+  },
+
+  getSalesOrder: async (id) => {
+    const response = await apiClient.get(`/sales-orders/${id}`);
     return response.data?.data || response.data;
   },
 
@@ -29,7 +48,8 @@ export const salesApi = {
 
   getSeries: async (params = { active: true }) => {
     const response = await apiClient.get('/invoice-series', { params });
-    return response.data?.data || response.data;
+    const body = response.data?.data ?? response.data;
+    return extractList(body, ['series', 'results', 'data']);
   },
 
   previewNextNo: async (seriesId, module) => {

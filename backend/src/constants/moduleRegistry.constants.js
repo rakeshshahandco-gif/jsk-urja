@@ -24,6 +24,7 @@ export const MODULE_REGISTRY = [
     { code: 'purchase', label: 'Purchase', group: MODULE_GROUPS.CORE, menuIds: ['purchase'], apiPrefixes: ['/suppliers', '/purchase-orders', '/purchase-rfq', '/grn', '/purchase-invoices'], permissionModules: ['purchase'] },
     { code: 'inventory', label: 'Inventory', group: MODULE_GROUPS.CORE, menuIds: ['inventory'], apiPrefixes: ['/items', '/item-types', '/item-groups', '/stock', '/bom'], permissionModules: ['inventory'] },
     { code: 'documents', label: 'Documents / Scan', group: MODULE_GROUPS.CORE, menuIds: ['documents-menu'], apiPrefixes: ['/scan-entry', '/smart-import', '/import-center'], permissionModules: ['documents', 'scan_entry', 'import_utility'] },
+    { code: 'data_extractor', label: 'Data Extractor / Market Finder', group: MODULE_GROUPS.CORE, menuIds: ['data-extractor'], apiPrefixes: ['/data-extractor'], permissionModules: ['data_extractor'] },
     { code: 'production', label: 'Production (General)', group: MODULE_GROUPS.CORE, menuIds: ['production', 'prod-dashboard', 'model-conversion', 'comp-replacement', 'prod-rejection', 'prod-planning', 'workflow-production'], apiPrefixes: ['/work-orders', '/production-sheets', '/production-output'], permissionModules: ['production'] },
     { code: 'service', label: 'Service / Complaints', group: MODULE_GROUPS.CORE, menuIds: ['service'], apiPrefixes: ['/complaints', '/replacement-dispatches', '/repair-job-cards'], permissionModules: ['service'] },
     { code: 'accounts', label: 'Accounts / Vouchers', group: MODULE_GROUPS.FINANCE, menuIds: ['accounts', 'voucher-entry', 'account-master-parent', 'group-master', 'ledger-master', 'financial-year-master', 'voucher-type-master', 'cost-centers', 'budgets', 'receipt-entry', 'payment-entry', 'contra-entry', 'expense-entry', 'journal-entry', 'credit-notes', 'debit-notes', 'bill-wise-adjustment', 'bank-reconciliation', 'pdc-register', 'narration-templates', 'vouchers', 'ledger-report', 'sales-register', 'purchase-register', 'expense-register', 'day-book', 'cash-book', 'bank-book', 'outstanding', 'petty-cash-group', 'petty-cash-entry', 'petty-cash-import', 'petty-cash-reports', 'petty-cash-settings'], apiPrefixes: ['/vouchers', '/ledgers', '/cash-bank-accounts', '/petty-cash', '/account-masters'], permissionModules: ['accounts', 'voucher_entry', 'account_master'] },
@@ -57,6 +58,38 @@ export const MODULE_REGISTRY = [
 export const ALL_MODULE_CODES = MODULE_REGISTRY.map((m) => m.code);
 
 export const MODULE_BY_CODE = Object.fromEntries(MODULE_REGISTRY.map((m) => [m.code, m]));
+
+/** Permission module ids used in user rights (not module-guard-only codes like china_sourcing). */
+export function collectPermissionModuleIds() {
+    const ids = new Set();
+    for (const mod of MODULE_REGISTRY) {
+        const pms = mod.permissionModules || [];
+        for (const pm of pms) {
+            ids.add(pm);
+        }
+        if (!pms.length && mod.code) {
+            ids.add(mod.code);
+        }
+    }
+    return ids;
+}
+
+/** Module-guard codes that must not appear as separate rows in User Management permissions. */
+export function moduleGuardOnlyPermissionCodes() {
+    const guardOnly = new Set();
+    for (const mod of MODULE_REGISTRY) {
+        const pms = mod.permissionModules || [];
+        if (mod.code && pms.length && !pms.includes(mod.code)) {
+            guardOnly.add(mod.code);
+        }
+    }
+    return guardOnly;
+}
+
+export function filterPermissionRegistryModules(modules = []) {
+    const guardOnly = moduleGuardOnlyPermissionCodes();
+    return (modules || []).filter((m) => m?.id && !guardOnly.has(m.id));
+}
 
 /** Menu item id → module code (first match wins). */
 export const MENU_ID_TO_MODULE = (() => {

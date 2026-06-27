@@ -44,9 +44,13 @@ export const SalesOrderCreateScreen = ({ route, navigation }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await salesApi.getSeries();
-        const list = res?.filter(s => s.seriesName.includes('SO') || s.prefix.includes('SO')) || [];
-        setSeries(list);
+        const raw = await salesApi.getSeries();
+        const all = Array.isArray(raw) ? raw : [];
+        const list = all.filter((s) => {
+          const name = String(s?.seriesName || s?.prefix || '').toUpperCase();
+          return name.includes('SO') || name.includes('SALES ORDER') || name.includes('ORDER');
+        });
+        setSeries(list.length ? list : all);
         if (list.length > 0) {
           handleSeriesChange(list[0]._id);
         }

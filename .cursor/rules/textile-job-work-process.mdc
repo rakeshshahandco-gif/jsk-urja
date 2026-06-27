@@ -1,0 +1,15 @@
+---
+description: Textile Job Work process guide - see docs/TEXTILE_JOB_WORK_PROCESS.md
+globs: src/features/production/textileJobWork/**,src/features/production/textileDyeingChallan/**,docs/TEXTILE_JOB_WORK_PROCESS.md
+alwaysApply: false
+---
+
+# Textile Job Work (Handloom)
+
+Full guide: docs/TEXTILE_JOB_WORK_PROCESS.md
+
+Workflow: Rate Master -> Issue Challan -> Return Entry -> Stock/Reports
+- One module with Process Type dropdown
+- Input Qty + Meter Per PCS same line for Expected PCS
+- Return PCS on Return Entry only
+- Handloom/Textile only; no JSK URJA changes

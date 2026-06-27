@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Company } from '../models/company.model.js';
 import { IndustryTemplate } from '../models/industryTemplate.model.js';
+import { normalizeLoginSlug } from '../utils/loginSlug.utils.js';
 import {
     clearModuleGuardCache,
     loadCompanyModuleContext,
@@ -36,6 +37,9 @@ export const getCompanyModuleAllocation = asyncHandler(async (req, res) => {
             _id: company._id,
             companyName: company.companyName,
             clientCode: company.clientCode || '',
+            loginSlug: company.loginSlug || '',
+            loginTagline: company.loginTagline || '',
+            loginPrimaryColor: company.loginPrimaryColor || '',
             industryTemplateRef: company.industryTemplateRef,
             enabledModules: company.enabledModules || [],
             disabledModules: company.disabledModules || [],
@@ -67,6 +71,9 @@ export const updateCompanyModuleAllocation = asyncHandler(async (req, res) => {
         moduleGuardEnabled,
         moduleAllocationConfigured,
         clientCode,
+        loginSlug,
+        loginTagline,
+        loginPrimaryColor,
         industryTemplateRef,
         deploymentConfig,
         applyTemplateDefaults,
@@ -112,6 +119,15 @@ export const updateCompanyModuleAllocation = asyncHandler(async (req, res) => {
     }
     if (clientCode !== undefined) {
         company.clientCode = String(clientCode || '').trim();
+    }
+    if (loginSlug !== undefined) {
+        company.loginSlug = normalizeLoginSlug(loginSlug);
+    }
+    if (loginTagline !== undefined) {
+        company.loginTagline = String(loginTagline || '').trim();
+    }
+    if (loginPrimaryColor !== undefined) {
+        company.loginPrimaryColor = String(loginPrimaryColor || '').trim();
     }
     if (deploymentConfig && typeof deploymentConfig === 'object') {
         company.deploymentConfig = {

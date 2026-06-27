@@ -48,7 +48,16 @@ const defaultForm = {
     batchSize: 25,
     gapBetweenBatchesMs: 86400000,
     manualNumbers: [],
-    filters: { activeOnly: false, inactiveOnly: false, customerTypes: [], industryTypes: [], states: [], cities: [] },
+    filters: {
+        activeOnly: false,
+        inactiveOnly: false,
+        businessCategory: 'All',
+        customerTypes: [],
+        industryTypes: [],
+        states: [],
+        cities: [],
+        selectedRecipientKeys: [],
+    },
     uploadFilePath: '',
 };
 
@@ -59,6 +68,7 @@ export default function WhatsappBulkCampaignsPage() {
     const [form, setForm] = useState(defaultForm);
     const [manualText, setManualText] = useState('');
     const [preview, setPreview] = useState(null);
+    const [selectedRecipientKeys, setSelectedRecipientKeys] = useState([]);
     const [liveRecipients, setLiveRecipients] = useState(null);
     const [selectedId, setSelectedId] = useState(null);
     const [testMobile, setTestMobile] = useState('');
@@ -151,7 +161,45 @@ export default function WhatsappBulkCampaignsPage() {
         if (form.scheduleType !== 'now' && form.scheduledStartAt) {
             scheduledStartAt = new Date(form.scheduledStartAt).toISOString();
         }
-        return { ...form, manualNumbers, scheduledStartAt };
+        const filters = {
+            ...form.filters,
+            businessCategory: form.filters.businessCategory || 'All',
+            selectedRecipientKeys: selectedRecipientKeys.length ? selectedRecipientKeys : undefined,
+        };
+        return { ...form, filters, manualNumbers, scheduledStartAt };
+    };
+
+    const isMasterSource = ['customer_master', 'lead_master'].includes(form.recipientSource);
+    const categoryOptions = meta?.businessCategories || meta?.customerTypes || ['All'];
+
+    const toggleRecipient = (recipientKey, checked) => {
+        setSelectedRecipientKeys((prev) => {
+            if (checked) return prev.includes(recipientKey) ? prev : [...prev, recipientKey];
+            return prev.filter((k) => k !== recipientKey);
+        });
+        setPreview((p) => {
+            if (!p?.recipients) return p;
+            const recipients = p.recipients.map((r) => (
+                r.recipientKey === recipientKey ? { ...r, selected: checked } : r
+            ));
+            const finalSelected = recipients.filter((r) => r.status === 'pending' && r.selected).length;
+            return { ...p, recipients, finalSelected };
+        });
+    };
+
+    const toggleAllRecipients = (checked) => {
+        if (!preview?.recipients) return;
+        const keys = preview.recipients
+            .filter((r) => r.status === 'pending')
+            .map((r) => r.recipientKey);
+        setSelectedRecipientKeys(checked ? keys : []);
+        setPreview((p) => {
+            const recipients = p.recipients.map((r) => (
+                r.status === 'pending' ? { ...r, selected: checked } : r
+            ));
+            const finalSelected = checked ? keys.length : 0;
+            return { ...p, recipients, finalSelected };
+        });
     };
 
     const onCreate = async () => {
@@ -201,6 +249,10 @@ export default function WhatsappBulkCampaignsPage() {
         try {
             const data = await whatsappBulkApi.previewRecipients(buildPayload());
             setPreview(data);
+            const defaultKeys = (data.recipients || [])
+                .filter((r) => r.status === 'pending' && r.selected !== false)
+                .map((r) => r.recipientKey);
+            setSelectedRecipientKeys(defaultKeys);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Preview failed');
         }
@@ -262,12 +314,53 @@ export default function WhatsappBulkCampaignsPage() {
     const runAction = async (action, id = selectedId) => {
         if (!id) return toast.error('Select or create a campaign first');
         try {
-            await whatsappBulkApi[action](id);
+            if (action === 'saveRecipients') {
+                await whatsappBulkApi.saveRecipients(id, {
+                    filters: {
+                        ...form.filters,
+                        businessCategory: form.filters.businessCategory || 'All',
+                        selectedRecipientKeys,
+                    },
+                });
+            } else {
+                await whatsappBulkApi[action](id);
+            }
             toast.success('Done');
             await load();
             await loadLiveRecipients(id);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Action failed');
+        }
+    };
+
+    const onScheduleCampaign = async () => {
+        if (!selectedId) return toast.error('Select or create a campaign first');
+        const count = preview?.finalSelected ?? selectedRecipientKeys.length;
+        if (isMasterSource && !preview) {
+            return toast.error('Preview recipients first, then confirm selection before sending');
+        }
+        const msg = `Send campaign to ${count} selected recipient(s)?\n\n`
+            + `Total found: ${preview?.totalFound ?? '—'}\n`
+            + `Valid numbers: ${preview?.validNumbers ?? '—'}\n`
+            + `Duplicates skipped: ${preview?.duplicateSkipped ?? 0}\n`
+            + `Invalid skipped: ${preview?.invalidSkipped ?? 0}\n`
+            + `Opt-out skipped: ${preview?.optOutSkipped ?? 0}\n`
+            + `Final selected: ${count}`;
+        if (!window.confirm(msg)) return;
+        try {
+            await whatsappBulkApi.saveRecipients(selectedId, {
+                filters: {
+                    ...form.filters,
+                    businessCategory: form.filters.businessCategory || 'All',
+                    selectedRecipientKeys,
+                },
+            });
+            await whatsappBulkApi.scheduleCampaign(selectedId);
+            toast.success('Campaign scheduled');
+            await load();
+            await loadLiveRecipients(selectedId);
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Schedule failed');
         }
     };
 
@@ -416,6 +509,32 @@ export default function WhatsappBulkCampaignsPage() {
                         <label><input type="checkbox" checked={form.filters.inactiveOnly} onChange={(e) => setForm({ ...form, filters: { ...form.filters, inactiveOnly: e.target.checked, activeOnly: false } })} /> Inactive customers</label>
                     </div>
                 ) : null}
+                {isMasterSource ? (
+                    <div style={{ marginTop: 12 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>
+                            Customer Type / Business Category
+                        </label>
+                        <select
+                            style={inp}
+                            value={form.filters.businessCategory || 'All'}
+                            onChange={(e) => {
+                                setPreview(null);
+                                setSelectedRecipientKeys([]);
+                                setForm({
+                                    ...form,
+                                    filters: { ...form.filters, businessCategory: e.target.value },
+                                });
+                            }}
+                        >
+                            {categoryOptions.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                        <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>
+                            Choose &quot;All&quot; to include customers/leads without a category. Custom types from Customer Type Master are listed automatically.
+                        </p>
+                    </div>
+                ) : null}
                 {form.sendMode === 'FAST' ? (
                     <label style={{ display: 'block', marginTop: 12, color: '#b45309' }}>
                         <input type="checkbox" checked={fastConfirm} onChange={(e) => setFastConfirm(e.target.checked)} />
@@ -443,12 +562,65 @@ export default function WhatsappBulkCampaignsPage() {
                 </div>
             ) : preview ? (
                 <div style={card}>
-                    <strong>Preview (before Save Recipients):</strong> {preview.valid} valid, {preview.blacklisted} blacklisted, {preview.total} total
-                    <ul style={{ maxHeight: 180, overflow: 'auto', fontSize: 12, marginTop: 8 }}>
-                        {(preview.recipients || []).slice(0, 50).map((r) => (
-                            <li key={r.mobile}>{r.mobile} — {r.displayName || r.status}</li>
-                        ))}
-                    </ul>
+                    <strong>Recipient preview — confirm before send</strong>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 10, fontSize: 13 }}>
+                        <span><strong>Total Found:</strong> {preview.totalFound ?? 0}</span>
+                        <span><strong>Valid Numbers:</strong> {preview.validNumbers ?? preview.valid ?? 0}</span>
+                        <span><strong>Duplicate Skipped:</strong> {preview.duplicateSkipped ?? 0}</span>
+                        <span><strong>Invalid Skipped:</strong> {preview.invalidSkipped ?? 0}</span>
+                        <span><strong>Opt-out Skipped:</strong> {preview.optOutSkipped ?? preview.blacklisted ?? 0}</span>
+                        <span style={{ color: '#0f766e' }}><strong>Final Selected:</strong> {preview.finalSelected ?? selectedRecipientKeys.length}</span>
+                    </div>
+                    {isMasterSource && (preview.recipients || []).length > 0 ? (
+                        <div style={{ marginTop: 12, overflowX: 'auto', maxHeight: 320, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
+                                        <th style={{ padding: 8 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={(preview.recipients || []).filter((r) => r.status === 'pending').every((r) => r.selected)}
+                                                onChange={(e) => toggleAllRecipients(e.target.checked)}
+                                            />
+                                        </th>
+                                        <th style={{ padding: 8 }}>Name</th>
+                                        <th style={{ padding: 8 }}>Mobile</th>
+                                        <th style={{ padding: 8 }}>City</th>
+                                        <th style={{ padding: 8 }}>State</th>
+                                        <th style={{ padding: 8 }}>Category</th>
+                                        <th style={{ padding: 8 }}>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(preview.recipients || []).map((r) => (
+                                        <tr key={r.recipientKey || r.mobile} style={{ borderTop: '1px solid #f1f5f9', opacity: r.status === 'blacklisted' ? 0.5 : 1 }}>
+                                            <td style={{ padding: 8 }}>
+                                                {r.status === 'pending' ? (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!r.selected}
+                                                        onChange={(e) => toggleRecipient(r.recipientKey, e.target.checked)}
+                                                    />
+                                                ) : '—'}
+                                            </td>
+                                            <td style={{ padding: 8 }}>{r.displayName || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.mobile}</td>
+                                            <td style={{ padding: 8 }}>{r.city || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.state || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.category || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.status === 'blacklisted' ? 'Opt-out' : (r.entityStatus || r.status)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <ul style={{ maxHeight: 180, overflow: 'auto', fontSize: 12, marginTop: 8 }}>
+                            {(preview.recipients || []).slice(0, 50).map((r) => (
+                                <li key={r.mobile}>{r.mobile} — {r.displayName || r.status}</li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
             ) : null}
 
@@ -458,7 +630,7 @@ export default function WhatsappBulkCampaignsPage() {
                     <input style={{ ...inp, maxWidth: 180 }} placeholder="Test mobile" value={testMobile} onChange={(e) => setTestMobile(e.target.value)} />
                     <button type="button" style={btnSec} onClick={onTestSend}>Test Send</button>
                     <button type="button" style={btn} onClick={() => runAction('saveRecipients')}>Save Recipients</button>
-                    <button type="button" style={btn} onClick={() => runAction('scheduleCampaign')}>Start / Schedule</button>
+                    <button type="button" style={btn} onClick={onScheduleCampaign}>Start / Schedule</button>
                     <button type="button" style={btnWarn} onClick={() => runAction('pauseCampaign')}>Pause</button>
                     <button type="button" style={btnSec} onClick={() => runAction('resumeCampaign')}>Resume</button>
                     <button type="button" style={btnDanger} onClick={() => runAction('stopCampaign')}>Stop</button>

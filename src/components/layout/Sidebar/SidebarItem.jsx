@@ -97,7 +97,10 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // Expansion state for nested children. Auto-expand on mount if any
     // descendant matches the current route. After the user manually toggles
     // we stop overriding their choice so it never re-opens itself.
-    const [isExpanded, setIsExpanded] = useState((isActive && hasChildren) || (item.id === 'admin' && hasChildren));
+    const [isExpanded, setIsExpanded] = useState(
+        (isActive && hasChildren)
+        || ((item.id === 'admin' || item.id === 'communication-bulk-group') && hasChildren),
+    );
     const userToggledRef = useRef(false);
 
     useEffect(() => {
@@ -126,9 +129,10 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // legacy expand-on-click behaviour — they are not rendered inside the
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
-    const isTopLevelParent = level === 1 && hasChildren;
-    /** Admin sub-items (Industry Template Master, etc.) must stay visible — other modules use home tiles only. */
-    const alwaysShowChildren = item.id === 'admin';
+    /** Top-level groups that expand inline (bulk/email utilities need visible sub-menus). */
+    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group';
+    const isTopLevelParent = level === 1 && hasChildren && !inlineTopLevelGroup;
+    const alwaysShowChildren = inlineTopLevelGroup;
 
     const handleClick = () => {
         if (isTopLevelParent) {

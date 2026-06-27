@@ -49,9 +49,9 @@ export const SalesInvoiceCreateScreen = ({ route, navigation }) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await salesApi.getSeries();
-        const list = res || [];
-        setSeries(list);
+        const list = await salesApi.getSeries();
+        const safeList = Array.isArray(list) ? list : [];
+        setSeries(safeList);
         if (list.length > 0) {
           const def = list.find(s => s.isDefault) || list[0];
           handleSeriesChange(def._id);
@@ -176,7 +176,7 @@ export const SalesInvoiceCreateScreen = ({ route, navigation }) => {
 
       await salesApi.createInvoice(payload);
       Alert.alert('Success', 'Invoice generated successfully!', [
-        { text: 'OK', onPress: () => navigation.replace('SalesList') }
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e) {
       Alert.alert('Error', e.response?.data?.message || e.message);

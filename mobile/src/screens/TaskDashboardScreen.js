@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { isPast, isToday, isWithinInterval, addDays, parseISO } from 'date-fns';
 import { tasksApi } from '../api/tasks.api';
 import { useAuth } from '../context/AuthContext';
+import { navigateParent } from '../navigation/rootNavigation';
+import { DEFAULT_LIMIT } from '../utils/pagination';
 import { TaskCard } from '../components/TaskCard';
 import { COLORS, FONT, SPACING, RADIUS, SHADOW } from '../theme/colors';
 
@@ -29,8 +31,15 @@ const categorizeToSections = (tasks) => {
     const raw = task.nextDueDate || task.dueDate;
     if (!raw) { sections[3].data.push(task); return; }
     
-    const d = typeof raw === 'string' ? parseISO(raw) : new Date(raw);
-    
+    let d;
+    try {
+      d = typeof raw === 'string' ? parseISO(raw) : new Date(raw);
+      if (Number.isNaN(d.getTime())) throw new Error('invalid');
+    } catch {
+      sections[3].data.push(task);
+      return;
+    }
+
     if (isPast(d) && !isToday(d)) {
       sections[0].data.push(task);
       sections[0].count++;
@@ -56,22 +65,35 @@ export const TaskDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
 
   const fetchTasks = useCallback(async () => {
+    setError('');
     try {
-      const res = await tasksApi.getTasks({ limit: 1000 });
-      const tasks = res?.results || res?.data?.tasks || res?.tasks || res?.data || (Array.isArray(res) ? res : []);
-      const processed = categorizeToSections(tasks);
+      const all = [];
+      let page = 1;
+      let pages = 1;
+      do {
+        const res = await tasksApi.getTasks({ page, limit: DEFAULT_LIMIT });
+        const batch = res?.results || [];
+        if (batch.length) all.push(...batch);
+        pages = res?.meta?.pages || 1;
+        page += 1;
+      } while (page <= pages && page <= 10);
+
+      const processed = categorizeToSections(all);
       setSections(processed);
-      
-      // Update summary counts
       setSummary({
-        overdue: processed[0]?.count || 0,
-        today: processed[1]?.count || 0,
-        upcoming: (processed[2]?.count || 0) + (processed[3]?.count || 0)
+        overdue: processed.find((s) => s.title === 'OVERDUE')?.count || 0,
+        today: processed.find((s) => s.title === 'TODAY')?.count || 0,
+        upcoming:
+          (processed.find((s) => s.title?.includes('UPCOMING'))?.data?.length || 0),
       });
     } catch (e) {
-      console.error('Task fetch error:', e.message);
+      const msg = e.response?.data?.message || e.message || 'Failed to load tasks';
+      setError(msg);
+      setSections([]);
+      console.error('Task fetch error:', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -105,10 +127,16 @@ export const TaskDashboardScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Manage Tasks</Text>
           <Text style={styles.headerSubtitle}>Assign and follow up your business tasks</Text>
         </View>
-        <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('CreateTask')}>
+        <TouchableOpacity style={styles.newBtn} onPress={() => navigateParent(navigation, 'CreateTask')}>
           <Text style={styles.newBtnText}>+ New Task</Text>
         </TouchableOpacity>
       </View>
+
+      {error ? (
+        <View style={{ margin: SPACING.base, padding: SPACING.sm, backgroundColor: '#fef2f2', borderRadius: 8 }}>
+          <Text style={{ color: '#b91c1c', fontSize: 12 }}>{error}</Text>
+        </View>
+      ) : null}
 
       {/* Filter Bar - Greyish */}
       <View style={styles.filterBar}>
@@ -149,7 +177,7 @@ export const TaskDashboardScreen = ({ navigation }) => {
           renderItem={({ item }) => (
             <TaskCard
               task={item}
-              onPress={(task) => navigation.navigate('TaskDetail', { task })}
+              onPress={(task) => navigateParent(navigation, 'TaskDetail', { taskId: task._id })}
             />
           )}
           renderSectionHeader={({ section: { title, color, bg, data } }) => (

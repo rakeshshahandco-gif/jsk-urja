@@ -1,4 +1,9 @@
 import { APP_MODULES } from '@/utils/permissions';
+import {
+    MODULE_REGISTRY,
+    collectPermissionModuleIds,
+    filterPermissionRegistryModules,
+} from '@/config/menuModuleMap';
 
 function cloneModule(mod) {
     return JSON.parse(JSON.stringify(mod));
@@ -32,6 +37,57 @@ function mergeSubmodule(targetMod, sourceSub) {
     mergeActions(sub, sourceSub);
     if (sourceSub.name && (!sub.name || sub.name === sub.id)) {
         sub.name = sourceSub.name;
+    }
+}
+
+/** MODULE_REGISTRY permissionModules not yet in API registry get a default stub. */
+function moduleRegistryAsPermissionStubs() {
+    const labels = {};
+    const moduleIds = collectPermissionModuleIds();
+
+    MODULE_REGISTRY.forEach((mod) => {
+        (mod.permissionModules || []).forEach((pm) => {
+            if (!labels[pm]) labels[pm] = mod.label;
+        });
+        if (!labels[mod.code]) labels[mod.code] = mod.label;
+    });
+
+    const overrides = {
+        wechat: 'China Sourcing / WeChat',
+        rd_samples: 'R&D Samples',
+        prd: 'R&D / PRD',
+        accounts: 'Accounts / Vouchers',
+        messenger: 'Messenger',
+    };
+
+    return Array.from(moduleIds).map((id) => ({
+        id,
+        name: overrides[id] || labels[id] || formatTitleFromId(id),
+        submodules: [
+            {
+                id: 'module_access',
+                name: 'Module Access',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'add', label: 'Create', type: 'boolean' },
+                    { id: 'edit', label: 'Edit', type: 'boolean' },
+                    { id: 'delete', label: 'Delete', type: 'boolean' },
+                ],
+            },
+        ],
+    }));
+}
+
+function ensureModuleAccessSubmodule(mod, itemTitle) {
+    const subId = 'module_access';
+    let sub = mod.submodules.find((s) => s.id === subId);
+    if (!sub) {
+        sub = { id: subId, name: 'Module Access', actions: [] };
+        mod.submodules.push(sub);
+    }
+    mergeActions(sub, { actions: ['view'] });
+    if (itemTitle && (!mod.name || mod.name === mod.id)) {
+        mod.name = itemTitle;
     }
 }
 
@@ -130,17 +186,37 @@ export function mergePermissionMetadata(apiRegistry = [], flattenedMenu = []) {
         (mod.submodules || []).forEach((sub) => mergeSubmodule(existing, sub));
     });
 
+    moduleRegistryAsPermissionStubs().forEach((mod) => {
+        if (!map.has(mod.id)) {
+            map.set(mod.id, cloneModule(mod));
+        }
+    });
+
     flattenedMenu.forEach((item) => {
-        if (!item.permission || !item.permission.includes('.')) return;
+        if (!item.permission) return;
+
+        if (!item.permission.includes('.')) {
+            const moduleId = item.permission;
+            let mod = map.get(moduleId);
+            if (!mod) {
+                mod = { id: moduleId, name: item.title || formatTitleFromId(moduleId), submodules: [] };
+                map.set(moduleId, mod);
+            }
+            ensureModuleAccessSubmodule(mod, item.title);
+            return;
+        }
+
         const parts = item.permission.split('.');
         const [moduleId, submoduleId, actionId] = parts;
-        if (!moduleId || !submoduleId || !actionId) return;
+        if (!moduleId || !submoduleId) return;
 
         let mod = map.get(moduleId);
         if (!mod) {
             mod = { id: moduleId, name: item.moduleName || formatTitleFromId(moduleId), submodules: [] };
             map.set(moduleId, mod);
         }
+
+        if (!actionId) return;
 
         let sub = mod.submodules.find((s) => s.id === submoduleId);
         if (!sub) {
@@ -155,10 +231,60 @@ export function mergePermissionMetadata(apiRegistry = [], flattenedMenu = []) {
         mergeActions(sub, { actions: [actionId] });
     });
 
-    return Array.from(map.values());
+    return filterPermissionRegistryModules(Array.from(map.values()));
 }
 
-/** Default-expanded modules so Lead/Inquiry and Customers are visible without extra clicks. */
+/** Permission UI groups — any module not listed appears under "Other Modules". */
+export const PERMISSION_GROUPS = [
+    { id: 'home', name: '🏠 Home & Dashboard', modules: ['home'] },
+    { id: 'crm', name: '💼 CRM & Customers', modules: ['crm', 'customers'] },
+    { id: 'tasks', name: '📋 Tasks & Workflow', modules: ['tasks'] },
+    {
+        id: 'communication',
+        name: '💬 Communication',
+        modules: ['messenger', 'whatsapp', 'whatsapp_bulk', 'email', 'email_bulk', 'wechat'],
+    },
+    { id: 'sales', name: '🛒 Sales', modules: ['sales'] },
+    { id: 'purchase', name: '📦 Purchase', modules: ['purchase'] },
+    {
+        id: 'documents',
+        name: '📄 Documents & Import',
+        modules: ['documents', 'scan_entry', 'import_utility', 'data_extractor'],
+    },
+    { id: 'inventory', name: '📥 Inventory', modules: ['inventory'] },
+    { id: 'production', name: '🏭 Production', modules: ['production'] },
+    { id: 'vouchers', name: '🧾 Voucher Entry & Accounts', modules: ['voucher_entry', 'account_master', 'accounts', 'accounts_reports'] },
+    { id: 'taxes', name: '💰 Taxes (GST / TDS)', modules: ['gst', 'tds'] },
+    { id: 'service', name: '🛠 Service & Support', modules: ['service'] },
+    { id: 'rd', name: '🔬 R&D / Product Development', modules: ['prd', 'rd_samples'] },
+    { id: 'hr', name: '👥 HR Management', modules: ['hr'] },
+    { id: 'mis_reports', name: '📊 MIS & Reports', modules: ['mis', 'reports'] },
+    { id: 'admin', name: '⚙️ Admin & Settings', modules: ['admin'] },
+];
+
+export function buildGroupedModules(modules = [], groups = PERMISSION_GROUPS) {
+    const byId = new Map((modules || []).map((m) => [m.id, m]));
+    const assigned = new Set();
+    const result = [];
+
+    (groups || []).forEach((group) => {
+        const groupModules = (group.modules || [])
+            .map((id) => byId.get(id))
+            .filter(Boolean);
+        groupModules.forEach((m) => assigned.add(m.id));
+        if (groupModules.length) {
+            result.push({ ...group, modules: groupModules });
+        }
+    });
+
+    const other = (modules || []).filter((m) => !assigned.has(m.id));
+    if (other.length) {
+        result.push({ id: 'other', name: '📁 Other Modules', modules: other });
+    }
+
+    return result;
+}
+
 export const DEFAULT_EXPANDED_MODULES = {
     crm: true,
     customers: true,
@@ -169,6 +295,12 @@ export const DEFAULT_EXPANDED_MODULES = {
     inventory: true,
     gst: true,
     tds: true,
+    messenger: true,
+    whatsapp: true,
+    whatsapp_bulk: true,
+    email: true,
+    email_bulk: true,
+    wechat: true,
 };
 
 export const MODULE_DISPLAY_ORDER = [
@@ -176,21 +308,27 @@ export const MODULE_DISPLAY_ORDER = [
     'crm',
     'customers',
     'tasks',
-    'whatsapp',
-    'wechat',
     'messenger',
+    'whatsapp',
+    'whatsapp_bulk',
+    'email',
+    'email_bulk',
+    'wechat',
     'sales',
     'purchase',
+    'documents',
+    'scan_entry',
+    'import_utility',
     'inventory',
     'production',
+    'service',
+    'data_extractor',
     'voucher_entry',
     'account_master',
-    'accounts_reports',
     'accounts',
+    'accounts_reports',
     'gst',
     'tds',
-    'tcs',
-    'service',
     'mis',
     'reports',
     'fixed_assets',

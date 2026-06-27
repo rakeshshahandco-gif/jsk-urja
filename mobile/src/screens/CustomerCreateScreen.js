@@ -9,6 +9,67 @@ import { customersApi } from '../api/customers.api';
 import { conversationApi, followupApi } from '../api/interaction.api';
 import { COLORS, FONT, RADIUS, SHADOW, SPACING } from '../theme/colors';
 import { DEMAND_PRODUCTS, CUSTOMER_TYPES, GST_REGISTRATION_TYPES } from '../utils/constants';
+import { extractList } from '../utils/apiResponse';
+
+const apiErrorMessage = (e) =>
+  e?.response?.data?.message || e?.message || 'Request failed';
+
+const buildCreatePayload = (form) => {
+  const gstRegistrationType = GST_REGISTRATION_TYPES.includes(form.gstRegistrationType)
+    ? form.gstRegistrationType
+    : (form.gstNumber?.trim() ? 'Registered' : 'Consumer');
+
+  return {
+    company: form.company?.trim() || '',
+    companyBrand: form.companyBrand?.trim() || '',
+    customerCode: form.customerCode?.trim() || '',
+    status: form.status || 'lead',
+    customerType: form.customerType || '',
+    gstRegistrationType,
+    gstNumber: form.gstNumber?.trim() || '',
+    address: form.address?.trim() || '',
+    city: form.city?.trim() || '',
+    state: form.state?.trim() || '',
+    pincode: form.pincode?.trim() || '',
+    country: form.country?.trim() || 'India',
+    creditPeriod: parseInt(form.creditPeriod, 10) || 0,
+    paymentType: form.paymentType || 'Credit',
+    contactPersons: (form.contactPersons || []).map(({ designation, ...c }) => ({
+      name: c.name?.trim() || '',
+      mobile: c.mobile?.trim() || '',
+      email: c.email?.trim() || '',
+      isPrimary: !!c.isPrimary,
+    })),
+    stickers: form.stickers || [],
+    interestedProducts: form.interestedProducts || [],
+  };
+};
+
+const emptyForm = () => ({
+  company: '',
+  customerName: '',
+  companyBrand: '',
+  customerCode: '',
+  status: 'lead',
+  customerType: '',
+  category: 'B2B',
+  gstRegistrationType: 'Consumer',
+  gstNumber: '',
+  address: '',
+  city: '',
+  state: 'Maharashtra',
+  pincode: '',
+  country: 'India',
+  creditPeriod: '0',
+  paymentType: 'Credit',
+  assignedSalesperson: '',
+  contactPersons: [{ name: '', mobile: '', email: '', designation: 'Owner', isPrimary: true }],
+  stickers: [],
+  interestedProducts: [],
+  followUpDate: new Date(),
+  nextActionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  initialConversation: '',
+});
 
 export const CustomerCreateScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
@@ -24,7 +85,7 @@ export const CustomerCreateScreen = ({ navigation }) => {
     status: 'lead',
     customerType: '',
     category: 'B2B',
-    gstRegistrationType: 'Regular',
+    gstRegistrationType: 'Consumer',
     gstNumber: '',
     address: '',
     city: '',
@@ -47,7 +108,7 @@ export const CustomerCreateScreen = ({ navigation }) => {
     const fetchData = async () => {
       try {
         const stickersRes = await customersApi.getCustomerStickers();
-        setStickersList(stickersRes || []);
+        setStickersList(extractList(stickersRes));
       } catch (e) {
         console.warn('Metadata fetch error');
       }
@@ -64,39 +125,42 @@ export const CustomerCreateScreen = ({ navigation }) => {
     setLoading(true);
     try {
       // 1. Create Customer
-      const payload = {
-        ...form,
-        creditPeriod: parseInt(form.creditPeriod) || 0,
-      };
-
+      const payload = buildCreatePayload(form);
       const customerRes = await customersApi.createCustomer(payload);
-      const customerId = customerRes._id || customerRes.data?._id;
+      const customerId = customerRes?._id || customerRes?.id;
 
-      // 2. Log Initial Conversation if provided
-      if (form.initialConversation && customerId) {
+      if (form.initialConversation?.trim() && customerId) {
+        try {
           await conversationApi.createConversation({
-            customerId: customerId,
+            customerId,
             mode: 'call',
-            discussionDetails: form.initialConversation,
+            discussionDetails: form.initialConversation.trim(),
             outcome: 'Initial contact during creation',
           });
-
-          // Create/Update Follow-up
           await followupApi.createFollowup({
-            customerId: customerId,
+            customerId,
             nextCallDate: form.nextActionDate,
             nextCallTime: '10:00',
             whatToTalkNext: 'Follow up from creation',
             priority: 'medium',
           });
+        } catch (followErr) {
+          console.warn('Customer saved; follow-up log failed:', followErr?.message);
+        }
       }
 
-      Alert.alert('Success ✅', 'Customer added to CRM successfully!', [
-        { text: 'View List', onPress: () => navigation.navigate('CustomerList') },
-        { text: 'Add Another', onPress: () => navigation.replace('CustomerCreate') }
+      Alert.alert('Success', 'Customer added to CRM successfully.', [
+        { text: 'Done', onPress: () => navigation.goBack() },
+        {
+          text: 'Add Another',
+          onPress: () => {
+            setForm(emptyForm());
+            setIsCustomType(false);
+          },
+        },
       ]);
     } catch (e) {
-      Alert.alert('Save Failed', e.message);
+      Alert.alert('Save Failed', apiErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -403,7 +467,7 @@ export const CustomerCreateScreen = ({ navigation }) => {
 
             <Text style={styles.label}>Stickers (Tags)</Text>
             <View style={styles.stickerCloud}>
-              {stickersList.map(s => (
+              {(Array.isArray(stickersList) ? stickersList : []).map(s => (
                 <TouchableOpacity 
                   key={s._id}
                   onPress={() => toggleSticker(s._id)}
@@ -430,13 +494,13 @@ export const CustomerCreateScreen = ({ navigation }) => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {showDatePicker.show && (
+      {showDatePicker.show && Platform.OS !== 'web' ? (
         <DateTimePicker
           value={form[showDatePicker.field]}
           mode="date"
           onChange={handleDateChange}
         />
-      )}
+      ) : null}
     </SafeAreaView>
   );
 };

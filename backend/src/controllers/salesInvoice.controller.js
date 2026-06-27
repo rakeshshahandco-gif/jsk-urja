@@ -370,15 +370,13 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const getSalesInvoices = asyncHandler(async (req, res) => {
-    const { search, customerId, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, includeDeleted, view, series } = req.query;
+    const { search, customerId, paymentStatus, paymentType, dateFrom, dateTo, limit = 50, page = 1, view, series } = req.query;
     console.log(`[SalesInvoices] Fetching with filter:`, { search, customerId, paymentStatus, series, view });
     
     const filter = { isDeleted: { $ne: true } };
 
     if (view === 'archived') {
         filter.isDeleted = true;
-    } else if (view === 'all' || includeDeleted === 'true') {
-        delete filter.isDeleted;
     }
 
     if (paymentStatus) filter.paymentStatus = paymentStatus;

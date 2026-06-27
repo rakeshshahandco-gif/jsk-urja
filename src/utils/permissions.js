@@ -173,7 +173,44 @@ export const APP_MODULES = [
             { id: 'whatsapp_settings', name: 'WhatsApp Connection & Settings', actions: ['view', 'edit', 'connect', 'disconnect'] },
             { id: 'whatsapp_send', name: 'Send via WhatsApp', actions: ['view', 'send'] }
         ]
-    }
+    },
+    {
+        id: 'whatsapp_bulk',
+        name: 'WhatsApp Bulk Messaging',
+        submodules: [
+            { id: 'campaigns', name: 'WhatsApp Bulk Message Utility', actions: ['view', 'add', 'edit', 'delete', 'send', 'export'] },
+            { id: 'matter_master', name: 'WhatsApp Matter Master', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'blacklist', name: 'WhatsApp Blacklist', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'history', name: 'Campaign History', actions: ['view', 'export'] },
+            { id: 'settings', name: 'WhatsApp Bulk Messaging Settings', actions: ['view', 'edit'] },
+        ],
+    },
+    {
+        id: 'email',
+        name: 'Platform Email',
+        submodules: [
+            { id: 'settings', name: 'Platform Email Settings', actions: ['view', 'edit', 'test'] },
+            { id: 'communication_history', name: 'Communication History', actions: ['view', 'export'] },
+        ],
+    },
+    {
+        id: 'email_bulk',
+        name: 'Email Bulk Messaging',
+        submodules: [
+            { id: 'campaigns', name: 'Email Bulk Message Utility', actions: ['view', 'add', 'edit', 'delete', 'send', 'export'] },
+            { id: 'templates', name: 'Email Template Master', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'blacklist', name: 'Email Blacklist', actions: ['view', 'add', 'edit', 'delete'] },
+            { id: 'history', name: 'Email Campaign History', actions: ['view', 'export'] },
+            { id: 'settings', name: 'Email Bulk Messaging Settings', actions: ['view', 'edit'] },
+        ],
+    },
+    {
+        id: 'messenger',
+        name: 'Messenger',
+        submodules: [
+            { id: 'module_access', name: 'Messenger Access', actions: ['view', 'add', 'edit', 'delete', 'send'] },
+        ],
+    },
 ];
 
 // Generate PERMISSIONS and PERMISSION_LABELS

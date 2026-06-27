@@ -61,6 +61,10 @@ const companySchema = new mongoose.Schema(
         /** Set true when admin explicitly configures modules for this company. */
         moduleAllocationConfigured: { type: Boolean, default: false },
         clientCode: { type: String, trim: true, default: '' },
+        /** URL slug for branded login: /login/{loginSlug} */
+        loginSlug: { type: String, trim: true, lowercase: true, default: '' },
+        loginTagline: { type: String, trim: true, default: '' },
+        loginPrimaryColor: { type: String, trim: true, default: '' },
         deploymentConfig: {
             databaseName: { type: String, trim: true, default: '' },
             backendUrl: { type: String, trim: true, default: '' },
@@ -106,6 +110,7 @@ const companySchema = new mongoose.Schema(
 // Index for fast lookup
 companySchema.index({ isActive: 1 });
 companySchema.index({ isDefault: 1 });
+companySchema.index({ loginSlug: 1 }, { sparse: true });
 
 const Company = mongoose.model('Company', companySchema);
 export { Company };

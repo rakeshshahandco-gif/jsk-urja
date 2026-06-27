@@ -25,11 +25,13 @@ const imageAttachmentSchema = Joi.object({
 const filtersSchema = Joi.object({
     customerTypes: Joi.array().items(Joi.string()),
     industryTypes: Joi.array().items(Joi.string()),
+    businessCategory: Joi.string().allow('', 'All'),
     states: Joi.array().items(Joi.string()),
     cities: Joi.array().items(Joi.string()),
     activeOnly: Joi.boolean(),
     inactiveOnly: Joi.boolean(),
     selectedCustomerIds: Joi.array().items(objectId),
+    selectedRecipientKeys: Joi.array().items(Joi.string()),
 });
 
 const campaignBody = {

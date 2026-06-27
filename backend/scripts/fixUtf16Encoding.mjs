@@ -28,8 +28,10 @@ function walk(dir, exts, out = []) {
 
 const targets = [
     ...walk(path.join(ROOT, "src"), [".js", ".mjs"]),
+    ...walk(path.join(ROOT, "scripts"), [".js", ".mjs"]),
     ...walk(path.join(ROOT, "test"), [".js", ".mjs"]),
     ...walk(path.resolve(ROOT, "..", "src"), [".js", ".jsx", ".scss"]),
+    ...walk(path.resolve(ROOT, "..", "scripts"), [".js", ".mjs", ".cjs"]),
 ];
 
 let fixed = 0;

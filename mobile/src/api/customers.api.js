@@ -1,9 +1,15 @@
 import apiClient from './client';
+import { clampListParams, DEFAULT_LIMIT, DEFAULT_PAGE } from '../utils/pagination';
 
 export const customersApi = {
   getCustomers: async (params = {}) => {
-    // Mirror of Web CRM params: page, limit, search, status, sortBy
-    const response = await apiClient.get('/customers', { params });
+    const response = await apiClient.get('/customers', {
+      params: clampListParams({
+        page: DEFAULT_PAGE,
+        limit: DEFAULT_LIMIT,
+        ...params,
+      }),
+    });
     return response.data?.data || response.data;
   },
 

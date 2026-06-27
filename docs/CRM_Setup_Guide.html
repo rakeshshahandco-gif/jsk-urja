@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JSK URJA CRM — Platform Setup Guide</title>
+<style>
+@page { size: A4; margin: 12mm; }
+* { box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; margin: 0; background: #fff; line-height: 1.45; }
+.slide { page-break-after: always; min-height: 260mm; padding: 8mm 10mm 14mm; position: relative; }
+.slide:last-child { page-break-after: auto; }
+.cover { background: linear-gradient(145deg, #0f766e 0%, #134e4a 55%, #115e59 100%); color: #fff; display: flex; flex-direction: column; justify-content: center; }
+.cover h1 { font-size: 36px; margin: 0 0 12px; font-weight: 800; letter-spacing: -0.02em; }
+.cover p { font-size: 16px; opacity: 0.92; max-width: 520px; }
+.badge { display: inline-block; background: rgba(255,255,255,0.18); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-bottom: 24px; }
+h2 { color: #0f766e; font-size: 22px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 3px solid #99f6e4; }
+h3 { color: #115e59; font-size: 15px; margin: 18px 0 8px; }
+p, li { font-size: 13px; color: #334155; }
+ul, ol { margin: 8px 0 12px 20px; }
+.lead { font-size: 14px; color: #475569; margin-bottom: 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; background: #f8fafc; }
+.card strong { color: #0f766e; display: block; margin-bottom: 6px; font-size: 14px; }
+.layer-num { width: 36px; height: 36px; border-radius: 50%; background: #0f766e; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; margin-right: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+th { background: #0f766e; color: #fff; text-align: left; padding: 7px 8px; font-weight: 700; }
+td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fafc; }
+code, .url { font-family: Consolas, 'Courier New', monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f766e; }
+.step { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start; }
+.step-n { flex-shrink: 0; width: 28px; height: 28px; background: #ccfbf1; color: #0f766e; border-radius: 6px; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.checklist li { margin-bottom: 6px; }
+.warn { background: #fff7ed; border-left: 4px solid #f97316; padding: 10px 12px; margin: 12px 0; font-size: 12px; }
+.footer-note { position: absolute; bottom: 8mm; left: 10mm; right: 10mm; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; }
+@media print { .slide { page-break-after: always; } }
+</style>
+</head>
+<body>
+
+<section class="slide cover">
+  <div class="badge">Internal · Platform Operations</div>
+  <h1>JSK URJA CRM<br/>Platform Setup Guide</h1>
+  <p>End-to-end instructions for Super Admin setup: industry templates, companies, module allocation, feature engine, users, and Handloom go-live checklist.</p>
+  <p style="margin-top:32px;font-size:13px;opacity:0.85">Document: CRM_Setup_Guide · A4 print/PDF via Puppeteer</p>
+</section>
+
+<section class="slide">
+  <h2>Start here — which step first?</h2>
+  <p class="lead"><strong>Always start as Super Admin.</strong> Do not create users or masters until Steps 1–4 below are done. Wrong order is the #1 reason menus are missing or too many modules appear.</p>
+  <table>
+    <thead><tr><th>Step</th><th>Start here if…</th><th>What to do</th><th>What to check before next step</th></tr></thead>
+    <tbody>
+      <tr><td><strong>0</strong></td><td>Every new setup</td><td><strong>Logout</strong> if needed → login as <code>superadmin</code> (not Company Admin) → <span class="url">/admin/home</span></td><td>☑ Sidebar shows <strong>Super Admin</strong> menus · ☑ NOT only Sales/Purchase/CRM menus</td></tr>
+      <tr><td><strong>1</strong></td><td>New business type OR first time setup</td><td><span class="url">/admin/industry-templates</span> — create or verify template (e.g. <code>TEXTILE_HANDLOOM</code>)</td><td>☑ Template code is correct · ☑ <code>isActive</code> = on · ☑ Default module list matches business type</td></tr>
+      <tr><td><strong>2</strong></td><td>Every new company</td><td><span class="url">/admin/companies</span> — Add company + link <strong>Industry template</strong></td><td>☑ Company appears in top company selector · ☑ Correct template linked · ☑ Select that company in header</td></tr>
+      <tr><td><strong>3</strong></td><td>After company exists (mandatory)</td><td><span class="url">/admin/module-allocation</span> → Apply template defaults → toggle modules → <strong>Save</strong></td><td>☑ <code>moduleGuardEnabled</code> on · ☑ Only needed modules ON · ☑ Wrong modules OFF (e.g. PCB off for Handloom) · ☑ Re-login and sidebar matches</td></tr>
+      <tr><td><strong>4</strong></td><td>After modules saved</td><td><span class="url">/admin/feature-compliance-settings</span> — set Customer, GST, Inventory, Sales flags</td><td>☑ Company tab toggles saved · ☑ Required fields visible on customer/item forms · ☑ GST/accounting flags match business</td></tr>
+      <tr><td><strong>5</strong></td><td>After features saved</td><td><span class="url">/company-profile</span> — legal name, GSTIN, address, FY, logo</td><td>☑ GSTIN/PAN filled · ☑ Financial year active · ☑ Invoice/voucher series configured</td></tr>
+      <tr><td><strong>6</strong></td><td>After profile done</td><td><span class="url">/admin/users</span> — create company Admin + staff users</td><td>☑ Each user has role · ☑ Permissions only for enabled modules · ☑ Test login as company Admin (not superadmin)</td></tr>
+      <tr><td><strong>7</strong></td><td>Before daily use</td><td>Masters: item groups, items, account groups, ledgers, task groups</td><td>☑ Sample item + ledger created · ☑ One test invoice or challan works · ☑ Stock/GST numbers look correct</td></tr>
+    </tbody>
+  </table>
+  <div class="warn"><strong>Skip nothing:</strong> Step 3 (Module Allocation) is the gate. Until you Save there, a company may show ALL modules (legacy JSK behavior). For Handloom, never skip Step 3.</div>
+  <h3>Quick decision — where do I start today?</h3>
+  <ul>
+    <li><strong>Brand-new Handloom company</strong> → Start at Step 1 (verify <code>TEXTILE_HANDLOOM</code>) then Steps 2 → 3 → 4.</li>
+    <li><strong>Company exists but wrong menus</strong> → Start at Step 3 only. Check template + Save allocation. Re-login.</li>
+    <li><strong>Menus OK but fields/forms wrong</strong> → Start at Step 4 (Feature Configuration). Do not change modules unless menu is wrong.</li>
+    <li><strong>JSK electronics (legacy)</strong> → Step 2 + profile only until you intentionally configure Step 3.</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Three setup layers</h2>
+  <p class="lead">Configure the platform top-down. Each layer builds on the previous one; skipping a layer causes missing menus, blocked APIs, or wrong defaults.</p>
+  <div class="grid2">
+    <div class="card"><span class="layer-num">1</span><strong>Platform / Industry</strong>
+      Industry Template Master (<span class="url">/admin/industry-templates</span>), platform feature defaults, workflow master. Defines template codes (e.g. <code>TEXTILE_HANDLOOM</code>, <code>ELECTRONICS_JSK</code>) and default module sets.</div>
+    <div class="card"><span class="layer-num">2</span><strong>Module allocation</strong>
+      Per-company enablement at <span class="url">/admin/module-allocation</span>. Sets <code>enabledModules</code>, optional <code>disabledModules</code>, links <code>industryTemplateRef</code>, and turns on <code>moduleGuardEnabled</code> when allocation is configured.</div>
+    <div class="card"><span class="layer-num">3</span><strong>Feature settings</strong>
+      Feature Configuration Engine at <span class="url">/admin/feature-compliance-settings</span> (legacy alias <span class="url">/admin/feature-configuration</span>). Toggles compliance, customer fields, GST, inventory behavior, and registry overrides per company.</div>
+    <div class="card"><strong>Company master data</strong>
+      Create/edit company at <span class="url">/admin/companies</span> and legal profile at <span class="url">/company-profile</span> (company Admin). Assign financial year, GST, and users after layers 1–3.</div>
+  </div>
+  <div class="warn"><strong>Order of operations:</strong> Template → Company record → Module allocation (Apply template defaults) → Feature settings → Users &amp; permissions → Masters (items, ledgers, groups).</div>
+</section>
+
+<section class="slide">
+  <h2>Roles: Super Admin vs Admin</h2>
+  <div class="grid2">
+    <div class="card">
+      <strong>Super Admin (<code>superadmin</code>)</strong>
+      <ul>
+        <li>Full platform menus: SaaS, industry templates, module allocation, platform feature defaults, diagnostics, backups.</li>
+        <li>Only role that may open platform paths under <span class="url">/admin/industry-templates</span>, <span class="url">/admin/module-allocation</span>, <span class="url">/admin/platform-feature-defaults</span>, <span class="url">/admin/companies</span> (platform list).</li>
+        <li>Sees <strong>Engine</strong> tabs in Feature Configuration (Modules, Registry → Compliance/Customer/Supplier/Industry).</li>
+        <li>Non–Super Admin users hitting platform routes are redirected to platform access denied.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <strong>Company Admin (<code>admin</code>)</strong>
+      <ul>
+        <li>Manages day-to-day setup inside an allocated company: users, permissions, company profile, masters.</li>
+        <li>Uses Feature Configuration <strong>Company</strong> tabs only (Customer, Sales, GST, Inventory, etc.).</li>
+        <li>Cannot change industry templates or cross-tenant module allocation unless granted Super Admin.</li>
+        <li>Module guard still applies: menus and APIs for disabled modules are hidden/blocked.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Permission model (summary)</h3>
+  <p>Module allocation controls <em>which modules exist</em> for a company. Role permissions control <em>what a user may do</em> inside enabled modules. Configure users at <span class="url">/admin/users</span> and fine-grained permissions via the permissions API / SaaS permission UI groups.</p>
+  <div class="warn"><strong>Already logged in as JSK Company Admin?</strong> Role <code>admin</code> is <em>not</em> the same as <code>superadmin</code>. Company Admin can create staff users for JSK, but <strong>cannot</strong> create Super Admin users or open platform pages (Industry Templates, Module Allocation, Companies list). For those steps you must log in with a <code>superadmin</code> account.</div>
+</section>
+
+<section class="slide">
+  <h2>How to get Super Admin access (if you are only Company Admin)</h2>
+  <p class="lead">Two different logins exist. Do not confuse username <code>admin</code> with role <code>superadmin</code>.</p>
+  <table>
+    <thead><tr><th>Check</th><th>Company Admin (<code>admin</code> role)</th><th>Platform Super Admin (<code>superadmin</code> role)</th></tr></thead>
+    <tbody>
+      <tr><td>Sidebar shows</td><td>Sales, Purchase, CRM, Company Profile, Users</td><td><strong>Super Admin</strong> section: SaaS, Industry Templates, Module Allocation, Companies</td></tr>
+      <tr><td>Can open <span class="url">/admin/module-allocation</span></td><td>No — access denied</td><td>Yes</td></tr>
+      <tr><td>Can create users at <span class="url">/admin/users</span></td><td>Yes — for own company only</td><td>Yes — any company</td></tr>
+      <tr><td>Can assign <code>superadmin</code> role</td><td><strong>No</strong> — blocked by system</td><td>Yes</td></tr>
+      <tr><td>Typical use</td><td>Daily JSK operations</td><td>New company setup, industry templates, module allocation</td></tr>
+    </tbody>
+  </table>
+  <h3>Step A — Confirm which role you have now</h3>
+  <ol>
+    <li>After login, open sidebar. If you see <strong>Super Admin → Platform Setup → Industry Template Master</strong>, you are already Super Admin — use that session for setup steps 1–4.</li>
+    <li>If you only see normal ERP menus (Sales, Purchase, etc.), you are Company Admin — continue to Step B.</li>
+    <li>Optional: open your user profile / user list and check <strong>Role</strong> column — must show <code>superadmin</code>, not <code>admin</code>.</li>
+  </ol>
+  <h3>Step B — Log in as Super Admin</h3>
+  <ol>
+    <li><strong>Logout</strong> from your current Company Admin session.</li>
+    <li>Login with the platform owner account. On fresh installs the default is username <code>admin</code> with role <code>superadmin</code> (password set during first install / seed).</li>
+    <li>If default login does not show Super Admin menus, your <code>admin</code> user may have been downgraded to Company Admin — a developer or DBA must promote that user in the database (<code>roleName: superadmin</code>).</li>
+  </ol>
+  <h3>Step C — Create users (correct role for each person)</h3>
+  <table>
+    <thead><tr><th>Who to create</th><th>Which login to use</th><th>Role to assign</th></tr></thead>
+    <tbody>
+      <tr><td>Handloom / new company setup person</td><td>Super Admin login</td><td>Do setup yourself; then create company Admin for that tenant</td></tr>
+      <tr><td>JSK daily operator (accounts, sales staff)</td><td>Company Admin login (JSK)</td><td><code>admin</code>, <code>accounts</code>, <code>sales</code>, etc. — <strong>not</strong> superadmin</td></tr>
+      <tr><td>Second platform owner</td><td>Super Admin login only</td><td><code>superadmin</code> — only Super Admin can assign this</td></tr>
+    </tbody>
+  </table>
+  <p class="warn"><strong>Rule:</strong> Company Admin at <span class="url">/admin/users</span> will never see <code>superadmin</code> in the role dropdown. This is intentional security — not a bug.</p>
+</section>
+
+<section class="slide">
+  <h2>Industry Template Master</h2>
+  <p class="lead">URL: <span class="url">/admin/industry-templates</span> · Super Admin only</p>
+  <ol>
+    <li>Open Industry Template Master → <strong>Add</strong> or edit an existing row.</li>
+    <li>Set <strong>Template name</strong>, unique <strong>Template code</strong> (uppercase snake case), description, active flag.</li>
+    <li>Configure template settings sections: Module, Field, Workflow, SOP, Production Process, Document, Report, Dashboard.</li>
+    <li>Use panels: Customer fields, Supplier fields, Item fields, Documents/KYC, default module list.</li>
+    <li>Save and ensure <code>isActive</code> is on before linking companies.</li>
+  </ol>
+  <h3>Standard template codes</h3>
+  <table>
+    <thead><tr><th>Code</th><th>Typical use</th><th>Module guard</th></tr></thead>
+    <tbody>
+<tr><td><code>ELECTRONICS_JSK</code></td><td>JSK URJA / electronics manufacturer</td><td>All modules; module guard off (legacy-compatible)</td></tr>
+<tr><td><code>TEXTILE_HANDLOOM</code></td><td>Handloom / textile (alias TEXTILE)</td><td>Textile modules + core ERP; enforce module guard</td></tr>
+<tr><td><code>TRADING</code></td><td>Trading / distribution</td><td>Sales, purchase, inventory, finance; guard on</td></tr>
+<tr><td><code>MANUFACTURING_GENERAL</code></td><td>General manufacturing</td><td>Production + core ERP</td></tr>
+<tr><td><code>EXPORTER</code></td><td>Export trading</td><td>Sales, GST, china sourcing, documents</td></tr>
+<tr><td><code>SERVICE</code></td><td>Service / complaints</td><td>CRM, service, accounts, reports</td></tr>
+    </tbody>
+  </table>
+  <p><code>TEXTILE</code> is kept as an alias for <code>TEXTILE_HANDLOOM</code> for existing Handloom databases.</p>
+</section>
+
+<section class="slide">
+  <h2>Company creation</h2>
+  <p class="lead">Platform list: <span class="url">/admin/companies</span> · Company profile (tenant): <span class="url">/company-profile</span></p>
+  <div class="step"><div class="step-n">1</div><div><strong>Super Admin — create company</strong><br/>Add company name, client code (optional), link <strong>Industry template</strong> (<code>industryTemplateRef</code>). This drives default modules when allocation is applied.</div></div>
+  <div class="step"><div class="step-n">2</div><div><strong>Select company</strong> in the top company selector so all admin pages target the correct tenant.</div></div>
+  <div class="step"><div class="step-n">3</div><div><strong>Company profile</strong> — legal name, address, GSTIN, PAN, logo, bank, FY settings (permission: <code>admin.company_profile.view</code>).</div></div>
+  <div class="step"><div class="step-n">4</div><div><strong>Financial year</strong> and voucher series — via Accounts masters after feature flags confirm accounting is enabled.</div></div>
+  <p class="warn">Do not enable module guard for JSK legacy default company until you intentionally configure allocation; unconfigured allocation preserves legacy “all modules” behavior for <code>ELECTRONICS_JSK</code>.</p>
+</section>
+
+<section class="slide">
+  <h2>Module allocation — step by step</h2>
+  <p class="lead">URL: <span class="url">/admin/module-allocation</span></p>
+  <div class="step"><div class="step-n">1</div><div>Log in as <strong>Super Admin</strong> and select the target company.</div></div>
+  <div class="step"><div class="step-n">2</div><div>Choose <strong>Industry template</strong> from the dropdown (loaded from active templates).</div></div>
+  <div class="step"><div class="step-n">3</div><div>Click <strong>Apply template defaults</strong> — sets <code>enabledModules</code> from template, sets <code>moduleAllocationConfigured</code> and <code>moduleGuardEnabled</code> true.</div></div>
+  <div class="step"><div class="step-n">4</div><div>Review modules by group (core, textile, electronics, finance, admin). Toggle individual module codes on/off.</div></div>
+  <div class="step"><div class="step-n">5</div><div>Optional: add <code>disabledModules</code> to force-off modules that remain in the enabled list (subtractive override).</div></div>
+  <div class="step"><div class="step-n">6</div><div>Optional deployment block: database name, backend URL, frontend URL, deployment status (multi-deployment tracking).</div></div>
+  <div class="step"><div class="step-n">7</div><div><strong>Save</strong> — refreshes module guard context; users may need re-login to see menu changes.</div></div>
+</section>
+
+<section class="slide">
+  <h2>Module registry (canonical codes)</h2>
+  <p class="lead">Mirrored in backend <code>moduleRegistry.constants.js</code> and module allocation UI.</p>
+  <table>
+    <thead><tr><th>Code</th><th>Label</th><th>Group</th><th>Scope</th></tr></thead>
+    <tbody>
+<tr><td><code>crm</code></td><td>CRM</td><td>core</td><td>Customers, leads, follow-ups, product catalog</td></tr>
+<tr><td><code>tasks</code></td><td>Task Management</td><td>core</td><td>Tasks, task groups, categories</td></tr>
+<tr><td><code>messenger</code></td><td>Messenger</td><td>core</td><td>Internal messenger / task chat groups</td></tr>
+<tr><td><code>whatsapp</code></td><td>WhatsApp</td><td>core</td><td>WhatsApp inbox and messaging</td></tr>
+<tr><td><code>whatsapp_bulk</code></td><td>WhatsApp Bulk Messaging</td><td>core</td><td>Campaigns, matters, blacklist, history</td></tr>
+<tr><td><code>email</code></td><td>Platform Email</td><td>core</td><td>Email settings and communication history</td></tr>
+<tr><td><code>email_bulk</code></td><td>Email Bulk Messaging</td><td>core</td><td>Bulk email campaigns and templates</td></tr>
+<tr><td><code>sales</code></td><td>Sales</td><td>core</td><td>Orders, invoices, e-way, e-invoice</td></tr>
+<tr><td><code>purchase</code></td><td>Purchase</td><td>core</td><td>Suppliers, PO, GRN, purchase invoices</td></tr>
+<tr><td><code>inventory</code></td><td>Inventory</td><td>core</td><td>Items, groups, stock, BOM entry points</td></tr>
+<tr><td><code>documents</code></td><td>Documents / Scan</td><td>core</td><td>Scan entry, smart import, import center</td></tr>
+<tr><td><code>production</code></td><td>Production (General)</td><td>core</td><td>Work orders, production sheets</td></tr>
+<tr><td><code>service</code></td><td>Service / Complaints</td><td>core</td><td>Complaints, repairs, replacements</td></tr>
+<tr><td><code>accounts</code></td><td>Accounts / Vouchers</td><td>finance</td><td>Ledgers, vouchers, books, petty cash</td></tr>
+<tr><td><code>gst</code></td><td>GST</td><td>finance</td><td>GSTR-1/3B/9, reconciliation, ITC</td></tr>
+<tr><td><code>tds</code></td><td>TDS</td><td>finance</td><td>TDS masters, deductions, challans, 26AS</td></tr>
+<tr><td><code>tcs</code></td><td>TCS</td><td>finance</td><td>TCS masters, deductions, challans</td></tr>
+<tr><td><code>reports</code></td><td>Reports / MIS</td><td>core</td><td>MIS, director reports, CRM reports</td></tr>
+<tr><td><code>fixed_assets</code></td><td>Fixed Assets</td><td>finance</td><td>Asset register and depreciation</td></tr>
+<tr><td><code>china_sourcing</code></td><td>China Sourcing / WeChat</td><td>core</td><td>WeChat groups, samples, pricing</td></tr>
+<tr><td><code>hr</code></td><td>HR / Payroll</td><td>core</td><td>HR module entry</td></tr>
+<tr><td><code>rd</code></td><td>R&D / PRD</td><td>electronics</td><td>PRD projects, RD samples</td></tr>
+<tr><td><code>payroll</code></td><td>Payroll</td><td>finance</td><td>Payroll processing</td></tr>
+<tr><td><code>admin</code></td><td>Admin / Settings</td><td>admin</td><td>Company profile, permissions, platform setup</td></tr>
+<tr><td><code>bom</code></td><td>BOM</td><td>electronics</td><td>Bill of materials</td></tr>
+<tr><td><code>pcb</code></td><td>PCB Production</td><td>electronics</td><td>PCB workflow</td></tr>
+<tr><td><code>smd</code></td><td>SMD Production</td><td>electronics</td><td>SMD workflow</td></tr>
+<tr><td><code>qc</code></td><td>QC / Testing</td><td>electronics</td><td>QC and retest</td></tr>
+<tr><td><code>fabric_purchase</code></td><td>Fabric Purchase</td><td>textile</td><td>Fabric purchase workflow</td></tr>
+<tr><td><code>than_meter_stock</code></td><td>Than / Meter Stock</td><td>textile</td><td>Than and meter stock</td></tr>
+<tr><td><code>dyeing</code></td><td>Dyeing</td><td>textile</td><td>Dyeing job work challan, issue/return</td></tr>
+<tr><td><code>embroidery</code></td><td>Embroidery</td><td>textile</td><td>Embroidery process</td></tr>
+<tr><td><code>printing</code></td><td>Printing</td><td>textile</td><td>Printing process</td></tr>
+<tr><td><code>stitching</code></td><td>Stitching</td><td>textile</td><td>Stitching process</td></tr>
+<tr><td><code>textile_job_work</code></td><td>Textile Job Work</td><td>textile</td><td>Rates, challan, return, reports</td></tr>
+<tr><td><code>lot_tracking</code></td><td>Lot Tracking</td><td>textile</td><td>Production lots and process routes</td></tr>
+<tr><td><code>multi_uom</code></td><td>Multi-UOM</td><td>textile</td><td>Conversion and transformation</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Feature Configuration Engine</h2>
+  <p class="lead">Primary URL: <span class="url">/admin/feature-compliance-settings</span> · Query param: <code>?tab=...</code></p>
+  <h3>Engine tabs (Super Admin only)</h3>
+  <ul>
+    <li><code>engine-module</code> — Modules registry overrides</li>
+    <li><code>engine-compliance</code> — Registry → Compliance</li>
+    <li><code>engine-customer</code> — Registry → Customer</li>
+    <li><code>engine-supplier</code> — Registry → Supplier</li>
+    <li><code>engine-industry</code> — Registry → Industry</li>
+  </ul>
+  <h3>Company tabs (Admin &amp; Super Admin)</h3>
+  <p>Customer · Industry / Production · Sales · GST · Inventory · Accounting · TDS/TCS · Manufacturing · SaaS/Permissions · Purchase · Workflow / Kanban · UI Customization · CRM · Communication</p>
+  <p>Disabled features hide menus and block related APIs; existing data is not deleted. Platform defaults: <span class="url">/admin/platform-feature-defaults</span>.</p>
+  <p>Legacy route <span class="url">/admin/feature-configuration</span> redirects to feature-compliance with the same tab id.</p>
+</section>
+
+<section class="slide">
+  <h2>Six types of &ldquo;groups&rdquo;</h2>
+  <p class="lead">Different modules use the word &ldquo;group&rdquo; for different master data — configure each after modules are allocated.</p>
+  <table>
+    <thead><tr><th>Type</th><th>Where</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Task groups</strong></td><td>Task Management</td><td>Organize tasks and team workload (<code>/tasks</code>, task-groups API)</td></tr>
+      <tr><td><strong>Messenger groups</strong></td><td>Messenger / WhatsApp</td><td>Chat channels linked to tasks or broadcast lists</td></tr>
+      <tr><td><strong>Item groups</strong></td><td>Inventory</td><td>Category tree for fabrics, SKUs, consumables (<code>item-groups</code>)</td></tr>
+      <tr><td><strong>Account groups</strong></td><td>Accounts</td><td>Chart of accounts hierarchy (Group Master / ledger parent groups)</td></tr>
+      <tr><td><strong>WeChat groups</strong></td><td>China Sourcing</td><td>Supplier conversation groups for sourcing (<code>china_sourcing</code> module)</td></tr>
+      <tr><td><strong>Permission UI groups</strong></td><td>Admin / SaaS</td><td>Bundle permissions for roles (module + action keys); assign on user/role screens</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Users and permissions</h2>
+  <ol>
+    <li>Ensure company is selected and modules allocated.</li>
+    <li>Open <span class="url">/admin/users</span> (Company Admin) — create users, assign role (admin, viewer, custom).</li>
+    <li>Grant permissions only for <strong>enabled modules</strong>; denied module APIs return guard errors.</li>
+    <li>Super Admin accounts are separate platform operators — do not use for daily Handloom operators.</li>
+    <li>After permission changes, users should refresh or re-login for menu cache updates.</li>
+    <li>WhatsApp / bulk / email modules require both module allocation and communication feature toggles.</li>
+  </ol>
+</section>
+
+<section class="slide">
+  <h2>New Handloom company — full checklist</h2>
+  <ul class="checklist">
+    <li>☐ Create or verify <code>TEXTILE_HANDLOOM</code> industry template (active)</li>
+    <li>☐ Create company at <span class="url">/admin/companies</span> and link template</li>
+    <li>☐ <span class="url">/admin/module-allocation</span> → Apply template defaults → enable textile modules (job work, dyeing, lot tracking, fabric purchase, etc.)</li>
+    <li>☐ Confirm <code>pcb</code>, <code>bom</code>, <code>smd</code> electronics modules are <strong>off</strong></li>
+    <li>☐ <span class="url">/admin/feature-compliance-settings</span> — Customer/KYC, GST, inventory, manufacturing flags for textile</li>
+    <li>☐ Company profile + FY + invoice series</li>
+    <li>☐ Item groups, items, multi-UOM / conversion masters if used</li>
+    <li>☐ Account groups and ledgers; GST ledgers mapped</li>
+    <li>☐ Textile job work rate master → issue challan → return entry workflow tested</li>
+    <li>☐ Task groups and messenger groups for operations team</li>
+    <li>☐ Users, roles, permission UI groups</li>
+    <li>☐ WhatsApp module connected (if allocated) and test message</li>
+    <li>☐ Sample sales invoice + stock movement smoke test</li>
+  </ul>
+</section>
+
+<section class="slide">
+  <h2>Troubleshooting</h2>
+  <table>
+    <thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Menu item missing</td><td>Module not in <code>enabledModules</code> or in <code>disabledModules</code></td><td>Module allocation → enable module → Save; refresh session</td></tr>
+      <tr><td>API 403 / module guard</td><td>Route mapped to disabled module</td><td>Check allocation; exempt paths only for health, auth, allocation config</td></tr>
+      <tr><td>Platform page &ldquo;access denied&rdquo;</td><td>User is not Super Admin</td><td>Use superadmin account or company-scoped admin routes</td></tr>
+      <tr><td>All modules visible on JSK company</td><td><code>moduleAllocationConfigured</code> false</td><td>Expected legacy behavior until allocation saved</td></tr>
+      <tr><td>Textile company sees PCB/BOM menus</td><td>Wrong template or guard off</td><td>Apply TEXTILE_HANDLOOM defaults; enable module guard</td></tr>
+      <tr><td>Feature toggle has no effect</td><td>Wrong company selected</td><td>Select company in header; save feature settings again</td></tr>
+      <tr><td>Engine tabs missing</td><td>Logged in as company Admin</td><td>Super Admin required for Engine registry tabs</td></tr>
+      <tr><td>WhatsApp bulk missing</td><td><code>whatsapp_bulk</code> not allocated</td><td>Enable module + communication feature flags</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide">
+  <h2>Key URLs reference</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Path</th></tr></thead>
+    <tbody>
+      <tr><td>Login</td><td><span class="url">/auth/login</span></td></tr>
+      <tr><td>Admin home</td><td><span class="url">/admin/home</span></td></tr>
+      <tr><td>Companies (platform)</td><td><span class="url">/admin/companies</span></td></tr>
+      <tr><td>Company profile</td><td><span class="url">/company-profile</span></td></tr>
+      <tr><td>Industry templates</td><td><span class="url">/admin/industry-templates</span></td></tr>
+      <tr><td>Module allocation</td><td><span class="url">/admin/module-allocation</span></td></tr>
+      <tr><td>Feature Configuration Engine</td><td><span class="url">/admin/feature-compliance-settings</span></td></tr>
+      <tr><td>Feature config (legacy redirect)</td><td><span class="url">/admin/feature-configuration</span></td></tr>
+      <tr><td>Platform feature defaults</td><td><span class="url">/admin/platform-feature-defaults</span></td></tr>
+      <tr><td>Workflow master</td><td><span class="url">/admin/workflow-master</span></td></tr>
+      <tr><td>Users</td><td><span class="url">/admin/users</span></td></tr>
+      <tr><td>Diagnostics</td><td><span class="url">/admin/diagnostics</span></td></tr>
+      <tr><td>Backups</td><td><span class="url">/admin/backups</span></td></tr>
+      <tr><td>WhatsApp settings</td><td><span class="url">/whatsapp</span></td></tr>
+      <tr><td>WhatsApp bulk campaigns</td><td><span class="url">/communication/whatsapp-bulk/campaigns</span></td></tr>
+      <tr><td>Email settings</td><td><span class="url">/communication/email-settings</span></td></tr>
+    </tbody>
+  </table>
+  <div class="footer-note">JSK URJA CRM Platform Setup Guide — generated for internal onboarding. Re-run backend/scripts/generate-setup-guide-pdf.mjs after HTML updates.</div>
+</section>
+
+</body>
+</html>

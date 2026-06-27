@@ -15,6 +15,7 @@ import {
     mergePermissionMetadata,
     DEFAULT_EXPANDED_MODULES,
     sortModulesForTable,
+    buildGroupedModules,
 } from './permissionMetadataMerge';
 import { isPlatformAdminUser } from '@/constants/platformAccess';
 
@@ -33,28 +34,6 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     );
     const [companyAccessConfigured, setCompanyAccessConfigured] = useState(!!user?.companyAccessConfigured);
     const [isLoading, setIsLoading] = useState(true);
-
-    // Permission groups: maps every module id to a human-friendly category.
-    // Any new module not listed here is automatically rendered under "Other Modules"
-    // (so the UI never breaks when a new module is added to the registry or menu).
-    const PERMISSION_GROUPS = [
-        { id: 'home', name: '🏠 Home & Dashboard', modules: ['home'] },
-        { id: 'crm', name: '💼 CRM & Customers', modules: ['crm', 'customers'] },
-        { id: 'tasks', name: '📋 Tasks & Workflow', modules: ['tasks'] },
-        { id: 'communications', name: '💬 Communications', modules: ['messenger', 'whatsapp', 'wechat'] },
-        { id: 'sales', name: '🛒 Sales', modules: ['sales'] },
-        { id: 'purchase', name: '📦 Purchase', modules: ['purchase'] },
-        { id: 'inventory', name: '📥 Inventory', modules: ['inventory'] },
-        { id: 'production', name: '🏭 Production', modules: ['production'] },
-        { id: 'vouchers', name: '🧾 Voucher Entry & Accounts', modules: ['voucher_entry', 'account_master', 'accounts', 'accounts_reports'] },
-        { id: 'taxes', name: '💰 Taxes (GST / TDS / TCS)', modules: ['gst', 'tds', 'tcs'] },
-        { id: 'fixed_assets', name: '🏢 Fixed Assets', modules: ['fixed_assets'] },
-        { id: 'service', name: '🛠 Service & Support', modules: ['service'] },
-        { id: 'rd', name: '🔬 R&D / Product Development', modules: ['prd', 'rd_samples'] },
-        { id: 'hr', name: '👥 HR Management', modules: ['hr'] },
-        { id: 'mis_reports', name: '📊 MIS & Reports', modules: ['mis', 'reports'] },
-        { id: 'admin', name: '⚙️ Admin & Settings', modules: ['admin'] }
-    ];
 
     const [expandedModules, setExpandedModules] = useState({ ...DEFAULT_EXPANDED_MODULES });
     const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
@@ -332,6 +311,11 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
         [filteredMetadata],
     );
 
+    const moduleGroups = useMemo(
+        () => buildGroupedModules(tableModules),
+        [tableModules],
+    );
+
     const visibleColumns = useMemo(() => buildVisibleColumns(filteredMetadata), [filteredMetadata]);
 
     const globalAllChecked = useMemo(() => {
@@ -490,6 +474,7 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                     </div>
 
                     <UserPermissionTable
+                        moduleGroups={moduleGroups}
                         modules={tableModules}
                         columns={visibleColumns}
                         expandedModules={{

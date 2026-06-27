@@ -1,10 +1,11 @@
 /**
  * Central Permission Registry
- * This is the single source of truth for all modules and their available permissions.
- * Adding a module here will automatically reflect in the User Management UI.
+ * Detailed submodule/action definitions for User Management.
+ * Modules declared in moduleRegistry.constants.js are auto-added via permissionRegistryEnricher.js
+ * when not listed here — add full submodule detail here when you need granular permissions.
  */
 
-const STANDARD_ACTIONS = [
+export const STANDARD_ACTIONS = [
     { id: 'view', label: 'View', type: 'boolean' },
     { id: 'add', label: 'Create', type: 'boolean' },
     { id: 'edit', label: 'Edit', type: 'boolean' },
@@ -99,17 +100,18 @@ export const PERMISSION_REGISTRY = [
         id: 'whatsapp_bulk',
         name: 'WhatsApp Bulk Messaging',
         submodules: [
-            { id: 'campaigns', name: 'Bulk Campaigns', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
-            { id: 'matter_master', name: 'Matter Master', actions: STANDARD_ACTIONS },
-            { id: 'blacklist', name: 'Blacklist / Opt-out', actions: STANDARD_ACTIONS },
-            { id: 'settings', name: 'Bulk Messaging Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'campaigns', name: 'WhatsApp Bulk Message Utility', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'matter_master', name: 'WhatsApp Matter Master', actions: STANDARD_ACTIONS },
+            { id: 'blacklist', name: 'WhatsApp Blacklist', actions: STANDARD_ACTIONS },
+            { id: 'history', name: 'Campaign History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'settings', name: 'WhatsApp Bulk Messaging Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
         ],
     },
     {
         id: 'email',
         name: 'Platform Email',
         submodules: [
-            { id: 'settings', name: 'Email SMTP Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'test', label: 'Test Connection', type: 'boolean' }] },
+            { id: 'settings', name: 'Platform Email Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'test', label: 'Test Connection', type: 'boolean' }] },
             { id: 'communication_history', name: 'Communication History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
         ],
     },
@@ -117,10 +119,11 @@ export const PERMISSION_REGISTRY = [
         id: 'email_bulk',
         name: 'Email Bulk Messaging',
         submodules: [
-            { id: 'campaigns', name: 'Bulk Campaigns', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
-            { id: 'templates', name: 'Email Templates', actions: STANDARD_ACTIONS },
-            { id: 'blacklist', name: 'Blacklist / Opt-out', actions: STANDARD_ACTIONS },
-            { id: 'settings', name: 'Bulk Email Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'campaigns', name: 'Email Bulk Message Utility', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send / Control Campaign', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'templates', name: 'Email Template Master', actions: STANDARD_ACTIONS },
+            { id: 'blacklist', name: 'Email Blacklist', actions: STANDARD_ACTIONS },
+            { id: 'history', name: 'Email Campaign History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
+            { id: 'settings', name: 'Email Bulk Messaging Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
         ],
     },
     {
@@ -148,6 +151,10 @@ export const PERMISSION_REGISTRY = [
                 actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }],
             },
             { id: 'followup_report', name: 'Follow-up Tracker Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'followup_dashboard_report', name: 'Follow-up Dashboard Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'followup_task_report', name: 'Follow-up Task Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'conversation_history_report', name: 'Conversation History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'task_reminder_report', name: 'Task Reminder Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'lead_report', name: 'Lead Report', actions: [{ id: 'view', label: 'View Own', type: 'boolean' }, { id: 'view_all', label: 'View All', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'reminder_report', name: 'Open Reminders Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }] }
         ]
@@ -175,6 +182,7 @@ export const PERMISSION_REGISTRY = [
             },
             { id: 'internal_sales', name: 'Estimate / Internal Sale', actions: EXTENDED_ACTIONS },
             { id: 'eway_bills', name: 'E-Way Bill Tracking', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'invoice_series', name: 'Invoice Series', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'logistics', name: 'Logistics & Courier Master', actions: STANDARD_ACTIONS }
         ]
     },
@@ -217,6 +225,8 @@ export const PERMISSION_REGISTRY = [
         name: 'Inventory',
         submodules: [
             { id: 'item_master', name: 'Item Master', actions: [...STANDARD_ACTIONS, { id: 'export', label: 'Export', type: 'boolean' }, { id: 'import', label: 'Import', type: 'boolean' }] },
+            { id: 'item_types', name: 'Item Types', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'item_groups', name: 'Item Groups', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'item_images', name: 'Item Images (Textile)', actions: [
                 { id: 'view', label: 'View', type: 'boolean' },
                 { id: 'upload', label: 'Upload', type: 'boolean' },
@@ -233,8 +243,13 @@ export const PERMISSION_REGISTRY = [
         id: 'production',
         name: 'Production',
         submodules: [
+            { id: 'prod_dashboard', name: 'Production Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
             { id: 'work_orders', name: 'Work Order', actions: EXTENDED_ACTIONS },
             { id: 'production_entry', name: 'Production Entry', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'model_conversion', name: 'Model Conversion', actions: EXTENDED_ACTIONS },
+            { id: 'comp_replacement', name: 'Component Replacement', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'prod_rejection', name: 'Production Rejection', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'prod_rework', name: 'Failure & Rework', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'production_planning', name: 'Production Planning / MRP', actions: [...STANDARD_ACTIONS, { id: 'calculate', label: 'Calculate', type: 'boolean' }, { id: 'approve', label: 'Approve', type: 'boolean' }] },
             { id: 'workflow_production', name: 'Workflow Production', actions: EXTENDED_ACTIONS },
             { id: 'textile_production', name: 'Textile / Handloom Production', actions: EXTENDED_ACTIONS },
@@ -365,6 +380,110 @@ export const PERMISSION_REGISTRY = [
         ],
     },
     {
+        id: 'data_extractor',
+        name: 'Data Extractor / Market Finder',
+        submodules: [
+            {
+                id: 'extractor',
+                name: 'Data Extractor',
+                actions: [
+                    { id: 'view', label: 'View', type: 'boolean' },
+                    { id: 'search', label: 'Search / Extract', type: 'boolean' },
+                    { id: 'import', label: 'Import Excel/CSV', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' },
+                    { id: 'approve', label: 'Approve / Reject', type: 'boolean' },
+                    { id: 'convert_lead', label: 'Convert to Lead', type: 'boolean' },
+                    { id: 'convert_supplier', label: 'Convert to Supplier', type: 'boolean' },
+                    { id: 'convert_customer', label: 'Convert to Customer', type: 'boolean' },
+                    { id: 'delete', label: 'Delete Draft', type: 'boolean' },
+                    { id: 'settings', label: 'Manage Settings', type: 'boolean' },
+                ],
+            },
+        ],
+    },
+    {
+        id: 'messenger',
+        name: 'Messenger',
+        submodules: [
+            { id: 'module_access', name: 'Messenger Access', actions: [...STANDARD_ACTIONS, { id: 'send', label: 'Send Messages', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'service',
+        name: 'Service / Complaints',
+        submodules: [
+            { id: 'complaints', name: 'Customer Complaints', actions: [...STANDARD_ACTIONS, { id: 'assign', label: 'Assign', type: 'boolean' }] },
+            { id: 'replacement_dashboard', name: 'Replacement Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'replacement_dispatches', name: 'Replacement Dispatches', actions: STANDARD_ACTIONS },
+        ],
+    },
+    {
+        id: 'wechat',
+        name: 'China Sourcing / WeChat',
+        submodules: [
+            { id: 'contacts', name: 'Supplier Contacts & Groups', actions: [...STANDARD_ACTIONS, { id: 'import', label: 'Import', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'samples', name: 'Samples Tracking', actions: STANDARD_ACTIONS },
+            { id: 'reports', name: 'China Sourcing Reports', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'hr',
+        name: 'HR / Payroll',
+        submodules: [
+            { id: 'hr_dashboard', name: 'HR Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'employee_master', name: 'Employee Master', actions: STANDARD_ACTIONS },
+            { id: 'shift_master', name: 'Shift Master', actions: STANDARD_ACTIONS },
+            { id: 'attendance', name: 'Attendance', actions: [...STANDARD_ACTIONS, { id: 'import', label: 'Import', type: 'boolean' }] },
+            { id: 'leave_management', name: 'Leave Management', actions: STANDARD_ACTIONS },
+            { id: 'payroll', name: 'Payroll / Salary Working', actions: [...STANDARD_ACTIONS, { id: 'approve', label: 'Approve', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'hr_reports', name: 'HR Reports', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'prd',
+        name: 'R&D / PRD',
+        submodules: [
+            { id: 'dashboard', name: 'R&D Dashboard', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },
+            { id: 'projects', name: 'Product Development Master', actions: EXTENDED_ACTIONS },
+            { id: 'test_parameters', name: 'Test Parameter Master', actions: STANDARD_ACTIONS },
+        ],
+    },
+    {
+        id: 'rd_samples',
+        name: 'R&D Samples',
+        submodules: [
+            { id: 'projects', name: 'R&D Projects', actions: STANDARD_ACTIONS },
+            { id: 'samples', name: 'Sample Tracker', actions: [...STANDARD_ACTIONS, { id: 'compare', label: 'Compare Samples', type: 'boolean' }] },
+        ],
+    },
+    {
+        id: 'accounts',
+        name: 'Accounts / Vouchers',
+        submodules: [
+            { id: 'receipt_entry', name: 'Receipt Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] },
+            { id: 'payment_entry', name: 'Payment Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }, { id: 'print', label: 'Print', type: 'boolean' }] },
+            { id: 'journal_entry', name: 'Journal Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
+            { id: 'credit_notes', name: 'Credit Note', actions: EXTENDED_ACTIONS },
+            { id: 'debit_notes', name: 'Debit Note', actions: EXTENDED_ACTIONS },
+            { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'group_master', name: 'Group Master', actions: STANDARD_ACTIONS },
+            { id: 'ledger_master', name: 'Ledger Master', actions: STANDARD_ACTIONS },
+            { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
+            { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'sales_register', name: 'Sales Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'purchase_register', name: 'Purchase Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'day_book', name: 'Day Book', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'cash_book', name: 'Cash Book', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'bank_book', name: 'Bank Book', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'outstanding', name: 'Outstanding Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'fixed_assets', name: 'Fixed Assets Register', actions: EXTENDED_ACTIONS },
+            { id: 'asset_categories', name: 'Asset Categories', actions: STANDARD_ACTIONS },
+            { id: 'asset_locations', name: 'Asset Locations', actions: STANDARD_ACTIONS },
+            { id: 'interest_payable_statement', name: 'Interest Payable Statement', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+        ],
+    },
+    {
         id: 'admin',
         name: 'Admin',
         submodules: [
@@ -374,6 +493,10 @@ export const PERMISSION_REGISTRY = [
             { id: 'ledger_linking', name: 'Ledger Linking Utility', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'apply', label: 'Apply Linking', type: 'boolean' }] },
             { id: 'company_settings', name: 'Company Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'company_profile', name: 'Company Profile', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'feature_configuration', name: 'Feature Configuration Engine', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'module_allocation', name: 'Company Module Allocation', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'industry_templates', name: 'Industry Template Master', actions: STANDARD_ACTIONS },
+            { id: 'platform_feature_defaults', name: 'Platform Default Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
             { id: 'system_settings', name: 'System Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] }
         ]
     }

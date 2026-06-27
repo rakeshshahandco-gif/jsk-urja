@@ -1,5 +1,6 @@
 import express from 'express';
 import publicInvoiceRoute from './publicInvoice.routes.js';
+import publicBrandingRoute from './publicBranding.routes.js';
 import productionPlanningRoute from './productionPlanning.routes.js';
 import creditDebitNoteRoute from './creditDebitNote.routes.js';
 import authRoute from './auth.routes.js';
@@ -145,6 +146,7 @@ import textileJobWorkChallanRoute from './textileJobWorkChallan.routes.js';
 import textileProcessRoute from './textileProcessRoute.routes.js';
 import textileProductionOrderRoute from './textileProductionOrder.routes.js';
 import textileProcessOutputRoute from './textileProcessOutput.routes.js';
+import dataExtractorRoute, { dataExtractorPublicRoute } from './dataExtractor.routes.js';
 import { resolveCompanyScope } from '../../middlewares/companyScope.middleware.js';
 import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware.js';
 import { attachModuleContext, gateApiModuleByPath } from '../../middlewares/moduleGuard.middleware.js';
@@ -153,6 +155,7 @@ import moduleAllocationRoute from './moduleAllocation.routes.js';
 const router = express.Router();
 
 router.use('/public', publicInvoiceRoute);
+router.use('/public', publicBrandingRoute);
 
 router.use(resolveCompanyScope);
 router.use(attachModuleContext);
@@ -767,6 +770,15 @@ const defaultRoutes = [
     {
         path: '/whatsapp-chat',
         route: whatsappChatRoute,
+    },
+    // ── Data Extractor / AI Market Finder (optional — disabled by default per company) ─
+    {
+        path: '/data-extractor',
+        route: dataExtractorPublicRoute,
+    },
+    {
+        path: '/data-extractor',
+        route: dataExtractorRoute,
     },
 ];
 

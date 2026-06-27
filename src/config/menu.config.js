@@ -108,6 +108,64 @@ export const menuConfig = [
                 ]
             },
             {
+                id: 'data-extractor',
+                title: 'Data Extractor',
+                icon: 'SearchIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'data_extractor.extractor.view',
+                children: [
+                    {
+                        id: 'data-extractor-keyword',
+                        title: 'Keyword Search',
+                        path: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.search',
+                    },
+                    {
+                        id: 'data-extractor-home',
+                        title: 'Market Finder',
+                        path: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-manual',
+                        title: 'Manual URL Extract',
+                        path: PATHS.DATA_EXTRACTOR.MANUAL_URL,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.search',
+                    },
+                    {
+                        id: 'data-extractor-import',
+                        title: 'Excel / CSV Import',
+                        path: PATHS.DATA_EXTRACTOR.IMPORT,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.import',
+                    },
+                    {
+                        id: 'data-extractor-history',
+                        title: 'Search History',
+                        path: PATHS.DATA_EXTRACTOR.HISTORY,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-leads',
+                        title: 'Extracted Leads',
+                        path: PATHS.DATA_EXTRACTOR.LEADS,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-settings',
+                        title: 'Extractor Settings',
+                        path: PATHS.DATA_EXTRACTOR.SETTINGS,
+                        roles: [ROLES.ADMIN],
+                        permission: 'data_extractor.extractor.settings',
+                    },
+                ],
+            },
+            {
                 id: 'crm-kanban',
                 title: 'Kanban / Workflow',
                 icon: 'BarChartIcon',
@@ -573,7 +631,7 @@ export const menuConfig = [
         title: 'Communication',
         icon: 'ChatIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
-        permission: 'whatsapp_bulk.campaigns.view',
+        permission: null,
         children: [
             { id: 'communication-bulk-campaigns', title: 'WhatsApp Bulk Message Utility', path: PATHS.SETTINGS.WHATSAPP_BULK.CAMPAIGNS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
             { id: 'communication-bulk-matter', title: 'WhatsApp Matter Master', path: PATHS.SETTINGS.WHATSAPP_BULK.MATTERS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.matter_master.view' },

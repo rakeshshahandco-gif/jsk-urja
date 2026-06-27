@@ -5,6 +5,7 @@ import { useUiPreferences } from '@/contexts/UiPreferencesContext';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 import { menuConfig, ROLES } from '@/config/menu.config';
+import { PATHS } from '@/routes/paths';
 import { MENU_FEATURE_BY_ID, MENU_FEATURE_ALWAYS_VISIBLE } from '@/config/menuFeatureMap';
 
 const page = {
@@ -511,8 +512,8 @@ export default function UiPreferencesPage() {
                         UI Customization &gt; Enable Advanced UI Customization
                     </code>
                     in
-                    <Link to="/admin/feature-settings" style={{ color: '#92400E', marginLeft: '4px', fontWeight: 700 }}>
-                        Admin &rsaquo; Feature Settings
+                    <Link to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=ui`} style={{ color: '#92400E', marginLeft: '4px', fontWeight: 700 }}>
+                        Admin &rsaquo; Feature Configuration Engine
                     </Link>.
                     <br />
                     <span style={{ fontSize: '12px', opacity: 0.85 }}>

@@ -13,7 +13,7 @@ export const FollowUpListScreen = ({ navigation }) => {
 
   const fetchFollowups = useCallback(async () => {
     try {
-      const res = await followupApi.getFollowups({ limit: 1000 });
+      const res = await followupApi.getFollowups({ limit: 50, page: 1 });
       const data = res?.docs || res?.data?.docs || res?.results || res?.data?.results || res?.data || (Array.isArray(res) ? res : []);
       setFollowups(data);
     } catch (e) {
