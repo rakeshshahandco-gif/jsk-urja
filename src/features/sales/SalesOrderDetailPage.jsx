@@ -166,7 +166,7 @@ export default function SalesOrderDetailPage() {
       }}
     >
       {/* PRINT ONLY LAYOUT */}
-      <div className="print-only" style={{ display: "none", width: "210mm", padding: 0 }}>
+      <div className="print-only" style={{ display: "none", width: "210mm", maxWidth: "210mm", margin: "0 auto", padding: 0, boxSizing: "border-box" }}>
         {(() => {
           const items = so.items || [];
           const itemsPerPageFirst = 7;
@@ -189,7 +189,7 @@ export default function SalesOrderDetailPage() {
              return (
                <div key={pageIdx} className="print-content" style={{ 
                  pageBreakAfter: isLastPage ? 'auto' : 'always', position: 'relative',
-                 padding: "10mm", minHeight: "270mm", display: "flex", flexDirection: "column", background: "#fff", boxSizing: "border-box" 
+                 width: "210mm", maxWidth: "210mm", padding: "10mm", background: "#fff", boxSizing: "border-box",
                }}>
                  <div style={{ position: 'absolute', bottom: '5mm', right: '10mm', fontSize: '8pt', color: '#666' }}>
                      Page {pageIdx + 1} of {totalPages}
@@ -568,12 +568,13 @@ export default function SalesOrderDetailPage() {
 
           {/* Items Table */}
           <table
+            className="print-items-table"
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              fontSize: "11px",
-              marginBottom: "auto",
+              fontSize: "10pt",
               border: "1px solid #000",
+              tableLayout: "fixed",
             }}
           >
             <thead style={{ background: "#f5f5f5", color: "#000" }}>
@@ -665,13 +666,6 @@ export default function SalesOrderDetailPage() {
                 >
                   AMOUNT
                 </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    width: "auto",
-                  }}
-                ></th>
               </tr>
             </thead>
             <tbody>
@@ -766,13 +760,12 @@ export default function SalesOrderDetailPage() {
                       2,
                     )}
                   </td>
-                  <td style={{ border: "1px solid #000", padding: "6px" }}></td>
                 </tr>
                 );
               })}
               {!isLastPage && (
                   <tr>
-                      <td colSpan="9" style={{ border: '1px solid #000', padding: '8px', textAlign: 'right', fontStyle: 'italic', fontSize: '9pt', background: '#fafafa' }}>
+                      <td colSpan="8" style={{ border: '1px solid #000', padding: '8px', textAlign: 'right', fontStyle: 'italic', fontSize: '9pt', background: '#fafafa' }}>
                           Continued on next page...
                       </td>
                   </tr>
@@ -828,7 +821,6 @@ export default function SalesOrderDetailPage() {
                 >
                   ₹ {Number(so.totalAmount || 0).toFixed(2)}
                 </td>
-                <td style={{ border: "1px solid #000", padding: "6px" }}></td>
               </tr>
               {so.freightAmount > 0 && (
                 <tr>
@@ -851,7 +843,6 @@ export default function SalesOrderDetailPage() {
                   >
                     ₹ {Number(so.freightAmount || 0).toFixed(2)}
                   </td>
-                  <td style={{ border: "1px solid #000", padding: "6px" }}></td>
                 </tr>
               )}
 
@@ -880,7 +871,6 @@ export default function SalesOrderDetailPage() {
                       (so.totalAmount || 0) + (so.freightAmount || 0),
                     ).toFixed(2)}
                   </td>
-                  <td style={{ border: "1px solid #000", padding: "6px" }}></td>
                 </tr>
               )}
 
@@ -907,9 +897,6 @@ export default function SalesOrderDetailPage() {
                       >
                         ₹ {Number(so.totalIgst || so.totalGst || 0).toFixed(2)}
                       </td>
-                      <td
-                        style={{ border: "1px solid #000", padding: "6px" }}
-                      ></td>
                     </tr>
                   ) : (
                     <>
@@ -936,9 +923,6 @@ export default function SalesOrderDetailPage() {
                             2,
                           )}
                         </td>
-                        <td
-                          style={{ border: "1px solid #000", padding: "6px" }}
-                        ></td>
                       </tr>
                       <tr>
                         <td colSpan="6" style={{ border: "none" }}></td>
@@ -963,9 +947,6 @@ export default function SalesOrderDetailPage() {
                             2,
                           )}
                         </td>
-                        <td
-                          style={{ border: "1px solid #000", padding: "6px" }}
-                        ></td>
                       </tr>
                     </>
                   )}
@@ -993,7 +974,6 @@ export default function SalesOrderDetailPage() {
                   >
                     {Number(so.roundOff || 0).toFixed(2)}
                   </td>
-                  <td style={{ border: "1px solid #000", padding: "6px" }}></td>
                 </tr>
               )}
               <tr style={{ background: "#f5f5f5" }}>
@@ -1019,7 +999,6 @@ export default function SalesOrderDetailPage() {
                 >
                   ₹ {Number(so.roundedTotal || so.grandTotal || 0).toFixed(2)}
                 </td>
-                <td style={{ border: "1px solid #000", padding: "6px" }}></td>
               </tr>
               <tr>
                 <td colSpan="6" style={{ border: "none" }}></td>
@@ -1033,7 +1012,6 @@ export default function SalesOrderDetailPage() {
                   In Words:
                 </td>
                 <td
-                  colSpan="2"
                   style={{
                     border: "1px solid #000",
                     padding: "6px",
@@ -1081,11 +1059,13 @@ export default function SalesOrderDetailPage() {
             </div>
           </div>
           <div
+            className="print-footer"
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-end",
-              marginTop: "30px",
+              alignItems: "flex-start",
+              marginTop: "20px",
+              gap: "20px",
             }}
           >
             {/* Footer Bank Details */}
@@ -1815,9 +1795,44 @@ export default function SalesOrderDetailPage() {
       <style>{`
                 @media print {
                     .no-print { display: none !important; }
-                    .print-only { display: block !important; padding: 0 !important; }
-                    @page { size: A4; margin: 0; }
-                    body { background: #fff !important; }
+                    html, body {
+                        width: 210mm !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: #fff !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .print-only {
+                        display: block !important;
+                        width: 210mm !important;
+                        max-width: 210mm !important;
+                        margin: 0 auto !important;
+                        padding: 0 !important;
+                    }
+                    .print-content {
+                        width: 210mm !important;
+                        max-width: 210mm !important;
+                        min-height: auto !important;
+                        padding: 10mm !important;
+                        box-sizing: border-box !important;
+                        page-break-after: always;
+                        break-after: page;
+                    }
+                    .print-content:last-child {
+                        page-break-after: auto;
+                        break-after: auto;
+                    }
+                    .print-items-table {
+                        width: 100% !important;
+                        table-layout: fixed !important;
+                    }
+                    .print-items-table th,
+                    .print-items-table td {
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                    }
+                    @page { size: A4 portrait; margin: 0; }
                 }
             `}</style>
 
