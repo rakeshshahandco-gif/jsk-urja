@@ -10,6 +10,7 @@ import {
     updateWhatsAppSettings,
     getWhatsAppStatus,
     connectWhatsApp,
+    requestWhatsAppPairingCode,
     disconnectWhatsApp,
     sendWhatsAppMessage
 } from '@/services/whatsappApi';
@@ -23,6 +24,7 @@ const StatusBadge = ({ status, phone }) => {
     const map = {
         CONNECTED:    { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', icon: CheckCircle2, label: `Connected${phone ? ` as +${phone}` : ''}` },
         WAITING_SCAN: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d', icon: QrCode,        label: 'Scan QR with your phone' },
+        WAITING_PAIRING: { color: '#d97706', bg: '#fffbeb', border: '#fcd34d', icon: Phone,       label: 'Enter pairing code on your phone' },
         CONNECTING:   { color: '#3b82f6', bg: '#eff6ff', border: '#93c5fd', icon: Loader2,       label: 'Connecting...' },
         RECONNECTING: { color: '#3b82f6', bg: '#eff6ff', border: '#93c5fd', icon: Loader2,       label: 'Reconnecting...' },
         LOGGED_OUT:   { color: '#dc2626', bg: '#fef2f2', border: '#fca5a5', icon: WifiOff,       label: 'Logged out — scan QR to reconnect' },
@@ -74,7 +76,14 @@ export default function WhatsAppSettingsPage() {
     const [connecting, setConnecting] = useState(false);
     const [disconnecting, setDisconnecting] = useState(false);
 
+    // Link method: QR (default, unchanged) or mobile-number pairing
+    const [linkMode, setLinkMode] = useState('qr');
+    const [pairingPhone, setPairingPhone] = useState('');
+    const [pairingCode, setPairingCode] = useState(null);
+    const [pairingConnecting, setPairingConnecting] = useState(false);
+
     const qrTimeoutRef = useRef(null);
+    const pairingTimeoutRef = useRef(null);
 
     // ── WhatsApp quick-action modal state ───────────────────────────────────
     // (Uses yesterday's ConvertFromWhatsAppModal + ProductCatalogPicker)
@@ -139,13 +148,17 @@ export default function WhatsAppSettingsPage() {
             console.log('[WhatsApp] Status update:', data);
             setWaStatus(data);
             if (data.status === 'CONNECTED') {
-                setQrDataUrl(null);  // hide QR once connected
+                setQrDataUrl(null);
+                setPairingCode(null);
                 setConnecting(false);
+                setPairingConnecting(false);
                 if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+                if (pairingTimeoutRef.current) clearTimeout(pairingTimeoutRef.current);
                 toast.success(`✅ WhatsApp connected as +${data.phone || ''}!`);
             }
             if (data.status === 'LOGGED_OUT' || data.status === 'ERROR') {
                 setConnecting(false);
+                setPairingConnecting(false);
             }
         };
 
@@ -166,19 +179,42 @@ export default function WhatsAppSettingsPage() {
         const onReady = (data) => {
             setWaStatus(data);
             setQrDataUrl(null);
+            setPairingCode(null);
             setConnecting(false);
+            setPairingConnecting(false);
+        };
+
+        const onPairingCode = ({ code, expiresIn }) => {
+            setPairingCode(code);
+            setPairingConnecting(false);
+            setWaStatus(prev => ({ ...prev, status: 'WAITING_PAIRING', connected: false }));
+            if (pairingTimeoutRef.current) clearTimeout(pairingTimeoutRef.current);
+            pairingTimeoutRef.current = setTimeout(() => {
+                setPairingCode(null);
+                setWaStatus(prev => ({ ...prev, status: 'DISCONNECTED', message: 'Pairing code expired. Request a new code.' }));
+            }, (expiresIn || 120) * 1000);
+        };
+
+        const onPairingExpired = () => {
+            setPairingCode(null);
+            setPairingConnecting(false);
         };
 
         socket.on('whatsapp:status', onStatus);
         socket.on('whatsapp:qr', onQr);
         socket.on('whatsapp:ready', onReady);
+        socket.on('whatsapp:pairing-code', onPairingCode);
+        socket.on('whatsapp:pairing-code-expired', onPairingExpired);
 
         return () => {
             socket.emit('leave:whatsapp');
             socket.off('whatsapp:status', onStatus);
             socket.off('whatsapp:qr', onQr);
             socket.off('whatsapp:ready', onReady);
+            socket.off('whatsapp:pairing-code', onPairingCode);
+            socket.off('whatsapp:pairing-code-expired', onPairingExpired);
             if (qrTimeoutRef.current) clearTimeout(qrTimeoutRef.current);
+            if (pairingTimeoutRef.current) clearTimeout(pairingTimeoutRef.current);
         };
     }, [socket, socketConnected]);
 
@@ -196,10 +232,10 @@ export default function WhatsAppSettingsPage() {
     const handleConnect = async () => {
         setConnecting(true);
         setQrDataUrl(null);
+        setPairingCode(null);
         setWaStatus(prev => ({ ...prev, status: 'CONNECTING', message: 'Starting connection...' }));
         try {
             await connectWhatsApp();
-            // Response is immediate (non-blocking). QR arrives via socket event.
             toast.success('Connection started — QR code will appear below', { duration: 5000 });
         } catch (e) {
             setConnecting(false);
@@ -208,13 +244,34 @@ export default function WhatsAppSettingsPage() {
         }
     };
 
+    const handleRequestPairingCode = async () => {
+        const trimmed = pairingPhone.trim();
+        if (!trimmed) {
+            toast.error('Enter your mobile number with country code (e.g. +919820000000)');
+            return;
+        }
+        setPairingConnecting(true);
+        setPairingCode(null);
+        setQrDataUrl(null);
+        setWaStatus(prev => ({ ...prev, status: 'CONNECTING', message: 'Requesting pairing code...' }));
+        try {
+            await requestWhatsAppPairingCode(trimmed);
+            toast.success('Pairing code will appear below shortly', { duration: 5000 });
+        } catch (e) {
+            setPairingConnecting(false);
+            setWaStatus(prev => ({ ...prev, status: 'ERROR' }));
+            toast.error(e.response?.data?.message || 'Failed to request pairing code');
+        }
+    };
+
     const handleDisconnect = async () => {
-        if (!window.confirm('This will log out WhatsApp. You will need to scan the QR again. Continue?')) return;
+        if (!window.confirm('This will log out WhatsApp. You will need to link again (QR or pairing code). Continue?')) return;
         setDisconnecting(true);
         try {
             await disconnectWhatsApp();
             setWaStatus({ status: 'DISCONNECTED', connected: false, loggedIn: false, phone: null, message: '' });
             setQrDataUrl(null);
+            setPairingCode(null);
             toast.success('WhatsApp disconnected');
         } catch {
             toast.error('Failed to disconnect');
@@ -238,7 +295,23 @@ export default function WhatsAppSettingsPage() {
 
     const isConnected = waStatus.status === 'CONNECTED';
     const isWaiting   = waStatus.status === 'WAITING_SCAN';
+    const isWaitingPairing = waStatus.status === 'WAITING_PAIRING';
     const isBusy      = ['CONNECTING', 'RECONNECTING'].includes(waStatus.status);
+
+    const tabBtnStyle = (active) => ({
+        padding: '10px 18px',
+        borderRadius: 10,
+        border: active ? '1.5px solid #25d366' : '1.5px solid #e2e8f0',
+        background: active ? '#f0fdf4' : '#fff',
+        color: active ? '#15803d' : '#475569',
+        fontWeight: 700,
+        fontSize: 13,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontFamily: 'inherit',
+    });
 
     const inputStyle = {
         width: '100%', padding: '12px 16px', borderRadius: 10,
@@ -341,7 +414,7 @@ export default function WhatsAppSettingsPage() {
                             </button>
                         )}
 
-                        {!isConnected ? (
+                        {!isConnected && linkMode === 'qr' ? (
                             <button
                                 onClick={handleConnect}
                                 disabled={connecting || isBusy}
@@ -361,7 +434,7 @@ export default function WhatsAppSettingsPage() {
                                     <><QrCode size={16} /> Connect WhatsApp</>
                                 )}
                             </button>
-                        ) : (
+                        ) : !isConnected ? null : (
                             <button
                                 onClick={handleDisconnect}
                                 disabled={disconnecting}
@@ -378,7 +451,27 @@ export default function WhatsAppSettingsPage() {
                     </div>
                 </div>
 
-                {/* ── QR Code Display ── */}
+                {/* ── Link method tabs (when not connected) ── */}
+                {!isConnected && (
+                    <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={() => { setLinkMode('qr'); setPairingCode(null); }}
+                            style={tabBtnStyle(linkMode === 'qr')}
+                        >
+                            <QrCode size={16} /> Link with QR Code
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setLinkMode('phone'); setQrDataUrl(null); }}
+                            style={tabBtnStyle(linkMode === 'phone')}
+                        >
+                            <Phone size={16} /> Link with Mobile Number
+                        </button>
+                    </div>
+                )}
+
+                {/* ── QR Code Display (unchanged) ── */}
                 {qrDataUrl && (
                     <div style={{
                         marginTop: 28,
@@ -422,6 +515,112 @@ export default function WhatsAppSettingsPage() {
                     </div>
                 )}
 
+                {/* ── Mobile Number / Pairing Code ── */}
+                {!isConnected && linkMode === 'phone' && (
+                    <div style={{
+                        marginTop: 28,
+                        padding: '24px 28px',
+                        background: isWaitingPairing || pairingCode ? '#fffbeb' : '#f8fafc',
+                        borderRadius: 14,
+                        border: isWaitingPairing || pairingCode ? '2px dashed #fbbf24' : '1px solid #e2e8f0',
+                    }}>
+                        {!pairingCode ? (
+                            <>
+                                <div style={{ fontWeight: 800, fontSize: 18, color: '#1e293b', marginBottom: 8 }}>
+                                    Link with Mobile Number
+                                </div>
+                                <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 16px', lineHeight: 1.6 }}>
+                                    Enter your WhatsApp mobile number with country code. We will generate a pairing code for you to enter on your phone.
+                                </p>
+                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                    <div style={{ flex: '1 1 220px' }}>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 8 }}>
+                                            Mobile Number (with country code)
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={pairingPhone}
+                                            onChange={e => setPairingPhone(e.target.value)}
+                                            placeholder="+919820000000"
+                                            disabled={pairingConnecting || isBusy}
+                                            style={{
+                                                width: '100%', padding: '12px 16px', borderRadius: 10,
+                                                border: '1px solid #e2e8f0', fontSize: 14, outline: 'none',
+                                                boxSizing: 'border-box', fontFamily: 'inherit',
+                                            }}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleRequestPairingCode}
+                                        disabled={pairingConnecting || isBusy}
+                                        style={{
+                                            padding: '12px 20px', background: '#25d366', color: '#fff', border: 'none',
+                                            borderRadius: 10, cursor: (pairingConnecting || isBusy) ? 'not-allowed' : 'pointer',
+                                            fontWeight: 700, fontSize: 14,
+                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            opacity: (pairingConnecting || isBusy) ? 0.7 : 1,
+                                        }}
+                                    >
+                                        {(pairingConnecting || isBusy) ? (
+                                            <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Requesting...</>
+                                        ) : (
+                                            <><Phone size={16} /> Get Pairing Code</>
+                                        )}
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 32, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div style={{
+                                    background: '#fff',
+                                    padding: '20px 28px',
+                                    borderRadius: 14,
+                                    boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                                    flexShrink: 0,
+                                    textAlign: 'center',
+                                }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginBottom: 8, letterSpacing: '0.05em' }}>
+                                        YOUR PAIRING CODE
+                                    </div>
+                                    <div style={{
+                                        fontSize: 36, fontWeight: 800, letterSpacing: '0.25em',
+                                        color: '#128c7e', fontFamily: 'monospace',
+                                    }}>
+                                        {pairingCode}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: 800, fontSize: 18, color: '#1e293b', marginBottom: 6 }}>
+                                        Enter Code on Your Phone
+                                    </div>
+                                    <p style={{ color: '#64748b', fontSize: 14, margin: '0 0 16px', lineHeight: 1.6 }}>
+                                        This code expires in about 2 minutes. After you enter it, WhatsApp will stay connected and all CRM messaging will work automatically.
+                                    </p>
+                                    <ol style={{ paddingLeft: 18, margin: 0, color: '#475569', fontSize: 14, lineHeight: 2 }}>
+                                        <li>Open <strong>WhatsApp</strong> on your mobile</li>
+                                        <li>Go to <strong>Linked Devices</strong></li>
+                                        <li>Tap <strong>"Link with phone number instead"</strong></li>
+                                        <li>Enter the pairing code shown ← on the left</li>
+                                    </ol>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPairingCode(null); handleRequestPairingCode(); }}
+                                        disabled={pairingConnecting || isBusy}
+                                        style={{
+                                            marginTop: 16, padding: '8px 14px', background: '#f1f5f9',
+                                            border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer',
+                                            fontSize: 13, fontWeight: 600, color: '#475569',
+                                        }}
+                                    >
+                                        Request New Code
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* ── Connected Info ── */}
                 {isConnected && waStatus.phone && (
                     <div style={{
@@ -446,17 +645,30 @@ export default function WhatsAppSettingsPage() {
                     </div>
                 )}
 
-                {/* ── How to connect instructions (when disconnected, no QR) ── */}
-                {!isConnected && !qrDataUrl && !isBusy && (
+                {/* ── How to connect instructions (when disconnected, no QR, QR tab) ── */}
+                {!isConnected && !qrDataUrl && !pairingCode && !isBusy && linkMode === 'qr' && (
                     <div style={{ marginTop: 16, padding: '14px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
                         <div style={{ fontSize: 13, color: '#475569', fontWeight: 600, marginBottom: 6 }}>
-                            📱 One-Time Setup (takes ~10 seconds):
+                            📱 One-Time Setup with QR (takes ~10 seconds):
                         </div>
                         <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#64748b', lineHeight: 1.8 }}>
                             <li>Click <strong>"Connect WhatsApp"</strong> above</li>
                             <li>A QR code will appear in this panel (no Chrome window needed!)</li>
                             <li>Scan it with your phone from WhatsApp → Linked Devices</li>
                             <li>Done! Session is saved — won't need to re-scan on server restart</li>
+                        </ol>
+                    </div>
+                )}
+                {!isConnected && !pairingCode && !isBusy && linkMode === 'phone' && !pairingConnecting && (
+                    <div style={{ marginTop: 16, padding: '14px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: 13, color: '#475569', fontWeight: 600, marginBottom: 6 }}>
+                            📱 One-Time Setup with Pairing Code:
+                        </div>
+                        <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#64748b', lineHeight: 1.8 }}>
+                            <li>Enter your mobile number with country code (e.g. <strong>+919820000000</strong>)</li>
+                            <li>Click <strong>"Get Pairing Code"</strong></li>
+                            <li>On your phone: WhatsApp → Linked Devices → Link with phone number instead</li>
+                            <li>Enter the code shown here — session is saved after linking</li>
                         </ol>
                     </div>
                 )}

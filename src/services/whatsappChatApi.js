@@ -12,7 +12,7 @@ export const listChats = async () => {
     // with hundreds of chats this can take longer than the global 10s axios
     // default — so allow 30s for this one endpoint to avoid spurious
     // "timeout of 10000ms exceeded" toasts in the chat UI.
-    const response = await api.get('/whatsapp-chat/chats', { timeout: 30000 });
+    const response = await api.get('/whatsapp-chat/chats', { timeout: 60000 });
     return response.data;
 };
 
@@ -56,23 +56,65 @@ export const startChat = async (phone) => {
 };
 
 /**
- * Downloads the media bytes for a single message and triggers a browser
- * save-as. `messageId` is the Mongo _id of the WhatsApp message row.
- * `suggestedFilename` is used as the saved filename (server also returns one
- * via Content-Disposition; we just take the explicit JS value to be safe).
+ * Parse API error when responseType is blob (errors come back as JSON blobs).
  */
-export const downloadMessageMedia = async (messageId, suggestedFilename) => {
-    const response = await api.get(
-        `/whatsapp-chat/messages/${encodeURIComponent(messageId)}/media`,
-        { responseType: 'blob', timeout: 60000 }
-    );
-    const blob = response.data;
+const parseMediaFetchError = async (err) => {
+    const fallback = err.response?.data?.message || err.message || 'Could not download media';
+    const data = err.response?.data;
+    if (data instanceof Blob && data.type?.includes('json')) {
+        try {
+            const json = JSON.parse(await data.text());
+            return json.message || fallback;
+        } catch {
+            return fallback;
+        }
+    }
+    if (typeof data?.message === 'string') return data.message;
+    return fallback;
+};
+
+/**
+ * Fetches media bytes for preview or manual save (does not auto-download).
+ */
+export const fetchMessageMediaBlob = async (messageId) => {
+    try {
+        const response = await api.get(
+            `/whatsapp-chat/messages/${encodeURIComponent(messageId)}/media`,
+            { responseType: 'blob', timeout: 90000 }
+        );
+        const blob = response.data;
+        if (blob?.type?.includes('json')) {
+            try {
+                const json = JSON.parse(await blob.text());
+                throw new Error(json.message || 'Could not download media');
+            } catch (e) {
+                if (e.message && !e.message.includes('JSON')) throw e;
+            }
+        }
+        return blob;
+    } catch (err) {
+        throw new Error(await parseMediaFetchError(err));
+    }
+};
+
+const saveBlobAsFile = (blob, filename) => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = suggestedFilename || `whatsapp-${messageId}`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
 };
+
+/**
+ * Downloads the media bytes for a single message and triggers a browser
+ * save-as. `messageId` is the Mongo _id of the WhatsApp message row.
+ */
+export const downloadMessageMedia = async (messageId, suggestedFilename) => {
+    const blob = await fetchMessageMediaBlob(messageId);
+    saveBlobAsFile(blob, suggestedFilename || `whatsapp-${messageId}`);
+};
+
+export { saveBlobAsFile };

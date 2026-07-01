@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
     MessageSquare, Search, Send, Users, Phone, ArrowLeft,
     Loader2, AlertCircle, ExternalLink, Paperclip, UserPlus, CalendarPlus,
-    RefreshCw, PlusCircle, Info, X, Download, Copy,
+    RefreshCw, PlusCircle, Info, X, Download, Copy, Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSocket } from '@/contexts/SocketContext';
 import {
     listChats, listMessages, markRead, sendChatMessage, syncChats, startChat,
-    downloadMessageMedia,
+    downloadMessageMedia, fetchMessageMediaBlob, saveBlobAsFile,
 } from '@/services/whatsappChatApi';
 import { getWhatsAppStatus } from '@/services/whatsappApi';
 import ConvertFromWhatsAppModal from '@/features/leads/components/ConvertFromWhatsAppModal';
@@ -28,11 +28,19 @@ const formatTime = (ts) => {
 };
 
 const chatDisplayName = (chat) => {
-    // Priority: CRM Customer name > WhatsApp saved name > group jid prefix > +phone
+    // Priority: CRM Customer name > WhatsApp saved name > friendly fallback
     if (chat.crmCustomerName) return chat.crmCustomerName;
     if (chat.chatName) return chat.chatName;
-    if (chat.isGroup) return chat.jid.split('@')[0].replace(/-/g, ' · ');
-    return `+${chat.phone || chat.jid.split('@')[0]}`;
+    if (chat.isGroup) return 'WhatsApp Group';
+    const phone = chat.phone || chat.jid?.split('@')[0];
+    return phone ? `+${phone}` : 'WhatsApp Contact';
+};
+
+const chatSubLabel = (chat) => {
+    if (chat.isGroup) return chat.chatName ? 'Group' : 'Group chat';
+    if (chat.phone) return `+${chat.phone}`;
+    const jidLeft = chat.jid?.split('@')[0];
+    return jidLeft ? `+${jidLeft}` : '';
 };
 
 const normalizeLeadMobile = (raw = '') => {
@@ -95,6 +103,7 @@ const FILTERS = [
 ];
 
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document', 'sticker']);
+const IMAGE_TYPES = new Set(['image', 'sticker']);
 const MEDIA_LABEL = {
     image: 'Image',
     video: 'Video',
@@ -103,26 +112,155 @@ const MEDIA_LABEL = {
     sticker: 'Sticker',
 };
 
-// Single chat bubble. For media-bearing messages it adds a "Download" button
-// that streams the bytes from Baileys via /whatsapp-chat/messages/:id/media.
-// Only messages persisted after the download feature was deployed carry the
-// raw payload — older "[unsupported]" rows surface a hint instead.
-// Also accepts onContextMenu so the parent can render a right-click menu
-// ("Add as Lead from this message", "Copy text").
-const MessageBubble = ({ m, onContextMenu }) => {
-    const isMedia = MEDIA_TYPES.has(m.mediaType);
+const defaultMediaFilename = (m) => (
+    m.mediaFilename || `whatsapp-${m.mediaType}-${m._id}`
+);
+
+/** Image/sticker bubble — preview and download only when you click (never bulk/auto). */
+const ImageMediaBlock = ({ m }) => {
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [errorMsg, setErrorMsg] = useState('');
+    const [loadingPreview, setLoadingPreview] = useState(false);
     const [downloading, setDownloading] = useState(false);
-    const handleDownload = async () => {
-        if (!m._id || downloading) return;
-        setDownloading(true);
+    const blobRef = useRef(null);
+    const canDownload = Boolean(m.mediaDownloadable);
+
+    useEffect(() => () => {
+        if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+    }, [previewUrl]);
+
+    const fetchBlobOnce = async () => {
+        if (blobRef.current) return blobRef.current;
+        const blob = await fetchMessageMediaBlob(m._id);
+        blobRef.current = blob;
+        return blob;
+    };
+
+    const handlePreview = async () => {
+        if (!canDownload || loadingPreview || downloading) return;
+        setLoadingPreview(true);
+        setErrorMsg('');
         try {
-            await downloadMessageMedia(m._id, m.mediaFilename || `whatsapp-${m.mediaType}-${m._id}`);
+            const blob = await fetchBlobOnce();
+            setPreviewUrl((prev) => {
+                if (prev) window.URL.revokeObjectURL(prev);
+                return window.URL.createObjectURL(blob);
+            });
         } catch (err) {
-            toast.error(err.response?.data?.message || err.message || 'Could not download media');
+            setErrorMsg(err.message || 'Could not load preview');
+        } finally {
+            setLoadingPreview(false);
+        }
+    };
+
+    const handleDownload = async () => {
+        if (!canDownload || downloading) return;
+        setDownloading(true);
+        setErrorMsg('');
+        try {
+            const blob = await fetchBlobOnce();
+            saveBlobAsFile(blob, defaultMediaFilename(m));
+        } catch (err) {
+            const msg = err.message || 'Could not download media';
+            setErrorMsg(msg);
+            toast.error(msg);
         } finally {
             setDownloading(false);
         }
     };
+
+    const caption = m.text && !/^\[(image|sticker|video|audio|document)\]$/i.test(m.text)
+        ? m.text
+        : '';
+    const label = MEDIA_LABEL[m.mediaType] || 'Image';
+    const busy = loadingPreview || downloading;
+
+    return (
+        <div className={styles.imageMediaBlock}>
+            <div className={styles.imagePreviewWrap}>
+                {previewUrl ? (
+                    <>
+                        <img
+                            src={previewUrl}
+                            alt={caption || 'WhatsApp image'}
+                            className={styles.imagePreview}
+                        />
+                        <button
+                            type="button"
+                            className={styles.imageDownloadOverlay}
+                            onClick={handleDownload}
+                            disabled={busy}
+                            title={`Download ${defaultMediaFilename(m)}`}
+                        >
+                            {downloading
+                                ? <Loader2 size={16} className={styles.spin} />
+                                : <Download size={16} />}
+                            <span>Download</span>
+                        </button>
+                    </>
+                ) : (
+                    <div className={styles.imagePreviewPlaceholder}>
+                        {busy ? (
+                            <>
+                                <Loader2 size={22} className={styles.spin} />
+                                <span>{loadingPreview ? 'Loading preview…' : 'Downloading…'}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className={styles.imageTypeLabel}>[{label.toLowerCase()}]</span>
+                                {canDownload && (
+                                    <div className={styles.imageActionRow}>
+                                        <button
+                                            type="button"
+                                            className={styles.imageActionBtn}
+                                            onClick={handlePreview}
+                                        >
+                                            <Eye size={14} />
+                                            Preview
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`${styles.imageActionBtn} ${styles.imageActionBtnPrimary}`}
+                                            onClick={handleDownload}
+                                        >
+                                            <Download size={14} />
+                                            Download
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+            {errorMsg && <div className={styles.mediaErrorHint}>{errorMsg}</div>}
+            {caption && <div className={styles.bubbleCaption}>{caption}</div>}
+        </div>
+    );
+};
+
+// Single chat bubble. For media-bearing messages it adds a "Download" button
+// that streams the bytes from Baileys via /whatsapp-chat/messages/:id/media.
+// Images show an inline preview; click Download on one image only — never bulk.
+const MessageBubble = ({ m, onContextMenu }) => {
+    const isMedia = MEDIA_TYPES.has(m.mediaType);
+    const isImageLike = IMAGE_TYPES.has(m.mediaType);
+    const canDownload = Boolean(m.mediaDownloadable);
+    const [downloading, setDownloading] = useState(false);
+    const handleDownload = async () => {
+        if (!m._id || downloading || !canDownload) return;
+        setDownloading(true);
+        try {
+            await downloadMessageMedia(m._id, defaultMediaFilename(m));
+        } catch (err) {
+            toast.error(err.message || 'Could not download media');
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const showPlainText = !isImageLike || !canDownload;
+
     return (
         <div
             className={`${styles.bubble} ${m.direction === 'out' ? styles.bubbleOut : styles.bubbleIn}`}
@@ -132,19 +270,23 @@ const MessageBubble = ({ m, onContextMenu }) => {
             }}
             title="Right-click for actions (Add as Lead, Copy)"
         >
-            <div className={styles.bubbleText}>
-                {m.text || `[${m.mediaType}]`}
-            </div>
-            {isMedia && (
+            {isImageLike && canDownload ? (
+                <ImageMediaBlock m={m} />
+            ) : (
+                showPlainText && (
+                    <div className={styles.bubbleText}>
+                        {m.text || `[${m.mediaType}]`}
+                    </div>
+                )
+            )}
+            {isMedia && !isImageLike && canDownload && (
                 <div className={styles.bubbleMedia}>
                     <button
                         type="button"
                         className={styles.mediaDownloadBtn}
                         onClick={handleDownload}
                         disabled={downloading}
-                        title={m.mediaFilename
-                            ? `Download ${m.mediaFilename}`
-                            : `Download ${MEDIA_LABEL[m.mediaType] || 'file'}`}
+                        title={`Download ${defaultMediaFilename(m)}`}
                     >
                         {downloading
                             ? <Loader2 size={13} className={styles.spin} />
@@ -154,6 +296,11 @@ const MessageBubble = ({ m, onContextMenu }) => {
                             {m.mediaFilename ? ` · ${m.mediaFilename}` : ''}
                         </span>
                     </button>
+                </div>
+            )}
+            {isMedia && !canDownload && (
+                <div className={styles.mediaUnavailableHint}>
+                    Download not available for this older message.
                 </div>
             )}
             <div className={styles.bubbleTime}>{formatTime(m.timestamp)}</div>
@@ -187,6 +334,8 @@ const WhatsAppChatPage = () => {
     const [createdLead, setCreatedLead] = useState(null);   // lead created from this chat
     const [followUpOpen, setFollowUpOpen] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const autoSyncDoneRef = useRef(false);
+    const bgSyncTimerRef = useRef(null);
 
     // When set, the ConvertFromWhatsAppModal uses THIS text instead of the
     // generic "last 8 messages" preview — populated by the per-message
@@ -252,10 +401,10 @@ const WhatsAppChatPage = () => {
         try {
             const res = await syncChats();
             const n = res?.groupCount || 0;
-            toast.success(n > 0
-                ? `Synced ${n} group${n > 1 ? 's' : ''}. New 1:1 chats appear as messages arrive.`
-                : 'Sync done. New chats will appear as messages arrive.');
             await reloadChats();
+            toast.success(n > 0
+                ? `Synced ${n} group name${n > 1 ? 's' : ''} from WhatsApp`
+                : 'Chat list refreshed from WhatsApp');
         } catch (err) {
             toast.error(err.response?.data?.message || err.message || 'Sync failed');
         } finally {
@@ -294,10 +443,57 @@ const WhatsAppChatPage = () => {
         }, 800);
     };
 
+    // Pull + refresh chat list from backend (group names, previews).
+    const runBackgroundSync = async ({ silent = true } = {}) => {
+        if (waStatus.status !== 'CONNECTED') return;
+        if (syncing) return;
+        setSyncing(true);
+        try {
+            await syncChats();
+            await reloadChats({ silent });
+        } catch (err) {
+            if (!silent) {
+                toast.error(err.response?.data?.message || err.message || 'Sync failed');
+            }
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     useEffect(() => { reloadChats(); }, []);
     useEffect(() => {
         getWhatsAppStatus().then(setWaStatus).catch(() => {});
     }, []);
+
+    // Auto-sync when WhatsApp connects, then every 2 minutes while this page is open.
+    useEffect(() => {
+        if (waStatus.status !== 'CONNECTED') {
+            autoSyncDoneRef.current = false;
+            if (bgSyncTimerRef.current) {
+                clearInterval(bgSyncTimerRef.current);
+                bgSyncTimerRef.current = null;
+            }
+            return undefined;
+        }
+
+        if (!autoSyncDoneRef.current) {
+            autoSyncDoneRef.current = true;
+            runBackgroundSync({ silent: true });
+        }
+
+        if (!bgSyncTimerRef.current) {
+            bgSyncTimerRef.current = setInterval(() => {
+                runBackgroundSync({ silent: true });
+            }, 2 * 60 * 1000);
+        }
+
+        return () => {
+            if (bgSyncTimerRef.current) {
+                clearInterval(bgSyncTimerRef.current);
+                bgSyncTimerRef.current = null;
+            }
+        };
+    }, [waStatus.status]);
 
     // ── Load messages for active chat ──────────────────────────────────────
     useEffect(() => {
@@ -348,20 +544,21 @@ const WhatsAppChatPage = () => {
         };
         const onStatus = (s) => setWaStatus(s);
         const onHistorySync = (info) => {
-            // Baileys streamed a batch of historical chats/messages — reload
-            // (debounced to coalesce multiple history batches).
             scheduleReloadChats();
             if (info?.messages > 0) {
                 toast.success(`Synced ${info.chats} chat${info.chats !== 1 ? 's' : ''}, ${info.messages} message${info.messages !== 1 ? 's' : ''}`);
             }
         };
+        const onChatsSynced = () => scheduleReloadChats();
         socket.on('whatsapp:message', onMessage);
         socket.on('whatsapp:status', onStatus);
         socket.on('whatsapp:history-sync', onHistorySync);
+        socket.on('whatsapp:chats-synced', onChatsSynced);
         return () => {
             socket.off('whatsapp:message', onMessage);
             socket.off('whatsapp:status', onStatus);
             socket.off('whatsapp:history-sync', onHistorySync);
+            socket.off('whatsapp:chats-synced', onChatsSynced);
         };
     }, [socket, activeJid]);
 
@@ -626,6 +823,11 @@ const WhatsAppChatPage = () => {
                     <div className={styles.sidebarTitle}>
                         <MessageSquare size={18} />
                         <span>WhatsApp Chats</span>
+                        {syncing && (
+                            <span title="Syncing from WhatsApp…" style={{ display: 'inline-flex', marginLeft: 6 }}>
+                                <Loader2 size={12} className={styles.spin} />
+                            </span>
+                        )}
                     </div>
                     <button
                         type="button"
@@ -745,9 +947,7 @@ const WhatsAppChatPage = () => {
                     )}
                     {filteredChats.map((c) => {
                         const b = BADGE_LABELS[c.badge] || BADGE_LABELS.unknown;
-                        const subLabel = c.isGroup
-                            ? `${c.jid}`
-                            : (c.phone ? `+${c.phone}` : c.jid);
+                        const subLabel = chatSubLabel(c);
                         return (
                             <button
                                 key={c.jid}

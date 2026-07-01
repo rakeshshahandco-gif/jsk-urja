@@ -21,6 +21,7 @@ import fs from 'fs';
 import logger from '../utils/logger.js';
 import { getIO } from '../config/socket.js';
 import WhatsAppMessage from '../models/whatsappMessage.model.js';
+import mongoose from 'mongoose';
 
 // Baileys needs a Pino-compatible logger
 const baileysLogger = {
@@ -59,6 +60,122 @@ const contactNameFrom = (c = {}) => (
     || ''
 );
 
+const PAIRING_CODE_DELAY_MS = 3000;
+const PAIRING_CODE_EXPIRE_MS = 120000;
+
+/** E.164 digits only — no +, spaces, or dashes (Baileys requirement). */
+const normalizePairingPhone = (raw) => {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (!digits || digits.length < 10 || digits.length > 15) {
+        throw new Error('Enter a valid mobile number with country code (e.g. +919820000000)');
+    }
+    if (!/^[1-9]\d{9,14}$/.test(digits)) {
+        throw new Error('Invalid phone number format. Use country code without spaces.');
+    }
+    return digits;
+};
+
+const extFromMime = (mime, fallback) => {
+    const part = String(mime || '').split('/')[1] || '';
+    return (part.split(';')[0] || fallback).toLowerCase();
+};
+
+/** Unwrap Baileys nested containers (view-once, ephemeral, captions, etc.). */
+const unwrapMessageContent = (raw = {}, depth = 0) => {
+    if (!raw || depth > 8) return raw || {};
+    if (
+        raw.conversation
+        || raw.extendedTextMessage
+        || raw.imageMessage
+        || raw.videoMessage
+        || raw.audioMessage
+        || raw.documentMessage
+        || raw.stickerMessage
+    ) {
+        return raw;
+    }
+    const nestedKeys = [
+        'ephemeralMessage',
+        'viewOnceMessage',
+        'viewOnceMessageV2',
+        'documentWithCaptionMessage',
+        'buttonsMessage',
+        'templateMessage',
+        'interactiveMessage',
+        'associatedChildMessage',
+        'encEventResponseMessage',
+        'editedMessage',
+    ];
+    for (const key of nestedKeys) {
+        const inner = raw[key]?.message;
+        if (inner) return unwrapMessageContent(inner, depth + 1);
+    }
+    if (raw.ptvMessage) return { videoMessage: raw.ptvMessage };
+    if (raw.lottieStickerMessage) return { stickerMessage: raw.lottieStickerMessage };
+    return raw;
+};
+
+/**
+ * Normalize a Baileys message.content object into CRM text + media metadata.
+ * Handles wrapped image/video types so fewer rows land as [unsupported].
+ */
+const parseMessagePayload = (rawContent, { messageId, tsRaw } = {}) => {
+    const c = unwrapMessageContent(rawContent || {});
+    const idPart = messageId || tsRaw || Date.now();
+    let text = '';
+    let mediaType = 'text';
+    let mediaFilename = '';
+    let mediaMime = '';
+
+    if (c.conversation) {
+        text = c.conversation;
+    } else if (c.extendedTextMessage?.text) {
+        text = c.extendedTextMessage.text;
+    } else if (c.imageMessage) {
+        text = c.imageMessage.caption || '[image]';
+        mediaType = 'image';
+        mediaMime = c.imageMessage.mimetype || 'image/jpeg';
+        mediaFilename = `image-${idPart}.${extFromMime(mediaMime, 'jpg')}`;
+    } else if (c.videoMessage) {
+        text = c.videoMessage.caption || '[video]';
+        mediaType = 'video';
+        mediaMime = c.videoMessage.mimetype || 'video/mp4';
+        mediaFilename = `video-${idPart}.${extFromMime(mediaMime, 'mp4')}`;
+    } else if (c.documentMessage) {
+        mediaMime = c.documentMessage.mimetype || 'application/octet-stream';
+        const docName = c.documentMessage.fileName || '';
+        if (mediaMime.startsWith('image/')) {
+            text = c.documentMessage.caption || docName || '[image]';
+            mediaType = 'image';
+            mediaFilename = docName || `image-${idPart}.${extFromMime(mediaMime, 'jpg')}`;
+        } else {
+            text = docName || '[document]';
+            mediaType = 'document';
+            mediaFilename = docName || `document-${idPart}`;
+        }
+    } else if (c.audioMessage) {
+        text = '[audio]';
+        mediaType = 'audio';
+        mediaMime = c.audioMessage.mimetype || 'audio/ogg';
+        mediaFilename = `audio-${idPart}.${extFromMime(mediaMime, 'ogg')}`;
+    } else if (c.stickerMessage) {
+        text = '[sticker]';
+        mediaType = 'sticker';
+        mediaMime = c.stickerMessage.mimetype || 'image/webp';
+        mediaFilename = `sticker-${idPart}.webp`;
+    } else if (c.albumMessage) {
+        text = '[album]';
+        mediaType = 'unsupported';
+    } else {
+        text = '';
+        mediaType = 'unsupported';
+    }
+
+    return { text, mediaType, mediaFilename, mediaMime };
+};
+
+const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'document', 'sticker']);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatsAppSession — one per logged-in user
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +187,60 @@ class WhatsAppSession {
         this.phoneNumber = null;
         this._connecting = false;
         this.authDir = path.join(AUTH_BASE_DIR, this.userId);
+        this._pairingMode = false;
+        this._pairingPhone = null;
+        this._pairingCodeRequested = false;
+        this._pairingCodeTimer = null;
+    }
+
+    _userOid() {
+        return new mongoose.Types.ObjectId(this.userId);
+    }
+
+    _clearPairingState() {
+        this._pairingMode = false;
+        this._pairingPhone = null;
+        this._pairingCodeRequested = false;
+        if (this._pairingCodeTimer) {
+            clearTimeout(this._pairingCodeTimer);
+            this._pairingCodeTimer = null;
+        }
+    }
+
+    async _requestAndEmitPairingCode(sock) {
+        if (!this._pairingPhone || !sock?.requestPairingCode) return;
+        try {
+            await new Promise((r) => setTimeout(r, PAIRING_CODE_DELAY_MS));
+            if (!sock.authState?.creds || sock.authState.creds.registered) {
+                logger.info(`[WhatsApp] User ${this.userId}: Skipping pairing — already registered.`);
+                return;
+            }
+            const code = await sock.requestPairingCode(this._pairingPhone);
+            logger.info(`[WhatsApp] User ${this.userId}: Pairing code generated.`);
+            this._emit('whatsapp:pairing-code', { code, expiresIn: Math.floor(PAIRING_CODE_EXPIRE_MS / 1000) });
+            this._emit('whatsapp:status', {
+                connected: false, loggedIn: false,
+                status: 'WAITING_PAIRING',
+                message: 'Enter the pairing code in WhatsApp on your phone',
+            });
+            if (this._pairingCodeTimer) clearTimeout(this._pairingCodeTimer);
+            this._pairingCodeTimer = setTimeout(() => {
+                this._emit('whatsapp:pairing-code-expired', {});
+                this._emit('whatsapp:status', {
+                    connected: false, loggedIn: false,
+                    status: 'DISCONNECTED',
+                    message: 'Pairing code expired. Request a new code.',
+                });
+            }, PAIRING_CODE_EXPIRE_MS);
+        } catch (e) {
+            logger.error(`[WhatsApp] User ${this.userId}: Pairing code error: ${e.message}`);
+            this._emit('whatsapp:status', {
+                connected: false, loggedIn: false,
+                status: 'ERROR',
+                message: `Could not generate pairing code: ${e.message}`,
+            });
+            this._pairingCodeRequested = false;
+        }
     }
 
     // Emit an event only to this user's socket room
@@ -83,8 +254,31 @@ class WhatsAppSession {
     }
 
     // ── Connect / Start ───────────────────────────────────────────────────────
-    async connect() {
+    // options.mode: 'qr' (default) | 'pairing'
+    // options.phoneNumber: required when mode === 'pairing'
+    async connect(options = {}) {
+        const mode = options.mode || 'qr';
+        const pairingMode = mode === 'pairing';
+
+        if (this.isConnected) {
+            throw new Error('WhatsApp is already connected');
+        }
+
+        if (pairingMode) {
+            if (!options.phoneNumber) {
+                throw new Error('Phone number is required for pairing');
+            }
+            this._pairingPhone = normalizePairingPhone(options.phoneNumber);
+            this._pairingMode = true;
+            this._pairingCodeRequested = false;
+        } else {
+            this._clearPairingState();
+        }
+
         if (this._connecting) {
+            if (pairingMode) {
+                throw new Error('Connection already in progress. Wait or refresh, then try again.');
+            }
             logger.info(`[WhatsApp] User ${this.userId}: Already connecting, skipping.`);
             return;
         }
@@ -124,7 +318,7 @@ class WhatsAppSession {
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
-                if (qr) {
+                if (qr && !this._pairingMode) {
                     logger.info(`[WhatsApp] User ${this.userId}: QR generated.`);
                     try {
                         const qrDataUrl = await qrcode.toDataURL(qr, {
@@ -141,9 +335,22 @@ class WhatsAppSession {
                     }
                 }
 
+                if (
+                    this._pairingMode
+                    && !this._pairingCodeRequested
+                    && !sock.authState?.creds?.registered
+                    && (connection === 'connecting' || qr)
+                ) {
+                    this._pairingCodeRequested = true;
+                    this._requestAndEmitPairingCode(sock).catch((e) => {
+                        logger.error(`[WhatsApp] User ${this.userId}: Pairing request failed: ${e.message}`);
+                    });
+                }
+
                 if (connection === 'open') {
                     this.isConnected = true;
                     this._connecting = false;
+                    this._clearPairingState();
                     this.phoneNumber = jidNormalizedUser(sock.user?.id || '').replace('@s.whatsapp.net', '');
                     logger.info(`[WhatsApp] User ${this.userId}: ✅ Connected as +${this.phoneNumber}`);
                     const readyData = {
@@ -153,6 +360,16 @@ class WhatsAppSession {
                     };
                     this._emit('whatsapp:ready', readyData);
                     this._emit('whatsapp:status', readyData);
+                    // Background: seed group chat rows + names after connect.
+                    setTimeout(() => {
+                        this.syncChats()
+                            .then(({ groupCount }) => {
+                                if (groupCount > 0) {
+                                    this._emit('whatsapp:chats-synced', { groups: groupCount });
+                                }
+                            })
+                            .catch((e) => logger.warn(`[WhatsApp-Chat] post-connect sync: ${e.message}`));
+                    }, 5000);
                 }
 
                 if (connection === 'close') {
@@ -209,46 +426,10 @@ class WhatsAppSession {
                         const participant = isGroup ? (m.key.participant || null) : null;
                         const pushName = String(m.pushName || m.pushname || '').trim();
 
-                        let text = '';
-                        let mediaType = 'text';
-                        let mediaFilename = '';
-                        let mediaMime = '';
-                        const c = m.message || {};
-                        if (c.conversation) { text = c.conversation; mediaType = 'text'; }
-                        else if (c.extendedTextMessage?.text) { text = c.extendedTextMessage.text; mediaType = 'text'; }
-                        else if (c.imageMessage) {
-                            text = c.imageMessage.caption || '[image]';
-                            mediaType = 'image';
-                            mediaMime = c.imageMessage.mimetype || 'image/jpeg';
-                            mediaFilename = `image-${messageId || tsRaw}.${(mediaMime.split('/')[1] || 'jpg').split(';')[0]}`;
-                        }
-                        else if (c.videoMessage) {
-                            text = c.videoMessage.caption || '[video]';
-                            mediaType = 'video';
-                            mediaMime = c.videoMessage.mimetype || 'video/mp4';
-                            mediaFilename = `video-${messageId || tsRaw}.${(mediaMime.split('/')[1] || 'mp4').split(';')[0]}`;
-                        }
-                        else if (c.documentMessage) {
-                            text = c.documentMessage.fileName || '[document]';
-                            mediaType = 'document';
-                            mediaMime = c.documentMessage.mimetype || 'application/octet-stream';
-                            mediaFilename = c.documentMessage.fileName || `document-${messageId || tsRaw}`;
-                        }
-                        else if (c.audioMessage) {
-                            text = '[audio]';
-                            mediaType = 'audio';
-                            mediaMime = c.audioMessage.mimetype || 'audio/ogg';
-                            mediaFilename = `audio-${messageId || tsRaw}.${(mediaMime.split('/')[1] || 'ogg').split(';')[0]}`;
-                        }
-                        else if (c.stickerMessage) {
-                            text = '[sticker]';
-                            mediaType = 'sticker';
-                            mediaMime = c.stickerMessage.mimetype || 'image/webp';
-                            mediaFilename = `sticker-${messageId || tsRaw}.webp`;
-                        }
-                        else { text = ''; mediaType = 'unsupported'; }
-                        // Only media-bearing messages need the raw envelope for later download.
-                        const isMedia = ['image', 'video', 'audio', 'document', 'sticker'].includes(mediaType);
+                        const {
+                            text, mediaType, mediaFilename, mediaMime,
+                        } = parseMessagePayload(m.message, { messageId, tsRaw });
+                        const isMedia = MEDIA_TYPES.has(mediaType);
 
                         let doc = null;
                         try {
@@ -278,6 +459,13 @@ class WhatsAppSession {
                                     },
                                     $set: {
                                         ...(!isGroup && pushName ? { chatName: pushName } : {}),
+                                        ...(isMedia ? {
+                                            text,
+                                            mediaType,
+                                            mediaFilename,
+                                            mediaMime,
+                                            rawMessage: m,
+                                        } : {}),
                                     },
                                 },
                                 { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -301,7 +489,12 @@ class WhatsAppSession {
                                 jid: remoteJid, isGroup, participant,
                                 direction, fromMe, messageId,
                                 text, mediaType, timestamp,
-                                ...(isMedia ? { mediaFilename, mediaMime, hasMedia: true } : {}),
+                                ...(isMedia ? {
+                                    mediaFilename,
+                                    mediaMime,
+                                    hasMedia: true,
+                                    mediaDownloadable: true,
+                                } : {}),
                             });
                         }
                     } catch (e) {
@@ -429,6 +622,25 @@ class WhatsAppSession {
             sock.ev.on('contacts.upsert', (contacts) => upsertContactStubs(contacts, 'contacts.upsert'));
             sock.ev.on('contacts.update', (contacts) => upsertContactStubs(contacts, 'contacts.update'));
 
+            // Group subject renames / metadata updates
+            sock.ev.on('groups.update', async (updates) => {
+                if (!Array.isArray(updates) || !updates.length) return;
+                const userOid = this._userOid();
+                for (const g of updates) {
+                    const jid = g?.id;
+                    const subject = String(g?.subject || '').trim();
+                    if (!jid || !subject) continue;
+                    try {
+                        await WhatsAppMessage.updateMany(
+                            { userId: userOid, jid },
+                            { $set: { chatName: subject, isGroup: true } },
+                        );
+                    } catch (e) {
+                        logger.warn(`[WhatsApp-Chat] groups.update persist: ${e.message}`);
+                    }
+                }
+            });
+
             logger.info(`[WhatsApp-Chat] User ${this.userId}: messaging-history.set listener REGISTERED`);
             sock.ev.on('messaging-history.set', async ({ chats, messages, isLatest }) => {
                 try {
@@ -455,12 +667,15 @@ class WhatsAppSession {
                                             fromMe: false,
                                             messageId: `placeholder:${c.id}`,
                                             text: '',
-                                            chatName: c.name || c.subject || '',
                                             mediaType: 'placeholder',
                                             timestamp: c.conversationTimestamp
                                                 ? new Date(Number(c.conversationTimestamp) * 1000)
                                                 : new Date(0),
                                             read: true,
+                                        },
+                                        $set: {
+                                            ...(contactNameFrom(c) ? { chatName: contactNameFrom(c) } : {}),
+                                            isGroup,
                                         },
                                     },
                                     upsert: true,
@@ -494,17 +709,10 @@ class WhatsAppSession {
                             const participant = isGroup ? (m.key.participant || null) : null;
                             const pushName = String(m.pushName || m.pushname || '').trim();
 
-                            let text = '';
-                            let mediaType = 'text';
-                            const c = m.message || {};
-                            if (c.conversation) { text = c.conversation; mediaType = 'text'; }
-                            else if (c.extendedTextMessage?.text) { text = c.extendedTextMessage.text; mediaType = 'text'; }
-                            else if (c.imageMessage)    { text = c.imageMessage.caption || '[image]';       mediaType = 'image'; }
-                            else if (c.videoMessage)    { text = c.videoMessage.caption || '[video]';       mediaType = 'video'; }
-                            else if (c.documentMessage) { text = c.documentMessage.fileName || '[document]'; mediaType = 'document'; }
-                            else if (c.audioMessage)    { text = '[audio]';   mediaType = 'audio'; }
-                            else if (c.stickerMessage)  { text = '[sticker]'; mediaType = 'sticker'; }
-                            else { text = ''; mediaType = 'unsupported'; }
+                            const {
+                                text, mediaType, mediaFilename, mediaMime,
+                            } = parseMessagePayload(m.message, { messageId, tsRaw });
+                            const isMedia = MEDIA_TYPES.has(mediaType);
 
                             msgOps.push({
                                 updateOne: {
@@ -516,6 +724,20 @@ class WhatsAppSession {
                                             text, mediaType, timestamp,
                                             read: fromMe,
                                             ...(!isGroup && pushName ? { chatName: pushName } : {}),
+                                            ...(isMedia ? {
+                                                mediaFilename,
+                                                mediaMime,
+                                                rawMessage: m,
+                                            } : {}),
+                                        },
+                                        $set: {
+                                            ...(isMedia ? {
+                                                text,
+                                                mediaType,
+                                                mediaFilename,
+                                                mediaMime,
+                                                rawMessage: m,
+                                            } : {}),
                                         },
                                     },
                                     upsert: true,
@@ -579,6 +801,7 @@ class WhatsAppSession {
         this.isConnected = false;
         this._connecting = false;
         this.phoneNumber = null;
+        this._clearPairingState();
         this._clearAuth();
         logger.info(`[WhatsApp] User ${this.userId}: Disconnected.`);
     }
@@ -638,16 +861,31 @@ class WhatsAppSession {
         if (!rawMessage || !rawMessage.message) {
             throw new Error('Message has no media payload to download');
         }
-        const buffer = await downloadMediaMessage(
-            rawMessage,
-            'buffer',
-            {},
-            {
-                logger: baileysLogger,
-                reuploadRequest: this.sock.updateMediaMessage,
+        const ctx = {
+            logger: baileysLogger,
+            reuploadRequest: this.sock.updateMediaMessage.bind(this.sock),
+        };
+        try {
+            return await downloadMediaMessage(rawMessage, 'buffer', {}, ctx);
+        } catch (firstErr) {
+            logger.warn(
+                `[WhatsApp] User ${this.userId}: media download retry `
+                + `(msg=${rawMessage?.key?.id || '?'}): ${firstErr.message}`,
+            );
+            try {
+                const refreshed = await this.sock.updateMediaMessage(rawMessage);
+                return await downloadMediaMessage(refreshed || rawMessage, 'buffer', {}, ctx);
+            } catch (retryErr) {
+                const msg = String(retryErr?.message || firstErr?.message || 'Download failed');
+                if (/not connected|connection closed|428/i.test(msg)) {
+                    throw new Error('WhatsApp is not connected. Re-open WhatsApp Chat after the green dot shows connected.');
+                }
+                if (/404|410|expired|unavailable|ENOENT/i.test(msg)) {
+                    throw new Error('This file expired on WhatsApp servers and can no longer be downloaded.');
+                }
+                throw new Error(msg);
             }
-        );
-        return buffer;
+        }
     }
 
     // ── On-demand: enumerate participating groups and seed them as chats ──
@@ -655,48 +893,110 @@ class WhatsAppSession {
     // without waiting for new messages. 1:1 chats can only be populated when
     // Baileys fires messaging-history.set (on connect) or when a real message
     // arrives via messages.upsert.
+    /** Fetch group subjects from Baileys and persist on all rows for each JID. */
+    async refreshGroupChatNames() {
+        if (!this.isConnected || !this.sock) {
+            return { map: {}, updated: 0, groupCount: 0, skipped: 'not_connected' };
+        }
+        logger.info(`[WhatsApp-Chat] User ${this.userId}: refreshGroupChatNames()`);
+        const userOid = this._userOid();
+        const map = {};
+        let updated = 0;
+
+        const applyName = async (jid, subject) => {
+            const name = String(subject || '').trim();
+            if (!name || !jid) return;
+            map[jid] = name;
+            const res = await WhatsAppMessage.updateMany(
+                { userId: userOid, jid },
+                { $set: { chatName: name, isGroup: true } },
+            );
+            updated += res.modifiedCount || 0;
+        };
+
+        try {
+            const groups = await this.sock.groupFetchAllParticipating();
+            for (const [key, meta] of Object.entries(groups || {})) {
+                const jid = meta?.id || key;
+                await applyName(jid, meta?.subject);
+            }
+            logger.info(`[WhatsApp-Chat] User ${this.userId}: groupFetchAllParticipating → ${Object.keys(map).length} names`);
+        } catch (e) {
+            logger.warn(`[WhatsApp-Chat] User ${this.userId}: groupFetchAllParticipating error: ${e.message}`);
+        }
+
+        // Per-group fallback for chats still missing a title in DB.
+        try {
+            const unnamed = await WhatsAppMessage.distinct('jid', {
+                userId: userOid,
+                isGroup: true,
+                jid: { $regex: '@g\\.us$' },
+                $or: [{ chatName: '' }, { chatName: null }, { chatName: { $exists: false } }],
+            });
+            const missing = unnamed.filter((j) => !map[j]).slice(0, 100);
+            for (const jid of missing) {
+                try {
+                    const meta = await this.sock.groupMetadata(jid);
+                    await applyName(jid, meta?.subject);
+                } catch {
+                    /* left group or metadata unavailable */
+                }
+            }
+            if (missing.length) {
+                logger.info(`[WhatsApp-Chat] User ${this.userId}: groupMetadata fallback tried ${missing.length}, total names ${Object.keys(map).length}`);
+            }
+        } catch (e) {
+            logger.warn(`[WhatsApp-Chat] User ${this.userId}: groupMetadata fallback error: ${e.message}`);
+        }
+
+        logger.info(`[WhatsApp-Chat] User ${this.userId}: refreshGroupChatNames — ${Object.keys(map).length} groups, ${updated} docs updated`);
+        return { map, updated, groupCount: Object.keys(map).length };
+    }
+
     async syncChats() {
         this._assertConnected();
         logger.info(`[WhatsApp-Chat] User ${this.userId}: syncChats() — pulling groups from Baileys`);
-        let groupCount = 0;
+        const { map } = await this.refreshGroupChatNames();
+        const groupCount = Object.keys(map).length;
+
+        // Ensure placeholder rows exist for every participating group.
         try {
-            const groups = await this.sock.groupFetchAllParticipating();
-            const entries = Object.entries(groups || {});
-            if (entries.length) {
-                const ops = entries.map(([jid, meta]) => ({
-                    updateOne: {
-                        filter: { userId: this.userId, messageId: `placeholder:${jid}` },
-                        update: {
-                            $setOnInsert: {
-                                userId: this.userId,
-                                jid,
-                                isGroup: true,
-                                direction: 'in',
-                                fromMe: false,
-                                messageId: `placeholder:${jid}`,
-                                text: '',
-                                chatName: meta?.subject || '',
-                                mediaType: 'placeholder',
-                                timestamp: meta?.creation
-                                    ? new Date(Number(meta.creation) * 1000)
-                                    : new Date(0),
-                                read: true,
-                            },
+            const ops = Object.entries(map).map(([jid, subject]) => ({
+                updateOne: {
+                    filter: { userId: this.userId, messageId: `placeholder:${jid}` },
+                    update: {
+                        $setOnInsert: {
+                            userId: this.userId,
+                            jid,
+                            isGroup: true,
+                            direction: 'in',
+                            fromMe: false,
+                            messageId: `placeholder:${jid}`,
+                            text: '',
+                            mediaType: 'placeholder',
+                            timestamp: new Date(0),
+                            read: true,
                         },
-                        upsert: true,
-                    }
-                }));
-                await WhatsAppMessage.bulkWrite(ops, { ordered: false }).catch(err => {
+                        $set: {
+                            chatName: subject,
+                            isGroup: true,
+                        },
+                    },
+                    upsert: true,
+                },
+            }));
+            if (ops.length) {
+                await WhatsAppMessage.bulkWrite(ops, { ordered: false }).catch((err) => {
                     if (err.code !== 11000) {
-                        logger.warn(`[WhatsApp] User ${this.userId}: sync bulk error: ${err.message}`);
+                        logger.warn(`[WhatsApp] User ${this.userId}: sync placeholder bulk error: ${err.message}`);
                     }
                 });
-                groupCount = ops.length;
             }
-            logger.info(`[WhatsApp-Chat] User ${this.userId}: syncChats() — saved ${groupCount} group placeholders`);
         } catch (e) {
-            logger.warn(`[WhatsApp-Chat] User ${this.userId}: syncChats groupFetch error: ${e.message}`);
+            logger.warn(`[WhatsApp-Chat] User ${this.userId}: syncChats placeholder error: ${e.message}`);
         }
+
+        logger.info(`[WhatsApp-Chat] User ${this.userId}: syncChats() — ${groupCount} groups`);
         return { groupCount };
     }
 
@@ -775,6 +1075,21 @@ class WhatsAppSession {
 class WhatsAppServiceManager {
     constructor() {
         this.sessions = new Map(); // userId (string) -> WhatsAppSession
+        // Keep group/contact names fresh while any Baileys session stays connected.
+        this._bgSyncTimer = setInterval(() => this._backgroundSyncAll(), 3 * 60 * 1000);
+    }
+
+    _backgroundSyncAll() {
+        for (const session of this.sessions.values()) {
+            if (!session.isConnected) continue;
+            session.syncChats()
+                .then(({ groupCount }) => {
+                    if (groupCount > 0) {
+                        session._emit('whatsapp:chats-synced', { groups: groupCount });
+                    }
+                })
+                .catch((e) => logger.warn(`[WhatsApp-Chat] background sync: ${e.message}`));
+        }
     }
 
     _getOrCreate(userId) {
@@ -785,8 +1100,61 @@ class WhatsAppServiceManager {
         return this.sessions.get(id);
     }
 
-    async connect(userId) {
-        return this._getOrCreate(userId).connect();
+    async connect(userId, options) {
+        return this._getOrCreate(userId).connect(options);
+    }
+
+    async connectWithPairingCode(userId, phoneNumber) {
+        return this._getOrCreate(userId).connect({ mode: 'pairing', phoneNumber });
+    }
+
+    /** Validate E.164 phone for pairing (throws on invalid). */
+    validatePairingPhone(raw) {
+        return normalizePairingPhone(raw);
+    }
+
+    /** Auth folders that have saved Baileys creds (one subdir per CRM user). */
+    _listAuthUserIds() {
+        if (!fs.existsSync(AUTH_BASE_DIR)) return [];
+        return fs.readdirSync(AUTH_BASE_DIR, { withFileTypes: true })
+            .filter((d) => d.isDirectory()
+                && fs.existsSync(path.join(AUTH_BASE_DIR, d.name, 'creds.json')))
+            .map((d) => d.name);
+    }
+
+    /**
+     * CRM often has one company phone linked under one user while admins log in
+     * as another account. Chat list / sync / send must use the live session owner
+     * (or sole saved auth folder), not always the HTTP request user.
+     */
+    resolveChatUserId(requestUserId) {
+        const reqId = String(requestUserId);
+        const reqSession = this.sessions.get(reqId);
+        if (reqSession?.isConnected) return reqId;
+
+        for (const [uid, session] of this.sessions.entries()) {
+            if (session.isConnected) return uid;
+        }
+
+        const authIds = this._listAuthUserIds();
+        if (authIds.includes(reqId)) return reqId;
+        if (authIds.length === 1) return authIds[0];
+
+        return reqId;
+    }
+
+    /** Status for UI — reflects the session that serves chat data. */
+    getEffectiveStatus(requestUserId) {
+        const dataUserId = this.resolveChatUserId(requestUserId);
+        const status = this.getStatus(dataUserId);
+        if (dataUserId !== String(requestUserId) && status.status === 'CONNECTED') {
+            return {
+                ...status,
+                sharedSession: true,
+                sessionOwnerUserId: dataUserId,
+            };
+        }
+        return status;
     }
 
     getStatus(userId) {
@@ -826,6 +1194,14 @@ class WhatsAppServiceManager {
 
     async syncChats(userId) {
         return this._getOrCreate(userId).syncChats();
+    }
+
+    async refreshGroupChatNames(userId) {
+        try {
+            return await this._getOrCreate(userId).refreshGroupChatNames();
+        } catch {
+            return { map: {}, updated: 0 };
+        }
     }
 
     async sendDocument(userId, params) {

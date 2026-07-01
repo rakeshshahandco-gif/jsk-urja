@@ -27,6 +27,16 @@ export const connectWhatsApp = async () => {
     return response.data;
 };
 
+// Non-blocking — returns immediately; pairing code arrives via Socket.io
+export const requestWhatsAppPairingCode = async (phoneNumber) => {
+    const response = await api.post(
+        '/whatsapp-settings/request-pairing-code',
+        { phoneNumber },
+        { timeout: 10000 }
+    );
+    return response.data;
+};
+
 export const disconnectWhatsApp = async () => {
     const response = await api.post('/whatsapp-settings/disconnect');
     return response.data;

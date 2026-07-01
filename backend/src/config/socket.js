@@ -70,7 +70,7 @@ export const initSocket = (server) => {
 
             // Push this user's specific status (not the shared admin session)
             import('../services/whatsapp.service.js').then(({ default: WhatsAppService }) => {
-                const status = WhatsAppService.getStatus(userId);
+                const status = WhatsAppService.getEffectiveStatus(userId);
                 socket.emit('whatsapp:status', status);
             }).catch(() => {});
         });

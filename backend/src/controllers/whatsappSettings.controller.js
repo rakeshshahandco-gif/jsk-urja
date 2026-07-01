@@ -27,7 +27,7 @@ const updateSettings = catchAsync(async (req, res) => {
 
 const getSessionStatus = catchAsync(async (req, res) => {
     const userId = req.user._id || req.user.id;
-    const status = WhatsAppService.getStatus(userId);
+    const status = WhatsAppService.getEffectiveStatus(userId);
     res.json(status);
 });
 
@@ -38,8 +38,54 @@ const connectWhatsApp = catchAsync(async (req, res) => {
     // Respond immediately; QR arrives via Socket.io to user:{userId}
     res.json({ success: true, message: 'Connecting... Watch for QR code in the panel below.' });
 
-    WhatsAppService.connect(userId).catch(err => {
+    WhatsAppService.connect(userId, { mode: 'qr' }).catch(err => {
         logger.error(`[WhatsApp] Background connect error for user ${userId}: ${err.message}`);
+    });
+});
+
+// ─── Connect via Mobile Number / Pairing Code (per-user) ───────────────────
+
+const requestPairingCode = catchAsync(async (req, res) => {
+    const userId = req.user._id || req.user.id;
+    const { phoneNumber } = req.body || {};
+
+    if (!phoneNumber || !String(phoneNumber).trim()) {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            success: false,
+            message: 'Phone number is required (e.g. +919820000000)',
+        });
+    }
+
+    const status = WhatsAppService.getStatus(userId);
+    if (status.connected) {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            success: false,
+            message: 'WhatsApp is already connected',
+        });
+    }
+    if (status.status === 'CONNECTING') {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            success: false,
+            message: 'Connection already in progress. Wait or refresh, then try again.',
+        });
+    }
+
+    try {
+        WhatsAppService.validatePairingPhone(phoneNumber);
+    } catch (e) {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            success: false,
+            message: e.message,
+        });
+    }
+
+    res.json({
+        success: true,
+        message: 'Requesting pairing code… It will appear in the panel below.',
+    });
+
+    WhatsAppService.connectWithPairingCode(userId, phoneNumber).catch(err => {
+        logger.error(`[WhatsApp] Pairing connect error for user ${userId}: ${err.message}`);
     });
 });
 
@@ -94,6 +140,7 @@ export {
     updateSettings,
     getSessionStatus,
     connectWhatsApp,
+    requestPairingCode,
     disconnectWhatsApp,
     getGroups,
     sendMessage,

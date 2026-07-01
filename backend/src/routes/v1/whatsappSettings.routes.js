@@ -14,6 +14,7 @@ router.post('/', whatsappSettingsController.updateSettings);
 router.get('/status', whatsappSettingsController.getSessionStatus);
 router.get('/session-status', whatsappSettingsController.getSessionStatus); // backward compat
 router.post('/connect', whatsappSettingsController.connectWhatsApp);
+router.post('/request-pairing-code', whatsappSettingsController.requestPairingCode);
 router.post('/disconnect', whatsappSettingsController.disconnectWhatsApp);
 
 // Messaging

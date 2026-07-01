@@ -10,6 +10,9 @@ import logger from '../utils/logger.js';
 
 const userIdFrom = (req) => (req.user._id || req.user.id).toString();
 
+/** Baileys session owner for chat read/write (may differ from logged-in user). */
+const whatsAppDataUserId = (req) => WhatsAppService.resolveChatUserId(userIdFrom(req));
+
 // Active company (tenant) on the request — set by tenant middleware. We only
 // scope CRM-customer LOOKUPS by this; chats and messages stay per-user since
 // a single Baileys session is the same phone across companies.
@@ -43,6 +46,70 @@ const normalizeMobile = (raw) => {
     if (!d) return '';
     if (d.length === 10) return d;
     if (d.length === 12 && d.startsWith('91')) return d;
+    return '';
+};
+
+const AUTH_DIR_CANDIDATES = [
+    path.join(process.cwd(), '.whatsapp-auth'),
+    path.join(process.cwd(), 'backend', '.whatsapp-auth'),
+];
+
+const resolveAuthDir = (userId) => {
+    for (const root of AUTH_DIR_CANDIDATES) {
+        const dir = path.join(root, String(userId));
+        if (fs.existsSync(path.join(dir, 'creds.json'))) return dir;
+    }
+    return null;
+};
+
+/** Build lid→phone map once per listChats (avoids scanning auth dirs per row). */
+const buildLidReverseCache = (userId) => {
+    const cache = new Map();
+    const authDir = resolveAuthDir(userId);
+    if (!authDir) return cache;
+    let files = [];
+    try {
+        files = fs.readdirSync(authDir);
+    } catch {
+        return cache;
+    }
+    for (const f of files) {
+        const reverseMatch = f.match(/^lid-mapping-(\d+)_reverse\.json$/i);
+        if (reverseMatch) {
+            try {
+                const phone = normalizeMobile(
+                    JSON.parse(fs.readFileSync(path.join(authDir, f), 'utf8')),
+                );
+                if (phone) cache.set(reverseMatch[1], phone);
+            } catch { /* ignore */ }
+            // eslint-disable-next-line no-continue
+            continue;
+        }
+        const forwardMatch = f.match(/^lid-mapping-(\d+)\.json$/i);
+        if (!forwardMatch) continue;
+        try {
+            const mappedLid = String(
+                JSON.parse(fs.readFileSync(path.join(authDir, f), 'utf8')) || '',
+            ).replace(/\D/g, '');
+            if (mappedLid) cache.set(mappedLid, normalizeMobile(forwardMatch[1]));
+        } catch { /* ignore */ }
+    }
+    return cache;
+};
+
+const lookupLidInCache = (cache, lid) => {
+    const digits = String(lid || '').replace(/\D/g, '');
+    if (!digits || !cache?.size) return '';
+    if (cache.has(digits)) return cache.get(digits);
+    for (const [mappedLid, phone] of cache.entries()) {
+        if (
+            mappedLid === digits
+            || mappedLid.endsWith(digits)
+            || digits.endsWith(mappedLid)
+        ) {
+            return phone;
+        }
+    }
     return '';
 };
 
@@ -124,80 +191,132 @@ const readLidReverseMobile = (userId, lid) => {
  * with the latest message preview, timestamp, and unread count.
  */
 const listChats = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const companyId = companyIdFrom(req);
+    const userOid = new mongoose.Types.ObjectId(userId);
+    const t0 = Date.now();
 
-    const rows = await WhatsAppMessage.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-        { $sort: { timestamp: -1 } },
-        {
-            $group: {
-                _id: '$jid',
-                jid: { $first: '$jid' },
-                isGroup: { $first: '$isGroup' },
-                // The chatName / mobile are the same for every doc of a given
-                // JID, but messages.upsert leaves them blank while
-                // messaging-history.set / chats.upsert / contacts.upsert fill
-                // them in. We pick the maximum non-empty value across the
-                // group — which equals "the one we have" if any doc has it.
-                chatName: {
-                    $max: { $cond: [{ $eq: [{ $ifNull: ['$chatName', ''] }, ''] }, null, '$chatName'] },
-                },
-                mobile: {
-                    $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
-                },
-                contactName: {
-                    $max: {
-                        $cond: [
-                            {
-                                $and: [
-                                    { $eq: ['$isContact', true] },
-                                    { $ne: [{ $ifNull: ['$chatName', ''] }, ''] },
+    const aggregateChats = async () => {
+        try {
+            // $top avoids sorting the entire message collection before grouping by jid.
+            return await WhatsAppMessage.aggregate([
+                { $match: { userId: userOid } },
+                {
+                    $group: {
+                        _id: '$jid',
+                        latest: { $top: { sortBy: { timestamp: -1 }, output: '$$ROOT' } },
+                        chatName: {
+                            $max: { $cond: [{ $eq: [{ $ifNull: ['$chatName', ''] }, ''] }, null, '$chatName'] },
+                        },
+                        mobile: {
+                            $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
+                        },
+                        isContact: { $max: { $cond: ['$isContact', 1, 0] } },
+                        unread: {
+                            $sum: {
+                                $cond: [
+                                    { $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$read', false] }] },
+                                    1,
+                                    0,
                                 ],
                             },
-                            '$chatName',
-                            null,
-                        ],
+                        },
                     },
                 },
-                contactMobile: {
-                    $max: {
-                        $cond: [
-                            {
-                                $and: [
-                                    { $eq: ['$isContact', true] },
-                                    { $ne: [{ $ifNull: ['$mobile', ''] }, ''] },
+                {
+                    $project: {
+                        jid: '$_id',
+                        isGroup: '$latest.isGroup',
+                        chatName: { $ifNull: ['$chatName', '$latest.chatName'] },
+                        mobile: { $ifNull: ['$mobile', '$latest.mobile'] },
+                        isContact: { $gt: ['$isContact', 0] },
+                        lastText: '$latest.text',
+                        lastDirection: '$latest.direction',
+                        lastMediaType: '$latest.mediaType',
+                        lastTimestamp: '$latest.timestamp',
+                        unread: 1,
+                    },
+                },
+                { $sort: { lastTimestamp: -1 } },
+                { $limit: 500 },
+            ]).allowDiskUse(true);
+        } catch (e) {
+            logger.warn(`[WhatsApp-Chat] listChats $top aggregate failed, using lookup fallback: ${e.message}`);
+            return WhatsAppMessage.aggregate([
+                { $match: { userId: userOid } },
+                {
+                    $group: {
+                        _id: '$jid',
+                        lastTimestamp: { $max: '$timestamp' },
+                        chatName: {
+                            $max: { $cond: [{ $eq: [{ $ifNull: ['$chatName', ''] }, ''] }, null, '$chatName'] },
+                        },
+                        mobile: {
+                            $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
+                        },
+                        isContact: { $max: { $cond: ['$isContact', 1, 0] } },
+                        unread: {
+                            $sum: {
+                                $cond: [
+                                    { $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$read', false] }] },
+                                    1,
+                                    0,
                                 ],
                             },
-                            '$mobile',
-                            null,
-                        ],
+                        },
                     },
                 },
-                isContact: { $max: { $cond: ['$isContact', 1, 0] } },
-                lastText: { $first: '$text' },
-                lastDirection: { $first: '$direction' },
-                lastMediaType: { $first: '$mediaType' },
-                lastTimestamp: { $first: '$timestamp' },
-                unread: {
-                    $sum: {
-                        $cond: [
-                            { $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$read', false] }] },
-                            1,
-                            0,
+                { $sort: { lastTimestamp: -1 } },
+                { $limit: 500 },
+                {
+                    $lookup: {
+                        from: WhatsAppMessage.collection.name,
+                        let: { jid: '$_id', ts: '$lastTimestamp' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $eq: ['$userId', userOid] },
+                                            { $eq: ['$jid', '$$jid'] },
+                                            { $eq: ['$timestamp', '$$ts'] },
+                                        ],
+                                    },
+                                },
+                            },
+                            { $limit: 1 },
                         ],
+                        as: 'latestArr',
                     },
                 },
-            },
-        },
-        { $sort: { lastTimestamp: -1 } },
-        { $limit: 500 },
-    ]);
+                {
+                    $project: {
+                        jid: '$_id',
+                        isGroup: { $arrayElemAt: ['$latestArr.isGroup', 0] },
+                        chatName: {
+                            $ifNull: ['$chatName', { $arrayElemAt: ['$latestArr.chatName', 0] }],
+                        },
+                        mobile: {
+                            $ifNull: ['$mobile', { $arrayElemAt: ['$latestArr.mobile', 0] }],
+                        },
+                        isContact: { $gt: ['$isContact', 0] },
+                        lastText: { $arrayElemAt: ['$latestArr.text', 0] },
+                        lastDirection: { $arrayElemAt: ['$latestArr.direction', 0] },
+                        lastMediaType: { $arrayElemAt: ['$latestArr.mediaType', 0] },
+                        lastTimestamp: 1,
+                        unread: 1,
+                    },
+                },
+            ]).allowDiskUse(true);
+        }
+    };
+
+    const rows = await aggregateChats();
+
+    const lidCache = buildLidReverseCache(userId);
 
     // Resolve phone per JID:
-    // 1) contactMobile/mobile columns
-    // 2) direct phone JID formats
-    // 3) WhatsApp LID reverse mapping files in auth state
+    // 1) mobile column / phone JID  2) cached LID reverse map (one auth-dir read)
     const resolvedPhoneByJid = new Map();
     const mobileFixBulk = [];
     for (const r of rows) {
@@ -206,36 +325,20 @@ const listChats = catchAsync(async (req, res) => {
             // eslint-disable-next-line no-continue
             continue;
         }
-        const basePhone = normalizeMobile(r.contactMobile || r.mobile || phoneFromJid(r.jid));
+        const basePhone = normalizeMobile(r.mobile || phoneFromJid(r.jid));
         if (basePhone) {
             resolvedPhoneByJid.set(r.jid, basePhone);
-            if (normalizeMobile(r.mobile) !== basePhone) {
-                mobileFixBulk.push({
-                    updateMany: {
-                        filter: {
-                            userId: new mongoose.Types.ObjectId(userId),
-                            jid: r.jid,
-                            isGroup: false,
-                        },
-                        update: { $set: { mobile: basePhone } },
-                    },
-                });
-            }
             // eslint-disable-next-line no-continue
             continue;
         }
         const lidFromJid = String(r.jid || '').split('@')[0] || '';
-        const lidFromStoredMobile = String(r.mobile || '');
-        const mappedPhone = readLidReverseMobile(userId, lidFromJid) || readLidReverseMobile(userId, lidFromStoredMobile);
+        const mappedPhone = lookupLidInCache(lidCache, lidFromJid)
+            || lookupLidInCache(lidCache, r.mobile);
         resolvedPhoneByJid.set(r.jid, mappedPhone);
         if (mappedPhone) {
             mobileFixBulk.push({
                 updateMany: {
-                    filter: {
-                        userId: new mongoose.Types.ObjectId(userId),
-                        jid: r.jid,
-                        isGroup: false,
-                    },
+                    filter: { userId: userOid, jid: r.jid, isGroup: false },
                     update: { $set: { mobile: mappedPhone } },
                 },
             });
@@ -243,11 +346,9 @@ const listChats = catchAsync(async (req, res) => {
     }
 
     if (mobileFixBulk.length) {
-        try {
-            await WhatsAppMessage.bulkWrite(mobileFixBulk, { ordered: false });
-        } catch (e) {
+        WhatsAppMessage.bulkWrite(mobileFixBulk, { ordered: false }).catch((e) => {
             logger.warn(`[WhatsApp-Chat] mobile fix bulk failed for user=${userId}: ${e.message}`);
-        }
+        });
     }
 
     // ── Map chats to last-10-digit keys for CRM customer lookup ────────────
@@ -264,10 +365,7 @@ const listChats = catchAsync(async (req, res) => {
     const phoneByCustomer = new Map();    // phoneKey -> { id, name }
     if (companyId && phoneKeySet.size) {
         try {
-            const keys = [...phoneKeySet];
-            // Build an $or over the 6 contact-person mobile fields with a
-            // suffix match — fast since Customers tend to be small per tenant
-            // and Mongo can use a generic field index.
+            const keys = [...phoneKeySet].slice(0, 120);
             const orClauses = [];
             for (const k of keys) {
                 const re = new RegExp(`${k}$`);
@@ -282,8 +380,8 @@ const listChats = catchAsync(async (req, res) => {
             }
             const matched = await Customer.find(
                 { companyId: new mongoose.Types.ObjectId(companyId), $or: orClauses },
-                { customerName: 1, tradeName: 1, contactPersons: 1 }
-            ).lean();
+                { customerName: 1, tradeName: 1, contactPersons: 1 },
+            ).limit(500).lean();
             for (const c of matched) {
                 const display = c.customerName || c.tradeName || '';
                 for (const cp of (c.contactPersons || [])) {
@@ -318,7 +416,7 @@ const listChats = catchAsync(async (req, res) => {
             jid: r.jid,
             isGroup: !!r.isGroup,
             phone,
-            chatName: r.contactName || r.chatName || '',
+            chatName: (r.isContact && r.chatName) ? r.chatName : (r.chatName || ''),
             isContact: !!r.isContact,
             badge,
             crmCustomerId: customer?.id || null,
@@ -331,9 +429,39 @@ const listChats = catchAsync(async (req, res) => {
         };
     });
 
+    // Group names refresh in background — do not block listChats (can take 30s+).
+    const groupsMissingNames = chats.filter((c) => c.isGroup && !c.chatName);
+    if (groupsMissingNames.length > 0) {
+        WhatsAppService.refreshGroupChatNames(userId).catch((e) => {
+            logger.warn(`[WhatsApp-Chat] group name refresh skipped: ${e.message}`);
+        });
+    }
+
+    // Re-read group names already in DB (small follow-up query only).
+    const stillMissing = chats.filter((c) => c.isGroup && !c.chatName).map((c) => c.jid);
+    if (stillMissing.length > 0 && stillMissing.length <= 200) {
+        const namedRows = await WhatsAppMessage.aggregate([
+            {
+                $match: {
+                    userId: userOid,
+                    jid: { $in: stillMissing },
+                    chatName: { $nin: [null, ''] },
+                },
+            },
+            { $group: { _id: '$jid', chatName: { $max: '$chatName' } } },
+        ]);
+        const byJid = Object.fromEntries(namedRows.map((r) => [r._id, r.chatName]));
+        for (const c of chats) {
+            if (c.isGroup && !c.chatName && byJid[c.jid]) {
+                c.chatName = byJid[c.jid];
+            }
+        }
+    }
+
     logger.info(
-        `[WhatsApp-Chat] listChats user=${userId} company=${companyId || 'none'}`
-        + ` returned=${chats.length} customerMatches=${phoneByCustomer.size}`
+        `[WhatsApp-Chat] listChats requestUser=${userIdFrom(req)} dataUser=${userId}`
+        + ` company=${companyId || 'none'} returned=${chats.length}`
+        + ` customerMatches=${phoneByCustomer.size} ms=${Date.now() - t0}`
     );
     res.json({ chats });
 });
@@ -345,7 +473,7 @@ const listChats = catchAsync(async (req, res) => {
  * returns messages older than that timestamp (for paging upward).
  */
 const listMessages = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const { jid } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     // Hide placeholder/sync-stub rows from the message panel.
@@ -357,7 +485,11 @@ const listMessages = catchAsync(async (req, res) => {
         .sort({ timestamp: -1 })
         .limit(limit)
         .lean();
-    res.json({ messages: rows.reverse() });
+    const messages = rows.reverse().map(({ rawMessage, ...rest }) => ({
+        ...rest,
+        mediaDownloadable: !!(rawMessage && rawMessage.message),
+    }));
+    res.json({ messages });
 });
 
 /**
@@ -366,7 +498,7 @@ const listMessages = catchAsync(async (req, res) => {
  * Marks all inbound messages of the chat as read.
  */
 const markRead = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const { jid } = req.params;
     const result = await WhatsAppMessage.updateMany(
         { userId, jid, direction: 'in', read: false },
@@ -383,7 +515,7 @@ const markRead = catchAsync(async (req, res) => {
  * an 'out' message locally so the UI picks it up immediately.
  */
 const sendChatMessage = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const { jid } = req.params;
     const text = String(req.body?.text || '').trim();
     if (!text) {
@@ -450,7 +582,7 @@ const sendChatMessage = catchAsync(async (req, res) => {
  * a real message will then flow through messages.upsert as normal.
  */
 const startChat = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const rawPhone = String(req.body?.phone || '').replace(/\D/g, '');
     if (!rawPhone) {
         return res.status(httpStatus.BAD_REQUEST).json({ message: 'Phone number is required' });
@@ -502,7 +634,7 @@ const startChat = catchAsync(async (req, res) => {
  * existing data and never overwrites real messages.
  */
 const syncChats = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     try {
         const result = await WhatsAppService.syncChats(userId);
         res.json({ success: true, ...result });
@@ -522,7 +654,7 @@ const syncChats = catchAsync(async (req, res) => {
  * return 404 with a clear message.
  */
 const downloadMedia = catchAsync(async (req, res) => {
-    const userId = userIdFrom(req);
+    const userId = whatsAppDataUserId(req);
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(httpStatus.BAD_REQUEST).json({ message: 'Invalid message id' });
@@ -544,7 +676,7 @@ const downloadMedia = catchAsync(async (req, res) => {
     } catch (err) {
         logger.warn(`[WhatsApp-Chat] downloadMedia failed user=${userId} msg=${id}: ${err.message}`);
         return res.status(httpStatus.BAD_GATEWAY).json({
-            message: 'Could not download media from WhatsApp. '
+            message: err.message || 'Could not download media from WhatsApp. '
                 + 'The file may have expired on WhatsApp servers or the session is not connected.',
         });
     }
