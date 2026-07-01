@@ -101,40 +101,33 @@ export default function ProductionSheetPage() {
     const F = ({ l, children }) => <div><label style={lbl}>{l}</label>{children}</div>;
 
     return (
-        <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            {/* Print Only Layout Refactored for PDF Stability */}
-            <div className="print-only" style={{ display: 'none', background: '#fff', color: '#000', padding: '0', boxSizing: 'border-box' }}>
-                <style>{`
-                    .o-table { width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 0; }
-                    .o-table td, .o-table th { border: 1px solid #000; padding: 6px 8px; font-size: 10pt; vertical-align: middle; }
-                    .o-header { text-align: center; font-weight: 900; background: #fff; border: 1.5px solid #000; border-bottom: none; padding: 4px; font-size: 12pt; }
-                    .o-label { font-weight: bold; width: 140px; display: inline-block; text-transform: uppercase; }
-                    .o-value { font-weight: normal; }
-                    @page { margin: 10mm; }
-                `}</style>
+        <div className="production-sheet-page-root" style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+            {/* LOCKED PRODUCTION SHEET PRINT FORMAT — A4 portrait layout. Do not change unless explicitly requested by JSK admin/user. */}
+            <div className="print-only production-sheet-print ps-print-page" style={{ display: 'none', width: '194mm', minWidth: '194mm', maxWidth: '194mm', margin: '0 auto', background: '#fff', color: '#000', padding: 0, boxSizing: 'border-box' }}>
+                <div className="ps-print-sheet">
+                <div className="ps-section-header">ORDER DETAILS</div>
+                <div className="ps-section-header ps-section-sub">Production Sheet</div>
 
-                <div className="o-header">ORDER DETAILS</div>
-                <div className="o-header" style={{ borderTop: 'none', fontSize: '10pt' }}>Production Sheet</div>
-
-                <table className="o-table">
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
                     <tbody>
                         <tr>
-                            <td><span className="o-label">DATE & TIME:-</span> <span className="o-value">{fmtDT(ps.createdAt)}</span></td>
-                            <td><span className="o-label">NO:-</span> <span className="o-value">{ps.soNumber}</span></td>
+                            <td><span className="ps-lbl">DATE &amp; TIME:-</span> <span className="ps-val">{fmtDT(ps.createdAt)}</span></td>
+                            <td><span className="ps-lbl">NO:-</span> <span className="ps-val">{ps.soNumber}</span></td>
                         </tr>
                         <tr>
-                            <td><span className="o-label">CLIENT CODE:-</span> <span className="o-value">{ps.customerCode || '—'}</span></td>
-                            <td><span className="o-label">DELIVERY DATE:-</span> <span className="o-value">{fmt(ps.deliveryDate)}</span></td>
+                            <td><span className="ps-lbl">CLIENT CODE:-</span> <span className="ps-val">{ps.customerCode || '—'}</span></td>
+                            <td><span className="ps-lbl">DELIVERY DATE:-</span> <span className="ps-val">{fmt(ps.deliveryDate)}</span></td>
                         </tr>
                         <tr>
-                            <td><span className="o-label">STICKER:-</span> <span className="o-value">{ps.stickerType || '—'}</span></td>
-                            <td><span className="o-label">SIGN:-</span></td>
+                            <td><span className="ps-lbl">STICKER:-</span> <span className="ps-val">{ps.stickerType || ''}</span></td>
+                            <td><span className="ps-lbl">SIGN:-</span></td>
                         </tr>
                         <tr>
                             <td colSpan={2}>
-                                <span className="o-label">Order category:</span> 
-                                <span className="o-value" style={{ 
-                                    color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : 'inherit', 
+                                <span className="ps-lbl">ORDER CATEGORY:-</span>
+                                <span className="ps-val" style={{
+                                    color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : 'inherit',
                                     fontWeight: 'bold'
                                 }}>
                                     {ps.orderCategory || ps.soId?.orderCategory || 'Order'}
@@ -144,8 +137,8 @@ export default function ProductionSheetPage() {
                         {((ps.orderCategory || ps.soId?.orderCategory) === 'Replacement') && (ps.warrantyDetails || ps.soId?.warrantyDetails) && (
                             <tr>
                                 <td colSpan={2} style={{ background: '#f8fafc' }}>
-                                    <span className="o-label" style={{ color: '#dc2626' }}>Warranty Details:</span> 
-                                    <span className="o-value" style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                                    <span className="ps-lbl" style={{ color: '#dc2626' }}>Warranty Details:</span>
+                                    <span className="ps-val" style={{ color: '#dc2626', fontWeight: 'bold' }}>
                                         {ps.warrantyDetails || ps.soId?.warrantyDetails}
                                     </span>
                                 </td>
@@ -154,109 +147,136 @@ export default function ProductionSheetPage() {
                     </tbody>
                 </table>
 
-                <table className="o-table" style={{ borderTop: 'none' }}>
+                <table className="ps-print-table ps-items-table">
+                    <colgroup>
+                        <col style={{ width: '6%' }} />
+                        <col style={{ width: '16%' }} />
+                        <col style={{ width: '38%' }} />
+                        <col style={{ width: '14%' }} />
+                        <col style={{ width: '13%' }} />
+                        <col style={{ width: '13%' }} />
+                    </colgroup>
                     <thead>
-                        <tr style={{ fontWeight: 900, background: '#f1f5f9' }}>
-                            <th style={{ width: '50px' }}>SR NO</th>
-                            <th style={{ width: '120px' }}>ITEM CODE</th>
-                            <th style={{ width: '250px' }}>VOLT/CURRENT</th>
-                            <th style={{ width: '100px' }}>QUANTITY</th>
-                            <th style={{ width: '80px' }}>HOURS</th>
-                            <th style={{ width: '80px' }}>DUMMY LOAD</th>
+                        <tr className="ps-th-row">
+                            <th>SR NO</th>
+                            <th>ITEM CODE</th>
+                            <th>VOLT/CURRENT</th>
+                            <th>QUANTITY</th>
+                            <th>HOURS</th>
+                            <th>DUMMY LOAD</th>
                         </tr>
                     </thead>
                     <tbody>
                         {(ps.items || []).map((item, i) => (
-                            <tr key={i} style={{ minHeight: '30px' }}>
-                                <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                                <td>{item.itemCode || '—'}</td>
-                                <td>
+                            <tr key={i}>
+                                <td className="ps-td-center">{i + 1}</td>
+                                <td className="ps-td-left">{item.itemCode || '—'}</td>
+                                <td className="ps-td-left">
                                     {item.voltCurrent || '—'}
-                                    {item.additionalNotes && <div style={{ fontSize: '9pt', color: '#555', borderTop: '0.5px solid #ccc', marginTop: '2px', paddingTop: '2px' }}>{item.additionalNotes}</div>}
+                                    {item.additionalNotes && <div className="ps-item-note">{item.additionalNotes}</div>}
                                 </td>
-                                <td style={{ textAlign: 'center' }}>{item.qty} Nos</td>
-                                <td>{item.hours || '—'}</td>
-                                <td>{item.dummyLoad || '—'}</td>
+                                <td className="ps-td-center">{item.qty} Nos</td>
+                                <td className="ps-td-center">{item.hours || '—'}</td>
+                                <td className="ps-td-center">{item.dummyLoad || '—'}</td>
                             </tr>
                         ))}
-                        {Array.from({ length: Math.max(0, 3 - (ps.items?.length || 0)) }).map((_, i) => (
-                            <tr key={`e-${i}`} style={{ height: '30px' }}><td /><td /><td /><td /><td /><td /></tr>
-                        ))}
                     </tbody>
                 </table>
 
-                <div className="o-header" style={{ borderTop: 'none' }}>PRODUCTION DETAILS</div>
-                <table className="o-table" style={{ borderTop: 'none' }}>
+                <div className="ps-section-header">PRODUCTION DETAILS</div>
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
                     <tbody>
                         <tr>
-                            <td><span className="o-label">DATE & TIME:</span> <span>{ps.testing?.dateTime ? fmtDT(ps.testing.dateTime) : ''}</span></td>
-                            <td><span className="o-label">TESTED BY:</span> <span>{ps.testing?.testedBy || ''}</span></td>
+                            <td><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.testing?.dateTime ? fmtDT(ps.testing.dateTime) : ''}</span></td>
+                            <td><span className="ps-lbl">TESTED BY:</span> <span className="ps-val">{ps.testing?.testedBy || ''}</span></td>
                         </tr>
                         <tr>
-                            <td colSpan={2}><span className="o-label">SET:</span> <span></span></td>
+                            <td colSpan={2}><span className="ps-lbl">SET:</span></td>
                         </tr>
                         <tr>
-                            <td><span className="o-label">SET 1:</span> <span style={{ flex: 1 }}>{ps.testing?.set1 || ''}</span></td>
-                            <td><span className="o-label">SET 3:</span> <span style={{ flex: 1 }}>{ps.testing?.set3 || ''}</span></td>
+                            <td><span className="ps-lbl">SET 1:</span> <span className="ps-val">{ps.testing?.set1 || ''}</span></td>
+                            <td><span className="ps-lbl">SET 3:</span> <span className="ps-val">{ps.testing?.set3 || ''}</span></td>
                         </tr>
                         <tr>
-                            <td><span className="o-label">SET 2:</span> <span style={{ flex: 1 }}>{ps.testing?.set2 || ''}</span></td>
-                            <td><span className="o-label">SET 4:</span> <span style={{ flex: 1 }}>{ps.testing?.set4 || ''}</span></td>
-                        </tr>
-                        <tr>
-                            <td colSpan={2}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span><span className="o-label">COMMENTS:</span> <span>{ps.testing?.comments || ''}</span></span>
-                                    <span style={{ marginRight: '50px' }}><span className="o-label" style={{ width: '60px' }}>SIGN:-</span></span>
-                                </div>
-                            </td>
+                            <td><span className="ps-lbl">SET 2:</span> <span className="ps-val">{ps.testing?.set2 || ''}</span></td>
+                            <td><span className="ps-lbl">SET 4:</span> <span className="ps-val">{ps.testing?.set4 || ''}</span></td>
                         </tr>
                     </tbody>
                 </table>
-
-                <div className="o-header" style={{ borderTop: 'none' }}>PACKING DETAILS</div>
-                <table className="o-table" style={{ borderTop: 'none' }}>
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
                     <tbody>
-                        <tr><td colSpan={2}><span className="o-label">DATE & TIME:</span> <span>{ps.packing?.dateTime ? fmtDT(ps.packing.dateTime) : ''}</span></td></tr>
                         <tr>
-                            <td><span className="o-label">HANDOVER D/T:</span> <span>{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></td>
-                            <td><span className="o-label">DELIVERY D/T:</span> <span>{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></td>
-                        </tr>
-                        <tr><td colSpan={2}><span className="o-label">DELIVERY TROUGH:</span> <span>{ps.packing?.deliveryThrough || ''}</span></td></tr>
-                        <tr><td colSpan={2}><span className="o-label">NAME OF PERSON:</span> <span>{ps.packing?.personName || ''}</span></td></tr>
-                        <tr>
-                            <td colSpan={2}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span><span className="o-label">COMMENTS:</span> <span>{ps.packing?.comments || ''}</span></span>
-                                    <span style={{ marginRight: '50px' }}><span className="o-label" style={{ width: '60px' }}>SIGN:-</span></span>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><span className="o-label">LOAD RECIEVED:</span></td>
-                            <td><span className="o-label" style={{ width: '60px' }}>YES/NO</span> <span style={{ marginLeft: '10px' }}>{ps.packing?.loadReceived || ''}</span></td>
+                            <td><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.testing?.comments || ''}</span></td>
+                            <td><span className="ps-lbl">SIGN:-</span></td>
                         </tr>
                     </tbody>
                 </table>
 
-                <table className="o-table" style={{ borderTop: 'none', marginTop: '10px' }}>
+                <div className="ps-section-header">PACKING DETAILS</div>
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
+                    <tbody>
+                        <tr><td colSpan={2}><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.packing?.dateTime ? fmtDT(ps.packing.dateTime) : ''}</span></td></tr>
+                        <tr>
+                            <td><span className="ps-lbl">HANDOVER D/T:</span> <span className="ps-val">{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></td>
+                            <td><span className="ps-lbl">DELIVERY D/T:</span> <span className="ps-val">{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></td>
+                        </tr>
+                        <tr><td colSpan={2}><span className="ps-lbl">DELIVERY TROUGH:</span> <span className="ps-val">{ps.packing?.deliveryThrough || ''}</span></td></tr>
+                        <tr><td colSpan={2}><span className="ps-lbl">NAME OF PERSON:</span> <span className="ps-val">{ps.packing?.personName || ''}</span></td></tr>
+                    </tbody>
+                </table>
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
+                    <tbody>
+                        <tr>
+                            <td><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.packing?.comments || ''}</span></td>
+                            <td><span className="ps-lbl">SIGN:-</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table className="ps-print-table">
+                    <colgroup><col style={{ width: '40%' }} /><col style={{ width: '30%' }} /><col style={{ width: '30%' }} /></colgroup>
+                    <tbody>
+                        <tr>
+                            <td><span className="ps-lbl">LOAD RECEIVED:</span></td>
+                            <td><span className="ps-lbl">YES/NO</span></td>
+                            <td><span className="ps-val">{ps.packing?.loadReceived || ''}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <table className="ps-print-table ps-loadtest-table">
+                    <colgroup>
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                        <col style={{ width: '14.28%' }} />
+                    </colgroup>
                     <thead>
-                        <tr style={{ fontWeight: 'bold', textAlign: 'center', background: '#f1f5f9' }}>
+                        <tr className="ps-th-row">
                             <th>NLV</th><th>LV</th><th>LI</th><th>TRANS</th><th>EX1</th><th>EX2</th><th>EX3</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr style={{ height: '30px', textAlign: 'center' }}>
-                            <td>{ps.loadTest?.nlv || ''}</td>
-                            <td>{ps.loadTest?.lv || ''}</td>
-                            <td>{ps.loadTest?.li || ''}</td>
-                            <td>{ps.loadTest?.trans || ''}</td>
-                            <td>{ps.loadTest?.ex1 || ''}</td>
-                            <td>{ps.loadTest?.ex2 || ''}</td>
-                            <td>{ps.loadTest?.ex3 || ''}</td>
-                        </tr>
+                        {Array.from({ length: Math.max((ps.items || []).length, 1) }, (_, i) => (
+                            <tr key={i} className="ps-td-center">
+                                <td>{i === 0 ? (ps.loadTest?.nlv || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.lv || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.li || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.trans || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.ex1 || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.ex2 || '') : ''}</td>
+                                <td>{i === 0 ? (ps.loadTest?.ex3 || '') : ''}</td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Header (No Print) */}
@@ -436,10 +456,97 @@ export default function ProductionSheetPage() {
 
             <style>{`
                 @media print {
-                    .no-print { display: none !important; }
-                    .print-only { display: block !important; padding: 10mm; }
-                    body { background: #fff !important; }
-                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    @page { size: A4 portrait; margin: 8mm; }
+                    html, body {
+                        width: 210mm !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: #fff !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .production-sheet-page-root,
+                    .production-sheet-page-root > * {
+                        max-width: none !important;
+                        min-width: 0 !important;
+                    }
+                    .production-sheet-page-root .no-print,
+                    .production-sheet-page-root .no-print * {
+                        display: none !important;
+                    }
+                    .production-sheet-print.ps-print-page {
+                        display: block !important;
+                        position: static !important;
+                        width: 194mm !important;
+                        min-width: 194mm !important;
+                        max-width: 194mm !important;
+                        margin: 0 auto !important;
+                        padding: 0 !important;
+                        box-sizing: border-box !important;
+                        transform: none !important;
+                        zoom: 1 !important;
+                    }
+                    .production-sheet-print .ps-print-sheet {
+                        width: 100% !important;
+                        border: 1.5px solid #000;
+                        box-sizing: border-box;
+                    }
+                    .production-sheet-print .ps-section-header {
+                        text-align: center;
+                        font-weight: 900;
+                        background: #fff;
+                        border: 1.5px solid #000;
+                        border-bottom: none;
+                        padding: 4px;
+                        font-size: 12pt;
+                        width: 100%;
+                        box-sizing: border-box;
+                    }
+                    .production-sheet-print .ps-section-sub {
+                        font-size: 10pt;
+                    }
+                    .production-sheet-print .ps-print-table {
+                        width: 100% !important;
+                        min-width: 100% !important;
+                        max-width: 100% !important;
+                        border-collapse: collapse !important;
+                        table-layout: fixed !important;
+                        border: 1.5px solid #000;
+                        border-top: none;
+                        margin: 0;
+                        box-sizing: border-box;
+                    }
+                    .production-sheet-print .ps-print-table td,
+                    .production-sheet-print .ps-print-table th {
+                        border: 1px solid #000;
+                        padding: 5px 8px;
+                        font-size: 10pt;
+                        vertical-align: middle;
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                    }
+                    .production-sheet-print .ps-th-row {
+                        background: #f1f5f9;
+                        font-weight: 900;
+                        text-align: center;
+                    }
+                    .production-sheet-print .ps-td-center { text-align: center !important; }
+                    .production-sheet-print .ps-td-left { text-align: left !important; }
+                    .production-sheet-print .ps-lbl {
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        margin-right: 6px;
+                        white-space: nowrap;
+                    }
+                    .production-sheet-print .ps-val { font-weight: normal; }
+                    .production-sheet-print .ps-item-note {
+                        font-size: 9pt;
+                        color: #555;
+                        border-top: 0.5px solid #ccc;
+                        margin-top: 2px;
+                        padding-top: 2px;
+                        text-align: left;
+                    }
                 }
             `}</style>
         </div>

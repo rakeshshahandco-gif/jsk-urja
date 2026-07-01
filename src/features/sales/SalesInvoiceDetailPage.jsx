@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
     getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, 
     restoreSalesInvoice, recordSalesPayment, renumberInvoice, 
-    changeInvoiceSeries, getInvoiceSeries 
+    changeInvoiceSeries, getInvoiceSeries, getInvoiceBarcodeData
 } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +15,7 @@ import communicationApi from '@/services/communicationApi';
 import CommunicationModal from '@/components/communication/CommunicationModal';
 import GstCorrectionModal from './components/GstCorrectionModal';
 import SalesInvoiceCancelDeleteModal from './components/SalesInvoiceCancelDeleteModal';
+import SalesInvoiceBuiltinPrint from './components/SalesInvoiceBuiltinPrint';
 import InvoiceBarcodeBlock from '@/components/invoice/InvoiceBarcodeBlock';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui/BrandedLoading';
@@ -49,6 +50,7 @@ export default function SalesInvoiceDetailPage() {
     const [showGstModal, setShowGstModal] = useState(false);
     const [isCommModalOpen, setIsCommModalOpen] = useState(false);
     const [billWiseRows, setBillWiseRows] = useState([]);
+    const [printBarcodePayload, setPrintBarcodePayload] = useState(null);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -85,6 +87,13 @@ export default function SalesInvoiceDetailPage() {
         getBillAdjustments({ billId: id, billType: 'SalesInvoice' })
             .then((rows) => setBillWiseRows(Array.isArray(rows) ? rows : []))
             .catch(() => setBillWiseRows([]));
+    }, [id]);
+
+    useEffect(() => {
+        if (!id) return;
+        getInvoiceBarcodeData(id)
+            .then((data) => setPrintBarcodePayload(data))
+            .catch(() => setPrintBarcodePayload(null));
     }, [id]);
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', {
@@ -205,403 +214,18 @@ export default function SalesInvoiceDetailPage() {
     const notFullyPaid = inv.paymentStatus !== 'Paid';
 
     return (
-        <div style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            {/* PRINT ONLY LAYOUT (PROFESSIONAL TAX INVOICE) */}
-            <div className="print-only sales-invoice-print" style={{ width: '210mm', padding: 0, color: '#000', fontSize: '10pt' }}>
-                {isEstimate ? (
-                    <div className="print-page" style={{
-                        width: '210mm',
-                        minHeight: '297mm',
-                        padding: '15mm',
-                        boxSizing: 'border-box',
-                        background: '#fff',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        position: 'relative',
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '12px' }}>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '16pt', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>ESTIMATE</div>
-                                <div style={{ fontSize: '11pt', fontWeight: 700, marginTop: '6px' }}>ESTIMATE NO: {inv.invoiceNumber}</div>
-                                <div style={{ fontSize: '10pt', color: '#475569', marginTop: '4px' }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
-                            </div>
-                        </div>
-                        <div style={{ marginBottom: '24px' }}>
-                            <div style={{ fontSize: '9pt', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', marginBottom: '6px' }}>Estimate For</div>
-                            <div style={{ fontSize: '14pt', fontWeight: 800, textTransform: 'uppercase' }}>{inv.customerName}</div>
-                        </div>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', flex: 1 }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid #000' }}>
-                                    <th style={{ textAlign: 'left', padding: '8px 0', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b' }}>Item &amp; Description</th>
-                                    <th style={{ textAlign: 'center', padding: '8px', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '70px' }}>Qty</th>
-                                    <th style={{ textAlign: 'right', padding: '8px', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '90px' }}>Rate</th>
-                                    <th style={{ textAlign: 'right', padding: '8px 0', fontSize: '9pt', textTransform: 'uppercase', color: '#64748b', width: '100px' }}>Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(inv.items || []).map((it, i) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                                        <td style={{ padding: '10px 0', verticalAlign: 'top' }}>
-                                            <div style={{ fontWeight: 700, fontSize: '10pt' }}>{it.description || it.itemName}</div>
-                                            {it.additionalNotes && <div style={{ fontSize: '8pt', color: '#64748b', marginTop: '3px' }}>Note: {it.additionalNotes}</div>}
-                                        </td>
-                                        <td style={{ textAlign: 'center', padding: '10px 8px', fontSize: '10pt' }}>{it.qty} {it.uom || 'NOS'}</td>
-                                        <td style={{ textAlign: 'right', padding: '10px 8px', fontSize: '10pt' }}>{Number(it.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                        <td style={{ textAlign: 'right', padding: '10px 0', fontSize: '10pt', fontWeight: 700 }}>{Number(it.taxableAmount || (it.qty * it.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px', fontSize: '10pt' }}>
-                                <span style={{ color: '#64748b', marginRight: '40px' }}>Total Estimated Price</span>
-                                <span style={{ fontWeight: 700, minWidth: '100px', textAlign: 'right' }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '2px solid #000', paddingTop: '10px', fontSize: '12pt', fontWeight: 900 }}>
-                                <span style={{ marginRight: '40px' }}>Total Estimated Price</span>
-                                <span style={{ minWidth: '100px', textAlign: 'right' }}>₹ {(inv.roundedTotal || inv.grandTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                        </div>
-                        {inv.status === 'Cancelled' && (
-                            <div style={{
-                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-45deg)',
-                                fontSize: '72pt', fontWeight: 900, color: 'rgba(239, 68, 68, 0.12)', pointerEvents: 'none', textTransform: 'uppercase',
-                            }}>CANCELLED</div>
-                        )}
-                    </div>
-                ) : (() => {
-                    const items = inv.items || [];
-                    const itemsPerPageFirst = 8; 
-                    const itemsPerPageOthers = 20; 
-                    
-                    const pages = [];
-                    if (items.length <= itemsPerPageFirst) {
-                        pages.push(items);
-                    } else {
-                        pages.push(items.slice(0, itemsPerPageFirst));
-                        let remaining = items.slice(itemsPerPageFirst);
-                        while (remaining.length > 0) {
-                            pages.push(remaining.slice(0, itemsPerPageOthers));
-                            remaining = remaining.slice(itemsPerPageOthers);
-                        }
-                    }
-
-                    return pages.map((pageItems, pageIdx) => {
-                        const isFirstPage = pageIdx === 0;
-                        const isLastPage = pageIdx === pages.length - 1;
-                        const totalPages = pages.length;
-
-                        return (
-                            <div key={pageIdx} className="print-page" style={{ 
-                                padding: '10mm', 
-                                minHeight: '275mm', 
-                                display: 'flex', 
-                                flexDirection: 'column', 
-                                background: '#fff', 
-                                boxSizing: 'border-box',
-                                pageBreakAfter: isLastPage ? 'auto' : 'always',
-                                position: 'relative'
-                            }}>
-                                <div style={{ position: 'absolute', bottom: '5mm', right: '10mm', fontSize: '8pt', color: '#666' }}>
-                                    Page {pageIdx + 1} of {totalPages}
-                                </div>
-
-                                {isFirstPage ? (
-                                    <div style={{ border: '1px solid #000', padding: '10px', marginBottom: '15px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                                                <img src="/logo.jpeg" alt="Logo" style={{ maxHeight: `${company.logoHeight || 75}px`, maxWidth: '160px', objectFit: 'contain' }} />
-                                                <div>
-                                                    <div style={{ fontSize: '18pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '2px', color: '#000' }}>{company.companyName}</div>
-                                                    <div style={{ fontSize: '8.5pt', lineHeight: '1.2', maxWidth: '450px' }}>
-                                                        <div style={{ fontWeight: 600 }}>{company.address}</div>
-                                                        <div>{company.city} - {company.pincode}, {company.state} (Code: {company.stateCode})</div>
-                                                        <div>{company.phone && `Contact: ${company.phone}`} {company.email && ` | Email: ${company.email}`}</div>
-                                                        <div style={{ marginTop: '3px', fontWeight: 600 }}>
-                                                            {(gstApplicable || isEstimate) && company.gstNumber && <span>GSTIN: {company.gstNumber} | </span>}
-                                                            {company.panNumber && <span>PAN: {company.panNumber}</span>}
-                                                        </div>
-                                                        {company.cin && <span>CIN: {company.cin} | </span>}
-                                                        {company.urn && <span>MSME/URN: {company.urn}</span>}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: 'right', minWidth: '150px' }}>
-                                                <div style={{ fontSize: '13pt', fontWeight: 900, color: '#000', border: '2px solid #000', padding: '4px 12px', display: 'inline-block', marginBottom: '8px', textTransform: 'uppercase' }}>
-                                                    {docTitle}
-                                                </div>
-                                                <div style={{ fontSize: '10pt', fontWeight: 800 }}>{docNumberLabel}: {inv.invoiceNumber}</div>
-                                                <div style={{ fontSize: '10pt', fontWeight: 700 }}>Date: {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ border: '1px solid #000', padding: '10px', marginBottom: '15px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName}</div>
-                                            <div style={{ textAlign: 'right', fontSize: '9pt' }}>
-                                                <strong>{docNumberLabel}:</strong> {inv.invoiceNumber} | <strong>Date:</strong> {new Date(inv.invoiceDate).toLocaleDateString('en-GB')}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {isFirstPage && (
-                                    <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderBottom: 'none' }}>
-                                            <div style={{ borderRight: '1px solid #000', padding: '6px' }}>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt' }}>
-                                                    <tbody>
-                                                        <tr><td style={{ color: '#555', width: '110px' }}>Sales Order No:</td><td style={{ fontWeight: 700 }}>{inv.soNumber || '—'}</td></tr>
-                                                        <tr><td style={{ color: '#555' }}>Buyer Order No:</td><td style={{ fontWeight: 700 }}>{inv.buyerOrderNo || '—'}</td></tr>
-                                                        <tr><td style={{ color: '#555' }}>Dispatch Through:</td><td>{inv.dispatchThrough || '—'}</td></tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                            <div style={{ padding: '6px' }}>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8pt' }}>
-                                                    <tbody>
-                                                        <tr><td style={{ color: '#555', width: '110px' }}>Place of Supply:</td><td style={{ fontWeight: 700 }}>{inv.placeOfSupply || inv.billingState || '—'}</td></tr>
-                                                        <tr><td style={{ color: '#555' }}>Payment Term:</td><td>{inv.paymentTerms || '—'}</td></tr>
-                                                        <tr><td style={{ color: '#555' }}>Buyer Order Date:</td><td>{inv.buyerOrderDate ? new Date(inv.buyerOrderDate).toLocaleDateString('en-GB') : '—'}</td></tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderBottom: 'none' }}>
-                                            <div style={{ borderRight: '1px solid #000', padding: '8px' }}>
-                                                <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Bill To (Buyer):</div>
-                                                <div style={{ fontSize: '10pt', fontWeight: 900 }}>{inv.customerName}</div>
-                                                <div style={{ fontSize: '9pt', whiteSpace: 'pre-wrap', marginBottom: '4px' }}>{inv.billingAddress}</div>
-                                                <div style={{ fontSize: '8pt' }}>
-                                                    {inv.customerGstin && <div><strong>GSTIN:</strong> {inv.customerGstin}</div>}
-                                                    <div><strong>State:</strong> {inv.billingState} ({inv.billingStateCode})</div>
-                                                </div>
-                                            </div>
-                                            <div style={{ padding: '8px' }}>
-                                                <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '4px' }}>Ship To (Consignee):</div>
-                                                <div style={{ fontSize: '10pt', fontWeight: 900 }}>{inv.customerName}</div>
-                                                <div style={{ fontSize: '9pt', whiteSpace: 'pre-wrap', marginBottom: '4px' }}>{inv.shippingAddress || inv.billingAddress}</div>
-                                                <div style={{ fontSize: '8pt' }}>
-                                                    {(inv.shippingGstin || inv.customerGstin) && <div><strong>GSTIN:</strong> {inv.shippingGstin || inv.customerGstin}</div>}
-                                                    <div><strong>State:</strong> {inv.shippingState || inv.billingState} ({inv.shippingStateCode || inv.billingStateCode})</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                <div style={{ flex: 1 }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #000' }}>
-                                        <thead>
-                                            <tr style={{ background: '#f5f5f5' }}>
-                                                <th style={{ width: '35px', border: '1px solid #000', padding: '6px 2px', fontSize: '8pt' }}>SR</th>
-                                                <th style={{ border: '1px solid #000', padding: '6px 8px', fontSize: '8pt', textAlign: 'left' }}>ITEM DESCRIPTION</th>
-                                                <th style={{ width: '70px', border: '1px solid #000', padding: '6px 2px', fontSize: '8pt' }}>HSN/SAC</th>
-                                                <th style={{ width: '45px', border: '1px solid #000', padding: '6px 2px', fontSize: '8pt' }}>UOM</th>
-                                                <th style={{ width: '50px', border: '1px solid #000', padding: '6px 2px', fontSize: '8pt' }}>QTY</th>
-                                                <th style={{ width: '90px', border: '1px solid #000', padding: '6px 4px', fontSize: '8pt', textAlign: 'right' }}>RATE</th>
-                                                <th style={{ width: '100px', border: '1px solid #000', padding: '6px 4px', fontSize: '8pt', textAlign: 'right' }}>AMOUNT</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {pageItems.map((it, i) => {
-                                                const srNo = (pageIdx === 0 ? 0 : itemsPerPageFirst + (pageIdx - 1) * itemsPerPageOthers) + i + 1;
-                                                return (
-                                                    <tr key={i} style={{ minHeight: '30px' }}>
-                                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontSize: '9pt' }}>{srNo}</td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px 8px' }}>
-                                                            <div style={{ fontSize: '9.5pt', fontWeight: 700, textTransform: 'uppercase' }}>{it.description || it.itemName}</div>
-                                                            {(it.additionalNotes || it.itemCode) && (
-                                                                <div style={{ fontSize: '8pt', color: '#444', marginTop: '2px' }}>
-                                                                    {it.itemCode && <span>Code: {it.itemCode} </span>}
-                                                                    {it.additionalNotes && <span>| {it.additionalNotes}</span>}
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontSize: '9pt' }}>{it.hsnCode || '—'}</td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontSize: '9pt' }}>{it.uom || 'NOS'}</td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px', textAlign: 'center', fontWeight: 700, fontSize: '9pt' }}>{it.qty}</td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'right', fontSize: '9pt' }}>{Number(it.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        <td style={{ border: '1px solid #000', padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontSize: '9pt' }}>{Number(it.taxableAmount || (it.qty * it.rate) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                            {!isLastPage && (
-                                                <tr>
-                                                    <td colSpan="7" style={{ border: '1px solid #000', padding: '8px', textAlign: 'right', fontStyle: 'italic', fontSize: '9pt', background: '#fafafa' }}>
-                                                        Continued on next page...
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {isLastPage && (
-                                    <div style={{ marginTop: '10px' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', border: '1px solid #000' }}>
-                                            <div style={{ borderRight: '1px solid #000', padding: '8px' }}>
-                                                <div style={{ marginBottom: '8px' }}>
-                                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Remarks:</div>
-                                                    <div style={{ fontSize: '9pt', color: '#333', whiteSpace: 'pre-wrap', fontStyle: inv.remarks ? 'normal' : 'italic' }}>
-                                                        {inv.remarks || '—'}
-                                                    </div>
-                                                </div>
-                                                <div style={{ marginBottom: '8px' }}>
-                                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Bank Details:</div>
-                                                    <div style={{ fontSize: '8.5pt', lineHeight: '1.3' }}>
-                                                        <strong>{company.bankName || 'BANK OF BARODA'}</strong><br />
-                                                        Account Name: {company.companyName}<br />
-                                                        Account No: {company.accountNo || '—'}<br />
-                                                        IFSC Code: {company.ifscCode || '—'} | Branch: {company.branchName || '—'}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #eee', paddingBottom: '2px', marginBottom: '4px' }}>Terms & Declaration:</div>
-                                                    <div style={{ fontSize: '7.5pt', color: '#333', lineHeight: '1.2' }}>
-                                                        {isEstimate ? (
-                                                            <>
-                                                                1. This is a quotation/estimate only — not a tax invoice.<br />
-                                                                2. Prices are subject to confirmation at the time of order.<br />
-                                                                3. Subject to MUMBAI Jurisdiction.
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                1. Goods once sold will not be taken back.<br />
-                                                                2. Subject to MUMBAI Jurisdiction.<br />
-                                                                3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div style={{ padding: '0' }}>
-                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-                                                    <tbody>
-                                                         {!isEstimate && (
-                                                            <>
-                                                                <tr>
-                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Total Item Value</td>
-                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalTaxableAmount - (inv.freightAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                </tr>
-                                                                {Number(inv.freightAmount || 0) > 0 && (
-                                                                    <tr>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ Freight / Shipping</td>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {Number(inv.freightAmount).toFixed(2)}</td>
-                                                                    </tr>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                        <tr>
-                                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', fontWeight: 700 }}>{isEstimate ? 'Total Estimated Price' : 'Total Taxable Value'}</td>
-                                                            <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 700 }}>₹ {(inv.totalTaxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        </tr>
-                                                        {!isEstimate && gstApplicable && (
-                                                            isIGST ? (
-                                                                <tr>
-                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ IGST @ {inv.items?.[0]?.taxRate || 18}%</td>
-                                                                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalIgst || inv.totalTaxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                </tr>
-                                                            ) : (
-                                                                <>
-                                                                    <tr>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ CGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalCgst || (inv.totalTaxAmount / 2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>+ SGST @ {(inv.items?.[0]?.taxRate || 18) / 2}%</td>
-                                                                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>₹ {(inv.totalSgst || (inv.totalTaxAmount / 2) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                                    </tr>
-                                                                </>
-                                                            )
-                                                        )}
-                                                        {inv.roundOff !== 0 && (
-                                                            <tr>
-                                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee' }}>Round Off</td>
-                                                                <td style={{ padding: '4px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{Number(inv.roundOff).toFixed(2)}</td>
-                                                            </tr>
-                                                        )}
-                                                        <tr style={{ background: '#f5f5f5' }}>
-                                                            <td style={{ padding: '6px 8px', fontWeight: 900, fontSize: '11pt' }}>Grand Total</td>
-                                                            <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 900, fontSize: '11pt' }}>₹ {(inv.roundedTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        <div style={{ border: '1px solid #000', borderTop: 'none', padding: '6px 8px', fontSize: '9pt', background: '#fafafa' }}>
-                                            <span style={{ fontWeight: 800, textTransform: 'uppercase', marginRight: '5px' }}>Amount in Words:</span>
-                                            <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{inv.amountInWords}</span>
-                                        </div>
-
-                                        {isLastPage && !isEstimate && <InvoiceBarcodeBlock invoiceId={id} variant="print" />}
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #000', borderTop: 'none', minHeight: '100px' }}>
-                                            <div style={{ borderRight: '1px solid #000', padding: '8px', fontSize: '8pt', position: 'relative' }}>
-                                                <div style={{ fontWeight: 900, marginBottom: '6px', textDecoration: 'underline' }}>Receiver&apos;s Signature:</div>
-                                                <div style={{ position: 'absolute', bottom: '8px', left: '8px', fontSize: '7pt', color: '#444', fontStyle: 'italic' }}>Verified and Received in Good Condition</div>
-                                            </div>
-                                            <div style={{ padding: '0', textAlign: 'center', display: 'flex', flexDirection: 'column' }}>
-                                                <div style={{ fontSize: '9pt', fontWeight: 900, padding: '8px', borderBottom: '1px dashed #ccc' }}>For {company.companyName}</div>
-                                                <div style={{ flex: 1 }}></div>
-                                                <div style={{ padding: '8px', fontSize: '9pt', fontWeight: 900, textTransform: 'uppercase' }}>Authorized Signatory</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {inv.status === 'Cancelled' && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%) rotate(-45deg)',
-                                        fontSize: '100pt',
-                                        fontWeight: 900,
-                                        color: 'rgba(239, 68, 68, 0.15)',
-                                        border: '15px solid rgba(239, 68, 68, 0.15)',
-                                        padding: '20px 50px',
-                                        borderRadius: '20px',
-                                        pointerEvents: 'none',
-                                        zIndex: 100,
-                                        textTransform: 'uppercase'
-                                    }}>
-                                        CANCELLED
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    });
-                })()}
-            </div>
-
-            {/* Print Styles — outside no-print so rules always apply */}
-            <style>{`
-                .sales-invoice-print { display: none; }
-                @media print {
-                    html, body, #root, #root * {
-                        max-height: none !important;
-                        height: auto !important;
-                        overflow: visible !important;
-                    }
-                    .no-print, .no-print * { display: none !important; }
-                    .sales-invoice-print, .sales-invoice-print.print-only {
-                        display: block !important;
-                        visibility: visible !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        width: 100% !important;
-                    }
-                    .sales-invoice-print * { visibility: visible !important; }
-                    @page { size: A4; margin: 0; }
-                    body { background: #fff !important; }
-                }
-            `}</style>
+        <div className="sales-invoice-page-root" style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
+            <SalesInvoiceBuiltinPrint
+                inv={inv}
+                company={company}
+                invoiceId={id}
+                printBarcodePayload={printBarcodePayload}
+                isEstimate={isEstimate}
+                gstApplicable={gstApplicable}
+                isIGST={isIGST}
+                docTitle={docTitle}
+                docNumberLabel={docNumberLabel}
+            />
 
             <div className="no-print">
 
