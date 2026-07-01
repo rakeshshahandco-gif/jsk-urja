@@ -438,7 +438,7 @@ const listChats = catchAsync(async (req, res) => {
     }
 
     // Re-read group names already in DB (small follow-up query only).
-    const stillMissing = chats.filter((c) => c.isGroup && !c.chatName).map((c) => c.jid);
+    let stillMissing = chats.filter((c) => c.isGroup && !c.chatName).map((c) => c.jid);
     if (stillMissing.length > 0 && stillMissing.length <= 200) {
         const namedRows = await WhatsAppMessage.aggregate([
             {
@@ -455,6 +455,23 @@ const listChats = catchAsync(async (req, res) => {
             if (c.isGroup && !c.chatName && byJid[c.jid]) {
                 c.chatName = byJid[c.jid];
             }
+        }
+    }
+
+    // Live fallback: prod DB may lack chatName even when Baileys knows group subjects.
+    stillMissing = chats.filter((c) => c.isGroup && !c.chatName);
+    const waStatus = WhatsAppService.getStatus(userId);
+    if (stillMissing.length > 0 && waStatus.connected) {
+        try {
+            const groups = await WhatsAppService.getGroups(userId);
+            const nameByJid = new Map(groups.map((g) => [g.id, g.name]));
+            for (const c of chats) {
+                if (c.isGroup && !c.chatName && nameByJid.has(c.jid)) {
+                    c.chatName = nameByJid.get(c.jid);
+                }
+            }
+        } catch (e) {
+            logger.warn(`[WhatsApp-Chat] live group name fetch: ${e.message}`);
         }
     }
 
