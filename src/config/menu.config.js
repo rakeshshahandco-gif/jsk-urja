@@ -749,6 +749,7 @@ export const menuConfig = [
                 children: [
                     { id: 'industry-template-master', title: 'Industry Template Master', path: PATHS.SETTINGS.INDUSTRY_TEMPLATES, roles: [ROLES.SUPERADMIN], permission: 'admin' },
                     { id: 'company-module-allocation', title: 'Company Module Allocation', path: PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION, roles: [ROLES.SUPERADMIN], permission: 'admin' },
+                    { id: 'industry-deployment-manager', title: 'Industry Deployment Manager', path: PATHS.SETTINGS.INDUSTRY_DEPLOYMENT_MANAGER, roles: [ROLES.SUPERADMIN], permission: 'admin' },
                     { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, roles: [ROLES.SUPERADMIN], permission: 'admin' },
                     { id: 'workflow-master', title: 'Workflow Master', path: PATHS.SETTINGS.WORKFLOW_MASTER, roles: [ROLES.SUPERADMIN], permission: 'admin' },
                 ],

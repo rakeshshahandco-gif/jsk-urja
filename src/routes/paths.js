@@ -38,6 +38,7 @@ export const PATHS = {
         PLATFORM_FEATURE_DEFAULTS: '/admin/platform-feature-defaults',
         INDUSTRY_TEMPLATES: '/admin/industry-templates',
         COMPANY_MODULE_ALLOCATION: '/admin/module-allocation',
+        INDUSTRY_DEPLOYMENT_MANAGER: '/admin/industry-deployment-manager',
         WORKFLOW_MASTER: '/admin/workflow-master',
         /** @deprecated use CUSTOMERS.SETTINGS — redirect in App */
         ACCOUNTS_SUNDRY_DEBTOR: '/admin/accounts-settings/sundry-debtor',

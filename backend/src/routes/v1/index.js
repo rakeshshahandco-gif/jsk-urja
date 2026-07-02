@@ -151,6 +151,7 @@ import { resolveCompanyScope } from '../../middlewares/companyScope.middleware.j
 import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware.js';
 import { attachModuleContext, gateApiModuleByPath } from '../../middlewares/moduleGuard.middleware.js';
 import moduleAllocationRoute from './moduleAllocation.routes.js';
+import deploymentManagerRoute from './deploymentManager.routes.js';
 
 const router = express.Router();
 
@@ -687,6 +688,10 @@ const defaultRoutes = [
     {
         path: '/module-allocation',
         route: moduleAllocationRoute,
+    },
+    {
+        path: '/deployment-manager',
+        route: deploymentManagerRoute,
     },
     {
         path: '/customer-template-field-settings',

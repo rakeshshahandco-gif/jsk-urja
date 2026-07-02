@@ -69,11 +69,30 @@ const companySchema = new mongoose.Schema(
             databaseName: { type: String, trim: true, default: '' },
             backendUrl: { type: String, trim: true, default: '' },
             frontendUrl: { type: String, trim: true, default: '' },
+            renderFrontendService: { type: String, trim: true, default: '' },
+            renderBackendService: { type: String, trim: true, default: '' },
+            lastLiveCommit: { type: String, trim: true, default: '' },
+            lastDeployDate: { type: String, trim: true, default: '' },
+            deployNotes: { type: String, trim: true, default: '' },
             deploymentStatus: {
                 type: String,
                 enum: ['', 'local', 'staging', 'live', 'pending'],
                 default: '',
             },
+        },
+        /** Manual deploy history log — Deployment Manager only; does not trigger deploys */
+        deploymentHistory: {
+            type: [{
+                recordedAt: { type: Date, default: Date.now },
+                commitHash: { type: String, trim: true, default: '' },
+                deployDate: { type: String, trim: true, default: '' },
+                changeScope: { type: String, trim: true, default: '' },
+                targetServices: { type: String, trim: true, default: '' },
+                notes: { type: String, trim: true, default: '' },
+                recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                recordedByName: { type: String, trim: true, default: '' },
+            }],
+            default: [],
         },
 
         // SaaS — Subscription reference

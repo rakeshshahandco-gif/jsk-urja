@@ -338,6 +338,7 @@ import FeatureConfigurationPage from '@/features/settings/FeatureConfigurationPa
 import PlatformFeatureDefaultsPage from '@/features/settings/PlatformFeatureDefaultsPage';
 import IndustryTemplateMasterPage from '@/features/settings/IndustryTemplateMasterPage';
 import CompanyModuleAllocationPage from '@/features/settings/CompanyModuleAllocationPage';
+import IndustryDeploymentManagerPage from '@/features/settings/IndustryDeploymentManagerPage';
 import ModuleDisabledPage from '@/features/settings/ModuleDisabledPage';
 import { ModuleGuardProvider } from '@/contexts/ModuleGuardContext';
 import WorkflowMasterPage from '@/features/settings/WorkflowMasterPage';
@@ -577,6 +578,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedPlatformRoute><PlatformFeatureDefaultsPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.INDUSTRY_TEMPLATES} element={<ProtectedPlatformRoute><IndustryTemplateMasterPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION} element={<ProtectedPlatformRoute><CompanyModuleAllocationPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.INDUSTRY_DEPLOYMENT_MANAGER} element={<ProtectedPlatformRoute><IndustryDeploymentManagerPage /></ProtectedPlatformRoute>} />
                         <Route path="/module-disabled" element={<ModuleDisabledPage />} />
                         <Route path="/platform-access-denied" element={<PlatformAccessDenied />} />
                         <Route path={PATHS.SETTINGS.WORKFLOW_MASTER} element={<ProtectedPlatformRoute><WorkflowMasterPage /></ProtectedPlatformRoute>} />

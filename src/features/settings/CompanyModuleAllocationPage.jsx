@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCompany } from '@/contexts/CompanyContext';
 import { useModuleGuard } from '@/contexts/ModuleGuardContext';
 import {
@@ -19,11 +20,12 @@ const inp = {
 };
 
 export default function CompanyModuleAllocationPage() {
+    const [searchParams] = useSearchParams();
     const { companies, selectedCompany } = useCompany();
     const { refreshModules } = useModuleGuard();
     const [registry, setRegistry] = useState([]);
     const [templates, setTemplates] = useState([]);
-    const [companyId, setCompanyId] = useState(selectedCompany?._id || '');
+    const [companyId, setCompanyId] = useState(searchParams.get('companyId') || selectedCompany?._id || '');
     const [form, setForm] = useState({
         clientCode: '',
         loginSlug: '',
@@ -88,8 +90,15 @@ export default function CompanyModuleAllocationPage() {
     }, [loadRegistry]);
 
     useEffect(() => {
-        if (selectedCompany?._id && !companyId) setCompanyId(selectedCompany._id);
-    }, [selectedCompany?._id, companyId]);
+        const fromUrl = searchParams.get('companyId');
+        if (fromUrl) setCompanyId(fromUrl);
+    }, [searchParams]);
+
+    useEffect(() => {
+        if (selectedCompany?._id && !companyId && !searchParams.get('companyId')) {
+            setCompanyId(selectedCompany._id);
+        }
+    }, [selectedCompany?._id, companyId, searchParams]);
 
     useEffect(() => {
         if (companyId) loadCompany(companyId);
