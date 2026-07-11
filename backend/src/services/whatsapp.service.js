@@ -62,6 +62,8 @@ const contactNameFrom = (c = {}) => (
 
 const PAIRING_CODE_DELAY_MS = 3000;
 const PAIRING_CODE_EXPIRE_MS = 120000;
+/** Max time a connect attempt may stay in CONNECTING before we release the lock. */
+const CONNECT_TIMEOUT_MS = 90000;
 
 /** E.164 digits only — no +, spaces, or dashes (Baileys requirement). */
 const normalizePairingPhone = (raw) => {
@@ -191,10 +193,20 @@ class WhatsAppSession {
         this._pairingPhone = null;
         this._pairingCodeRequested = false;
         this._pairingCodeTimer = null;
+        this._connectTimeout = null;
+        /** Bumps on each new connect so stale close/reconnect handlers are ignored. */
+        this._connectGen = 0;
     }
 
     _userOid() {
         return new mongoose.Types.ObjectId(this.userId);
+    }
+
+    _clearConnectTimeout() {
+        if (this._connectTimeout) {
+            clearTimeout(this._connectTimeout);
+            this._connectTimeout = null;
+        }
     }
 
     _clearPairingState() {
@@ -207,6 +219,23 @@ class WhatsAppSession {
         }
     }
 
+    /**
+     * Stop a hung / in-progress Baileys socket so pairing (or a fresh QR) can start.
+     * Does not clear auth unless caller does so separately.
+     */
+    _abortInProgressConnect(reason = 'aborted') {
+        this._connectGen += 1;
+        this._clearConnectTimeout();
+        const sock = this.sock;
+        this.sock = null;
+        this._connecting = false;
+        this.isConnected = false;
+        if (sock) {
+            try { sock.end(undefined); } catch (_) { /* ignore */ }
+        }
+        logger.info(`[WhatsApp] User ${this.userId}: Aborted in-progress connect (${reason})`);
+    }
+
     async _requestAndEmitPairingCode(sock) {
         if (!this._pairingPhone || !sock?.requestPairingCode) return;
         try {
@@ -215,13 +244,21 @@ class WhatsAppSession {
                 logger.info(`[WhatsApp] User ${this.userId}: Skipping pairing — already registered.`);
                 return;
             }
-            const code = await sock.requestPairingCode(this._pairingPhone);
-            logger.info(`[WhatsApp] User ${this.userId}: Pairing code generated.`);
+            const codeRaw = await sock.requestPairingCode(this._pairingPhone);
+            const codeDigits = String(codeRaw || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            const code = codeDigits.length === 8
+                ? `${codeDigits.slice(0, 4)}-${codeDigits.slice(4)}`
+                : codeDigits;
+            logger.info(`[WhatsApp] User ${this.userId}: Pairing code generated for +${this._pairingPhone}.`);
+            // Pairing code is out — release the connect-timeout lock so we do not
+            // kill the socket while the user is typing the code on their phone.
+            this._connecting = false;
+            this._clearConnectTimeout();
             this._emit('whatsapp:pairing-code', { code, expiresIn: Math.floor(PAIRING_CODE_EXPIRE_MS / 1000) });
             this._emit('whatsapp:status', {
                 connected: false, loggedIn: false,
                 status: 'WAITING_PAIRING',
-                message: 'Enter the pairing code in WhatsApp on your phone',
+                message: `Enter code on WhatsApp for +${this._pairingPhone}`,
             });
             if (this._pairingCodeTimer) clearTimeout(this._pairingCodeTimer);
             this._pairingCodeTimer = setTimeout(() => {
@@ -271,18 +308,40 @@ class WhatsAppSession {
             this._pairingPhone = normalizePairingPhone(options.phoneNumber);
             this._pairingMode = true;
             this._pairingCodeRequested = false;
+            // Pairing needs a fresh unregistered auth folder. Abort any stuck
+            // QR/auto-reconnect first so Render does not keep "already in progress".
+            if (this._connecting || this.sock) {
+                this._abortInProgressConnect('pairing-restart');
+            }
+            this._clearAuth();
         } else {
             this._clearPairingState();
+            if (this._connecting) {
+                logger.info(`[WhatsApp] User ${this.userId}: Already connecting, skipping.`);
+                return;
+            }
         }
 
-        if (this._connecting) {
-            if (pairingMode) {
-                throw new Error('Connection already in progress. Wait or refresh, then try again.');
-            }
-            logger.info(`[WhatsApp] User ${this.userId}: Already connecting, skipping.`);
-            return;
-        }
+        const connectGen = ++this._connectGen;
         this._connecting = true;
+        this._clearConnectTimeout();
+        this._connectTimeout = setTimeout(() => {
+            if (this._connectGen !== connectGen || !this._connecting || this.isConnected) return;
+            logger.warn(`[WhatsApp] User ${this.userId}: Connect timed out after ${CONNECT_TIMEOUT_MS}ms`);
+            this._abortInProgressConnect('connect-timeout');
+            this._clearPairingState();
+            this._emit('whatsapp:status', {
+                connected: false, loggedIn: false,
+                status: 'ERROR',
+                message: 'Connection timed out. Click Refresh, then try again.',
+            });
+        }, CONNECT_TIMEOUT_MS);
+
+        this._emit('whatsapp:status', {
+            connected: false, loggedIn: false,
+            status: 'CONNECTING',
+            message: pairingMode ? 'Requesting pairing code...' : 'Connecting...',
+        });
 
         if (!fs.existsSync(this.authDir)) {
             fs.mkdirSync(this.authDir, { recursive: true });
@@ -290,9 +349,11 @@ class WhatsAppSession {
 
         try {
             const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
+            if (this._connectGen !== connectGen) return;
             this.saveCreds = saveCreds;
 
             const { version } = await fetchLatestBaileysVersion();
+            if (this._connectGen !== connectGen) return;
             logger.info(`[WhatsApp] User ${this.userId}: Using Baileys v${version.join('.')}`);
 
             const sock = makeWASocket({
@@ -302,20 +363,27 @@ class WhatsAppSession {
                     keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
                 },
                 printQRInTerminal: false,
-                browser: ['JSK Urja CRM', 'Chrome', '120.0.0.0'],
+                // Custom browser names cause WhatsApp to reject pairing codes on the phone
+                // ("check the phone number… or get a new code"). Use a normal Chrome identity.
+                browser: ['Windows', 'Chrome', '114.0.5735.198'],
                 logger: baileysLogger,
                 generateHighQualityLinkPreview: false,
                 connectTimeoutMs: 60000,
-                defaultQueryTimeoutMs: 60000,
+                defaultQueryTimeoutMs: pairingMode ? undefined : 60000,
                 keepAliveIntervalMs: 25000,
                 markOnlineOnConnect: false,
                 syncFullHistory: false,
             });
 
+            if (this._connectGen !== connectGen) {
+                try { sock.end(undefined); } catch (_) { /* ignore */ }
+                return;
+            }
             this.sock = sock;
 
             // ── QR / Connection events ──────────────────────────────────────
             sock.ev.on('connection.update', async (update) => {
+                if (this._connectGen !== connectGen) return;
                 const { connection, lastDisconnect, qr } = update;
 
                 if (qr && !this._pairingMode) {
@@ -350,6 +418,7 @@ class WhatsAppSession {
                 if (connection === 'open') {
                     this.isConnected = true;
                     this._connecting = false;
+                    this._clearConnectTimeout();
                     this._clearPairingState();
                     this.phoneNumber = jidNormalizedUser(sock.user?.id || '').replace('@s.whatsapp.net', '');
                     logger.info(`[WhatsApp] User ${this.userId}: ✅ Connected as +${this.phoneNumber}`);
@@ -375,9 +444,42 @@ class WhatsAppSession {
                 if (connection === 'close') {
                     this.isConnected = false;
                     this._connecting = false;
+                    this._clearConnectTimeout();
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                    const wasPairing = this._pairingMode;
+                    // 515 / restartRequired is expected right after a successful pair — reconnect with saved creds.
+                    const isRestartRequired = statusCode === DisconnectReason.restartRequired;
+                    const shouldReconnect = isRestartRequired
+                        || (statusCode !== DisconnectReason.loggedOut
+                            && !wasPairing
+                            && this._connectGen === connectGen);
                     logger.warn(`[WhatsApp] User ${this.userId}: Closed. Code: ${statusCode}. Reconnect: ${shouldReconnect}`);
+
+                    if (isRestartRequired) {
+                        this._clearPairingState();
+                        this._emit('whatsapp:status', {
+                            connected: false, loggedIn: false,
+                            status: 'RECONNECTING',
+                            message: 'Pairing accepted — finishing link...',
+                        });
+                        setTimeout(() => {
+                            if (this._connectGen !== connectGen) return;
+                            this.connect().catch(e =>
+                                logger.error(`[WhatsApp] User ${this.userId}: Post-pair reconnect error: ${e.message}`)
+                            );
+                        }, 1500);
+                        return;
+                    }
+
+                    if (wasPairing) {
+                        this._clearPairingState();
+                        this._emit('whatsapp:status', {
+                            connected: false, loggedIn: false,
+                            status: 'ERROR',
+                            message: 'Pairing connection closed before link completed. Request a new code.',
+                        });
+                        return;
+                    }
 
                     if (shouldReconnect) {
                         this._emit('whatsapp:status', {
@@ -385,6 +487,7 @@ class WhatsAppSession {
                             status: 'RECONNECTING', message: 'Connection lost, reconnecting...',
                         });
                         setTimeout(() => {
+                            if (this._connectGen !== connectGen) return;
                             this.connect().catch(e =>
                                 logger.error(`[WhatsApp] User ${this.userId}: Reconnect error: ${e.message}`)
                             );
@@ -765,7 +868,10 @@ class WhatsAppSession {
             });
 
         } catch (error) {
-            this._connecting = false;
+            if (this._connectGen === connectGen) {
+                this._connecting = false;
+                this._clearConnectTimeout();
+            }
             logger.error(`[WhatsApp] User ${this.userId}: Connect error: ${error.message}`);
             this._emit('whatsapp:status', {
                 connected: false, loggedIn: false,
@@ -794,6 +900,8 @@ class WhatsAppSession {
 
     // ── Disconnect ────────────────────────────────────────────────────────────
     async disconnect() {
+        this._connectGen += 1;
+        this._clearConnectTimeout();
         if (this.sock) {
             try { await this.sock.logout(); this.sock.end(); } catch (_) {}
             this.sock = null;

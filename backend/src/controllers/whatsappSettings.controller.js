@@ -63,12 +63,8 @@ const requestPairingCode = catchAsync(async (req, res) => {
             message: 'WhatsApp is already connected',
         });
     }
-    if (status.status === 'CONNECTING') {
-        return res.status(httpStatus.BAD_REQUEST).json({
-            success: false,
-            message: 'Connection already in progress. Wait or refresh, then try again.',
-        });
-    }
+    // Do not hard-block on CONNECTING — service aborts any stuck connect and
+    // starts a fresh pairing session (common on Render after QR/auto-reconnect).
 
     try {
         WhatsAppService.validatePairingPhone(phoneNumber);

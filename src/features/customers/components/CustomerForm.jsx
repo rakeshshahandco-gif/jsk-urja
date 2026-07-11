@@ -353,7 +353,16 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             addToast(`Required fields: ${missing.join(', ')}`, 'error');
             return;
         }
-        onSubmit(data);
+        // Blank "-- Select --" options send ""; Mongo ObjectId fields need null.
+        const payload = { ...data };
+        if (!payload.assignedSalesperson) payload.assignedSalesperson = null;
+        if (!payload.collectionPersonId) payload.collectionPersonId = null;
+        if (payload.referralDetails) {
+            payload.referralDetails = { ...payload.referralDetails };
+            if (!payload.referralDetails.salespersonId) payload.referralDetails.salespersonId = null;
+            if (!payload.referralDetails.distributorId) payload.referralDetails.distributorId = null;
+        }
+        onSubmit(payload);
     };
 
     const handleFetchPin = async () => {
@@ -1402,7 +1411,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
                                 {isEnabled('customer.salesPerson') && (
                                     <div className={styles['form-group']}>
-                                        <label htmlFor="assignedSalesperson">SALES PERSON</label>
+                                        <label htmlFor="assignedSalesperson">SALES PERSON (optional)</label>
                                         <select id="assignedSalesperson" {...register('assignedSalesperson')} className={styles['form-select']}>
                                             <option value="">-- Select --</option>
                                             {salesTeam.map((user) => (
@@ -1414,7 +1423,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
 
                                 {isEnabled('customer.collectionPerson') && (
                                     <div className={styles['form-group']}>
-                                        <label htmlFor="collectionPersonId">COLLECTION PERSON</label>
+                                        <label htmlFor="collectionPersonId">COLLECTION PERSON (optional)</label>
                                         <select id="collectionPersonId" {...register('collectionPersonId')} className={styles['form-select']}>
                                             <option value="">-- Select --</option>
                                             {salesTeam.map((user) => (

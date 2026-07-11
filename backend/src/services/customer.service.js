@@ -9,6 +9,23 @@ import { SalesOrder } from '../models/salesOrder.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 
+/** Empty select values arrive as "" and break ObjectId cast — use null instead. */
+const nullifyEmptyObjectIds = (body = {}) => {
+    const out = { ...body };
+    for (const key of ['assignedSalesperson', 'collectionPersonId', 'ledgerId']) {
+        if (out[key] === '' || out[key] === undefined) out[key] = null;
+    }
+    if (out.referralDetails && typeof out.referralDetails === 'object') {
+        out.referralDetails = { ...out.referralDetails };
+        for (const key of ['salespersonId', 'distributorId']) {
+            if (out.referralDetails[key] === '' || out.referralDetails[key] === undefined) {
+                out.referralDetails[key] = null;
+            }
+        }
+    }
+    return out;
+};
+
 /**
  * Generate a new unique customer code (e.g., CU001)
  * @returns {Promise<string>}
@@ -58,6 +75,7 @@ const genCustomerCode = async (offset = 0) => {
  * @returns {Promise<Customer>}
  */
 const createCustomer = async (body) => {
+    body = nullifyEmptyObjectIds(body);
     logger.info('📝 Creating customer:', { customerName: body.customerName, company: body.company });
 
     // ── Duplicate check by company name ─────────────────────────────────────
@@ -208,7 +226,7 @@ const updateCustomerById = async (customerId, updateBody) => {
     // ⚠️  SAFETY: Never allow an update to soft-delete a customer.
     //    Strip isDeleted from any payload so that no code path can
     //    accidentally hide a customer by setting isDeleted = true.
-    const safeBody = { ...updateBody };
+    const safeBody = nullifyEmptyObjectIds(updateBody);
     delete safeBody.isDeleted;  // cannot be changed via normal update
     delete safeBody.restoredAt;
     delete safeBody.restoredReason;
