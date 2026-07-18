@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getSalesOrderById,
   cancelSalesOrder,
@@ -14,6 +14,8 @@ import toast from "react-hot-toast";
 import CommunicationModal from "@/components/communication/CommunicationModal";
 import { Mail, MessageSquare, Send } from "lucide-react";
 import { BrandedLoader } from "@/components/ui";
+import SalesOrderPrintDocument from "@/features/sales/print/SalesOrderPrintDocument";
+import { getActivePrintFormat } from "@/services/printFormatApi";
 
 const STATUS_COLORS = {
   Draft: { color: "#64748b", bg: "#f1f5f9", border: "#e2e8f0" },
@@ -45,22 +47,33 @@ export default function SalesOrderDetailPage() {
   const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const stayForPrintView = searchParams.get("view") === "print";
   const [so, setSO] = useState(null);
   const [company, setCompany] = useState({});
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [isCommModalOpen, setIsCommModalOpen] = useState(false);
+  const [activePrintFormat, setActivePrintFormat] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
       getSalesOrderById(id),
       getCompanyProfile().catch(() => ({ data: {} })),
+      getActivePrintFormat("Sales Order").catch(() => null),
     ])
-      .then(([soRes, companyRes]) => {
+      .then(([soRes, companyRes, formatRes]) => {
         setSO(soRes);
         setCompany(companyRes?.data || {});
+        // API may return null; also accept bare format object
+        const fmt = formatRes && formatRes._id ? formatRes : (formatRes?.data?._id ? formatRes.data : formatRes);
+        setActivePrintFormat(fmt && fmt.layout ? fmt : null);
+        if (typeof window !== "undefined" && window.localStorage?.getItem("debugSoPrint") === "1") {
+          // eslint-disable-next-line no-console
+          console.log("[SO Print] active format", fmt ? { id: fmt._id, name: fmt.name, status: fmt.status, isDefault: fmt.isDefault, blocks: Object.keys(fmt.layout?.blocks || {}).length } : null);
+        }
       })
       .catch(() => toast.error("Failed to load"))
       .finally(() => setLoading(false));
@@ -69,6 +82,17 @@ export default function SalesOrderDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!so || loading || stayForPrintView) return;
+    const locked =
+      so.billingState?.fullyInvoiced
+      || so.status === "Invoiced"
+      || ["Cancelled", "Closed", "Completed"].includes(so.status);
+    if (!locked) {
+      navigate(`/sales/orders/${id}/edit`, { replace: true });
+    }
+  }, [so, loading, stayForPrintView, id, navigate]);
 
   const fmt = (d) =>
     d ? new Date(d).toLocaleDateString('en-GB', {
@@ -90,6 +114,7 @@ export default function SalesOrderDetailPage() {
       setGenerating(false);
     }
   };
+
 
   const handleCancel = async () => {
     if (!window.confirm("Cancel this Sales Order?")) return;
@@ -152,8 +177,18 @@ export default function SalesOrderDetailPage() {
   const sc = STATUS_COLORS[so.status] || STATUS_COLORS.Draft;
   const notCancelled = so.status !== "Cancelled";
   const isDraft = so.status === "Draft";
-  const canEdit = isDraft && !so.invoiceId;
-  const isIGST = so.gstType === "IGST";
+  const billingState = so.billingState || {
+    hasActiveInvoices: so.status === "Partially Invoiced" || so.status === "Invoiced",
+    anyInvoiced: so.status === "Partially Invoiced" || so.status === "Invoiced",
+    fullyInvoiced: so.status === "Invoiced",
+    lines: [],
+    activeInvoices: [],
+  };
+  const billingLineById = new Map(
+    (billingState.lines || []).map((line) => [String(line.lineId), line]),
+  );
+  const activeInvoices = billingState.activeInvoices || [];
+  const isInvoiceLocked = billingState.fullyInvoiced;
   const gstApplicable = so.gstApplicable !== false;
 
   return (
@@ -165,1027 +200,16 @@ export default function SalesOrderDetailPage() {
         color: "#1e293b",
       }}
     >
-      {/* PRINT ONLY LAYOUT */}
-      <div className="print-only" style={{ display: "none", width: "210mm", maxWidth: "210mm", margin: "0 auto", padding: 0, boxSizing: "border-box" }}>
-        {(() => {
-          const items = so.items || [];
-          const itemsPerPageFirst = 7;
-          const itemsPerPageOthers = 15;
-          const pages = [];
-          if (items.length <= itemsPerPageFirst) {
-              pages.push(items);
-          } else {
-              pages.push(items.slice(0, itemsPerPageFirst));
-              let remaining = items.slice(itemsPerPageFirst);
-              while (remaining.length > 0) {
-                  pages.push(remaining.slice(0, itemsPerPageOthers));
-                  remaining = remaining.slice(itemsPerPageOthers);
-              }
-          }
-          return pages.map((pageItems, pageIdx) => {
-             const isFirstPage = pageIdx === 0;
-             const isLastPage = pageIdx === pages.length - 1;
-             const totalPages = pages.length;
-             return (
-               <div key={pageIdx} className="print-content" style={{ 
-                 pageBreakAfter: isLastPage ? 'auto' : 'always', position: 'relative',
-                 width: "210mm", maxWidth: "210mm", padding: "10mm", background: "#fff", boxSizing: "border-box",
-               }}>
-                 <div style={{ position: 'absolute', bottom: '5mm', right: '10mm', fontSize: '8pt', color: '#666' }}>
-                     Page {pageIdx + 1} of {totalPages}
-                 </div>
-                 {isFirstPage ? (
-                 <>
-          {/* Header Section */}
-          <div
-            className="p-header"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}
-            >
-                <img
-                  src="/logo.jpeg"
-                  alt="Logo"
-                  style={{
-                    maxHeight: "80px",
-                    maxWidth: "120px",
-                    objectFit: "contain",
-                  }}
-                />
-              <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: "20pt",
-                    fontWeight: 900,
-                    color: "#000",
-                    marginBottom: "2px",
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {company.companyName || "JSK URJA"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "9pt",
-                    color: "#000",
-                    lineHeight: "1.3",
-                    maxWidth: "450px",
-                  }}
-                >
-                  {company.address}
-                  <br />
-                  {company.city || company.state
-                    ? `${company.city} ${company.state}, India. Postal Code: ${company.pincode}. State Code: ${company.stateCode || ""}`
-                    : ""}
-                  <br />
-                  {(company.phone || company.email) &&
-                    `Phone: ${company.phone || ""} Email: ${company.email || ""}`}
-                  <br />
-                  {gstApplicable && company.gstNumber && (
-                    <strong>GSTIN: {company.gstNumber}</strong>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <h1
-                style={{
-                  margin: "0 0 2px 0",
-                  fontSize: "16pt",
-                  fontWeight: 900,
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                }}
-              >
-                {so.seriesId?.isEstimate ? "ESTIMATE" : "SALES ORDER"}
-              </h1>
-              {!gstApplicable && (
-                <div
-                  style={{
-                    fontSize: "10pt",
-                    fontWeight: 700,
-                    marginBottom: "4px",
-                  }}
-                >
-                  (NON-GST)
-                </div>
-              )}
-              <div
-                style={{ fontSize: "14pt", fontWeight: 700, color: "#334155" }}
-              >
-                {so.soNumber}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{ borderBottom: "1.5px solid #000", marginBottom: "20px" }}
-          ></div>
-
-          {/* Info Block (Parties & Order Details) */}
-          <div
-            className="p-summary"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "40px",
-              marginBottom: "20px",
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  <tr>
-                    <td
-                      style={{
-                        width: "120px",
-                        fontSize: "11pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                        verticalAlign: "top",
-                      }}
-                    >
-                      Customer Name:
-                    </td>
-                    <td
-                      style={{
-                        fontSize: "11pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {so.customerName
-                        ? so.customerName.replace(
-                            new RegExp(`\\s*\\(${so.customerGstin}\\)$`),
-                            "",
-                          )
-                        : ""}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "8px 0 4px 0",
-                        verticalAlign: "top",
-                      }}
-                    >
-                      Address:
-                    </td>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        padding: "8px 0 4px 0",
-                        lineHeight: 1.4,
-                        color: "#333",
-                      }}
-                    >
-                      {so.billingAddress || so.shippingAddress || "—"}
-                    </td>
-                  </tr>
-                  {(so.customerState || so.customerStateCode) && (
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          fontWeight: 800,
-                          padding: "4px 0",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        State:
-                      </td>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          padding: "4px 0",
-                          color: "#333",
-                        }}
-                      >
-                        {so.customerState || ""}{" "}
-                        {so.customerStateCode
-                          ? `(${so.customerStateCode})`
-                          : ""}
-                      </td>
-                    </tr>
-                  )}
-                  {so.customerPhone && (
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          fontWeight: 800,
-                          padding: "4px 0",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        Contact No:
-                      </td>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          padding: "4px 0",
-                          color: "#333",
-                        }}
-                      >
-                        {so.customerPhone}
-                      </td>
-                    </tr>
-                  )}
-                  {so.customerEmail && (
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          fontWeight: 800,
-                          padding: "4px 0",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        Email ID:
-                      </td>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          padding: "4px 0",
-                          color: "#333",
-                        }}
-                      >
-                        {so.customerEmail}
-                      </td>
-                    </tr>
-                  )}
-                  {gstApplicable && so.customerGstin && (
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          fontWeight: 800,
-                          padding: "4px 0",
-                          verticalAlign: "top",
-                        }}
-                      >
-                        GST No:
-                      </td>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          padding: "4px 0",
-                          color: "#333",
-                        }}
-                      >
-                        {so.customerGstin}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ width: "300px" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                        width: "140px",
-                      }}
-                    >
-                      Date:
-                    </td>
-                    <td style={{ fontSize: "10pt", padding: "4px 0" }}>
-                      {fmt(so.soDate)}
-                    </td>
-                  </tr>
-                    <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                      }}
-                    >
-                      Order Category:
-                    </td>
-                    <td style={{ fontSize: "10pt", padding: "4px 0" }}>
-                      {so.orderCategory || "Order"}
-                    </td>
-                  </tr>
-                  {so.orderCategory === 'Replacement' && so.warrantyDetails && (
-                    <tr>
-                      <td
-                        style={{
-                          fontSize: "10pt",
-                          fontWeight: 800,
-                          padding: "4px 0",
-                          verticalAlign: "top",
-                          color: "#dc2626"
-                        }}
-                      >
-                        Warranty Details:
-                      </td>
-                      <td style={{ fontSize: "10pt", padding: "4px 0", color: "#dc2626", fontWeight: 700 }}>
-                        {so.warrantyDetails}
-                      </td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                      }}
-                    >
-                      Delivery Date:
-                    </td>
-                    <td style={{ fontSize: "10pt", padding: "4px 0" }}>
-                      {fmt(so.deliveryDate)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                        verticalAlign: "top",
-                      }}
-                    >
-                      Customer&apos;s
-                      <br />
-                      Purchase Order:
-                    </td>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        padding: "4px 0",
-                        verticalAlign: "top",
-                      }}
-                    >
-                      {so.customerPO || "VERBAL"}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td
-                      style={{
-                        fontSize: "10pt",
-                        fontWeight: 800,
-                        padding: "4px 0",
-                      }}
-                    >
-                      Customer&apos;s
-                      <br />
-                      PO Date:
-                    </td>
-                    <td style={{ fontSize: "10pt", padding: "4px 0" }}>
-                      {fmt(so.customerPODate || so.soDate)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          </>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
-                <div style={{ fontSize: '14pt', fontWeight: 900, textTransform: 'uppercase' }}>{company.companyName || "JSK URJA"}</div>
-                <div style={{ textAlign: 'right', fontSize: '9pt' }}>
-                    <strong>Order No:</strong> {so.soNumber} | <strong>Date:</strong> {fmt(so.soDate)}
-                </div>
-            </div>
-          )}
-
-          {/* Items Table */}
-          <table
-            className="print-items-table"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "10pt",
-              border: "1px solid #000",
-              tableLayout: "fixed",
-            }}
-          >
-            <thead style={{ background: "#f5f5f5", color: "#000" }}>
-              <tr>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "center",
-                    width: "30px",
-                    fontWeight: 800,
-                  }}
-                >
-                  SR
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "left",
-                    width: "85px",
-                    fontWeight: 800,
-                  }}
-                >
-                  ITEM CODE
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "left",
-                    fontWeight: 800,
-                  }}
-                >
-                  DESCRIPTION
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "left",
-                    width: "100px",
-                    fontWeight: 800,
-                  }}
-                >
-                  ADDITIONAL NOTES
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "center",
-                    width: "60px",
-                    fontWeight: 800,
-                  }}
-                >
-                  HSN
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "center",
-                    width: "60px",
-                    fontWeight: 800,
-                  }}
-                >
-                  QTY
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "right",
-                    width: "80px",
-                    fontWeight: 800,
-                  }}
-                >
-                  RATE
-                </th>
-                <th
-                  style={{
-                    border: "1px solid #000",
-                    padding: "8px 6px",
-                    textAlign: "right",
-                    width: "100px",
-                    fontWeight: 800,
-                  }}
-                >
-                  AMOUNT
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map((item, i) => {
-                const srNo = (pageIdx === 0 ? 0 : itemsPerPageFirst + (pageIdx - 1) * itemsPerPageOthers) + i + 1;
-                return (
-                <tr key={i}>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "center",
-                      verticalAlign: "top",
-                    }}
-                  >
-                    {srNo}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      verticalAlign: "top",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {item.itemCode || "—"}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      verticalAlign: "top",
-                      fontWeight: "bold",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {item.description || item.itemName}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      verticalAlign: "top",
-                      fontSize: "9px",
-                    }}
-                  >
-                    {item.additionalNotes || "—"}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      verticalAlign: "top",
-                      textAlign: "center",
-                      fontSize: "9px",
-                    }}
-                  >
-                    {item.hsnCode || "—"}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      verticalAlign: "top",
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {item.qty} {item.uom}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "right",
-                      verticalAlign: "top",
-                    }}
-                  >
-                    ₹ {Number(item.rate || 0).toFixed(2)}
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "right",
-                      verticalAlign: "top",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ₹{" "}
-                    {Number(item.amount || item.qty * item.rate || 0).toFixed(
-                      2,
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-              {!isLastPage && (
-                  <tr>
-                      <td colSpan="8" style={{ border: '1px solid #000', padding: '8px', textAlign: 'right', fontStyle: 'italic', fontSize: '9pt', background: '#fafafa' }}>
-                          Continued on next page...
-                      </td>
-                  </tr>
-              )}
-            </tbody>
-            {isLastPage && (
-            <tbody style={{ borderTop: "2px solid #000" }}>
-              <tr style={{ background: "#f5f5f5" }}>
-                <td
-                  colSpan="5"
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  <div
-                    style={{ display: "flex", justifyContent: "flex-start" }}
-                  >
-                    Total Quantity:
-                  </div>
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    textAlign: "center",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {so.items?.reduce(
-                    (sum, item) => sum + (Number(item.qty) || 0),
-                    0,
-                  )}
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    textAlign: "left",
-                    fontWeight: "bold",
-                  }}
-                >
-                  Total Taxable
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    textAlign: "right",
-                    fontWeight: "bold",
-                  }}
-                >
-                  ₹ {Number(so.totalAmount || 0).toFixed(2)}
-                </td>
-              </tr>
-              {so.freightAmount > 0 && (
-                <tr>
-                  <td colSpan="6" style={{ border: "none" }}></td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Freight
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "right",
-                    }}
-                  >
-                    ₹ {Number(so.freightAmount || 0).toFixed(2)}
-                  </td>
-                </tr>
-              )}
-
-              {gstApplicable && (
-                <tr>
-                  <td colSpan="6" style={{ border: "none" }}></td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Taxable Amount
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "right",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    ₹{" "}
-                    {Number(
-                      (so.totalAmount || 0) + (so.freightAmount || 0),
-                    ).toFixed(2)}
-                  </td>
-                </tr>
-              )}
-
-              {gstApplicable && (
-                <>
-                  {isIGST ? (
-                    <tr>
-                      <td colSpan="6" style={{ border: "none" }}></td>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: "6px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        IGST @ {so.items?.[0]?.taxPercent || 18}%
-                      </td>
-                      <td
-                        style={{
-                          border: "1px solid #000",
-                          padding: "6px",
-                          textAlign: "right",
-                        }}
-                      >
-                        ₹ {Number(so.totalIgst || so.totalGst || 0).toFixed(2)}
-                      </td>
-                    </tr>
-                  ) : (
-                    <>
-                      <tr>
-                        <td colSpan="6" style={{ border: "none" }}></td>
-                        <td
-                          style={{
-                            border: "1px solid #000",
-                            padding: "6px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          CGST @ {(so.items?.[0]?.taxPercent || 18) / 2}%
-                        </td>
-                        <td
-                          style={{
-                            border: "1px solid #000",
-                            padding: "6px",
-                            textAlign: "right",
-                          }}
-                        >
-                          ₹{" "}
-                          {Number(so.totalCgst || so.totalGst / 2 || 0).toFixed(
-                            2,
-                          )}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan="6" style={{ border: "none" }}></td>
-                        <td
-                          style={{
-                            border: "1px solid #000",
-                            padding: "6px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          SGST @ {(so.items?.[0]?.taxPercent || 18) / 2}%
-                        </td>
-                        <td
-                          style={{
-                            border: "1px solid #000",
-                            padding: "6px",
-                            textAlign: "right",
-                          }}
-                        >
-                          ₹{" "}
-                          {Number(so.totalSgst || so.totalGst / 2 || 0).toFixed(
-                            2,
-                          )}
-                        </td>
-                      </tr>
-                    </>
-                  )}
-                </>
-              )}
-
-              {so.roundOff !== 0 && (
-                <tr>
-                  <td colSpan="6" style={{ border: "none" }}></td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Round Off
-                  </td>
-                  <td
-                    style={{
-                      border: "1px solid #000",
-                      padding: "6px",
-                      textAlign: "right",
-                    }}
-                  >
-                    {Number(so.roundOff || 0).toFixed(2)}
-                  </td>
-                </tr>
-              )}
-              <tr style={{ background: "#f5f5f5" }}>
-                <td colSpan="6" style={{ border: "none" }}></td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    fontWeight: "bold",
-                    fontSize: "14px",
-                  }}
-                >
-                  Rounded Total:
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    textAlign: "right",
-                    fontWeight: "bold",
-                    fontSize: "14px",
-                  }}
-                >
-                  ₹ {Number(so.roundedTotal || so.grandTotal || 0).toFixed(2)}
-                </td>
-              </tr>
-              <tr>
-                <td colSpan="6" style={{ border: "none" }}></td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  In Words:
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #000",
-                    padding: "6px",
-                    fontSize: "9px",
-                    fontStyle: "italic",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {so.amountInWords}
-                </td>
-              </tr>
-            </tbody>
-            )}
-          </table>
-
-          {isLastPage && (
-          <>
-          <div
-            style={{
-              marginTop: "14px",
-              border: "1px solid #000",
-              padding: "8px 10px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "8pt",
-                fontWeight: 900,
-                textTransform: "uppercase",
-                color: "#555",
-                marginBottom: "4px",
-              }}
-            >
-              Remarks:
-            </div>
-            <div
-              style={{
-                fontSize: "9pt",
-                color: "#333",
-                whiteSpace: "pre-wrap",
-                fontStyle: so.remarks ? "normal" : "italic",
-              }}
-            >
-              {so.remarks || "—"}
-            </div>
-          </div>
-          <div
-            className="print-footer"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginTop: "20px",
-              gap: "20px",
-            }}
-          >
-            {/* Footer Bank Details */}
-            <div style={{ fontSize: "9px" }}>
-              <b style={{ textTransform: "uppercase" }}>
-                COMPANY BANK DETAILS:
-              </b>
-              <br />
-              <table style={{ borderCollapse: "collapse", marginTop: "4px" }}>
-                <tbody>
-                  <tr>
-                    <td
-                      style={{
-                        width: "80px",
-                        paddingBottom: "3px",
-                        color: "#6b7280",
-                      }}
-                    >
-                      Bank Name
-                    </td>
-                    <td style={{ paddingBottom: "3px" }}>
-                      : <b>BANK OF BARODA</b>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ paddingBottom: "3px", color: "#6b7280" }}>
-                      A/c No.
-                    </td>
-                    <td style={{ paddingBottom: "3px" }}>
-                      : <b>20260200001544</b>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ paddingBottom: "3px", color: "#6b7280" }}>
-                      Branch & IFS Code
-                    </td>
-                    <td style={{ paddingBottom: "3px" }}>
-                      : <b>SHIMPOLI & BARB0SHIBOR</b>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div
-              style={{ textAlign: "center", fontSize: "8pt", color: "#666" }}
-            >
-              This is a computer generated order and does not require a physical
-              signature.
-            </div>
-
-            {/* Authorized Signatory Box */}
-            <div
-              style={{
-                border: "1px solid #000",
-                width: "220px",
-                display: "flex",
-                flexDirection: "column",
-                height: "100px",
-              }}
-            >
-              <div
-                style={{
-                  background: "#f5f5f5",
-                  padding: "5px",
-                  fontSize: "9px",
-                  fontWeight: 800,
-                  textAlign: "center",
-                  borderBottom: "1px solid #000",
-                }}
-              >
-                For {company.companyName || "JSK URJA"}
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  alignItems: "center",
-                  paddingBottom: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "10px",
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {so.createdBy?.name || user?.name || "Authorized User"}
-                </div>
-                {(so.createdBy?.mobile || user?.mobile) && (
-                  <div style={{ fontSize: "9px", color: "#333" }}>
-                    Mob: {so.createdBy?.mobile || user?.mobile}
-                  </div>
-                )}
-                <div
-                  style={{
-                    width: "160px",
-                    borderTop: "1px solid #000",
-                    marginTop: "4px",
-                    paddingTop: "2px",
-                    fontSize: "9px",
-                    fontWeight: 800,
-                    textAlign: "center",
-                  }}
-                >
-                  AUTHORIZED SIGNATORY
-                </div>
-              </div>
-            </div>
-          </div>
-          </>
-          )}
-        </div>
-             );
-          });
-        })()}
-      </div>
+      {/* PRINT ONLY - single shared Sales Order print engine */}
+      <SalesOrderPrintDocument
+        so={so}
+        company={company}
+        user={user}
+        printFormat={activePrintFormat}
+        mode="print"
+        visible={false}
+        className="print-only"
+      />
 
       {/* Application Section (Screen Only) */}
       <div className="no-print">
@@ -1347,7 +371,7 @@ export default function SalesOrderDetailPage() {
                   📋 View Production Sheet
                 </button>
               )}
-              {(so.status === "Confirmed" || so.status === "Partially Invoiced" || so.status === "Dispatched") && so.status !== "Invoiced" && (
+              {(so.status === "Draft" || so.status === "Confirmed" || so.status === "Partially Invoiced" || so.status === "Dispatched") && !isInvoiceLocked && (
                 <button
                   onClick={() =>
                     navigate(`${PATHS.SALES.NEW_INVOICE}?soId=${id}`)
@@ -1364,7 +388,7 @@ export default function SalesOrderDetailPage() {
                     boxShadow: "0 2px 8px rgba(13,148,136,0.3)",
                   }}
                 >
-                  🧾 Create Invoice
+                  🧾 Create Tax Invoice
                 </button>
               )}
               <button
@@ -1382,23 +406,6 @@ export default function SalesOrderDetailPage() {
               >
                 🖨️ Print
               </button>
-              {canEdit && (
-                <button
-                  onClick={() => navigate(`/sales/orders/${id}/edit`)}
-                  style={{
-                    padding: "9px 14px",
-                    background: "#f1f5f9",
-                    color: "#374151",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    fontSize: 13,
-                  }}
-                >
-                  ✏️ Edit
-                </button>
-              )}
               {isDraft && (user?.roleName === "admin" || user?.roleName === "superadmin") && (
                 <button
                   onClick={handleCancel}
@@ -1440,6 +447,44 @@ export default function SalesOrderDetailPage() {
         </div>
 
         <div style={{ padding: "24px 28px" }}>
+          {billingState.anyInvoiced && (
+            <div
+              style={{
+                background: isInvoiceLocked ? "#fef2f2" : "#fff7ed",
+                border: `1px solid ${isInvoiceLocked ? "#fca5a5" : "#fdba74"}`,
+                color: isInvoiceLocked ? "#991b1b" : "#9a3412",
+                borderRadius: 10,
+                padding: "14px 16px",
+                marginBottom: 18,
+              }}
+            >
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                {isInvoiceLocked
+                  ? `This Sales Order is locked because Tax Invoice ${activeInvoices[0]?.invoiceNumber || ""} has been created.`
+                  : "This Sales Order is partially invoiced. Only safe remaining-quantity and non-financial details may be updated."}
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                {activeInvoices.map((invoice) => (
+                  <button
+                    key={invoice._id}
+                    onClick={() => navigate(PATHS.SALES.INVOICE_DETAIL(invoice._id))}
+                    style={{
+                      padding: "7px 10px",
+                      background: "#fff",
+                      color: "#334155",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 7,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    View {invoice.invoiceNumber || "Tax Invoice"} · {fmt(invoice.invoiceDate)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Summary Cards */}
           <div
             style={{
@@ -1645,7 +690,9 @@ export default function SalesOrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {(so.items || []).map((item, i) => (
+                {(so.items || []).map((item, i) => {
+                  const lineBilling = billingLineById.get(String(item._id || ""));
+                  return (
                   <tr
                     key={i}
                     onMouseEnter={(e) =>
@@ -1670,7 +717,12 @@ export default function SalesOrderDetailPage() {
                     </td>
                     <td style={td}>{item.uom}</td>
                     <td style={{ ...td, color: "#2563eb", fontWeight: 600 }}>
-                      {item.qty}
+                      <div>{item.qty}</div>
+                      {lineBilling?.invoicedQty > 0 && (
+                        <div style={{ fontSize: 10, color: "#7c3aed", marginTop: 3, whiteSpace: "nowrap" }}>
+                          Invoiced {lineBilling.invoicedQty} · Balance {lineBilling.remainingQty}
+                        </div>
+                      )}
                     </td>
                     <td style={td}>₹{item.rate}</td>
                     {gstApplicable && (
@@ -1687,7 +739,8 @@ export default function SalesOrderDetailPage() {
                       ).toLocaleString("en-IN")}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             {/* Totals Footer */}
@@ -1791,48 +844,93 @@ export default function SalesOrderDetailPage() {
         </div>
       </div>
 
-      {/* Print Styles */}
+      {/* Locked Sales Order print geometry from golden reference 035.pdf */}
       <style>{`
                 @media print {
-                    .no-print { display: none !important; }
+                    @page { size: A4 portrait; margin: 0; }
+                    .no-print, .no-print * { display: none !important; }
                     html, body {
-                        width: 210mm !important;
                         margin: 0 !important;
                         padding: 0 !important;
+                        width: 210mm !important;
                         background: #fff !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
+                        zoom: 1 !important;
                     }
-                    .print-only {
-                        display: block !important;
+                    #root,
+                    #root > div,
+                    #root > div > div,
+                    #root main {
                         width: 210mm !important;
+                        max-width: 210mm !important;
+                        margin: 0 !important;
+                        margin-left: 0 !important;
+                        padding: 0 !important;
+                        left: 0 !important;
+                        transform: none !important;
+                        zoom: 1 !important;
+                        display: block !important;
+                        position: static !important;
+                    }
+                    .so-print-root.print-only {
+                        display: block !important;
+                        position: static !important;
+                        width: 210mm !important;
+                        min-width: 210mm !important;
                         max-width: 210mm !important;
                         margin: 0 auto !important;
                         padding: 0 !important;
+                        box-sizing: border-box !important;
+                        transform: none !important;
+                        zoom: 1 !important;
                     }
-                    .print-content {
+                    /* Golden multi-page flow only — do NOT flex the designer block canvas */
+                    .so-print-root .print-content:not(.pf-block-layout-root) {
                         width: 210mm !important;
+                        min-width: 210mm !important;
                         max-width: 210mm !important;
-                        min-height: auto !important;
+                        min-height: 270mm !important;
+                        margin: 0 auto !important;
                         padding: 10mm !important;
                         box-sizing: border-box !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        transform: none !important;
+                        zoom: 1 !important;
                         page-break-after: always;
                         break-after: page;
                     }
-                    .print-content:last-child {
+                    .so-print-root .print-content.pf-block-layout-root {
+                        display: block !important;
+                        position: relative !important;
+                        width: 210mm !important;
+                        max-width: 210mm !important;
+                        margin: 0 auto !important;
+                        box-sizing: border-box !important;
+                        flex-direction: unset !important;
+                        page-break-after: auto !important;
+                        break-after: auto !important;
+                    }
+                    .so-print-root .print-content:not(.pf-block-layout-root):last-child {
                         page-break-after: auto;
                         break-after: auto;
                     }
-                    .print-items-table {
+                    .so-print-root [data-pf-block] {
+                        overflow: visible !important;
+                    }
+                    .so-print-root .print-items-table {
                         width: 100% !important;
                         table-layout: fixed !important;
                     }
-                    .print-items-table th,
-                    .print-items-table td {
+                    .so-print-root .print-items-table th,
+                    .so-print-root .print-items-table td {
                         word-wrap: break-word;
-                        overflow-wrap: break-word;
+                        overflow-wrap: anywhere;
                     }
-                    @page { size: A4 portrait; margin: 0; }
+                    .so-print-root .print-footer {
+                        width: 100% !important;
+                    }
                 }
             `}</style>
 

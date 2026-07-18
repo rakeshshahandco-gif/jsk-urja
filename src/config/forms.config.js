@@ -224,6 +224,8 @@ export const ALL_FORMS = [
     { id: 'company-module-allocation', title: 'Company Module Allocation', path: PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION, icon: 'settings', permission: 'admin', module: 'Super Admin' },
     { id: 'industry-deployment-manager', title: 'Industry Deployment Manager', path: PATHS.SETTINGS.INDUSTRY_DEPLOYMENT_MANAGER, icon: 'settings', permission: 'admin', module: 'Super Admin' },
     { id: 'workflow-master', title: 'Workflow Master', path: PATHS.SETTINGS.WORKFLOW_MASTER, icon: 'settings', permission: 'admin', module: 'Super Admin' },
+    { id: 'print-format-version-manager', title: 'Print Format Version Manager', path: PATHS.SETTINGS.PRINT_FORMAT_VERSION_MANAGER, icon: 'settings', permission: 'admin', module: 'Super Admin', keywords: ['print', 'format', 'sales order', 'sales invoice', 'pdf'] },
+    { id: 'print-format-designer', title: 'Print Format Designer', path: PATHS.SETTINGS.PRINT_FORMAT_DESIGNER, icon: 'settings', permission: 'admin.print_format_designer.view', module: 'Admin', keywords: ['print', 'designer', 'wysiwyg', 'layout', 'drag', 'sales order', 'sales invoice'] },
     { id: 'platform-feature-defaults', title: 'Platform Default Settings', path: PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS, icon: 'settings', permission: 'admin', module: 'Super Admin' },
     { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', icon: 'settings', permission: 'admin', module: 'Super Admin' },
     { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', icon: 'settings', permission: 'admin', module: 'Super Admin' },

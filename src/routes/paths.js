@@ -40,6 +40,8 @@ export const PATHS = {
         COMPANY_MODULE_ALLOCATION: '/admin/module-allocation',
         INDUSTRY_DEPLOYMENT_MANAGER: '/admin/industry-deployment-manager',
         WORKFLOW_MASTER: '/admin/workflow-master',
+        PRINT_FORMAT_VERSION_MANAGER: '/admin/print-format-version-manager',
+        PRINT_FORMAT_DESIGNER: '/admin/print-format-designer',
         /** @deprecated use CUSTOMERS.SETTINGS — redirect in App */
         ACCOUNTS_SUNDRY_DEBTOR: '/admin/accounts-settings/sundry-debtor',
         CUSTOMER_SETTINGS: '/customers/settings',

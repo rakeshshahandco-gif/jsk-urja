@@ -2,6 +2,13 @@ import puppeteer from 'puppeteer';
 import { numberToWords } from '../utils/numberToWords.js';
 import fs from 'fs';
 import path from 'path';
+import {
+    buildSalesOrderFlowHtml,
+    buildSalesOrderBlockHtml,
+    SO_PRINT_BASE_CSS,
+} from '../templates/salesOrderPrintHtml.js';
+import { PrintFormatService } from './printFormat.service.js';
+import { buildPdfFormatCss, isLivePrintFormat } from '../utils/printFormatRuntime.js';
 
 /**
  * PDF Service for generating high-quality document PDFs using Puppeteer
@@ -631,241 +638,55 @@ class PDFService {
      */
     static async generateSalesOrderPDF(so, company, user) {
         const logoBase64 = this.getLogoBase64();
-        const items = so.items || [];
-        
-        const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB') : "—";
         const grandTotal = so.roundedTotal || so.grandTotal || 0;
-        const amountInWords = so.amountInWords || numberToWords(grandTotal);
-        const gstApplicable = so.gstApplicable !== false;
-        const isIGST = so.gstType === "IGST";
-        
-        // Multi-page logic matching frontend
-        const itemsPerPageFirst = 7;
-        const itemsPerPageOthers = 15;
-        const pages = [];
-        if (items.length <= itemsPerPageFirst) {
-            pages.push(items);
-        } else {
-            pages.push(items.slice(0, itemsPerPageFirst));
-            let remaining = items.slice(itemsPerPageFirst);
-            while (remaining.length > 0) {
-                pages.push(remaining.slice(0, itemsPerPageOthers));
-                remaining = remaining.slice(itemsPerPageOthers);
+        if (!so.amountInWords) so.amountInWords = numberToWords(grandTotal);
+
+        let printFormat = null;
+        try {
+            const companyId = so.companyId || company?.companyId || company?._id;
+            if (companyId) {
+                printFormat = await PrintFormatService.getActiveDefault(companyId, 'Sales Order');
             }
+        } catch (e) {
+            console.warn('[PDF] SO active print format skipped:', e.message);
         }
 
-        const htmlContent = `
-            <!DOCTYPE html>
+        const liveBlocks = isLivePrintFormat(printFormat)
+            && printFormat?.layout?.blocks
+            && typeof printFormat.layout.blocks === 'object'
+            && Object.keys(printFormat.layout.blocks).length > 0;
+
+        const bodyHtml = liveBlocks
+            ? buildSalesOrderBlockHtml({
+                so,
+                company,
+                user,
+                logoBase64,
+                blocks: printFormat.layout.blocks,
+            })
+            : buildSalesOrderFlowHtml({ so, company, user, logoBase64 });
+
+        const formatCss = liveBlocks ? buildPdfFormatCss(printFormat, 'Sales Order') : '';
+
+        const htmlContent = `<!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
                 <style>
-                    
-                    * { box-sizing: border-box; font-family: sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    body { margin: 0; padding: 0; color: #000; background: #fff; font-size: 9pt; line-height: 1.3; }
-                    
-                    .page { width: 210mm; min-height: 297mm; padding: 10mm; position: relative; display: flex; flex-direction: column; background: #fff; page-break-after: always; }
-                    .page:last-child { page-break-after: auto; }
-                    
-                    .p-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-                    .company-info { display: flex; gap: 20px; align-items: flex-start; }
-                    .logo-img { max-height: 80px; max-width: 120px; object-fit: contain; }
-                    .company-details h1 { margin: 0; font-size: 20pt; font-weight: 900; line-height: 1.1; text-transform: uppercase; }
-                    .company-addr { font-size: 9pt; color: #000; line-height: 1.3; max-width: 450px; }
-                    
-                    .doc-meta { text-align: right; }
-                    .doc-title { margin: 0 0 2px 0; font-size: 16pt; font-weight: 900; text-transform: uppercase; color: #64748b; }
-                    .doc-id { font-size: 14pt; font-weight: 700; color: #334155; }
-
-                    .info-block { display: flex; justify-content: space-between; gap: 40px; margin-bottom: 20px; }
-                    .party-info { flex: 1; }
-                    .order-info { width: 300px; }
-                    .info-table { width: 100%; border-collapse: collapse; }
-                    .info-label { width: 120px; font-size: 10pt; font-weight: 800; padding: 4px 0; vertical-align: top; }
-                    .info-value { font-size: 10pt; padding: 4px 0; vertical-align: top; text-transform: uppercase; }
-
-                    .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; }
-                    .items-table th { border: 1px solid #000; padding: 8px 6px; font-weight: 800; background: #f5f5f5; text-align: center; text-transform: uppercase; }
-                    .items-table td { border: 1px solid #000; padding: 6px; vertical-align: top; }
-
-                    .summary-section { border: 1.5px solid #000; border-top: none; }
-                    .summary-row { display: grid; grid-template-columns: 1.4fr 1fr; border-top: 1.5px solid #000; }
-                    .summary-left { border-right: 1.5px solid #000; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; }
-                    .summary-right { padding: 0; }
-                    .summary-table { width: 100%; border-collapse: collapse; }
-                    .summary-table td { padding: 5px 10px; border-bottom: 1px solid #eee; font-size: 10pt; }
-                    .total-label { font-weight: 400; }
-                    .total-value { text-align: right; font-weight: 700; }
-                    .grand-total-row { background: #f5f5f5; font-weight: 900; font-size: 11pt; }
-
-                    .signatory-row { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid #000; border-top: none; min-height: 120px; }
-                    .receiver-sign { border-right: 1.5px solid #000; padding: 10px; font-size: 9pt; position: relative; }
-                    .authorizer-sign { padding: 10px; text-align: center; position: relative; display: flex; flex-direction: column; justify-content: space-between; }
-
-                    .continued-notice { padding: 8px; text-align: right; font-style: italic; font-size: 9pt; background: #fafafa; border: 1px solid #000; border-top: none; }
-                    .page-counter { position: absolute; bottom: 5mm; right: 10mm; font-size: 8pt; color: #666; }
-
-                    @page { margin: 0; size: A4 portrait; }
+                    ${SO_PRINT_BASE_CSS}
+                    ${formatCss}
                 </style>
             </head>
             <body>
-                ${pages.map((pageItems, pageIdx) => {
-                    const isFirstPage = pageIdx === 0;
-                    const isLastPage = pageIdx === pages.length - 1;
-                    const totalPages = pages.length;
-                    return `
-                        <div class="page">
-                            <div class="page-counter">Page ${pageIdx + 1} of ${totalPages}</div>
-                            
-                            ${isFirstPage ? `
-                                <div class="p-header">
-                                    <div class="company-info">
-                                        ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : ''}
-                                        <div class="company-details">
-                                            <h1>${company.companyName || "JSK URJA"}</h1>
-                                            <div class="company-addr">
-                                                ${company.address}<br />
-                                                ${company.city} ${company.state}, India. Postal Code: ${company.pincode}. State Code: ${company.stateCode || ""}<br />
-                                                ${(company.phone || company.email) ? `Phone: ${company.phone || ""} Email: ${company.email || ""}` : ""}<br />
-                                                ${gstApplicable && company.gstNumber ? `<strong>GSTIN: ${company.gstNumber}</strong>` : ""}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="doc-meta">
-                                        <h1 class="doc-title">${so.seriesId?.isEstimate ? "ESTIMATE" : "SALES ORDER"}</h1>
-                                        ${!gstApplicable ? `<div style="font-size: 10pt; font-weight: 700;">(NON-GST)</div>` : ''}
-                                        <div class="doc-id">${so.soNumber}</div>
-                                    </div>
-                                </div>
-                                <div style="border-bottom: 2px solid #000; margin-bottom: 20px;"></div>
-
-                                <div class="info-block">
-                                    <div class="party-info">
-                                        <table class="info-table">
-                                            <tr><td class="info-label">Customer Name:</td><td class="info-value" style="font-weight: 900;">${so.customerName}</td></tr>
-                                            <tr><td class="info-label">Address:</td><td class="info-value" style="font-size: 9pt;">${so.billingAddress || so.shippingAddress || "—"}</td></tr>
-                                            ${(so.customerState) ? `<tr><td class="info-label">State:</td><td class="info-value">${so.customerState} ${so.customerStateCode ? `(${so.customerStateCode})` : ""}</td></tr>` : ''}
-                                            ${so.customerPhone ? `<tr><td class="info-label">Contact No:</td><td class="info-value">${so.customerPhone}</td></tr>` : ''}
-                                            ${gstApplicable && so.customerGstin ? `<tr><td class="info-label">GST No:</td><td class="info-value">${so.customerGstin}</td></tr>` : ''}
-                                        </table>
-                                    </div>
-                                    <div class="order-info">
-                                        <table class="info-table">
-                                            <tr><td class="info-label">Date:</td><td class="info-value">${fmt(so.soDate)}</td></tr>
-                                            <tr><td class="info-label">Order Category:</td><td class="info-value">${so.orderCategory || "Order"}</td></tr>
-                                            <tr><td class="info-label">Delivery Date:</td><td class="info-value">${fmt(so.deliveryDate)}</td></tr>
-                                            <tr><td class="info-label">Customer PO:</td><td class="info-value">${so.customerPO || "VERBAL"}</td></tr>
-                                            <tr><td class="info-label">PO Date:</td><td class="info-value">${fmt(so.customerPODate || so.soDate)}</td></tr>
-                                        </table>
-                                    </div>
-                                </div>
-                            ` : `
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #000; padding-bottom: 5px;">
-                                    <div style="font-size: 14pt; font-weight: 900; text-transform: uppercase;">${company.companyName || "JSK URJA"}</div>
-                                    <div style="text-align: right; font-size: 9pt;">
-                                        <strong>Order No:</strong> ${so.soNumber} | <strong>Date:</strong> ${fmt(so.soDate)}
-                                    </div>
-                                </div>
-                            `}
-
-                            <table class="items-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 35px;">SR</th>
-                                        <th style="width: 85px; text-align: left;">ITEM CODE</th>
-                                        <th style="text-align: left;">DESCRIPTION</th>
-                                        <th style="width: 100px; text-align: left;">NOTES</th>
-                                        <th style="width: 60px;">HSN</th>
-                                        <th style="width: 60px;">QTY</th>
-                                        <th style="width: 80px; text-align: right;">RATE</th>
-                                        <th style="width: 100px; text-align: right;">AMOUNT</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${pageItems.map((item, i) => {
-                                        const srNo = (pageIdx === 0 ? 0 : itemsPerPageFirst + (pageIdx - 1) * itemsPerPageOthers) + i + 1;
-                                        return `
-                                            <tr>
-                                                <td style="text-align: center;">${srNo}</td>
-                                                <td>${item.itemCode || "—"}</td>
-                                                <td style="font-weight: 700; text-transform: uppercase;">${item.description || item.itemName}</td>
-                                                <td style="font-size: 8pt;">${item.additionalNotes || "—"}</td>
-                                                <td style="text-align: center; font-size: 8pt;">${item.hsnCode || "—"}</td>
-                                                <td style="text-align: center; font-weight: 700;">${item.qty} ${item.uom}</td>
-                                                <td style="text-align: right;">₹ ${Number(item.rate || 0).toFixed(2)}</td>
-                                                <td style="text-align: right; font-weight: 700;">₹ ${Number(item.amount || item.qty * item.rate || 0).toFixed(2)}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                            ${!isLastPage ? `<div class="continued-notice">Continued on next page...</div>` : ''}
-
-                            ${isLastPage ? `
-                                <div class="summary-section">
-                                    <div class="summary-row">
-                                        <div class="summary-left">
-                                            <div>
-                                                <div style="font-size: 8pt; font-weight: 800; color: #666; margin-bottom: 2px;">REMARKS:</div>
-                                                <div style="font-size: 9pt; color: #333; white-space: pre-wrap;">${so.remarks || "—"}</div>
-                                            </div>
-                                            <div style="margin-top: 10px;">
-                                                <div style="font-size: 8.5pt; font-weight: 800; color: #666; margin-bottom: 2px;">AMOUNT IN WORDS:</div>
-                                                <div style="font-size: 10pt; font-weight: 900; text-transform: uppercase; color: #000;">${amountInWords} ONLY</div>
-                                            </div>
-                                        </div>
-                                        <div class="summary-right">
-                                            <table class="summary-table">
-                                                <tr><td class="total-label">Total Before Tax</td><td class="total-value">₹ ${(so.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-                                                ${gstApplicable ? (
-                                                    isIGST ? `
-                                                        <tr><td class="total-label">IGST Total</td><td class="total-value">₹ ${(so.totalIgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-                                                    ` : `
-                                                        <tr><td class="total-label">CGST Total</td><td class="total-value">₹ ${(so.totalCgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-                                                        <tr><td class="total-label">SGST Total</td><td class="total-value">₹ ${(so.totalSgst || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-                                                    `
-                                                ) : ''}
-                                                ${so.freightAmount ? `<tr><td class="total-label">Freight / Other</td><td class="total-value">₹ ${(so.freightAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>` : ''}
-                                                <tr class="grand-total-row">
-                                                    <td style="font-weight: 900; border: none;">Grand Total</td>
-                                                    <td style="text-align: right; font-weight: 900; border: none;">₹ ${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                </tr>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="signatory-row">
-                                    <div class="receiver-sign">
-                                        <div style="font-weight: 900; text-decoration: underline;">Terms & Conditions:</div>
-                                        <div style="font-size: 7.5pt; color: #333; margin-top: 4px; line-height: 1.4;">
-                                            1. Material once dispatched will not be taken back.<br/>
-                                            2. Standard warranty applies as per product category.<br/>
-                                            3. All disputes are subject to MUMBAI Jurisdiction.<br/>
-                                            4. This is a computer generated document.
-                                        </div>
-                                        <div style="position: absolute; bottom: 10px; left: 10px; width: 150px; border-top: 1px dashed #000; text-align: center; font-size: 8pt; font-weight: 800; padding-top: 4px;">RECEIVER'S SIGNATURE</div>
-                                    </div>
-                                    <div class="authorizer-sign">
-                                        <div style="font-weight: 900; font-size: 10pt; text-transform: uppercase;">For ${company.companyName}</div>
-                                        <div style="margin-bottom: 5px;">
-                                            <div style="font-weight: 800; font-size: 9.5pt; text-transform: uppercase;">${so.createdBy?.fullName || so.createdBy?.name || user?.name || ''}</div>
-                                            <div style="width: 180px; border-top: 1.5px solid #000; margin: 5px auto 0; padding-top: 2px; font-size: 8.5pt; font-weight: 900;">AUTHORIZED SIGNATORY</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }).join('')}
+                ${bodyHtml}
             </body>
-            </html>
-        `;
+            </html>`;
 
-        const browser = await puppeteer.launch({ 
-            headless: 'new', 
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
-        
+
         try {
             const page = await browser.newPage();
             await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });

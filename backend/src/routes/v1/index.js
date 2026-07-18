@@ -136,6 +136,8 @@ import itemTemplateFieldSettingsRoute from './itemTemplateFieldSettings.routes.j
 import documentsKycTemplateSettingsRoute from './documentsKycTemplateSettings.routes.js';
 import supplierDocumentRoute from './supplierDocument.routes.js';
 import workflowMasterRoute from './workflowMaster.routes.js';
+import printFormatVersionRoute from './printFormatVersion.routes.js';
+import printFormatRoute from './printFormat.routes.js';
 import companyWorkflowAssignmentRoute from './companyWorkflowAssignment.routes.js';
 import workflowProductionLotRoute from './workflowProductionLot.routes.js';
 import textileProductionLotRoute from './textileProductionLot.routes.js';
@@ -712,6 +714,14 @@ const defaultRoutes = [
     {
         path: '/workflow-masters',
         route: workflowMasterRoute,
+    },
+    {
+        path: '/print-format-versions',
+        route: printFormatVersionRoute,
+    },
+    {
+        path: '/print-formats',
+        route: printFormatRoute,
     },
     {
         path: '/company-workflow-assignment',

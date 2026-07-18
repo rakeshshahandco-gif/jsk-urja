@@ -31,8 +31,8 @@ api.interceptors.request.use(
                 const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('jsk_selected_company') : null;
                 if (raw) {
                     const co = JSON.parse(raw);
-                    if (co && co._id) {
-                        config.headers['X-Company-Id'] = co._id;
+                    if (co && (co._id || co.companyId)) {
+                        config.headers['X-Company-Id'] = co._id || co.companyId;
                     }
                 }
             } catch {

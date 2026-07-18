@@ -1,48 +1,25 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui';
-import { ShieldAlert } from 'lucide-react';
-import styles from './PermissionDenied.module.scss';
+import React, { useMemo } from 'react';
+import { AccessDeniedGuidance } from './AccessDeniedGuidance';
+import { resolvePermissionGuidance } from '@/constants/accessGuidance.constants';
 import { ROLE_CONFIG, PERMISSION_LABELS } from '@/utils/permissions';
 
-export const PermissionDenied = ({ requiredRole, requiredPermission }) => {
-    const navigate = useNavigate();
+export const PermissionDenied = ({ requiredRole, requiredPermission, moduleName }) => {
+    const guidance = useMemo(
+        () =>
+            resolvePermissionGuidance({
+                requiredRole,
+                requiredPermission,
+                moduleName: moduleName || 'This page',
+            }),
+        [requiredRole, requiredPermission, moduleName],
+    );
 
     return (
-        <div className={styles.container}>
-            <div className={styles.content}>
-                <ShieldAlert size={80} className={styles.icon} />
-                <h1 className={styles.title}>Access Denied</h1>
-                <p className={styles.message}>
-                    You don&apos;t have permission to access this page.
-                </p>
-
-                {requiredRole && (
-                    <div className={styles.requirement}>
-                        <strong>Required Role:</strong> {(() => {
-                            if (Array.isArray(requiredRole)) {
-                                return requiredRole.map(r => ROLE_CONFIG[r]?.label || r).join(' / ');
-                            }
-                            return ROLE_CONFIG[requiredRole]?.label || requiredRole;
-                        })()}
-                    </div>
-                )}
-
-                {requiredPermission && (
-                    <div className={styles.requirement}>
-                        <strong>Required Permission:</strong> {PERMISSION_LABELS[requiredPermission] || requiredPermission}
-                    </div>
-                )}
-
-                <div className={styles.actions}>
-                    <Button onClick={() => navigate(-1)} variant="outline">
-                        Go Back
-                    </Button>
-                    <Button onClick={() => navigate('/')}>
-                        Go to Home
-                    </Button>
-                </div>
-            </div>
-        </div>
+        <AccessDeniedGuidance
+            guidance={guidance}
+            title="Access Denied"
+            roleConfig={ROLE_CONFIG}
+            permissionLabels={PERMISSION_LABELS}
+        />
     );
 };

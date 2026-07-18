@@ -76,12 +76,21 @@ export const ModuleGuardProvider = ({ children }) => {
     useEffect(() => {
         if (loading) return;
         if (!isPlatformAdminUser(user) && isPlatformPath(location.pathname)) {
-            navigate('/platform-access-denied', { replace: true, state: { from: location.pathname } });
+            navigate('/platform-access-denied', {
+                replace: true,
+                state: { from: location.pathname },
+            });
             return;
         }
         if (!moduleGuardEnabled) return;
         if (!isPathEnabled(location.pathname)) {
-            navigate('/module-disabled', { replace: true, state: { from: location.pathname } });
+            navigate('/module-disabled', {
+                replace: true,
+                state: {
+                    from: location.pathname,
+                    moduleCode: moduleForPath(location.pathname) || '',
+                },
+            });
         }
     }, [location.pathname, moduleGuardEnabled, loading, isPathEnabled, navigate, user]);
 

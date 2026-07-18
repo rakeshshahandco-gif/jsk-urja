@@ -342,6 +342,8 @@ import IndustryDeploymentManagerPage from '@/features/settings/IndustryDeploymen
 import ModuleDisabledPage from '@/features/settings/ModuleDisabledPage';
 import { ModuleGuardProvider } from '@/contexts/ModuleGuardContext';
 import WorkflowMasterPage from '@/features/settings/WorkflowMasterPage';
+import PrintFormatVersionManagerPage from '@/features/settings/PrintFormatVersionManagerPage';
+import PrintFormatDesignerPage from '@/features/settings/PrintFormatDesignerPage';
 import { FeatureGuard } from '@/components/FeatureGuard';
 import { LiveNotificationProvider } from '@/components/ui/LiveNotificationPopup';
 
@@ -582,6 +584,8 @@ const AppLayout = () => {
                         <Route path="/module-disabled" element={<ModuleDisabledPage />} />
                         <Route path="/platform-access-denied" element={<PlatformAccessDenied />} />
                         <Route path={PATHS.SETTINGS.WORKFLOW_MASTER} element={<ProtectedPlatformRoute><WorkflowMasterPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.PRINT_FORMAT_VERSION_MANAGER} element={<ProtectedPlatformRoute><PrintFormatVersionManagerPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.PRINT_FORMAT_DESIGNER} element={<ProtectedRoute requirePermission="admin.print_format_designer.view"><PrintFormatDesignerPage /></ProtectedRoute>} />
                         <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />

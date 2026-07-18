@@ -144,6 +144,10 @@ const companyProfileSchema = new mongoose.Schema(
             websiteUrl: { type: String, trim: true, default: '' },
             includeDispatchBarcode: { type: Boolean, default: false },
         },
+        /** When false (default), live SI/SO print/PDF always use locked built-in formats. */
+        printSettings: {
+            enableCustomPrintDesigner: { type: Boolean, default: false },
+        },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

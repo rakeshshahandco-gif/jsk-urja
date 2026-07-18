@@ -37,6 +37,14 @@ export const checkUserPermission = (user, permissionKey) => {
     if (roleName === 'superadmin') return true;
     // Routes use checkPermission('admin') as module gate (feature / customer settings)
     if (permissionKey === 'admin' && roleName === 'admin') return true;
+    // Company Admin always has Print Format Designer (staff need explicit grant)
+    if (
+        roleName === 'admin' &&
+        typeof permissionKey === 'string' &&
+        permissionKey.startsWith('admin.print_format_designer.')
+    ) {
+        return true;
+    }
     
     // Legacy support for fixed permission array if exists
     if (Array.isArray(user.permissions)) {

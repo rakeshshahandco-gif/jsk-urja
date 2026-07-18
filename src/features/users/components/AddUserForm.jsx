@@ -59,6 +59,34 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
     const selectedRole = watch('role');
     const [selectedPermissions, setSelectedPermissions] = useState(user?.additionalPermissions || {});
 
+    const selectedRoleObj = useMemo(
+        () => roles.find((r) => String(r._id) === String(selectedRole) || String(r.id) === String(selectedRole)),
+        [roles, selectedRole],
+    );
+    const isCompanyAdminRole = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+        String(selectedRoleObj?.name || '').trim().toLowerCase(),
+    );
+    const printDesignerEnabled =
+        isCompanyAdminRole || !!selectedPermissions?.admin?.print_format_designer?.view;
+
+    const setPrintDesignerEnabled = (enabled) => {
+        if (isCompanyAdminRole) return;
+        setSelectedPermissions((prev) => {
+            const updated = {
+                ...prev,
+                admin: {
+                    ...(prev.admin || {}),
+                    print_format_designer: {
+                        ...(prev.admin?.print_format_designer || {}),
+                        view: !!enabled,
+                    },
+                },
+            };
+            setValue('additionalPermissions', updated);
+            return updated;
+        });
+    };
+
     // Fetch Metadata, Roles, Departments
     useEffect(() => {
         const fetchData = async () => {
@@ -380,6 +408,25 @@ export const AddUserForm = ({ user = null, onSave, closeModal }) => {
                                 <input type="checkbox" {...register('isActive')} className={styles.tableCheckbox} />
                                 <span>Active</span>
                             </label>
+                        </div>
+                    </div>
+                    <div className={styles.row2} style={{ marginTop: 12 }}>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <span className={styles.statusLabel}>Print Format Designer</span>
+                            <label className={styles.statusToggle} style={{ display: 'flex', marginTop: 6, marginBottom: 4 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={printDesignerEnabled}
+                                    disabled={isCompanyAdminRole}
+                                    onChange={(e) => setPrintDesignerEnabled(e.target.checked)}
+                                />
+                                <span>Allow this user to open &amp; edit Print Format Designer</span>
+                            </label>
+                            <p style={{ margin: '0 0 8px', fontSize: 12, color: '#64748b' }}>
+                                {isCompanyAdminRole
+                                    ? 'Company Admin always has this access.'
+                                    : 'For Staff / Manager only — does not grant full Admin rights.'}
+                            </p>
                         </div>
                     </div>
                     <div className={styles.row2} style={{ marginTop: 12 }}>

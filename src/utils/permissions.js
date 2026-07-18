@@ -163,6 +163,7 @@ export const APP_MODULES = [
         name: 'Admin',
         submodules: [
             { id: 'company_profile', name: 'Company Profile', actions: ['view', 'edit'] },
+            { id: 'print_format_designer', name: 'Print Format Designer', actions: ['view'] },
             { id: 'user_management', name: 'User Management', actions: ['view', 'manage'] }
         ]
     },

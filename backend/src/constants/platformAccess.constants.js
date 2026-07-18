@@ -13,6 +13,8 @@ export const PLATFORM_API_PREFIXES = [
     '/supplier-template-field-settings',
     '/item-template-field-settings',
     '/documents-kyc-template-settings',
+    '/print-format-versions',
+    '/print-formats',
     '/saas',
 ];
 
@@ -32,6 +34,8 @@ export const PLATFORM_MENU_IDS = new Set([
     'platform-feature-defaults',
     'feature-configuration',
     'workflow-master',
+    'print-format-version-manager',
+    'print-format-designer',
     'companies-list',
     'system-diagnostic',
     'backup-restore',
