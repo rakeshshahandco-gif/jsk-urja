@@ -55,15 +55,20 @@ function stripTrailingSlash(url) {
     return String(url || '').replace(/\/$/, '');
 }
 
+function isLoopbackApiUrl(url) {
+    return /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(String(url || '').trim());
+}
+
 function resolveProductionApiUrl() {
-    if (viteApiUrl) return stripTrailingSlash(viteApiUrl);
+    // Never bake localhost into production: a local VITE_API_URL would break every other PC.
+    if (viteApiUrl && !isLoopbackApiUrl(viteApiUrl)) return stripTrailingSlash(viteApiUrl);
     if (isSameOriginRenderBackend) return `${window.location.origin}/api/v1`;
     if (isHandloomFrontendRenderService) return `${HANDLOOM_BACKEND_ORIGIN}/api/v1`;
     return `${prodBackend}/api/v1`;
 }
 
 function resolveProductionSocketUrl() {
-    if (viteSocketUrl) return stripTrailingSlash(viteSocketUrl);
+    if (viteSocketUrl && !isLoopbackApiUrl(viteSocketUrl)) return stripTrailingSlash(viteSocketUrl);
     if (isSameOriginRenderBackend) return window.location.origin;
     if (isHandloomFrontendRenderService) return HANDLOOM_BACKEND_ORIGIN;
     return prodBackend;
