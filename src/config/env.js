@@ -70,12 +70,13 @@ function resolveProductionSocketUrl() {
 }
 
 // On Render: same-origin when API+UI share one service; Handloom static site → Handloom backend.
+// Local: prefer VITE_API_URL / VITE_SOCKET_URL when set (JSK backend on :5100); else default :5000.
 export const env = {
     API_URL: useLocalBackend
-        ? `http://${localBackendHost}:5000/api/v1`
+        ? (viteApiUrl || `http://${localBackendHost}:5000/api/v1`)
         : resolveProductionApiUrl(),
     SOCKET_URL: useLocalBackend
-        ? `http://${localBackendHost}:5000`
+        ? (viteSocketUrl || `http://${localBackendHost}:5000`)
         : resolveProductionSocketUrl(),
     /** Textile FG transfer demo — localhost / LAN only, never on Render production. */
     TEXTILE_DEMO_ENABLED: useLocalBackend,

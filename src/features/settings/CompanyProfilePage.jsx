@@ -11,6 +11,7 @@ import {
 } from '@/services/companyWorkflowAssignmentApi';
 import { useCompany } from '@/contexts/CompanyContext';
 import InvoiceBarcodeSettingsCard from './InvoiceBarcodeSettingsCard';
+import PrintFormatDesignerSettingsCard from './PrintFormatDesignerSettingsCard';
 import toast from 'react-hot-toast';
 
 const inp = {
@@ -746,6 +747,8 @@ export default function CompanyProfilePage() {
                     </div>
 
                     <InvoiceBarcodeSettingsCard />
+
+                    <PrintFormatDesignerSettingsCard />
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '24px' }}>
                         <button type="submit" disabled={saving} style={{
