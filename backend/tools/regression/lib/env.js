@@ -4,13 +4,19 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/** backend/tools/regression/lib → repo root */
 export function repoRoot() {
-    // backend/tools/regression → repo root
+    return path.resolve(__dirname, '../../../..');
+}
+
+/** backend/tools/regression/lib → backend */
+export function backendRoot() {
     return path.resolve(__dirname, '../../..');
 }
 
-export function backendRoot() {
-    return path.resolve(__dirname, '../..');
+/** backend/tools/regression */
+export function regressionRoot() {
+    return path.resolve(__dirname, '..');
 }
 
 export function loadEnvFile(filePath, into = {}) {
