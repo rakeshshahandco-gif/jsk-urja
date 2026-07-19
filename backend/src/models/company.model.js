@@ -56,15 +56,82 @@ const companySchema = new mongoose.Schema(
             default: ['crm', 'accounts', 'inventory', 'gst', 'tds', 'production', 'service', 'hr', 'rd', 'reports', 'payroll'],
         },
         disabledModules: { type: [String], default: [] },
+        /**
+         * Phase 2 — per-module ON / LOCKED / OFF (additive).
+         * When absent for a key, resolveEffectiveModules / enabledModules fallback applies.
+         */
+        moduleStates: {
+            type: [{
+                moduleKey: { type: String, trim: true, lowercase: true, required: true },
+                state: {
+                    type: String,
+                    enum: ['ON', 'LOCKED', 'OFF'],
+                    required: true,
+                },
+                lockMode: {
+                    type: String,
+                    enum: ['READ_ONLY', 'NEW_ENTRY_BLOCKED', 'FULL_LOCK'],
+                    default: undefined,
+                },
+                lockReason: { type: String, trim: true, default: '' },
+                remarks: { type: String, trim: true, default: '' },
+                changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                changedAt: { type: Date, default: null },
+            }],
+            default: [],
+        },
+        /** Append-only history of module state changes (capped in controller). */
+        moduleStateAudit: {
+            type: [{
+                moduleKey: { type: String, trim: true, lowercase: true },
+                previousState: { type: String, trim: true, default: '' },
+                newState: { type: String, trim: true, default: '' },
+                previousLockMode: { type: String, trim: true, default: '' },
+                newLockMode: { type: String, trim: true, default: '' },
+                lockReason: { type: String, trim: true, default: '' },
+                remarks: { type: String, trim: true, default: '' },
+                changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                changedByName: { type: String, trim: true, default: '' },
+                changedAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
         /** When false (default), legacy full access — JSK URJA unchanged. */
         moduleGuardEnabled: { type: Boolean, default: false },
         /** Set true when admin explicitly configures modules for this company. */
         moduleAllocationConfigured: { type: Boolean, default: false },
+        /**
+         * Super-Admin company setup lock — when true, industry template, module allocation,
+         * workflow assignment, login branding, and deployment mapping cannot be changed
+         * until unlocked by a platform admin.
+         */
+        configurationLocked: { type: Boolean, default: false },
+        configurationLockedAt: { type: Date, default: null },
+        configurationLockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        configurationLockReason: { type: String, trim: true, default: '' },
+        configurationLockHistory: {
+            type: [{
+                action: { type: String, enum: ['lock', 'unlock'], required: true },
+                at: { type: Date, default: Date.now },
+                by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                byName: { type: String, trim: true, default: '' },
+                reason: { type: String, trim: true, default: '' },
+            }],
+            default: [],
+        },
         clientCode: { type: String, trim: true, default: '' },
         /** URL slug for branded login: /login/{loginSlug} */
         loginSlug: { type: String, trim: true, lowercase: true, default: '' },
         loginTagline: { type: String, trim: true, default: '' },
         loginPrimaryColor: { type: String, trim: true, default: '' },
+        /** Application shell subtitle (sidebar/login) — presentation only */
+        applicationSubtitle: { type: String, trim: true, default: '' },
+        /** Browser tab title override (before | JSK E-SARTHI) */
+        browserTitle: { type: String, trim: true, default: '' },
+        /** Public favicon URL for this company */
+        faviconUrl: { type: String, trim: true, default: '' },
+        /** Show Powered by JSK E-SARTHI footer */
+        showPlatformFooter: { type: Boolean, default: true },
         deploymentConfig: {
             databaseName: { type: String, trim: true, default: '' },
             backendUrl: { type: String, trim: true, default: '' },
@@ -91,6 +158,23 @@ const companySchema = new mongoose.Schema(
                 notes: { type: String, trim: true, default: '' },
                 recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
                 recordedByName: { type: String, trim: true, default: '' },
+                /** Phase 4 — CRM-triggered deploy log (manual or Render hook) */
+                source: { type: String, trim: true, default: 'manual' },
+                clientKey: { type: String, trim: true, default: '' },
+                companyName: { type: String, trim: true, default: '' },
+                industryTemplateCode: { type: String, trim: true, default: '' },
+                serviceTarget: { type: String, trim: true, default: '' },
+                environment: { type: String, trim: true, default: '' },
+                deployStatus: {
+                    type: String,
+                    enum: ['', 'pending', 'deploying', 'success', 'failed', 'dry_run', 'blocked'],
+                    default: '',
+                },
+                deployMode: { type: String, trim: true, default: '' },
+                deployResponse: { type: mongoose.Schema.Types.Mixed, default: null },
+                checklistResult: { type: mongoose.Schema.Types.Mixed, default: null },
+                sharedRiskAcknowledged: { type: Boolean, default: false },
+                rollbackAvailable: { type: Boolean, default: false },
             }],
             default: [],
         },

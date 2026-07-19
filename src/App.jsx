@@ -5,6 +5,7 @@ import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import ModuleLockBanner from './components/module/ModuleLockBanner';
 import { TopMenuBar } from './components/layout/TopMenuBar/TopMenuBar';
 import { Button, Input, Select, ModalProvider, useModal } from '@/components/ui';
 import { SidebarProvider, useSidebar } from './context/SidebarContext';
@@ -515,6 +516,7 @@ const AppLayout = () => {
             }}>
                 <TopMenuBar />
                 <Header />
+                <ModuleLockBanner />
                 <main
                     className="jsk-main-content"
                     key={selectedFY}
