@@ -1,0 +1,104 @@
+# CRM Safe Change Validation (Phase 2.6)
+# Validation only — never deploys, never uses production/local Mongo credentials.
+
+name: CRM Safe Change Validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crm-safe-change-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safe-change:
+    name: Safe Change Guard + Offline Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CI: "true"
+      NODE_ENV: test
+      # Explicitly do not configure live DB credentials
+      REGRESSION_HANDLOOM_PASS: ""
+      REGRESSION_JSK_PASS: ""
+      REGRESSION_PASS: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Safe Change Guard (CI)
+        run: node backend/tools/regression/safe-change/check.mjs --ci
+
+      - name: Regression fast (offline)
+        run: npm run regression:fast -- --ci
+
+      - name: Backend unit tests (module / company / sales / print bundles)
+        working-directory: backend
+        run: |
+          node --test \
+            test/moduleGuard.test.js \
+            test/moduleStateDecision.test.js \
+            test/companyUserAccess.test.js \
+            test/platformAccess.test.js \
+            test/phase3GstRegression.test.js \
+            test/handloomPrintSeparation.test.js \
+            test/formPrintLock.test.js
+
+      - name: Module-state suite
+        run: node backend/tools/regression/run.mjs --ci --offline --category module-state
+
+      - name: Company-isolation suite
+        run: node backend/tools/regression/run.mjs --ci --offline --category company-isolation
+
+      - name: Sales regression suite (offline units)
+        run: node backend/tools/regression/run.mjs --ci --offline --category sales
+
+      - name: Print regression suite (offline units)
+        run: node backend/tools/regression/run.mjs --ci --offline --category print
+
+      - name: Frontend build
+        run: npm run build
+
+      - name: Regression release (CI-safe offline)
+        run: npm run regression:release -- --ci --offline --no-report
+
+      - name: Generate reports
+        if: always()
+        run: |
+          node backend/tools/regression/run.mjs --ci --offline --level fast || true
+          node backend/tools/regression/safe-change/check.mjs --ci || true
+          npm run regression:report || true
+
+      - name: Upload Safe Change Report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-safe-change-report
+          path: |
+            backend/tools/regression/reports/SAFE-CHANGE-GUARD-latest.md
+            backend/tools/regression/reports/SAFE-CHANGE-GUARD-latest.json
+            backend/tools/regression/reports/CRM-SAFE-CHANGE-REPORT-latest.txt
+            backend/tools/regression/reports/*.md
+            backend/tools/regression/reports/*.json
+            backend/tools/regression/reports/*.txt
+          if-no-files-found: warn
+          retention-days: 14
