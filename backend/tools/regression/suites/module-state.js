@@ -1,9 +1,11 @@
 import mongoose from 'mongoose';
-import { PRODUCTS, PILOT_MODULES, RISK, UNIT_TEST_BUNDLES } from '../config.js';
+import { PRODUCTS, PILOT_MODULES, RISK } from '../config.js';
 import { createHarness } from '../lib/harness.js';
 import { api } from '../lib/http.js';
 import { loadProductMongoUrl } from '../lib/env.js';
-import { runUnitTests } from '../lib/process.js';
+import { runApplicableUnitBundle } from '../lib/process.js';
+import { detectActiveProduct } from '../lib/productContext.js';
+import { recordUnitBundle } from '../lib/unitBundle.js';
 import {
     evaluateModuleAccess,
     resolveModuleState,
@@ -87,14 +89,16 @@ async function restore(mongoUrl, companyId, prev) {
     }
 }
 
-export async function runModuleStateSuite({ live, sessions, mutate = false }) {
+export async function runModuleStateSuite({ live, sessions, mutate = false, productContext } = {}) {
     const h = createHarness({ category: 'module-state', live });
+    const ctx = productContext || detectActiveProduct();
 
-    const unit = runUnitTests(UNIT_TEST_BUNDLES.module);
-    h.expect(unit.ok, 'module decision unit tests', unit.ok ? 'pass' : 'fail', {
-        detail: unit.output.slice(-400),
-        risk: RISK.BLOCK_DEPLOYMENT,
-        code: 'MODULE_BYPASS',
+    const unit = runApplicableUnitBundle('module', ctx.productKey);
+    recordUnitBundle(h, {
+        label: 'module decision unit tests',
+        bundleResult: unit,
+        failCode: 'MODULE_BYPASS',
+        failRisk: RISK.BLOCK_DEPLOYMENT,
     });
 
     const matrix = [

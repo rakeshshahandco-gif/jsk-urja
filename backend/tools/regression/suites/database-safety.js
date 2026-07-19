@@ -2,20 +2,41 @@ import { PRODUCTS, RISK } from '../config.js';
 import { createHarness } from '../lib/harness.js';
 import { snapshotCounts, compareSnapshots } from '../lib/dbSafety.js';
 import { loadProductMongoUrl } from '../lib/env.js';
+import { detectActiveProduct } from '../lib/productContext.js';
 
 /**
  * Database safety — read-only snapshots. No deletes/migrations.
+ * Only validates the active product's database (never sibling product against wrong DB).
  */
-export async function runDatabaseSafetySuite({ live, context }) {
+export async function runDatabaseSafetySuite({ live, context, productContext } = {}) {
     const h = createHarness({ category: 'database-safety', live });
+    const ctx = productContext || detectActiveProduct();
 
     if (context?.ci || process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') {
         h.skip('DB snapshots', 'SKIPPED — dedicated CI database not configured');
         h.pass('database safety policy', 'framework never runs destructive migrations or bulk deletes');
         return h.results;
     }
+
+    if (ctx.productKey === 'unknown') {
+        h.skip(
+            'product DB snapshots',
+            'SKIPPED — UNKNOWN_PRODUCT; no guessed database for safety checks',
+        );
+        h.pass('database safety policy', 'framework never runs destructive migrations or bulk deletes');
+        return h.results;
+    }
+
     for (const key of ['handloom', 'jsk']) {
         const product = PRODUCTS[key];
+        if (key !== ctx.productKey) {
+            h.skip(
+                `${product.label} DB snapshot`,
+                `SKIPPED — ${key}-only check; active product is ${ctx.productKey}`,
+            );
+            continue;
+        }
+
         const url = loadProductMongoUrl(key);
         if (!url) {
             h.skip(`${product.label} DB snapshot`, 'mongo url unavailable');
@@ -50,7 +71,6 @@ export async function runDatabaseSafetySuite({ live, context }) {
                 }
             }
 
-            // Known company present
             const hasCompany = (snap.companyIds || []).includes(product.companyId);
             h.expect(hasCompany, `${product.label} expected company id present`, product.companyId, {
                 detail: `company ${product.companyId} missing in ${snap.database}`,

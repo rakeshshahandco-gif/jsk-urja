@@ -1,26 +1,28 @@
 import fs from 'fs';
 import path from 'path';
-import { RISK, UNIT_TEST_BUNDLES, PRODUCTS } from '../config.js';
+import { RISK, PRODUCTS } from '../config.js';
 import { createHarness } from '../lib/harness.js';
-import { runUnitTests } from '../lib/process.js';
+import { runApplicableUnitBundle } from '../lib/process.js';
 import { backendRoot } from '../lib/env.js';
 import { api } from '../lib/http.js';
+import { detectActiveProduct } from '../lib/productContext.js';
+import { recordUnitBundle } from '../lib/unitBundle.js';
 
 /**
  * Print/PDF regression — read-only unit + isolation checks.
- * Does not regenerate or overwrite print formats.
  */
-export async function runPrintSuite({ live, sessions }) {
+export async function runPrintSuite({ live, sessions, productContext } = {}) {
     const h = createHarness({ category: 'print', live });
+    const ctx = productContext || detectActiveProduct();
 
-    const unit = runUnitTests(UNIT_TEST_BUNDLES.print);
-    h.expect(unit.ok, 'print/golden unit regression', unit.ok ? 'pass' : 'fail', {
-        detail: unit.output.slice(-500),
-        risk: RISK.BLOCK_DEPLOYMENT,
-        code: unit.ok ? null : 'WRONG_PRINT',
+    const unit = runApplicableUnitBundle('print', ctx.productKey);
+    recordUnitBundle(h, {
+        label: 'print/golden unit regression',
+        bundleResult: unit,
+        failCode: 'WRONG_PRINT',
+        failRisk: RISK.BLOCK_DEPLOYMENT,
     });
 
-    // Static: Handloom print helpers must not import JSK-only paths incorrectly
     const soPrint = path.join(backendRoot(), 'src/features/sales/print');
     if (fs.existsSync(soPrint)) {
         h.pass('sales print helper folder present', soPrint);
@@ -28,21 +30,27 @@ export async function runPrintSuite({ live, sessions }) {
         h.skip('sales print helper folder', 'path not found (layout may differ)');
     }
 
-    // Locked-forms checklist script exists
     const lockedScript = path.join(backendRoot(), '../scripts/check-locked-form-changes.cjs');
-    h.expect(fs.existsSync(lockedScript), 'locked-forms check script exists', lockedScript, {
-        detail: 'missing scripts/check-locked-form-changes.cjs',
-        risk: RISK.MEDIUM,
-    });
+    if (ctx.productKey === 'handloom') {
+        h.expect(fs.existsSync(lockedScript), 'locked-forms check script exists', lockedScript, {
+            detail: 'missing scripts/check-locked-form-changes.cjs',
+            risk: RISK.MEDIUM,
+        });
+    } else {
+        h.skip(
+            'locked-forms check script exists',
+            `SKIPPED — locked-forms script is handloom-only; active product is ${ctx.productKey}`,
+        );
+    }
 
     if (!live) {
         h.skip('live print format isolation APIs', 'offline mode');
         return h.results;
     }
 
-    // If print-formats list exists, ensure company scope applies (no cross-company)
-    for (const key of ['handloom', 'jsk']) {
-        const s = sessions[key];
+    const keys = ctx.productKey === 'unknown' ? ['handloom', 'jsk'] : [ctx.productKey];
+    for (const key of keys) {
+        const s = sessions?.[key];
         const p = PRODUCTS[key];
         if (!s?.token) {
             h.skip(`${p.label} print formats`, 'no session');
@@ -63,7 +71,6 @@ export async function runPrintSuite({ live, sessions }) {
             h.pass(`${p.label} print formats request scoped`, `status=${r.status}`);
         }
 
-        // Cross company header
         const other = key === 'handloom' ? PRODUCTS.jsk.companyId : PRODUCTS.handloom.companyId;
         const leak = await api(s.base, 'GET', '/api/v1/print-formats?limit=1', {
             token: s.token,

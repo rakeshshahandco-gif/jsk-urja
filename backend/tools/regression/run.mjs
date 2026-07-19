@@ -20,6 +20,7 @@ import { CATEGORIES, PRODUCTS } from './config.js';
 import { summarize } from './lib/harness.js';
 import { buildSafeChangeReport, writeReport } from './lib/report.js';
 import { health } from './lib/http.js';
+import { detectActiveProduct } from './lib/productContext.js';
 
 import { runEnvironmentSuite } from './suites/environment.js';
 import { runAuthenticationSuite } from './suites/authentication.js';
@@ -137,6 +138,12 @@ async function main() {
 
     console.log('\nCRM REGRESSION PROTECTION FRAMEWORK');
     console.log(`Level: ${opts.level} | Mode: ${live ? 'LIVE' : 'OFFLINE'} | categories: ${opts.categories.join(', ')}`);
+    const productContext = detectActiveProduct();
+    console.log(
+        `Product: ${productContext.productKey} (${productContext.productName}) via ${productContext.detectionSource}`
+        + (productContext.expectedDatabase ? ` | expected DB: ${productContext.expectedDatabase}` : ''),
+    );
+    if (productContext.warning) console.log(`Warning: ${productContext.warning}`);
     if (live) console.log('Backends: Handloom :5000 / JSK :5100');
     console.log('');
 
@@ -145,31 +152,43 @@ async function main() {
         live,
         ci: opts.ci,
         environment: process.env.NODE_ENV || 'development',
-        companies: 'Handloom Group, JSK URJA',
-        databases: 'handloom_crm, jsk-esarthi-ui-dev',
+        companies: productContext.productKey === 'jsk'
+            ? 'JSK URJA'
+            : productContext.productKey === 'handloom'
+                ? 'Handloom Group'
+                : 'Handloom Group, JSK URJA',
+        databases: productContext.expectedDatabase || 'handloom_crm, jsk-esarthi-ui-dev',
+        productKey: productContext.productKey,
+        productName: productContext.productName,
+        expectedIdentity: productContext.expectedIdentity,
+        expectedDatabase: productContext.expectedDatabase,
+        detectionSource: productContext.detectionSource,
+        productWarning: productContext.warning,
         dbSnapshots: {},
     };
 
     const runners = {
-        environment: () => runEnvironmentSuite({ live }),
+        environment: () => runEnvironmentSuite({ live, productContext }),
         authentication: () => runAuthenticationSuite({ live, sessions }),
-        'company-isolation': () => runCompanyIsolationSuite({ live, sessions }),
+        'company-isolation': () => runCompanyIsolationSuite({ live, sessions, productContext }),
         'module-state': () => runModuleStateSuite({
             live,
             sessions,
             mutate: opts.mutateModules && !opts.ci,
+            productContext,
         }),
-        sales: () => runSalesSuite({ live, sessions }),
-        print: () => runPrintSuite({ live, sessions }),
+        sales: () => runSalesSuite({ live, sessions, productContext }),
+        print: () => runPrintSuite({ live, sessions, productContext }),
         'company-config': () => runCompanyConfigSuite({ live, sessions }),
         cache: () => runCacheSuite({ live }),
         security: () => runSecuritySuite({ live, sessions }),
-        'database-safety': () => runDatabaseSafetySuite({ live, context }),
+        'database-safety': () => runDatabaseSafetySuite({ live, context, productContext }),
         build: () => runBuildSuite({
             live,
             runBuild: opts.runBuild,
             runLint: opts.runLint,
             releaseChecks: opts.releaseChecks,
+            productContext,
         }),
     };
 
@@ -223,6 +242,9 @@ async function main() {
     } else if (summary.failed > 0) {
         console.log('\nRECOMMENDATION: FIX FAILURES BEFORE COMMIT/DEPLOY');
         process.exitCode = 1;
+    } else if (productContext.productKey === 'unknown') {
+        console.log('\nRECOMMENDATION: UNKNOWN_PRODUCT — SAFE FOR REVIEW only (not SAFE FOR DEPLOYMENT)');
+        process.exitCode = 0;
     } else if (opts.ci) {
         console.log('\nRECOMMENDATION: SAFE FOR REVIEW (CI offline — not SAFE FOR DEPLOYMENT)');
         process.exitCode = 0;

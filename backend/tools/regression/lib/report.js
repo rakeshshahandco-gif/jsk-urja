@@ -34,6 +34,12 @@ export function buildSafeChangeReport({
     lines.push(`Branch:          ${git.branch} @ ${git.sha}`);
     lines.push(`Environment:     ${context.environment || process.env.NODE_ENV || 'development'}`);
     lines.push(`Mode:            ${context.live ? 'LIVE (API)' : 'OFFLINE / UNIT'}`);
+    if (context.productKey) {
+        lines.push(`Product:         ${context.productKey} (${context.productName || ''}) via ${context.detectionSource || '?'}`);
+        lines.push(`Identity:        ${context.expectedIdentity || '(n/a)'}`);
+        lines.push(`Expected DB:     ${context.expectedDatabase || '(n/a)'}`);
+    }
+    if (context.productWarning) lines.push(`Product warn:    ${context.productWarning}`);
     lines.push(`Companies:       ${context.companies || 'Handloom Group, JSK URJA'}`);
     lines.push(`Databases:       ${context.databases || 'handloom_crm, jsk-esarthi-ui-dev'}`);
     lines.push(`Categories:      ${categoriesRun.join(', ') || '(all)'}`);

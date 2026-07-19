@@ -108,3 +108,138 @@ export const UNIT_TEST_BUNDLES = Object.freeze({
         'test/platformAccess.test.js',
     ],
 });
+
+/**
+ * Product-aware check registry (metadata). Prefer this over bare filename lists.
+ * products: which products the check applies to
+ * required: if true on an applicable product, missing file → FAIL/BLOCK
+ */
+export const UNIT_TEST_CHECKS = Object.freeze([
+    {
+        id: 'module-state-decision',
+        file: 'test/moduleStateDecision.test.js',
+        products: ['handloom', 'jsk'],
+        required: true,
+        bundle: 'module',
+        blockCode: 'MODULE_BYPASS',
+    },
+    {
+        id: 'module-guard',
+        file: 'test/moduleGuard.test.js',
+        products: ['handloom', 'jsk'],
+        required: false,
+        bundle: 'module',
+        blockCode: 'MODULE_BYPASS',
+    },
+    {
+        id: 'phase5-module-matrix',
+        file: 'test/phase5ModuleGuardMatrix.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'module',
+        blockCode: 'MODULE_BYPASS',
+    },
+    {
+        id: 'phase3-gst',
+        file: 'test/phase3GstRegression.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'salesGst',
+        blockCode: 'SALES_REGRESSION',
+    },
+    {
+        id: 'phase3-stock',
+        file: 'test/phase3StockRegression.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'salesGst',
+        blockCode: 'SALES_REGRESSION',
+    },
+    {
+        id: 'phase3-accounting',
+        file: 'test/phase3AccountingRegression.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'salesGst',
+        blockCode: 'SALES_REGRESSION',
+    },
+    {
+        id: 'handloom-print-separation',
+        file: 'test/handloomPrintSeparation.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'print',
+        blockCode: 'WRONG_PRINT',
+    },
+    {
+        id: 'form-print-lock',
+        file: 'test/formPrintLock.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'print',
+        blockCode: 'WRONG_PRINT',
+    },
+    {
+        id: 'golden-reference',
+        file: 'test/goldenReferenceRegression.test.js',
+        products: ['handloom'],
+        required: true,
+        bundle: 'print',
+        blockCode: 'WRONG_PRINT',
+    },
+    {
+        id: 'company-user-access',
+        file: 'test/companyUserAccess.test.js',
+        products: ['handloom', 'jsk'],
+        required: true,
+        bundle: 'company',
+        blockCode: 'COMPANY_LEAK',
+    },
+    {
+        id: 'company-branding',
+        file: 'test/companyBranding.test.js',
+        products: ['handloom', 'jsk'],
+        required: false,
+        bundle: 'company',
+        blockCode: 'COMPANY_LEAK',
+    },
+    {
+        id: 'platform-access',
+        file: 'test/platformAccess.test.js',
+        products: ['handloom', 'jsk'],
+        required: true,
+        bundle: 'company',
+        blockCode: 'COMPANY_LEAK',
+    },
+]);
+
+export const SCRIPT_CHECKS = Object.freeze([
+    {
+        id: 'locked-forms-script',
+        path: 'scripts/check-locked-form-changes.cjs',
+        products: ['handloom'],
+        required: true,
+        risk: RISK.MEDIUM,
+    },
+    {
+        id: 'golden-regression-script',
+        path: 'scripts/check-golden-reference-regression.cjs',
+        products: ['handloom'],
+        required: true,
+        risk: RISK.HIGH,
+    },
+    {
+        id: 'release-check-script',
+        path: 'scripts/release-check.cjs',
+        products: ['handloom'],
+        required: true,
+        risk: RISK.HIGH,
+    },
+    {
+        id: 'regression-runner',
+        path: 'backend/tools/regression/run.mjs',
+        products: ['handloom', 'jsk'],
+        required: true,
+        risk: RISK.HIGH,
+    },
+]);

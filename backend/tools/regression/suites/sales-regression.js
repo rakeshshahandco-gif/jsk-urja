@@ -1,24 +1,25 @@
-import { PRODUCTS, RISK, UNIT_TEST_BUNDLES } from '../config.js';
+import { PRODUCTS, RISK } from '../config.js';
 import { createHarness } from '../lib/harness.js';
 import { api } from '../lib/http.js';
-import { runUnitTests } from '../lib/process.js';
+import { runApplicableUnitBundle } from '../lib/process.js';
+import { detectActiveProduct } from '../lib/productContext.js';
+import { recordUnitBundle } from '../lib/unitBundle.js';
 
 /**
  * Sales regression — READ ONLY.
- * Does not create/edit/delete sales documents.
- * Verifies unit GST/stock/accounting regression bundles + list API reachability.
  */
-export async function runSalesSuite({ live, sessions }) {
+export async function runSalesSuite({ live, sessions, productContext } = {}) {
     const h = createHarness({ category: 'sales', live });
+    const ctx = productContext || detectActiveProduct();
 
-    const unit = runUnitTests(UNIT_TEST_BUNDLES.salesGst);
-    h.expect(unit.ok, 'GST/stock/accounting unit regression bundles', unit.ok ? 'pass' : 'fail', {
-        detail: unit.output.slice(-500),
-        risk: RISK.BLOCK_DEPLOYMENT,
-        code: unit.ok ? null : 'SALES_REGRESSION',
+    const unit = runApplicableUnitBundle('salesGst', ctx.productKey);
+    recordUnitBundle(h, {
+        label: 'GST/stock/accounting unit regression bundles',
+        bundleResult: unit,
+        failCode: 'SALES_REGRESSION',
+        failRisk: RISK.BLOCK_DEPLOYMENT,
     });
 
-    // Static invariant: sales module decision ON allows GET
     h.pass('sales regression policy', 'no mutation of SO/SI/GST/totals/series/stock/PDF in this suite');
 
     if (!live) {
@@ -31,7 +32,6 @@ export async function runSalesSuite({ live, sessions }) {
         { name: 'Sales Invoices list', path: '/api/v1/sales-invoices?limit=1' },
     ];
 
-    // Optional docs if routes exist — treat 404 as skip, permission 403 as pass (not module regression)
     const optional = [
         { name: 'Estimates list', path: '/api/v1/estimates?limit=1' },
         { name: 'Quotations list', path: '/api/v1/quotations?limit=1' },
@@ -39,8 +39,10 @@ export async function runSalesSuite({ live, sessions }) {
         { name: 'Purchase Orders list', path: '/api/v1/purchase-orders?limit=1' },
     ];
 
-    for (const productKey of ['handloom', 'jsk']) {
-        const session = sessions[productKey];
+    const productKeys = ctx.productKey === 'unknown' ? ['handloom', 'jsk'] : [ctx.productKey];
+
+    for (const productKey of productKeys) {
+        const session = sessions?.[productKey];
         const product = PRODUCTS[productKey];
         if (!session?.token) {
             h.skip(`${product.label} sales APIs`, 'no session');
@@ -59,7 +61,6 @@ export async function runSalesSuite({ live, sessions }) {
                     code: 'SALES_REGRESSION',
                 });
             } else if (r.status < 400 || r.status === 403) {
-                // 403 permission is acceptable; proves route exists and company scope ran
                 h.pass(`${product.label} ${ep.name}`, `status=${r.status}${r.status === 403 ? ' (permission)' : ''}`);
             } else {
                 h.fail(`${product.label} ${ep.name}`, `status=${r.status} ${msg}`, {

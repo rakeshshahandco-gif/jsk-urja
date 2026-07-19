@@ -1,18 +1,20 @@
 import { PRODUCTS, RISK } from '../config.js';
 import { createHarness } from '../lib/harness.js';
 import { api } from '../lib/http.js';
-import { UNIT_TEST_BUNDLES } from '../config.js';
-import { runUnitTests } from '../lib/process.js';
+import { runApplicableUnitBundle } from '../lib/process.js';
+import { detectActiveProduct } from '../lib/productContext.js';
+import { recordUnitBundle } from '../lib/unitBundle.js';
 
-export async function runCompanyIsolationSuite({ live, sessions }) {
+export async function runCompanyIsolationSuite({ live, sessions, productContext } = {}) {
     const h = createHarness({ category: 'company-isolation', live });
+    const ctx = productContext || detectActiveProduct();
 
-    const unit = runUnitTests(UNIT_TEST_BUNDLES.company);
-    if (unit.skipped) h.skip('company unit bundle', 'none');
-    else h.expect(unit.ok, 'company unit tests', unit.ok ? 'pass' : unit.output.slice(-200), {
-        detail: unit.output.slice(-500),
-        risk: RISK.HIGH,
-        code: 'COMPANY_LEAK',
+    const unit = runApplicableUnitBundle('company', ctx.productKey);
+    recordUnitBundle(h, {
+        label: 'company unit tests',
+        bundleResult: unit,
+        failCode: 'COMPANY_LEAK',
+        failRisk: RISK.HIGH,
     });
 
     if (!live) {
