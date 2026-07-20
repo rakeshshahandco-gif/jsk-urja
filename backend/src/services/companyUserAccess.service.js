@@ -22,6 +22,49 @@ export function canUserAccessCompany(user, companyId) {
     return (user.assignedCompanyIds || []).some((id) => String(id) === target);
 }
 
+/**
+ * Whether the UI may offer company switching.
+ * Missing/undefined canSwitchCompany → preserve legacy multi-company behaviour.
+ */
+export function userCanSwitchCompany(user) {
+    if (!user) return true;
+    if (user.canSwitchCompany === false) return false;
+    return true;
+}
+
+/**
+ * Resolve the company the client should auto-open after login.
+ * Returns company id string or null (null → keep existing FE fallback).
+ */
+export function resolvePreferredCompanyId(user) {
+    if (!user) return null;
+
+    const assigned = (user.assignedCompanyIds || []).map((id) => String(id)).filter(Boolean);
+    const configured = user.companyAccessConfigured === true;
+    const defaultId = user.defaultCompanyId ? String(user.defaultCompanyId) : null;
+    const legacy = hasLegacyCompanyAccess(user);
+
+    if (defaultId) {
+        const allowed =
+            legacy
+            || !configured
+            || assigned.length === 0
+            || assigned.includes(defaultId);
+        if (allowed) {
+            return defaultId;
+        }
+        console.warn(
+            `[companyUserAccess] defaultCompanyId ${defaultId} not in assignedCompanyIds for user ${user.username || user._id}`
+        );
+    }
+
+    if (configured && assigned.length === 1) {
+        return assigned[0];
+    }
+
+    return null;
+}
+
 export function mongooseFilterCompaniesForUser(user) {
     if (hasLegacyCompanyAccess(user)) {
         return {};
