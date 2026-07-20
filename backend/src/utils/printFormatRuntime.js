@@ -53,7 +53,11 @@ export function buildPdfFormatCss(printFormat, docType) {
       .page { width: ${pageW}mm; padding: ${pad}; box-sizing: border-box; position: relative; }
     `;
 
-    if (printFormat.layout?.engineVersion >= 2 && printFormat.layout?.blocks && docType) {
+    // Match frontend hasBlockLayout: apply designer absolute blocks whenever saved blocks exist,
+    // so PDF geometry matches Print Format Designer / browser print.
+    const blocks = printFormat.layout?.blocks;
+    const hasBlocks = blocks && typeof blocks === 'object' && Object.keys(blocks).length > 0;
+    if (docType && hasBlocks) {
         css += buildPdfBlockLayoutCss(printFormat, docType);
     } else {
         const sections = printFormat.layout?.sections || {};

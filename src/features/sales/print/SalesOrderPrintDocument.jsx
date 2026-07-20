@@ -59,12 +59,16 @@ export default function SalesOrderPrintDocument({
 
     const designerMode = mode === 'designer';
     // /print-formats/active already returns only Approved + Active Default (or null).
-    // Trust that payload; only require blocks for absolute layout.
+    // If that payload has designer blocks, use the same absolute block renderer as the designer.
     const liveCustom = Boolean(
         !designerMode
         && printFormat
         && hasBlockLayout(printFormat)
-        && (isLivePrintFormat(printFormat) || printFormat.isDefault === true)
+        && (
+            isLivePrintFormat(printFormat)
+            || printFormat.isDefault === true
+            || printFormat.status === 'approved'
+        )
     );
     const useBlockLayout = designerMode || liveCustom;
 

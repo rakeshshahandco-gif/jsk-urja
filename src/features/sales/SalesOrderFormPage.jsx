@@ -854,6 +854,15 @@ export default function SalesOrderFormPage() {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24, padding: '20px 0', borderTop: '1px solid #e5e7eb' }}>
                     <button onClick={() => { if (window.confirm('Discard changes and return to list?')) navigate(PATHS.SALES.ORDERS); }} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 14 }}>Cancel</button>
+                    {isEdit && (
+                        <button
+                            type="button"
+                            onClick={() => navigate(`${PATHS.SALES.ORDER_DETAIL(id)}?view=print`)}
+                            style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, color: '#374151', fontSize: 14 }}
+                        >
+                            🖨️ Print
+                        </button>
+                    )}
                     {(!form.status || form.status === 'Draft') && (
                         <button onClick={() => handleSubmit('Draft')} disabled={saving} style={{ padding: '10px 24px', background: '#fff', color: '#0d9488', border: '1px solid #0d9488', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
                             {saving ? 'Saving...' : isEdit ? 'Save Draft' : 'Save as Draft'}

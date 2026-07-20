@@ -85,11 +85,9 @@ export default function SalesOrderDetailPage() {
 
   useEffect(() => {
     if (!so || loading || stayForPrintView) return;
-    const locked =
-      so.billingState?.fullyInvoiced
-      || so.status === "Invoiced"
-      || ["Cancelled", "Closed", "Completed"].includes(so.status);
-    if (!locked) {
+    // Only Draft is editable. Confirmed/etc must stay on detail — otherwise
+    // detail→edit→"cannot be edited"→detail loops and spams toasts.
+    if (so.status === "Draft" && !so.invoiceId) {
       navigate(`/sales/orders/${id}/edit`, { replace: true });
     }
   }, [so, loading, stayForPrintView, id, navigate]);
