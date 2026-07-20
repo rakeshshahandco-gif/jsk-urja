@@ -37,9 +37,11 @@ connectDB().then((connected) => {
     // Initialize Socket.io
     initSocket(httpServer);
 
-    server = httpServer.listen(config.port, () => {
-        console.log(`Server started at ${new Date().toISOString()} on port ${config.port}`);
-        logger.info(`Listening to port ${config.port}`);
+    // Render requires an open HTTP port on 0.0.0.0; local JSK uses PORT from env/.env.local (5100).
+    const listenHost = '0.0.0.0';
+    server = httpServer.listen(config.port, listenHost, () => {
+        console.log(`Server started at ${new Date().toISOString()} on ${listenHost}:${config.port}`);
+        logger.info(`Listening on ${listenHost}:${config.port}`);
         logger.info(`🌐 API available at: http://localhost:${config.port}/api/v1`);
 
         // Auto-reconnect all saved per-user WhatsApp sessions (after 5s delay for socket init)
