@@ -40,9 +40,38 @@ export const PRODUCT_CONTEXTS = Object.freeze({
 export const ALL_WATCH_PORTS = Object.freeze([4000, 5000, 4100, 5100]);
 
 /**
- * Detect product context from repository root path.
+ * Normalize explicit product identifiers to approved keys.
+ * Priority consumers: REGRESSION_PRODUCT, APPLICATION_KEY.
+ */
+export function normalizeProductKey(raw = '') {
+    const v = String(raw || '').trim().toLowerCase();
+    if (!v) return null;
+    if (v === 'handloom' || v === 'handloom-local' || v === 'handloom_crm' || v.startsWith('handloom')) {
+        return 'handloom';
+    }
+    if (
+        v === 'jsk'
+        || v === 'jsk-local'
+        || v === 'jsk-urja'
+        || v === 'jsk-esarthi-ui-dev'
+        || v.startsWith('jsk')
+    ) {
+        return 'jsk';
+    }
+    return null;
+}
+
+/**
+ * Detect product context.
+ * Priority: REGRESSION_PRODUCT → APPLICATION_KEY → local folder → unknown.
  */
 export function detectContextFromRoot(repoRootPath = '') {
+    const fromOverride = normalizeProductKey(process.env.REGRESSION_PRODUCT);
+    if (fromOverride) return PRODUCT_CONTEXTS[fromOverride];
+
+    const fromAppKey = normalizeProductKey(process.env.APPLICATION_KEY);
+    if (fromAppKey) return PRODUCT_CONTEXTS[fromAppKey];
+
     const normalized = String(repoRootPath || '').replace(/\\/g, '/');
     const base = normalized.split('/').filter(Boolean).pop() || '';
 
@@ -52,11 +81,6 @@ export function detectContextFromRoot(repoRootPath = '') {
     if (base === 'JSK-E-SARTHI-MASTER' || /\/JSK-E-SARTHI-MASTER$/i.test(normalized)) {
         return PRODUCT_CONTEXTS.handloom;
     }
-
-    // Fallback: APPLICATION_KEY env
-    const key = String(process.env.APPLICATION_KEY || '').toLowerCase();
-    if (key.includes('jsk')) return PRODUCT_CONTEXTS.jsk;
-    if (key.includes('handloom')) return PRODUCT_CONTEXTS.handloom;
 
     return null;
 }
