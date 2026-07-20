@@ -2,22 +2,39 @@ import httpStatus from 'http-status';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import {
-    isModuleEnabled,
     loadCompanyModuleContext,
 } from '../services/moduleGuard.service.js';
 import {
     isModuleGuardExemptApiPath,
     moduleForApiPath,
 } from '../constants/moduleRegistry.constants.js';
+import {
+    evaluateModuleAccess,
+    formatModuleAccessDeniedMessage,
+} from '../constants/moduleAccessDecision.constants.js';
+import { isPlatformAdminUser } from '../constants/platformAccess.constants.js';
 
 export const requireModule = (moduleCode) => asyncHandler(async (req, res, next) => {
     if (!req.companyId) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Company context required');
     }
-    const enabled = await isModuleEnabled(req.companyId, moduleCode);
-    if (!enabled) {
-        throw new ApiError(httpStatus.FORBIDDEN, `Module disabled: ${moduleCode}`);
+    const ctx = await loadCompanyModuleContext(req.companyId);
+    const decision = evaluateModuleAccess({
+        moduleGuardEnabled: ctx.moduleGuardEnabled,
+        enabledModules: ctx.enabledModules,
+        moduleStates: ctx.moduleStates,
+        moduleCode,
+        method: req.method,
+        pathname: req.path || req.originalUrl || '',
+        isPlatformAdmin: isPlatformAdminUser(req.user),
+    });
+    if (!decision.allowed) {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            formatModuleAccessDeniedMessage(decision.moduleCode, decision.reason),
+        );
     }
+    req.moduleAccessDecision = decision;
     next();
 });
 
@@ -28,20 +45,39 @@ export const attachModuleContext = asyncHandler(async (req, res, next) => {
     next();
 });
 
-/** Auto-gate known API prefixes when company has moduleGuardEnabled. */
+/**
+ * Auto-gate known API prefixes.
+ * Sequence: company already resolved by companyScope → load allocation →
+ * resolve ON/LOCKED/OFF → apply lockMode by method → then existing permission middleware runs.
+ */
 export const gateApiModuleByPath = asyncHandler(async (req, res, next) => {
     if (!req.companyId) return next();
     if (isModuleGuardExemptApiPath(req.path)) return next();
 
     const ctx = req.moduleContext || await loadCompanyModuleContext(req.companyId);
     req.moduleContext = ctx;
-    if (!ctx.moduleGuardEnabled) return next();
 
     const moduleCode = moduleForApiPath(req.path);
     if (!moduleCode) return next();
 
-    if (!ctx.enabledModules.includes(moduleCode)) {
-        throw new ApiError(httpStatus.FORBIDDEN, `Module disabled: ${moduleCode}`);
+    // Always evaluate: explicit moduleStates apply even when moduleGuardEnabled is false.
+    // When guard is off and no state entry → allowed (legacy ON).
+    const decision = evaluateModuleAccess({
+        moduleGuardEnabled: ctx.moduleGuardEnabled,
+        enabledModules: ctx.enabledModules,
+        moduleStates: ctx.moduleStates,
+        moduleCode,
+        method: req.method,
+        pathname: req.path || req.originalUrl || '',
+        isPlatformAdmin: isPlatformAdminUser(req.user),
+    });
+    req.moduleAccessDecision = decision;
+
+    if (!decision.allowed) {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            formatModuleAccessDeniedMessage(decision.moduleCode, decision.reason),
+        );
     }
     next();
 });

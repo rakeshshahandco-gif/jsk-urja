@@ -1,4 +1,3 @@
-
 {
   "name": "crm-app",
   "private": true,
@@ -21,7 +20,16 @@
     "build:handloom-backend": "npm install --include=dev && npm run build",
     "lint": "eslint \"src/**/*.{js,jsx}\" vite.config.js",
     "preview": "vite preview",
-    "preview:web": "vite preview --port 4000 --host localhost --strictPort"
+    "preview:web": "vite preview --port 4000 --host localhost --strictPort",
+    "regression": "node backend/tools/regression/run.mjs",
+    "regression:offline": "node backend/tools/regression/run.mjs --offline",
+    "regression:live": "node backend/tools/regression/run.mjs --live",
+    "regression:fast": "node backend/tools/regression/run.mjs --level fast --offline",
+    "regression:full": "node backend/tools/regression/run.mjs --level full",
+    "regression:release": "node backend/tools/regression/run.mjs --level release",
+    "regression:report": "node backend/tools/regression/report.mjs",
+    "safe-change:check": "node backend/tools/regression/safe-change/check.mjs",
+    "check:safe-change": "node backend/tools/regression/safe-change/check.mjs"
   },
   "dependencies": {
     "axios": "^1.13.4",

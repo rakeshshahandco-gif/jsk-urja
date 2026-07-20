@@ -4,6 +4,7 @@ import { PATHS } from '@/routes/paths';
 import styles from './Sidebar.module.scss';
 import clsx from 'clsx';
 import { useSidebar } from '@/context/SidebarContext';
+import { useModuleGuard } from '@/contexts/ModuleGuardContext';
 
 import { 
     ChevronDown, 
@@ -27,6 +28,7 @@ import {
     Folder,
     Globe,
     Receipt,
+    Lock,
 } from 'lucide-react';
 
 const iconMap = {
@@ -61,6 +63,8 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { closeMobileMenu } = useSidebar();
+    const { getMenuLockInfo } = useModuleGuard();
+    const lockInfo = getMenuLockInfo?.(item.id) || null;
 
     // Helper to find module home path
     const getModuleHomePath = (it) => {
@@ -99,7 +103,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // we stop overriding their choice so it never re-opens itself.
     const [isExpanded, setIsExpanded] = useState(
         (isActive && hasChildren)
-        || ((item.id === 'admin' || item.id === 'communication-bulk-group') && hasChildren),
+        || ((item.id === 'admin' || item.id === 'communication-bulk-group' || item.id === 'textile-foundation') && hasChildren),
     );
     const userToggledRef = useRef(false);
 
@@ -129,8 +133,8 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // legacy expand-on-click behaviour — they are not rendered inside the
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
-    /** Top-level groups that expand inline (bulk/email utilities need visible sub-menus). */
-    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group';
+    /** Top-level groups that expand inline (bulk/email utilities + Handloom testing hub). */
+    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group' || item.id === 'textile-foundation';
     const isTopLevelParent = level === 1 && hasChildren && !inlineTopLevelGroup;
     const alwaysShowChildren = inlineTopLevelGroup;
 
@@ -176,6 +180,15 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
                 {!collapsed && (
                     <span className={styles.label} data-jsk-ui-component="sidebar-label">
                         {item.title}
+                        {lockInfo ? (
+                            <Lock
+                                size={12}
+                                strokeWidth={2.4}
+                                style={{ marginLeft: 6, verticalAlign: 'middle', color: '#c2410c' }}
+                                title={lockInfo.lockReason || `Locked (${lockInfo.lockMode || 'LOCKED'})`}
+                                aria-label="Module locked"
+                            />
+                        ) : null}
                     </span>
                 )}
                 {!collapsed && hasChildren && !isTopLevelParent && (

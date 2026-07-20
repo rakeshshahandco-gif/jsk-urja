@@ -4,6 +4,7 @@ import publicBrandingRoute from './publicBranding.routes.js';
 import productionPlanningRoute from './productionPlanning.routes.js';
 import creditDebitNoteRoute from './creditDebitNote.routes.js';
 import authRoute from './auth.routes.js';
+import devActiveContextRoute from './devActiveContext.routes.js';
 import userRoute from './user.routes.js';
 import customerRoute from './customer.routes.js';
 import customerDocumentRoute from './customerDocument.routes.js';
@@ -195,6 +196,10 @@ const defaultRoutes = [
     {
         path: '/auth',
         route: authRoute,
+    },
+    {
+        path: '/dev',
+        route: devActiveContextRoute,
     },
     {
         path: '/users',
