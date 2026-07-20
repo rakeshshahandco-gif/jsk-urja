@@ -53,17 +53,8 @@ jobs:
       - name: Regression fast (offline)
         run: npm run regression:fast -- --ci
 
-      - name: Backend unit tests (module / company / sales / print bundles)
-        working-directory: backend
-        run: |
-          node --test \
-            test/moduleGuard.test.js \
-            test/moduleStateDecision.test.js \
-            test/companyUserAccess.test.js \
-            test/platformAccess.test.js \
-            test/phase3GstRegression.test.js \
-            test/handloomPrintSeparation.test.js \
-            test/formPrintLock.test.js
+      - name: Product-aware unit test bundles
+        run: node backend/tools/regression/run-unit-bundles.mjs
 
       - name: Module-state suite
         run: node backend/tools/regression/run.mjs --ci --offline --category module-state
