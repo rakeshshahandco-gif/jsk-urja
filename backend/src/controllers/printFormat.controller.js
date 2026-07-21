@@ -49,6 +49,11 @@ export const copyPrintFormat = asyncHandler(async (req, res) => {
     res.status(201).json(new ApiResponse(201, data, 'Format copied'));
 });
 
+export const importPrintFormat = asyncHandler(async (req, res) => {
+    const data = await PrintFormatService.importFromExport(req.companyId, req.user._id, req.body || {});
+    res.status(201).json(new ApiResponse(201, data, 'Format imported as draft'));
+});
+
 export const updatePrintFormat = asyncHandler(async (req, res) => {
     const data = await PrintFormatService.update(req.companyId, req.user._id, req.params.id, req.body);
     res.json(new ApiResponse(200, data, 'Print format updated'));

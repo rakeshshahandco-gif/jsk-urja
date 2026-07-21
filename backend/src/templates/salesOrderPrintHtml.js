@@ -124,10 +124,12 @@ function signatureHtml(so, company, user) {
     </div>`;
 }
 
-function itemRows(pageItems, pageIdx) {
-    return pageItems.map((item, i) => `
+function itemRows(pageItems, pageIdx, srStart = null) {
+    return pageItems.map((item, i) => {
+        const sr = srStart != null ? Number(srStart) + i : srNo(pageIdx, i);
+        return `
       <tr>
-        <td style="text-align:center;" data-pf-col="sr">${srNo(pageIdx, i)}</td>
+        <td style="text-align:center;" data-pf-col="sr">${sr}</td>
         <td data-pf-col="itemCode">${esc(item.itemCode || '—')}</td>
         <td style="font-weight:700;text-transform:uppercase;" data-pf-col="description">${esc(item.description || item.itemName || '')}</td>
         <td style="font-size:8pt;" data-pf-col="notes">${esc(item.additionalNotes || '—')}</td>
@@ -136,12 +138,128 @@ function itemRows(pageItems, pageIdx) {
         <td style="text-align:right;" data-pf-col="rate">${fmtMoney(item.rate)}</td>
         <td style="text-align:right;font-weight:700;" data-pf-col="amount">${fmtMoney(item.amount ?? (Number(item.qty) || 0) * (Number(item.rate) || 0))}</td>
         <td data-pf-col="spacer"></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
+}
+
+const FIRST_PAGE_BLOCKS = ['logo', 'companyDetails', 'documentTitle', 'documentNumber', 'customerDetails', 'documentDetails'];
+const LAST_PAGE_BLOCKS = ['totalsBox', 'remarks', 'terms', 'bankDetails', 'signature'];
+
+function paginateBlockItems(items = [], printFormat = null) {
+    const list = Array.isArray(items) ? items : [];
+    const tableH = Number(printFormat?.layout?.blocks?.itemTable?.height) || 100;
+    const margins = printFormat?.margins || {};
+    const marginTop = Number(margins.top ?? 10) || 10;
+    const marginBottom = Number(margins.bottom ?? 10) || 10;
+    const contentH = 297 - marginTop - marginBottom;
+    const headerMm = 8;
+    const rowMm = 7;
+    const rowsFirst = Math.max(1, Math.floor(Math.max(tableH - headerMm, rowMm) / rowMm));
+    const contTableH = Math.max(tableH, contentH - 28);
+    const rowsOther = Math.max(1, Math.floor(Math.max(contTableH - headerMm, rowMm) / rowMm));
+    if (list.length === 0) return [[]];
+    if (list.length <= rowsFirst) return [list];
+    const pages = [list.slice(0, rowsFirst)];
+    let remaining = list.slice(rowsFirst);
+    while (remaining.length > 0) {
+        pages.push(remaining.slice(0, rowsOther));
+        remaining = remaining.slice(rowsOther);
+    }
+    return pages;
+}
+
+function srStartForPage(pages, pageIdx) {
+    let start = 1;
+    for (let i = 0; i < pageIdx; i += 1) start += (pages[i] || []).length;
+    return start;
 }
 
 /**
- * Golden multi-page flow HTML (default). Tagged with data-pf-block for shared engine identity.
+ * Absolute block-layout HTML used when live custom print format has layout.blocks.
+ * Paginated to fixed A4 pages — same rules as frontend SalesOrderPrintDocument.
  */
+export function buildSalesOrderBlockHtml({ so, company, user, logoBase64, blocks = {}, printFormat = null }) {
+    const gstApplicable = so.gstApplicable !== false;
+    const isIGST = so.gstType === 'IGST';
+    const gstRate = Number(so.items?.[0]?.gstRate || so.items?.[0]?.taxPercent || 18);
+    const pages = paginateBlockItems(so.items || [], printFormat || { layout: { blocks } });
+    const totalPages = pages.length;
+    const tableBlock = blocks.itemTable || {};
+
+    const staticContent = {
+        logo: logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '',
+        companyDetails: `<div class="company-details">
+          <h1>${esc(company.companyName || 'JSK URJA')}</h1>
+          <div class="company-addr">
+            ${esc(company.address)}<br/>
+            ${esc(company.city)} ${esc(company.state)}, India. Postal Code: ${esc(company.pincode)}. State Code: ${esc(company.stateCode || '')}<br/>
+            ${(company.phone || company.email) ? `Phone: ${esc(company.phone || '')} Email: ${esc(company.email || '')}` : ''}<br/>
+            ${gstApplicable && company.gstNumber ? `<strong>GSTIN: ${esc(company.gstNumber)}</strong>` : ''}
+          </div>
+        </div>`,
+        documentTitle: `<h1 class="doc-title">${so.seriesId?.isEstimate ? 'ESTIMATE' : 'SALES ORDER'}</h1>`,
+        documentNumber: `${!gstApplicable ? '<div style="font-size:10pt;font-weight:700;">(NON-GST)</div>' : ''}<div class="doc-id">${esc(so.soNumber)}</div>`,
+        customerDetails: `<table class="info-table">
+          <tr><td class="info-label">Customer Name:</td><td class="info-value" style="font-weight:900;">${esc(so.customerName)}</td></tr>
+          <tr><td class="info-label">Address:</td><td class="info-value" style="font-size:9pt;">${esc(so.billingAddress || so.shippingAddress || '—')}</td></tr>
+          ${so.customerState ? `<tr><td class="info-label">State:</td><td class="info-value">${esc(so.customerState)}</td></tr>` : ''}
+          ${so.customerPhone ? `<tr><td class="info-label">Contact No:</td><td class="info-value">${esc(so.customerPhone)}</td></tr>` : ''}
+          ${gstApplicable && so.customerGstin ? `<tr><td class="info-label">GST No:</td><td class="info-value">${esc(so.customerGstin)}</td></tr>` : ''}
+        </table>`,
+        documentDetails: `<table class="info-table">
+          <tr><td class="info-label">Date:</td><td class="info-value">${fmtDate(so.soDate)}</td></tr>
+          <tr><td class="info-label">Order Category:</td><td class="info-value">${esc(so.orderCategory || 'Order')}</td></tr>
+          <tr><td class="info-label">Delivery Date:</td><td class="info-value">${fmtDate(so.deliveryDate)}</td></tr>
+          <tr><td class="info-label">Customer PO:</td><td class="info-value">${esc(so.customerPO || 'VERBAL')}</td></tr>
+          <tr><td class="info-label">PO Date:</td><td class="info-value">${fmtDate(so.customerPODate || so.soDate)}</td></tr>
+        </table>`,
+        totalsBox: buildStandaloneTotals(so, gstApplicable, isIGST, gstRate),
+        remarks: so.remarks
+            ? `<div style="border:1px solid #000;padding:7px 9px;"><div style="font-size:7.5pt;font-weight:800;color:#555;">REMARKS:</div><div style="font-size:8.5pt;white-space:pre-wrap;">${esc(so.remarks)}</div></div>`
+            : '',
+        terms: '',
+        bankDetails: bankHtml(),
+        signature: signatureHtml(so, company, user),
+    };
+
+    return pages.map((pageItems, pageIdx) => {
+        const isFirst = pageIdx === 0;
+        const isLast = pageIdx === totalPages - 1;
+        const start = srStartForPage(pages, pageIdx);
+        const contHeader = !isFirst
+            ? `<div class="pf-cont-header"><strong>${esc(company.companyName || 'JSK URJA')}</strong>
+                <span>Order No: ${esc(so.soNumber)} | Date: ${fmtDate(so.soDate)} (continued)</span></div>`
+            : '';
+        const itemTableHtml = `<table class="items-table"><thead><tr>
+          <th data-pf-col="sr">SR</th><th data-pf-col="itemCode">ITEM CODE</th><th data-pf-col="description">DESCRIPTION</th>
+          <th data-pf-col="notes">ADDITIONAL NOTES</th><th data-pf-col="hsn">HSN</th><th data-pf-col="qty">QTY</th>
+          <th data-pf-col="rate">RATE</th><th data-pf-col="amount">AMOUNT</th><th data-pf-col="spacer"></th>
+        </tr></thead><tbody>${itemRows(pageItems, pageIdx, start)}</tbody></table>`;
+
+        const ids = Object.keys({ ...staticContent, itemTable: true });
+        const body = ids.map((id) => {
+            const b = blocks[id];
+            if (b && b.visible === false) return '';
+            if (FIRST_PAGE_BLOCKS.includes(id) && !isFirst) return '';
+            if (LAST_PAGE_BLOCKS.includes(id) && !isLast) return '';
+            if (id === 'itemTable') {
+                const contStyle = !isFirst
+                    ? ` style="top:28mm;left:${Number(tableBlock.x) || 0}mm;width:${Number(tableBlock.width) || 190}mm;min-height:${Math.max(Number(tableBlock.height) || 100, 180)}mm;"`
+                    : '';
+                return `<div data-pf-block="itemTable"${contStyle}>${itemTableHtml}</div>`;
+            }
+            return blockHtml(id, staticContent[id] || '');
+        }).join('\n');
+
+        return `<div class="page pf-block-layout-root">
+          ${totalPages > 1 ? `<div class="page-counter">Page ${pageIdx + 1} of ${totalPages}</div>` : ''}
+          ${contHeader}
+          ${body}
+        </div>`;
+    }).join('\n');
+}
+
+
 export function buildSalesOrderFlowHtml({ so, company, user, logoBase64 }) {
     const gstApplicable = so.gstApplicable !== false;
     const isIGST = so.gstType === 'IGST';
@@ -236,73 +354,13 @@ export function buildSalesOrderFlowHtml({ so, company, user, logoBase64 }) {
     }).join('');
 }
 
-/**
- * Absolute block-layout HTML used when live custom print format has layout.blocks.
- * Same block content as flow / React SalesOrderPrintBlockContent.
- */
-export function buildSalesOrderBlockHtml({ so, company, user, logoBase64, blocks = {} }) {
-    const gstApplicable = so.gstApplicable !== false;
-    const isIGST = so.gstType === 'IGST';
-    const gstRate = Number(so.items?.[0]?.gstRate || so.items?.[0]?.taxPercent || 18);
-    const items = so.items || [];
-
-    const content = {
-        logo: logoBase64 ? `<img src="${logoBase64}" class="logo-img" />` : '',
-        companyDetails: `<div class="company-details">
-          <h1>${esc(company.companyName || 'JSK URJA')}</h1>
-          <div class="company-addr">
-            ${esc(company.address)}<br/>
-            ${esc(company.city)} ${esc(company.state)}, India. Postal Code: ${esc(company.pincode)}. State Code: ${esc(company.stateCode || '')}<br/>
-            ${(company.phone || company.email) ? `Phone: ${esc(company.phone || '')} Email: ${esc(company.email || '')}` : ''}<br/>
-            ${gstApplicable && company.gstNumber ? `<strong>GSTIN: ${esc(company.gstNumber)}</strong>` : ''}
-          </div>
-        </div>`,
-        documentTitle: `<h1 class="doc-title">${so.seriesId?.isEstimate ? 'ESTIMATE' : 'SALES ORDER'}</h1>`,
-        documentNumber: `${!gstApplicable ? '<div style="font-size:10pt;font-weight:700;">(NON-GST)</div>' : ''}<div class="doc-id">${esc(so.soNumber)}</div>`,
-        customerDetails: `<table class="info-table">
-          <tr><td class="info-label">Customer Name:</td><td class="info-value" style="font-weight:900;">${esc(so.customerName)}</td></tr>
-          <tr><td class="info-label">Address:</td><td class="info-value" style="font-size:9pt;">${esc(so.billingAddress || so.shippingAddress || '—')}</td></tr>
-          ${so.customerState ? `<tr><td class="info-label">State:</td><td class="info-value">${esc(so.customerState)}</td></tr>` : ''}
-          ${so.customerPhone ? `<tr><td class="info-label">Contact No:</td><td class="info-value">${esc(so.customerPhone)}</td></tr>` : ''}
-          ${gstApplicable && so.customerGstin ? `<tr><td class="info-label">GST No:</td><td class="info-value">${esc(so.customerGstin)}</td></tr>` : ''}
-        </table>`,
-        documentDetails: `<table class="info-table">
-          <tr><td class="info-label">Date:</td><td class="info-value">${fmtDate(so.soDate)}</td></tr>
-          <tr><td class="info-label">Order Category:</td><td class="info-value">${esc(so.orderCategory || 'Order')}</td></tr>
-          <tr><td class="info-label">Delivery Date:</td><td class="info-value">${fmtDate(so.deliveryDate)}</td></tr>
-          <tr><td class="info-label">Customer PO:</td><td class="info-value">${esc(so.customerPO || 'VERBAL')}</td></tr>
-          <tr><td class="info-label">PO Date:</td><td class="info-value">${fmtDate(so.customerPODate || so.soDate)}</td></tr>
-        </table>`,
-        itemTable: `<table class="items-table"><thead><tr>
-          <th data-pf-col="sr">SR</th><th data-pf-col="itemCode">ITEM CODE</th><th data-pf-col="description">DESCRIPTION</th>
-          <th data-pf-col="notes">ADDITIONAL NOTES</th><th data-pf-col="hsn">HSN</th><th data-pf-col="qty">QTY</th>
-          <th data-pf-col="rate">RATE</th><th data-pf-col="amount">AMOUNT</th><th data-pf-col="spacer"></th>
-        </tr></thead><tbody>${itemRows(items, 0)}</tbody></table>`,
-        totalsBox: buildStandaloneTotals(so, gstApplicable, isIGST, gstRate),
-        remarks: so.remarks
-            ? `<div style="border:1px solid #000;padding:7px 9px;"><div style="font-size:7.5pt;font-weight:800;color:#555;">REMARKS:</div><div style="font-size:8.5pt;white-space:pre-wrap;">${esc(so.remarks)}</div></div>`
-            : '',
-        terms: '',
-        bankDetails: bankHtml(),
-        signature: signatureHtml(so, company, user),
-    };
-
-    const ids = Object.keys(content);
-    const body = ids.map((id) => {
-        const b = blocks[id];
-        if (b && b.visible === false) return '';
-        return blockHtml(id, content[id] || '');
-    }).join('\n');
-
-    return `<div class="page pf-block-layout-root">${body}</div>`;
-}
-
 export const SO_PRINT_BASE_CSS = `
   * { box-sizing: border-box; font-family: sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { margin: 0; padding: 0; color: #000; background: #fff; font-size: 9pt; line-height: 1.3; }
-  .page { width: 210mm; min-height: 270mm; padding: 10mm; box-sizing: border-box; position: relative; display: flex; flex-direction: column; background: #fff; page-break-after: always; }
+  .page { width: 210mm; height: 297mm; min-height: 297mm; max-height: 297mm; padding: 10mm; box-sizing: border-box; position: relative; display: flex; flex-direction: column; background: #fff; page-break-after: always; overflow: hidden; }
   .page:last-child { page-break-after: auto; }
   .pf-block-layout-root { display: block !important; }
+  .pf-cont-header { position: absolute; left: 0; top: 0; right: 0; height: 22mm; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #000; font-size: 9pt; box-sizing: border-box; padding-bottom: 2mm; }
   .p-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
   .company-info { display: flex; gap: 20px; align-items: flex-start; }
   .logo-img { max-height: 80px; max-width: 120px; object-fit: contain; }
@@ -317,7 +375,7 @@ export const SO_PRINT_BASE_CSS = `
   .info-table { width: 100%; border-collapse: collapse; }
   .info-label { width: 120px; font-size: 10pt; font-weight: 800; padding: 4px 0; vertical-align: top; }
   .info-value { font-size: 10pt; padding: 4px 0; vertical-align: top; text-transform: uppercase; }
-  .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; }
+  .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; table-layout: fixed; }
   .items-table th { border: 1px solid #000; padding: 8px 6px; font-weight: 800; background: #f5f5f5; text-align: center; text-transform: uppercase; }
   .items-table td { border: 1px solid #000; padding: 6px; vertical-align: top; overflow-wrap: anywhere; }
   .totals-label { font-weight: 800; }
@@ -330,6 +388,6 @@ export const SO_PRINT_BASE_CSS = `
   .signatory-title { background: #f5f5f5; border-bottom: 1px solid #000; padding: 4px; font-size: 7.5pt; font-weight: 800; }
   .signatory-body { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 5px; }
   .continued-notice { padding: 8px; text-align: right; font-style: italic; font-size: 9pt; background: #fafafa; border: 1px solid #000; border-top: none; }
-  .page-counter { position: absolute; bottom: 5mm; right: 10mm; font-size: 8pt; color: #666; }
+  .page-counter { position: absolute; bottom: 5mm; right: 10mm; font-size: 8pt; color: #666; z-index: 30; }
   @page { margin: 0; size: A4 portrait; }
 `;

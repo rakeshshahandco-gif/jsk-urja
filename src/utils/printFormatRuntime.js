@@ -83,7 +83,11 @@ export function getPrintPageSizeRule(printFormat) {
 
 /** Extra @media print CSS when a company Approved + Active Default custom format is live */
 export function buildPrintFormatCss(printFormat, rootClass, docType) {
-    if (!isLivePrintFormat(printFormat)) return '';
+    if (!printFormat) return '';
+    // Allow Active Default / approved payloads from /active (already filtered server-side).
+    const liveOk = isLivePrintFormat(printFormat)
+        || (printFormat.isDefault === true && printFormat.status === LIVE_PRINT_FORMAT_STATUS);
+    if (!liveOk) return '';
 
     const pageW = getPrintPageWidthMm(printFormat);
     const pad = getPrintContentPadding(printFormat);
@@ -95,10 +99,24 @@ export function buildPrintFormatCss(printFormat, rootClass, docType) {
         width: ${pageW}mm !important;
         min-width: ${pageW}mm !important;
         max-width: ${pageW}mm !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        transform: none !important;
+        zoom: 1 !important;
       }
       .${rootClass} .print-content,
       .${rootClass} .print-page {
+        width: ${pageW}mm !important;
+        max-width: ${pageW}mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
         padding: ${pad} !important;
+        box-sizing: border-box !important;
+        background: #fff !important;
+        overflow: hidden !important;
+        transform: none !important;
+        zoom: 1 !important;
       }
     `;
 

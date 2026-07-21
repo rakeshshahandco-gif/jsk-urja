@@ -11,6 +11,8 @@ import {
     pullOriginalPrintFormat,
     pullBlankPrintFormat,
     copyPrintFormat,
+    importPrintFormat,
+    buildPrintFormatExportPayload,
     savePrintFormatDraft,
     approvePrintFormat,
     setDefaultPrintFormat,
@@ -351,6 +353,119 @@ export default function PrintFormatDesignerPage() {
         }
     };
 
+    const handleSaveAsNewVersion = async () => {
+        if (!selectedId) return toast.error('Select a format first');
+        const base = selectedRow?.name || form.name || docType;
+        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+        const name = window.prompt('New version name:', `${base} — ${stamp}`);
+        if (!name?.trim()) return;
+        try {
+            const row = await copyPrintFormat(selectedId, name.trim());
+            toast.success('Saved as new draft version (live print unchanged)');
+            setSelectedId(row._id);
+            setForm({
+                name: row.name,
+                paperSize: row.paperSize,
+                orientation: row.orientation,
+                margins: row.margins || emptyFormat().margins,
+                customPaper: row.customPaper || emptyFormat().customPaper,
+                layout: mergeLayoutWithV2(row.layout, docType),
+            });
+            await load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to save new version');
+        }
+    };
+
+    const handleRestoreAsNewDraft = async () => {
+        if (!selectedId) return toast.error('Select a format to restore from');
+        if (!window.confirm(
+            `Restore "${selectedRow?.name || 'selected format'}" as a new Draft?\n\nLive Active Default is not changed until you Approve + Set Active Default.`,
+        )) return;
+        try {
+            const name = `${selectedRow?.name || form.name || docType} (Restored Draft)`;
+            const row = await copyPrintFormat(selectedId, name);
+            toast.success('Restored as new draft');
+            setSelectedId(row._id);
+            setForm({
+                name: row.name,
+                paperSize: row.paperSize,
+                orientation: row.orientation,
+                margins: row.margins || emptyFormat().margins,
+                customPaper: row.customPaper || emptyFormat().customPaper,
+                layout: mergeLayoutWithV2(row.layout, docType),
+            });
+            await load();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Failed to restore');
+        }
+    };
+
+    const handleExportFormat = () => {
+        if (!selectedId || !selectedRow) return toast.error('Select a format first');
+        const payload = buildPrintFormatExportPayload({
+            ...selectedRow,
+            ...form,
+            _id: selectedId,
+            docType,
+            layout: form.layout || selectedRow.layout,
+        });
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `print-format-${docType.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Format exported');
+    };
+
+    const handleImportFormat = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json,.json';
+        input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const json = JSON.parse(text);
+                if (!json.layout || !json.docType) {
+                    return toast.error('Invalid export file (missing layout/docType)');
+                }
+                if (json.docType !== docType) {
+                    if (!window.confirm(`File is for "${json.docType}" but current type is "${docType}". Import anyway as ${docType}?`)) {
+                        return;
+                    }
+                }
+                const row = await importPrintFormat({
+                    docType,
+                    name: json.name || `Imported ${docType}`,
+                    paperSize: json.paperSize,
+                    orientation: json.orientation,
+                    margins: json.margins,
+                    customPaper: json.customPaper,
+                    layout: json.layout,
+                    invoiceSeriesId: docType === 'Sales Invoice' ? invoiceSeriesId || undefined : undefined,
+                });
+                toast.success('Imported as new draft (live print unchanged)');
+                setSelectedId(row._id);
+                setForm({
+                    name: row.name,
+                    paperSize: row.paperSize,
+                    orientation: row.orientation,
+                    margins: row.margins || emptyFormat().margins,
+                    customPaper: row.customPaper || emptyFormat().customPaper,
+                    layout: mergeLayoutWithV2(row.layout, docType),
+                });
+                await load();
+            } catch (e) {
+                toast.error(e.response?.data?.message || e.message || 'Import failed');
+            }
+        };
+        input.click();
+    };
+
     const selectedRow = formats.find((f) => f._id === selectedId);
 
     if (editorOpen) {
@@ -578,6 +693,18 @@ export default function PrintFormatDesignerPage() {
                         >
                             Set Active Default
                         </button>
+                        <button type="button" style={btn('#0369a1')} onClick={handleSaveAsNewVersion} disabled={!selectedId}>
+                            Save As New Version
+                        </button>
+                        <button type="button" style={btn('#b45309')} onClick={handleRestoreAsNewDraft} disabled={!selectedId}>
+                            Restore as New Draft
+                        </button>
+                        <button type="button" style={btn('#475569')} onClick={handleExportFormat} disabled={!selectedId}>
+                            Export
+                        </button>
+                        <button type="button" style={btn('#334155')} onClick={handleImportFormat}>
+                            Import
+                        </button>
                         <button type="button" style={btn('#dc2626')} onClick={handleDelete} disabled={!selectedId}>Delete</button>
                     </div>
                 </div>
@@ -603,7 +730,10 @@ export default function PrintFormatDesignerPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
                 <div style={card}>
-                    <div style={{ fontWeight: 800, marginBottom: 12 }}>Saved Formats</div>
+                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Version History</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                        Saved formats for this company + document type. Only Approved + Active Default drives live print.
+                    </div>
                     {loading ? <div style={{ color: '#94a3b8' }}>Loading...</div> : (
                         formats.length === 0 ? (
                             <div style={{ color: '#94a3b8', fontSize: 13 }}>No custom formats yet. Pull Original to start.</div>

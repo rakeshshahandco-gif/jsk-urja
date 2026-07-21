@@ -50,7 +50,19 @@ export function buildPdfFormatCss(printFormat, docType) {
 
     let css = `
       @page { size: ${paper} ${orient}; margin: 0; }
-      .page { width: ${pageW}mm; padding: ${pad}; box-sizing: border-box; position: relative; }
+      .page {
+        width: ${pageW}mm !important;
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        padding: ${pad} !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+        background: #fff !important;
+        overflow: hidden !important;
+        page-break-after: always;
+      }
+      .page:last-child { page-break-after: auto !important; }
     `;
 
     // Match frontend hasBlockLayout: apply designer absolute blocks whenever saved blocks exist,

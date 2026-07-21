@@ -663,6 +663,7 @@ class PDFService {
                 user,
                 logoBase64,
                 blocks: printFormat.layout.blocks,
+                printFormat,
             })
             : buildSalesOrderFlowHtml({ so, company, user, logoBase64 });
 

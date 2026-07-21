@@ -2,11 +2,14 @@
  * SINGLE Sales Order print render engine.
  * Used by: Browser Print, Print Preview, Designer (editable shell), and mirrored by PDF HTML.
  * Designer only changes layout metadata; this component renders the same document content.
+ *
+ * Active Default with blocks → absolute mm block layout (same as Designer), paginated to A4.
+ * No Active Default → legacy golden multi-page flow.
  */
 import React from 'react';
 import { PRINT_BLOCK_IDS, mergeBlocks, mergeColumns } from '@/constants/printFormatSections';
-import { buildBlockLayoutCss, blockInlineStyle, getLayoutMinHeightMm, hasBlockLayout } from '@/utils/printFormatBlockRuntime';
-import { isLivePrintFormat } from '@/utils/printFormatRuntime';
+import { buildBlockLayoutCss, blockInlineStyle, hasBlockLayout } from '@/utils/printFormatBlockRuntime';
+import { isLivePrintFormat, buildPrintFormatCss } from '@/utils/printFormatRuntime';
 import {
     SalesOrderPrintBlockContent,
     SoBlockBankDetails,
@@ -21,7 +24,17 @@ import {
     SoBlockSignature,
     SO_PRINT_COLUMNS,
 } from './SalesOrderPrintBlocks';
-import { paginateSoItems, resolveGstFlags, fmtDate } from './salesOrderPrintUtils';
+import {
+    paginateSoItems,
+    paginateBlockSoItems,
+    soItemSrStart,
+    resolveGstFlags,
+    fmtDate,
+    SO_PRINT_PAGE_WIDTH_MM,
+    SO_PRINT_PAGE_HEIGHT_MM,
+    SO_BLOCK_FIRST_PAGE_IDS,
+    SO_BLOCK_LAST_PAGE_IDS,
+} from './salesOrderPrintUtils';
 
 /** Scale visible column widthPct so they sum to 100 — prevents crushed HSN/UOM in print. */
 function normalizeColumnWidths(columns = []) {
@@ -36,9 +49,16 @@ function normalizeColumnWidths(columns = []) {
     return list;
 }
 
+function marginPadding(printFormat) {
+    if (!printFormat?.margins) return '10mm';
+    const m = printFormat.margins;
+    const u = m.unit || 'mm';
+    return `${m.top ?? 10}${u} ${m.right ?? 10}${u} ${m.bottom ?? 10}${u} ${m.left ?? 10}${u}`;
+}
+
 /**
  * @param {'print'|'designer'|'preview'} mode
- * @param {object|null} printFormat — when live Approved+Default, block layout drives print
+ * @param {object|null} printFormat — Approved + Active Default with blocks drives live print
  */
 export default function SalesOrderPrintDocument({
     so,
@@ -58,8 +78,7 @@ export default function SalesOrderPrintDocument({
     if (!so) return null;
 
     const designerMode = mode === 'designer';
-    // /print-formats/active already returns only Approved + Active Default (or null).
-    // If that payload has designer blocks, use the same absolute block renderer as the designer.
+    // /print-formats/active returns Approved + Active Default (or null).
     const liveCustom = Boolean(
         !designerMode
         && printFormat
@@ -76,8 +95,6 @@ export default function SalesOrderPrintDocument({
         ? mergeBlocks(printFormat?.layout?.blocks || {}, 'Sales Order')
         : null;
 
-    // Live/designer: use saved designer columns (normalize widths so print doesn't crush HSN/UOM).
-    // Golden flow fallback: fixed SO columns only — never expand via full catalog.
     const columns = useBlockLayout
         ? normalizeColumnWidths(mergeColumns(printFormat?.layout?.itemTable?.columns || [], 'Sales Order'))
         : SO_PRINT_COLUMNS.map((c) => ({
@@ -89,13 +106,12 @@ export default function SalesOrderPrintDocument({
             align: c.align,
         }));
 
-    // Same absolute block CSS the designer uses — do not depend on isLivePrintFormat gate here.
-    const layoutCss = useBlockLayout && !designerMode && printFormat
+    const pageCss = useBlockLayout && !designerMode && printFormat
         ? `
+          ${buildPrintFormatCss(printFormat, rootClassName, 'Sales Order')}
           .${rootClassName} .pf-block-layout-root {
             position: relative !important;
             display: block !important;
-            width: 100% !important;
             box-sizing: border-box !important;
           }
           .${rootClassName} .print-content.pf-block-layout-root {
@@ -114,29 +130,48 @@ export default function SalesOrderPrintDocument({
                 data-pf-live={liveCustom ? '1' : '0'}
                 style={{
                     display: visible || designerMode ? 'block' : 'none',
-                    width: '210mm',
-                    maxWidth: '210mm',
+                    width: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                    maxWidth: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
                     margin: '0 auto',
                     padding: 0,
                     boxSizing: 'border-box',
                     background: '#fff',
                 }}
             >
-                {layoutCss ? <style>{layoutCss}</style> : null}
-                <SalesOrderBlockLayoutPage
-                    so={so}
-                    company={company}
-                    user={user}
-                    blocks={blocks}
-                    columns={columns}
-                    forceDesignerInline
-                    selectedBlockId={selectedBlockId}
-                    onBlockSelect={onBlockSelect}
-                    onBlockMouseDown={onBlockMouseDown}
-                    onColumnHeaderClick={onColumnHeaderClick}
-                    selectedColumnId={selectedColumnId}
-                    printFormat={printFormat}
-                />
+                {pageCss ? <style>{pageCss}</style> : null}
+                {designerMode ? (
+                    <SalesOrderBlockLayoutPage
+                        so={so}
+                        company={company}
+                        user={user}
+                        blocks={blocks}
+                        columns={columns}
+                        forceDesignerInline
+                        selectedBlockId={selectedBlockId}
+                        onBlockSelect={onBlockSelect}
+                        onBlockMouseDown={onBlockMouseDown}
+                        onColumnHeaderClick={onColumnHeaderClick}
+                        selectedColumnId={selectedColumnId}
+                        printFormat={printFormat}
+                        pageItems={so?.items || []}
+                        pageIdx={0}
+                        isLastPage
+                        isFirstPage
+                        srStart={1}
+                        totalPages={1}
+                    />
+                ) : (
+                    <SalesOrderBlockLayoutPages
+                        so={so}
+                        company={company}
+                        user={user}
+                        blocks={blocks}
+                        columns={columns}
+                        printFormat={printFormat}
+                        onColumnHeaderClick={onColumnHeaderClick}
+                        selectedColumnId={selectedColumnId}
+                    />
+                )}
             </div>
         );
     }
@@ -146,8 +181,8 @@ export default function SalesOrderPrintDocument({
             className={`print-only ${rootClassName} ${className}`.trim()}
             style={{
                 display: visible ? undefined : 'none',
-                width: '210mm',
-                maxWidth: '210mm',
+                width: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                maxWidth: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
                 margin: '0 auto',
                 padding: 0,
                 boxSizing: 'border-box',
@@ -156,6 +191,46 @@ export default function SalesOrderPrintDocument({
             <SalesOrderFlowPages so={so} company={company} user={user} columns={columns} />
         </div>
     );
+}
+
+function SalesOrderBlockLayoutPages({
+    so,
+    company,
+    user,
+    blocks,
+    columns,
+    printFormat,
+    onColumnHeaderClick,
+    selectedColumnId,
+}) {
+    const pages = paginateBlockSoItems(so?.items || [], printFormat);
+    const totalPages = pages.length;
+
+    return pages.map((pageItems, pageIdx) => {
+        const isFirstPage = pageIdx === 0;
+        const isLastPage = pageIdx === totalPages - 1;
+        const srStart = soItemSrStart(pages, pageIdx);
+        return (
+            <SalesOrderBlockLayoutPage
+                key={pageIdx}
+                so={so}
+                company={company}
+                user={user}
+                blocks={blocks}
+                columns={columns}
+                forceDesignerInline
+                printFormat={printFormat}
+                pageItems={pageItems}
+                pageIdx={pageIdx}
+                isFirstPage={isFirstPage}
+                isLastPage={isLastPage}
+                srStart={srStart}
+                totalPages={totalPages}
+                onColumnHeaderClick={onColumnHeaderClick}
+                selectedColumnId={selectedColumnId}
+            />
+        );
+    });
 }
 
 function SalesOrderBlockLayoutPage({
@@ -171,39 +246,107 @@ function SalesOrderBlockLayoutPage({
     onColumnHeaderClick,
     selectedColumnId,
     printFormat,
+    pageItems,
+    pageIdx = 0,
+    isFirstPage = true,
+    isLastPage = true,
+    srStart = 1,
+    totalPages = 1,
 }) {
-    const marginPad = printFormat?.margins
-        ? `${printFormat.margins.top ?? 10}${printFormat.margins.unit || 'mm'} ${printFormat.margins.right ?? 10}${printFormat.margins.unit || 'mm'} ${printFormat.margins.bottom ?? 10}${printFormat.margins.unit || 'mm'} ${printFormat.margins.left ?? 10}${printFormat.margins.unit || 'mm'}`
-        : '10mm';
-    const minH = getLayoutMinHeightMm(blocks);
+    const marginPad = marginPadding(printFormat);
+    const tableBlock = blocks?.itemTable;
 
     return (
         <div
             className="print-content print-page pf-block-layout-root"
+            data-pf-page={pageIdx + 1}
             style={{
                 position: 'relative',
-                width: '210mm',
-                maxWidth: '210mm',
-                minHeight: `${Math.max(minH + 20, 270)}mm`,
+                width: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                maxWidth: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                height: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
+                minHeight: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
+                maxHeight: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
                 padding: marginPad,
                 background: '#fff',
                 boxSizing: 'border-box',
+                overflow: 'hidden',
+                pageBreakAfter: isLastPage ? 'auto' : 'always',
+                breakAfter: isLastPage ? 'auto' : 'page',
             }}
         >
+            {totalPages > 1 && (
+                <div
+                    className="pf-page-number"
+                    style={{
+                        position: 'absolute',
+                        bottom: '3mm',
+                        right: '4mm',
+                        fontSize: '8pt',
+                        color: '#666',
+                        zIndex: 30,
+                    }}
+                >
+                    Page {pageIdx + 1} of {totalPages}
+                </div>
+            )}
+
+            {!isFirstPage && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        height: '22mm',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid #000',
+                        boxSizing: 'border-box',
+                        paddingBottom: '2mm',
+                        fontSize: '9pt',
+                    }}
+                >
+                    <div style={{ fontWeight: 900, textTransform: 'uppercase' }}>
+                        {company?.companyName || 'JSK URJA'}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <strong>Order No:</strong> {so.soNumber} | <strong>Date:</strong> {fmtDate(so.soDate)}
+                        {' '}(continued)
+                    </div>
+                </div>
+            )}
+
             {PRINT_BLOCK_IDS.map((blockId) => {
                 const block = blocks?.[blockId];
                 if (!block || block.visible === false) return null;
-                const selected = Boolean(forceDesignerInline && selectedBlockId === blockId && onBlockSelect);
-                // Always apply the same absolute geometry as the Designer canvas.
-                const style = forceDesignerInline
+
+                if (SO_BLOCK_FIRST_PAGE_IDS.includes(blockId) && !isFirstPage) return null;
+                if (SO_BLOCK_LAST_PAGE_IDS.includes(blockId) && !isLastPage) return null;
+
+                let style = forceDesignerInline
                     ? {
-                        ...blockInlineStyle(block, { selected }),
-                        // Print must not show designer chrome
-                        outline: selected && onBlockSelect ? '2px solid #2563eb' : undefined,
-                        cursor: onBlockSelect ? (selected ? 'move' : 'pointer') : 'default',
-                        background: selected && onBlockSelect ? 'rgba(37,99,235,0.04)' : 'transparent',
+                        ...blockInlineStyle(block, {
+                            selected: Boolean(selectedBlockId === blockId && onBlockSelect),
+                        }),
+                        outline: selectedBlockId === blockId && onBlockSelect ? '2px solid #2563eb' : undefined,
+                        cursor: onBlockSelect ? (selectedBlockId === blockId ? 'move' : 'pointer') : 'default',
+                        background: selectedBlockId === blockId && onBlockSelect ? 'rgba(37,99,235,0.04)' : 'transparent',
                     }
                     : blockInlineStyle(block, { selected: false });
+
+                // Continuation pages: place item table under compact header
+                if (blockId === 'itemTable' && !isFirstPage && tableBlock) {
+                    style = {
+                        ...style,
+                        top: '28mm',
+                        left: `${Number(tableBlock.x) || 0}mm`,
+                        width: `${Number(tableBlock.width) || 190}mm`,
+                        minHeight: `${Math.max(Number(tableBlock.height) || 100, 180)}mm`,
+                    };
+                }
+
                 return (
                     <div
                         key={blockId}
@@ -229,12 +372,13 @@ function SalesOrderBlockLayoutPage({
                             company={company}
                             user={user}
                             columns={columns}
-                            pageItems={so?.items || []}
-                            pageIdx={0}
-                            isLastPage
+                            pageItems={blockId === 'itemTable' ? pageItems : so?.items || []}
+                            pageIdx={pageIdx}
+                            isLastPage={isLastPage}
                             embedTotalsInTable={false}
                             onColumnHeaderClick={onColumnHeaderClick}
                             selectedColumnId={selectedColumnId}
+                            srStart={blockId === 'itemTable' ? srStart : null}
                         />
                     </div>
                 );
@@ -259,15 +403,19 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                 className="print-content"
                 style={{
                     pageBreakAfter: isLastPage ? 'auto' : 'always',
+                    breakAfter: isLastPage ? 'auto' : 'page',
                     position: 'relative',
-                    width: '210mm',
-                    maxWidth: '210mm',
-                    minHeight: '270mm',
+                    width: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                    maxWidth: `${SO_PRINT_PAGE_WIDTH_MM}mm`,
+                    height: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
+                    minHeight: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
+                    maxHeight: `${SO_PRINT_PAGE_HEIGHT_MM}mm`,
                     padding: '10mm',
                     background: '#fff',
                     boxSizing: 'border-box',
                     display: 'flex',
                     flexDirection: 'column',
+                    overflow: 'hidden',
                 }}
             >
                 <div style={{ position: 'absolute', bottom: '5mm', right: '10mm', fontSize: '8pt', color: '#666' }}>
@@ -351,10 +499,10 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                         isLastPage={isLastPage}
                         showTotals
                         columns={columns}
+                        srStart={soItemSrStart(pages, pageIdx)}
                     />
                 </div>
 
-                {/* totals live inside item table in flow mode; keep empty totals marker for CSS */}
                 <div data-pf-block="totalsBox" className="pf-flow-fallback" style={{ display: 'none' }} />
 
                 {isLastPage && (

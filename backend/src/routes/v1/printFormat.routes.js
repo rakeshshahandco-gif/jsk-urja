@@ -7,6 +7,7 @@ import {
     pullOriginalFormat,
     pullBlankFormat,
     copyPrintFormat,
+    importPrintFormat,
     updatePrintFormat,
     savePrintFormatDraft,
     approvePrintFormat,
@@ -39,6 +40,7 @@ router.get('/:id', canUseDesigner, getPrintFormat);
 router.post('/pull-original', canUseDesigner, pullOriginalFormat);
 router.post('/pull-blank', canUseDesigner, pullBlankFormat);
 router.post('/copy', canUseDesigner, copyPrintFormat);
+router.post('/import', canUseDesigner, importPrintFormat);
 router.put('/:id', canUseDesigner, updatePrintFormat);
 router.patch('/:id/draft', canUseDesigner, savePrintFormatDraft);
 router.patch('/:id/approve', canUseDesigner, approvePrintFormat);

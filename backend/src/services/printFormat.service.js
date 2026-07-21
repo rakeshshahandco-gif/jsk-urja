@@ -212,6 +212,31 @@ export class PrintFormatService {
         });
     }
 
+    /**
+     * Import a previously exported print-format JSON as a new DRAFT (does not activate live print).
+     */
+    static async importFromExport(companyId, userId, payload = {}) {
+        const docType = payload.docType;
+        this.assertDocType(docType);
+        const name = String(payload.name || '').trim() || `Imported ${docType}`;
+        const layout = payload.layout && typeof payload.layout === 'object'
+            ? JSON.parse(JSON.stringify(payload.layout))
+            : getOriginalPrintLayout(docType);
+        return this.createFromLayout(companyId, userId, {
+            docType,
+            name,
+            layout,
+            source: 'import',
+            status: 'draft',
+            paperSize: payload.paperSize || layout.paperSize || 'A4',
+            orientation: payload.orientation || layout.orientation || 'portrait',
+            margins: payload.margins || layout.margins,
+            customPaper: payload.customPaper || null,
+            engineVersion: layout.engineVersion || 3,
+            invoiceSeriesId: payload.invoiceSeriesId || null,
+        });
+    }
+
     static async update(companyId, userId, id, updates) {
         const format = await PrintFormat.findOne({ _id: id, companyId });
         if (!format) throw new ApiError(404, 'Print format not found');

@@ -842,11 +842,13 @@ export default function SalesOrderDetailPage() {
         </div>
       </div>
 
-      {/* Locked Sales Order print geometry from golden reference 035.pdf */}
+      {/* Sales Order print geometry — A4 mm, no shrink-to-fit, Active Default block layout */}
       <style>{`
                 @media print {
                     @page { size: A4 portrait; margin: 0; }
-                    .no-print, .no-print * { display: none !important; }
+                    .no-print, .no-print *, [data-no-print], #app-sidebar, #app-header {
+                        display: none !important;
+                    }
                     html, body {
                         margin: 0 !important;
                         padding: 0 !important;
@@ -855,6 +857,7 @@ export default function SalesOrderDetailPage() {
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                         zoom: 1 !important;
+                        transform: none !important;
                     }
                     #root,
                     #root > div,
@@ -863,56 +866,58 @@ export default function SalesOrderDetailPage() {
                         width: 210mm !important;
                         max-width: 210mm !important;
                         margin: 0 !important;
-                        margin-left: 0 !important;
                         padding: 0 !important;
                         left: 0 !important;
                         transform: none !important;
                         zoom: 1 !important;
                         display: block !important;
                         position: static !important;
+                        background: #fff !important;
+                        box-shadow: none !important;
                     }
-                    .so-print-root.print-only {
+                    .so-print-root.print-only,
+                    .so-print-root {
                         display: block !important;
                         position: static !important;
                         width: 210mm !important;
                         min-width: 210mm !important;
                         max-width: 210mm !important;
-                        margin: 0 auto !important;
+                        margin: 0 !important;
                         padding: 0 !important;
                         box-sizing: border-box !important;
                         transform: none !important;
                         zoom: 1 !important;
+                        background: #fff !important;
+                        box-shadow: none !important;
                     }
-                    /* Golden multi-page flow only — do NOT flex the designer block canvas */
-                    .so-print-root .print-content:not(.pf-block-layout-root) {
+                    .so-print-root .print-content {
                         width: 210mm !important;
-                        min-width: 210mm !important;
                         max-width: 210mm !important;
-                        min-height: 270mm !important;
-                        margin: 0 auto !important;
-                        padding: 10mm !important;
+                        height: 297mm !important;
+                        min-height: 297mm !important;
+                        max-height: 297mm !important;
+                        margin: 0 !important;
                         box-sizing: border-box !important;
-                        display: flex !important;
-                        flex-direction: column !important;
+                        background: #fff !important;
+                        overflow: hidden !important;
                         transform: none !important;
                         zoom: 1 !important;
                         page-break-after: always;
                         break-after: page;
                     }
-                    .so-print-root .print-content.pf-block-layout-root {
-                        display: block !important;
-                        position: relative !important;
-                        width: 210mm !important;
-                        max-width: 210mm !important;
-                        margin: 0 auto !important;
-                        box-sizing: border-box !important;
-                        flex-direction: unset !important;
+                    .so-print-root .print-content:last-child {
                         page-break-after: auto !important;
                         break-after: auto !important;
                     }
-                    .so-print-root .print-content:not(.pf-block-layout-root):last-child {
-                        page-break-after: auto;
-                        break-after: auto;
+                    .so-print-root .print-content.pf-block-layout-root {
+                        display: block !important;
+                        position: relative !important;
+                        flex-direction: unset !important;
+                    }
+                    .so-print-root .print-content:not(.pf-block-layout-root) {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        padding: 10mm !important;
                     }
                     .so-print-root [data-pf-block] {
                         overflow: visible !important;
@@ -925,9 +930,6 @@ export default function SalesOrderDetailPage() {
                     .so-print-root .print-items-table td {
                         word-wrap: break-word;
                         overflow-wrap: anywhere;
-                    }
-                    .so-print-root .print-footer {
-                        width: 100% !important;
                     }
                 }
             `}</style>

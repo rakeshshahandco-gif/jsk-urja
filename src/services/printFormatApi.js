@@ -46,6 +46,28 @@ export const pullBlankPrintFormat = (docType, name) =>
 export const copyPrintFormat = (sourceId, name) =>
     api.post(`${base}/copy`, { sourceId, name }).then((r) => r.data?.data ?? r.data);
 
+export const importPrintFormat = (payload) =>
+    api.post(`${base}/import`, payload).then((r) => r.data?.data ?? r.data);
+
+/** Build a portable JSON snapshot for Export (layout only — no live activation). */
+export function buildPrintFormatExportPayload(format) {
+    if (!format) return null;
+    return {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        docType: format.docType,
+        name: format.name,
+        paperSize: format.paperSize,
+        orientation: format.orientation,
+        margins: format.margins,
+        customPaper: format.customPaper,
+        layout: format.layout,
+        sourceFormatId: format._id,
+        sourceStatus: format.status,
+        sourceIsDefault: format.isDefault,
+    };
+}
+
 export const updatePrintFormat = (id, payload) =>
     api.put(`${base}/${id}`, payload).then((r) => r.data?.data ?? r.data);
 

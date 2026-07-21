@@ -233,6 +233,7 @@ export function SoBlockItemTable({
     columns,
     onColumnHeaderClick,
     selectedColumnId,
+    srStart = null,
 }) {
     const { gstApplicable, isIGST, gstRate } = resolveGstFlags(so);
     const cols = visibleColumns(columns);
@@ -285,7 +286,7 @@ export function SoBlockItemTable({
             </thead>
             <tbody>
                 {(pageItems || []).map((item, i) => {
-                    const srNo = soItemSrNo(pageIdx, i);
+                    const srNo = srStart != null ? Number(srStart) + i : soItemSrNo(pageIdx, i);
                     return (
                         <tr key={i}>
                             {cols.map((col) => (
@@ -607,6 +608,7 @@ export function SalesOrderPrintBlockContent({
     onColumnHeaderClick,
     selectedColumnId,
     embedTotalsInTable = false,
+    srStart = null,
 }) {
     const { gstApplicable } = resolveGstFlags(so);
     switch (blockId) {
@@ -633,6 +635,7 @@ export function SalesOrderPrintBlockContent({
                     columns={columns}
                     onColumnHeaderClick={onColumnHeaderClick}
                     selectedColumnId={selectedColumnId}
+                    srStart={srStart}
                 />
             );
         case 'totalsBox':
