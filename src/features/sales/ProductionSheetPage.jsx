@@ -1,19 +1,36 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getProductionSheetById, updateProductionSheet } from '@/services/salesApi';
 import { getCompanyProfile } from '@/services/settingsApi';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import { BrandedLoader } from '@/components/ui/BrandedLoading';
+
+/** Canonical print grid — every row's colspan total must equal 6. */
+const C1 = 1;
+const C2 = 2;
+const C3 = 3;
+const C4 = 4;
+const C6 = 6;
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const lbl = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
 const th = { padding: '9px 12px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
 const td = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid #f3f4f6', color: '#374151' };
 
-const STATUS_OPTS = ['Pending', 'In Testing', 'Ready', 'Dispatched'];
-const STATUS_COLORS = { Pending: '#d97706', 'In Testing': '#2563eb', Ready: '#16a34a', Dispatched: '#059669' };
-
-import { BrandedLoader } from '@/components/ui/BrandedLoading';
+const STATUS_OPTS = ['Draft', 'Pending', 'In Production', 'Testing', 'In Testing', 'Ready for Packing', 'Ready', 'Dispatched', 'Completed'];
+const STATUS_COLORS = {
+    Draft: '#64748b',
+    Pending: '#d97706',
+    'In Production': '#7c3aed',
+    Testing: '#2563eb',
+    'In Testing': '#2563eb',
+    'Ready for Packing': '#0891b2',
+    Ready: '#16a34a',
+    Dispatched: '#059669',
+    Completed: '#0f766e',
+};
 
 export default function ProductionSheetPage() {
     const { id } = useParams();
@@ -23,6 +40,7 @@ export default function ProductionSheetPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editing, setEditing] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [form, setForm] = useState({});
 
     const load = useCallback(() => {
@@ -32,6 +50,9 @@ export default function ProductionSheetPage() {
             getCompanyProfile().catch(() => ({ data: {} }))
         ]).then(([psData, compData]) => {
             setPS(psData);
+            const loadTestRows = Array.isArray(psData.loadTestRows) && psData.loadTestRows.length
+                ? psData.loadTestRows
+                : [psData.loadTest || { nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', ex3: '' }];
             setForm({
                 ...psData,
                 testing: {
@@ -42,6 +63,7 @@ export default function ProductionSheetPage() {
                     set3: psData.testing?.set3 || '',
                     set4: psData.testing?.set4 || '',
                     comments: psData.testing?.comments || '',
+                    signature: psData.testing?.signature || '',
                 },
                 packing: {
                     dateTime: psData.packing?.dateTime || '',
@@ -51,14 +73,35 @@ export default function ProductionSheetPage() {
                     personName: psData.packing?.personName || '',
                     comments: psData.packing?.comments || '',
                     loadReceived: psData.packing?.loadReceived || 'NO',
+                    signature: psData.packing?.signature || '',
                 },
-                loadTest: psData.loadTest || { nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', i3: '' }
+                loadTest: psData.loadTest || { nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', ex3: '' },
+                loadTestRows,
             });
             setCompany(compData?.data || {});
         }).catch(() => toast.error('Failed to load')).finally(() => setLoading(false));
     }, [id]);
 
     useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        document.body.classList.add('ps-printing-ready');
+        return () => {
+            document.body.classList.remove('ps-printing-ready');
+            document.body.classList.remove('ps-printing');
+        };
+    }, []);
+
+    useEffect(() => {
+        const onBefore = () => document.body.classList.add('ps-printing');
+        const onAfter = () => document.body.classList.remove('ps-printing');
+        window.addEventListener('beforeprint', onBefore);
+        window.addEventListener('afterprint', onAfter);
+        return () => {
+            window.removeEventListener('beforeprint', onBefore);
+            window.removeEventListener('afterprint', onAfter);
+        };
+    }, []);
 
     const setF = (path, val) => setForm(p => {
         const parts = path.split('.');
@@ -83,8 +126,30 @@ export default function ProductionSheetPage() {
         finally { setSaving(false); }
     };
 
+    const handleRefreshFromSO = async () => {
+        toast('Refresh from Sales Order is not enabled on this deployment yet.');
+    };
+
     const fmt = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
     const fmtDT = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : '—';
+    const qtyLabel = (item) => `${item.qty ?? 0} ${item.uom || 'Nos'}`;
+    const extraChangeOf = (item) => item.extraChange || item.hours || '';
+    /** Print/display only — prefer saved snapshot voltCurrent, then notes (SO additionalNotes snapshot). Do not invent values. */
+    const voltCurrentOf = (item) => {
+        const v = item?.voltCurrent || item?.voltageCurrent || item?.notes || item?.additionalNotes || '';
+        return String(v).trim();
+    };
+    const loadTestPrintRows = (() => {
+        const saved = Array.isArray(ps?.loadTestRows) && ps.loadTestRows.length
+            ? ps.loadTestRows
+            : (ps?.loadTest && (ps.loadTest.nlv || ps.loadTest.lv || ps.loadTest.li || ps.loadTest.trans || ps.loadTest.ex1 || ps.loadTest.ex2 || ps.loadTest.ex3)
+                ? [ps.loadTest]
+                : []);
+        const minRows = Math.max(saved.length, Math.min(Math.max((ps?.items || []).length, 3), 6), 3);
+        const rows = [...saved];
+        while (rows.length < minRows) rows.push({ nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', ex3: '' });
+        return rows;
+    })();
 
     if (loading) return <BrandedLoader size={120} />;
     if (!ps) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Production Sheet not found.</div>;
@@ -102,182 +167,185 @@ export default function ProductionSheetPage() {
 
     return (
         <div className="production-sheet-page-root" style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            {/* LOCKED PRODUCTION SHEET PRINT FORMAT — A4 portrait layout. Do not change unless explicitly requested by JSK admin/user. */}
-            <div className="print-only production-sheet-print ps-print-page" style={{ display: 'none', width: '194mm', minWidth: '194mm', maxWidth: '194mm', margin: '0 auto', background: '#fff', color: '#000', padding: 0, boxSizing: 'border-box' }}>
-                <div className="ps-print-sheet">
-                <div className="ps-section-header">ORDER DETAILS</div>
-                <div className="ps-section-header ps-section-sub">Production Sheet</div>
-
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
-                    <tbody>
-                        <tr>
-                            <td><span className="ps-lbl">DATE &amp; TIME:-</span> <span className="ps-val">{fmtDT(ps.createdAt)}</span></td>
-                            <td><span className="ps-lbl">NO:-</span> <span className="ps-val">{ps.soNumber}</span></td>
-                        </tr>
-                        <tr>
-                            <td><span className="ps-lbl">CLIENT CODE:-</span> <span className="ps-val">{ps.customerCode || '—'}</span></td>
-                            <td><span className="ps-lbl">DELIVERY DATE:-</span> <span className="ps-val">{fmt(ps.deliveryDate)}</span></td>
-                        </tr>
-                        <tr>
-                            <td><span className="ps-lbl">STICKER:-</span> <span className="ps-val">{ps.stickerType || ''}</span></td>
-                            <td><span className="ps-lbl">SIGN:-</span></td>
-                        </tr>
-                        <tr>
-                            <td colSpan={2}>
-                                <span className="ps-lbl">ORDER CATEGORY:-</span>
-                                <span className="ps-val" style={{
-                                    color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : 'inherit',
-                                    fontWeight: 'bold'
-                                }}>
-                                    {ps.orderCategory || ps.soId?.orderCategory || 'Order'}
-                                </span>
-                            </td>
-                        </tr>
-                        {((ps.orderCategory || ps.soId?.orderCategory) === 'Replacement') && (ps.warrantyDetails || ps.soId?.warrantyDetails) && (
+            {/* Production Order print — body portal + single 6-column main table (no unused right parent column). */}
+            {typeof document !== 'undefined' && createPortal(
+                <div className="ps-print-portal production-order-print" data-ps-print-portal="1">
+                    <table className="production-order-main-table">
+                        <colgroup>
+                            <col style={{ width: '6%' }} />
+                            <col style={{ width: '24%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '16%' }} />
+                            <col style={{ width: '18%' }} />
+                            <col style={{ width: '18%' }} />
+                        </colgroup>
+                        <tbody>
                             <tr>
-                                <td colSpan={2} style={{ background: '#f8fafc' }}>
-                                    <span className="ps-lbl" style={{ color: '#dc2626' }}>Warranty Details:</span>
-                                    <span className="ps-val" style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                        {ps.warrantyDetails || ps.soId?.warrantyDetails}
+                                <td colSpan={C6} className="ps-sec-hd">ORDER DETAILS</td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6} className="ps-sec-hd ps-sec-sub">Production Order / Sheet</td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">DATE &amp; TIME:-</span> <span className="ps-val">{fmtDT(ps.createdAt)}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">SO NO:-</span> <span className="ps-val">{ps.soNumber}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">CUSTOMER NAME:-</span> <span className="ps-val">{ps.customerName || '—'}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">CLIENT CODE:-</span> <span className="ps-val">{ps.customerCode || '—'}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">DELIVERY DATE:-</span> <span className="ps-val">{fmt(ps.deliveryDate)}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">ADDRESS:-</span> <span className="ps-val">{ps.customerAddress || '—'}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">ORDERED BY:-</span> <span className="ps-val">{ps.orderedBy || '—'}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">PRODUCTION IN-CHARGE:-</span> <span className="ps-val">{ps.productionInCharge || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">STICKER:-</span> <span className="ps-val">{ps.stickerType || ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">SIGN:-</span> <span className="ps-val">{ps.signMark || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">CABINET:-</span> <span className="ps-val">{ps.cabinetType || ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">WIRES:-</span> <span className="ps-val">{ps.wires || ps.acDc || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">REPEAT ORDER:-</span> <span className="ps-val">{ps.repeatOrder || ''}</span></td>
+                                <td colSpan={C3}>
+                                    <span className="ps-lbl">ORDER CATEGORY:-</span>
+                                    <span className="ps-val" style={{
+                                        color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : 'inherit',
+                                        fontWeight: 'bold',
+                                    }}>
+                                        {ps.orderCategory || ps.soId?.orderCategory || 'Order'}
                                     </span>
                                 </td>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
+                            {((ps.orderCategory || ps.soId?.orderCategory) === 'Replacement') && (ps.warrantyDetails || ps.soId?.warrantyDetails) && (
+                                <tr>
+                                    <td colSpan={C6} style={{ background: '#f8fafc' }}>
+                                        <span className="ps-lbl" style={{ color: '#dc2626' }}>Warranty Details:</span>
+                                        <span className="ps-val" style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                                            {ps.warrantyDetails || ps.soId?.warrantyDetails}
+                                        </span>
+                                    </td>
+                                </tr>
+                            )}
 
-                <table className="ps-print-table ps-items-table">
-                    <colgroup>
-                        <col style={{ width: '6%' }} />
-                        <col style={{ width: '16%' }} />
-                        <col style={{ width: '38%' }} />
-                        <col style={{ width: '14%' }} />
-                        <col style={{ width: '13%' }} />
-                        <col style={{ width: '13%' }} />
-                    </colgroup>
-                    <thead>
-                        <tr className="ps-th-row">
-                            <th>SR NO</th>
-                            <th>ITEM CODE</th>
-                            <th>VOLT/CURRENT</th>
-                            <th>QUANTITY</th>
-                            <th>HOURS</th>
-                            <th>DUMMY LOAD</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {(ps.items || []).map((item, i) => (
-                            <tr key={i}>
-                                <td className="ps-td-center">{i + 1}</td>
-                                <td className="ps-td-left">{item.itemCode || '—'}</td>
-                                <td className="ps-td-left">
-                                    {item.voltCurrent || '—'}
-                                    {item.additionalNotes && <div className="ps-item-note">{item.additionalNotes}</div>}
+                            <tr className="ps-th-row">
+                                <td colSpan={C1} className="ps-td-center">SR NO</td>
+                                <td colSpan={C1} className="ps-td-center">MODEL NO</td>
+                                <td colSpan={C1} className="ps-td-center">VOLT/CURRENT</td>
+                                <td colSpan={C1} className="ps-td-center">QUANTITY</td>
+                                <td colSpan={C1} className="ps-td-center">EXTRA CHANGE</td>
+                                <td colSpan={C1} className="ps-td-center">DUMMY LOAD</td>
+                            </tr>
+                            {(ps.items || []).map((item, i) => (
+                                <tr key={i}>
+                                    <td colSpan={C1} className="ps-td-center">{item.srNo || (i + 1)}</td>
+                                    <td colSpan={C1} className="ps-td-left">{item.modelNo || item.itemCode || '—'}</td>
+                                    <td colSpan={C1} className="ps-td-left">{voltCurrentOf(item) || '—'}</td>
+                                    <td colSpan={C1} className="ps-td-center">{qtyLabel(item)}</td>
+                                    <td colSpan={C1} className="ps-td-center">{extraChangeOf(item) || ''}</td>
+                                    <td colSpan={C1} className="ps-td-center">{item.dummyLoad || ''}</td>
+                                </tr>
+                            ))}
+
+                            <tr>
+                                <td colSpan={C6} className="ps-sec-hd">PRODUCTION DETAILS</td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.testing?.dateTime ? fmtDT(ps.testing.dateTime) : ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">TESTED BY:</span> <span className="ps-val">{ps.testing?.testedBy || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">SET:</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">SET 1:</span> <span className="ps-val">{ps.testing?.set1 || ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">SET 3:</span> <span className="ps-val">{ps.testing?.set3 || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">SET 2:</span> <span className="ps-val">{ps.testing?.set2 || ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">SET 4:</span> <span className="ps-val">{ps.testing?.set4 || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C4}><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.testing?.comments || ''}</span></td>
+                                <td colSpan={C2}><span className="ps-lbl">SIGN:</span> <span className="ps-val">{ps.testing?.signature || ''}</span></td>
+                            </tr>
+
+                            <tr>
+                                <td colSpan={C6} className="ps-sec-hd">PACKING DETAILS</td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.packing?.dateTime ? fmtDT(ps.packing.dateTime) : ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">HANDOVER DATE &amp; TIME:</span> <span className="ps-val">{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">DELIVERY DATE &amp; TIME:</span> <span className="ps-val">{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">DELIVERY THROUGH:</span> <span className="ps-val">{ps.packing?.deliveryThrough || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C6}><span className="ps-lbl">NAME OF PERSON:</span> <span className="ps-val">{ps.packing?.personName || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C4}><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.packing?.comments || ''}</span></td>
+                                <td colSpan={C2}><span className="ps-lbl">SIGN:</span> <span className="ps-val">{ps.packing?.signature || ''}</span></td>
+                            </tr>
+                            <tr>
+                                <td colSpan={C3}><span className="ps-lbl">LOAD RECEIVED:</span> <span className="ps-val">{ps.packing?.loadReceived || ''}</span></td>
+                                <td colSpan={C3}><span className="ps-lbl">YES / NO</span></td>
+                            </tr>
+
+                            <tr>
+                                <td colSpan={C6} className="ps-nested-cell">
+                                    <table className="ps-loadtest-table">
+                                        <colgroup>
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                            <col style={{ width: '14.28%' }} />
+                                        </colgroup>
+                                        <thead>
+                                            <tr className="ps-th-row">
+                                                <th>NLV</th>
+                                                <th>LV</th>
+                                                <th>LI</th>
+                                                <th>Trans</th>
+                                                <th>Ex1</th>
+                                                <th>Ex2</th>
+                                                <th>Ex3</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {loadTestPrintRows.map((row, i) => (
+                                                <tr key={i} className="ps-td-center ps-loadtest-row">
+                                                    <td>{row.nlv || ''}</td>
+                                                    <td>{row.lv || ''}</td>
+                                                    <td>{row.li || ''}</td>
+                                                    <td>{row.trans || ''}</td>
+                                                    <td>{row.ex1 || ''}</td>
+                                                    <td>{row.ex2 || ''}</td>
+                                                    <td>{row.ex3 || ''}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </td>
-                                <td className="ps-td-center">{item.qty} Nos</td>
-                                <td className="ps-td-center">{item.hours || '—'}</td>
-                                <td className="ps-td-center">{item.dummyLoad || '—'}</td>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-
-                <div className="ps-section-header">PRODUCTION DETAILS</div>
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
-                    <tbody>
-                        <tr>
-                            <td><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.testing?.dateTime ? fmtDT(ps.testing.dateTime) : ''}</span></td>
-                            <td><span className="ps-lbl">TESTED BY:</span> <span className="ps-val">{ps.testing?.testedBy || ''}</span></td>
-                        </tr>
-                        <tr>
-                            <td colSpan={2}><span className="ps-lbl">SET:</span></td>
-                        </tr>
-                        <tr>
-                            <td><span className="ps-lbl">SET 1:</span> <span className="ps-val">{ps.testing?.set1 || ''}</span></td>
-                            <td><span className="ps-lbl">SET 3:</span> <span className="ps-val">{ps.testing?.set3 || ''}</span></td>
-                        </tr>
-                        <tr>
-                            <td><span className="ps-lbl">SET 2:</span> <span className="ps-val">{ps.testing?.set2 || ''}</span></td>
-                            <td><span className="ps-lbl">SET 4:</span> <span className="ps-val">{ps.testing?.set4 || ''}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
-                    <tbody>
-                        <tr>
-                            <td><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.testing?.comments || ''}</span></td>
-                            <td><span className="ps-lbl">SIGN:-</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div className="ps-section-header">PACKING DETAILS</div>
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '50%' }} /><col style={{ width: '50%' }} /></colgroup>
-                    <tbody>
-                        <tr><td colSpan={2}><span className="ps-lbl">DATE &amp; TIME:</span> <span className="ps-val">{ps.packing?.dateTime ? fmtDT(ps.packing.dateTime) : ''}</span></td></tr>
-                        <tr>
-                            <td><span className="ps-lbl">HANDOVER D/T:</span> <span className="ps-val">{ps.packing?.handoverDateTime ? fmtDT(ps.packing.handoverDateTime) : ''}</span></td>
-                            <td><span className="ps-lbl">DELIVERY D/T:</span> <span className="ps-val">{ps.packing?.deliveryDateTime ? fmtDT(ps.packing.deliveryDateTime) : ''}</span></td>
-                        </tr>
-                        <tr><td colSpan={2}><span className="ps-lbl">DELIVERY TROUGH:</span> <span className="ps-val">{ps.packing?.deliveryThrough || ''}</span></td></tr>
-                        <tr><td colSpan={2}><span className="ps-lbl">NAME OF PERSON:</span> <span className="ps-val">{ps.packing?.personName || ''}</span></td></tr>
-                    </tbody>
-                </table>
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '70%' }} /><col style={{ width: '30%' }} /></colgroup>
-                    <tbody>
-                        <tr>
-                            <td><span className="ps-lbl">COMMENTS:</span> <span className="ps-val">{ps.packing?.comments || ''}</span></td>
-                            <td><span className="ps-lbl">SIGN:-</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <table className="ps-print-table">
-                    <colgroup><col style={{ width: '40%' }} /><col style={{ width: '30%' }} /><col style={{ width: '30%' }} /></colgroup>
-                    <tbody>
-                        <tr>
-                            <td><span className="ps-lbl">LOAD RECEIVED:</span></td>
-                            <td><span className="ps-lbl">YES/NO</span></td>
-                            <td><span className="ps-val">{ps.packing?.loadReceived || ''}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <table className="ps-print-table ps-loadtest-table">
-                    <colgroup>
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                        <col style={{ width: '14.28%' }} />
-                    </colgroup>
-                    <thead>
-                        <tr className="ps-th-row">
-                            <th>NLV</th><th>LV</th><th>LI</th><th>TRANS</th><th>EX1</th><th>EX2</th><th>EX3</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {Array.from({ length: Math.max((ps.items || []).length, 1) }, (_, i) => (
-                            <tr key={i} className="ps-td-center">
-                                <td>{i === 0 ? (ps.loadTest?.nlv || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.lv || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.li || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.trans || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.ex1 || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.ex2 || '') : ''}</td>
-                                <td>{i === 0 ? (ps.loadTest?.ex3 || '') : ''}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                </div>
-            </div>
+                        </tbody>
+                    </table>
+                </div>,
+                document.body,
+            )}
 
             {/* Header (No Print) */}
             <div className="no-print" style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -291,20 +359,30 @@ export default function ProductionSheetPage() {
                             <span style={{ padding: '3px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, color: sc, background: `${sc}20`, border: `1px solid ${sc}40` }}>{ps.status}</span>
                         </div>
                         <div style={{ color: '#9ca3af', fontSize: 13, marginTop: 4 }}>
-                            SO Ref: <strong style={{ color: '#374151' }}>{ps.soNumber}</strong> · Client Code: <strong style={{ color: '#374151' }}>{ps.customerCode || ps.customerName}</strong>
+                            SO Ref: <strong style={{ color: '#374151' }}>{ps.soNumber}</strong>
+                            {' · '}Customer: <strong style={{ color: '#374151' }}>{ps.customerName || '—'}</strong>
+                            {' · '}Code: <strong style={{ color: '#374151' }}>{ps.customerCode || '—'}</strong>
                         </div>
+                        {ps.salesOrderUpdatedAfterPull && (
+                            <div style={{ marginTop: 8, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, color: '#92400e', fontSize: 13, fontWeight: 600 }}>
+                                Sales Order has been updated after this Production Order was created.
+                            </div>
+                        )}
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         {editing ? (
                             <>
-                                <button onClick={() => { setEditing(false); setForm(ps); }} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Discard</button>
+                                <button onClick={() => { setEditing(false); load(); }} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Discard</button>
                                 <button onClick={handleSave} disabled={saving} style={{ padding: '9px 18px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
                                     {saving ? 'Saving...' : '✓ Save Changes'}
                                 </button>
                             </>
                         ) : (
                             <>
-                                <button onClick={() => window.print()} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
+                                <button onClick={handleRefreshFromSO} disabled={refreshing} style={{ padding: '9px 14px', background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+                                    {refreshing ? 'Refreshing…' : '↻ Refresh from Sales Order'}
+                                </button>
+                                <button onClick={() => { document.body.classList.add('ps-printing'); window.print(); }} style={{ padding: '9px 14px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>🖨️ Print</button>
                                 <button onClick={() => setEditing(true)} style={{ padding: '9px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>✏️ Edit</button>
                             </>
                         )}
@@ -316,32 +394,65 @@ export default function ProductionSheetPage() {
                 {/* Order Information Section */}
                 <Section title="Order Details" icon="📦">
                     <G cols={3}>
+                        <F l="Customer Name"><input value={ps.customerName || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
                         <F l="Client Code"><input value={ps.customerCode || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
-                        <F l="Order Category">
-                            <span style={{ 
-                                padding: '4px 10px', 
-                                borderRadius: 6, 
-                                fontSize: 13, 
-                                fontWeight: 700, 
-                                background: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#fef2f2' : '#f1f5f9', 
-                                color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : '#475569',
-                                border: `1px solid ${(ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#fca5a5' : '#e2e8f0'}`
-                            }}>
-                                {ps.orderCategory || ps.soId?.orderCategory || 'Order'}
-                            </span>
+                        <F l="Sales Order No"><input value={ps.soNumber || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
+                        <div style={{ gridColumn: 'span 3' }}>
+                            <F l="Address"><input value={ps.customerAddress || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
+                        </div>
+                        <F l="Ordered By"><input value={ps.orderedBy || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
+                        <F l="Production In-Charge">
+                            <input value={editing ? (form.productionInCharge || '') : (ps.productionInCharge || '')}
+                                onChange={e => setF('productionInCharge', e.target.value)}
+                                readOnly={!editing}
+                                style={editing ? inp : { ...inp, background: '#f8f9fa' }} />
                         </F>
-                        {((ps.orderCategory || ps.soId?.orderCategory) === 'Replacement') && (ps.warrantyDetails || ps.soId?.warrantyDetails) && (
-                            <div style={{ gridColumn: 'span 3', background: '#fef2f2', border: '1px solid #fca5a5', padding: '12px 16px', borderRadius: 8, marginTop: 4 }}>
-                                <label style={{ ...lbl, color: '#dc2626' }}>Warranty Details</label>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: '#991b1b' }}>{ps.warrantyDetails || ps.soId?.warrantyDetails}</div>
-                            </div>
-                        )}
                         <F l="Delivery Date"><input value={fmt(ps.deliveryDate)} readOnly style={{ ...inp, background: '#f8f9fa' }} /></F>
-                        <F l="Sticker Type">
+                        <F l="Repeat Order">
+                            {editing ? (
+                                <select value={form.repeatOrder || ''} onChange={e => setF('repeatOrder', e.target.value)} style={inp}>
+                                    <option value="">—</option>
+                                    <option value="Yes">Yes</option>
+                                    <option value="No">No</option>
+                                </select>
+                            ) : <input value={ps.repeatOrder || '—'} readOnly style={{ ...inp, background: '#f8f9fa' }} />}
+                        </F>
+                        <F l="Sticker">
                             <input value={editing ? form.stickerType : ps.stickerType || ''}
                                 onChange={e => setF('stickerType', e.target.value)}
                                 readOnly={!editing}
-                                style={editing ? inp : { ...inp, border: 'none', padding: '7px 0' }} />
+                                style={editing ? inp : { ...inp, background: '#f8f9fa' }} />
+                        </F>
+                        <F l="Sign">
+                            <input value={editing ? (form.signMark || '') : (ps.signMark || '')}
+                                onChange={e => setF('signMark', e.target.value)}
+                                readOnly={!editing}
+                                style={editing ? inp : { ...inp, background: '#f8f9fa' }} />
+                        </F>
+                        <F l="Cabinet">
+                            <input value={editing ? (form.cabinetType || '') : (ps.cabinetType || '')}
+                                onChange={e => setF('cabinetType', e.target.value)}
+                                readOnly={!editing}
+                                style={editing ? inp : { ...inp, background: '#f8f9fa' }} />
+                        </F>
+                        <F l="Wires">
+                            <input value={editing ? (form.wires || form.acDc || '') : (ps.wires || ps.acDc || '')}
+                                onChange={e => setF('wires', e.target.value)}
+                                readOnly={!editing}
+                                style={editing ? inp : { ...inp, background: '#f8f9fa' }} />
+                        </F>
+                        <F l="Order Category">
+                            <span style={{
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                fontSize: 13,
+                                fontWeight: 700,
+                                background: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#fef2f2' : '#f1f5f9',
+                                color: (ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#dc2626' : '#475569',
+                                border: `1px solid ${(ps.orderCategory || ps.soId?.orderCategory) === 'Replacement' ? '#fca5a5' : '#e2e8f0'}`,
+                            }}>
+                                {ps.orderCategory || ps.soId?.orderCategory || 'Order'}
+                            </span>
                         </F>
                         <F l="Status">
                             {editing ? (
@@ -350,6 +461,12 @@ export default function ProductionSheetPage() {
                                 </select>
                             ) : <span>{ps.status}</span>}
                         </F>
+                        {((ps.orderCategory || ps.soId?.orderCategory) === 'Replacement') && (ps.warrantyDetails || ps.soId?.warrantyDetails) && (
+                            <div style={{ gridColumn: 'span 3', background: '#fef2f2', border: '1px solid #fca5a5', padding: '12px 16px', borderRadius: 8, marginTop: 4 }}>
+                                <label style={{ ...lbl, color: '#dc2626' }}>Warranty Details</label>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#991b1b' }}>{ps.warrantyDetails || ps.soId?.warrantyDetails}</div>
+                            </div>
+                        )}
                     </G>
                 </Section>
 
@@ -359,28 +476,35 @@ export default function ProductionSheetPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Item Code', 'Volt / Current', 'Qty', 'Hours', 'Dummy Load'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {['SR NO', 'MODEL NO', 'VOLT/CURRENT', 'QUANTITY', 'EXTRA CHANGE', 'DUMMY LOAD'].map(h => <th key={h} style={th}>{h}</th>)}
                                 </tr>
                             </thead>
                             <tbody>
                                 {(editing ? form.items : ps.items || []).map((item, i) => (
                                     <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={td}>{i + 1}</td>
-                                        <td style={td}>{item.itemCode || '—'}</td>
+                                        <td style={td}>{item.srNo || (i + 1)}</td>
+                                        <td style={td}>{item.modelNo || item.itemCode || '—'}</td>
                                         <td style={td}>
-                                            <div>{item.voltCurrent}</div>
-                                            {item.additionalNotes && <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px', borderTop: '1px solid #f3f4f6', paddingTop: '4px' }}>{item.additionalNotes}</div>}
+                                            {editing ? (
+                                                <input value={item.voltCurrent || ''} onChange={e => {
+                                                    const its = [...form.items]; its[i] = { ...its[i], voltCurrent: e.target.value }; setF('items', its);
+                                                }} style={inp} />
+                                            ) : (voltCurrentOf(item) || '—')}
                                         </td>
-                                        <td style={td}>{item.qty} Nos</td>
+                                        <td style={td}>{qtyLabel(item)}</td>
                                         <td style={td}>
-                                            {editing ? <input value={item.hours || ''} onChange={e => {
-                                                const its = [...form.items]; its[i].hours = e.target.value; setF('items', its);
-                                            }} style={inp} /> : item.hours}
+                                            {editing ? (
+                                                <input value={item.extraChange || ''} onChange={e => {
+                                                    const its = [...form.items]; its[i] = { ...its[i], extraChange: e.target.value }; setF('items', its);
+                                                }} style={inp} />
+                                            ) : (extraChangeOf(item) || '—')}
                                         </td>
                                         <td style={td}>
-                                            {editing ? <input value={item.dummyLoad || ''} onChange={e => {
-                                                const its = [...form.items]; its[i].dummyLoad = e.target.value; setF('items', its);
-                                            }} style={inp} /> : item.dummyLoad}
+                                            {editing ? (
+                                                <input value={item.dummyLoad || ''} onChange={e => {
+                                                    const its = [...form.items]; its[i] = { ...its[i], dummyLoad: e.target.value }; setF('items', its);
+                                                }} style={inp} />
+                                            ) : (item.dummyLoad || '—')}
                                         </td>
                                     </tr>
                                 ))}
@@ -440,112 +564,169 @@ export default function ProductionSheetPage() {
 
                 {/* Load Test Section (No Print) */}
                 <Section title="Load Test Details" icon="📊">
-                    <G cols={7}>
-                        {['nlv', 'lv', 'li', 'trans', 'ex1', 'ex2', 'ex3'].map(k => (
-                            <F key={k} l={k.toUpperCase()}>
-                                {editing ? (
-                                    <input value={form.loadTest?.[k] || ''} onChange={e => setF(`loadTest.${k}`, e.target.value)} style={inp} />
-                                ) : (
-                                    <span style={{ fontWeight: 600 }}>{ps.loadTest?.[k] || '—'}</span>
-                                )}
-                            </F>
-                        ))}
-                    </G>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr>
+                                    {['NLV', 'LV', 'LI', 'Trans', 'Ex1', 'Ex2', 'Ex3'].map(h => <th key={h} style={th}>{h}</th>)}
+                                    {editing && <th style={th} />}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(form.loadTestRows || []).map((row, i) => (
+                                    <tr key={i}>
+                                        {['nlv', 'lv', 'li', 'trans', 'ex1', 'ex2', 'ex3'].map(k => (
+                                            <td key={k} style={td}>
+                                                {editing ? (
+                                                    <input
+                                                        value={row?.[k] || ''}
+                                                        onChange={e => {
+                                                            const rows = [...(form.loadTestRows || [])];
+                                                            rows[i] = { ...rows[i], [k]: e.target.value };
+                                                            setF('loadTestRows', rows);
+                                                            if (i === 0) setF(`loadTest.${k}`, e.target.value);
+                                                        }}
+                                                        style={inp}
+                                                    />
+                                                ) : (
+                                                    <span style={{ fontWeight: 600 }}>{row?.[k] || '—'}</span>
+                                                )}
+                                            </td>
+                                        ))}
+                                        {editing && (
+                                            <td style={td}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const rows = (form.loadTestRows || []).filter((_, idx) => idx !== i);
+                                                        setF('loadTestRows', rows.length ? rows : [{ nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', ex3: '' }]);
+                                                    }}
+                                                    style={{ border: 'none', background: '#fef2f2', color: '#dc2626', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}
+                                                >
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {editing && (
+                        <button
+                            type="button"
+                            onClick={() => setF('loadTestRows', [...(form.loadTestRows || []), { nlv: '', lv: '', li: '', trans: '', ex1: '', ex2: '', ex3: '' }])}
+                            style={{ marginTop: 10, padding: '7px 12px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}
+                        >
+                            + Add test row
+                        </button>
+                    )}
                 </Section>
             </div>
 
             <style>{`
+                .ps-print-portal.production-order-print {
+                    display: none;
+                }
                 @media print {
                     @page { size: A4 portrait; margin: 8mm; }
                     html, body {
-                        width: 210mm !important;
                         margin: 0 !important;
                         padding: 0 !important;
+                        width: 100% !important;
+                        height: auto !important;
+                        overflow: visible !important;
                         background: #fff !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
                     }
-                    .production-sheet-page-root,
-                    .production-sheet-page-root > * {
-                        max-width: none !important;
-                        min-width: 0 !important;
-                    }
-                    .production-sheet-page-root .no-print,
-                    .production-sheet-page-root .no-print * {
+                    /* Hide SPA chrome; only body-level Production Order print portal remains */
+                    body.ps-printing > #root,
+                    body.ps-printing > *:not(.ps-print-portal):not(script):not(style) {
                         display: none !important;
                     }
-                    .production-sheet-print.ps-print-page {
+                    body.ps-printing > .ps-print-portal.production-order-print,
+                    .ps-print-portal.production-order-print {
                         display: block !important;
                         position: static !important;
-                        width: 194mm !important;
-                        min-width: 194mm !important;
-                        max-width: 194mm !important;
-                        margin: 0 auto !important;
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin: 0 !important;
                         padding: 0 !important;
                         box-sizing: border-box !important;
-                        transform: none !important;
-                        zoom: 1 !important;
+                        background: #fff !important;
+                        color: #000 !important;
                     }
-                    .production-sheet-print .ps-print-sheet {
+                    .production-order-print,
+                    .production-order-main-table {
                         width: 100% !important;
-                        border: 1.5px solid #000;
-                        box-sizing: border-box;
+                        max-width: none !important;
+                        margin: 0 !important;
+                        box-sizing: border-box !important;
                     }
-                    .production-sheet-print .ps-section-header {
-                        text-align: center;
-                        font-weight: 900;
-                        background: #fff;
-                        border: 1.5px solid #000;
-                        border-bottom: none;
-                        padding: 4px;
-                        font-size: 12pt;
-                        width: 100%;
-                        box-sizing: border-box;
-                    }
-                    .production-sheet-print .ps-section-sub {
-                        font-size: 10pt;
-                    }
-                    .production-sheet-print .ps-print-table {
-                        width: 100% !important;
-                        min-width: 100% !important;
-                        max-width: 100% !important;
+                    .production-order-main-table {
                         border-collapse: collapse !important;
                         table-layout: fixed !important;
-                        border: 1.5px solid #000;
-                        border-top: none;
-                        margin: 0;
-                        box-sizing: border-box;
+                        border: 1.5px solid #000 !important;
                     }
-                    .production-sheet-print .ps-print-table td,
-                    .production-sheet-print .ps-print-table th {
-                        border: 1px solid #000;
-                        padding: 5px 8px;
-                        font-size: 10pt;
-                        vertical-align: middle;
-                        word-wrap: break-word;
-                        overflow-wrap: break-word;
+                    .production-order-main-table tr,
+                    .production-order-main-table td,
+                    .production-order-main-table th {
+                        box-sizing: border-box !important;
                     }
-                    .production-sheet-print .ps-th-row {
-                        background: #f1f5f9;
-                        font-weight: 900;
-                        text-align: center;
+                    .production-order-main-table > tbody > tr > td {
+                        border: 1px solid #000 !important;
+                        padding: 5px 7px !important;
+                        font-size: 9.5pt !important;
+                        vertical-align: middle !important;
+                        word-wrap: break-word !important;
+                        overflow-wrap: break-word !important;
                     }
-                    .production-sheet-print .ps-td-center { text-align: center !important; }
-                    .production-sheet-print .ps-td-left { text-align: left !important; }
-                    .production-sheet-print .ps-lbl {
-                        font-weight: bold;
-                        text-transform: uppercase;
-                        margin-right: 6px;
-                        white-space: nowrap;
+                    .production-order-main-table .ps-sec-hd {
+                        text-align: center !important;
+                        font-weight: 900 !important;
+                        font-size: 11pt !important;
+                        background: #fff !important;
+                        padding: 4px 6px !important;
                     }
-                    .production-sheet-print .ps-val { font-weight: normal; }
-                    .production-sheet-print .ps-item-note {
-                        font-size: 9pt;
-                        color: #555;
-                        border-top: 0.5px solid #ccc;
-                        margin-top: 2px;
-                        padding-top: 2px;
-                        text-align: left;
+                    .production-order-main-table .ps-sec-sub {
+                        font-size: 10pt !important;
+                    }
+                    .production-order-main-table .ps-th-row > td,
+                    .production-order-main-table .ps-th-row > th {
+                        background: #f1f5f9 !important;
+                        font-weight: 900 !important;
+                        text-align: center !important;
+                    }
+                    .production-order-main-table .ps-td-center { text-align: center !important; }
+                    .production-order-main-table .ps-td-left { text-align: left !important; }
+                    .production-order-main-table .ps-lbl {
+                        font-weight: bold !important;
+                        text-transform: uppercase !important;
+                        margin-right: 6px !important;
+                    }
+                    .production-order-main-table .ps-val { font-weight: normal !important; }
+                    .production-order-main-table .ps-nested-cell {
+                        padding: 0 !important;
+                    }
+                    .production-order-main-table .ps-loadtest-table {
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin: 0 !important;
+                        border-collapse: collapse !important;
+                        table-layout: fixed !important;
+                        border: none !important;
+                    }
+                    .production-order-main-table .ps-loadtest-table th,
+                    .production-order-main-table .ps-loadtest-table td {
+                        border: 1px solid #000 !important;
+                        padding: 5px 4px !important;
+                        font-size: 9.5pt !important;
+                        box-sizing: border-box !important;
+                    }
+                    .production-order-main-table .ps-loadtest-row td {
+                        height: 22px !important;
+                        min-height: 22px !important;
                     }
                 }
             `}</style>
