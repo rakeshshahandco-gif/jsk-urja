@@ -803,6 +803,11 @@ export default function PrintFormatWysiwygEditor({
     onSetDefault,
     onExit,
     saving,
+    onSaveLayoutFile,
+    onSaveLayoutFileAs,
+    onOpenLayoutFile,
+    layoutFileName = null,
+    layoutFileDirty = false,
 }) {
     const [selectedBlockId, setSelectedBlockId] = useState(null);
     const [selectedFieldId, setSelectedFieldId] = useState(null);
@@ -1171,6 +1176,25 @@ export default function PrintFormatWysiwygEditor({
                     </button>
                     <span style={{ fontWeight: 800, fontSize: 16 }}>{form.name || 'Untitled Format'}</span>
                     <span style={{ fontSize: 12, color: '#64748b' }}>{docType} WYSIWYG</span>
+                    {layoutFileName ? (
+                        <span
+                            style={{
+                                fontSize: 11,
+                                color: layoutFileDirty ? '#b45309' : '#334155',
+                                background: layoutFileDirty ? '#fffbeb' : '#f1f5f9',
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                border: layoutFileDirty ? '1px solid #fcd34d' : '1px solid #e2e8f0',
+                                maxWidth: 280,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                            title={layoutFileName}
+                        >
+                            {layoutFileDirty ? '● ' : ''}{layoutFileName}
+                        </span>
+                    ) : null}
                     <span style={{ fontSize: 11, color: '#334155', background: '#e2e8f0', padding: '4px 10px', borderRadius: 6 }}>
                         {pageWidthMm} × {pageHeightMm} mm · {pageMeta.orientation}
                     </span>
@@ -1184,9 +1208,33 @@ export default function PrintFormatWysiwygEditor({
                         </span>
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button type="button" style={btn('#16a34a')} onClick={onSaveDraft} disabled={saving}>
                         {saving ? 'Saving...' : 'Save Draft'}
+                    </button>
+                    <button
+                        type="button"
+                        style={btn('#0369a1')}
+                        onClick={onSaveLayoutFile}
+                        title="Save layout as .jsklayout on your computer"
+                    >
+                        Save Layout File
+                    </button>
+                    <button
+                        type="button"
+                        style={btn('#0e7490')}
+                        onClick={onSaveLayoutFileAs}
+                        title="Save a copy as a new .jsklayout file"
+                    >
+                        Save Layout File As…
+                    </button>
+                    <button
+                        type="button"
+                        style={btn('#475569')}
+                        onClick={onOpenLayoutFile}
+                        title="Open a .jsklayout design file"
+                    >
+                        Open Layout File
                     </button>
                     <button type="button" style={btn('#0d9488')} onClick={onApprove}>
                         Approve

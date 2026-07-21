@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { PATHS } from '@/routes/paths';
@@ -24,6 +24,14 @@ import {
 } from '@/services/printFormatApi';
 import { getPrintFormatDisplayStatus } from '@/utils/printFormatRuntime';
 import { getInvoiceSeries } from '@/services/salesApi';
+import {
+    buildJskLayoutFile,
+    jskLayoutToFormState,
+    openJskLayoutFromDisk,
+    saveJskLayoutToDisk,
+    suggestedJskLayoutFileName,
+    supportsJskLayoutOverwrite,
+} from '@/utils/jskLayoutFile';
 
 const DOC_TYPES = ['Sales Order', 'Sales Invoice'];
 const PAPER_SIZES = ['A4', 'Letter', 'Legal', 'Custom'];
@@ -120,6 +128,38 @@ export default function PrintFormatDesignerPage() {
     const [saving, setSaving] = useState(false);
     const [layoutPreviewMode, setLayoutPreviewMode] = useState(false);
     const [designerEnabled, setDesignerEnabled] = useState(false);
+    const layoutFileHandleRef = useRef(null);
+    const [layoutFileName, setLayoutFileName] = useState(null);
+    const [layoutCleanSnap, setLayoutCleanSnap] = useState('');
+
+    const formLayoutSnap = useMemo(
+        () => JSON.stringify({
+            name: form.name,
+            paperSize: form.paperSize,
+            orientation: form.orientation,
+            margins: form.margins,
+            customPaper: form.customPaper,
+            layout: form.layout,
+        }),
+        [form],
+    );
+    const layoutFileDirty = Boolean(layoutCleanSnap) && formLayoutSnap !== layoutCleanSnap;
+
+    const markLayoutFileClean = useCallback((nextForm = form) => {
+        setLayoutCleanSnap(JSON.stringify({
+            name: nextForm.name,
+            paperSize: nextForm.paperSize,
+            orientation: nextForm.orientation,
+            margins: nextForm.margins,
+            customPaper: nextForm.customPaper,
+            layout: nextForm.layout,
+        }));
+    }, [form]);
+
+    const clearLayoutFileBinding = useCallback(() => {
+        layoutFileHandleRef.current = null;
+        setLayoutFileName(null);
+    }, []);
 
     useEffect(() => {
         getPrintDesignerSettings()
@@ -230,16 +270,20 @@ export default function PrintFormatDesignerPage() {
             setLayoutPreviewMode(Boolean(previewData?.isLayoutPreview ?? doc?._layoutPreview));
             setCompany(companyRes?.data || {});
             if (previewData?.format?.layout) {
-                setForm((prev) => ({
-                    ...prev,
-                    name: previewData.format.name ?? prev.name,
-                    paperSize: previewData.format.paperSize ?? prev.paperSize,
-                    orientation: previewData.format.orientation ?? prev.orientation,
-                    margins: previewData.format.margins ?? prev.margins,
-                    customPaper: previewData.format.customPaper ?? prev.customPaper,
+                const nextForm = {
+                    name: previewData.format.name ?? form.name,
+                    paperSize: previewData.format.paperSize ?? form.paperSize,
+                    orientation: previewData.format.orientation ?? form.orientation,
+                    margins: previewData.format.margins ?? form.margins,
+                    customPaper: previewData.format.customPaper ?? form.customPaper,
                     layout: mergeLayoutWithV2(previewData.format.layout, docType),
-                }));
+                };
+                setForm(nextForm);
+                markLayoutFileClean(nextForm);
+            } else {
+                markLayoutFileClean(form);
             }
+            clearLayoutFileBinding();
             setEditorOpen(true);
             if (ref && previewData?.isLayoutPreview) {
                 toast(`Invoice/SO "${ref}" not found — using layout sample data.`, { icon: 'ℹ️' });
@@ -352,6 +396,8 @@ export default function PrintFormatDesignerPage() {
             toast.error(e.response?.data?.message || 'Failed');
         }
     };
+
+    const selectedRow = formats.find((f) => f._id === selectedId);
 
     const handleSaveAsNewVersion = async () => {
         if (!selectedId) return toast.error('Select a format first');
@@ -466,7 +512,105 @@ export default function PrintFormatDesignerPage() {
         input.click();
     };
 
-    const selectedRow = formats.find((f) => f._id === selectedId);
+    const buildCurrentLayoutPayload = () => buildJskLayoutFile({
+        docType,
+        form,
+        designerUi: {},
+    });
+
+    const handleSaveLayoutFile = async ({ forcePicker = false } = {}) => {
+        try {
+            const payload = buildCurrentLayoutPayload();
+            const suggested = suggestedJskLayoutFileName(docType, form.name || 'Print Layout');
+            const needPicker = forcePicker || !layoutFileHandleRef.current || !supportsJskLayoutOverwrite();
+            const result = await saveJskLayoutToDisk({
+                payload,
+                fileHandle: needPicker ? null : layoutFileHandleRef.current,
+                suggestedName: suggested,
+                forcePicker: needPicker,
+            });
+            if (result.handle) layoutFileHandleRef.current = result.handle;
+            setLayoutFileName(result.fileName);
+            markLayoutFileClean();
+            toast.success(
+                result.method === 'fsa'
+                    ? `Layout saved: ${result.fileName}`
+                    : `Layout downloaded: ${result.fileName}`,
+            );
+            return true;
+        } catch (e) {
+            if (e?.name === 'AbortError') return false;
+            toast.error(e?.message || 'Failed to save layout file');
+            return false;
+        }
+    };
+
+    const handleSaveLayoutFileAs = async () => handleSaveLayoutFile({ forcePicker: true });
+
+    const handleOpenLayoutFile = async () => {
+        if (layoutFileDirty) {
+            const choice = window.prompt(
+                'You have unsaved changes.\nType LAYOUT to save layout file, DRAFT to save CRM draft, DISCARD to continue, or Cancel.',
+                'LAYOUT',
+            );
+            if (choice == null) return;
+            const c = String(choice).trim().toUpperCase();
+            if (c === 'LAYOUT') {
+                const ok = await handleSaveLayoutFile();
+                if (!ok) return;
+            } else if (c === 'DRAFT') {
+                await handleSaveDraft();
+            } else if (c !== 'DISCARD') {
+                return;
+            }
+        }
+        try {
+            const opened = await openJskLayoutFromDisk();
+            if (opened.data.docType !== docType) {
+                const switchOk = window.confirm(
+                    `This file is for "${opened.data.docType}" but Designer is on "${docType}".\n\nSwitch document type and load the file?`,
+                );
+                if (!switchOk) return;
+                setDocType(opened.data.docType);
+            }
+            const nextForm = {
+                ...emptyFormat(),
+                ...jskLayoutToFormState(opened.data),
+                layout: mergeLayoutWithV2(opened.data.layout, opened.data.docType || docType),
+            };
+            setForm(nextForm);
+            layoutFileHandleRef.current = opened.handle;
+            setLayoutFileName(opened.fileName);
+            markLayoutFileClean(nextForm);
+            setEditorOpen(true);
+            setLayoutPreviewMode(false);
+            toast.success(`Opened ${opened.fileName}`);
+        } catch (e) {
+            if (e?.name === 'AbortError') return;
+            toast.error(e?.message || 'Failed to open layout file');
+        }
+    };
+
+    const handleExitEditor = async () => {
+        if (layoutFileDirty) {
+            const choice = window.prompt(
+                'You have unsaved changes.\nType LAYOUT to save layout file, DRAFT to save CRM draft, DISCARD to exit, or Cancel.',
+                'LAYOUT',
+            );
+            if (choice == null) return;
+            const c = String(choice).trim().toUpperCase();
+            if (c === 'LAYOUT') {
+                const ok = await handleSaveLayoutFile();
+                if (!ok) return;
+            } else if (c === 'DRAFT') {
+                await handleSaveDraft();
+            } else if (c !== 'DISCARD') {
+                return;
+            }
+        }
+        setEditorOpen(false);
+        setLayoutPreviewMode(false);
+    };
 
     if (editorOpen) {
         return (
@@ -480,11 +624,13 @@ export default function PrintFormatDesignerPage() {
                 onSaveDraft={handleSaveDraft}
                 onApprove={handleApprove}
                 onSetDefault={handleSetDefault}
-                onExit={() => {
-                    setEditorOpen(false);
-                    setLayoutPreviewMode(false);
-                }}
+                onExit={handleExitEditor}
                 saving={saving}
+                onSaveLayoutFile={() => handleSaveLayoutFile()}
+                onSaveLayoutFileAs={handleSaveLayoutFileAs}
+                onOpenLayoutFile={handleOpenLayoutFile}
+                layoutFileName={layoutFileName}
+                layoutFileDirty={layoutFileDirty}
             />
         );
     }
@@ -680,6 +826,32 @@ export default function PrintFormatDesignerPage() {
                         </button>
                         <button type="button" style={btn('#16a34a')} onClick={handleSaveDraft} disabled={saving || !selectedId}>
                             {saving ? 'Saving...' : 'Save Draft'}
+                        </button>
+                        <button
+                            type="button"
+                            style={btn('#0369a1')}
+                            onClick={() => handleSaveLayoutFile()}
+                            disabled={!form?.layout}
+                            title="Save design as .jsklayout file on your computer"
+                        >
+                            Save Layout File
+                        </button>
+                        <button
+                            type="button"
+                            style={btn('#0e7490')}
+                            onClick={handleSaveLayoutFileAs}
+                            disabled={!form?.layout}
+                            title="Save a copy as a new .jsklayout file"
+                        >
+                            Save Layout File As…
+                        </button>
+                        <button
+                            type="button"
+                            style={btn('#475569')}
+                            onClick={handleOpenLayoutFile}
+                            title="Open a .jsklayout design file from your computer"
+                        >
+                            Open Layout File
                         </button>
                         <button type="button" style={btn('#0d9488')} onClick={handleApprove} disabled={!selectedId}>
                             Approve
