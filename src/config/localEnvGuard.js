@@ -1,14 +1,29 @@
 import { env } from './env';
 import { LOCAL_APP_EXPECTATION } from './localAppExpectation';
 
-function isRenderHostname() {
+/**
+ * Local-only backend identity guard.
+ * Runs ONLY on localhost browser hosts during Vite DEV.
+ * Never runs on Render / production (any non-loopback hostname).
+ */
+function isLocalBrowserHost() {
     if (typeof window === 'undefined') return false;
-    return String(window.location.hostname || '').toLowerCase().endsWith('.onrender.com');
+    const host = String(window.location.hostname || '').toLowerCase();
+    return (
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host === '[::1]' ||
+        host === '::1'
+    );
 }
 
 export async function verifyLocalBackendIdentity() {
-    // Local Vite/dev only. Never block Render/production login with localhost:5100 checks.
-    if (!import.meta.env.DEV || isRenderHostname()) {
+    // Production / Render / any remote host: skip entirely.
+    if (!isLocalBrowserHost()) {
+        return { ok: true, skipped: true };
+    }
+    // Localhost but production build: skip (API already resolved via env.js).
+    if (!import.meta.env.DEV) {
         return { ok: true, skipped: true };
     }
 
