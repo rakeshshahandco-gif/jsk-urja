@@ -842,17 +842,27 @@ export default function SalesOrderDetailPage() {
         </div>
       </div>
 
-      {/* Sales Order print geometry — A4 mm, no shrink-to-fit, Active Default block layout */}
+      {/* Sales Order print geometry — full A4; neutralize app-shell flex/overflow that squeezes left */}
       <style>{`
                 @media print {
-                    @page { size: A4 portrait; margin: 0; }
-                    .no-print, .no-print *, [data-no-print], #app-sidebar, #app-header {
+                    @page { size: A4 portrait; margin: 0 !important; }
+                    .no-print, .no-print *, [data-no-print],
+                    #app-sidebar, #app-header,
+                    [data-jsk-ui-component="sidebar"],
+                    [data-jsk-ui-component="header"],
+                    .jsk-mobile-backdrop {
                         display: none !important;
+                        width: 0 !important;
+                        height: 0 !important;
+                        overflow: hidden !important;
                     }
                     html, body {
                         margin: 0 !important;
                         padding: 0 !important;
-                        width: 210mm !important;
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        height: auto !important;
+                        overflow: visible !important;
                         background: #fff !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
@@ -861,24 +871,34 @@ export default function SalesOrderDetailPage() {
                     }
                     #root,
                     #root > div,
-                    #root > div > div,
-                    #root main {
+                    [data-jsk-ui-component="app-shell"],
+                    [data-jsk-ui-component="main-column"],
+                    #root main,
+                    .jsk-main-content {
+                        display: block !important;
+                        position: static !important;
                         width: 210mm !important;
+                        min-width: 210mm !important;
                         max-width: 210mm !important;
+                        height: auto !important;
+                        max-height: none !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         left: 0 !important;
+                        top: 0 !important;
+                        overflow: visible !important;
                         transform: none !important;
                         zoom: 1 !important;
-                        display: block !important;
-                        position: static !important;
                         background: #fff !important;
                         box-shadow: none !important;
+                        flex: none !important;
                     }
                     .so-print-root.print-only,
                     .so-print-root {
                         display: block !important;
-                        position: static !important;
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
                         width: 210mm !important;
                         min-width: 210mm !important;
                         max-width: 210mm !important;
@@ -889,6 +909,7 @@ export default function SalesOrderDetailPage() {
                         zoom: 1 !important;
                         background: #fff !important;
                         box-shadow: none !important;
+                        visibility: visible !important;
                     }
                     .so-print-root .print-content {
                         width: 210mm !important;

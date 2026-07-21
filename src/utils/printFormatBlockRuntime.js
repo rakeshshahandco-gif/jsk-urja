@@ -67,9 +67,18 @@ export function buildBlockLayoutCss(printFormat, rootClass, docType) {
         width: 100% !important;
         max-width: 100% !important;
         min-height: ${minH}mm !important;
-        height: auto !important;
         box-sizing: border-box !important;
         display: block !important;
+      }
+      @media print {
+        .${rootClass} .pf-block-layout-root.print-content,
+        .${rootClass} .pf-block-layout-root.print-page {
+          width: 210mm !important;
+          max-width: 210mm !important;
+          height: 297mm !important;
+          min-height: 297mm !important;
+          max-height: 297mm !important;
+        }
       }
       .${rootClass} .pf-block-layout-root .pf-block-flow-spacer {
         flex: none !important;

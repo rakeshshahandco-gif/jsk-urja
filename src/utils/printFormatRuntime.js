@@ -94,7 +94,7 @@ export function buildPrintFormatCss(printFormat, rootClass, docType) {
     const pageSize = getPrintPageSizeRule(printFormat);
 
     let css = `
-      @page { size: ${pageSize}; margin: 0; }
+      @page { size: ${pageSize}; margin: 0 !important; }
       .${rootClass} {
         width: ${pageW}mm !important;
         min-width: ${pageW}mm !important;
@@ -111,12 +111,15 @@ export function buildPrintFormatCss(printFormat, rootClass, docType) {
         height: 297mm !important;
         min-height: 297mm !important;
         max-height: 297mm !important;
-        padding: ${pad} !important;
         box-sizing: border-box !important;
         background: #fff !important;
         overflow: hidden !important;
         transform: none !important;
         zoom: 1 !important;
+      }
+      .${rootClass} .print-content:not(.pf-block-layout-root),
+      .${rootClass} .print-page:not(.pf-block-layout-root) {
+        padding: ${pad} !important;
       }
     `;
 
