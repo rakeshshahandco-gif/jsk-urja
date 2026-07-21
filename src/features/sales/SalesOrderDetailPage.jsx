@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getSalesOrderById,
@@ -154,6 +155,20 @@ export default function SalesOrderDetailPage() {
     });
   };
 
+  /** Print outside app-shell so sidebar/flex never squeezes A4 (fixes Render left-squeeze). */
+  const handlePrint = useCallback(() => {
+    document.body.classList.add("so-printing");
+    const cleanup = () => {
+      document.body.classList.remove("so-printing");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(cleanup, 2000);
+    }, 50);
+  }, []);
+
   if (loading)
     return <BrandedLoader size={120} />;
   if (!so)
@@ -198,16 +213,22 @@ export default function SalesOrderDetailPage() {
         color: "#1e293b",
       }}
     >
-      {/* PRINT ONLY - single shared Sales Order print engine */}
-      <SalesOrderPrintDocument
-        so={so}
-        company={company}
-        user={user}
-        printFormat={activePrintFormat}
-        mode="print"
-        visible={false}
-        className="print-only"
-      />
+      {/* PRINT ONLY — portaled to body so app-shell flex/sidebar cannot shrink A4 */}
+      {typeof document !== "undefined"
+        && createPortal(
+          <div className="so-print-portal" data-so-print-portal="1">
+            <SalesOrderPrintDocument
+              so={so}
+              company={company}
+              user={user}
+              printFormat={activePrintFormat}
+              mode="print"
+              visible={false}
+              className="print-only"
+            />
+          </div>,
+          document.body,
+        )}
 
       {/* Application Section (Screen Only) */}
       <div className="no-print">
@@ -390,7 +411,7 @@ export default function SalesOrderDetailPage() {
                 </button>
               )}
               <button
-                onClick={() => window.print()}
+                onClick={handlePrint}
                 style={{
                   padding: "9px 14px",
                   background: "#f1f5f9",
@@ -842,25 +863,17 @@ export default function SalesOrderDetailPage() {
         </div>
       </div>
 
-      {/* Sales Order print geometry — full A4; neutralize app-shell flex/overflow that squeezes left */}
+      {/* Sales Order print — body portal; hide everything else under @media print */}
       <style>{`
+                .so-print-portal {
+                    display: none;
+                }
                 @media print {
                     @page { size: A4 portrait; margin: 0 !important; }
-                    .no-print, .no-print *, [data-no-print],
-                    #app-sidebar, #app-header,
-                    [data-jsk-ui-component="sidebar"],
-                    [data-jsk-ui-component="header"],
-                    .jsk-mobile-backdrop {
-                        display: none !important;
-                        width: 0 !important;
-                        height: 0 !important;
-                        overflow: hidden !important;
-                    }
                     html, body {
                         margin: 0 !important;
                         padding: 0 !important;
                         width: 100% !important;
-                        min-width: 0 !important;
                         height: auto !important;
                         overflow: visible !important;
                         background: #fff !important;
@@ -869,36 +882,29 @@ export default function SalesOrderDetailPage() {
                         zoom: 1 !important;
                         transform: none !important;
                     }
-                    #root,
-                    #root > div,
-                    [data-jsk-ui-component="app-shell"],
-                    [data-jsk-ui-component="main-column"],
-                    #root main,
-                    .jsk-main-content {
+                    /* Hide entire SPA chrome; only body-level print portal remains */
+                    body.so-printing > *:not(.so-print-portal),
+                    body > #root,
+                    body > *:not(.so-print-portal):not(script):not(style) {
+                        display: none !important;
+                    }
+                    body > .so-print-portal,
+                    .so-print-portal {
                         display: block !important;
                         position: static !important;
+                        left: 0 !important;
+                        top: 0 !important;
                         width: 210mm !important;
-                        min-width: 210mm !important;
                         max-width: 210mm !important;
-                        height: auto !important;
-                        max-height: none !important;
                         margin: 0 !important;
                         padding: 0 !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        overflow: visible !important;
-                        transform: none !important;
-                        zoom: 1 !important;
                         background: #fff !important;
-                        box-shadow: none !important;
-                        flex: none !important;
+                        visibility: visible !important;
                     }
-                    .so-print-root.print-only,
-                    .so-print-root {
+                    .so-print-portal .so-print-root.print-only,
+                    .so-print-portal .so-print-root {
                         display: block !important;
-                        position: absolute !important;
-                        left: 0 !important;
-                        top: 0 !important;
+                        position: static !important;
                         width: 210mm !important;
                         min-width: 210mm !important;
                         max-width: 210mm !important;
@@ -911,7 +917,7 @@ export default function SalesOrderDetailPage() {
                         box-shadow: none !important;
                         visibility: visible !important;
                     }
-                    .so-print-root .print-content {
+                    .so-print-portal .so-print-root .print-content {
                         width: 210mm !important;
                         max-width: 210mm !important;
                         height: 297mm !important;
@@ -926,29 +932,29 @@ export default function SalesOrderDetailPage() {
                         page-break-after: always;
                         break-after: page;
                     }
-                    .so-print-root .print-content:last-child {
+                    .so-print-portal .so-print-root .print-content:last-child {
                         page-break-after: auto !important;
                         break-after: auto !important;
                     }
-                    .so-print-root .print-content.pf-block-layout-root {
+                    .so-print-portal .so-print-root .print-content.pf-block-layout-root {
                         display: block !important;
                         position: relative !important;
                         flex-direction: unset !important;
                     }
-                    .so-print-root .print-content:not(.pf-block-layout-root) {
+                    .so-print-portal .so-print-root .print-content:not(.pf-block-layout-root) {
                         display: flex !important;
                         flex-direction: column !important;
                         padding: 10mm !important;
                     }
-                    .so-print-root [data-pf-block] {
+                    .so-print-portal .so-print-root [data-pf-block] {
                         overflow: visible !important;
                     }
-                    .so-print-root .print-items-table {
+                    .so-print-portal .so-print-root .print-items-table {
                         width: 100% !important;
                         table-layout: fixed !important;
                     }
-                    .so-print-root .print-items-table th,
-                    .so-print-root .print-items-table td {
+                    .so-print-portal .so-print-root .print-items-table th,
+                    .so-print-portal .so-print-root .print-items-table td {
                         word-wrap: break-word;
                         overflow-wrap: anywhere;
                     }

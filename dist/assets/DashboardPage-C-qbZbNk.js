@@ -1,0 +1,1 @@
+import{j as e}from"./index-d9O2SIoi.js";import o from"./ModuleHomePage-zzrIjWe4.js";import"./chart-pie-4Id_aMne.js";const t=()=>e.jsxDEV(o,{moduleName:"dashboard",title:"Home",subtitle:"Your Global Shortcuts"},void 0,!1,{fileName:"D:/JSK-E-SARTHI-MASTER-jsk-deploy/src/features/dashboard/DashboardPage.jsx",lineNumber:5,columnNumber:12},void 0);export{t as default};
