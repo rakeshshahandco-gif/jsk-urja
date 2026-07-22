@@ -127,6 +127,21 @@ import WhatsappBulkMatterPage from '@/features/whatsappBulk/WhatsappBulkMatterPa
 import WhatsappBulkBlacklistPage from '@/features/whatsappBulk/WhatsappBulkBlacklistPage';
 import WhatsappBulkHistoryPage from '@/features/whatsappBulk/WhatsappBulkHistoryPage';
 import WhatsappBulkSettingsPage from '@/features/whatsappBulk/WhatsappBulkSettingsPage';
+import {
+    WhatsAppAIDashboardPage,
+    WhatsAppAIInboxPage,
+    WhatsAppAIActiveConversationsPage,
+    WhatsAppAIWaitingHumanPage,
+    WhatsAppAILeadDraftsPage,
+    WhatsAppAIKnowledgePage,
+    WhatsAppAIDocumentsPage,
+    WhatsAppAIRulesPage,
+    WhatsAppAISettingsPage,
+    WhatsAppAIAuditLogsPage,
+    WhatsAppAiAnyPermission,
+    WhatsAppAiFeatureGuard,
+    WHATSAPP_AI_PERMISSIONS,
+} from '@/features/whatsappAi';
 import EmailSettingsPage from '@/features/emailSettings/EmailSettingsPage';
 import EmailBulkCampaignsPage from '@/features/emailBulk/EmailBulkCampaignsPage';
 import EmailBulkTemplatesPage from '@/features/emailBulk/EmailBulkTemplatesPage';
@@ -601,6 +616,18 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST} element={<ProtectedRoute requirePermission="whatsapp_bulk.blacklist.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkBlacklistPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.HISTORY} element={<ProtectedRoute requirePermission="whatsapp_bulk.campaigns.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkHistoryPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS} element={<ProtectedRoute requirePermission="whatsapp_bulk.settings.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkSettingsPage /></FeatureGuard></ProtectedRoute>} />
+
+                                                {/* WhatsApp AI Assistant — Phase 1A foundation shells (feature-flagged; no live WA) */}
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.DASHBOARD} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.DASHBOARD_VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIDashboardPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.INBOX} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIInboxPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.ACTIVE} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.CONVERSATIONS_VIEW_ALL, WHATSAPP_AI_PERMISSIONS.CONVERSATIONS_VIEW_ASSIGNED]}><WhatsAppAIActiveConversationsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.WAITING_HUMAN} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.TAKEOVER}><WhatsAppAiFeatureGuard><WhatsAppAIWaitingHumanPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.LEAD_DRAFTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.LEAD_DRAFT_CREATE, WHATSAPP_AI_PERMISSIONS.LEAD_DRAFT_APPROVE]}><WhatsAppAILeadDraftsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE, WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE]}><WhatsAppAIKnowledgePage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.DOCUMENTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE, WHATSAPP_AI_PERMISSIONS.DOCUMENTS_SHARE]}><WhatsAppAIDocumentsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.RULES} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE}><WhatsAppAiFeatureGuard><WhatsAppAIRulesPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.SETTINGS} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE}><WhatsAppAiFeatureGuard><WhatsAppAISettingsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.AUDIT} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.AUDIT_VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIAuditLogsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
 
                         {/* Platform Email Communication */}
                         <Route path={PATHS.SETTINGS.EMAIL} element={<ProtectedRoute requirePermission="email.settings.view"><FeatureGuard feature="communication.enableEmail"><EmailSettingsPage /></FeatureGuard></ProtectedRoute>} />

@@ -102,6 +102,8 @@ const DEFAULTS = {
     },
     communication: {
         enableWhatsappBulk: false,
+        /** WhatsApp AI Assistant - off by default; isolated from Chat/Bulk. */
+        whatsappAiEnabled: false,
         enableEmail: false,
         enableEmailBulk: false,
     },
@@ -162,6 +164,10 @@ export function isFeatureEnabled(settings, path) {
     if (!path) return true;
     if (path === 'accounting.enableAiSmartImport') {
         return isAiSmartImportEnabled(settings);
+    }
+    if (path === 'communication.whatsappAiEnabled') {
+        const mergedWa = mergeFeatureSettings(settings);
+        return Boolean(mergedWa.communication?.whatsappAiEnabled);
     }
     const merged = mergeFeatureSettings(settings);
     const parts = String(path).split('.');

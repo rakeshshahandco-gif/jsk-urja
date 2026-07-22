@@ -99,6 +99,7 @@ export const FEATURE_SETTINGS_FIELDS = {
     ],
     communication: [
         ['enableWhatsappBulk', 'Enable WhatsApp Bulk Messaging Utility (campaigns, matter master, blacklist)'],
+        ['whatsappAiEnabled', 'Enable WhatsApp AI Assistant (isolated; off by default)'],
         ['enableEmail', 'Enable Platform Email (SMTP settings, communication history)'],
         ['enableEmailBulk', 'Enable Email Bulk Messaging Utility (campaigns, templates, blacklist)'],
     ],

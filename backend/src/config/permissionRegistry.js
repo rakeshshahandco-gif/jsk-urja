@@ -108,6 +108,37 @@ export const PERMISSION_REGISTRY = [
         ],
     },
     {
+        id: 'whatsapp_ai',
+        name: 'WhatsApp AI',
+        submodules: [
+            { id: 'module', name: 'WhatsApp AI Access', actions: [
+                { id: 'view', label: 'View WhatsApp AI', type: 'boolean' },
+                { id: 'archive', label: 'Archive AI Records', type: 'boolean' },
+                { id: 'takeover', label: 'Take Over Chat', type: 'boolean' },
+                { id: 'return_to_ai', label: 'Return Chat to AI', type: 'boolean' },
+            ] },
+            { id: 'settings', name: 'AI Settings', actions: [{ id: 'manage', label: 'Manage AI Settings', type: 'boolean' }] },
+            { id: 'knowledge', name: 'AI Knowledge', actions: [
+                { id: 'manage', label: 'Manage Knowledge', type: 'boolean' },
+                { id: 'approve', label: 'Approve Knowledge', type: 'boolean' },
+            ] },
+            { id: 'conversations', name: 'AI Conversations', actions: [
+                { id: 'view_all', label: 'View All Conversations', type: 'boolean' },
+                { id: 'view_assigned', label: 'View Assigned Conversations', type: 'boolean' },
+            ] },
+            { id: 'lead_draft', name: 'AI Lead Drafts', actions: [
+                { id: 'create', label: 'Create Lead Draft', type: 'boolean' },
+                { id: 'approve', label: 'Approve Lead Draft', type: 'boolean' },
+            ] },
+            { id: 'documents', name: 'AI Product Documents', actions: [
+                { id: 'manage', label: 'Manage Documents', type: 'boolean' },
+                { id: 'share', label: 'Share Documents', type: 'boolean' },
+            ] },
+            { id: 'audit', name: 'AI Audit Logs', actions: [{ id: 'view', label: 'View Audit Logs', type: 'boolean' }] },
+            { id: 'dashboard', name: 'AI Dashboard', actions: [{ id: 'view', label: 'View Dashboard', type: 'boolean' }] },
+        ],
+    },
+    {
         id: 'email',
         name: 'Platform Email',
         submodules: [
