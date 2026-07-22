@@ -85,6 +85,30 @@ router.post('/knowledge/:id/reject', checkPermission(WHATSAPP_AI_PERMISSIONS.KNO
 router.post('/knowledge/:id/activate', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.idParam), ctrl.activateKnowledge);
 router.post('/knowledge/:id/deactivate', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.idParam), ctrl.deactivateKnowledge);
 
+
+// Phase 1B-1: authenticated internal/test inbound only (not a public webhook).
+router.post(
+    '/internal/test-inbound',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.TESTING_INBOUND),
+    validate(validation.testInbound),
+    ctrl.testInbound,
+);
+
+
+// Phase 1B-2: deterministic dry-run draft generation (not a public webhook / not live AI).
+router.post(
+    '/internal/test-generate-draft',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.TESTING_GENERATE_DRAFT),
+    validate(validation.testGenerateDraft),
+    ctrl.testGenerateDraft,
+);
+router.get(
+    '/internal/test-drafts/:id',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.TESTING_GENERATE_DRAFT),
+    validate(validation.testDraftIdParam),
+    ctrl.getTestDraft,
+);
+
 router.get('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.listDocuments), ctrl.listDocuments);
 router.post('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.createDocument), ctrl.createDocument);
 router.put('/documents/:id', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.updateDocument), ctrl.updateDocument);

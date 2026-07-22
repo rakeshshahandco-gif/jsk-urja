@@ -87,6 +87,8 @@ describe('whatsappAi phase1a foundation', () => {
             'whatsapp_ai.documents.share',
             'whatsapp_ai.audit.view',
             'whatsapp_ai.dashboard.view',
+            'whatsapp_ai.testing.inbound',
+            'whatsapp_ai.testing.generate_draft',
         ];
         for (const key of expected) {
             assert.ok(Object.values(WHATSAPP_AI_PERMISSIONS).includes(key), 'missing ' + key);

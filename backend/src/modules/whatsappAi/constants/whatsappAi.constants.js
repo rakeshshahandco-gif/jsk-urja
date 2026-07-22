@@ -71,6 +71,29 @@ export const WHATSAPP_AI_DUPLICATE_CHECK_STATUSES = Object.freeze([
     'pending', 'clear', 'possible_match', 'confirmed_duplicate', 'skipped',
 ]);
 
+
+export const WHATSAPP_AI_INTENT_TYPES = Object.freeze([
+    'greeting',
+    'product_enquiry',
+    'price_enquiry',
+    'support_request',
+    'order_status',
+    'unknown',
+]);
+
+export const WHATSAPP_AI_REPLY_DRAFT_STATUSES = Object.freeze([
+    'pending_review',
+    'approved',
+    'edited',
+    'sent',
+    'rejected',
+    'expired',
+]);
+
+export const WHATSAPP_AI_DEFAULT_PROCESSING_VERSION = 'deterministic_stub_v1';
+export const WHATSAPP_AI_CONTEXT_MAX_MESSAGES = 20;
+export const WHATSAPP_AI_DRAFT_TEXT_MAX = 2000;
+
 export const WHATSAPP_AI_ACTION_TYPES = Object.freeze([
     'settings_updated',
     'knowledge_created',
@@ -84,6 +107,12 @@ export const WHATSAPP_AI_ACTION_TYPES = Object.freeze([
     'lead_draft_viewed',
     'permissions_checked',
     'dashboard_viewed',
+    'inbound_test_received',
+    'inbound_test_duplicate',
+    'test_draft_requested',
+    'test_draft_created',
+    'test_draft_duplicate',
+    'test_draft_rejected',
     'system',
 ]);
 
@@ -105,6 +134,8 @@ export const WHATSAPP_AI_PERMISSIONS = Object.freeze({
     DOCUMENTS_SHARE: 'whatsapp_ai.documents.share',
     AUDIT_VIEW: 'whatsapp_ai.audit.view',
     DASHBOARD_VIEW: 'whatsapp_ai.dashboard.view',
+    TESTING_INBOUND: 'whatsapp_ai.testing.inbound',
+    TESTING_GENERATE_DRAFT: 'whatsapp_ai.testing.generate_draft',
 });
 
 export const WHATSAPP_AI_DEFAULT_SETTINGS = Object.freeze({

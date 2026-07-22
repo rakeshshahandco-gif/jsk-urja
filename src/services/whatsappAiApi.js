@@ -28,6 +28,9 @@ export const whatsappAiApi = {
     listAuditLogs: async (params = {}) => unwrap(await apiClient.get('/whatsapp-ai/audit-logs', { params })),
     permissionsCheck: async () => unwrap(await apiClient.get('/whatsapp-ai/permissions-check')),
     dashboardSummary: async () => unwrap(await apiClient.get('/whatsapp-ai/dashboard-summary')),
+    testInbound: async (body) => unwrap(await apiClient.post('/whatsapp-ai/internal/test-inbound', body)),
+    testGenerateDraft: async (body) => unwrap(await apiClient.post('/whatsapp-ai/internal/test-generate-draft', body)),
+    getTestDraft: async (id) => unwrap(await apiClient.get(`/whatsapp-ai/internal/test-drafts/${id}`)),
 };
 
 export default whatsappAiApi;
