@@ -21,6 +21,7 @@ export const WHATSAPP_AI_PERMISSIONS = Object.freeze({
     AUDIT_VIEW: 'whatsapp_ai.audit.view',
     DASHBOARD_VIEW: 'whatsapp_ai.dashboard.view',
     TESTING_INBOUND: 'whatsapp_ai.testing.inbound',
+    TESTING_GENERATE_DRAFT: 'whatsapp_ai.testing.generate_draft',
 });
 
 export const FOUNDATION_NOTICE =

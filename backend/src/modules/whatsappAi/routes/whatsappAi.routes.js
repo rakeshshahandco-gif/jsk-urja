@@ -94,6 +94,21 @@ router.post(
     ctrl.testInbound,
 );
 
+
+// Phase 1B-2: deterministic dry-run draft generation (not a public webhook / not live AI).
+router.post(
+    '/internal/test-generate-draft',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.TESTING_GENERATE_DRAFT),
+    validate(validation.testGenerateDraft),
+    ctrl.testGenerateDraft,
+);
+router.get(
+    '/internal/test-drafts/:id',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.TESTING_GENERATE_DRAFT),
+    validate(validation.testDraftIdParam),
+    ctrl.getTestDraft,
+);
+
 router.get('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.listDocuments), ctrl.listDocuments);
 router.post('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.createDocument), ctrl.createDocument);
 router.put('/documents/:id', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.updateDocument), ctrl.updateDocument);

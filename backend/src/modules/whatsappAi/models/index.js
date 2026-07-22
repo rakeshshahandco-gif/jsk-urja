@@ -7,4 +7,5 @@ export { default as WhatsAppAIActionLog } from './WhatsAppAIActionLog.model.js';
 export { default as WhatsAppAIHumanTakeover } from './WhatsAppAIHumanTakeover.model.js';
 export { default as WhatsAppAIDocumentReference } from './WhatsAppAIDocumentReference.model.js';
 export { default as WhatsAppAICustomerMemory } from './WhatsAppAICustomerMemory.model.js';
+export { default as WhatsAppAIReplyDraft } from './WhatsAppAIReplyDraft.model.js';
 export { softDeleteAuditFields, attachmentMetaSchema, assertNoBinaryPayload } from './sharedFields.js';

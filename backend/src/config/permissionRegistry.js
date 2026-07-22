@@ -138,6 +138,7 @@ export const PERMISSION_REGISTRY = [
             { id: 'dashboard', name: 'AI Dashboard', actions: [{ id: 'view', label: 'View Dashboard', type: 'boolean' }] },
             { id: 'testing', name: 'AI Testing', actions: [
                 { id: 'inbound', label: 'Run Internal Inbound Test', type: 'boolean' },
+                { id: 'generate_draft', label: 'Generate Internal Test Draft', type: 'boolean' },
             ] },
         ],
     },

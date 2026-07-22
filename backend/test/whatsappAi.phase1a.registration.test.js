@@ -45,6 +45,7 @@ const REQUIRED_PERMISSION_KEYS = [
     'whatsapp_ai.dashboard.view',
     'whatsapp_ai.module.archive',
     'whatsapp_ai.testing.inbound',
+    'whatsapp_ai.testing.generate_draft',
 ];
 
 function flattenPermissionKeys(registry) {
@@ -265,6 +266,8 @@ describe('whatsappAi phase1a registration', () => {
         assert.ok(paths.some((p) => p.includes('/settings')));
         assert.ok(paths.some((p) => p.includes('/knowledge/:id/activate')));
         assert.ok(paths.some((p) => p.includes('/internal/test-inbound')));
+        assert.ok(paths.some((p) => p.includes('/internal/test-generate-draft')));
+        assert.ok(paths.some((p) => p.includes('/internal/test-drafts/:id')));
         assert.ok(!paths.some((p) => /webhook|\/send\b|promote/i.test(p)));
         assert.ok(!paths.some((p) => /inbound/i.test(p) && !/test-inbound/i.test(p)));
     });

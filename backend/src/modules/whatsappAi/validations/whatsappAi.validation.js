@@ -149,6 +149,17 @@ export const testInbound = {
     }).unknown(false),
 };
 
+
+export const testGenerateDraft = {
+    body: Joi.object({
+        messageId: objectId.required(),
+    }).unknown(false),
+};
+
+export const testDraftIdParam = {
+    params: Joi.object({ id: objectId.required() }),
+};
+
 export default {
     updateSettings,
     listConversations,
@@ -163,4 +174,6 @@ export default {
     updateDocument,
     listAuditLogs,
     testInbound,
+    testGenerateDraft,
+    testDraftIdParam,
 };

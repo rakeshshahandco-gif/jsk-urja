@@ -138,7 +138,7 @@ describe('whatsappAi phase1a4 frontend registration', () => {
   it('19. permissions registered', () => {
     const perms = fs.readFileSync(permsFile, 'utf8');
     assert.match(perms, /id: 'whatsapp_ai'/);
-    assert.equal(Object.keys(WHATSAPP_AI_PERMISSIONS).length, 16);
+    assert.equal(Object.keys(WHATSAPP_AI_PERMISSIONS).length, 17);
     for (const key of Object.values(WHATSAPP_AI_PERMISSIONS)) {
       assert.ok(key.startsWith('whatsapp_ai.'));
     }
