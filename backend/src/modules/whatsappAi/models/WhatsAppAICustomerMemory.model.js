@@ -3,7 +3,7 @@ import { softDeleteAuditFields } from './sharedFields.js';
 import { WHATSAPP_AI_MEMORY_STATUSES } from '../constants/whatsappAi.constants.js';
 
 /**
- * Approved structured context only â€” not a raw chat dump.
+ * Approved structured context only — not a raw chat dump.
  * Do not store: credentials, OTP, passwords, bank/card data, government IDs, health data.
  * Summaries must stay short; sourceConversationIds are ObjectId refs only.
  */

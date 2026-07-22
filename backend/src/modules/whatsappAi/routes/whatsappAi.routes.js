@@ -66,12 +66,22 @@ router.get(
     ctrl.getLeadDraft,
 );
 
-router.get('/knowledge', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.listKnowledge), ctrl.listKnowledge);
+// List/read: manage OR approve. Mutating create/edit/submit/activate: manage. Approve/reject: approve.
+router.get(
+    '/knowledge',
+    requireAnyPermission([
+        WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE,
+        WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE,
+    ]),
+    validate(validation.listKnowledge),
+    ctrl.listKnowledge,
+);
 router.post('/knowledge', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.createKnowledge), ctrl.createKnowledge);
 router.put('/knowledge/:id', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.updateKnowledge), ctrl.updateKnowledge);
 router.post('/knowledge/:id/submit', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.idParam), ctrl.submitKnowledge);
 router.post('/knowledge/:id/approve', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE), validate(validation.idParam), ctrl.approveKnowledge);
 router.post('/knowledge/:id/reject', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE), validate(validation.rejectKnowledge), ctrl.rejectKnowledge);
+// Activation stays on manage (existing Phase 1A registration design).
 router.post('/knowledge/:id/activate', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.idParam), ctrl.activateKnowledge);
 router.post('/knowledge/:id/deactivate', checkPermission(WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE), validate(validation.idParam), ctrl.deactivateKnowledge);
 

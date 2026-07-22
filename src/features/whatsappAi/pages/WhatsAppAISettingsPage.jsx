@@ -41,8 +41,10 @@ export default function WhatsAppAISettingsPage() {
             SAFE_KEYS.forEach((k) => {
                 if (Object.prototype.hasOwnProperty.call(form, k)) body[k] = form[k];
             });
-            // Never force-enable live mode from this page.
-            if (body.mode === 'live') body.mode = 'disabled';
+            // Phase 1A: never send unsupported live/ai modes from this page.
+            if (body.mode === 'live' || body.mode === 'ai' || body.mode === 'autonomous') {
+                body.mode = 'disabled';
+            }
             const updated = await whatsappAiApi.updateSettings(body);
             setForm(updated);
             toast.success('Settings saved');

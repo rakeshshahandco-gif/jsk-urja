@@ -99,6 +99,7 @@ describe('whatsappAi phase1a registration', () => {
         assert.equal(entry.label, 'WhatsApp AI');
         assert.deepEqual(entry.apiPrefixes, ['/whatsapp-ai']);
         assert.deepEqual(entry.permissionModules, ['whatsapp_ai']);
+        assert.ok(entry.menuIds.includes('communication-whatsapp-ai-group'));
         assert.equal(moduleForApiPath('/whatsapp-ai/health'), 'whatsapp_ai');
         assert.ok(MODULE_REGISTRY.find((m) => m.code === 'whatsapp'));
         assert.ok(MODULE_REGISTRY.find((m) => m.code === 'whatsapp_bulk'));
@@ -221,7 +222,7 @@ describe('whatsappAi phase1a registration', () => {
         assert.equal(data.module, 'whatsapp_ai');
         assert.equal(data.registered, true);
         assert.equal(data.featureEnabled, false);
-        assert.match(String(data.mode), /disabled|dry_run|scripted|live/);
+        assert.match(String(data.mode), /disabled|dry_run|scripted/);
         assert.ok(data.database);
         for (const secret of ['apiKey', 'openaiApiKey', 'mongodb://', 'password', 'whatsapp-auth', 'JWT_SECRET']) {
             assert.equal(json.toLowerCase().includes(secret.toLowerCase()), false, `leaked: ${secret}`);

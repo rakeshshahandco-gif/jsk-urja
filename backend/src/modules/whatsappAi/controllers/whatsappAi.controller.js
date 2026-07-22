@@ -73,12 +73,14 @@ export const updateSettings = asyncHandler(async (req, res) => {
 });
 
 export const listConversations = asyncHandler(async (req, res) => {
-    const data = await conversationService.listConversations(companyId(req), req.query);
+    const access = conversationService.resolveConversationAccess(req.user, req.query);
+    const data = await conversationService.listConversations(companyId(req), req.query, access);
     res.send(new ApiResponse(200, data));
 });
 
 export const getConversation = asyncHandler(async (req, res) => {
-    const data = await conversationService.getConversation(companyId(req), req.params.id, userId(req));
+    const access = conversationService.resolveConversationAccess(req.user, req.query);
+    const data = await conversationService.getConversation(companyId(req), req.params.id, userId(req), access);
     res.send(new ApiResponse(200, data));
 });
 

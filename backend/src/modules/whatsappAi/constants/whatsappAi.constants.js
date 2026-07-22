@@ -5,7 +5,25 @@
 
 export const WHATSAPP_AI_FEATURE_PATH = 'communication.whatsappAiEnabled';
 
-export const WHATSAPP_AI_MODES = Object.freeze(['disabled', 'dry_run', 'scripted', 'ai']);
+export const WHATSAPP_AI_MODES = Object.freeze(['disabled', 'dry_run', 'scripted']);
+/** Modes rejected in Phase 1A (and any unknown value). */
+export const WHATSAPP_AI_UNSUPPORTED_MODES = Object.freeze(['ai', 'live', 'autonomous']);
+
+/** Normalize stored/requested mode to a Phase 1A-safe value. */
+export function normalizeWhatsAppAiMode(mode) {
+    if (WHATSAPP_AI_MODES.includes(mode)) return mode;
+    return 'disabled';
+}
+
+/** Throw 400-style error for explicit unsupported mode writes. */
+export function assertWhatsAppAiModeAllowed(mode) {
+    if (mode === undefined || mode === null || mode === '') return;
+    if (!WHATSAPP_AI_MODES.includes(mode)) {
+        const err = new Error('Invalid settings mode: ' + String(mode) + '. Phase 1A allows only: disabled, dry_run, scripted.');
+        err.statusCode = 400;
+        throw err;
+    }
+}
 
 export const WHATSAPP_AI_CONVERSATION_STATUSES = Object.freeze([
     'new_message',
