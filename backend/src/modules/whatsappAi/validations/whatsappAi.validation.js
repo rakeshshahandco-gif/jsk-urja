@@ -137,6 +137,18 @@ export const listAuditLogs = {
     }),
 };
 
+
+export const testInbound = {
+    body: Joi.object({
+        externalMessageId: Joi.string().trim().required().max(200),
+        mobile: Joi.string().trim().required().max(32),
+        contactName: Joi.string().trim().allow('').max(200),
+        messageType: Joi.string().valid('text').default('text'),
+        text: Joi.string().trim().required().min(1).max(4000),
+        receivedAt: Joi.date().iso().optional(),
+    }).unknown(false),
+};
+
 export default {
     updateSettings,
     listConversations,
@@ -150,4 +162,5 @@ export default {
     createDocument,
     updateDocument,
     listAuditLogs,
+    testInbound,
 };

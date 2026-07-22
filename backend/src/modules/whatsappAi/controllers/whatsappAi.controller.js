@@ -18,6 +18,7 @@ import * as documentService from '../services/document.service.js';
 import * as leadDraftService from '../services/leadDraft.service.js';
 import * as auditService from '../services/audit.service.js';
 import * as dashboardService from '../services/dashboardSummary.service.js';
+import * as inboundTestService from '../services/inboundTest.service.js';
 
 const companyId = (req) => {
     if (!req.companyId) throw new ApiError(400, 'Company context required');
@@ -185,4 +186,10 @@ export const dashboardSummary = asyncHandler(async (req, res) => {
         success: true,
     });
     res.send(new ApiResponse(200, data));
+});
+
+export const testInbound = asyncHandler(async (req, res) => {
+    // companyId only from authenticated company scope ? never from body.
+    const data = await inboundTestService.processTestInbound(companyId(req), req.body, userId(req));
+    res.send(new ApiResponse(200, data, data.duplicate ? 'Duplicate inbound test (idempotent)' : 'Inbound test stored'));
 });

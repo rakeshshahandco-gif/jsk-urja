@@ -100,7 +100,8 @@ describe('whatsappAi phase1a4 frontend registration', () => {
   it('13. API client safety', () => {
     const src = fs.readFileSync(apiFile, 'utf8');
     assert.match(src, /from '\.\/api'/);
-    assert.doesNotMatch(src, /sendMessage|sendDocument|inbound|promote|webhook/i);
+    assert.doesNotMatch(src, /sendMessage|sendDocument|promote|webhook/i);
+    assert.ok(!/inbound/i.test(src) || /test-inbound/i.test(src));
     assert.doesNotMatch(src, /localhost|onrender\.com|baileys|whatsapp\.service/i);
     assert.match(src, /activateKnowledge/);
     assert.match(src, /dashboardSummary/);
@@ -137,7 +138,7 @@ describe('whatsappAi phase1a4 frontend registration', () => {
   it('19. permissions registered', () => {
     const perms = fs.readFileSync(permsFile, 'utf8');
     assert.match(perms, /id: 'whatsapp_ai'/);
-    assert.equal(Object.keys(WHATSAPP_AI_PERMISSIONS).length, 15);
+    assert.equal(Object.keys(WHATSAPP_AI_PERMISSIONS).length, 16);
     for (const key of Object.values(WHATSAPP_AI_PERMISSIONS)) {
       assert.ok(key.startsWith('whatsapp_ai.'));
     }

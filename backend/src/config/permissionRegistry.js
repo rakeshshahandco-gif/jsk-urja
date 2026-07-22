@@ -136,6 +136,9 @@ export const PERMISSION_REGISTRY = [
             ] },
             { id: 'audit', name: 'AI Audit Logs', actions: [{ id: 'view', label: 'View Audit Logs', type: 'boolean' }] },
             { id: 'dashboard', name: 'AI Dashboard', actions: [{ id: 'view', label: 'View Dashboard', type: 'boolean' }] },
+            { id: 'testing', name: 'AI Testing', actions: [
+                { id: 'inbound', label: 'Run Internal Inbound Test', type: 'boolean' },
+            ] },
         ],
     },
     {

@@ -20,9 +20,19 @@ const SAFE_KEYS = [
 export default function WhatsAppAISettingsPage() {
     const { hasPermission } = useAuth();
     const canManage = hasPermission(WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE);
+    const canTestInbound = hasPermission(WHATSAPP_AI_PERMISSIONS.TESTING_INBOUND);
     const [form, setForm] = useState(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [testForm, setTestForm] = useState({
+        externalMessageId: 'test-message-001',
+        mobile: '919876543210',
+        contactName: 'Test Customer',
+        messageType: 'text',
+        text: 'I need information about DALI drivers',
+    });
+    const [testResult, setTestResult] = useState(null);
+    const [testing, setTesting] = useState(false);
 
     useEffect(() => {
         whatsappAiApi.getSettings()
@@ -130,6 +140,68 @@ export default function WhatsAppAISettingsPage() {
                     )}
                 </form>
             )}
+
+            {canTestInbound ? (
+                <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid #e2e8f0' }} data-whatsapp-ai-inbound-test="1">
+                    <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>Internal inbound test</h3>
+                    <p style={{ fontSize: 13, color: '#9a3412', background: '#fff7ed', padding: 10, borderRadius: 8, border: '1px solid #fed7aa', marginBottom: 12 }}>
+                        <strong>TEST / DRY-RUN ONLY</strong>
+                        <br />No WhatsApp message will be sent
+                        <br />No AI provider will be called
+                        <br />No lead will be created
+                    </p>
+                    <div style={grid}>
+                        <label>
+                            <span style={lbl}>External message id</span>
+                            <input style={inp} value={testForm.externalMessageId} onChange={(e) => setTestForm((p) => ({ ...p, externalMessageId: e.target.value }))} />
+                        </label>
+                        <label>
+                            <span style={lbl}>Mobile</span>
+                            <input style={inp} value={testForm.mobile} onChange={(e) => setTestForm((p) => ({ ...p, mobile: e.target.value }))} />
+                        </label>
+                        <label>
+                            <span style={lbl}>Contact name</span>
+                            <input style={inp} value={testForm.contactName} onChange={(e) => setTestForm((p) => ({ ...p, contactName: e.target.value }))} />
+                        </label>
+                    </div>
+                    <label style={{ display: 'block', marginTop: 12 }}>
+                        <span style={lbl}>Text (messageType=text only)</span>
+                        <textarea style={{ ...inp, minHeight: 72 }} value={testForm.text} onChange={(e) => setTestForm((p) => ({ ...p, text: e.target.value }))} />
+                    </label>
+                    <button
+                        type="button"
+                        disabled={testing || !testForm.externalMessageId.trim() || !testForm.mobile.trim() || !testForm.text.trim()}
+                        onClick={async () => {
+                            setTesting(true);
+                            setTestResult(null);
+                            try {
+                                const body = {
+                                    externalMessageId: testForm.externalMessageId.trim(),
+                                    mobile: testForm.mobile.trim(),
+                                    contactName: testForm.contactName.trim(),
+                                    messageType: 'text',
+                                    text: testForm.text.trim(),
+                                };
+                                const data = await whatsappAiApi.testInbound(body);
+                                setTestResult(data);
+                                toast.success(data?.duplicate ? 'Duplicate (idempotent)' : 'Test inbound stored');
+                            } catch (err) {
+                                toast.error(err?.response?.data?.message || 'Test inbound failed');
+                            } finally {
+                                setTesting(false);
+                            }
+                        }}
+                        style={{ marginTop: 12, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#334155', color: '#fff', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                        {testing ? 'Submitting?' : 'Run dry-run inbound test'}
+                    </button>
+                    {testResult ? (
+                        <pre style={{ marginTop: 12, padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, overflow: 'auto' }}>
+                            {JSON.stringify(testResult, null, 2)}
+                        </pre>
+                    ) : null}
+                </div>
+            ) : null}
         </WhatsAppAiPageShell>
     );
 }

@@ -84,6 +84,8 @@ export const WHATSAPP_AI_ACTION_TYPES = Object.freeze([
     'lead_draft_viewed',
     'permissions_checked',
     'dashboard_viewed',
+    'inbound_test_received',
+    'inbound_test_duplicate',
     'system',
 ]);
 
@@ -105,6 +107,7 @@ export const WHATSAPP_AI_PERMISSIONS = Object.freeze({
     DOCUMENTS_SHARE: 'whatsapp_ai.documents.share',
     AUDIT_VIEW: 'whatsapp_ai.audit.view',
     DASHBOARD_VIEW: 'whatsapp_ai.dashboard.view',
+    TESTING_INBOUND: 'whatsapp_ai.testing.inbound',
 });
 
 export const WHATSAPP_AI_DEFAULT_SETTINGS = Object.freeze({
