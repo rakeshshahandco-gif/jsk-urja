@@ -130,6 +130,7 @@ import scanEntryRoute from './scanEntry.routes.js';
 import smartImportRoute from './smartImport.routes.js';
 import importCenterRoute from './importCenter.routes.js';
 import whatsappChatRoute from './whatsappChat.routes.js';
+import whatsappAiRoute from '../../modules/whatsappAi/routes/whatsappAi.routes.js';
 import industryTemplateRoute from './industryTemplate.routes.js';
 import customerTemplateFieldSettingsRoute from './customerTemplateFieldSettings.routes.js';
 import supplierTemplateFieldSettingsRoute from './supplierTemplateFieldSettings.routes.js';
@@ -790,6 +791,11 @@ const defaultRoutes = [
     {
         path: '/whatsapp-chat',
         route: whatsappChatRoute,
+    },
+    // ── WhatsApp AI Assistant (Phase 1A foundation — feature-flagged, no live WA) ─
+    {
+        path: '/whatsapp-ai',
+        route: whatsappAiRoute,
     },
     // ── Data Extractor / AI Market Finder (optional — disabled by default per company) ─
     {

@@ -187,6 +187,20 @@ export const APP_MODULES = [
         ],
     },
     {
+        id: 'whatsapp_ai',
+        name: 'WhatsApp AI',
+        submodules: [
+            { id: 'module', name: 'WhatsApp AI Access', actions: ['view', 'archive', 'takeover', 'return_to_ai'] },
+            { id: 'settings', name: 'AI Settings', actions: ['manage'] },
+            { id: 'knowledge', name: 'AI Knowledge', actions: ['manage', 'approve'] },
+            { id: 'conversations', name: 'AI Conversations', actions: ['view_all', 'view_assigned'] },
+            { id: 'lead_draft', name: 'AI Lead Drafts', actions: ['create', 'approve'] },
+            { id: 'documents', name: 'AI Product Documents', actions: ['manage', 'share'] },
+            { id: 'audit', name: 'AI Audit Logs', actions: ['view'] },
+            { id: 'dashboard', name: 'AI Dashboard', actions: ['view'] },
+        ],
+    },
+    {
         id: 'email',
         name: 'Platform Email',
         submodules: [
