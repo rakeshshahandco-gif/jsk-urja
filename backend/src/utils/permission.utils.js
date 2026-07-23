@@ -45,3 +45,61 @@ export const syncPermissionsWithRegistry = (existingPermissions = {}, isFullAcce
 
     return synced;
 };
+
+/**
+ * Grant only missing actions for one registry module.
+ * Preserves explicit `false` / custom values. Idempotent.
+ *
+ * @param {object} existingPermissions
+ * @param {string} moduleId e.g. 'whatsapp_bulk'
+ * @param {boolean} grantMissing default true for Client Admin Bulk backfill
+ */
+export const ensureModulePermissions = (existingPermissions = {}, moduleId, grantMissing = true) => {
+    let synced = {};
+    try {
+        synced = (existingPermissions && typeof existingPermissions === 'object')
+            ? JSON.parse(JSON.stringify(existingPermissions))
+            : {};
+    } catch (e) {
+        synced = {};
+    }
+
+    const mod = getEffectivePermissionRegistry().find((m) => m.id === moduleId);
+    if (!mod) return synced;
+
+    if (!synced[moduleId] || typeof synced[moduleId] !== 'object') {
+        synced[moduleId] = {};
+    }
+
+    mod.submodules.forEach((sub) => {
+        if (!synced[moduleId][sub.id] || typeof synced[moduleId][sub.id] !== 'object') {
+            synced[moduleId][sub.id] = {};
+        }
+        sub.actions.forEach((action) => {
+            const actionId = typeof action === 'string' ? action : action.id;
+            if (synced[moduleId][sub.id][actionId] === undefined) {
+                synced[moduleId][sub.id][actionId] = !!grantMissing;
+            }
+        });
+    });
+
+    return synced;
+};
+
+/** Client Admin role names that should receive WhatsApp Bulk company-admin access. */
+export const CLIENT_ADMIN_ROLE_NAMES = ['admin'];
+
+/**
+ * Pure: ensure whatsapp_bulk.* missing keys are true for a Client Admin permission tree.
+ * Does not grant other modules. Does not overwrite explicit false.
+ */
+export const ensureClientAdminWhatsappBulkPermissions = (existingPermissions = {}) =>
+    ensureModulePermissions(existingPermissions, 'whatsapp_bulk', true);
+
+/**
+ * Whether a role document is the CRM Client Admin role (not Superadmin).
+ */
+export const isClientAdminRole = (role) => {
+    const name = String(role?.name || '').trim().toLowerCase();
+    return name === 'admin';
+};
