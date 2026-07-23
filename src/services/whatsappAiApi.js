@@ -31,6 +31,14 @@ export const whatsappAiApi = {
     testInbound: async (body) => unwrap(await apiClient.post('/whatsapp-ai/internal/test-inbound', body)),
     testGenerateDraft: async (body) => unwrap(await apiClient.post('/whatsapp-ai/internal/test-generate-draft', body)),
     getTestDraft: async (id) => unwrap(await apiClient.get(`/whatsapp-ai/internal/test-drafts/${id}`)),
+    listReplyDrafts: async (params = {}) => unwrap(await apiClient.get('/whatsapp-ai/reply-drafts', { params })),
+    getReplyDraft: async (id) => unwrap(await apiClient.get('/whatsapp-ai/reply-drafts/' + id)),
+    editReplyDraft: async (id, body) => unwrap(await apiClient.put('/whatsapp-ai/reply-drafts/' + id, body)),
+    approveReplyDraft: async (id) => unwrap(await apiClient.post('/whatsapp-ai/reply-drafts/' + id + '/approve')),
+    rejectReplyDraft: async (id, body = {}) => unwrap(await apiClient.post('/whatsapp-ai/reply-drafts/' + id + '/reject', body)),
+    regenerateReplyDraft: async (id) => unwrap(await apiClient.post('/whatsapp-ai/reply-drafts/' + id + '/regenerate')),
+    addReplyDraftNote: async (id, body) => unwrap(await apiClient.post('/whatsapp-ai/reply-drafts/' + id + '/notes', body)),
 };
+
 
 export default whatsappAiApi;

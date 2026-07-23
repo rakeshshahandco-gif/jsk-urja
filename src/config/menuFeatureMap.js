@@ -57,6 +57,7 @@ export const MENU_FEATURE_BY_ID = {
     'communication-whatsapp-ai-active': 'communication.whatsappAiEnabled',
     'communication-whatsapp-ai-waiting': 'communication.whatsappAiEnabled',
     'communication-whatsapp-ai-lead-drafts': 'communication.whatsappAiEnabled',
+    'communication-whatsapp-ai-reply-drafts': 'communication.whatsappAiEnabled',
     'communication-whatsapp-ai-knowledge': 'communication.whatsappAiEnabled',
     'communication-whatsapp-ai-documents': 'communication.whatsappAiEnabled',
     'communication-whatsapp-ai-rules': 'communication.whatsappAiEnabled',

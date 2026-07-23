@@ -20,6 +20,7 @@ import * as auditService from '../services/audit.service.js';
 import * as dashboardService from '../services/dashboardSummary.service.js';
 import * as inboundTestService from '../services/inboundTest.service.js';
 import * as generateDraftTestService from '../services/generateDraftTest.service.js';
+import * as draftReviewService from '../services/draftReview.service.js';
 
 const companyId = (req) => {
     if (!req.companyId) throw new ApiError(400, 'Company context required');
@@ -203,4 +204,40 @@ export const testGenerateDraft = asyncHandler(async (req, res) => {
 export const getTestDraft = asyncHandler(async (req, res) => {
     const data = await generateDraftTestService.getTestDraft(companyId(req), req.params.id);
     res.send(new ApiResponse(200, data));
+});
+
+
+export const listReplyDrafts = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.listPendingDrafts(companyId(req), { ...req.query, actorUserId: userId(req) });
+    res.send(new ApiResponse(200, data));
+});
+
+export const getReplyDraft = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.getDraftForReview(companyId(req), req.params.id, userId(req));
+    res.send(new ApiResponse(200, data));
+});
+
+export const editReplyDraft = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.editDraft(companyId(req), req.params.id, req.body, userId(req));
+    res.send(new ApiResponse(200, data, 'Draft edited'));
+});
+
+export const approveReplyDraft = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.approveDraft(companyId(req), req.params.id, userId(req));
+    res.send(new ApiResponse(200, data, data.message || 'Draft approved (not sent)'));
+});
+
+export const rejectReplyDraft = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.rejectDraft(companyId(req), req.params.id, req.body, userId(req));
+    res.send(new ApiResponse(200, data, 'Draft rejected'));
+});
+
+export const regenerateReplyDraft = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.requestRegeneration(companyId(req), req.params.id, userId(req));
+    res.send(new ApiResponse(200, data, 'Regeneration requested'));
+});
+
+export const addReplyDraftNote = asyncHandler(async (req, res) => {
+    const data = await draftReviewService.addReviewNote(companyId(req), req.params.id, req.body, userId(req));
+    res.send(new ApiResponse(200, data, 'Review note added'));
 });

@@ -85,9 +85,10 @@ export const WHATSAPP_AI_REPLY_DRAFT_STATUSES = Object.freeze([
     'pending_review',
     'approved',
     'edited',
-    'sent',
     'rejected',
+    'regeneration_requested',
     'expired',
+    'sent',
 ]);
 
 export const WHATSAPP_AI_DEFAULT_PROCESSING_VERSION = 'deterministic_stub_v1';
@@ -113,6 +114,13 @@ export const WHATSAPP_AI_ACTION_TYPES = Object.freeze([
     'test_draft_created',
     'test_draft_duplicate',
     'test_draft_rejected',
+    'reply_draft_viewed',
+    'reply_draft_listed',
+    'reply_draft_edited',
+    'reply_draft_approved',
+    'reply_draft_rejected',
+    'reply_draft_regeneration_requested',
+    'reply_draft_note_added',
     'system',
 ]);
 
@@ -136,6 +144,11 @@ export const WHATSAPP_AI_PERMISSIONS = Object.freeze({
     DASHBOARD_VIEW: 'whatsapp_ai.dashboard.view',
     TESTING_INBOUND: 'whatsapp_ai.testing.inbound',
     TESTING_GENERATE_DRAFT: 'whatsapp_ai.testing.generate_draft',
+    DRAFTS_VIEW: 'whatsapp_ai.drafts.view',
+    DRAFTS_EDIT: 'whatsapp_ai.drafts.edit',
+    DRAFTS_APPROVE: 'whatsapp_ai.drafts.approve',
+    DRAFTS_REJECT: 'whatsapp_ai.drafts.reject',
+    DRAFTS_REGENERATE: 'whatsapp_ai.drafts.regenerate',
 });
 
 export const WHATSAPP_AI_DEFAULT_SETTINGS = Object.freeze({

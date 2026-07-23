@@ -133,6 +133,7 @@ import {
     WhatsAppAIActiveConversationsPage,
     WhatsAppAIWaitingHumanPage,
     WhatsAppAILeadDraftsPage,
+    WhatsAppAIReplyDraftsPage,
     WhatsAppAIKnowledgePage,
     WhatsAppAIDocumentsPage,
     WhatsAppAIRulesPage,
@@ -623,6 +624,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.ACTIVE} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.CONVERSATIONS_VIEW_ALL, WHATSAPP_AI_PERMISSIONS.CONVERSATIONS_VIEW_ASSIGNED]}><WhatsAppAIActiveConversationsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.WAITING_HUMAN} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.TAKEOVER}><WhatsAppAiFeatureGuard><WhatsAppAIWaitingHumanPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.LEAD_DRAFTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.LEAD_DRAFT_CREATE, WHATSAPP_AI_PERMISSIONS.LEAD_DRAFT_APPROVE]}><WhatsAppAILeadDraftsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.REPLY_DRAFTS} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.DRAFTS_VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIReplyDraftsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE, WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE]}><WhatsAppAIKnowledgePage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.DOCUMENTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE, WHATSAPP_AI_PERMISSIONS.DOCUMENTS_SHARE]}><WhatsAppAIDocumentsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.RULES} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE}><WhatsAppAiFeatureGuard><WhatsAppAIRulesPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />

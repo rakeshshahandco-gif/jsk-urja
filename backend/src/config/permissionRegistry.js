@@ -140,6 +140,13 @@ export const PERMISSION_REGISTRY = [
                 { id: 'inbound', label: 'Run Internal Inbound Test', type: 'boolean' },
                 { id: 'generate_draft', label: 'Generate Internal Test Draft', type: 'boolean' },
             ] },
+            { id: 'drafts', name: 'AI Reply Drafts', actions: [
+                { id: 'view', label: 'View Reply Drafts', type: 'boolean' },
+                { id: 'edit', label: 'Edit Reply Drafts', type: 'boolean' },
+                { id: 'approve', label: 'Approve Reply Drafts', type: 'boolean' },
+                { id: 'reject', label: 'Reject Reply Drafts', type: 'boolean' },
+                { id: 'regenerate', label: 'Request Draft Regeneration', type: 'boolean' },
+            ] },
         ],
     },
     {

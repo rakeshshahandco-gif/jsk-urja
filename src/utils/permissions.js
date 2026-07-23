@@ -198,6 +198,8 @@ export const APP_MODULES = [
             { id: 'documents', name: 'AI Product Documents', actions: ['manage', 'share'] },
             { id: 'audit', name: 'AI Audit Logs', actions: ['view'] },
             { id: 'dashboard', name: 'AI Dashboard', actions: ['view'] },
+            { id: 'testing', name: 'AI Testing', actions: ['inbound', 'generate_draft'] },
+            { id: 'drafts', name: 'AI Reply Drafts', actions: ['view', 'edit', 'approve', 'reject', 'regenerate'] },
         ],
     },
     {
@@ -281,8 +283,59 @@ export const ROLE_PERMISSIONS = {
     ]
 };
 
+/**
+ * Grant check for nested permission trees (role.permissions / additionalPermissions).
+ * Only explicit `true` grants. Explicit `false` / missing does not grant and does not deny
+ * other sources (caller continues to the next source).
+ */
+export const nestedPermissionGrants = (tree, requiredPermission) => {
+    if (!tree || typeof tree !== 'object' || typeof requiredPermission !== 'string') {
+        return false;
+    }
+
+    if (!requiredPermission.includes('.')) {
+        const moduleData = tree[requiredPermission];
+        if (moduleData === true) return true;
+        if (moduleData && typeof moduleData === 'object') {
+            const hasAnyTrueValue = (obj) => {
+                if (!obj || typeof obj !== 'object') return obj === true;
+                return Object.values(obj).some(
+                    (val) => val === true || (val && typeof val === 'object' && hasAnyTrueValue(val)),
+                );
+            };
+            return hasAnyTrueValue(moduleData);
+        }
+        return false;
+    }
+
+    const parts = requiredPermission.split('.');
+    if (parts.length === 3) {
+        const [mod, sub, act] = parts;
+        if (tree[mod]?.[sub]?.[act] === true) return true;
+        if (tree[mod]?.[act] === true) return true;
+        return false;
+    }
+    if (parts.length === 2) {
+        const [mod, act] = parts;
+        if (tree[mod]?.[act] === true) return true;
+        const moduleData = tree[mod];
+        if (moduleData && typeof moduleData === 'object') {
+            return Object.values(moduleData).some(
+                (sub) => typeof sub === 'object' && sub !== null && sub[act] === true,
+            );
+        }
+    }
+    return false;
+};
+
 // Check if user has permission
-export const hasPermission = (userPermissions, requiredPermission, userRole = null, additionalPermissions = {}) => {
+export const hasPermission = (
+    userPermissions,
+    requiredPermission,
+    userRole = null,
+    additionalPermissions = {},
+    rolePermissions = {},
+) => {
     // 1. Normalize and check for System Admin/Admin role bypass
     const normalizedRole = (userRole || '').trim().toLowerCase();
     const isAdmin = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(normalizedRole);
@@ -290,11 +343,13 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
     if (isAdmin) return true;
 
     // 2. Safety check for missing permission data
-    if (!userPermissions && !additionalPermissions) {
+    const hasRoleTree = rolePermissions && typeof rolePermissions === 'object'
+        && Object.keys(rolePermissions).length > 0;
+    if (!userPermissions && !additionalPermissions && !hasRoleTree) {
         return false;
     }
 
-    // 3. Check additionalPermissions (granular object structure)
+    // 3. Check additionalPermissions (granular object structure) — true grants only
     if (typeof requiredPermission === 'string' && additionalPermissions) {
         if (requiredPermission.includes('.')) {
             const parts = requiredPermission.split('.');
@@ -329,6 +384,11 @@ export const hasPermission = (userPermissions, requiredPermission, userRole = nu
     const permissions = Array.isArray(userPermissions) ? userPermissions : [userPermissions].filter(Boolean);
     if (permissions.includes('*')) return true;
     if (permissions.some(p => (typeof p === 'string' ? p : p?.key) === requiredPermission)) return true;
+
+    // 4b. Authenticated role permission tree (user.role.permissions) — true grants only
+    if (nestedPermissionGrants(rolePermissions, requiredPermission)) {
+        return true;
+    }
 
     // 5. Fallback to Role Default Permissions
     if (userRole && ROLE_PERMISSIONS[userRole]) {
