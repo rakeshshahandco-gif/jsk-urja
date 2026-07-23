@@ -13,7 +13,7 @@ export { WHATSAPP_AI_ENTITY_KEYS, emptyEntityMap } from './entities/entitySchema
 export { createEntityExtractor } from './entities/entityExtractor.service.js';
 export { createExpandedContextLoader } from './expandedContextLoader.service.js';
 export { createHybridRouter, routeHybrid } from './hybridRouter.service.js';
-export { createPromptBuilder, buildPromptBundle } from './prompt/promptBuilder.service.js';
+export { createPromptBuilder, buildPromptBundle, PROMPT_BUNDLE_VERSION, PROMPT_BUILDER_LIMITS } from './prompt/promptBuilder.service.js';
 export { isAiProvider, assertCompletionRequest } from './providers/AiProvider.interface.js';
 export {
     createNullProvider,

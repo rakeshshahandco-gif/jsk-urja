@@ -123,6 +123,7 @@ export function createAiBrain(options = {}) {
                 context,
                 intentResult,
                 entities,
+                productIntelligence,
                 grounding,
                 groundingPack,
                 route,

@@ -156,7 +156,8 @@ describe('whatsappAi phase1c0 brain foundation', () => {
         });
         assert.ok(bundle.systemPrompt.includes('DRY RUN'));
         assert.ok(bundle.userPrompt.includes('Need DALI info'));
-        assert.equal(bundle.meta.processingVersion, 'ai_brain_foundation_v0');
+        assert.equal(bundle.version, 'prompt_bundle_v1');
+        assert.equal(bundle.meta.processingVersion, 'prompt_bundle_v1');
     });
 
     it('ai brain orchestrator greeting uses rule path and never calls network', async () => {
