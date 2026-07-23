@@ -383,10 +383,25 @@ export default function WhatsappBulkCampaignsPage() {
         if (!selectedId) return toast.error('Create campaign first');
         try {
             await whatsappBulkApi.approveCampaign(selectedId);
-            toast.success('Campaign manually approved â€” ready for queue after test send');
+            toast.success('Campaign manually approved — ready for queue after test send');
             await load();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Approve failed');
+        }
+    };
+
+    const onPrecheck = async () => {
+        if (!selectedId) return toast.error('Select a campaign first');
+        try {
+            const data = await whatsappBulkApi.campaignPrecheck(selectedId);
+            const s = data.summary || {};
+            toast.success(
+                `Pre-check: eligible ${s.eligible || 0}/${s.totalImported || 0}. Invalid ${s.invalid || 0}, dup ${s.duplicate || 0}, blacklist ${s.blacklisted || 0}. Can queue: ${data.canQueue ? 'yes' : 'no'}`,
+                { duration: 6000 },
+            );
+            if (data.warning) toast(data.warning, { icon: '⚠️', duration: 7000 });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Pre-check failed');
         }
     };
 
@@ -664,6 +679,7 @@ export default function WhatsappBulkCampaignsPage() {
                     <input style={{ ...inp, maxWidth: 180 }} placeholder="Test mobile" value={testMobile} onChange={(e) => setTestMobile(e.target.value)} />
                     <button type="button" style={btnSec} onClick={onTestSend}>Test Send</button>
                         <button type="button" style={btnSec} onClick={onApprove}>Approve for queue</button>
+                        <button type="button" style={btnSec} onClick={onPrecheck}>Campaign Pre-check</button>
                         <button type="button" style={btnSec} onClick={onAiDraft}>AI draft (optional)</button>
                     <button type="button" style={btn} onClick={() => runAction('saveRecipients')}>Save Recipients</button>
                     <button type="button" style={btn} onClick={onScheduleCampaign}>Start / Schedule</button>

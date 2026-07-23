@@ -132,6 +132,37 @@ export async function runAiAssist(companyId, action, payload = {}, options = {})
         requiresHumanReview: true,
       };
     }
+    case 'explain_invalid_numbers':
+    case 'summarize_duplicates':
+    case 'campaign_report_summary':
+    case 'explain_delivery_risk':
+    case 'number_health_management_summary': {
+      const language = String(payload.language || 'en').toLowerCase();
+      const riskNote = 'Possible delivery risk; blocking cannot be confirmed.';
+      const drafts = {
+        en: `Number Health draft summary: invalid=${payload.invalidCount || 0}, duplicates=${payload.duplicateCount || 0}, eligible=${payload.eligibleCount || 0}. ${riskNote} Human review required before any campaign action.`,
+        hi: `नंबर हेल्थ ड्राफ्ट सारांश: अमान्य=${payload.invalidCount || 0}, डुप्लिकेट=${payload.duplicateCount || 0}, योग्य=${payload.eligibleCount || 0}. ${riskNote} किसी भी अभियान कार्रवाई से पहले मानव समीक्षा आवश्यक है।`,
+        gu: `નંબર હેલ્થ ડ્રાફ્ટ સારાંશ: અમાન્ય=${payload.invalidCount || 0}, ડુપ્લિકેટ=${payload.duplicateCount || 0}, પાત્ર=${payload.eligibleCount || 0}. ${riskNote} કોઈપણ કેમ્પેન પગલાં પહેલાં માનવ સમીક્ષા જરૂરી છે.`,
+      };
+      return {
+        success: true,
+        action,
+        provider: PROVIDER,
+        networkCalled: false,
+        outboundSent: false,
+        status: 'DRAFT',
+        requiresHumanReview: true,
+        draftText: drafts[language] || drafts.en,
+        blockingConfirmed: false,
+        warning: riskNote,
+        suggestions: [
+          'Review invalid reason codes manually',
+          'Keep first or selected duplicate only — do not merge masters',
+          'Do not treat UNKNOWN WhatsApp status as NOT_ON_WHATSAPP',
+          'Do not auto-blacklist from estimated delivery risk',
+        ],
+      };
+    }
     default:
       throw new ApiError(400, 'Unknown AI assist action');
   }

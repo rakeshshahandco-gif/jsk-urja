@@ -51,4 +51,16 @@ router.post('/campaigns/:id/revoke-sent', wb('campaigns', 'send'), whatsappBulkC
 
 router.get('/audit-logs', wb('campaigns', 'view'), whatsappBulkController.listAuditLogs);
 
+// Number Health / reports (isolated Bulk endpoints)
+router.get('/number-health/summary', wb('number_health', 'view'), whatsappBulkController.numberHealthSummary);
+router.get('/number-health', wb('number_health', 'view'), whatsappBulkController.numberHealthList);
+router.post('/number-health/validate', wb('number_health', 'validate'), validate(whatsappBulkValidation.numberHealthValidate), whatsappBulkController.numberHealthValidate);
+router.post('/number-health/duplicates', wb('number_health', 'validate'), validate(whatsappBulkValidation.numberHealthValidate), whatsappBulkController.numberHealthDuplicates);
+router.post('/number-health/availability-check', wb('number_health', 'lookup'), validate(whatsappBulkValidation.availabilityLookup), whatsappBulkController.numberHealthAvailabilityCheck);
+router.post('/number-health/recheck-unknown', wb('number_health', 'lookup'), validate(whatsappBulkValidation.availabilityLookup), whatsappBulkController.numberHealthRecheckUnknown);
+router.get('/number-health/export', wb('number_health', 'export'), whatsappBulkController.numberHealthExport);
+router.get('/number-health/risk/:normalizedNumber', wb('number_health', 'view'), whatsappBulkController.numberHealthRisk);
+router.get('/campaigns/:id/precheck', wb('campaigns', 'view'), whatsappBulkController.campaignPrecheck);
+router.get('/campaigns/:id/performance-report', wb('report', 'view'), whatsappBulkController.campaignPerformanceReport);
+
 export default router;

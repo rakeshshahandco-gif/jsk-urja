@@ -111,9 +111,25 @@ export const WHATSAPP_BULK_DEFAULT_SETTINGS = {
     mandatoryTestSend: true,
     aiAssistantEnabled: false,
     simulateSend: false,
+    // Number Health (additive; availability lookup off by default)
+    numberHealthEnabled: true,
+    whatsappAvailabilityCheckEnabled: false,
+    availabilityLookupDailyLimit: 50,
+    availabilityLookupMinDelaySeconds: 3,
+    availabilityLookupMaxDelaySeconds: 6,
+    availabilityCacheDays: 7,
+    stopOnThrottle: true,
+    stopOnSessionError: true,
+    allowManualRecheck: true,
+    countryDefault: '91',
+    validationStrictMode: true,
+    excludeUnknownWhatsAppStatus: false,
 };
 
 export const WHATSAPP_BULK_SAFE_MODE_WARNING =
     'Safe Mode uses controlled delays, limits and pauses to reduce sending risk. It cannot guarantee that WhatsApp will not restrict, suspend or block the connected number. Use only for relevant recipients and respect opt-out requests.';
+
+export const WHATSAPP_BULK_POSSIBLE_BLOCK_WARNING =
+    'This is an estimated delivery risk only. WhatsApp does not provide reliable confirmation that a recipient has blocked this number.';
 
 export const WHATSAPP_BULK_UPLOAD_DIR = 'uploads/whatsapp-bulk/';

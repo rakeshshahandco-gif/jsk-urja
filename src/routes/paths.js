@@ -51,6 +51,7 @@ export const PATHS = {
             MATTERS: '/communication/whatsapp-bulk/matters',
             BLACKLIST: '/communication/whatsapp-bulk/blacklist',
             HISTORY: '/communication/whatsapp-bulk/history',
+            NUMBER_HEALTH: '/communication/whatsapp-bulk/number-health',
             SETTINGS: '/communication/whatsapp-bulk/settings',
         },
         WHATSAPP_AI: {

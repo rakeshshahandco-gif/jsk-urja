@@ -63,6 +63,19 @@ export const whatsappBulkApi = {
         const res = await apiClient.get('/whatsapp-bulk/campaigns/export', { responseType: 'blob' });
         return res.data;
     },
+    numberHealthSummary: async () => unwrap(await apiClient.get('/whatsapp-bulk/number-health/summary')),
+    numberHealthList: async (params = {}) => unwrap(await apiClient.get('/whatsapp-bulk/number-health', { params })),
+    numberHealthValidate: async (items) => unwrap(await apiClient.post('/whatsapp-bulk/number-health/validate', { items })),
+    numberHealthDuplicates: async (items) => unwrap(await apiClient.post('/whatsapp-bulk/number-health/duplicates', { items })),
+    numberHealthAvailabilityCheck: async (body) => unwrap(await apiClient.post('/whatsapp-bulk/number-health/availability-check', body || {})),
+    numberHealthRecheckUnknown: async (body) => unwrap(await apiClient.post('/whatsapp-bulk/number-health/recheck-unknown', body || {})),
+    numberHealthExport: async (params = {}) => {
+        const res = await apiClient.get('/whatsapp-bulk/number-health/export', { params, responseType: 'blob' });
+        return res.data;
+    },
+    numberHealthRisk: async (normalizedNumber) => unwrap(await apiClient.get(`/whatsapp-bulk/number-health/risk/${encodeURIComponent(normalizedNumber)}`)),
+    campaignPrecheck: async (id) => unwrap(await apiClient.get(`/whatsapp-bulk/campaigns/${id}/precheck`)),
+    campaignPerformanceReport: async (id) => unwrap(await apiClient.get(`/whatsapp-bulk/campaigns/${id}/performance-report`)),
 };
 
 export default whatsappBulkApi;

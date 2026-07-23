@@ -184,6 +184,9 @@ export const APP_MODULES = [
             { id: 'blacklist', name: 'WhatsApp Blacklist', actions: ['view', 'add', 'edit', 'delete'] },
             { id: 'history', name: 'Campaign History', actions: ['view', 'export'] },
             { id: 'settings', name: 'WhatsApp Bulk Messaging Settings', actions: ['view', 'edit'] },
+            { id: 'number_health', name: 'WhatsApp Number Health', actions: ['view', 'validate', 'lookup', 'export', 'blacklist'] },
+            { id: 'report', name: 'WhatsApp Bulk Reports', actions: ['view', 'export'] },
+            { id: 'ai_assist', name: 'WhatsApp Bulk AI Assist', actions: ['view', 'generate'] },
         ],
     },
     {

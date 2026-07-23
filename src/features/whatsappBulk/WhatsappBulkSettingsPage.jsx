@@ -63,6 +63,18 @@ export default function WhatsappBulkSettingsPage() {
                     <span>Simulate send (no live WhatsApp)</span>
                 </label>
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={form.numberHealthEnabled !== false} onChange={(e) => setForm({ ...form, numberHealthEnabled: e.target.checked })} />
+                    <span>Enable Number Health</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={!!form.whatsappAvailabilityCheckEnabled} onChange={(e) => setForm({ ...form, whatsappAvailabilityCheckEnabled: e.target.checked })} />
+                    <span>Enable WhatsApp availability lookup (manual, sequential, no message send)</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={form.stopOnThrottle !== false} onChange={(e) => setForm({ ...form, stopOnThrottle: e.target.checked })} />
+                    <span>Stop availability lookup on throttle</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
                     <input type="checkbox" checked={!!form.enableFastMode} onChange={(e) => setForm({ ...form, enableFastMode: e.target.checked })} />
                     <span>Allow Fast Mode (admin only)</span>
                 </label>
@@ -74,6 +86,11 @@ export default function WhatsappBulkSettingsPage() {
                     <div><label style={lbl}>Pause duration max (ms)</label><input style={inp} type="number" value={form.pauseDurationMaxMs ?? form.pauseDurationMs} onChange={(e) => setForm({ ...form, pauseDurationMaxMs: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Max retry count</label><input style={inp} type="number" value={form.maxRetryCount ?? 2} onChange={(e) => setForm({ ...form, maxRetryCount: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Timezone</label><input style={inp} value={form.defaultTimezone || 'Asia/Kolkata'} onChange={(e) => setForm({ ...form, defaultTimezone: e.target.value })} /></div>
+                    <div><label style={lbl}>Availability daily limit</label><input style={inp} type="number" value={form.availabilityLookupDailyLimit ?? 50} onChange={(e) => setForm({ ...form, availabilityLookupDailyLimit: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Availability cache days</label><input style={inp} type="number" value={form.availabilityCacheDays ?? 7} onChange={(e) => setForm({ ...form, availabilityCacheDays: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Lookup delay min (sec)</label><input style={inp} type="number" value={form.availabilityLookupMinDelaySeconds ?? 3} onChange={(e) => setForm({ ...form, availabilityLookupMinDelaySeconds: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Lookup delay max (sec)</label><input style={inp} type="number" value={form.availabilityLookupMaxDelaySeconds ?? 6} onChange={(e) => setForm({ ...form, availabilityLookupMaxDelaySeconds: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Country default</label><input style={inp} value={form.countryDefault || '91'} onChange={(e) => setForm({ ...form, countryDefault: e.target.value })} /></div>
                     <div><label style={lbl}>Daily limit</label><input style={inp} type="number" value={form.dailyLimit} onChange={(e) => setForm({ ...form, dailyLimit: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Default batch size</label><input style={inp} type="number" value={form.defaultBatchSize} onChange={(e) => setForm({ ...form, defaultBatchSize: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Send window start</label><input style={inp} value={form.sendWindowStart} onChange={(e) => setForm({ ...form, sendWindowStart: e.target.value })} /></div>

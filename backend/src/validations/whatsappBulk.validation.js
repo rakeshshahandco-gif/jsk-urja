@@ -76,6 +76,18 @@ const settings = {
         mandatoryTestSend: Joi.boolean(),
         aiAssistantEnabled: Joi.boolean(),
         simulateSend: Joi.boolean(),
+        numberHealthEnabled: Joi.boolean(),
+        whatsappAvailabilityCheckEnabled: Joi.boolean(),
+        availabilityLookupDailyLimit: Joi.number().min(1),
+        availabilityLookupMinDelaySeconds: Joi.number().min(1),
+        availabilityLookupMaxDelaySeconds: Joi.number().min(1),
+        availabilityCacheDays: Joi.number().min(1),
+        stopOnThrottle: Joi.boolean(),
+        stopOnSessionError: Joi.boolean(),
+        allowManualRecheck: Joi.boolean(),
+        countryDefault: Joi.string().allow(''),
+        validationStrictMode: Joi.boolean(),
+        excludeUnknownWhatsAppStatus: Joi.boolean(),
         dailyLimit: Joi.number().min(1),
         retryFailedMessages: Joi.boolean(),
         sendWindowStart: Joi.string(),
@@ -153,9 +165,38 @@ const aiAssist = {
         recipientCount: Joi.number(),
         sendMode: Joi.string().allow(''),
         text: Joi.string().allow(''),
-        // allow nested payload shape from UI without rejecting
+        reportSummary: Joi.object().unknown(true),
+        invalidReasons: Joi.array().items(Joi.string()),
+        duplicateCount: Joi.number(),
+        riskLevel: Joi.string().allow(''),
         payload: Joi.object().unknown(true),
     }).unknown(true),
+};
+
+const numberHealthValidate = {
+    body: Joi.object().keys({
+        items: Joi.array().items(
+            Joi.alternatives().try(
+                Joi.string(),
+                Joi.object({
+                    mobile: Joi.string().allow(''),
+                    originalNumber: Joi.string().allow(''),
+                    displayName: Joi.string().allow(''),
+                    sourceType: Joi.string().allow(''),
+                    source: Joi.string().allow(''),
+                    sourceRef: Joi.string().allow(''),
+                    sourceRow: Joi.number(),
+                }).unknown(true),
+            ),
+        ).min(1).required(),
+    }),
+};
+
+const availabilityLookup = {
+    body: Joi.object().keys({
+        normalizedNumbers: Joi.array().items(Joi.string()).default([]),
+        recheckUnknownOnly: Joi.boolean(),
+    }),
 };
 
 export default {
@@ -167,6 +208,8 @@ export default {
     preview,
     testSend: { ...testSend, params: Joi.object().keys({ id: objectId.required() }) },
     aiAssist,
+    numberHealthValidate,
+    availabilityLookup,
     listCampaigns: {
         query: Joi.object().keys({
             status: Joi.string().valid(...WHATSAPP_BULK_CAMPAIGN_STATUSES),
