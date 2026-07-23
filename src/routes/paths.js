@@ -60,6 +60,7 @@ export const PATHS = {
             ACTIVE: '/communication/whatsapp-ai/active',
             WAITING_HUMAN: '/communication/whatsapp-ai/waiting-human',
             LEAD_DRAFTS: '/communication/whatsapp-ai/lead-drafts',
+            REPLY_DRAFTS: '/communication/whatsapp-ai/reply-drafts',
             KNOWLEDGE: '/communication/whatsapp-ai/knowledge',
             DOCUMENTS: '/communication/whatsapp-ai/documents',
             RULES: '/communication/whatsapp-ai/rules',

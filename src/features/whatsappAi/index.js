@@ -10,6 +10,7 @@ export { default as WhatsAppAIInboxPage } from './pages/WhatsAppAIInboxPage';
 export { default as WhatsAppAIActiveConversationsPage } from './pages/WhatsAppAIActiveConversationsPage';
 export { default as WhatsAppAIWaitingHumanPage } from './pages/WhatsAppAIWaitingHumanPage';
 export { default as WhatsAppAILeadDraftsPage } from './pages/WhatsAppAILeadDraftsPage';
+export { default as WhatsAppAIReplyDraftsPage } from './pages/WhatsAppAIReplyDraftsPage';
 export { default as WhatsAppAIKnowledgePage } from './pages/WhatsAppAIKnowledgePage';
 export { default as WhatsAppAIDocumentsPage } from './pages/WhatsAppAIDocumentsPage';
 export { default as WhatsAppAIRulesPage } from './pages/WhatsAppAIRulesPage';

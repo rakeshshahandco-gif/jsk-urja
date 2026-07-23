@@ -3,6 +3,7 @@ import {
     WHATSAPP_AI_MODES,
     WHATSAPP_AI_DOCUMENT_TYPES,
     WHATSAPP_AI_APPROVAL_STATUSES,
+    WHATSAPP_AI_REPLY_DRAFT_STATUSES,
 } from '../constants/whatsappAi.constants.js';
 
 const objectId = Joi.string().hex().length(24);
@@ -156,6 +157,36 @@ export const testGenerateDraft = {
     }).unknown(false),
 };
 
+
+export const listReplyDrafts = {
+    query: Joi.object({
+        ...paginationQuery,
+        status: Joi.string().valid(...WHATSAPP_AI_REPLY_DRAFT_STATUSES, 'all').optional(),
+        pendingOnly: Joi.alternatives().try(Joi.boolean(), Joi.string()).optional(),
+    }),
+};
+
+export const editReplyDraft = {
+    params: Joi.object({ id: objectId.required() }),
+    body: Joi.object({
+        draftText: Joi.string().required().max(2000),
+    }).unknown(false),
+};
+
+export const rejectReplyDraft = {
+    params: Joi.object({ id: objectId.required() }),
+    body: Joi.object({
+        reason: Joi.string().allow('').max(1000),
+    }).unknown(false),
+};
+
+export const replyDraftNote = {
+    params: Joi.object({ id: objectId.required() }),
+    body: Joi.object({
+        note: Joi.string().required().max(2000),
+    }).unknown(false),
+};
+
 export const testDraftIdParam = {
     params: Joi.object({ id: objectId.required() }),
 };
@@ -176,4 +207,8 @@ export default {
     testInbound,
     testGenerateDraft,
     testDraftIdParam,
+    listReplyDrafts,
+    editReplyDraft,
+    rejectReplyDraft,
+    replyDraftNote,
 };

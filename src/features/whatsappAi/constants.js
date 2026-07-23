@@ -22,6 +22,11 @@ export const WHATSAPP_AI_PERMISSIONS = Object.freeze({
     DASHBOARD_VIEW: 'whatsapp_ai.dashboard.view',
     TESTING_INBOUND: 'whatsapp_ai.testing.inbound',
     TESTING_GENERATE_DRAFT: 'whatsapp_ai.testing.generate_draft',
+    DRAFTS_VIEW: 'whatsapp_ai.drafts.view',
+    DRAFTS_EDIT: 'whatsapp_ai.drafts.edit',
+    DRAFTS_APPROVE: 'whatsapp_ai.drafts.approve',
+    DRAFTS_REJECT: 'whatsapp_ai.drafts.reject',
+    DRAFTS_REGENERATE: 'whatsapp_ai.drafts.regenerate',
 });
 
 export const FOUNDATION_NOTICE =

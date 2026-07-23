@@ -199,6 +199,7 @@ export const APP_MODULES = [
             { id: 'audit', name: 'AI Audit Logs', actions: ['view'] },
             { id: 'dashboard', name: 'AI Dashboard', actions: ['view'] },
             { id: 'testing', name: 'AI Testing', actions: ['inbound', 'generate_draft'] },
+            { id: 'drafts', name: 'AI Reply Drafts', actions: ['view', 'edit', 'approve', 'reject', 'regenerate'] },
         ],
     },
     {

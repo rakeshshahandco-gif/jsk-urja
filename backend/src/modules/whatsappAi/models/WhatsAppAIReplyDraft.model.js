@@ -59,6 +59,32 @@ const whatsAppAIReplyDraftSchema = new mongoose.Schema(
             maxlength: 64,
         },
         safetyResult: { type: safetyResultSchema, default: () => ({ ok: true, code: '', reasons: [] }) },
+        reviewNotes: {
+            type: [{
+                note: { type: String, trim: true, maxlength: 2000 },
+                createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
+        reviewMeta: {
+            type: {
+                approvedAt: { type: Date, default: null },
+                approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                rejectedAt: { type: Date, default: null },
+                rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                rejectionReason: { type: String, trim: true, default: '', maxlength: 1000 },
+                editedAt: { type: Date, default: null },
+                editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                regenerationRequestedAt: { type: Date, default: null },
+                regenerationRequestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                // Phase 1D: approval never sends WhatsApp
+                outboundSent: { type: Boolean, default: false },
+                readyForControlledSend: { type: Boolean, default: false },
+            },
+            default: () => ({}),
+        },
+        contextSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
         idempotencyKey: { type: String, trim: true, required: true, maxlength: 220 },
         processingStartedAt: { type: Date, default: null },
         processingCompletedAt: { type: Date, default: null },

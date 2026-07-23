@@ -113,6 +113,51 @@ router.get('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAG
 router.post('/documents', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.createDocument), ctrl.createDocument);
 router.put('/documents/:id', checkPermission(WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE), validate(validation.updateDocument), ctrl.updateDocument);
 
+
+// Phase 1D — human reply draft review (approval does NOT send WhatsApp).
+router.get(
+    '/reply-drafts',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_VIEW),
+    validate(validation.listReplyDrafts),
+    ctrl.listReplyDrafts,
+);
+router.get(
+    '/reply-drafts/:id',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_VIEW),
+    validate(validation.idParam),
+    ctrl.getReplyDraft,
+);
+router.put(
+    '/reply-drafts/:id',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_EDIT),
+    validate(validation.editReplyDraft),
+    ctrl.editReplyDraft,
+);
+router.post(
+    '/reply-drafts/:id/approve',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_APPROVE),
+    validate(validation.idParam),
+    ctrl.approveReplyDraft,
+);
+router.post(
+    '/reply-drafts/:id/reject',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_REJECT),
+    validate(validation.rejectReplyDraft),
+    ctrl.rejectReplyDraft,
+);
+router.post(
+    '/reply-drafts/:id/regenerate',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_REGENERATE),
+    validate(validation.idParam),
+    ctrl.regenerateReplyDraft,
+);
+router.post(
+    '/reply-drafts/:id/notes',
+    checkPermission(WHATSAPP_AI_PERMISSIONS.DRAFTS_EDIT),
+    validate(validation.replyDraftNote),
+    ctrl.addReplyDraftNote,
+);
+
 router.get('/audit-logs', checkPermission(WHATSAPP_AI_PERMISSIONS.AUDIT_VIEW), validate(validation.listAuditLogs), ctrl.listAuditLogs);
 router.get('/permissions-check', checkPermission(WHATSAPP_AI_PERMISSIONS.VIEW), ctrl.permissionsCheck);
 router.get('/dashboard-summary', checkPermission(WHATSAPP_AI_PERMISSIONS.DASHBOARD_VIEW), ctrl.dashboardSummary);
