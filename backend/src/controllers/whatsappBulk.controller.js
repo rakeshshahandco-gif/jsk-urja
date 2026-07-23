@@ -5,6 +5,8 @@ import * as settingsService from '../services/whatsappBulkSettings.service.js';
 import * as matterService from '../services/whatsappBulkMatter.service.js';
 import * as blacklistService from '../services/whatsappBulkBlacklist.service.js';
 import * as campaignService from '../services/whatsappBulkCampaign.service.js';
+import * as aiAssistService from '../services/whatsappBulkAiAssist.service.js';
+import { WHATSAPP_BULK_SAFE_MODE_WARNING } from '../constants/whatsappBulk.constants.js';
 import * as auditService from '../services/whatsappBulkAudit.service.js';
 import {
     WHATSAPP_BULK_ATTACHMENT_TYPES,
@@ -217,4 +219,20 @@ export const uploadCampaignImage = asyncHandler(async (req, res) => {
 export const listAuditLogs = asyncHandler(async (req, res) => {
     const rows = await auditService.listAuditLogs(companyId(req), req.query);
     res.send(new ApiResponse(200, { results: rows }));
+});
+
+
+export const approveCampaign = asyncHandler(async (req, res) => {
+    const doc = await campaignService.approveCampaign(companyId(req), req.params.id, req.user.id);
+    res.send(new ApiResponse(200, doc, 'Campaign approved for queue'));
+});
+
+export const aiAssist = asyncHandler(async (req, res) => {
+    const { action, payload: nested, ...rest } = req.body || {};
+    const payload =
+        nested && typeof nested === 'object' && !Array.isArray(nested)
+            ? { ...rest, ...nested }
+            : rest;
+    const data = await aiAssistService.runAiAssist(companyId(req), action, payload);
+    res.send(new ApiResponse(200, data));
 });

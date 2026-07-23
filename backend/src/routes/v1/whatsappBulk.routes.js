@@ -41,6 +41,8 @@ router.post('/campaigns/:id/recipients', wb('campaigns', 'edit'), whatsappBulkCo
 router.get('/campaigns/:id/recipients', wb('campaigns', 'view'), whatsappBulkController.listRecipients);
 router.post('/campaigns/:id/test-send', wb('campaigns', 'send'), validate(whatsappBulkValidation.testSend), whatsappBulkController.testSend);
 router.post('/campaigns/:id/schedule', wb('campaigns', 'send'), whatsappBulkController.scheduleCampaign);
+router.post('/campaigns/:id/approve', wb('campaigns', 'send'), whatsappBulkController.approveCampaign);
+router.post('/ai-assist', wb('campaigns', 'edit'), validate(whatsappBulkValidation.aiAssist), whatsappBulkController.aiAssist);
 router.post('/campaigns/:id/pause', wb('campaigns', 'send'), whatsappBulkController.pauseCampaign);
 router.post('/campaigns/:id/resume', wb('campaigns', 'send'), whatsappBulkController.resumeCampaign);
 router.post('/campaigns/:id/stop', wb('campaigns', 'send'), whatsappBulkController.stopCampaign);

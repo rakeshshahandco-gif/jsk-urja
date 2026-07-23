@@ -64,10 +64,18 @@ const settings = {
     body: Joi.object().keys({
         enabled: Joi.boolean(),
         enableFastMode: Joi.boolean(),
+        safeModeEnabled: Joi.boolean(),
         safeDelayMinMs: Joi.number().min(0),
         safeDelayMaxMs: Joi.number().min(0),
         pauseAfterMessages: Joi.number().min(1),
         pauseDurationMs: Joi.number().min(0),
+        pauseDurationMinMs: Joi.number().min(0),
+        pauseDurationMaxMs: Joi.number().min(0),
+        maxRetryCount: Joi.number().min(0),
+        requireManualApproval: Joi.boolean(),
+        mandatoryTestSend: Joi.boolean(),
+        aiAssistantEnabled: Joi.boolean(),
+        simulateSend: Joi.boolean(),
         dailyLimit: Joi.number().min(1),
         retryFailedMessages: Joi.boolean(),
         sendWindowStart: Joi.string(),
@@ -130,6 +138,26 @@ const testSend = {
     }),
 };
 
+const aiAssist = {
+    body: Joi.object().keys({
+        action: Joi.string().required(),
+        language: Joi.string().allow(''),
+        name: Joi.string().allow(''),
+        productInterest: Joi.string().allow(''),
+        category: Joi.string().allow(''),
+        city: Joi.string().allow(''),
+        seedText: Joi.string().allow(''),
+        messageBody: Joi.string().allow(''),
+        mobiles: Joi.array().items(Joi.string()),
+        campaignName: Joi.string().allow(''),
+        recipientCount: Joi.number(),
+        sendMode: Joi.string().allow(''),
+        text: Joi.string().allow(''),
+        // allow nested payload shape from UI without rejecting
+        payload: Joi.object().unknown(true),
+    }).unknown(true),
+};
+
 export default {
     settings,
     matter,
@@ -138,6 +166,7 @@ export default {
     updateCampaign: { body: Joi.object().keys(campaignBody), params: Joi.object().keys({ id: objectId.required() }) },
     preview,
     testSend: { ...testSend, params: Joi.object().keys({ id: objectId.required() }) },
+    aiAssist,
     listCampaigns: {
         query: Joi.object().keys({
             status: Joi.string().valid(...WHATSAPP_BULK_CAMPAIGN_STATUSES),

@@ -52,6 +52,8 @@ export const whatsappBulkApi = {
     listRecipients: async (id, params = {}) => unwrap(await apiClient.get(`/whatsapp-bulk/campaigns/${id}/recipients`, { params }))?.results || [],
     testSend: async (id, mobile) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/test-send`, { mobile })),
     scheduleCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/schedule`)),
+    approveCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/approve`)),
+    aiAssist: async (body) => unwrap(await apiClient.post('/whatsapp-bulk/ai-assist', body)),
     pauseCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/pause`)),
     resumeCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/resume`)),
     stopCampaign: async (id) => unwrap(await apiClient.post(`/whatsapp-bulk/campaigns/${id}/stop`)),

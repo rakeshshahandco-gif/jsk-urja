@@ -92,17 +92,28 @@ export const WHATSAPP_BULK_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 export const WHATSAPP_BULK_DEFAULT_SETTINGS = {
     enabled: false,
     enableFastMode: false,
-    safeDelayMinMs: 8000,
-    safeDelayMaxMs: 15000,
+    safeModeEnabled: true,
+    safeDelayMinMs: 20000,
+    safeDelayMaxMs: 30000,
     pauseAfterMessages: 25,
     pauseDurationMs: 120000,
+    pauseDurationMinMs: 120000,
+    pauseDurationMaxMs: 180000,
     dailyLimit: 100,
+    maxRetryCount: 2,
     retryFailedMessages: true,
     sendWindowStart: '09:00',
     sendWindowEnd: '19:00',
     defaultSendMode: 'SAFE',
     defaultBatchSize: 25,
     defaultTimezone: 'Asia/Kolkata',
+    requireManualApproval: true,
+    mandatoryTestSend: true,
+    aiAssistantEnabled: false,
+    simulateSend: false,
 };
+
+export const WHATSAPP_BULK_SAFE_MODE_WARNING =
+    'Safe Mode uses controlled delays, limits and pauses to reduce sending risk. It cannot guarantee that WhatsApp will not restrict, suspend or block the connected number. Use only for relevant recipients and respect opt-out requests.';
 
 export const WHATSAPP_BULK_UPLOAD_DIR = 'uploads/whatsapp-bulk/';

@@ -43,6 +43,26 @@ export default function WhatsappBulkSettingsPage() {
                     <span>Enable WhatsApp Bulk Messaging module</span>
                 </label>
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={form.safeModeEnabled !== false} onChange={(e) => setForm({ ...form, safeModeEnabled: e.target.checked })} />
+                    <span>Safe Mode enabled (sequential sends + delays)</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={!!form.requireManualApproval} onChange={(e) => setForm({ ...form, requireManualApproval: e.target.checked })} />
+                    <span>Require manual approval before queue</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={!!form.mandatoryTestSend} onChange={(e) => setForm({ ...form, mandatoryTestSend: e.target.checked })} />
+                    <span>Mandatory test send before queue</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={!!form.aiAssistantEnabled} onChange={(e) => setForm({ ...form, aiAssistantEnabled: e.target.checked })} />
+                    <span>Enable AI Campaign Assistant (optional, never auto-sends)</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                    <input type="checkbox" checked={!!form.simulateSend} onChange={(e) => setForm({ ...form, simulateSend: e.target.checked })} />
+                    <span>Simulate send (no live WhatsApp)</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
                     <input type="checkbox" checked={!!form.enableFastMode} onChange={(e) => setForm({ ...form, enableFastMode: e.target.checked })} />
                     <span>Allow Fast Mode (admin only)</span>
                 </label>
@@ -50,7 +70,10 @@ export default function WhatsappBulkSettingsPage() {
                     <div><label style={lbl}>Safe delay min (ms)</label><input style={inp} type="number" value={form.safeDelayMinMs} onChange={(e) => setForm({ ...form, safeDelayMinMs: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Safe delay max (ms)</label><input style={inp} type="number" value={form.safeDelayMaxMs} onChange={(e) => setForm({ ...form, safeDelayMaxMs: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Pause after messages</label><input style={inp} type="number" value={form.pauseAfterMessages} onChange={(e) => setForm({ ...form, pauseAfterMessages: Number(e.target.value) })} /></div>
-                    <div><label style={lbl}>Pause duration (ms)</label><input style={inp} type="number" value={form.pauseDurationMs} onChange={(e) => setForm({ ...form, pauseDurationMs: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Pause duration min (ms)</label><input style={inp} type="number" value={form.pauseDurationMinMs ?? form.pauseDurationMs} onChange={(e) => setForm({ ...form, pauseDurationMinMs: Number(e.target.value), pauseDurationMs: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Pause duration max (ms)</label><input style={inp} type="number" value={form.pauseDurationMaxMs ?? form.pauseDurationMs} onChange={(e) => setForm({ ...form, pauseDurationMaxMs: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Max retry count</label><input style={inp} type="number" value={form.maxRetryCount ?? 2} onChange={(e) => setForm({ ...form, maxRetryCount: Number(e.target.value) })} /></div>
+                    <div><label style={lbl}>Timezone</label><input style={inp} value={form.defaultTimezone || 'Asia/Kolkata'} onChange={(e) => setForm({ ...form, defaultTimezone: e.target.value })} /></div>
                     <div><label style={lbl}>Daily limit</label><input style={inp} type="number" value={form.dailyLimit} onChange={(e) => setForm({ ...form, dailyLimit: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Default batch size</label><input style={inp} type="number" value={form.defaultBatchSize} onChange={(e) => setForm({ ...form, defaultBatchSize: Number(e.target.value) })} /></div>
                     <div><label style={lbl}>Send window start</label><input style={inp} value={form.sendWindowStart} onChange={(e) => setForm({ ...form, sendWindowStart: e.target.value })} /></div>

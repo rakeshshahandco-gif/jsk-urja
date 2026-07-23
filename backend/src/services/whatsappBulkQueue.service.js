@@ -3,10 +3,11 @@ import WhatsAppBulkCampaignRecipient from '../models/whatsappBulkCampaignRecipie
 import { getSettings } from './whatsappBulkSettings.service.js';
 import { touchMatterUsage } from './whatsappBulkMatter.service.js';
 import { logAudit } from './whatsappBulkAudit.service.js';
+import { dispatchBulkWhatsAppSend } from './whatsappBulkDispatch.service.js';
 import {
     bulkSendDelay,
-    dispatchBulkWhatsAppSend,
-} from './whatsappBulkDispatch.service.js';
+    randomBulkDelayMs,
+} from './whatsappBulkSafeMode.util.js';
 import {
     resolveCampaignAttachment,
 } from './whatsappBulkAttachment.service.js';
@@ -16,9 +17,7 @@ let processing = false;
 let messagesSincePause = 0;
 
 function randomDelay(minMs, maxMs) {
-    const min = Math.min(minMs, maxMs);
-    const max = Math.max(minMs, maxMs);
-    return min + Math.floor(Math.random() * (max - min + 1));
+    return randomBulkDelayMs(minMs, maxMs);
 }
 
 function isWithinSendWindow(campaign, settings) {
@@ -161,14 +160,20 @@ async function processCampaign(campaign) {
         return;
     }
 
-    const isFast = campaign.sendMode === 'FAST' && settings.enableFastMode;
-    const minDelay = isFast ? 500 : (settings.safeDelayMinMs || 8000);
-    const maxDelay = isFast ? 1500 : (settings.safeDelayMaxMs || 15000);
+    const forceSafe = settings.safeModeEnabled !== false;
+    const isFast = !forceSafe && campaign.sendMode === 'FAST' && settings.enableFastMode;
+    const minDelay = isFast ? 500 : (settings.safeDelayMinMs || 20000);
+    const maxDelay = isFast ? 1500 : (settings.safeDelayMaxMs || 30000);
     const pauseAfter = settings.pauseAfterMessages || 25;
-    const pauseMs = settings.pauseDurationMs || 120000;
+    const pauseMin = settings.pauseDurationMinMs ?? settings.pauseDurationMs ?? 120000;
+    const pauseMax = settings.pauseDurationMaxMs ?? settings.pauseDurationMs ?? pauseMin;
 
     for (const recipient of recipients) {
-        if (campaign.status === 'Paused' || campaign.status === 'Stopped') break;
+        const fresh = await WhatsAppBulkCampaign.findById(campaign._id).select('status').lean();
+        if (!fresh || fresh.status === 'Paused' || fresh.status === 'Stopped') {
+            campaign.status = fresh?.status || campaign.status;
+            break;
+        }
 
         await sendOneRecipient(campaign, recipient, settings);
         campaign.dailySentToday += 1;
@@ -176,9 +181,10 @@ async function processCampaign(campaign) {
         messagesSincePause += 1;
         await campaign.save();
 
+        // Sequential only: full wait before next recipient (no parallel sends)
         if (messagesSincePause >= pauseAfter && !isFast) {
             messagesSincePause = 0;
-            await bulkSendDelay(pauseMs);
+            await bulkSendDelay(randomDelay(pauseMin, pauseMax));
         } else {
             await bulkSendDelay(randomDelay(minDelay, maxDelay));
         }
