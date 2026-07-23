@@ -28,15 +28,56 @@ describe('whatsappBulk safe mode defaults', () => {
     });
 });
 
+/** Capture/restore process.env without leaking parent-shell state into assertions. */
+function withEnv(key, value, fn) {
+    const had = Object.prototype.hasOwnProperty.call(process.env, key);
+    const prev = process.env[key];
+    try {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+        return fn();
+    } finally {
+        if (!had) delete process.env[key];
+        else process.env[key] = prev;
+    }
+}
+
 describe('whatsappBulk simulate mode', () => {
     it('honours simulateSend setting and env', () => {
-        assert.equal(isBulkSimulateMode({ simulateSend: true }), true);
-        assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
-        const prev = process.env.WHATSAPP_BULK_SIMULATE;
-        process.env.WHATSAPP_BULK_SIMULATE = 'true';
-        assert.equal(isBulkSimulateMode({ simulateSend: false }), true);
-        if (prev === undefined) delete process.env.WHATSAPP_BULK_SIMULATE;
-        else process.env.WHATSAPP_BULK_SIMULATE = prev;
+        withEnv('WHATSAPP_BULK_SIMULATE', undefined, () => {
+            assert.equal(isBulkSimulateMode({ simulateSend: true }), true);
+            assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
+            assert.equal(isBulkSimulateMode({}), false);
+        });
+        withEnv('WHATSAPP_BULK_SIMULATE', 'true', () => {
+            assert.equal(isBulkSimulateMode({ simulateSend: false }), true);
+            assert.equal(isBulkSimulateMode({}), true);
+        });
+        withEnv('WHATSAPP_BULK_SIMULATE', 'false', () => {
+            assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
+            assert.equal(isBulkSimulateMode({ simulateSend: true }), true);
+        });
+    });
+
+    it('is isolated from parent shell WHATSAPP_BULK_SIMULATE', () => {
+        // Pollute like an outer staging shell, then prove withEnv isolates assertions.
+        withEnv('WHATSAPP_BULK_SIMULATE', 'true', () => {
+            withEnv('WHATSAPP_BULK_SIMULATE', undefined, () => {
+                assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
+            });
+            withEnv('WHATSAPP_BULK_SIMULATE', 'false', () => {
+                assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
+            });
+            // Outer pollution restored by nested withEnv; still true here.
+            assert.equal(isBulkSimulateMode({ simulateSend: false }), true);
+        });
+        // After outer withEnv, parent shell value is restored (whatever it was).
+        // Explicitly re-check isolation again under forced pollution.
+        withEnv('WHATSAPP_BULK_SIMULATE', 'true', () => {
+            withEnv('WHATSAPP_BULK_SIMULATE', undefined, () => {
+                assert.equal(isBulkSimulateMode({ simulateSend: false }), false);
+            });
+        });
     });
 });
 
