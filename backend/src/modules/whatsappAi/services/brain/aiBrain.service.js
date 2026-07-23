@@ -18,6 +18,7 @@ import { createHybridRouter } from './hybridRouter.service.js';
 import { createPromptBuilder } from './prompt/promptBuilder.service.js';
 import { createProviderRegistry } from './providers/providerRegistry.js';
 import { NULL_PROVIDER_DUMMY_TEXT, NULL_PROVIDER_ID } from './providers/adapters/null.adapter.js';
+import { createProductIntelligenceEngine } from './productIntelligence/productIntelligence.service.js';
 
 export const AI_BRAIN_FOUNDATION_VERSION = 'ai_brain_foundation_v0';
 
@@ -42,6 +43,7 @@ export function createAiBrain(options = {}) {
     const contextLoader = options.contextLoader || createExpandedContextLoader({ deps: options.deps });
     const intentDetector = options.intentDetector || createIntentDetector();
     const entityExtractor = options.entityExtractor || createEntityExtractor();
+    const productIntelligenceEngine = options.productIntelligenceEngine || createProductIntelligenceEngine();
     const hybridRouter = options.hybridRouter || createHybridRouter();
     const promptBuilder = options.promptBuilder || createPromptBuilder();
     const registry = options.providerRegistry || createProviderRegistry();
@@ -76,8 +78,13 @@ export function createAiBrain(options = {}) {
             );
 
             const intentResult = intentDetector.detect(messageText);
+            const productIntelligence = productIntelligenceEngine.analyze(messageText, {
+                languageHint: intentResult.detectedLanguage || context.language,
+            });
             const entities = entityExtractor.extract(messageText, {
-                language: intentResult.detectedLanguage || context.language,
+                language: productIntelligence.language?.primaryCode
+                    || intentResult.detectedLanguage
+                    || context.language,
             });
             const route = hybridRouter.route({
                 intent: intentResult.intent,
@@ -129,8 +136,10 @@ export function createAiBrain(options = {}) {
                 intent: intentResult.intent,
                 intentReason: intentResult.intentReason,
                 confidence: intentResult.confidence,
-                detectedLanguage: intentResult.detectedLanguage,
+                detectedLanguage: productIntelligence.language?.primaryCode
+                    || intentResult.detectedLanguage,
                 entities,
+                productIntelligence,
                 route,
                 prompt: {
                     systemPromptLength: prompt.systemPrompt.length,

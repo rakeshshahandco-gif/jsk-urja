@@ -27,3 +27,15 @@ export {
     runAiBrainFoundation,
     AI_BRAIN_FOUNDATION_VERSION,
 } from './aiBrain.service.js';
+
+export {
+    JSK_PRODUCT_FAMILIES,
+    getProductFamilyById,
+    JSK_PRODUCT_ALIASES,
+    detectLanguageDetailed,
+    detectPrimaryLanguageCode,
+    createProductIntelligenceEngine,
+    analyzeProductIntelligence,
+    productIntelligenceToEntityMap,
+    JSK_PRODUCT_INTELLIGENCE_VERSION,
+} from './productIntelligence/index.js';
