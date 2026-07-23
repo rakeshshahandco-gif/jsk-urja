@@ -19,6 +19,8 @@ import { createPromptBuilder } from './prompt/promptBuilder.service.js';
 import { createProviderRegistry } from './providers/providerRegistry.js';
 import { NULL_PROVIDER_DUMMY_TEXT, NULL_PROVIDER_ID } from './providers/adapters/null.adapter.js';
 import { createProductIntelligenceEngine } from './productIntelligence/productIntelligence.service.js';
+import { createKnowledgeRetrievalEngine } from './knowledge/knowledgeRetrieval.service.js';
+import { createEmptyReadModel } from './knowledge/approvedKnowledgeRepository.js';
 
 export const AI_BRAIN_FOUNDATION_VERSION = 'ai_brain_foundation_v0';
 
@@ -44,6 +46,17 @@ export function createAiBrain(options = {}) {
     const intentDetector = options.intentDetector || createIntentDetector();
     const entityExtractor = options.entityExtractor || createEntityExtractor();
     const productIntelligenceEngine = options.productIntelligenceEngine || createProductIntelligenceEngine();
+    const knowledgeDeps = options.deps?.Knowledge
+        ? options.deps
+        : {
+            ...(options.deps || {}),
+            Knowledge: options.deps?.Knowledge || createEmptyReadModel(),
+            DocumentRef: options.deps?.DocumentRef || createEmptyReadModel(),
+        };
+    const knowledgeRetrievalEngine = options.knowledgeRetrievalEngine || createKnowledgeRetrievalEngine({
+        deps: knowledgeDeps,
+        limits: options.knowledgeLimits,
+    });
     const hybridRouter = options.hybridRouter || createHybridRouter();
     const promptBuilder = options.promptBuilder || createPromptBuilder();
     const registry = options.providerRegistry || createProviderRegistry();
@@ -93,12 +106,25 @@ export function createAiBrain(options = {}) {
                 text: messageText,
             });
 
-            const grounding = { snippets: [], sourceIds: [] };
+            const groundingPack = await knowledgeRetrievalEngine.retrieve({
+                companyId,
+                conversationId,
+                messageId: sourceMessageId,
+                messageText,
+                intent: intentResult.intent,
+                productIntelligence,
+            });
+            const grounding = {
+                snippets: (groundingPack.sources || []).map((s) => s.contentSnippet),
+                sourceIds: (groundingPack.sources || []).map((s) => s.sourceId),
+                emptyGrounding: !!groundingPack.emptyGrounding,
+            };
             const prompt = promptBuilder.build({
                 context,
                 intentResult,
                 entities,
                 grounding,
+                groundingPack,
                 route,
             });
 
@@ -140,6 +166,7 @@ export function createAiBrain(options = {}) {
                     || intentResult.detectedLanguage,
                 entities,
                 productIntelligence,
+                groundingPack,
                 route,
                 prompt: {
                     systemPromptLength: prompt.systemPrompt.length,
@@ -162,6 +189,7 @@ export function createAiBrain(options = {}) {
                 leadCreated: false,
                 customerCreated: false,
                 grounding,
+                requiresHumanReview: !!groundingPack.requiresHumanReview,
             };
         },
     };

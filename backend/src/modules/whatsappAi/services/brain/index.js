@@ -39,3 +39,15 @@ export {
     productIntelligenceToEntityMap,
     JSK_PRODUCT_INTELLIGENCE_VERSION,
 } from './productIntelligence/index.js';
+
+export {
+    GROUNDING_PACK_VERSION,
+    KNOWLEDGE_RETRIEVAL_LIMITS,
+    createApprovedKnowledgeRepository,
+    isCustomerSafeKnowledge,
+    buildRetrievalQuery,
+    scoreKnowledgeDocument,
+    buildGroundingPack,
+    createKnowledgeRetrievalEngine,
+    retrieveApprovedGrounding,
+} from './knowledge/index.js';

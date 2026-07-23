@@ -24,7 +24,11 @@ export function buildPromptBundle(input = {}) {
     const context = input.context || {};
     const intentResult = input.intentResult || {};
     const entities = input.entities || {};
-    const grounding = input.grounding || { snippets: [], sourceIds: [] };
+    const groundingPack = input.groundingPack || null;
+    const grounding = input.grounding || {
+        snippets: (groundingPack?.sources || []).map((s) => s.contentSnippet),
+        sourceIds: (groundingPack?.sources || []).map((s) => s.sourceId),
+    };
     const route = input.route || {};
 
     const currentMessage = context.currentMessage?.text
