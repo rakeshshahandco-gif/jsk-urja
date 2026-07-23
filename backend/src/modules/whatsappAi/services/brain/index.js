@@ -74,3 +74,10 @@ export {
 export { createSafetyValidator, validateSafety, rewriteSafeDraft, SAFETY_ENGINE_VERSION } from './safety/index.js';
 export { createBudgetEngine, BUDGET_ENGINE_VERSION, DEFAULT_BUDGET_LIMITS } from './budget/index.js';
 export { createHybridCostRouter, routeWithCostControls, HYBRID_COST_ROUTER_VERSION } from './hybridCostRouter.service.js';
+
+export { createDraftAssembler, assemblePendingDraft, DRAFT_ASSEMBLER_VERSION } from './draftAssembler.service.js';
+export {
+    createDryRunOrchestrator,
+    runDryRunOrchestrator,
+    DRY_RUN_ORCHESTRATOR_VERSION,
+} from './dryRunOrchestrator.service.js';
