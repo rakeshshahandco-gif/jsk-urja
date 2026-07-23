@@ -70,3 +70,7 @@ export {
     createKnowledgeRetrievalEngine,
     retrieveApprovedGrounding,
 } from './knowledge/index.js';
+
+export { createSafetyValidator, validateSafety, rewriteSafeDraft, SAFETY_ENGINE_VERSION } from './safety/index.js';
+export { createBudgetEngine, BUDGET_ENGINE_VERSION, DEFAULT_BUDGET_LIMITS } from './budget/index.js';
+export { createHybridCostRouter, routeWithCostControls, HYBRID_COST_ROUTER_VERSION } from './hybridCostRouter.service.js';
