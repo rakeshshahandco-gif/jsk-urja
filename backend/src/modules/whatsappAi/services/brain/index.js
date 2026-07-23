@@ -14,14 +14,33 @@ export { createEntityExtractor } from './entities/entityExtractor.service.js';
 export { createExpandedContextLoader } from './expandedContextLoader.service.js';
 export { createHybridRouter, routeHybrid } from './hybridRouter.service.js';
 export { createPromptBuilder, buildPromptBundle, PROMPT_BUNDLE_VERSION, PROMPT_BUILDER_LIMITS } from './prompt/promptBuilder.service.js';
-export { isAiProvider, assertCompletionRequest } from './providers/AiProvider.interface.js';
 export {
+    isAiProvider,
+    assertCompletionRequest,
+    estimateTokensRough,
+    createHttpTransport,
+    PROVIDER_FRAMEWORK_VERSION,
+    PROVIDER_IDS,
+    DEFAULT_PROVIDER_RUNTIME_CONFIG,
+    resolveCompanyProviderConfig,
+    maskSecret,
+    assertNoApiKeysInPayload,
+    resolveSecretRef,
+    secretStatus,
     createNullProvider,
     NULL_PROVIDER_ID,
     NULL_PROVIDER_MODEL,
     NULL_PROVIDER_DUMMY_TEXT,
-} from './providers/adapters/null.adapter.js';
-export { createProviderRegistry } from './providers/providerRegistry.js';
+    createOpenAIProvider,
+    OPENAI_PROVIDER_ID,
+    createGeminiProvider,
+    GEMINI_PROVIDER_ID,
+    createClaudeProvider,
+    CLAUDE_PROVIDER_ID,
+    createLocalLlmProvider,
+    LOCAL_PROVIDER_ID,
+    createProviderRegistry,
+} from './providers/index.js';
 export {
     createAiBrain,
     runAiBrainFoundation,

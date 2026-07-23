@@ -1,5 +1,5 @@
 /**
- * Phase 1C.0 — AI Provider Adapter interface (port).
+ * Phase 1C.4 — AI Provider Adapter interface (port).
  * Business services must depend on this contract only — never on vendor SDKs.
  */
 
@@ -34,6 +34,10 @@ export function isAiProvider(provider) {
         provider
         && typeof provider.id === 'string'
         && typeof provider.complete === 'function'
+        && typeof provider.healthCheck === 'function'
+        && typeof provider.estimateCost === 'function'
+        && typeof provider.normalizeError === 'function'
+        && typeof provider.supportsStructuredOutput === 'function'
     );
 }
 
@@ -49,4 +53,8 @@ export function assertCompletionRequest(req) {
     }
 }
 
-export default { isAiProvider, assertCompletionRequest };
+export function estimateTokensRough(text) {
+    return Math.ceil(String(text || '').length / 4);
+}
+
+export default { isAiProvider, assertCompletionRequest, estimateTokensRough };

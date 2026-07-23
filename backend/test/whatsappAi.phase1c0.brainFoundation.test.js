@@ -215,7 +215,18 @@ describe('whatsappAi phase1c0 brain foundation', () => {
         assert.equal(ctx.optionalContext.knowledgeBase, null);
     });
 
-    it('no vendor SDK imports in brain foundation source', () => {
+    it('no vendor SDK package imports in brain foundation source', () => {
+        // Phase 1C.4 allows provider *ids* and HTTPS transport; still forbid vendor SDKs.
+        const forbidden = [
+            /from\s+['"]openai['"]/,
+            /require\(\s*['"]openai['"]\s*\)/,
+            /@anthropic-ai\//,
+            /from\s+['"]@google\//,
+            /require\(\s*['"]@google\//,
+            /from\s+['"]anthropic['"]/,
+            /require\(\s*['"]anthropic['"]\s*\)/,
+            /from\s+['"]@google\/generative-ai['"]/,
+        ];
         const walk = (dir) => {
             for (const name of fs.readdirSync(dir)) {
                 const p = path.join(dir, name);
@@ -223,10 +234,9 @@ describe('whatsappAi phase1c0 brain foundation', () => {
                 if (st.isDirectory()) walk(p);
                 else if (name.endsWith('.js')) {
                     const t = fs.readFileSync(p, 'utf8');
-                    assert.equal(t.includes('openai'), false, p);
-                    assert.equal(t.includes('@google'), false, p);
-                    assert.equal(t.includes('anthropic'), false, p);
-                    assert.equal(t.includes('fetch('), false, p);
+                    for (const re of forbidden) {
+                        assert.equal(re.test(t), false, `${p} matched ${re}`);
+                    }
                 }
             }
         };
