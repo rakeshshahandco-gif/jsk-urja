@@ -105,6 +105,21 @@ export const PERMISSION_REGISTRY = [
             { id: 'blacklist', name: 'WhatsApp Blacklist', actions: STANDARD_ACTIONS },
             { id: 'history', name: 'Campaign History', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export History', type: 'boolean' }] },
             { id: 'settings', name: 'WhatsApp Bulk Messaging Settings', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }] },
+            { id: 'number_health', name: 'WhatsApp Number Health', actions: [
+                { id: 'view', label: 'View Number Health', type: 'boolean' },
+                { id: 'validate', label: 'Validate Numbers', type: 'boolean' },
+                { id: 'lookup', label: 'WhatsApp Availability Lookup', type: 'boolean' },
+                { id: 'export', label: 'Export Number Health', type: 'boolean' },
+                { id: 'blacklist', label: 'Blacklist from Number Health', type: 'boolean' },
+            ] },
+            { id: 'report', name: 'WhatsApp Bulk Reports', actions: [
+                { id: 'view', label: 'View Campaign Reports', type: 'boolean' },
+                { id: 'export', label: 'Export Campaign Reports', type: 'boolean' },
+            ] },
+            { id: 'ai_assist', name: 'WhatsApp Bulk AI Assist', actions: [
+                { id: 'view', label: 'View AI Assist', type: 'boolean' },
+                { id: 'generate', label: 'Generate AI Draft', type: 'boolean' },
+            ] },
         ],
     },
     {

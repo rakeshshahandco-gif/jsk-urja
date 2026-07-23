@@ -11,11 +11,8 @@ import { logAudit } from './whatsappBulkAudit.service.js';
 import {
     dispatchBulkWhatsAppSend,
     assertCrmWhatsAppConnected,
-    bulkSendDelay,
-    resolveBulkSenderUserId,
 } from './whatsappBulkDispatch.service.js';
 import { processQueue } from './whatsappBulkQueue.service.js';
-import WhatsAppService from './whatsapp.service.js';
 import { WHATSAPP_BULK_UPLOAD_DIR } from '../constants/whatsappBulk.constants.js';
 import {
     resolveCampaignAttachment,
@@ -33,6 +30,13 @@ import {
     normalizeMobile,
     syncCampaignSendStats,
 } from './whatsappBulkRecipient.service.js';
+import { resolveBulkSenderUserId, bulkSendDelay } from './whatsappBulkSafeMode.util.js';
+
+/** Lazy — avoids Baileys/open handles when Bulk campaign module is imported in tests. */
+async function getWhatsAppService() {
+    const mod = await import('./whatsapp.service.js');
+    return mod.default;
+}
 
 function normalizeBulkFilters(filters = {}) {
     const f = { ...filters };
@@ -281,6 +285,7 @@ export async function testSend(companyId, campaignId, mobile, userId) {
     campaign.sentCount = stats.sentCount;
     campaign.failedCount = stats.failedCount;
     campaign.testSendMobile = normalized;
+    campaign.testSendCompletedAt = new Date();
     if (stats.pendingCount === 0 && stats.sentCount > 0 && ['Pending', 'Sending', 'Draft'].includes(campaign.status)) {
         campaign.status = 'Completed';
         campaign.completedAt = new Date();
@@ -294,6 +299,16 @@ export async function scheduleCampaign(companyId, campaignId, userId) {
     await assertModuleEnabled(companyId);
     const campaign = await WhatsAppBulkCampaign.findOne({ _id: campaignId, companyId });
     if (!campaign) throw new ApiError(404, 'Campaign not found');
+    const settings = await getSettings(companyId);
+    if (!String(campaign.messageBody || '').trim() && !campaign.matterId) {
+        throw new ApiError(400, 'Campaign message is empty');
+    }
+    if (settings.mandatoryTestSend !== false && !campaign.testSendCompletedAt) {
+        throw new ApiError(400, 'Mandatory test send required before queue start');
+    }
+    if (settings.requireManualApproval !== false && !campaign.manualApprovedAt) {
+        throw new ApiError(400, 'Manual approval required before queue start');
+    }
     await saveRecipientsForCampaign(companyId, campaignId);
     if (campaign.scheduleType === 'now') {
         campaign.status = 'Pending';
@@ -407,7 +422,7 @@ export async function revokeSentMessages(companyId, campaignId, userId) {
         try {
             const key = row.whatsappMessageKey;
             const jid = key.remoteJid || `${row.mobile}@s.whatsapp.net`;
-            await WhatsAppService.revokeMessage(senderUserId, { jid, key });
+            await (await getWhatsAppService()).revokeMessage(senderUserId, { jid, key });
             row.revokedAt = new Date();
             await row.save();
             revoked += 1;
@@ -472,4 +487,17 @@ export async function exportCampaignHistoryExcel(companyId) {
 
 export function storeUpload(relativePath) {
     return path.join(WHATSAPP_BULK_UPLOAD_DIR, path.basename(relativePath));
+}
+
+
+export async function approveCampaign(companyId, campaignId, userId) {
+    await assertModuleEnabled(companyId);
+    const campaign = await WhatsAppBulkCampaign.findOne({ _id: campaignId, companyId });
+    if (!campaign) throw new ApiError(404, 'Campaign not found');
+    campaign.manualApprovedAt = new Date();
+    campaign.manualApprovedBy = userId;
+    campaign.updatedBy = userId;
+    await campaign.save();
+    await logAudit(companyId, 'campaign_manual_approved', { campaignId, userId });
+    return campaign;
 }

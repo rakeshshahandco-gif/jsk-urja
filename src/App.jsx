@@ -126,6 +126,7 @@ import WhatsappBulkCampaignsPage from '@/features/whatsappBulk/WhatsappBulkCampa
 import WhatsappBulkMatterPage from '@/features/whatsappBulk/WhatsappBulkMatterPage';
 import WhatsappBulkBlacklistPage from '@/features/whatsappBulk/WhatsappBulkBlacklistPage';
 import WhatsappBulkHistoryPage from '@/features/whatsappBulk/WhatsappBulkHistoryPage';
+import WhatsappBulkNumberHealthPage from '@/features/whatsappBulk/WhatsappBulkNumberHealthPage';
 import WhatsappBulkSettingsPage from '@/features/whatsappBulk/WhatsappBulkSettingsPage';
 import {
     WhatsAppAIDashboardPage,
@@ -616,6 +617,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.MATTERS} element={<ProtectedRoute requirePermission="whatsapp_bulk.matter_master.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkMatterPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST} element={<ProtectedRoute requirePermission="whatsapp_bulk.blacklist.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkBlacklistPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.HISTORY} element={<ProtectedRoute requirePermission="whatsapp_bulk.campaigns.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkHistoryPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_BULK.NUMBER_HEALTH} element={<ProtectedRoute requirePermission="whatsapp_bulk.number_health.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkNumberHealthPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS} element={<ProtectedRoute requirePermission="whatsapp_bulk.settings.view"><FeatureGuard feature="communication.enableWhatsappBulk"><WhatsappBulkSettingsPage /></FeatureGuard></ProtectedRoute>} />
 
                                                 {/* WhatsApp AI Assistant — Phase 1A foundation shells (feature-flagged; no live WA) */}

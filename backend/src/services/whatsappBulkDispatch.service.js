@@ -1,23 +1,25 @@
-import WhatsAppService from './whatsapp.service.js';
 import { validateSendContentPayload } from './whatsappBulkAttachment.service.js';
+import { getSettings } from './whatsappBulkSettings.service.js';
+import {
+    isBulkSimulateMode,
+    resolveBulkSenderUserId,
+    bulkSendDelay,
+} from './whatsappBulkSafeMode.util.js';
 
-/** Delay between bulk sends (Safe Mode pacing). */
-export function bulkSendDelay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+export {
+    isBulkSimulateMode,
+    resolveBulkSenderUserId,
+    bulkSendDelay,
+};
+
+/** Lazy-load Chat WhatsApp service — avoids Baileys open handles on Bulk test import. */
+async function getWhatsAppService() {
+    const mod = await import('./whatsapp.service.js');
+    return mod.default;
 }
 
-/** Bulk sends use the same Baileys session as CRM WhatsApp (per logged-in user). */
-export function resolveBulkSenderUserId(campaign, actingUserId) {
-    const id = actingUserId || campaign?.updatedBy || campaign?.createdBy;
-    if (!id) {
-        throw new Error(
-            'No WhatsApp sender user for this campaign. Open the campaign again while logged in, then retry.',
-        );
-    }
-    return String(id);
-}
-
-export function assertCrmWhatsAppConnected(userId) {
+export async function assertCrmWhatsAppConnected(userId) {
+    const WhatsAppService = await getWhatsAppService();
     const status = WhatsAppService.getStatus(userId);
     if (status.status === 'CONNECTED' || status.connected === true) {
         return status;
@@ -29,10 +31,22 @@ export function assertCrmWhatsAppConnected(userId) {
 
 /**
  * Send one bulk message via the CRM WhatsApp (Baileys) session — no separate Puppeteer login.
+ * When simulateSend / WHATSAPP_BULK_SIMULATE=true, never loads Baileys.
  */
 export async function dispatchBulkWhatsAppSend(mobile, resolved, { userId, campaign } = {}) {
+    const companyId = campaign?.companyId;
+    const settings = companyId ? await getSettings(companyId) : {};
+    if (isBulkSimulateMode(settings)) {
+        return {
+            simulated: true,
+            messageKey: { id: 'sim-' + Date.now(), remoteJid: String(mobile) + '@s.whatsapp.net', fromMe: true },
+            jid: String(mobile) + '@s.whatsapp.net',
+        };
+    }
+
     const senderUserId = resolveBulkSenderUserId(campaign, userId);
-    assertCrmWhatsAppConnected(senderUserId);
+    await assertCrmWhatsAppConnected(senderUserId);
+    const WhatsAppService = await getWhatsAppService();
 
     const { messageBody, sendContentType, imageAttachment, absolutePath } = resolved;
     validateSendContentPayload({

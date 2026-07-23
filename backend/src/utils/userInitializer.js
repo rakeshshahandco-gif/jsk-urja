@@ -2,6 +2,8 @@ import { Role } from '../models/role.model.js';
 import { Department } from '../models/department.model.js';
 import { User } from '../models/user.model.js';
 import logger from './logger.js';
+import { persistClientAdminWhatsappBulkPermissions } from '../services/whatsappBulkClientAdminPermissions.service.js';
+import { ensureClientAdminWhatsappBulkPermissions } from './permission.utils.js';
 
 const defaultRoles = [
     { name: 'superadmin', description: 'Full access to everything', isSystemRole: true },
@@ -37,10 +39,25 @@ export const initializeUserManagement = async () => {
         for (const roleData of defaultRoles) {
             let role = await Role.findOne({ name: roleData.name });
             if (!role) {
-                role = await Role.create(roleData);
+                // New Client Admin role gets WhatsApp Bulk keys from registry immediately
+                const createPayload = { ...roleData };
+                if (String(roleData.name).toLowerCase() === 'admin') {
+                    createPayload.permissions = ensureClientAdminWhatsappBulkPermissions({});
+                }
+                role = await Role.create(createPayload);
                 logger.info(`Created role: ${roleData.name}`);
             }
             roleMap[roleData.name] = role._id;
+        }
+
+        // 2b. Idempotent backfill: existing Client Admin roles missing whatsapp_bulk.*
+        try {
+            const result = await persistClientAdminWhatsappBulkPermissions();
+            if (result.updated > 0) {
+                logger.info(`Client Admin whatsapp_bulk permissions updated for ${result.updated} role(s)`);
+            }
+        } catch (permErr) {
+            logger.error('Client Admin whatsapp_bulk permission backfill failed:', permErr);
         }
 
         // 3. Ensure Super Admin user has the role assigned correctly

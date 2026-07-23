@@ -41,6 +41,8 @@ router.post('/campaigns/:id/recipients', wb('campaigns', 'edit'), whatsappBulkCo
 router.get('/campaigns/:id/recipients', wb('campaigns', 'view'), whatsappBulkController.listRecipients);
 router.post('/campaigns/:id/test-send', wb('campaigns', 'send'), validate(whatsappBulkValidation.testSend), whatsappBulkController.testSend);
 router.post('/campaigns/:id/schedule', wb('campaigns', 'send'), whatsappBulkController.scheduleCampaign);
+router.post('/campaigns/:id/approve', wb('campaigns', 'send'), whatsappBulkController.approveCampaign);
+router.post('/ai-assist', wb('campaigns', 'edit'), validate(whatsappBulkValidation.aiAssist), whatsappBulkController.aiAssist);
 router.post('/campaigns/:id/pause', wb('campaigns', 'send'), whatsappBulkController.pauseCampaign);
 router.post('/campaigns/:id/resume', wb('campaigns', 'send'), whatsappBulkController.resumeCampaign);
 router.post('/campaigns/:id/stop', wb('campaigns', 'send'), whatsappBulkController.stopCampaign);
@@ -48,5 +50,17 @@ router.post('/campaigns/:id/retry-failed', wb('campaigns', 'send'), whatsappBulk
 router.post('/campaigns/:id/revoke-sent', wb('campaigns', 'send'), whatsappBulkController.revokeSent);
 
 router.get('/audit-logs', wb('campaigns', 'view'), whatsappBulkController.listAuditLogs);
+
+// Number Health / reports (isolated Bulk endpoints)
+router.get('/number-health/summary', wb('number_health', 'view'), whatsappBulkController.numberHealthSummary);
+router.get('/number-health', wb('number_health', 'view'), whatsappBulkController.numberHealthList);
+router.post('/number-health/validate', wb('number_health', 'validate'), validate(whatsappBulkValidation.numberHealthValidate), whatsappBulkController.numberHealthValidate);
+router.post('/number-health/duplicates', wb('number_health', 'validate'), validate(whatsappBulkValidation.numberHealthValidate), whatsappBulkController.numberHealthDuplicates);
+router.post('/number-health/availability-check', wb('number_health', 'lookup'), validate(whatsappBulkValidation.availabilityLookup), whatsappBulkController.numberHealthAvailabilityCheck);
+router.post('/number-health/recheck-unknown', wb('number_health', 'lookup'), validate(whatsappBulkValidation.availabilityLookup), whatsappBulkController.numberHealthRecheckUnknown);
+router.get('/number-health/export', wb('number_health', 'export'), whatsappBulkController.numberHealthExport);
+router.get('/number-health/risk/:normalizedNumber', wb('number_health', 'view'), whatsappBulkController.numberHealthRisk);
+router.get('/campaigns/:id/precheck', wb('campaigns', 'view'), whatsappBulkController.campaignPrecheck);
+router.get('/campaigns/:id/performance-report', wb('report', 'view'), whatsappBulkController.campaignPerformanceReport);
 
 export default router;

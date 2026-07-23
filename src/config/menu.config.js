@@ -637,6 +637,7 @@ export const menuConfig = [
             { id: 'communication-bulk-matter', title: 'WhatsApp Matter Master', path: PATHS.SETTINGS.WHATSAPP_BULK.MATTERS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.matter_master.view' },
             { id: 'communication-bulk-blacklist', title: 'WhatsApp Blacklist', path: PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.blacklist.view' },
             { id: 'communication-bulk-history', title: 'Campaign History', path: PATHS.SETTINGS.WHATSAPP_BULK.HISTORY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
+            { id: 'communication-bulk-number-health', title: 'Number Health', path: PATHS.SETTINGS.WHATSAPP_BULK.NUMBER_HEALTH, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.number_health.view' },
             { id: 'communication-bulk-settings', title: 'WhatsApp Bulk Messaging Settings', path: PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.settings.view' },
             {
                 id: 'communication-whatsapp-ai-group',

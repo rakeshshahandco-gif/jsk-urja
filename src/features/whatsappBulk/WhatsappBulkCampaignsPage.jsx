@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { whatsappBulkApi } from '@/services/whatsappBulkApi';
 
@@ -217,7 +217,7 @@ export default function WhatsappBulkCampaignsPage() {
                 return;
             }
             const doc = await whatsappBulkApi.createCampaign(buildPayload());
-            toast.success('Campaign created — now Save Recipients then Start');
+            toast.success('Campaign created â€” now Save Recipients then Start');
             setSelectedId(doc._id);
             load();
         } catch (err) {
@@ -226,7 +226,7 @@ export default function WhatsappBulkCampaignsPage() {
     };
 
     const onSaveAsMatter = async () => {
-        const name = window.prompt('Matter template name (message only — no recipients):', form.campaignName || 'New Matter');
+        const name = window.prompt('Matter template name (message only â€” no recipients):', form.campaignName || 'New Matter');
         if (!name?.trim()) return;
         try {
             await whatsappBulkApi.createMatter({
@@ -238,7 +238,7 @@ export default function WhatsappBulkCampaignsPage() {
                 attachmentType: form.sendContentType === 'text_only' ? 'none' : 'image',
                 isActive: true,
             });
-            toast.success('Matter template saved — pick it from dropdown next time');
+            toast.success('Matter template saved â€” pick it from dropdown next time');
             load();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Save matter failed');
@@ -340,8 +340,8 @@ export default function WhatsappBulkCampaignsPage() {
             return toast.error('Preview recipients first, then confirm selection before sending');
         }
         const msg = `Send campaign to ${count} selected recipient(s)?\n\n`
-            + `Total found: ${preview?.totalFound ?? '—'}\n`
-            + `Valid numbers: ${preview?.validNumbers ?? '—'}\n`
+            + `Total found: ${preview?.totalFound ?? 'â€”'}\n`
+            + `Valid numbers: ${preview?.validNumbers ?? 'â€”'}\n`
             + `Duplicates skipped: ${preview?.duplicateSkipped ?? 0}\n`
             + `Invalid skipped: ${preview?.invalidSkipped ?? 0}\n`
             + `Opt-out skipped: ${preview?.optOutSkipped ?? 0}\n`
@@ -379,6 +379,49 @@ export default function WhatsappBulkCampaignsPage() {
         }
     };
 
+    const onApprove = async () => {
+        if (!selectedId) return toast.error('Create campaign first');
+        try {
+            await whatsappBulkApi.approveCampaign(selectedId);
+            toast.success('Campaign manually approved — ready for queue after test send');
+            await load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Approve failed');
+        }
+    };
+
+    const onPrecheck = async () => {
+        if (!selectedId) return toast.error('Select a campaign first');
+        try {
+            const data = await whatsappBulkApi.campaignPrecheck(selectedId);
+            const s = data.summary || {};
+            toast.success(
+                `Pre-check: eligible ${s.eligible || 0}/${s.totalImported || 0}. Invalid ${s.invalid || 0}, dup ${s.duplicate || 0}, blacklist ${s.blacklisted || 0}. Can queue: ${data.canQueue ? 'yes' : 'no'}`,
+                { duration: 6000 },
+            );
+            if (data.warning) toast(data.warning, { icon: '⚠️', duration: 7000 });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Pre-check failed');
+        }
+    };
+
+    const onAiDraft = async () => {
+        try {
+            const out = await whatsappBulkApi.aiAssist({
+                action: 'draft_message',
+                language: 'en',
+                name: 'Customer',
+                productInterest: 'LED drivers',
+                category: 'Dealer',
+                seedText: form.messageBody,
+            });
+            if (out?.draftText) setForm({ ...form, messageBody: out.draftText });
+            toast.success('AI draft ready for human review (not sent)');
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'AI assist unavailable (enable in Bulk Settings)');
+        }
+    };
+
     const onTestSend = async () => {
         if (!selectedId) return toast.error('Create campaign first');
         try {
@@ -401,8 +444,14 @@ export default function WhatsappBulkCampaignsPage() {
             <h1>WhatsApp Bulk Message Utility</h1>
             <p style={{ color: '#64748b' }}>
                 Step 1: Pick or save a <strong>Matter template</strong> (message only). Step 2: Choose recipients and send.
-                Uses CRM WhatsApp — connect once under <strong>WhatsApp</strong> in sidebar.
+                Uses CRM WhatsApp â€” connect once under <strong>WhatsApp</strong> in sidebar.
             </p>
+            <div style={{ ...card, border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e', fontSize: 13 }}>
+                <strong>WhatsApp risk warning</strong>
+                <p style={{ margin: '8px 0 0' }}>
+                    {(meta?.safeModeWarning) || 'Safe Mode uses controlled delays, limits and pauses to reduce sending risk. It cannot guarantee that WhatsApp will not restrict, suspend or block the connected number. Use only for relevant recipients and respect opt-out requests.'}
+                </p>
+            </div>
 
             {showActionBar ? (
                 <div style={{ ...card, border: '2px solid #f59e0b', background: '#fffbeb' }}>
@@ -411,33 +460,33 @@ export default function WhatsappBulkCampaignsPage() {
                     </strong>
                     <p style={{ fontSize: 12, color: '#92400e', margin: '8px 0 12px' }}>
                         Sent {selectedCampaign.sentCount} / {selectedCampaign.totalRecipients}
-                        {isActiveSend ? ' — click Pause immediately if sent by mistake.' : ' — use Delete Sent Messages to revoke WhatsApp messages.'}
+                        {isActiveSend ? ' â€” click Pause immediately if sent by mistake.' : ' â€” use Delete Sent Messages to revoke WhatsApp messages.'}
                     </p>
                     {isActiveSend ? (
                         <>
-                            <button type="button" style={btnWarn} onClick={() => runAction('pauseCampaign')}>⏸ Pause Now</button>
-                            <button type="button" style={btnDanger} onClick={() => runAction('stopCampaign')}>⏹ Stop Sending</button>
+                            <button type="button" style={btnWarn} onClick={() => runAction('pauseCampaign')}>â¸ Pause Now</button>
+                            <button type="button" style={btnDanger} onClick={() => runAction('stopCampaign')}>â¹ Stop Sending</button>
                         </>
                     ) : null}
                     {hasSentMessages ? (
-                        <button type="button" style={{ ...btnDanger, background: '#7f1d1d' }} onClick={onRevokeSent}>🗑 Delete Sent Messages</button>
+                        <button type="button" style={{ ...btnDanger, background: '#7f1d1d' }} onClick={onRevokeSent}>ðŸ—‘ Delete Sent Messages</button>
                     ) : null}
                 </div>
             ) : null}
 
             <div style={card}>
-                <h3 style={stepTitle}>Step 1 — Message (Matter template)</h3>
+                <h3 style={stepTitle}>Step 1 â€” Message (Matter template)</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <input style={inp} placeholder="Campaign name" value={form.campaignName} onChange={(e) => setForm({ ...form, campaignName: e.target.value })} />
                     <select style={inp} value={form.matterId || ''} onChange={(e) => applyMatterDefaults(e.target.value || null)}>
-                        <option value="">— Pick saved Matter template —</option>
+                        <option value="">â€” Pick saved Matter template â€”</option>
                         {matters.map((m) => <option key={m._id} value={m._id}>{m.matterName}</option>)}
                     </select>
                 </div>
                 <p style={{ fontSize: 12, color: '#64748b', margin: '10px 0' }}>
                     Save message-only templates in <strong>WhatsApp Matter Master</strong>, or save current text below as a new template.
                 </p>
-                <button type="button" style={btnSec} onClick={onSaveAsMatter}>💾 Save as Matter Template (message only)</button>
+                <button type="button" style={btnSec} onClick={onSaveAsMatter}>ðŸ’¾ Save as Matter Template (message only)</button>
 
                 {!messageLocked ? (
                     <>
@@ -459,17 +508,17 @@ export default function WhatsappBulkCampaignsPage() {
                     <div style={{ marginTop: 12, padding: 12, background: '#ecfdf5', borderRadius: 8, fontSize: 13 }}>
                         <strong>Using matter:</strong> {matters.find((m) => m._id === form.matterId)?.matterName}
                         <br />
-                        {form.messageBody ? <>Message: {form.messageBody.slice(0, 120)}{form.messageBody.length > 120 ? '…' : ''}</> : null}
+                        {form.messageBody ? <>Message: {form.messageBody.slice(0, 120)}{form.messageBody.length > 120 ? 'â€¦' : ''}</> : null}
                         {imagePreviewUrl(form.imageAttachment) ? (
                             <img src={imagePreviewUrl(form.imageAttachment)} alt="" style={{ maxWidth: 80, marginTop: 8, display: 'block' }} />
                         ) : null}
-                        <button type="button" style={{ ...btnSec, marginTop: 8 }} onClick={() => applyMatterDefaults(null)}>Clear matter — edit message manually</button>
+                        <button type="button" style={{ ...btnSec, marginTop: 8 }} onClick={() => applyMatterDefaults(null)}>Clear matter â€” edit message manually</button>
                     </div>
                 )}
             </div>
 
             <div style={card}>
-                <h3 style={stepTitle}>Step 2 — Recipients &amp; send options</h3>
+                <h3 style={stepTitle}>Step 2 â€” Recipients &amp; send options</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <select style={inp} value={form.recipientSource} onChange={(e) => setForm({ ...form, recipientSource: e.target.value })}>
                         {(meta?.recipientSources || []).map((s) => <option key={s} value={s}>{s}</option>)}
@@ -494,7 +543,7 @@ export default function WhatsappBulkCampaignsPage() {
                         <textarea style={{ ...inp, marginTop: 4, minHeight: 80 }} placeholder="919920730373&#10;9323135895" value={manualText} onChange={(e) => setManualText(e.target.value)} />
                         <div style={{ marginTop: 8 }}>
                             <label style={{ ...btnSec, display: 'inline-block', cursor: 'pointer' }}>
-                                📁 Import numbers from file (TXT / CSV / Excel)
+                                ðŸ“ Import numbers from file (TXT / CSV / Excel)
                                 <input type="file" accept=".txt,.csv,.xlsx,.xls" onChange={onImportNumbersFile} style={{ display: 'none' }} />
                             </label>
                         </div>
@@ -550,11 +599,11 @@ export default function WhatsappBulkCampaignsPage() {
             {liveRecipients ? (
                 <div style={card}>
                     <strong>Recipient status (live):</strong>{' '}
-                    {liveRecipients.sent} sent, {liveRecipients.pending} pending, {liveRecipients.failed} failed — {liveRecipients.total} total
+                    {liveRecipients.sent} sent, {liveRecipients.pending} pending, {liveRecipients.failed} failed â€” {liveRecipients.total} total
                     <ul style={{ maxHeight: 180, overflow: 'auto', fontSize: 12, marginTop: 8 }}>
                         {liveRecipients.recipients.slice(0, 50).map((r) => (
                             <li key={r._id || r.mobile}>
-                                {r.mobile} — <strong>{r.status}</strong>
+                                {r.mobile} â€” <strong>{r.status}</strong>
                                 {r.sentAt ? ` (${new Date(r.sentAt).toLocaleString()})` : ''}
                             </li>
                         ))}
@@ -562,7 +611,7 @@ export default function WhatsappBulkCampaignsPage() {
                 </div>
             ) : preview ? (
                 <div style={card}>
-                    <strong>Recipient preview — confirm before send</strong>
+                    <strong>Recipient preview â€” confirm before send</strong>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 10, fontSize: 13 }}>
                         <span><strong>Total Found:</strong> {preview.totalFound ?? 0}</span>
                         <span><strong>Valid Numbers:</strong> {preview.validNumbers ?? preview.valid ?? 0}</span>
@@ -601,13 +650,13 @@ export default function WhatsappBulkCampaignsPage() {
                                                         checked={!!r.selected}
                                                         onChange={(e) => toggleRecipient(r.recipientKey, e.target.checked)}
                                                     />
-                                                ) : '—'}
+                                                ) : 'â€”'}
                                             </td>
-                                            <td style={{ padding: 8 }}>{r.displayName || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.displayName || 'â€”'}</td>
                                             <td style={{ padding: 8 }}>{r.mobile}</td>
-                                            <td style={{ padding: 8 }}>{r.city || '—'}</td>
-                                            <td style={{ padding: 8 }}>{r.state || '—'}</td>
-                                            <td style={{ padding: 8 }}>{r.category || '—'}</td>
+                                            <td style={{ padding: 8 }}>{r.city || 'â€”'}</td>
+                                            <td style={{ padding: 8 }}>{r.state || 'â€”'}</td>
+                                            <td style={{ padding: 8 }}>{r.category || 'â€”'}</td>
                                             <td style={{ padding: 8 }}>{r.status === 'blacklisted' ? 'Opt-out' : (r.entityStatus || r.status)}</td>
                                         </tr>
                                     ))}
@@ -617,7 +666,7 @@ export default function WhatsappBulkCampaignsPage() {
                     ) : (
                         <ul style={{ maxHeight: 180, overflow: 'auto', fontSize: 12, marginTop: 8 }}>
                             {(preview.recipients || []).slice(0, 50).map((r) => (
-                                <li key={r.mobile}>{r.mobile} — {r.displayName || r.status}</li>
+                                <li key={r.mobile}>{r.mobile} â€” {r.displayName || r.status}</li>
                             ))}
                         </ul>
                     )}
@@ -625,10 +674,13 @@ export default function WhatsappBulkCampaignsPage() {
             ) : null}
 
             <div style={card}>
-                <h3 style={stepTitle}>Step 3 — Run campaign</h3>
+                <h3 style={stepTitle}>Step 3 â€” Run campaign</h3>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                     <input style={{ ...inp, maxWidth: 180 }} placeholder="Test mobile" value={testMobile} onChange={(e) => setTestMobile(e.target.value)} />
                     <button type="button" style={btnSec} onClick={onTestSend}>Test Send</button>
+                        <button type="button" style={btnSec} onClick={onApprove}>Approve for queue</button>
+                        <button type="button" style={btnSec} onClick={onPrecheck}>Campaign Pre-check</button>
+                        <button type="button" style={btnSec} onClick={onAiDraft}>AI draft (optional)</button>
                     <button type="button" style={btn} onClick={() => runAction('saveRecipients')}>Save Recipients</button>
                     <button type="button" style={btn} onClick={onScheduleCampaign}>Start / Schedule</button>
                     <button type="button" style={btnWarn} onClick={() => runAction('pauseCampaign')}>Pause</button>

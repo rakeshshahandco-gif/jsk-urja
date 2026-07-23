@@ -164,7 +164,7 @@ describe('whatsappBulkCampaign parseNumbersFromUpload', () => {
 
 describe('whatsappBulkDispatch.service', () => {
     it('resolveBulkSenderUserId prefers acting user then campaign updatedBy', async () => {
-        const { resolveBulkSenderUserId } = await import('../src/services/whatsappBulkDispatch.service.js');
+        const { resolveBulkSenderUserId } = await import('../src/services/whatsappBulkSafeMode.util.js');
         assert.equal(
             resolveBulkSenderUserId({ createdBy: 'aaa', updatedBy: 'bbb' }, 'ccc'),
             'ccc',

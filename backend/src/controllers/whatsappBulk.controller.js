@@ -5,6 +5,10 @@ import * as settingsService from '../services/whatsappBulkSettings.service.js';
 import * as matterService from '../services/whatsappBulkMatter.service.js';
 import * as blacklistService from '../services/whatsappBulkBlacklist.service.js';
 import * as campaignService from '../services/whatsappBulkCampaign.service.js';
+import * as aiAssistService from '../services/whatsappBulkAiAssist.service.js';
+import * as numberHealthService from '../services/whatsappBulkNumberHealth.service.js';
+import * as campaignReportService from '../services/whatsappBulkCampaignReport.service.js';
+import { WHATSAPP_BULK_SAFE_MODE_WARNING } from '../constants/whatsappBulk.constants.js';
 import * as auditService from '../services/whatsappBulkAudit.service.js';
 import {
     WHATSAPP_BULK_ATTACHMENT_TYPES,
@@ -217,4 +221,82 @@ export const uploadCampaignImage = asyncHandler(async (req, res) => {
 export const listAuditLogs = asyncHandler(async (req, res) => {
     const rows = await auditService.listAuditLogs(companyId(req), req.query);
     res.send(new ApiResponse(200, { results: rows }));
+});
+
+
+export const approveCampaign = asyncHandler(async (req, res) => {
+    const doc = await campaignService.approveCampaign(companyId(req), req.params.id, req.user.id);
+    res.send(new ApiResponse(200, doc, 'Campaign approved for queue'));
+});
+
+export const aiAssist = asyncHandler(async (req, res) => {
+    const { action, payload: nested, ...rest } = req.body || {};
+    const payload =
+        nested && typeof nested === 'object' && !Array.isArray(nested)
+            ? { ...rest, ...nested }
+            : rest;
+    const data = await aiAssistService.runAiAssist(companyId(req), action, payload);
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthSummary = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.getNumberHealthSummary(companyId(req));
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthList = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.listNumberHealth(companyId(req), req.query);
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthValidate = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.validateAndStore(companyId(req), req.body.items || [], req.user.id);
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthDuplicates = asyncHandler(async (req, res) => {
+    const validated = await numberHealthService.validateAndStore(companyId(req), req.body.items || [], req.user.id);
+    res.send(new ApiResponse(200, { duplicates: validated.duplicates, warning: validated.warning }));
+});
+
+export const numberHealthAvailabilityCheck = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.runAvailabilityLookup(
+        companyId(req),
+        req.body.normalizedNumbers || [],
+        req.user.id,
+        { recheckUnknownOnly: false },
+    );
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthRecheckUnknown = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.runAvailabilityLookup(
+        companyId(req),
+        req.body.normalizedNumbers || [],
+        req.user.id,
+        { recheckUnknownOnly: true },
+    );
+    res.send(new ApiResponse(200, data));
+});
+
+export const numberHealthExport = asyncHandler(async (req, res) => {
+    const buffer = await numberHealthService.exportNumberHealthExcel(companyId(req), req.query);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=whatsapp-bulk-number-health.xlsx');
+    res.send(Buffer.from(buffer));
+});
+
+export const numberHealthRisk = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.computeRiskForNumber(companyId(req), req.params.normalizedNumber);
+    res.send(new ApiResponse(200, data));
+});
+
+export const campaignPrecheck = asyncHandler(async (req, res) => {
+    const data = await numberHealthService.campaignPrecheck(companyId(req), req.params.id);
+    res.send(new ApiResponse(200, data));
+});
+
+export const campaignPerformanceReport = asyncHandler(async (req, res) => {
+    const data = await campaignReportService.buildCampaignPerformanceReport(companyId(req), req.params.id);
+    res.send(new ApiResponse(200, data));
 });
