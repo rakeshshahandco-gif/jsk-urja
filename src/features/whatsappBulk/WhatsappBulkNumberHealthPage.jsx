@@ -1,6 +1,19 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { whatsappBulkApi } from '@/services/whatsappBulkApi';
+import {
+  DEFAULT_NUMBER_HEALTH_FILTER,
+  FILTER_ALL,
+  applyAvailabilityResultsToRows,
+  applyNumberHealthFilters,
+  applyValidateDataset,
+  emptyStateMessage,
+  lookupButtonState,
+  numbersForAvailabilityLookup,
+  parseNumberHealthTextarea,
+  toNumberHealthListParams,
+  normalizeHealthRow,
+} from './numberHealthListUi';
 
 const page = { padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' };
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16 };
@@ -17,22 +30,52 @@ const WARNING =
 
 export default function WhatsappBulkNumberHealthPage() {
   const [summary, setSummary] = useState(null);
-  const [rows, setRows] = useState([]);
+  const [sourceRows, setSourceRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [rawText, setRawText] = useState('');
-  const [filter, setFilter] = useState({ validationStatus: '', availabilityStatus: '', riskLevel: '' });
+  const [filter, setFilter] = useState({ ...DEFAULT_NUMBER_HEALTH_FILTER });
   const [aiDraft, setAiDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lookupEnabled, setLookupEnabled] = useState(false);
+  const [lookupProgress, setLookupProgress] = useState('');
 
+  const visibleRows = useMemo(
+    () => applyNumberHealthFilters(sourceRows, filter),
+    [sourceRows, filter],
+  );
+
+  const emptyMsg = useMemo(
+    () => emptyStateMessage({ sourceRowCount: sourceRows.length, visibleRowCount: visibleRows.length }),
+    [sourceRows.length, visibleRows.length],
+  );
+
+  const lookupNumbers = useMemo(
+    () => numbersForAvailabilityLookup(sourceRows, 20),
+    [sourceRows],
+  );
+
+  const lookupUi = useMemo(
+    () => lookupButtonState({
+      lookupEnabled,
+      hasPermission: true,
+      busy,
+      eligibleCount: lookupNumbers.length,
+    }),
+    [lookupEnabled, busy, lookupNumbers.length],
+  );
+
+  /** Reload latest records from server; preserves textarea and selected filters. */
   const load = async () => {
     setLoading(true);
     try {
-      const [s, list] = await Promise.all([
+      const [s, list, settings] = await Promise.all([
         whatsappBulkApi.numberHealthSummary(),
-        whatsappBulkApi.numberHealthList(filter),
+        whatsappBulkApi.numberHealthList({}),
+        whatsappBulkApi.getSettings().catch(() => null),
       ]);
       setSummary(s);
-      setRows(list?.results || []);
+      setSourceRows((list?.results || []).map(normalizeHealthRow));
+      setLookupEnabled(settings?.whatsappAvailabilityCheckEnabled === true);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to load Number Health');
     } finally {
@@ -57,7 +100,7 @@ export default function WhatsappBulkNumberHealthPage() {
     ['Eligible', summary?.eligible],
   ]), [summary]);
 
-  const parseItems = () => rawText.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).map((mobile) => ({ mobile, sourceType: 'manual' }));
+  const parseItems = () => parseNumberHealthTextarea(rawText);
 
   const onValidate = async () => {
     const items = parseItems();
@@ -65,30 +108,51 @@ export default function WhatsappBulkNumberHealthPage() {
     setBusy(true);
     try {
       const data = await whatsappBulkApi.numberHealthValidate(items);
-      toast.success(`Validated ${data.summary?.total || 0} numbers`);
+      const next = applyValidateDataset(data);
+      setFilter(next.filter);
+      setSourceRows(next.sourceRows);
+      setSummary(next.summary);
       setRawText('');
-      await load();
+      toast.success(`Validated ${data.summary?.total || next.sourceRows.length || 0} numbers`);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Validation failed');
     } finally { setBusy(false); }
   };
 
   const onLookup = async () => {
-    const nums = rows.filter((r) => r.normalizedNumber && r.validationStatus === 'VALID').map((r) => r.normalizedNumber).slice(0, 20);
+    if (lookupUi.disabled) return toast.error(lookupUi.reason || 'Availability check unavailable');
+    const nums = lookupNumbers;
     if (!nums.length) return toast.error('No valid normalized numbers to check');
     setBusy(true);
+    setLookupProgress(`Checking 0/${nums.length}…`);
     try {
-      await whatsappBulkApi.numberHealthAvailabilityCheck({ normalizedNumbers: nums });
-      toast.success('Availability lookup finished (or stopped by safety controls)');
+      const data = await whatsappBulkApi.numberHealthAvailabilityCheck({ normalizedNumbers: nums });
+      const results = data?.results || data?.lookup?.results || [];
+      if (results.length) {
+        setSourceRows((prev) => applyAvailabilityResultsToRows(prev, results));
+      }
+      setLookupProgress(`Checked ${data?.lookedUp ?? results.length}/${nums.length}${data?.stoppedReason ? ` (stopped: ${data.stoppedReason})` : ''}`);
+      toast.success(data?.stoppedReason
+        ? `Availability lookup stopped (${data.stoppedReason})`
+        : `Availability lookup finished for ${data?.lookedUp ?? nums.length} number(s)`);
       await load();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lookup failed / disabled');
-    } finally { setBusy(false); }
+      const msg = err.response?.data?.message || 'Lookup failed / disabled';
+      if (/not connected|SESSION_NOT_CONNECTED/i.test(msg)) {
+        toast.error('WhatsApp session not connected');
+      } else if (/disabled/i.test(msg)) {
+        toast.error('WhatsApp availability lookup is disabled for this company');
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onExport = async () => {
     try {
-      const blob = await whatsappBulkApi.numberHealthExport(filter);
+      const blob = await whatsappBulkApi.numberHealthExport(toNumberHealthListParams(filter));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -117,7 +181,7 @@ export default function WhatsappBulkNumberHealthPage() {
     } finally { setBusy(false); }
   };
 
-  if (loading && !summary) return <div style={page}>Loading Number Health...</div>;
+  if (loading && !summary && sourceRows.length === 0) return <div style={page}>Loading Number Health...</div>;
 
   return (
     <div style={page}>
@@ -139,13 +203,15 @@ export default function WhatsappBulkNumberHealthPage() {
         <textarea style={{ ...inp, minHeight: 90, marginTop: 6 }} value={rawText} onChange={(e) => setRawText(e.target.value)} placeholder={'+91 99207 30373\n09920730373\n9920730373'} />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
           <button type="button" style={btnPrimary} disabled={busy} onClick={onValidate}>Validate Selected</button>
-          <button type="button" style={btn} disabled={busy} onClick={onLookup}>Check WhatsApp Availability</button>
+          <button type="button" style={btn} disabled={lookupUi.disabled} onClick={onLookup}>Check WhatsApp Availability</button>
           <button type="button" style={btn} disabled={busy} onClick={async () => { setBusy(true); try { await whatsappBulkApi.numberHealthRecheckUnknown({}); await load(); toast.success('Recheck unknown done'); } catch (e) { toast.error(e.response?.data?.message || 'Recheck failed'); } finally { setBusy(false); } }}>Recheck Unknown</button>
           <button type="button" style={btn} onClick={onExport}>Export Report</button>
           <button type="button" style={btn} disabled={busy} onClick={onAiDraft}>AI Report Draft</button>
           <button type="button" style={btn} onClick={load}>Refresh</button>
         </div>
         <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>Availability lookup is disabled by default, sequential only, and never sends messages. Live Chat session is not modified.</p>
+        {lookupUi.reason ? <p style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>{lookupUi.reason}</p> : null}
+        {lookupProgress ? <p style={{ fontSize: 12, color: '#0f766e', marginTop: 6 }}>{lookupProgress}</p> : null}
       </div>
 
       {aiDraft ? (
@@ -157,20 +223,20 @@ export default function WhatsappBulkNumberHealthPage() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         <select style={inp} value={filter.validationStatus} onChange={(e) => setFilter({ ...filter, validationStatus: e.target.value })}>
-          <option value="">Validation: All</option>
+          <option value={FILTER_ALL}>ALL</option>
           <option value="VALID">VALID</option>
           <option value="INVALID">INVALID</option>
           <option value="UNKNOWN">UNKNOWN</option>
         </select>
         <select style={inp} value={filter.availabilityStatus} onChange={(e) => setFilter({ ...filter, availabilityStatus: e.target.value })}>
-          <option value="">WhatsApp: All</option>
+          <option value={FILTER_ALL}>ALL</option>
           <option value="WHATSAPP_AVAILABLE">AVAILABLE</option>
           <option value="NOT_ON_WHATSAPP">NOT ON WA</option>
           <option value="UNKNOWN">UNKNOWN</option>
           <option value="NOT_CHECKED">NOT CHECKED</option>
         </select>
         <select style={inp} value={filter.riskLevel} onChange={(e) => setFilter({ ...filter, riskLevel: e.target.value })}>
-          <option value="">Risk: All</option>
+          <option value={FILTER_ALL}>ALL</option>
           <option value="LOW">LOW</option>
           <option value="MEDIUM">MEDIUM</option>
           <option value="HIGH">HIGH</option>
@@ -189,13 +255,13 @@ export default function WhatsappBulkNumberHealthPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={13} style={{ padding: 16, color: '#94a3b8' }}>No number health records yet. Validate numbers above.</td></tr>
-            ) : rows.map((r) => (
-              <tr key={`${r.normalizedNumber || r._id}-${r.originalNumberSample || ''}`}>
+            {visibleRows.length === 0 ? (
+              <tr><td colSpan={13} style={{ padding: 16, color: '#94a3b8' }}>{emptyMsg}</td></tr>
+            ) : visibleRows.map((r, idx) => (
+              <tr key={`${r.normalizedNumber || r._id || 'row'}-${r.originalNumberSample || ''}-${idx}`}>
                 <td style={{ padding: '8px 6px' }}>{r.displayName || '—'}</td>
                 <td style={{ padding: '8px 6px' }}>{r.sourceType || '—'}</td>
-                <td style={{ padding: '8px 6px' }}>{r.originalNumberSample || '—'}</td>
+                <td style={{ padding: '8px 6px' }}>{r.originalNumberSample || r.originalNumber || '—'}</td>
                 <td style={{ padding: '8px 6px' }}>{r.normalizedNumber || '—'}</td>
                 <td style={{ padding: '8px 6px' }}>{r.validationStatus}</td>
                 <td style={{ padding: '8px 6px' }}>{r.reasonCode || r.validationReason || '—'}</td>
