@@ -114,9 +114,9 @@ export const WHATSAPP_BULK_DEFAULT_SETTINGS = {
     // Number Health (additive; availability lookup off by default)
     numberHealthEnabled: true,
     whatsappAvailabilityCheckEnabled: false,
-    availabilityLookupDailyLimit: 50,
-    availabilityLookupMinDelaySeconds: 3,
-    availabilityLookupMaxDelaySeconds: 6,
+    availabilityLookupDailyLimit: 20,
+    availabilityLookupMinDelaySeconds: 2,
+    availabilityLookupMaxDelaySeconds: 5,
     availabilityCacheDays: 7,
     stopOnThrottle: true,
     stopOnSessionError: true,

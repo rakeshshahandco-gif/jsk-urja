@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WhatsApp Bulk Number Health service
  */
 import ExcelJS from 'exceljs';
@@ -31,6 +31,7 @@ export function buildHealthRowFromAnalysis(analysis, extra = {}) {
     extra.availabilityStatus !== AVAILABILITY_STATUSES.NOT_ON_WHATSAPP;
   return {
     originalNumber: analysis.originalNumber,
+    originalNumberSample: analysis.originalNumber,
     normalizedNumber: analysis.normalizedNumber,
     countryCode: analysis.countryCode,
     nationalNumber: analysis.nationalNumber,
@@ -222,7 +223,7 @@ export async function runAvailabilityLookup(companyId, normalizedNumbers, userId
   if (settings.whatsappAvailabilityCheckEnabled !== true) {
     throw new ApiError(403, 'WhatsApp availability lookup is disabled for this company');
   }
-  let numbers = [...new Set((normalizedNumbers || []).map(String).filter(Boolean))];
+  let numbers = [...new Set((normalizedNumbers || []).map(String).filter(Boolean))].slice(0, 20);
   if (recheckUnknownOnly) {
     const q = { companyId, availabilityStatus: { $in: ['UNKNOWN', 'NOT_CHECKED', 'CHECK_FAILED'] } };
     if (numbers.length) q.normalizedNumber = { $in: numbers };

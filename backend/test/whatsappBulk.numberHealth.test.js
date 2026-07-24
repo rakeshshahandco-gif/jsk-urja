@@ -230,3 +230,75 @@ describe('number health defaults and AI report drafts', () => {
     }
   });
 });
+
+describe('availability status mapping via injectable Chat-like impl', () => {
+  afterEach(() => {
+    resetAvailabilityLookupImpl();
+    resetAvailabilityLookupCounters();
+    resetBulkSendDelayImpl();
+  });
+
+  it('maps AVAILABLE / NOT_ON_WHATSAPP / UNKNOWN / CHECK_FAILED / METHOD_UNSUPPORTED / SESSION_NOT_CONNECTED', async () => {
+    setBulkSendDelayImpl(async () => {});
+    const seq = [
+      { normalizedNumber: '911111111111', availabilityStatus: AVAILABILITY_STATUSES.WHATSAPP_AVAILABLE },
+      { normalizedNumber: '911111111112', availabilityStatus: AVAILABILITY_STATUSES.NOT_ON_WHATSAPP },
+      { normalizedNumber: '911111111113', availabilityStatus: AVAILABILITY_STATUSES.UNKNOWN },
+      { normalizedNumber: '911111111114', availabilityStatus: AVAILABILITY_STATUSES.CHECK_FAILED, errorCode: 'LOOKUP_ERROR' },
+      { normalizedNumber: '911111111115', availabilityStatus: AVAILABILITY_STATUSES.METHOD_UNSUPPORTED, errorCode: 'METHOD_UNSUPPORTED' },
+      { normalizedNumber: '911111111116', availabilityStatus: AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED, errorCode: 'SESSION_NOT_CONNECTED' },
+    ];
+    let i = 0;
+    setAvailabilityLookupImpl(async ([n]) => {
+      const row = { ...seq[i], normalizedNumber: n };
+      i += 1;
+      return [row];
+    });
+    const out = await checkWhatsAppAvailabilitySequential(seq.map((r) => r.normalizedNumber), {
+      whatsappAvailabilityCheckEnabled: true,
+      stopOnSessionError: false,
+      stopOnThrottle: false,
+      availabilityLookupMinDelaySeconds: 1,
+      availabilityLookupMaxDelaySeconds: 1,
+      availabilityLookupDailyLimit: 50,
+    });
+    assert.equal(out.results[0].availabilityStatus, AVAILABILITY_STATUSES.WHATSAPP_AVAILABLE);
+    assert.equal(out.results[1].availabilityStatus, AVAILABILITY_STATUSES.NOT_ON_WHATSAPP);
+    assert.equal(out.results[2].availabilityStatus, AVAILABILITY_STATUSES.UNKNOWN);
+    assert.equal(out.results[3].availabilityStatus, AVAILABILITY_STATUSES.CHECK_FAILED);
+    assert.equal(out.results[4].availabilityStatus, AVAILABILITY_STATUSES.METHOD_UNSUPPORTED);
+    assert.equal(out.results[5].availabilityStatus, AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED);
+  });
+
+  it('dedupes normalized numbers before lookup', async () => {
+    const calls = [];
+    setBulkSendDelayImpl(async () => {});
+    setAvailabilityLookupImpl(async ([n]) => {
+      calls.push(n);
+      return [{ normalizedNumber: n, availabilityStatus: AVAILABILITY_STATUSES.WHATSAPP_AVAILABLE }];
+    });
+    const out = await checkWhatsAppAvailabilitySequential(
+      ['919920730373', '919920730373', '919920730373'],
+      {
+        whatsappAvailabilityCheckEnabled: true,
+        availabilityLookupMinDelaySeconds: 1,
+        availabilityLookupMaxDelaySeconds: 1,
+      },
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(out.lookedUp, 1);
+  });
+
+  it('whatsapp.service exposes checkOnWhatsApp and does not add second session/QR in that method', () => {
+    const src = fs.readFileSync(path.join(process.cwd(), 'src/services/whatsapp.service.js'), 'utf8');
+    assert.match(src, /async checkOnWhatsApp\(/);
+    assert.match(src, /sock\.onWhatsApp/);
+    const start = src.indexOf('async checkOnWhatsApp(normalizedNumbers');
+    const end = src.indexOf('class WhatsAppServiceManager');
+    const method = src.slice(start, end);
+    assert.ok(method.includes('sock.onWhatsApp'));
+    assert.doesNotMatch(method, /makeWASocket/);
+    assert.doesNotMatch(method, /requestPairingCode/);
+    assert.doesNotMatch(method, /sendMessage\(/);
+  });
+});

@@ -14,6 +14,8 @@ export const AVAILABILITY_STATUSES = Object.freeze({
   CHECK_FAILED: 'CHECK_FAILED',
   NOT_CHECKED: 'NOT_CHECKED',
   SESSION_UNAVAILABLE: 'SESSION_UNAVAILABLE',
+  SESSION_NOT_CONNECTED: 'SESSION_NOT_CONNECTED',
+  METHOD_UNSUPPORTED: 'METHOD_UNSUPPORTED',
   RATE_LIMITED: 'RATE_LIMITED',
 });
 
@@ -58,43 +60,100 @@ async function getWhatsAppServiceLazy() {
  * Chat is not modified in this feature — missing method => METHOD_UNSUPPORTED (UNKNOWN/CHECK_FAILED).
  * Never treats UNKNOWN as NOT_ON_WHATSAPP.
  */
+function mapRowFromChatLookup(row, fallbackNumber) {
+  const n = row?.normalizedNumber || row?.jid || row?.number || fallbackNumber;
+  const code = row?.errorCode || null;
+  if (code === 'METHOD_UNSUPPORTED') {
+    return {
+      normalizedNumber: n,
+      availabilityStatus: AVAILABILITY_STATUSES.METHOD_UNSUPPORTED,
+      errorCode: 'METHOD_UNSUPPORTED',
+      checkSource: 'crm_whatsapp_adapter',
+    };
+  }
+  if (code === 'SESSION_NOT_CONNECTED' || code === 'SESSION_DISCONNECTED') {
+    return {
+      normalizedNumber: n,
+      availabilityStatus: AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED,
+      errorCode: 'SESSION_NOT_CONNECTED',
+      checkSource: 'crm_whatsapp_adapter',
+    };
+  }
+  if (code === 'THROTTLED') {
+    return {
+      normalizedNumber: n,
+      availabilityStatus: AVAILABILITY_STATUSES.RATE_LIMITED,
+      errorCode: 'THROTTLED',
+      checkSource: 'crm_whatsapp_adapter',
+    };
+  }
+  if (code === 'CHECK_FAILED' || code === 'LOOKUP_ERROR') {
+    return {
+      normalizedNumber: n,
+      availabilityStatus: AVAILABILITY_STATUSES.CHECK_FAILED,
+      errorCode: code,
+      checkSource: 'crm_whatsapp_adapter',
+    };
+  }
+  const exists = row?.exists === true;
+  const definiteNo = row?.exists === false && row?.definitive === true;
+  let availabilityStatus = AVAILABILITY_STATUSES.UNKNOWN;
+  if (exists) availabilityStatus = AVAILABILITY_STATUSES.WHATSAPP_AVAILABLE;
+  else if (definiteNo) availabilityStatus = AVAILABILITY_STATUSES.NOT_ON_WHATSAPP;
+  return {
+    normalizedNumber: n,
+    availabilityStatus,
+    errorCode: code,
+    checkSource: 'crm_whatsapp_adapter',
+  };
+}
+
 async function defaultLiveLookup(normalizedNumbers, { userId } = {}) {
   try {
     const WhatsAppService = await getWhatsAppServiceLazy();
     if (typeof WhatsAppService.checkOnWhatsApp !== 'function') {
       return normalizedNumbers.map((n) => ({
         normalizedNumber: n,
-        availabilityStatus: AVAILABILITY_STATUSES.CHECK_FAILED,
+        availabilityStatus: AVAILABILITY_STATUSES.METHOD_UNSUPPORTED,
         errorCode: 'METHOD_UNSUPPORTED',
         checkSource: 'crm_whatsapp_adapter',
       }));
     }
-    const status = WhatsAppService.getStatus?.(userId) || {};
-    if (!(status.status === 'CONNECTED' || status.connected === true)) {
+    // Prefer shared Chat session owner (same resolve used by Chat UI).
+    const effective = WhatsAppService.getEffectiveStatus?.(userId) || WhatsAppService.getStatus?.(userId) || {};
+    if (!(effective.status === 'CONNECTED' || effective.connected === true)) {
       return normalizedNumbers.map((n) => ({
         normalizedNumber: n,
-        availabilityStatus: AVAILABILITY_STATUSES.SESSION_UNAVAILABLE,
-        errorCode: 'SESSION_DISCONNECTED',
+        availabilityStatus: AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED,
+        errorCode: 'SESSION_NOT_CONNECTED',
         checkSource: 'crm_whatsapp_adapter',
       }));
     }
     const rows = await WhatsAppService.checkOnWhatsApp(userId, normalizedNumbers);
-    return (rows || []).map((row) => {
-      const exists = row?.exists === true;
-      const definiteNo = row?.exists === false && row?.definitive === true;
-      let availabilityStatus = AVAILABILITY_STATUSES.UNKNOWN;
-      if (exists) availabilityStatus = AVAILABILITY_STATUSES.WHATSAPP_AVAILABLE;
-      else if (definiteNo) availabilityStatus = AVAILABILITY_STATUSES.NOT_ON_WHATSAPP;
-      return {
-        normalizedNumber: row.normalizedNumber || row.jid || row.number,
-        availabilityStatus,
-        errorCode: row.errorCode || null,
-        checkSource: 'crm_whatsapp_adapter',
-      };
+    return (normalizedNumbers || []).map((n, idx) => {
+      const row = (rows || []).find((r) => String(r?.normalizedNumber || '') === String(n)) || (rows || [])[idx] || { normalizedNumber: n };
+      return mapRowFromChatLookup(row, n);
     });
   } catch (err) {
     const msg = String(err?.message || err || '');
-    const throttled = /rate|throttl|too many|429/i.test(msg);
+    const code = err?.code || '';
+    if (code === 'METHOD_UNSUPPORTED' || /METHOD_UNSUPPORTED/i.test(msg)) {
+      return normalizedNumbers.map((n) => ({
+        normalizedNumber: n,
+        availabilityStatus: AVAILABILITY_STATUSES.METHOD_UNSUPPORTED,
+        errorCode: 'METHOD_UNSUPPORTED',
+        checkSource: 'crm_whatsapp_adapter',
+      }));
+    }
+    if (code === 'SESSION_NOT_CONNECTED' || /SESSION_NOT_CONNECTED/i.test(msg)) {
+      return normalizedNumbers.map((n) => ({
+        normalizedNumber: n,
+        availabilityStatus: AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED,
+        errorCode: 'SESSION_NOT_CONNECTED',
+        checkSource: 'crm_whatsapp_adapter',
+      }));
+    }
+    const throttled = code === 'THROTTLED' || /rate|throttl|too many|429/i.test(msg);
     return normalizedNumbers.map((n) => ({
       normalizedNumber: n,
       availabilityStatus: throttled ? AVAILABILITY_STATUSES.RATE_LIMITED : AVAILABILITY_STATUSES.CHECK_FAILED,
@@ -140,8 +199,8 @@ export async function checkWhatsAppAvailabilitySequential(normalizedNumbers, set
   lookupInFlight = true;
   resetDailyIfNeeded();
   const dailyLimit = Number(settings.availabilityLookupDailyLimit || 50);
-  const minDelay = Math.max(1, Number(settings.availabilityLookupMinDelaySeconds || 3)) * 1000;
-  const maxDelay = Math.max(minDelay, Number(settings.availabilityLookupMaxDelaySeconds || 6)) * 1000;
+  const minDelay = Math.max(1, Number(settings.availabilityLookupMinDelaySeconds || 2)) * 1000;
+  const maxDelay = Math.max(minDelay, Number(settings.availabilityLookupMaxDelaySeconds || 5)) * 1000;
   const stopOnThrottle = settings.stopOnThrottle !== false;
   const stopOnSessionError = settings.stopOnSessionError !== false;
   const impl = lookupImpl || defaultLiveLookup;
@@ -191,13 +250,19 @@ export async function checkWhatsAppAvailabilitySequential(normalizedNumbers, set
       if (
         stopOnSessionError &&
         (row.availabilityStatus === AVAILABILITY_STATUSES.SESSION_UNAVAILABLE ||
-          row.errorCode === 'SESSION_DISCONNECTED')
+          row.availabilityStatus === AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED ||
+          row.availabilityStatus === AVAILABILITY_STATUSES.METHOD_UNSUPPORTED ||
+          row.errorCode === 'SESSION_DISCONNECTED' ||
+          row.errorCode === 'SESSION_NOT_CONNECTED' ||
+          row.errorCode === 'METHOD_UNSUPPORTED')
       ) {
         stoppedReason = 'SESSION_ERROR';
         for (let j = i + 1; j < numbers.length; j += 1) {
           results.push({
             normalizedNumber: numbers[j],
-            availabilityStatus: AVAILABILITY_STATUSES.SESSION_UNAVAILABLE,
+            availabilityStatus: row.availabilityStatus === AVAILABILITY_STATUSES.METHOD_UNSUPPORTED
+              ? AVAILABILITY_STATUSES.METHOD_UNSUPPORTED
+              : AVAILABILITY_STATUSES.SESSION_NOT_CONNECTED,
             errorCode: 'STOPPED_ON_SESSION',
             checkSource: 'safety',
           });

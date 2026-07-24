@@ -1175,6 +1175,61 @@ class WhatsAppSession {
             throw new Error(`Failed to fetch groups: ${e.message}`);
         }
     }
+
+    /**
+     * Read-only WhatsApp registration lookup via existing Baileys socket.
+     * Does not send messages, create QR/session, or mutate chat history.
+     * Uses sock.onWhatsApp from installed @whiskeysockets/baileys.
+     */
+    async checkOnWhatsApp(normalizedNumbers = []) {
+        if (!this.sock || !this.isConnected) {
+            const err = new Error('SESSION_NOT_CONNECTED');
+            err.code = 'SESSION_NOT_CONNECTED';
+            throw err;
+        }
+        if (typeof this.sock.onWhatsApp !== 'function') {
+            const err = new Error('METHOD_UNSUPPORTED');
+            err.code = 'METHOD_UNSUPPORTED';
+            throw err;
+        }
+        const nums = [...new Set((normalizedNumbers || []).map((n) => String(n || '').replace(/\D/g, '')).filter(Boolean))];
+        if (!nums.length) return [];
+
+        let rows;
+        try {
+            rows = await this.sock.onWhatsApp(...nums);
+        } catch (e) {
+            const msg = String(e?.message || e || '');
+            const err = new Error(msg || 'CHECK_FAILED');
+            err.code = /rate|throttl|too many|429/i.test(msg) ? 'THROTTLED' : 'CHECK_FAILED';
+            throw err;
+        }
+
+        const byDigits = new Map();
+        for (const row of rows || []) {
+            const jid = String(row?.jid || '');
+            const digits = jid.replace(/\D/g, '').split('@')[0].split(':')[0];
+            if (!digits) continue;
+            byDigits.set(digits, row);
+            if (digits.length > 10) byDigits.set(digits.slice(-10), row);
+        }
+
+        return nums.map((n) => {
+            const hit = byDigits.get(n) || byDigits.get(n.slice(-10));
+            if (!hit) {
+                return { normalizedNumber: n, exists: null, definitive: false, jid: null, errorCode: null };
+            }
+            const exists = hit.exists === true;
+            const definiteNo = hit.exists === false;
+            return {
+                normalizedNumber: n,
+                exists: exists ? true : (definiteNo ? false : null),
+                definitive: definiteNo,
+                jid: hit.jid || null,
+                errorCode: null,
+            };
+        });
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1332,7 +1387,36 @@ class WhatsAppServiceManager {
         return this._getOrCreate(userId).getGroups();
     }
 
-    // ── Auto-reconnect on server start ────────────────────────────────────────
+    
+    /**
+     * Thin read-only availability check using the connected Chat session only.
+     */
+    async checkOnWhatsApp(userId, normalizedNumbers = []) {
+        const chatUserId = this.resolveChatUserId(userId);
+        const status = this.getStatus(chatUserId);
+        if (!(status.status === 'CONNECTED' || status.connected === true)) {
+            return (normalizedNumbers || []).map((n) => ({
+                normalizedNumber: String(n || ''),
+                exists: null,
+                definitive: false,
+                jid: null,
+                errorCode: 'SESSION_NOT_CONNECTED',
+            }));
+        }
+        try {
+            return await this._getOrCreate(chatUserId).checkOnWhatsApp(normalizedNumbers);
+        } catch (e) {
+            const code = e?.code || (/METHOD_UNSUPPORTED/i.test(String(e?.message || '')) ? 'METHOD_UNSUPPORTED' : 'CHECK_FAILED');
+            return (normalizedNumbers || []).map((n) => ({
+                normalizedNumber: String(n || ''),
+                exists: null,
+                definitive: false,
+                jid: null,
+                errorCode: code,
+            }));
+        }
+    }
+// ── Auto-reconnect on server start ────────────────────────────────────────
     async initializeSavedSessions() {
         if (!fs.existsSync(AUTH_BASE_DIR)) return;
         const entries = fs.readdirSync(AUTH_BASE_DIR, { withFileTypes: true });
