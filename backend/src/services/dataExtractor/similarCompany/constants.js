@@ -1,0 +1,45 @@
+export const ENGINE_VERSION = 'similar-company-v1';
+export const SETTINGS_VERSION = 'similar-company-settings-v1';
+
+export const DEFAULT_SIMILARITY_DIMENSIONS = Object.freeze([
+    { id: 'industry_match', label: 'Industry match', weight: 20, maxScore: 20, active: true },
+    { id: 'sub_industry_match', label: 'Sub-industry match', weight: 10, maxScore: 10, active: true },
+    { id: 'customer_type_match', label: 'Customer-type match', weight: 10, maxScore: 10, active: true },
+    { id: 'product_match', label: 'Product/service match', weight: 15, maxScore: 15, active: true },
+    { id: 'opportunity_match', label: 'Product-opportunity match', weight: 10, maxScore: 10, active: true },
+    { id: 'target_market_fit', label: 'Target-market fit', weight: 10, maxScore: 10, active: true },
+    { id: 'description_match', label: 'Business-description match', weight: 8, maxScore: 8, active: true },
+    { id: 'geographic_match', label: 'Geographic match', weight: 8, maxScore: 8, active: true },
+    { id: 'contact_role_similarity', label: 'Contact-role similarity', weight: 4, maxScore: 4, active: true },
+    { id: 'lead_score_proximity', label: 'Lead-score proximity', weight: 5, maxScore: 5, active: true },
+    { id: 'source_category_match', label: 'Source-category match', weight: 3, maxScore: 3, active: true },
+    { id: 'entity_confidence', label: 'Entity confidence', weight: 4, maxScore: 4, active: true },
+]);
+
+export const DEFAULT_SIMILARITY_SETTINGS = Object.freeze({
+    enabled: true,
+    similarityMode: 'rule_based',
+    version: SETTINGS_VERSION,
+    minimumSimilarityScore: 35,
+    highPotentialThreshold: 70,
+    requireReviewBelowConfidence: 45,
+    dimensions: DEFAULT_SIMILARITY_DIMENSIONS,
+    geographyWeight: 8,
+    industryWeight: 20,
+    productWeight: 15,
+    customerTypeWeight: 10,
+    contactQualityWeight: 4,
+    leadScoreWeight: 5,
+    sourceReliabilityWeight: 3,
+    relationshipDetectionEnabled: true,
+    nearbySearchEnabled: true,
+    defaultRadiusKm: 25,
+    clusterAnalysisEnabled: true,
+    whiteSpaceEnabled: true,
+    expansionSuggestionsEnabled: true,
+    autoRefreshOnUpstreamChange: false,
+    maximumCandidatesPerSeed: 50,
+    maximumProviderCallsPerJob: 0,
+    requireConfirmationForPaidProvider: true,
+    nameSimilarityForRelationshipOnly: true,
+});

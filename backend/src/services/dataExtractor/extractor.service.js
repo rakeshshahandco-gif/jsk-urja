@@ -24,8 +24,153 @@ import {
     getExtractedRecordDuplicates,
     scheduleFollowupForExtracted,
 } from './extractorConversion.service.js';
+import { sanitizeExtractorSettingsForClient } from './providerSecrets.util.js';
 
 export { listKeywordSources, getProviderStatus };
+
+/**
+ * Compatibility export for discovery.controller.js.
+ * Case B: wraps sanitizeExtractorSettingsForClient (established client sanitizer).
+ * Pure: no DB, no env reads, no mutation of the input object.
+ */
+export function sanitizeSettingsResponse(settings) {
+    if (settings == null) {
+        return {
+            moduleEnabled: false,
+            sourceConnectors: {},
+        };
+    }
+
+    let plain = settings;
+    if (typeof settings.toObject === 'function') {
+        try {
+            plain = settings.toObject({ depopulate: true, flattenMaps: true });
+        } catch {
+            plain = settings.toObject();
+        }
+    } else if (
+        typeof settings.toJSON === 'function'
+        && !Array.isArray(settings)
+        && typeof settings !== 'string'
+    ) {
+        try {
+            plain = settings.toJSON();
+        } catch {
+            plain = settings;
+        }
+    }
+
+    if (!plain || typeof plain !== 'object' || Array.isArray(plain)) {
+        return {
+            moduleEnabled: false,
+            sourceConnectors: {},
+        };
+    }
+
+    // Existing util shallow-clones and masks known provider API keys (*Masked).
+    const sanitized = sanitizeExtractorSettingsForClient(plain);
+
+    const TOP_SAFE = [
+        '_id',
+        'companyId',
+        'moduleEnabled',
+        'maxUrlsPerJob',
+        'maxJobsPerDay',
+        'maxResultsPerSearch',
+        'maxRecordsPerExport',
+        'searchTimeoutMs',
+        'enableSearchLogs',
+        'allowedAdapters',
+        'aiEnabled',
+        'updatedBy',
+        'createdAt',
+        'updatedAt',
+        '__v',
+    ];
+    const CONNECTOR_SAFE = [
+        'discovery',
+        'brave',
+        'serpapi',
+        'google',
+        'controlledTestMode',
+        'justdial',
+    ];
+    const SECRET_KEY_RE = /(?:^|_)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|passwd|private[_-]?key|session[_-]?token|cookie|cookies|authorization|bearer|credential|credentials|webhook[_-]?token|pairing[_-]?secret|encryption[_-]?key|mongo(db)?(_?uri)?|database[_-]?uri|proxy[_-]?(pass|password|user)|service[_-]?account)(?:$|_)/i;
+    const MASKED_KEEP = new Set([
+        'apiKeyMasked',
+        'cseApiKeyMasked',
+        'placesApiKeyMasked',
+    ]);
+
+    function dangerousKey(key) {
+        return key === '__proto__' || key === 'constructor' || key === 'prototype';
+    }
+
+    function isSecretFieldName(key) {
+        if (dangerousKey(key)) return true;
+        if (MASKED_KEEP.has(key)) return false;
+        const k = String(key);
+        if (SECRET_KEY_RE.test(k)) return true;
+        if (/password|passwd|secret|token|credential|privatekey|authorization|cookie/i.test(k)) {
+            if (/masked$/i.test(k)) return false;
+            return true;
+        }
+        return false;
+    }
+
+    function pickSafeObject(src, { allowNested = true } = {}) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return {};
+        const out = {};
+        for (const key of Object.keys(src)) {
+            if (dangerousKey(key) || isSecretFieldName(key)) continue;
+            const val = src[key];
+            if (val != null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+                if (!allowNested) continue;
+                if (key === 'headers' || key === 'auth' || key === 'credentials' || key === 'proxy') continue;
+                out[key] = pickSafeObject(val, { allowNested: true });
+                continue;
+            }
+            out[key] = val;
+        }
+        return out;
+    }
+
+    const out = {};
+    for (const key of TOP_SAFE) {
+        if (dangerousKey(key)) continue;
+        if (Object.prototype.hasOwnProperty.call(sanitized, key)) {
+            out[key] = sanitized[key];
+        }
+    }
+
+    const connectorsIn = sanitized.sourceConnectors && typeof sanitized.sourceConnectors === 'object'
+        ? sanitized.sourceConnectors
+        : {};
+    const connectorsOut = {};
+    for (const name of CONNECTOR_SAFE) {
+        if (!Object.prototype.hasOwnProperty.call(connectorsIn, name)) continue;
+        if (dangerousKey(name)) continue;
+        const block = connectorsIn[name];
+        if (!block || typeof block !== 'object' || Array.isArray(block)) {
+            connectorsOut[name] = {};
+            continue;
+        }
+        const safeBlock = pickSafeObject(block);
+        for (const mk of MASKED_KEEP) {
+            if (Object.prototype.hasOwnProperty.call(block, mk)) {
+                safeBlock[mk] = block[mk];
+            }
+        }
+        connectorsOut[name] = safeBlock;
+    }
+    out.sourceConnectors = connectorsOut;
+
+    if (!Object.prototype.hasOwnProperty.call(out, 'moduleEnabled')) {
+        out.moduleEnabled = false;
+    }
+
+    return out;
+}
 
 export async function testExtractorAdapter(adapterId, settings = null, companyId = null) {
     if (adapterId === 'web_search' || adapterId === 'google_cse') {

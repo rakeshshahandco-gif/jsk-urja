@@ -156,4 +156,276 @@ export const dataExtractorApi = {
         if (params.format === 'json') return unwrap(res);
         return res.data;
     },
+
+    // ---- Checkpoint 5B Simple Lead Search ----
+    simpleLeadSearchStart: async (payload) => {
+        const res = await api.post('/data-extractor/simple-lead-search/start', payload, { timeout: 120000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchPreviewQueries: async (payload) => {
+        const res = await api.post('/data-extractor/simple-lead-search/preview-queries', payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchAgentStatus: async (params = {}) => {
+        const res = await api.get('/data-extractor/simple-lead-search/agent-status', { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchSessionStatus: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}`);
+        return unwrap(res);
+    },
+    simpleLeadSearchSessionResults: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/results`, { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchStop: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/stop`);
+        return unwrap(res);
+    },
+    simpleLeadSearchContinueAfterManual: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/continue-after-manual`);
+        return unwrap(res);
+    },
+    simpleLeadSearchComplete: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/complete`);
+        return unwrap(res);
+    },
+    simpleLeadSearchExport: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/export`, {
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
+    simpleLeadSearchCapturedData: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/captured-data`, {
+            params,
+            timeout: 120000,
+        });
+        return unwrap(res);
+    },
+    simpleLeadSearchExportAllCurrent: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-all-current`, {
+            responseType: 'blob',
+            timeout: 180000,
+        });
+        return res;
+    },
+    simpleLeadSearchStopAndExport: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/stop-and-export`, null, {
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
+    simpleLeadSearchOpenNextQuery: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/open-next-query`, {}, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchOpenNextPage: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/open-next-page`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchSkipQuery: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/skip-query`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchCompleteQuery: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/complete-query`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchCampaignProgress: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/campaign-progress`);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionStart: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/start`, body, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionPause: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/pause`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionResume: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionStop: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/stop`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionContinue: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/continue`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionContinueBatch: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/continue-batch`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionResumeCheckpoint: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/resume-checkpoint`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionNextQuery: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/next-query`, {}, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoCollectionTick: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-collection/tick`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingEnable: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/enable`, payload);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingPause: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/pause`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingResume: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/resume`, {});
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingStop: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/stop`, payload);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingStatus: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing`);
+        return unwrap(res);
+    },
+    simpleLeadSearchAutoProcessingTick: async (sessionId) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/auto-processing/tick`, {});
+        return unwrap(res);
+    },
+    requestAssistedCapture: async ({ campaignId, queryId, sessionId, idempotencyKey }) => {
+        const res = await api.post(
+            `/data-extractor/search-campaigns/${campaignId}/queries/${queryId}/assisted-captures/${sessionId}/request-capture`,
+            { idempotencyKey },
+        );
+        return unwrap(res);
+    },
+    completeAssistedCapture: async ({ campaignId, queryId, sessionId }) => {
+        const res = await api.post(
+            `/data-extractor/search-campaigns/${campaignId}/queries/${queryId}/assisted-captures/${sessionId}/complete`,
+        );
+        return unwrap(res);
+    },
+    cancelAssistedCapture: async ({ campaignId, queryId, sessionId }) => {
+        const res = await api.post(
+            `/data-extractor/search-campaigns/${campaignId}/queries/${queryId}/assisted-captures/${sessionId}/cancel`,
+        );
+        return unwrap(res);
+    },
+
+    // ---- Checkpoint 6A enrichment ----
+    simpleLeadSearchEnrichmentStart: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/start`, payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentStop: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/stop`, payload);
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentJob: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/job`, { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentList: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment`);
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentDetail: async (sessionId, enrichmentId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/${enrichmentId}`);
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentReview: async (sessionId, enrichmentId, body) => {
+        const res = await api.patch(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/${enrichmentId}/review`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchEnrichmentExport: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/enrichment/export`, {
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
+
+    // ---- Checkpoint 7 qualification ----
+    simpleLeadSearchQualificationStart: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/start`, payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationStop: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/stop`, payload);
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationJob: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/job`, { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationList: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification`);
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationDetail: async (sessionId, qualificationId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/${qualificationId}`);
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationReview: async (sessionId, qualificationId, body) => {
+        const res = await api.patch(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/${qualificationId}/review`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchQualificationExport: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/export`, {
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
+    simpleLeadSearchLocationRecheckStart: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/recheck-location`, payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchLocationRecheckStatus: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/recheck-location`, { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchLocationRecheckStop: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/qualification/recheck-location/stop`, payload);
+        return unwrap(res);
+    },
+
+    // ---- Checkpoint 8 genuineness verification ----
+    simpleLeadSearchGenuinenessStart: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/start`, payload, { timeout: 60000 });
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessStop: async (sessionId, payload = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/stop`, payload);
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessJob: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/job`, { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessList: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness`);
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessDetail: async (sessionId, genuinenessId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/${genuinenessId}`);
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessReview: async (sessionId, genuinenessId, body) => {
+        const res = await api.patch(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/${genuinenessId}/review`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchGenuinenessExport: async (sessionId) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/genuineness/export`, {
+            responseType: 'blob',
+            timeout: 120000,
+        });
+        return res;
+    },
 };

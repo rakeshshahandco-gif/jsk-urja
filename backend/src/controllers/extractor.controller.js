@@ -29,6 +29,50 @@ import {
     updateExtractorSettings,
 } from '../services/dataExtractor/extractor.service.js';
 import { ensureJustdialWebhookToken } from '../services/dataExtractor/adapters/portalAdapter.factory.js';
+import {
+    classifySampleLeadIntelligence,
+    getAiLeadIntelligenceOverview as loadAiLeadIntelligenceOverview,
+    saveAiCustomerTypes,
+    saveAiIndustryMasters,
+    saveAiOpportunityMaps,
+    updateAiLeadIntelligenceSettings,
+} from '../services/dataExtractor/aiLeadIntelligenceAdmin.service.js';
+import { saveProductMasters } from '../services/dataExtractor/productRecommendation/productMaster.service.js';
+
+const AI_LEAD_SAVE_ALLOWED = new Set([
+    'settings',
+    'industries',
+    'customerTypes',
+    'opportunityMaps',
+    'products',
+]);
+
+function rejectBodyCompanyId(body = {}) {
+    if (Object.prototype.hasOwnProperty.call(body || {}, 'companyId')) {
+        throw new ApiError(400, 'body.companyId is not allowed');
+    }
+}
+
+function rejectUnknownAndProhibited(body = {}, allowed) {
+    for (const key of Object.keys(body || {})) {
+        if (key.startsWith('$') || key.includes('.') || key === '__proto__' || key === 'constructor') {
+            throw new ApiError(400, `Prohibited field: ${key}`);
+        }
+        if (!allowed.has(key)) {
+            throw new ApiError(400, `Unknown field: ${key}`);
+        }
+    }
+    const walk = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+        for (const [k, v] of Object.entries(obj)) {
+            if (k.startsWith('$') || k.includes('.') || k === '__proto__' || k === 'constructor') {
+                throw new ApiError(400, `Prohibited field: ${k}`);
+            }
+            if (v && typeof v === 'object') walk(v);
+        }
+    };
+    walk(body);
+}
 
 export const getSettings = asyncHandler(async (req, res) => {
     let settings = await getOrCreateExtractorSettings(req.companyId);
@@ -286,4 +330,55 @@ export const exportExtractedRecords = asyncHandler(async (req, res) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="extracted-leads.${ext}"`);
     res.send(Buffer.from(content));
+});
+
+/** Thin AI Lead Intelligence admin handlers (route wiring; company from auth). */
+export const getAiLeadIntelligenceOverview = asyncHandler(async (req, res) => {
+    rejectBodyCompanyId(req.body || {});
+    const data = await loadAiLeadIntelligenceOverview(req.companyId);
+    res.send(new ApiResponse(200, data, 'AI lead intelligence overview'));
+});
+
+export const saveAiLeadIntelligenceOverview = asyncHandler(async (req, res) => {
+    const body = req.body || {};
+    rejectBodyCompanyId(body);
+    rejectUnknownAndProhibited(body, AI_LEAD_SAVE_ALLOWED);
+    const userId = req.user?.id || req.user?._id || null;
+    if (body.settings) {
+        await updateAiLeadIntelligenceSettings(req.companyId, body.settings, userId);
+    }
+    if (Array.isArray(body.industries)) {
+        await saveAiIndustryMasters(req.companyId, body.industries, userId);
+    }
+    if (Array.isArray(body.customerTypes)) {
+        await saveAiCustomerTypes(req.companyId, body.customerTypes, userId);
+    }
+    if (Array.isArray(body.opportunityMaps)) {
+        await saveAiOpportunityMaps(req.companyId, body.opportunityMaps, userId);
+    }
+    if (Array.isArray(body.products)) {
+        await saveProductMasters(req.companyId, body.products, userId);
+    }
+    const data = await loadAiLeadIntelligenceOverview(req.companyId);
+    res.send(new ApiResponse(200, data, 'AI lead intelligence saved'));
+});
+
+export const classifyAiLeadSampleHandler = asyncHandler(async (req, res) => {
+    const body = req.body || {};
+    rejectBodyCompanyId(body);
+    if (Object.prototype.hasOwnProperty.call(body, 'apiKey')
+        || Object.prototype.hasOwnProperty.call(body, 'api_key')
+        || Object.prototype.hasOwnProperty.call(body, 'credentials')) {
+        throw new ApiError(400, 'Do not send credentials in classify-sample body');
+    }
+    const record = body.record;
+    if (!record || typeof record !== 'object') {
+        throw new ApiError(400, 'record is required');
+    }
+    const size = Buffer.byteLength(JSON.stringify(record), 'utf8');
+    if (size > 64 * 1024) {
+        throw new ApiError(400, 'record payload is too large');
+    }
+    const data = await classifySampleLeadIntelligence(req.companyId, record, body.settings || null);
+    res.send(new ApiResponse(200, data, 'Sample classification (dry-run)'));
 });

@@ -131,7 +131,7 @@ export function mapGooglePlaceToRecord(place, input) {
     return normalizeExtractedRecord(record);
 }
 
-async function callPlacesTextSearch({ textQuery, maxResults, timeoutMs, regionCode, settings }) {
+export async function callPlacesTextSearch({ textQuery, maxResults, timeoutMs, regionCode, settings }) {
     const apiKey = getPlacesApiKey(settings);
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
         method: 'POST',

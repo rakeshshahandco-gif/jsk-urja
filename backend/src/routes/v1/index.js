@@ -156,6 +156,8 @@ import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware
 import { attachModuleContext, gateApiModuleByPath } from '../../middlewares/moduleGuard.middleware.js';
 import moduleAllocationRoute from './moduleAllocation.routes.js';
 import deploymentManagerRoute from './deploymentManager.routes.js';
+import config from '../../config/config.js';
+import { getLocalAppIdentity } from '../../utils/localAppIdentity.js';
 
 const router = express.Router();
 
@@ -168,8 +170,18 @@ router.use(gateApiFeatureByPath);
 router.use(gateApiModuleByPath);
 
 router.get('/health', (req, res) => {
+    // Keep status:OK for existing probes; include local identity for localhost frontend guard.
+    const identity = getLocalAppIdentity({
+        mongoUrl: config.mongoose.url,
+        port: config.port,
+    });
     res.send({
         status: 'OK',
+        applicationKey: identity.applicationKey,
+        industryType: identity.industryType,
+        port: identity.port,
+        environment: identity.environment,
+        databaseName: identity.databaseName,
     });
 });
 

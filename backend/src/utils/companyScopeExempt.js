@@ -1,12 +1,63 @@
 /**
  * Routes that must NOT require X-Company-Id (auth bootstrap, company master, health).
  * Path is relative to the /api/v1 router (e.g. /auth/login, /companies/active).
+ * Also accepts full /api/v1/... paths (HTTP test apps that mount scope at app root).
  */
 const OID = '[a-fA-F0-9]{24}';
 
-export function isCompanyScopeExempt(req) {
-    const p = req.path || '';
+function normalizeApiV1Path(req) {
+    let p = req.path || '';
+    if (p.startsWith('/api/v1')) p = p.slice('/api/v1'.length) || '/';
+    return p;
+}
+
+function hasDiscoveryAgentTokenHeader(req) {
+    const headers = req.headers || {};
+    if (headers['x-discovery-agent-token']) return true;
+    const auth = headers.authorization || '';
+    return typeof auth === 'string' && auth.startsWith('Agent ');
+}
+
+/**
+ * Agent-facing Discovery Agent routes authenticate via X-Discovery-Agent-Token.
+ * Company scope is derived from the token record in protectDiscoveryAgent —
+ * do NOT require X-Company-Id before agent auth (bootstrap / connect contract).
+ * CRM JWT routes under /discovery/agent/tokens (and job create/list/control) stay company-scoped.
+ */
+export function isDiscoveryAgentFacingPath(req) {
+    const p = normalizeApiV1Path(req);
     const m = req.method;
+
+    if (!p.startsWith('/data-extractor/discovery/agent')) return false;
+    if (p.startsWith('/data-extractor/discovery/agent/tokens')) return false;
+
+    if (p === '/data-extractor/discovery/agent/connect' && m === 'POST') return true;
+    if (p === '/data-extractor/discovery/agent/presence' && m === 'POST') return true;
+    if (p.startsWith('/data-extractor/discovery/agent/assisted-captures')) return true;
+    if (
+        m === 'POST'
+        && new RegExp(`^/data-extractor/discovery/agent/jobs/${OID}/(claim|heartbeat|records)$`).test(p)
+    ) {
+        return true;
+    }
+    // Shared GET /jobs/:id — only skip X-Company-Id when the caller presents an agent token
+    // (CRM JWT callers still need company scope).
+    if (
+        m === 'GET'
+        && new RegExp(`^/data-extractor/discovery/agent/jobs/${OID}$`).test(p)
+        && hasDiscoveryAgentTokenHeader(req)
+    ) {
+        return true;
+    }
+    return false;
+}
+
+export function isCompanyScopeExempt(req) {
+    const p = normalizeApiV1Path(req);
+    const m = req.method;
+
+    // Discovery Agent auth-derived company (must run before X-Company-Id requirement)
+    if (isDiscoveryAgentFacingPath(req)) return true;
 
     if (p === '/health') return true;
     if (p.startsWith('/public')) return true;

@@ -1,9 +1,15 @@
 import { CompanyFeatureSettings } from '../models/companyFeatureSettings.model.js';
 import { DEFAULT_COMPANY_FEATURE_SETTINGS } from '../constants/companyFeatureSettings.defaults.js';
+import {
+    applyJskProtectedCommunicationFlags,
+    JSK_PROTECTED_FEATURE_PATHS,
+} from '../constants/protectedCrmModules.constants.js';
 import { mergeIndustryConfig } from './productionTemplate.service.js';
-import { ensureJskIndustryDefaults } from './companyIndustryBootstrap.service.js';
+import { ensureJskIndustryDefaults, isJskUrjaCompany } from './companyIndustryBootstrap.service.js';
 import { getPlatformFeatureSettingsRaw } from './platformFeatureSettings.service.js';
 import { CUSTOMER_LEGACY_SYNC } from '../constants/customerFeatureSync.constants.js';
+import { Company } from '../models/company.model.js';
+import { ApiError } from '../utils/ApiError.js';
 
 export function deepMerge(...sources) {
     let out = {};
@@ -118,8 +124,42 @@ function applyCustomerFeatureSync(settings) {
 export async function updateCompanyFeatureSettings(companyId, patch, userId) {
     const platformRaw = await getPlatformFeatureSettingsRaw();
     const doc = await getCompanyFeatureSettingsDoc(companyId);
-    doc.settings = deepMerge(doc.settings || {}, patch);
+    const company = await Company.findById(companyId)
+        .select('companyName brandName legalName isDefault')
+        .lean();
+    const allowDisable = patch?.allowDisableProtectedModules === true
+        || patch?.settings?.allowDisableProtectedModules === true;
+    const cleanPatch = { ...(patch || {}) };
+    delete cleanPatch.allowDisableProtectedModules;
+    if (cleanPatch.settings && typeof cleanPatch.settings === 'object') {
+        cleanPatch.settings = { ...cleanPatch.settings };
+        delete cleanPatch.settings.allowDisableProtectedModules;
+    }
+
+    // Callers may pass either a full settings object or a nested { settings } body.
+    const settingsPatch = cleanPatch.settings && typeof cleanPatch.settings === 'object'
+        && !cleanPatch.sales && !cleanPatch.communication
+        ? cleanPatch.settings
+        : cleanPatch;
+
+    if (isJskUrjaCompany(company) && !allowDisable) {
+        for (const path of JSK_PROTECTED_FEATURE_PATHS) {
+            const [section, key] = String(path).split('.');
+            const nextVal = settingsPatch?.[section]?.[key];
+            if (nextVal === false) {
+                throw new ApiError(
+                    403,
+                    `Protected feature ${path} cannot be disabled for JSK URJA without explicit owner approval (allowDisableProtectedModules).`,
+                );
+            }
+        }
+    }
+
+    doc.settings = deepMerge(doc.settings || {}, settingsPatch);
     doc.settings = applyCustomerFeatureSync(doc.settings);
+    if (isJskUrjaCompany(company) && !allowDisable) {
+        doc.settings = applyJskProtectedCommunicationFlags(doc.settings);
+    }
 
     if (userId) doc.updatedBy = userId;
     await doc.save();
@@ -138,6 +178,7 @@ export const API_FEATURE_ROUTE_MAP = [
     { prefix: '/bill-wise-adjustments', feature: 'accounting.billWiseAdjustmentRequired' },
     { prefix: '/petty-cash', feature: 'accounting.enablePettyCash' },
     { prefix: '/whatsapp-bulk', feature: 'communication.enableWhatsappBulk' },
+    { prefix: '/whatsapp-ai', feature: 'communication.whatsappAiEnabled' },
     { prefix: '/email-settings', feature: 'communication.enableEmail' },
     { prefix: '/email-bulk', feature: 'communication.enableEmailBulk' },
     { prefix: '/communication-history', feature: 'communication.enableEmail' },

@@ -2,6 +2,7 @@ import { ExtractedLead } from '../../models/extractedLead.model.js';
 import { Lead } from '../../models/lead.model.js';
 import Customer from '../../models/customer.model.js';
 import { Supplier } from '../../models/supplier.model.js';
+import { DUPLICATE_DISPLAY } from './discovery/providerTypes.js';
 
 function domainFromWebsite(website) {
     try {
@@ -11,6 +12,61 @@ function domainFromWebsite(website) {
         return '';
     }
 }
+
+
+const LABEL_NEW = 'NEW';
+const LABEL_POSSIBLE = 'POSSIBLE_DUPLICATE';
+const LABEL_CONFIRMED = 'CONFIRMED_DUPLICATE';
+const LABEL_MERGED = 'MERGED_DRAFT';
+const LABEL_CONVERTED = 'ALREADY_CONVERTED';
+
+const APPROVED_LABELS = new Set(DUPLICATE_DISPLAY);
+
+function isPlainRecord(input) {
+    if (input == null || typeof input !== 'object') return false;
+    if (Array.isArray(input)) return false;
+    const proto = Object.getPrototypeOf(input);
+    return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Map an existing Discovery/duplicate preview record to a DUPLICATE_DISPLAY label.
+ * Pure / sync — no DB. Does not mutate input. Defaults to NEW.
+ */
+export function mapDuplicateDisplayLabel(record) {
+    if (!isPlainRecord(record)) return LABEL_NEW;
+
+    const status = String(record.status || '').toLowerCase();
+    if (status === 'converted') return LABEL_CONVERTED;
+    if (record.convertedRecordId) return LABEL_CONVERTED;
+    if (String(record.duplicateDisplayLabel || '') === LABEL_CONVERTED) return LABEL_CONVERTED;
+
+    if (record._mergedDraft === true) return LABEL_MERGED;
+    if (String(record.duplicateDisplayLabel || '') === LABEL_MERGED) return LABEL_MERGED;
+
+    const dupStatus = String(record.duplicateStatus || '').toLowerCase();
+    const decision = String(
+        (record.entityResolution && record.entityResolution.decision) || '',
+    ).toUpperCase();
+
+    if (dupStatus === 'confirmed_duplicate') return LABEL_CONFIRMED;
+    if (decision === 'EXACT_DUPLICATE') return LABEL_CONFIRMED;
+    if (String(record.duplicateDisplayLabel || '') === LABEL_CONFIRMED) return LABEL_CONFIRMED;
+
+    if (dupStatus === 'possible_duplicate') return LABEL_POSSIBLE;
+    if (['HIGH_PROBABILITY_DUPLICATE', 'POSSIBLE_DUPLICATE', 'MANUAL_REVIEW_REQUIRED'].includes(decision)) {
+        return LABEL_POSSIBLE;
+    }
+    if (record._isDuplicate === true && dupStatus !== 'none') return LABEL_POSSIBLE;
+    if (record._isDuplicate === true && !dupStatus) return LABEL_POSSIBLE;
+    if (String(record.duplicateDisplayLabel || '') === LABEL_POSSIBLE) return LABEL_POSSIBLE;
+
+    const existing = String(record.duplicateDisplayLabel || record._duplicateLabel || '');
+    if (APPROVED_LABELS.has(existing)) return existing;
+
+    return LABEL_NEW;
+}
+
 
 export async function checkDuplicateForRecord(companyId, record) {
     const refs = [];

@@ -1,0 +1,118 @@
+import mongoose from 'mongoose';
+
+export const RELATIONSHIP_TYPES = [
+    'SIMILAR_COMPANY',
+    'INDUSTRY_PEER',
+    'POSSIBLE_COMPETITOR',
+    'POSSIBLE_CUSTOMER',
+    'POSSIBLE_SUPPLIER',
+    'POSSIBLE_DEALER',
+    'POSSIBLE_DISTRIBUTOR',
+    'POSSIBLE_OEM',
+    'POSSIBLE_SYSTEM_INTEGRATOR',
+    'POSSIBLE_CONSULTANT',
+    'POSSIBLE_PARTNER',
+    'RELATED_COMPANY',
+    'POSSIBLE_PARENT',
+    'POSSIBLE_SUBSIDIARY',
+    'POSSIBLE_SISTER_CONCERN',
+    'POSSIBLE_BRANCH',
+    'GROUP_COMPANY_VARIANT',
+    'UNRELATED',
+    'MANUAL_REVIEW_REQUIRED',
+];
+
+export const CANDIDATE_STATUSES = [
+    'DISCOVERED',
+    'SIMILAR',
+    'HIGH_POTENTIAL',
+    'POSSIBLE_COMPETITOR',
+    'RELATED_COMPANY_REVIEW',
+    'POSSIBLE_BRANCH_REVIEW',
+    'ALREADY_IN_CRM',
+    'DUPLICATE',
+    'LOW_CONFIDENCE',
+    'IRRELEVANT',
+    'APPROVED_FOR_ENRICHMENT',
+    'REJECTED',
+    'OUTDATED',
+    'LOCKED',
+    'FAILED',
+];
+
+const historySchema = new mongoose.Schema(
+    {
+        at: { type: Date, default: Date.now },
+        action: { type: String, trim: true, default: '' },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        previousStatus: { type: String, trim: true, default: '' },
+        resultingStatus: { type: String, trim: true, default: '' },
+        previous: { type: mongoose.Schema.Types.Mixed, default: null },
+        next: { type: mongoose.Schema.Types.Mixed, default: null },
+        reason: { type: String, trim: true, default: '' },
+        actionType: { type: String, trim: true, default: '' },
+        sourceType: { type: String, trim: true, default: 'system' },
+    },
+    { _id: false },
+);
+
+const schema = new mongoose.Schema(
+    {
+        companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true, index: true },
+        financialYear: { type: String, trim: true, default: '' },
+        seedRecordKey: { type: String, trim: true, default: '', index: true },
+        seedExtractedLeadId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+        seedCompanyName: { type: String, trim: true, default: '' },
+        candidateRecordKey: { type: String, trim: true, default: '', index: true },
+        candidateExtractedLeadId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+        candidateCompanyName: { type: String, trim: true, default: '' },
+        pairKey: { type: String, trim: true, default: '', index: true },
+        status: { type: String, enum: CANDIDATE_STATUSES, default: 'DISCOVERED', index: true },
+        similarityScore: { type: Number, default: 0, index: true },
+        confidence: { type: Number, default: 0 },
+        relationshipType: { type: String, enum: RELATIONSHIP_TYPES, default: 'SIMILAR_COMPANY', index: true },
+        primaryReasons: { type: [String], default: [] },
+        matchingIndustries: { type: [String], default: [] },
+        matchingSubIndustries: { type: [String], default: [] },
+        matchingCustomerTypes: { type: [String], default: [] },
+        matchingProducts: { type: [String], default: [] },
+        matchingOpportunitySignals: { type: [String], default: [] },
+        geographicProximity: { type: mongoose.Schema.Types.Mixed, default: null },
+        sourceAgreement: { type: [String], default: [] },
+        riskSignals: { type: [String], default: [] },
+        existingCrmStatus: { type: String, trim: true, default: 'UNKNOWN' },
+        duplicateEntityStatus: { type: String, trim: true, default: '' },
+        candidateLeadScore: { type: Number, default: null },
+        recommendedNextAction: { type: String, trim: true, default: '' },
+        evidence: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        sourceUrls: { type: [String], default: [] },
+        dimensionScores: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        engineUsed: { type: String, trim: true, default: 'rule_based' },
+        modelVersion: { type: String, trim: true, default: '' },
+        settingsVersion: { type: String, trim: true, default: '' },
+        fallbackUsed: { type: Boolean, default: false },
+        fallbackReason: { type: String, trim: true, default: '' },
+        manuallyApproved: { type: Boolean, default: false },
+        locked: { type: Boolean, default: false },
+        lockedAt: { type: Date, default: null },
+        lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        generatedAt: { type: Date, default: Date.now },
+        reviewedAt: { type: Date, default: null },
+        history: { type: [historySchema], default: [] },
+        rawPayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        noAutoCrmCreate: { type: Boolean, default: true },
+        noAutoCommunications: { type: Boolean, default: true },
+        noAutoPaidProvider: { type: Boolean, default: true },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        isDeleted: { type: Boolean, default: false },
+    },
+    { timestamps: true, collection: 'ai_similar_company_results' },
+);
+
+schema.index({ companyId: 1, pairKey: 1 }, { unique: true, partialFilterExpression: { isDeleted: { $ne: true }, pairKey: { $gt: '' } } });
+schema.index({ companyId: 1, similarityScore: -1, updatedAt: -1 });
+
+const AiSimilarCompanyResult = mongoose.models.AiSimilarCompanyResult || mongoose.model('AiSimilarCompanyResult', schema);
+export { AiSimilarCompanyResult };
+export default AiSimilarCompanyResult;

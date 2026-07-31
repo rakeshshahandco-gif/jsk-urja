@@ -1,0 +1,77 @@
+import mongoose from 'mongoose';
+
+export const AR_STATUSES = [
+    'DRAFT', 'VALIDATION_PENDING', 'VALIDATION_IN_PROGRESS', 'VALIDATION_FAILED',
+    'BLOCKED', 'REMEDIATION_REQUIRED', 'HOLD', 'REJECTED', 'READY_FOR_FINAL_REVIEW',
+    'READY_FOR_MANUAL_PRODUCTION_DEPLOYMENT', 'ARCHIVED',
+];
+
+const schema = new mongoose.Schema({
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, index: true },
+    platformScoped: { type: Boolean, default: false },
+    programCode: { type: String, trim: true, required: true },
+    programName: { type: String, trim: true, required: true },
+    description: { type: String, trim: true, default: '' },
+    releasePackageId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReleasePackage', required: true, index: true },
+    readinessCertificationId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductionReadinessCertification', required: true, index: true },
+    pilotProgramId: { type: mongoose.Schema.Types.ObjectId, ref: 'PilotProgram', required: true, index: true },
+    pilotClosureId: { type: String, trim: true, default: '' },
+    operationsProgramId: { type: mongoose.Schema.Types.ObjectId, ref: 'OperationsProgram', required: true, index: true },
+    phase26RecommendationId: { type: String, trim: true, default: '' },
+    releaseVersion: { type: String, trim: true, default: '' },
+    releaseChecksum: { type: String, trim: true, default: '' },
+    proposedEnvironment: { type: String, default: 'PRODUCTION_MANUAL_DEPLOYMENT_PLANNING_ONLY' },
+    lineageValidation: { type: mongoose.Schema.Types.Mixed, default: null },
+    integrityReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    phaseDependencies: { type: mongoose.Schema.Types.Mixed, default: null },
+    finalGates: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    defectGate: { type: mongoose.Schema.Types.Mixed, default: null },
+    riskGate: { type: mongoose.Schema.Types.Mixed, default: null },
+    approvalReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    environmentReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    maintenanceReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    monitoringReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    incidentReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    escalationReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    backupReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    restoreReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    rollbackReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    drReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    businessContinuityReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    communicationReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    customerImpactReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    hypercareReview: { type: mongoose.Schema.Types.Mixed, default: null },
+    smokeTestPlan: { type: mongoose.Schema.Types.Mixed, default: null },
+    manualDeploymentChecklist: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    handoverPackage: { type: mongoose.Schema.Types.Mixed, default: null },
+    blockers: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    exceptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    recommendation: { type: String, default: 'DRAFT' },
+    recommendationReason: { type: String, default: '' },
+    recommendationWarning: { type: String, default: 'Manual deployment has not been performed. Separate human authorization and execution outside Cursor are required.' },
+    status: { type: String, enum: AR_STATUSES, default: 'DRAFT', index: true },
+    simulationOnly: { type: Boolean, default: true },
+    manualDeploymentOnly: { type: Boolean, default: true },
+    productionExecutionAllowed: { type: Boolean, default: false },
+    deploymentExecuted: { type: Boolean, default: false },
+    productionActivated: { type: Boolean, default: false },
+    renderActionExecuted: { type: Boolean, default: false },
+    gitCommitExecuted: { type: Boolean, default: false },
+    gitPushExecuted: { type: Boolean, default: false },
+    rollbackExecuted: { type: Boolean, default: false },
+    backupExecuted: { type: Boolean, default: false },
+    restoreExecuted: { type: Boolean, default: false },
+    migrationExecuted: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    isDeleted: { type: Boolean, default: false, index: true },
+}, { timestamps: true, collection: 'activation_readiness_programs' });
+
+schema.index({ companyId: 1, programCode: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
+schema.index({ companyId: 1, status: 1, createdAt: -1 });
+
+const ActivationReadinessProgram = mongoose.models.ActivationReadinessProgram || mongoose.model('ActivationReadinessProgram', schema);
+export { ActivationReadinessProgram };
+export default ActivationReadinessProgram;

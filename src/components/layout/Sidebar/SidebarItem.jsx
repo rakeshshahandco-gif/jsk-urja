@@ -103,7 +103,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // we stop overriding their choice so it never re-opens itself.
     const [isExpanded, setIsExpanded] = useState(
         (isActive && hasChildren)
-        || ((item.id === 'admin' || item.id === 'communication-bulk-group' || item.id === 'textile-foundation') && hasChildren),
+        || ((item.id === 'admin' || item.id === 'communication-bulk-group' || item.id === 'whatsapp-root' || item.id === 'textile-foundation') && hasChildren),
     );
     const userToggledRef = useRef(false);
 
@@ -121,6 +121,14 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
         const onExpandRequest = (e) => {
             if (e?.detail?.id === item.id) {
                 setIsExpanded(true);
+                // Bring protected WhatsApp (and other inline groups) into view.
+                requestAnimationFrame(() => {
+                    try {
+                        document
+                            .querySelector(`[data-jsk-ui-component="sidebar-item"][data-jsk-menu-id="${item.id}"]`)
+                            ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    } catch { /* ignore */ }
+                });
             }
         };
         window.addEventListener('jsk-sidebar-expand', onExpandRequest);
@@ -133,8 +141,8 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // legacy expand-on-click behaviour — they are not rendered inside the
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
-    /** Top-level groups that expand inline (bulk/email utilities + Handloom testing hub). */
-    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group' || item.id === 'textile-foundation';
+    /** Top-level groups that expand inline (WhatsApp + email utilities + Handloom testing hub). */
+    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group' || item.id === 'whatsapp-root' || item.id === 'textile-foundation';
     const isTopLevelParent = level === 1 && hasChildren && !inlineTopLevelGroup;
     const alwaysShowChildren = inlineTopLevelGroup;
 
@@ -167,6 +175,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
             title={collapsed && level === 1 ? item.title : ''}
             data-jsk-ui-component="sidebar-item"
             data-jsk-ui-level={level}
+            data-jsk-menu-id={item.id}
         >
             <div
                 className={clsx(styles.link, { [styles.active]: isActive })}

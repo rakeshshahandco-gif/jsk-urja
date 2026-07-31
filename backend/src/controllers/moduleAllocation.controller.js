@@ -26,6 +26,11 @@ import {
     moduleStatesToMap,
 } from '../constants/moduleState.constants.js';
 import { resolveModuleState } from '../constants/moduleAccessDecision.constants.js';
+import {
+    assertProtectedModulesNotRemoved,
+    ensureProtectedModuleCodes,
+} from '../constants/protectedCrmModules.constants.js';
+import { isJskUrjaCompany } from '../services/companyIndustryBootstrap.service.js';
 
 const MODULE_STATE_AUDIT_CAP = 100;
 
@@ -261,6 +266,32 @@ export const updateCompanyModuleAllocation = asyncHandler(async (req, res) => {
     if (Array.isArray(disabledModules)) {
         company.disabledModules = [...new Set(disabledModules.map((m) => String(m).trim().toLowerCase()).filter(Boolean))];
     }
+
+    // JSK URJA: protected WhatsApp modules cannot be removed unless owner explicitly allows.
+    if (isJskUrjaCompany(company)) {
+        const allowDisable = req.body?.allowDisableProtectedModules === true;
+        if (Array.isArray(company.enabledModules)) {
+            const check = assertProtectedModulesNotRemoved(company.enabledModules, {
+                allowDisableProtectedModules: allowDisable,
+            });
+            if (!check.ok) {
+                throw new ApiError(
+                    httpStatus.FORBIDDEN,
+                    `Protected modules cannot be removed from JSK URJA without explicit owner approval: ${check.missing.join(', ')}`,
+                );
+            }
+            if (!allowDisable) {
+                company.enabledModules = ensureProtectedModuleCodes(company.enabledModules);
+            }
+        }
+        // Never leave protected codes in disabledModules for JSK unless explicitly allowed.
+        if (!allowDisable && Array.isArray(company.disabledModules)) {
+            company.disabledModules = company.disabledModules.filter(
+                (c) => !['whatsapp', 'whatsapp_bulk', 'whatsapp_ai'].includes(c),
+            );
+        }
+    }
+
     if (typeof moduleGuardEnabled === 'boolean') {
         company.moduleGuardEnabled = moduleGuardEnabled;
     }

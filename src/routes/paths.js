@@ -430,6 +430,7 @@ export const PATHS = {
     EINVOICE: '/gst/einvoice',
     DATA_EXTRACTOR: {
         ROOT: '/data-extractor',
+        SIMPLE_LEAD_SEARCH: '/data-extractor/simple-lead-search',
         KEYWORD_SEARCH: '/data-extractor/keyword-search',
         MANUAL_URL: '/data-extractor/manual-url',
         IMPORT: '/data-extractor/import',

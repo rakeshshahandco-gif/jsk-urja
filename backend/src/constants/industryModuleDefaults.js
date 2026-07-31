@@ -14,7 +14,9 @@ const TEXTILE_CORE_MODULES = [
 export const INDUSTRY_MODULE_DEFAULTS = {
     ELECTRONICS_JSK: {
         enabledModules: [
-            'crm', 'tasks', 'messenger', 'whatsapp', 'sales', 'purchase', 'inventory',
+            'crm', 'tasks', 'messenger', 'whatsapp', 'whatsapp_bulk', 'whatsapp_ai',
+            'email', 'email_bulk', 'data_extractor',
+            'sales', 'purchase', 'inventory',
             'bom', 'pcb', 'smd', 'qc', 'production', 'accounts', 'fixed_assets', 'gst', 'tds', 'tcs',
             'reports', 'service', 'hr', 'rd', 'documents', 'payroll', 'china_sourcing', 'admin',
         ],
