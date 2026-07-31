@@ -98,12 +98,13 @@ export const testWebSearchProvider = asyncHandler(async (req, res) => {
 export const putSettings = asyncHandler(async (req, res) => {
     const roleName = String(req.user?.roleName || '').toLowerCase();
     const isPlatformAdmin = roleName === 'superadmin';
-    if (req.body?.moduleEnabled === true && !isPlatformAdmin) {
-        throw new ApiError(403, 'Only platform superadmin can enable Data Extractor for a company');
+    // moduleEnabled is derived from Company Module Allocation (master switch).
+    // Do not allow Extractor Settings to silently override allocation.
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'moduleEnabled') && !isPlatformAdmin) {
+        throw new ApiError(403, 'Data Extractor enablement is controlled by Company Module Allocation');
     }
 
     const allowed = {};
-    if (typeof req.body.moduleEnabled === 'boolean') allowed.moduleEnabled = req.body.moduleEnabled;
     if (req.body.maxUrlsPerJob != null) allowed.maxUrlsPerJob = Number(req.body.maxUrlsPerJob);
     if (req.body.maxJobsPerDay != null) allowed.maxJobsPerDay = Number(req.body.maxJobsPerDay);
     if (req.body.maxResultsPerSearch != null) allowed.maxResultsPerSearch = Number(req.body.maxResultsPerSearch);

@@ -91,7 +91,6 @@ export default function DataExtractorSettingsPage() {
         setSaving(true);
         try {
             const payload = {
-                moduleEnabled: settings.moduleEnabled,
                 maxUrlsPerJob: settings.maxUrlsPerJob,
                 maxJobsPerDay: settings.maxJobsPerDay,
                 maxResultsPerSearch: settings.maxResultsPerSearch,
@@ -397,15 +396,20 @@ TRADEINDIA_API_KEY=`}</pre>
                 </div>
             )}
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <input
                     type="checkbox"
                     checked={!!settings?.moduleEnabled}
-                    disabled={!isSuperadmin}
-                    onChange={(e) => setSettings((s) => ({ ...s, moduleEnabled: e.target.checked }))}
+                    disabled
+                    readOnly
                 />
-                Enable Data Extractor for this company
+                Data Extractor enabled for this company
             </label>
+            <p style={{ marginTop: 0, marginBottom: 16, fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                Controlled by Super Admin → Company Module Allocation (Data Extractor / Market Finder).
+                This flag is synced automatically and cannot be used as a second silent OFF switch.
+                {isSuperadmin ? ' Use Module Allocation to enable or disable the module.' : ''}
+            </p>
             <label style={{ display: 'block', marginBottom: 12, fontSize: 13 }}>
                 Max URLs per job
                 <input

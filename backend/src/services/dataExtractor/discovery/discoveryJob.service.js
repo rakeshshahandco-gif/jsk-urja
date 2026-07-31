@@ -22,7 +22,7 @@ import { normalizeExtractedRecord } from '../companyNormalizer.service.js';
 import { enrichRecordsWithDuplicates, mapDuplicateDisplayLabel } from '../duplicateChecker.service.js';
 import { syncMergeReviewsFromJob } from './entityResolution/mergeReview.service.js';
 import { scoreExtractorConfidence, normalizeExtractorUrl } from '../extractor.utils.js';
-import { getOrCreateExtractorSettings } from '../extractor.service.js';
+import { getOrCreateExtractorSettings, assertExtractorModuleEnabled } from '../extractor.service.js';
 import { applyControlledResultCap, getControlledTestConfig } from '../controlledTestMode.js';
 import { convertExtractedToLead } from '../extractorConversion.service.js';
 

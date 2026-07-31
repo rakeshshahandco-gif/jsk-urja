@@ -12,6 +12,7 @@ import {
     loadCompanyModuleContext,
     resolveEffectiveModules,
 } from '../services/moduleGuard.service.js';
+import { onCompanyDataExtractorAllocationChanged } from '../services/dataExtractor/dataExtractorEnablement.service.js';
 import { getIndustryModuleDefaults } from '../constants/industryModuleDefaults.js';
 import { ALL_MODULE_CODES, MODULE_REGISTRY } from '../constants/moduleRegistry.constants.js';
 import { canUserAccessCompany } from '../services/companyUserAccess.service.js';
@@ -409,6 +410,11 @@ export const updateCompanyModuleAllocation = asyncHandler(async (req, res) => {
     company.updatedBy = req.user?._id;
     await company.save();
     clearModuleGuardCache(companyId);
+    try {
+        await onCompanyDataExtractorAllocationChanged(companyId, req.user?._id || null);
+    } catch {
+        // Allocation save must succeed even if ExtractorSettings sync fails; next DE open repairs.
+    }
 
     const template = company.industryTemplateRef
         ? await IndustryTemplate.findById(company.industryTemplateRef).select('templateCode templateSettings').lean()

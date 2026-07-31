@@ -2,7 +2,7 @@ import { DiscoveryAgentJob, AGENT_SOURCES } from '../../../../models/discoveryAg
 import { DiscoveryJob } from '../../../../models/discoveryJob.model.js';
 import { DiscoverySourceTask } from '../../../../models/discoverySourceTask.model.js';
 import { ApiError } from '../../../../utils/ApiError.js';
-import { getOrCreateExtractorSettings } from '../../extractor.service.js';
+import { assertExtractorModuleEnabled } from '../../extractor.service.js';
 import { DISCLAIMER } from '../providerTypes.js';
 
 function clamp(n, min, max, fallback) {
@@ -24,8 +24,7 @@ export async function createAgentJob({
 }) {
     if (!financialYear) throw new ApiError(400, 'financialYear is required');
     if (!AGENT_SOURCES.includes(sourceMode)) throw new ApiError(400, 'Invalid sourceMode');
-    const settings = await getOrCreateExtractorSettings(companyId);
-    if (!settings.moduleEnabled) throw new ApiError(403, 'Data Extractor module is not enabled');
+    const settings = await assertExtractorModuleEnabled(companyId);
     if (!agentEnabled(settings)) {
         throw new ApiError(403, 'Browser-assisted Discovery Agent is disabled for this company. Enable it in Discovery settings.');
     }

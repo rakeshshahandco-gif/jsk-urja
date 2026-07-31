@@ -25,8 +25,17 @@ import {
     scheduleFollowupForExtracted,
 } from './extractorConversion.service.js';
 import { sanitizeExtractorSettingsForClient } from './providerSecrets.util.js';
+import {
+    assertDataExtractorEnabledForCompany,
+    isDataExtractorEnabledForCompany,
+    syncExtractorSettingsWithAllocation,
+} from './dataExtractorEnablement.service.js';
 
 export { listKeywordSources, getProviderStatus };
+export {
+    isDataExtractorEnabledForCompany,
+    assertDataExtractorEnabledForCompany,
+};
 
 /**
  * Compatibility export for discovery.controller.js.
@@ -196,19 +205,12 @@ export async function handleJustdialWebhook(token, body, query, reqMeta) {
 }
 
 export async function getOrCreateExtractorSettings(companyId) {
-    let settings = await ExtractorSettings.findOne({ companyId }).lean();
-    if (!settings) {
-        settings = await ExtractorSettings.create({ companyId, moduleEnabled: false });
-        return settings.toObject ? settings.toObject() : settings;
-    }
-    return settings;
+    // Allocation is master: create/repair settings.moduleEnabled to match Company Module Allocation.
+    return syncExtractorSettingsWithAllocation(companyId);
 }
 
 export async function assertExtractorModuleEnabled(companyId) {
-    const settings = await getOrCreateExtractorSettings(companyId);
-    if (!settings.moduleEnabled) {
-        throw new ApiError(403, 'Data Extractor module is not enabled for this company');
-    }
+    const { settings } = await assertDataExtractorEnabledForCompany(companyId);
     return settings;
 }
 
@@ -241,7 +243,8 @@ export async function updateExtractorSettings(companyId, payload, userId) {
         { $set: update },
         { new: true, upsert: true },
     ).lean();
-    return settings;
+    // Company Module Allocation remains master for moduleEnabled.
+    return syncExtractorSettingsWithAllocation(companyId, { userId });
 }
 
 async function countJobsToday(companyId) {

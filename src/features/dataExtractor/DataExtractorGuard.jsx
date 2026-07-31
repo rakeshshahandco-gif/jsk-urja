@@ -4,8 +4,9 @@ import { dataExtractorApi } from '@/services/dataExtractorApi';
 import { PATHS } from '@/routes/paths';
 
 /**
- * Blocks UI when Data Extractor is not enabled for the selected company.
- * Module is OFF by default — superadmin enables via Settings.
+ * Blocks UI when Data Extractor is not allocated for the selected company.
+ * Master switch: Super Admin → Company Module Allocation (data_extractor).
+ * ExtractorSettings.moduleEnabled is synced from allocation by the backend.
  */
 export default function DataExtractorGuard({ children }) {
     const [loading, setLoading] = useState(true);
@@ -42,11 +43,18 @@ export default function DataExtractorGuard({ children }) {
             <div style={{ padding: 32, maxWidth: 560 }}>
                 <h2 style={{ marginTop: 0 }}>Data Extractor not enabled</h2>
                 <p style={{ color: '#64748b', lineHeight: 1.6 }}>
-                    This module is optional and disabled for your company by default.
-                    A platform superadmin can enable it from
+                    Data Extractor / Market Finder is not allocated for this company.
+                    A Platform Admin can enable it in
+                    {' '}
+                    <Link to={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION}>
+                        Company Module Allocation
+                    </Link>
+                    .
+                    Advanced connector options remain in
                     {' '}
                     <Link to={PATHS.DATA_EXTRACTOR.SETTINGS}>Extractor Settings</Link>
-                    .
+                    {' '}
+                    and do not replace the company allocation switch.
                 </p>
                 {error && <p style={{ color: '#b91c1c', fontSize: 13 }}>{error}</p>}
             </div>

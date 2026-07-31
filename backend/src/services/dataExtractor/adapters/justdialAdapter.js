@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import { ExtractedLead } from '../../../models/extractedLead.model.js';
 import { ExtractorSettings } from '../../../models/extractorSettings.model.js';
+import {
+    isDataExtractorEnabledForCompany,
+    syncExtractorSettingsWithAllocation,
+} from '../dataExtractorEnablement.service.js';
 
 export function isJustdialConfigured(settings) {
     const token = getJustdialWebhookToken(settings);
@@ -31,9 +35,10 @@ export function buildJustdialWebhookUrl(baseUrl, token) {
 }
 
 export async function ensureJustdialWebhookToken(companyId) {
+    await syncExtractorSettingsWithAllocation(companyId);
     let settings = await ExtractorSettings.findOne({ companyId });
     if (!settings) {
-        settings = await ExtractorSettings.create({ companyId, moduleEnabled: false });
+        settings = await ExtractorSettings.create({ companyId, moduleEnabled: true });
     }
     const existing = getJustdialWebhookToken(settings.toObject ? settings.toObject() : settings);
     if (existing) return existing;
@@ -108,7 +113,7 @@ export async function ingestJustdialWebhook(token, body, query, reqMeta = {}) {
     if (!settings) {
         return { ok: false, status: 404, message: 'Invalid Justdial webhook token' };
     }
-    if (!settings.moduleEnabled) {
+    if (!(await isDataExtractorEnabledForCompany(settings.companyId))) {
         return { ok: false, status: 403, message: 'Data Extractor is not enabled for this company' };
     }
 
