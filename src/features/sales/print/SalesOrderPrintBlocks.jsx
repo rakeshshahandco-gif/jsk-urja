@@ -5,6 +5,7 @@
  * Do not change GST/totals calculations here.
  */
 import React from 'react';
+import { documentLogoImgProps } from '@/config/documentBranding';
 import {
     cleanCustomerName,
     fmtDate,
@@ -69,12 +70,18 @@ function cellValue(colId, item, srNo, visibleColIds = []) {
     }
 }
 
-export function SoBlockLogo() {
+export function SoBlockLogo({ company }) {
+    const img = documentLogoImgProps({
+        ...company,
+        logoHeight: company?.logoHeight || 80,
+    });
+    if (!img.src) return null;
     return (
         <img
-            src="/logo.jpeg"
-            alt="Logo"
-            style={{ maxHeight: 80, maxWidth: 120, objectFit: 'contain', display: 'block' }}
+            src={img.src}
+            alt={img.alt}
+            style={{ ...img.style, maxHeight: company?.logoHeight || 80 }}
+            onError={img.onError}
             draggable={false}
         />
     );
@@ -613,7 +620,7 @@ export function SalesOrderPrintBlockContent({
     const { gstApplicable } = resolveGstFlags(so);
     switch (blockId) {
         case 'logo':
-            return <SoBlockLogo />;
+            return <SoBlockLogo company={company} />;
         case 'companyDetails':
             return <SoBlockCompanyDetails company={company} gstApplicable={gstApplicable} />;
         case 'documentTitle':

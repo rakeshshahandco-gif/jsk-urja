@@ -436,7 +436,7 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                         >
                             <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
                                 <div data-pf-block="logo">
-                                    <SoBlockLogo />
+                                    <SoBlockLogo company={company} />
                                 </div>
                                 <div data-pf-block="companyDetails" style={{ flex: 1 }}>
                                     <SoBlockCompanyDetails company={company} gstApplicable={gstApplicable} />

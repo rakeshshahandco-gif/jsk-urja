@@ -16,23 +16,93 @@ import { buildPdfFormatCss, isLivePrintFormat } from '../utils/printFormatRuntim
  */
 class PDFService {
     /**
-     * Get logo as base64 for reliable rendering in PDFs
+     * Map a public URL/path to candidate filesystem paths (repo public/ + cwd).
+     * Prefer Git-tracked branding assets over localhost-only or Render temp uploads.
      */
-    static getLogoBase64() {
+    static resolvePublicAssetCandidates(urlOrPath) {
+        const raw = String(urlOrPath || '').trim();
+        if (!raw || raw === '__none__') return [];
+
+        let rel = raw;
         try {
-            // Try common paths relative to root and backend
-            const possiblePaths = [
+            if (/^https?:\/\//i.test(raw)) {
+                const u = new URL(raw);
+                rel = u.pathname || '';
+            }
+        } catch {
+            /* keep rel as-is */
+        }
+
+        // Strip query/hash (e.g. ?v=urja-doc-1 cache buster)
+        rel = rel.split('?')[0].split('#')[0];
+
+        // Only load stable public paths from disk (not remote/temp uploads)
+        if (!rel.startsWith('/branding/') && !rel.startsWith('/logo.')) {
+            return [];
+        }
+
+        const cleaned = rel.replace(/^\/+/, '');
+        const roots = [
+            path.join(process.cwd(), 'public'),
+            path.join(process.cwd(), '..', 'public'),
+            path.resolve('public'),
+            path.resolve('../public'),
+        ];
+        return roots.map((root) => path.join(root, cleaned));
+    }
+
+    /**
+     * Get logo as base64 for reliable rendering in PDFs.
+     * Priority: company print/main logo (public path) → JSK URJA approved asset → legacy logo.jpeg.
+     */
+    static getLogoBase64(company = null) {
+        try {
+            const mimeFor = (filePath) => {
+                const ext = path.extname(filePath).toLowerCase();
+                if (ext === '.png') return 'image/png';
+                if (ext === '.webp') return 'image/webp';
+                if (ext === '.gif') return 'image/gif';
+                return 'image/jpeg';
+            };
+
+            const tryRead = (candidates) => {
+                for (const logoPath of candidates) {
+                    if (logoPath && fs.existsSync(logoPath)) {
+                        const bitmap = fs.readFileSync(logoPath);
+                        return `data:${mimeFor(logoPath)};base64,${Buffer.from(bitmap).toString('base64')}`;
+                    }
+                }
+                return '';
+            };
+
+            const companyLogo = String(company?.printLogoUrl || company?.logoUrl || '').trim();
+            if (companyLogo === '__none__') return '';
+
+            if (companyLogo) {
+                const fromCompany = tryRead(this.resolvePublicAssetCandidates(companyLogo));
+                if (fromCompany) return fromCompany;
+            }
+
+            const companyName = String(company?.companyName || company?.name || '').toUpperCase();
+            const isJskUrjaCompany =
+                companyName.includes('JSK') &&
+                (companyName.includes('INNOVATIVE') || companyName.includes('URJA'));
+
+            // Approved login-page JSK URJA asset — only for JSK company (or when company unknown)
+            if (isJskUrjaCompany || !company) {
+                const approved = tryRead([
+                    ...this.resolvePublicAssetCandidates('/branding/companies/jsk-urja-logo-ui.png'),
+                    ...this.resolvePublicAssetCandidates('/branding/companies/jsk-urja-logo.jpg'),
+                ]);
+                if (approved) return approved;
+            }
+
+            return tryRead([
                 path.resolve('public/logo.jpeg'),
                 path.resolve('../public/logo.jpeg'),
-                path.join(process.cwd(), 'public/logo.jpeg')
-            ];
-
-            for (const logoPath of possiblePaths) {
-                if (fs.existsSync(logoPath)) {
-                    const bitmap = fs.readFileSync(logoPath);
-                    return `data:image/jpeg;base64,${Buffer.from(bitmap).toString('base64')}`;
-                }
-            }
+                path.join(process.cwd(), 'public/logo.jpeg'),
+                path.join(process.cwd(), '..', 'public', 'logo.jpeg'),
+            ]);
         } catch (e) {
             console.error('[PDF Service] Logo load error:', e.message);
         }
@@ -127,7 +197,7 @@ class PDFService {
             return this.generateSalesInvoicePDF(docData, company, user);
         }
 
-        const logoBase64 = this.getLogoBase64();
+        const logoBase64 = this.getLogoBase64(company);
         const docNumber = isSO ? docData.soNumber : (isSI ? (docData.displayInvoiceNumber || docData.invoiceNumber) : docData.poNumber);
         const docDate = isSO ? docData.soDate : (isSI ? docData.invoiceDate : docData.poDate);
         
@@ -372,7 +442,7 @@ class PDFService {
      * Generate Purchase Order PDF matching the Frontend "Print Layout" exactly.
      */
     static async generatePurchaseOrderPDF(po, company, user) {
-        const logoBase64 = this.getLogoBase64();
+        const logoBase64 = this.getLogoBase64(company);
         const items = po.items || [];
         
         const fnum = (n) => parseFloat((Number(n) || 0).toFixed(2));
@@ -637,7 +707,7 @@ class PDFService {
      * Generate Sales Order PDF matching the Frontend "Print Layout" exactly.
      */
     static async generateSalesOrderPDF(so, company, user) {
-        const logoBase64 = this.getLogoBase64();
+        const logoBase64 = this.getLogoBase64(company);
         const grandTotal = so.roundedTotal || so.grandTotal || 0;
         if (!so.amountInWords) so.amountInWords = numberToWords(grandTotal);
 
@@ -705,7 +775,7 @@ class PDFService {
      * Generate High-Fidelity Sales Invoice PDF matching the Frontend layout.
      */
     static async generateSalesInvoicePDF(inv, company, user) {
-        const logoBase64 = this.getLogoBase64();
+        const logoBase64 = this.getLogoBase64(company);
         let barcodeBlockHtml = '';
         const isEstimate = inv.seriesId?.isEstimate === true ||
             (inv.seriesId?.seriesName || '').toLowerCase().includes('estimate') ||
@@ -1093,7 +1163,7 @@ class PDFService {
      * Supports both Full (with costing) and Technical (no costing) modes.
      */
     static async generateBOMPDF(bom, company, includeCost = true) {
-        const logoBase64 = this.getLogoBase64();
+        const logoBase64 = this.getLogoBase64(company);
         const items = bom.components || [];
         const sectionCount = parseInt(bom.sectionCount, 10) || 1;
         const isMultiSection = sectionCount > 1;

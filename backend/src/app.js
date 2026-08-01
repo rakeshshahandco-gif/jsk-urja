@@ -68,9 +68,20 @@ console.log(`[Static] Serving frontend from: ${buildPath}`);
 
 app.use(express.static(buildPath, {
     maxAge: '1d',
-    setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
+
+// Git-tracked public branding (login + document logos) — stable on Render even if dist lags
+const publicPath = path.join(__dirname, '../../public');
+app.use(express.static(publicPath, {
+    maxAge: '7d',
+    setHeaders: (res, filePath) => {
+        if (filePath.includes(`${path.sep}branding${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
         }
     }
 }));

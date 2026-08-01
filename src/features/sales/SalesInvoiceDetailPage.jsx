@@ -8,6 +8,7 @@ import {
 import { getCompanyProfile } from '@/services/settingsApi';
 import { useAuth } from '@/hooks/useAuth';
 import { PATHS } from '@/routes/paths';
+import { documentLogoImgProps } from '@/config/documentBranding';
 import { createEwayBillDraft } from '@/services/ewayBillApi';
 import { createEInvoiceDraft } from '@/services/eInvoiceApi';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
@@ -466,7 +467,18 @@ export default function SalesInvoiceDetailPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px', borderBottom: '2px solid #eee', paddingBottom: '15px' }}>
                             {!isEstimate ? (
                             <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                                <img src="/logo.jpeg" style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />
+                                {(() => {
+                                    const img = documentLogoImgProps({ ...company, logoHeight: 60 });
+                                    if (!img.src) return null;
+                                    return (
+                                        <img
+                                            src={img.src}
+                                            alt={img.alt}
+                                            style={{ ...img.style, maxHeight: '60px', maxWidth: '120px' }}
+                                            onError={img.onError}
+                                        />
+                                    );
+                                })()}
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, textTransform: 'uppercase' }}>{company.companyName}</h2>
                                     <div style={{ fontSize: 13, color: '#444', marginTop: 4 }}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import InvoiceBarcodeBlock from '@/components/invoice/InvoiceBarcodeBlock';
 import { GOLDEN_INVOICE_FORMAT_VERSION, GOLDEN_INVOICE_USABLE_WIDTH_MM } from '@/constants/goldenInvoiceFormat.constants';
+import { documentLogoImgProps } from '@/config/documentBranding';
 
 /**
  * LOCKED GOLDEN SALES INVOICE FORMAT — Based on approved JSK reference image
@@ -103,7 +104,22 @@ export default function SalesInvoiceBuiltinPrint({
                         {isFirstPage ? (
                             <div className="si-builtin-header si-builtin-header-main">
                                 <div className="si-builtin-header-logo-col">
-                                    <img src="/logo.jpeg" alt="Logo" className="si-builtin-logo" style={{ maxHeight: `${company.logoHeight || 75}px` }} />
+                                    {(() => {
+                                        const img = documentLogoImgProps({
+                                            ...company,
+                                            logoHeight: company?.logoHeight || 75,
+                                        });
+                                        if (!img.src) return null;
+                                        return (
+                                            <img
+                                                src={img.src}
+                                                alt={img.alt}
+                                                className="si-builtin-logo"
+                                                style={{ ...img.style, maxHeight: `${company?.logoHeight || 75}px` }}
+                                                onError={img.onError}
+                                            />
+                                        );
+                                    })()}
                                 </div>
                                 <div className="si-builtin-header-center-col">
                                     <div className="si-builtin-company-name">{company.companyName}</div>
