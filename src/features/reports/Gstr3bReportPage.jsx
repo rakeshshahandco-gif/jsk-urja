@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/contexts/CompanyContext';
+import { rcmApi } from '@/services/rcmApi';
 import { 
   FileText, Download, ShieldCheck, Eye, RefreshCw, 
   ChevronDown, ChevronUp, Edit3, Save, AlertCircle, 
@@ -39,10 +41,12 @@ const cellStyle = { padding: '12px', fontSize: '13px', color: '#1e293b', borderB
 const numCellStyle = { ...cellStyle, textAlign: 'right', fontWeight: 600 };
 
 export default function Gstr3bReportPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.roleName === 'admin' || user?.roleName === 'superadmin';
+  const { user, hasPermission } = useAuth();
+  const { selectedCompany } = useCompany();
+  const isAdmin = user?.roleName === 'admin' || user?.roleName === 'superadmin'
+    || ['admin', 'superadmin'].includes(String(user?.role || '').toLowerCase());
 
-  const [activeTab, setActiveTab] = useState('summary'); // summary, payable, reconciliation
+  const [activeTab, setActiveTab] = useState('summary'); // summary, payable, reconciliation, rcm
   const [fy, setFy] = useState('2025-2026');
   const [month, setMonth] = useState('04');
   const [loading, setLoading] = useState(false);
@@ -52,6 +56,66 @@ export default function Gstr3bReportPage() {
   const [adjustment, setAdjustment] = useState({
       table4: {}, table5: {}, table51: {}, openingBalance: { creditLedger: {}, cashLedger: {} }
   });
+  const [rcmRecon, setRcmRecon] = useState(null);
+  const [rcmBusy, setRcmBusy] = useState(false);
+  const [rcmConfirm, setRcmConfirm] = useState(false);
+
+  const returnPeriod = (() => {
+    const yr = Number(month) >= 4 ? fy.split('-')[0] : fy.split('-')[1];
+    return `${yr}-${month}`;
+  })();
+
+  const canViewRcm = isAdmin || hasPermission?.('gst.rcm.view_reconciliation');
+
+  async function fetchRcmRecon() {
+    if (!selectedCompany?._id) return;
+    setRcmBusy(true);
+    try {
+      const data = await rcmApi.getGstr3bReconciliation({
+        companyId: selectedCompany._id,
+        returnPeriod,
+        financialYear: fy,
+      });
+      setRcmRecon(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e.message || 'RCM reconciliation failed');
+    } finally {
+      setRcmBusy(false);
+    }
+  }
+
+  async function runRcmWorkflow(step) {
+    setRcmBusy(true);
+    try {
+      const base = { companyId: selectedCompany?._id, returnPeriod, financialYear: fy };
+      if (step === 'prepare') await rcmApi.prepareReturnMapping({ ...base, remarks: 'Prepared from GSTR-3B page' });
+      if (step === 'review') await rcmApi.reviewReturnMapping(base);
+      if (step === 'approve') await rcmApi.approveReturnMapping(base);
+      if (step === 'include') {
+        if (!rcmConfirm) {
+          toast.error('Confirm checkbox required');
+          return;
+        }
+        await rcmApi.includeInGstr3b({
+          ...base,
+          confirmInclude: true,
+          checkboxAccepted: true,
+          manualAdjustmentOption: 'REPLACE_WITH_APPROVED',
+        });
+        toast.success('Included in draft GSTR-3B (not filed)');
+        fetchReport();
+      }
+      if (step === 'lock') {
+        await rcmApi.lockGstr3bPeriod({ ...base, confirmLock: true, remarks: 'Lock from UI' });
+        toast.success('Period locked');
+      }
+      await fetchRcmRecon();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e.message);
+    } finally {
+      setRcmBusy(false);
+    }
+  }
 
   async function fetchReport() {
     setLoading(true);
@@ -130,6 +194,14 @@ export default function Gstr3bReportPage() {
         <button onClick={() => setActiveTab('summary')} style={tabStyle(activeTab === 'summary')}><FileText size={16} /> Summary Return</button>
         <button onClick={() => setActiveTab('payable')} style={tabStyle(activeTab === 'payable')}><Calculator size={16} /> GST Payable Summary</button>
         <button onClick={() => setActiveTab('reconciliation')} style={tabStyle(activeTab === 'reconciliation')}><Database size={16} /> GSTR-1 vs 3B Recon</button>
+        {canViewRcm ? (
+          <button
+            onClick={() => { setActiveTab('rcm'); fetchRcmRecon(); }}
+            style={tabStyle(activeTab === 'rcm')}
+          >
+            <ShieldCheck size={16} /> RCM Reconciliation
+          </button>
+        ) : null}
       </div>
 
       {/* Selectors */}
@@ -384,7 +456,95 @@ export default function Gstr3bReportPage() {
               </div>
             </div>
           )}
+
+          {activeTab === 'rcm' && (
+            <div style={cardStyle}>
+              <SectionTitle
+                title="Phase 2D — RCM GSTR-3B Reconciliation"
+                subtitle={`Period ${returnPeriod} · PREVIEW ONLY until approved inclusion`}
+              />
+              <div style={{ marginBottom: 12, padding: 12, background: '#fff7ed', borderRadius: 8, color: '#9a3412', fontWeight: 650 }}>
+                {rcmRecon?.banner || 'PREVIEW ONLY — NOT YET INCLUDED IN GSTR-3B'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                <button type="button" disabled={rcmBusy} onClick={fetchRcmRecon} style={btnSecondary}>Refresh</button>
+                <button type="button" disabled={rcmBusy} onClick={() => runRcmWorkflow('prepare')} style={btnSecondary}>Prepare</button>
+                <button type="button" disabled={rcmBusy} onClick={() => runRcmWorkflow('review')} style={btnSecondary}>Review</button>
+                <button type="button" disabled={rcmBusy} onClick={() => runRcmWorkflow('approve')} style={btnSecondary}>Approve</button>
+                <button type="button" disabled={rcmBusy || !rcmConfirm} onClick={() => runRcmWorkflow('include')} style={btnPrimary}>
+                  Include in Draft GSTR-3B
+                </button>
+                <button type="button" disabled={rcmBusy} onClick={() => runRcmWorkflow('lock')} style={btnSecondary}>Lock Period</button>
+              </div>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, fontSize: 12 }}>
+                <input type="checkbox" checked={rcmConfirm} onChange={(e) => setRcmConfirm(e.target.checked)} />
+                I confirm draft inclusion only (does not file the return; no new accounting JV).
+              </label>
+              {rcmRecon ? (
+                <>
+                  <div style={{ fontSize: 12, marginBottom: 12 }}>
+                    <strong>Workflow:</strong> {rcmRecon.workflow?.workflowStatus || 'DRAFT'}
+                    {rcmRecon.workflow?.version ? ` · v${rcmRecon.workflow.version}` : ''}
+                    {rcmRecon.periodLocked ? ' · LOCKED' : ''}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
+                      <div style={{ fontWeight: 800, marginBottom: 6 }}>A. RCM Liability Proposed (3.1(d))</div>
+                      <div>Taxable ₹{fmt(rcmRecon.preview?.liabilityProposed?.taxableValue)}</div>
+                      <div>CGST ₹{fmt(rcmRecon.preview?.liabilityProposed?.cgst)} · SGST ₹{fmt(rcmRecon.preview?.liabilityProposed?.sgst)} · IGST ₹{fmt(rcmRecon.preview?.liabilityProposed?.igst)}</div>
+                    </div>
+                    <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
+                      <div style={{ fontWeight: 800, marginBottom: 6 }}>B. RCM ITC Proposed (4(A)(3))</div>
+                      <div>CGST ₹{fmt(rcmRecon.preview?.itcProposed?.cgst)} · SGST ₹{fmt(rcmRecon.preview?.itcProposed?.sgst)} · IGST ₹{fmt(rcmRecon.preview?.itcProposed?.igst)}</div>
+                    </div>
+                  </div>
+                  {reportData?.rcmPhase2 ? (
+                    <div style={{ marginBottom: 12, fontSize: 12, color: '#0f766e' }}>
+                      Live GSTR-3B overlay: {reportData.rcmPhase2.banner}
+                    </div>
+                  ) : null}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr>
+                          {['Source', 'Supplier', 'Liab JV', 'Paid', 'ITC Rel.', 'Liab Status', 'ITC Status', 'Exception'].map((h) => (
+                            <th key={h} style={tableHeaderStyle}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rcmRecon.rows || []).slice(0, 50).map((r) => (
+                          <tr key={String(r.liabilityId)}>
+                            <td style={cellStyle}>{r.sourceVoucherNumber || '—'}</td>
+                            <td style={cellStyle}>{r.supplier || '—'}</td>
+                            <td style={cellStyle}>{r.liabilityPostingVoucher || '—'}</td>
+                            <td style={numCellStyle}>₹{fmt(r.amountPaid)}</td>
+                            <td style={numCellStyle}>₹{fmt(r.itcReleasedInBooks)}</td>
+                            <td style={cellStyle}>{r.liabilityReturnStatus}</td>
+                            <td style={cellStyle}>{r.itcReturnStatus}</td>
+                            <td style={{ ...cellStyle, color: r.exception ? '#b91c1c' : '#059669' }}>{r.exception || 'OK'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p style={{ color: '#64748b' }}>{rcmBusy ? 'Loading…' : 'Click Refresh to load RCM reconciliation for this period.'}</p>
+              )}
+            </div>
+          )}
         </>
+      ) : activeTab === 'rcm' ? (
+        <div style={cardStyle}>
+          <SectionTitle title="Phase 2D — RCM GSTR-3B Reconciliation" subtitle={`Period ${returnPeriod}`} />
+          <button type="button" disabled={rcmBusy} onClick={fetchRcmRecon} style={btnPrimary}>Load RCM Reconciliation</button>
+          {rcmRecon ? (
+            <div style={{ marginTop: 16, fontSize: 12 }}>
+              Rows: {(rcmRecon.rows || []).length} · Workflow: {rcmRecon.workflow?.workflowStatus || 'DRAFT'}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div style={{ padding: '100px 0', textAlign: 'center', background: '#fff', borderRadius: '20px', border: '2px dashed #e2e8f0' }}>
            <Eye size={48} color="#cbd5e1" style={{ marginBottom: '16px' }} />

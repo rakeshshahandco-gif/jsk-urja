@@ -97,7 +97,13 @@ const voucherSchema = new mongoose.Schema({
 
     isSystemGenerated: { type: Boolean, default: false },
 
-    /** Expense TDS (194C etc.) — threshold + posting audit */
+    /**
+     * Phase 2B-B — RCM liability posting audit on Journal vouchers (no new collection).
+     * Stored only on system-generated RCM liability / reversal journals.
+     */
+    rcmLiabilityMeta: { type: mongoose.Schema.Types.Mixed, default: null },
+
+/** Expense TDS (194C etc.) — threshold + posting audit */
     tdsSection: { type: String, trim: true, default: '' },
     tdsAmount: { type: Number, default: 0, min: 0 },
     tdsThresholdBaseAmount: { type: Number, default: 0, min: 0 },

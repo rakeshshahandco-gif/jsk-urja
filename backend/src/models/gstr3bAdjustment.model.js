@@ -69,6 +69,15 @@ const gstr3bAdjustmentSchema = new mongoose.Schema({
         rcmLiability: { type: adjustmentEntrySchema, default: () => ({}) },
     },
 
+    /**
+     * Phase 2D — RCM reconciliation / GSTR-3B inclusion (no accounting JVs).
+     * Stored on existing gstr3badjustments to avoid a new Atlas collection.
+     */
+    rcmPhase2: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+
     remarks: { type: String, default: '' },
     
     auditLog: [{
@@ -80,7 +89,7 @@ const gstr3bAdjustmentSchema = new mongoose.Schema({
         reason: String
     }],
 
-    status: { type: String, default: 'Draft' }, // Draft, Finalized
+    status: { type: String, default: 'Draft' }, // Draft | Finalized | Filed | Locked
 }, { timestamps: true });
 
 gstr3bAdjustmentSchema.index({ financialYear: 1, month: 1 }, { unique: true });

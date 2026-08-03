@@ -97,6 +97,7 @@ import ewayBillRoute from './ewayBill.routes.js';
 import eInvoiceRoute from './eInvoice.routes.js';
 import gstReportRoute from './gstReport.routes.js';
 import gstReconciliationRoute from './gstReconciliation.routes.js';
+import rcmRoute from './rcm.routes.js';
 import backupRoute from './backup.routes.js';
 import distributorRoute from './distributor.route.js';
 import userHomePreferenceRoute from './userHomePreference.route.js';
@@ -597,6 +598,10 @@ const defaultRoutes = [
   {
     path: '/gst-reconciliation',
     route: gstReconciliationRoute,
+  },
+  {
+    path: '/rcm',
+    route: rcmRoute,
   },
     {
         path: '/distributors',

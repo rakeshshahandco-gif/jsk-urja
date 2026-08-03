@@ -230,6 +230,14 @@ const supplierSchema = Joi.object({
     country: Joi.string().optional().allow(''),
     gstNumber: Joi.string().optional().allow(''),
     gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional().allow(''),
+    gstRegistrationStatus: Joi.string().valid(
+        '', 'Registered Regular', 'Composition', 'Unregistered', 'SEZ', 'Overseas', 'Exempt Entity',
+    ).optional().allow(''),
+    supplierChargesGst: Joi.string().valid(
+        '', 'Forward Charge', 'Reverse Charge', 'Transaction-wise', 'Not Applicable',
+    ).optional().allow(''),
+    defaultPlaceOfSupply: Joi.string().optional().allow(''),
+
     panNumber: Joi.string().optional().allow(''),
     deducteeConstitution: Joi.string().optional().allow(''),
     paymentTerms: Joi.string().optional().allow(''),

@@ -359,13 +359,63 @@ export default function SupplierListPage() {
                             </div>
                         </div>
 
-                        {/* ── Section 3: GST & Tax ── */}
-                        <div style={secTitle}>🔰 GST & Tax Details</div>
+                        {/* ── Section 3: Supplier Tax Profile ── */}
+                        <div style={secTitle}>🔰 Supplier Tax Profile</div>
+                        <p style={{ fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 14, lineHeight: 1.45 }}>
+                            Party identity for GST/TDS/RCM. Expense ledgers (Rent, Transport, etc.) hold transaction tax nature only — not PAN/GSTIN.
+                        </p>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            {show('panNumber') && (
+                            <div>
+                                <label style={lbl}>{fieldLabel('panNumber', 'PAN Number')}</label>
+                                <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" {...fieldProps('panNumber')} />
+                            </div>
+                            )}
+                            <div>
+                                <label style={lbl}>PAN available</label>
+                                <select value={modal.data.panAvailable === false ? 'no' : 'yes'} onChange={e => set('panAvailable', e.target.value !== 'no')} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="yes">Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                            </div>
+                            <div style={{ gridColumn: 'span 3' }}>
+                                <label style={lbl}>Deductee type / constitution</label>
+                                <select value={modal.data.deducteeConstitution || ''} onChange={e => set('deducteeConstitution', e.target.value)} style={{ ...inp, cursor: 'pointer' }} title="Used with TDS Master to pick Individual/HUF vs company rate (e.g. 194C 1% vs 2%).">
+                                    {DEDUCTEE_CONSTITUTION_OPTIONS.map((opt) => (
+                                        <option key={opt || 'blank'} value={opt}>{opt ? opt : '— Not set —'}</option>
+                                    ))}
+                                </select>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6 }}>
+                                    Drives auto TDS rate from TDS Master by section. Not a permanent TDS section lock.
+                                </span>
+                            </div>
+                            <div>
+                                <label style={lbl}>GST Registration Status</label>
+                                <select value={modal.data.gstRegistrationStatus || ''} onChange={e => set('gstRegistrationStatus', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— Select —</option>
+                                    <option value="Registered Regular">Registered Regular</option>
+                                    <option value="Composition">Composition</option>
+                                    <option value="Unregistered">Unregistered</option>
+                                    <option value="SEZ">SEZ</option>
+                                    <option value="Overseas">Overseas</option>
+                                    <option value="Exempt Entity">Exempt Entity</option>
+                                </select>
+                            </div>
                             {show('gstNumber') && (
                             <div>
                                 <label style={lbl}>{fieldLabel('gstNumber', 'GST Number (GSTIN)')}</label>
-                                <input value={modal.data.gstNumber || ''} onChange={e => set('gstNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="22AAAAA0000A1Z5" {...fieldProps('gstNumber')} />
+                                <input
+                                    value={modal.data.gstNumber || ''}
+                                    onChange={e => set('gstNumber', e.target.value.toUpperCase())}
+                                    style={{ ...inp, fontFamily: 'monospace' }}
+                                    placeholder={modal.data.gstRegistrationStatus === 'Unregistered' ? 'Leave blank if unregistered' : '22AAAAA0000A1Z5'}
+                                    {...fieldProps('gstNumber')}
+                                />
+                                {modal.data.gstRegistrationStatus === 'Unregistered' && (
+                                    <span style={{ fontSize: 11, color: '#b45309', display: 'block', marginTop: 4 }}>
+                                        Unregistered — do not invent a GSTIN. Blank GSTIN alone does not create RCM.
+                                    </span>
+                                )}
                             </div>
                             )}
                             {show('gstNumber') && (

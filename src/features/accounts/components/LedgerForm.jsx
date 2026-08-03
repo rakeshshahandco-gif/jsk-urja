@@ -376,6 +376,58 @@ const LedgerForm = ({ initial = EMPTY, groups = [], onSave, onCancel, loading })
                                     />
                                 </div>
                             </div>
+                            <div style={{ ...grid2, ...mb }}>
+                                <div>
+                                    <label style={s.label}>Default GST Treatment</label>
+                                    <select name="gstTreatmentDefault" value={form.gstTreatmentDefault || 'TRANSACTION_WISE'} onChange={change} style={s.select}>
+                                        <option value="TRANSACTION_WISE">Transaction-wise</option>
+                                        <option value="FORWARD_CHARGE">Forward Charge</option>
+                                        <option value="RCM_CANDIDATE">RCM Candidate</option>
+                                        <option value="EXEMPT">Exempt</option>
+                                        <option value="NIL_RATED">Nil Rated</option>
+                                        <option value="NON_GST">Non-GST</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={s.label}>Supply Type</label>
+                                    <select name="supplyType" value={form.supplyType || ''} onChange={change} style={s.select}>
+                                        <option value="">—</option>
+                                        <option value="GOODS">Goods</option>
+                                        <option value="SERVICES">Services</option>
+                                        <option value="BOTH">Both</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={s.label}>Default RCM Category</label>
+                                    <select name="defaultRcmCategory" value={form.defaultRcmCategory || ''} onChange={change} style={s.select}>
+                                        <option value="">—</option>
+                                        {['RENT', 'GTA', 'COURIER', 'LEGAL', 'GENERAL', 'OTHER'].map((c) => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={s.label}>ITC Eligibility Default</label>
+                                    <select name="defaultItcEligibility" value={form.defaultItcEligibility || ''} onChange={change} style={s.select}>
+                                        <option value="">—</option>
+                                        <option value="Eligible">Eligible</option>
+                                        <option value="Ineligible">Ineligible</option>
+                                        <option value="Blocked">Blocked</option>
+                                        <option value="Review Required">Review Required</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, ...mb }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                                    <input type="checkbox" name="rcmCandidate" checked={!!form.rcmCandidate} onChange={change} style={{ accentColor: '#2563eb' }} />
+                                    RCM Candidate (does not auto-post RCM)
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                                    <input type="checkbox" name="allowTransactionTaxOverride" checked={form.allowTransactionTaxOverride !== false} onChange={change} style={{ accentColor: '#2563eb' }} />
+                                    Allow authorised transaction override
+                                </label>
+                            </div>
+                            </>
                         )}
                     </div>
                 )}

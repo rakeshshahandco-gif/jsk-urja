@@ -21,6 +21,11 @@ import { DOCUMENT_ATTACHMENTS_FEATURE } from '@/features/documents/DocumentsFeat
 import VoucherAttachmentPanel from '@/features/documents/components/VoucherAttachmentPanel';
 import PostSaveAttachModal from '@/features/documents/components/PostSaveAttachModal';
 import { scanEntryApi } from '@/services/scanEntryApi';
+import RcmPreviewPanel from '@/features/accounts/components/RcmPreviewPanel';
+import RcmAccountingPreviewPanel from '@/features/accounts/components/RcmAccountingPreviewPanel';
+import { rcmApi } from '@/services/rcmApi';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 
 
 const inp = { padding: '9px 12px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' };
@@ -44,6 +49,38 @@ export default function PurchaseInvoiceFormPage() {
     const [searchParams] = useSearchParams();
     const prefillPoId = searchParams.get('poId') || '';
     const prefillGrnId = searchParams.get('grnId') || '';
+
+    const { selectedCompany } = useCompany();
+    const { user, hasPermission } = useAuth();
+    const canConfirmRcm = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+        String(user?.role || user?.roleName || '').toLowerCase(),
+    ) || hasPermission?.('gst.rcm.confirm');
+    const canPostRcm = hasPermission?.('gst.rcm.post_liability')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canRecordRcmPayment = hasPermission?.('gst.rcm.record_payment')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReviewRcmItc = hasPermission?.('gst.rcm.review_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReleaseRcmItc = hasPermission?.('gst.rcm.release_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const [rcmPreview, setRcmPreview] = useState(null);
+    const [rcmLoading, setRcmLoading] = useState(false);
+    const [rcmConfirmed, setRcmConfirmed] = useState(false);
+    const [rcmAccountingSim, setRcmAccountingSim] = useState(null);
+    const [rcmSimLoading, setRcmSimLoading] = useState(false);
+    const [rcmPostingEligibility, setRcmPostingEligibility] = useState(null);
+    const [rcmPostingResult, setRcmPostingResult] = useState(null);
+    const [rcmPostBusy, setRcmPostBusy] = useState(false);
+    const [rcmPaymentBusy, setRcmPaymentBusy] = useState(false);
+    const [rcmItcBusy, setRcmItcBusy] = useState(false);
 
     const [flowType, setFlowType] = useState('PO→GRN→Invoice');
     const [suppliers, setSuppliers] = useState([]);
@@ -477,6 +514,95 @@ export default function PurchaseInvoiceFormPage() {
     const rawTotal = r2(totalTaxableWithFreight + totals.cgst + totals.sgst + totals.igst + freightGstTotal);
     const roundOff = r2(Math.round(rawTotal) - rawTotal);
     const grandWithFreight = r2(rawTotal + roundOff);
+
+    useEffect(() => {
+        if (!header.supplierId || !totals.taxable) {
+            setRcmPreview(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            setRcmLoading(true);
+            try {
+                const docGst = totals.cgst + totals.sgst + totals.igst + freightGstTotal;
+                const data = await rcmApi.evaluate({
+                    companyId: selectedCompany?._id,
+                    transactionDate: header.invoiceDate,
+                    supplierId: header.supplierId,
+                    supplierGstin: header.supplierGstin,
+                    placeOfSupply: header.placeOfSupply,
+                    gstType: header.gstType,
+                    taxableValue: totals.taxable,
+                    suggestedGstRate: rows[0]?.gstRate,
+                    hsnSac: rows[0]?.hsnCode,
+                    documentGstAmount: docGst,
+                    supplierGstCharged: docGst > 0 ? true : undefined,
+                    supplierGstOption: docGst > 0 ? 'Forward Charge' : undefined,
+                }, { includeDraftRules: true });
+                setRcmPreview(data);
+            } catch {
+                setRcmPreview(null);
+            } finally {
+                setRcmLoading(false);
+            }
+        }, 500);
+        return () => clearTimeout(t);
+    }, [
+        header.supplierId,
+        header.invoiceDate,
+        header.supplierGstin,
+        header.placeOfSupply,
+        header.gstType,
+        totals.taxable,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        freightGstTotal,
+        rows,
+        selectedCompany?._id,
+    ]);
+
+    // Phase 2B-A — accounting simulation only
+    useEffect(() => {
+        if (!rcmPreview) {
+            setRcmAccountingSim(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            setRcmSimLoading(true);
+            try {
+                const supplier = suppliers.find((s) => s._id === header.supplierId);
+                const sim = await rcmApi.simulateAccounting({
+                    decision: rcmPreview,
+                    rcmConfirmed,
+                    expenseLedgerName: 'Purchase / Stock',
+                    supplierName: supplier?.name || 'Supplier',
+                    taxableValue: totals.taxable,
+                    gstType: header.gstType,
+                    rate: rows[0]?.gstRate || rcmPreview.suggestedGstRate,
+                    supplierChargedGst: totals.cgst + totals.sgst + totals.igst + freightGstTotal,
+                    rcmCategory: rcmPreview.rcmCategory,
+                });
+                setRcmAccountingSim(sim);
+            } catch {
+                setRcmAccountingSim(null);
+            } finally {
+                setRcmSimLoading(false);
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [
+        rcmPreview,
+        rcmConfirmed,
+        header.supplierId,
+        header.gstType,
+        totals.taxable,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        freightGstTotal,
+        rows,
+        suppliers,
+    ]);
 
     // ── Keyboard Navigation ───────────────────────────────────────────────
     const handleRowKeyDown = (e, rowIdx, colIdx) => {
@@ -962,6 +1088,138 @@ export default function PurchaseInvoiceFormPage() {
                                             })}
                                         </tbody>
                                     </table>
+                                </div>
+
+                                <div style={{ marginTop: 16 }}>
+                                    <RcmPreviewPanel result={rcmPreview} loading={rcmLoading} />
+                                    <RcmAccountingPreviewPanel
+                                        simulation={rcmAccountingSim}
+                                        loading={rcmSimLoading}
+                                        rcmConfirmed={rcmConfirmed}
+                                        onConfirmChange={setRcmConfirmed}
+                                        canConfirm={canConfirmRcm}
+                                        canPost={canPostRcm}
+                                        canRecordPayment={canRecordRcmPayment}
+                                        canReviewItc={canReviewRcmItc}
+                                        canReleaseItc={canReleaseRcmItc}
+                                        postingEligibility={rcmPostingEligibility}
+                                        postingResult={rcmPostingResult}
+                                        sourceVoucherId={id || null}
+                                        sourceSummary={{
+                                            voucherNumber: header.supplierInvoiceNo || id,
+                                            supplierName: suppliers.find((s) => s._id === header.supplierId)?.name,
+                                            ledgerName: 'Purchase',
+                                            taxPeriod: header.invoiceDate,
+                                        }}
+                                        postBusy={rcmPostBusy}
+                                        paymentBusy={rcmPaymentBusy}
+                                        itcBusy={rcmItcBusy}
+                                        onPostLiability={async ({ confirmPost, checkboxAccepted, remarks }) => {
+                                            setRcmPostBusy(true);
+                                            try {
+                                                const result = await rcmApi.postLiability({
+                                                    decision: rcmPreview,
+                                                    rcmConfirmed: true,
+                                                    confirmPost,
+                                                    checkboxAccepted,
+                                                    remarks,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                    sourceModule: 'PurchaseInvoice',
+                                                    sourceVoucherId: id,
+                                                    supplierName: suppliers.find((s) => s._id === header.supplierId)?.name,
+                                                    supplierId: header.supplierId,
+                                                    taxableValue: rcmAccountingSim?.rcmLiability?.taxableValue,
+                                                    gstType: header.gstType,
+                                                    rate: rcmAccountingSim?.rcmLiability?.rate,
+                                                    placeOfSupply: header.placeOfSupply,
+                                                    rcmCategory: rcmPreview?.rcmCategory,
+                                                });
+                                                setRcmPostingResult(result);
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'RCM posting failed');
+                                            } finally {
+                                                setRcmPostBusy(false);
+                                            }
+                                        }}
+                                        onRecordPayment={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) {
+                                                toast.error('No posted RCM liability found to pay.');
+                                                return;
+                                            }
+                                            setRcmPaymentBusy(true);
+                                            try {
+                                                const result = await rcmApi.recordPayment(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    status: result.status || 'PAYMENT_RECORDED',
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                    posting: result.liability || result.posting || rcmPostingResult?.posting,
+                                                    payment: result.payment,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'RCM tax payment failed');
+                                            } finally {
+                                                setRcmPaymentBusy(false);
+                                            }
+                                        }}
+                                        onSaveItcReview={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) return;
+                                            setRcmItcBusy(true);
+                                            try {
+                                                const result = await rcmApi.saveItcReview(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    posting: result.posting || rcmPostingResult?.posting,
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'ITC review failed');
+                                                throw err;
+                                            } finally {
+                                                setRcmItcBusy(false);
+                                            }
+                                        }}
+                                        onReleaseItc={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) return;
+                                            setRcmItcBusy(true);
+                                            try {
+                                                await rcmApi.ensureLedgers({
+                                                    companyId: selectedCompany?._id,
+                                                    confirmCreate: true,
+                                                    includeInputLedgers: true,
+                                                });
+                                                const result = await rcmApi.releaseItc(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    posting: result.posting || rcmPostingResult?.posting,
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                    itcRelease: result.release,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'ITC release failed');
+                                            } finally {
+                                                setRcmItcBusy(false);
+                                            }
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Totals */}

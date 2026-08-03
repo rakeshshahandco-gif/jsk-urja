@@ -22,6 +22,7 @@ import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import { previewPurchaseInvoiceTds, resolveTdsPayableLedgerId } from '../services/tdsDecisionEngine.service.js';
 import * as tdsTh from '../services/tdsThreshold.service.js';
+import { assertSourceCancelAllowedForRcm } from '../services/rcmLiabilityPostingStore.service.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
@@ -835,6 +836,11 @@ export const cancelPurchaseInvoice = asyncHandler(async (req, res) => {
         const inv = await PurchaseInvoice.findById(req.params.id).session(session);
         if (!inv) throw new ApiError(404, 'Invoice not found');
         if (inv.paymentStatus === 'Paid') throw new ApiError(400, 'Cannot cancel a fully paid invoice');
+
+        await assertSourceCancelAllowedForRcm({
+            companyId: inv.companyId || req.companyId,
+            sourceVoucherId: inv._id,
+        });
         
         const oldNumber = inv.invoiceNumber;
         inv.status = 'Cancelled';

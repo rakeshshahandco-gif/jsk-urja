@@ -14,6 +14,26 @@ const supplierSchema = new mongoose.Schema({
     pincode: { type: String, trim: true, default: '' },
     country: { type: String, trim: true, default: 'India' },
     gstNumber: { type: String, trim: true, uppercase: true, default: '' },
+    /**
+     * Party GST registration status (not on expense/income ledgers).
+     * GSTIN required only when status indicates registered.
+     */
+    gstRegistrationStatus: {
+        type: String,
+        enum: ['', 'Registered Regular', 'Composition', 'Unregistered', 'SEZ', 'Overseas', 'Exempt Entity'],
+        default: '',
+    },
+    /**
+     * How this supplier typically charges GST on invoices.
+     * Does not auto-create RCM — voucher/RCM engine decides transaction-wise.
+     */
+    supplierChargesGst: {
+        type: String,
+        enum: ['', 'Forward Charge', 'Reverse Charge', 'Transaction-wise', 'Not Applicable'],
+        default: '',
+    },
+    defaultPlaceOfSupply: { type: String, trim: true, default: '' },
+
     gstType: { type: String, enum: ['CGST / SGST', 'IGST', ''], default: '' },
     panNumber: { type: String, trim: true, uppercase: true, default: '' },
     paymentTerms: { type: String, trim: true, default: '' },

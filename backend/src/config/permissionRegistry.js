@@ -381,6 +381,33 @@ export const PERMISSION_REGISTRY = [
             { id: 'itc_register', name: 'ITC Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'hsn_summary', name: 'HSN Summary', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'gst_ledger', name: 'GST Ledger', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            {
+                id: 'rcm',
+                name: 'RCM Evaluation / Accounting Preview',
+                actions: [
+                    { id: 'evaluate', label: 'Evaluate RCM', type: 'boolean' },
+                    { id: 'confirm', label: 'Confirm RCM (preview)', type: 'boolean' },
+                    { id: 'view_accounting_preview', label: 'View Accounting Simulation', type: 'boolean' },
+                    { id: 'override', label: 'Override Treatment (preview)', type: 'boolean' },
+                    { id: 'post_liability', label: 'Post RCM Liability', type: 'boolean' },
+                    { id: 'view_payment', label: 'View RCM Tax Payment', type: 'boolean' },
+                    { id: 'record_payment', label: 'Record RCM Tax Payment', type: 'boolean' },
+                    { id: 'reverse_payment', label: 'Reverse RCM Tax Payment', type: 'boolean' },
+                    { id: 'view_itc_review', label: 'View RCM ITC Review', type: 'boolean' },
+                    { id: 'review_itc', label: 'Review RCM ITC Eligibility', type: 'boolean' },
+                    { id: 'release_itc', label: 'Release RCM ITC', type: 'boolean' },
+                    { id: 'reverse_itc', label: 'Reverse RCM ITC Release', type: 'boolean' },
+                    { id: 'view_reconciliation', label: 'View RCM GSTR-3B Reconciliation', type: 'boolean' },
+                    { id: 'prepare_return_mapping', label: 'Prepare RCM Return Mapping', type: 'boolean' },
+                    { id: 'review_return_mapping', label: 'Review RCM Return Mapping', type: 'boolean' },
+                    { id: 'approve_return_mapping', label: 'Approve RCM Return Mapping', type: 'boolean' },
+                    { id: 'include_in_gstr3b', label: 'Include RCM in Draft GSTR-3B', type: 'boolean' },
+                    { id: 'lock_period', label: 'Lock RCM GSTR-3B Period', type: 'boolean' },
+                    { id: 'create_amendment', label: 'Create RCM GSTR-3B Amendment', type: 'boolean' },
+                    { id: 'reverse', label: 'Reverse RCM Liability', type: 'boolean' },
+                ],
+            },
+
         ]
     },
     {

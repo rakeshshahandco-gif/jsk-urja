@@ -39,6 +39,39 @@ const accountLedgerSchema = new mongoose.Schema({
     isBillWise: { type: Boolean, default: false },
     creditPeriod: { type: Number, default: 0 }, // in days
     gstApplicable: { type: Boolean, default: false },
+/**
+     * Phase 2A — transaction-nature ledger tax settings (additive).
+     * Defaults do NOT auto-enable RCM on existing ledgers.
+     */
+    gstTreatmentDefault: {
+        type: String,
+        enum: [
+            'TRANSACTION_WISE',
+            'FORWARD_CHARGE',
+            'RCM_CANDIDATE',
+            'EXEMPT',
+            'NIL_RATED',
+            'NON_GST',
+            '',
+        ],
+        default: 'TRANSACTION_WISE',
+    },
+    rcmCandidate: { type: Boolean, default: false },
+    defaultRcmCategory: { type: String, trim: true, default: '' },
+    supplyType: {
+        type: String,
+        enum: ['GOODS', 'SERVICES', 'BOTH', ''],
+        default: '',
+    },
+    defaultHsnSac: { type: String, trim: true, default: '' },
+    defaultGstRateId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    defaultItcEligibility: {
+        type: String,
+        enum: ['Eligible', 'Ineligible', 'Blocked', 'Review Required', ''],
+        default: '',
+    },
+    allowTransactionTaxOverride: { type: Boolean, default: true },
+
     gstRate: { type: Number, default: 0 },
     hsnCode: { type: String, trim: true },
 

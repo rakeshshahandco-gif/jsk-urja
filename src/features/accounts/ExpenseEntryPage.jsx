@@ -22,6 +22,17 @@ import VoucherEntryTallyLayout from './components/voucherEntryTally';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { scanEntryApi } from '@/services/scanEntryApi';
+import {
+    buildGroupIndex,
+    isCreditorLedger,
+    isExpenseLedger,
+    formatLedgerBalanceDrCr,
+} from './utils/ledgerClassification';
+import RcmPreviewPanel from './components/RcmPreviewPanel';
+import RcmAccountingPreviewPanel from './components/RcmAccountingPreviewPanel';
+import { rcmApi } from '@/services/rcmApi';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const r2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -39,11 +50,51 @@ const ExpenseEntryPage = () => {
     const navigate = useNavigate();
     const { openModal, closeModal } = useModal();
     const { isFeatureEnabled } = useFeatureSettings();
-    const { selectedFY } = useFinancialYear();
     const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
+    const { selectedFY } = useFinancialYear();
+    const { selectedCompany } = useCompany();
+    const { user, hasPermission } = useAuth();
+    const canOverrideRcm = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+        String(user?.role || user?.roleName || '').toLowerCase(),
+    ) || hasPermission?.('gst.rcm.override') || hasPermission?.('gst.rcm.confirm');
+    const canPostRcm = hasPermission?.('gst.rcm.post_liability')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canRecordRcmPayment = hasPermission?.('gst.rcm.record_payment')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReviewRcmItc = hasPermission?.('gst.rcm.review_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReleaseRcmItc = hasPermission?.('gst.rcm.release_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+
+    const [rcmPreview, setRcmPreview] = useState(null);
+    const [rcmLoading, setRcmLoading] = useState(false);
+    const [rcmQuestions, setRcmQuestions] = useState({
+        propertyType: '',
+        transportServiceType: '',
+        supplierGstCharged: '',
+        consignmentNoteAvailable: '',
+        supplierGstOption: '',
+        rcmCategory: '',
+    });
+    const [rcmOverride, setRcmOverride] = useState(null);
+    const [rcmConfirmed, setRcmConfirmed] = useState(false);
+    const [rcmAccountingSim, setRcmAccountingSim] = useState(null);
+    const [rcmSimLoading, setRcmSimLoading] = useState(false);
+    const [rcmPostingEligibility, setRcmPostingEligibility] = useState(null);
+    const [rcmPostingResult, setRcmPostingResult] = useState(null);
+    const [rcmPostBusy, setRcmPostBusy] = useState(false);
+    const [rcmPaymentBusy, setRcmPaymentBusy] = useState(false);
+    const [rcmItcBusy, setRcmItcBusy] = useState(false);
 
     const [voucherTypes, setVoucherTypes] = useState([]);
-    const [cashBankAccounts, setCashBankAccounts] = useState([]);
     const [ledgers, setLedgers] = useState([]);
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -94,339 +145,313 @@ const ExpenseEntryPage = () => {
 
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
+
     useEffect(() => {
-        const fetchData = async () => {
+        const first = formData.items.find((i) => i.ledgerId && Number(i.amount) > 0);
+        if (!first?.ledgerId) {
+            setRcmPreview(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            setRcmLoading(true);
             try {
-                const [vTypes, cbAccs, allLedgers, allGroups] = await Promise.all([
-                    getVoucherTypes({ nature: 'Expense', active: true }),
-                    getCashBankAccounts({ status: 'Active' }),
-                    getLedgers(),
-                    getAccountGroups()
-                ]);
-                setVoucherTypes(vTypes);
-                setCashBankAccounts(cbAccs);
-                setLedgers(allLedgers);
-                setGroups(allGroups);
-
-                if (vTypes.length > 0) {
-                    setFormData(prev => ({ ...prev, voucherTypeId: vTypes[0]._id }));
-                }
-                const cashAcc = cbAccs.find(a => a.accountType === 'Cash');
-                if (cashAcc) {
-                    setFormData(prev => ({ ...prev, cashBankAccountId: cashAcc._id }));
-                }
-            } catch (error) {
-                toast.error('Failed to load initial data');
+                const taxable = formData.isGstEnabled
+                    ? Number(formData.totalTaxableAmount) || Number(first.amount) || 0
+                    : Number(first.amount) || 0;
+                const docGst =
+                    (Number(formData.totalCgst) || 0)
+                    + (Number(formData.totalSgst) || 0)
+                    + (Number(formData.totalIgst) || 0);
+                const data = await rcmApi.evaluate({
+                    companyId: selectedCompany?._id,
+                    transactionDate: formData.date,
+                    partyLedgerId: formData.partyId || undefined,
+                    expenseLedgerId: first.ledgerId,
+                    supplierGstin: formData.supplierGstin,
+                    placeOfSupply: formData.placeOfSupply,
+                    gstType: formData.gstType,
+                    taxableValue: taxable,
+                    suggestedGstRate: first.gstRate,
+                    hsnSac: first.hsnCode,
+                    documentGstAmount: formData.isGstEnabled ? docGst : 0,
+                    propertyType: rcmQuestions.propertyType || undefined,
+                    transportServiceType: rcmQuestions.transportServiceType || undefined,
+                    supplierGstCharged: rcmQuestions.supplierGstCharged === '' ? undefined : rcmQuestions.supplierGstCharged,
+                    consignmentNoteAvailable: rcmQuestions.consignmentNoteAvailable === '' ? undefined : rcmQuestions.consignmentNoteAvailable,
+                    supplierGstOption: rcmQuestions.supplierGstOption || undefined,
+                    rcmCategory: rcmQuestions.rcmCategory || undefined,
+                    override: rcmOverride || undefined,
+                }, { includeDraftRules: true });
+                setRcmPreview(data);
+            } catch {
+                setRcmPreview(null);
             } finally {
-                setLoading(false);
+                setRcmLoading(false);
             }
-        };
-        fetchData();
-    }, []);
+        }, 500);
+        return () => clearTimeout(t);
+    }, [
+        formData.partyId,
+        formData.date,
+        formData.items,
+        formData.isGstEnabled,
+        formData.gstType,
+        formData.supplierGstin,
+        formData.placeOfSupply,
+        formData.totalTaxableAmount,
+        formData.totalCgst,
+        formData.totalSgst,
+        formData.totalIgst,
+        rcmQuestions,
+        rcmOverride,
+        selectedCompany?._id,
+    ]);
 
-    // Effect for loading existing voucher data in edit mode
+    // Phase 2B-A — accounting simulation only (requires confirm + Reverse Charge)
     useEffect(() => {
-        if (isEdit && ledgers.length > 0) {
-            const fetchVoucherData = async () => {
-                try {
-                    const response = await getVoucher(id);
-                    if (!response) throw new Error('Voucher not found');
-                    
-                    setFormData({
-                        ...response,
-                        date: response.date ? new Date(response.date).toISOString().split('T')[0] : '',
-                        supplierBillDate: response.supplierBillDate ? new Date(response.supplierBillDate).toISOString().split('T')[0] : '',
-                        dueDate: response.dueDate ? new Date(response.dueDate).toISOString().split('T')[0] : '',
-                        voucherTypeId: response.voucherType?._id || response.voucherType,
-                        cashBankAccountId: response.cashBankAccountId?._id || response.cashBankAccountId,
-                        partyId: response.partyId?._id || response.partyId,
-                        items: response.items.map(item => ({
-                            ...item,
-                            id: item._id || Date.now() + Math.random(),
-                            ledgerId: item.ledgerId?._id || item.ledgerId,
-                            ledgerName: item.ledgerId?.name || item.ledgerName
-                        }))
+        if (!rcmPreview) {
+            setRcmAccountingSim(null);
+            return undefined;
+        }
+        const first = formData.items.find((i) => i.ledgerId && Number(i.amount) > 0);
+        const t = setTimeout(async () => {
+            setRcmSimLoading(true);
+            try {
+                const taxable = formData.isGstEnabled
+                    ? Number(formData.totalTaxableAmount) || Number(first?.amount) || 0
+                    : Number(first?.amount) || 0;
+                const sim = await rcmApi.simulateAccounting({
+                    decision: rcmPreview,
+                    rcmConfirmed,
+                    expenseLedgerName: first?.ledgerName || 'Rent Expense',
+                    supplierName: formData.partyName || 'Supplier',
+                    taxableValue: taxable,
+                    gstType: formData.gstType,
+                    rate: first?.gstRate || rcmPreview.suggestedGstRate,
+                    supplierChargedGst: formData.isGstEnabled
+                        ? ((Number(formData.totalCgst) || 0)
+                            + (Number(formData.totalSgst) || 0)
+                            + (Number(formData.totalIgst) || 0))
+                        : 0,
+                    rcmCategory: rcmPreview.rcmCategory || rcmQuestions.rcmCategory,
+                });
+                setRcmAccountingSim(sim);
+            } catch {
+                setRcmAccountingSim(null);
+            } finally {
+                setRcmSimLoading(false);
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [
+        rcmPreview,
+        rcmConfirmed,
+        formData.partyName,
+        formData.gstType,
+        formData.isGstEnabled,
+        formData.totalTaxableAmount,
+        formData.totalCgst,
+        formData.totalSgst,
+        formData.totalIgst,
+        formData.items,
+        rcmQuestions.rcmCategory,
+    ]);
+
+    // Phase 2B-B — posting eligibility (no side effects)
+    useEffect(() => {
+        if (!rcmPreview || !rcmConfirmed || !rcmAccountingSim?.simulationGenerated) {
+            setRcmPostingEligibility(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            try {
+                const elig = await rcmApi.postingEligibility({
+                    decision: rcmPreview,
+                    rcmConfirmed: true,
+                    companyId: selectedCompany?._id,
+                    sourceVoucherId: id || undefined,
+                    taxableValue: rcmAccountingSim?.rcmLiability?.taxableValue,
+                    gstType: formData.gstType,
+                    rate: rcmAccountingSim?.rcmLiability?.rate,
+                });
+                setRcmPostingEligibility(elig);
+            } catch {
+                setRcmPostingEligibility({
+                    eligible: false,
+                    reason: 'Could not evaluate posting eligibility.',
+                });
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [
+        rcmPreview,
+        rcmConfirmed,
+        rcmAccountingSim,
+        id,
+        selectedCompany?._id,
+        formData.gstType,
+    ]);
+
+    // Load existing posting when editing
+    useEffect(() => {
+        if (!id || !selectedCompany?._id) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const rows = await rcmApi.listPostings({ sourceVoucherId: id });
+                if (!cancelled && rows?.length) {
+                    const active = rows.find((r) => r.postingStatus === 'POSTED') || rows[0];
+                    setRcmPostingResult({
+                        status: active.postingStatus === 'REVERSED' ? 'REVERSED' : 'ALREADY_POSTED',
+                        banner: active.postingStatus === 'POSTED'
+                            ? 'RCM Liability Already Posted'
+                            : 'RCM Liability Reversed',
+                        posting: active,
+                        alreadyPosted: active.postingStatus === 'POSTED',
                     });
-                } catch (error) {
-                    console.error('FetchVoucher Error:', error);
-                    toast.error('Failed to load expense for editing');
-                    navigate(PATHS.ACCOUNTS.VOUCHERS);
                 }
-            };
-            fetchVoucherData();
-        }
-    }, [id, isEdit, ledgers.length]);
+            } catch { /* ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, [id, selectedCompany?._id]);
 
-    // Helper for Real-time Totals
-    const calculateTotals = (items, isGst, gstType) => {
-        let taxable = 0, cgst = 0, sgst = 0, igst = 0;
-        const isIGST = gstType === 'IGST';
-
-        items.forEach(item => {
-            const amt = parseFloat(item.amount || 0);
-            taxable += amt;
-            if (isGst && item.gstRate > 0) {
-                if (isIGST) {
-                    igst += r2(amt * item.gstRate / 100);
-                } else {
-                    cgst += r2(amt * (item.gstRate / 2) / 100);
-                    sgst += r2(amt * (item.gstRate / 2) / 100);
-                }
-            }
-        });
-
-        const rawTotal = taxable + cgst + sgst + igst;
-        const rounded = Math.round(rawTotal);
-        const ro = r2(rounded - rawTotal);
-
-        return {
-            totalTaxableAmount: r2(taxable),
-            totalCgst: r2(cgst),
-            totalSgst: r2(sgst),
-            totalIgst: r2(igst),
-            totalTax: r2(cgst + sgst + igst),
-            roundOff: ro,
-            grandTotal: rounded,
-            totalAmount: isGst ? rounded : taxable
-        };
-    };
-
-    // Combined Account List for Header (Cash + Bank + Suppliers)
-    const combinedHeaderAccounts = useMemo(() => {
-        const cb = cashBankAccounts.map(a => ({
-            value: a._id,
-            label: `${a.accountName} (${a.accountType})`,
-            type: a.accountType, // Cash or Bank
-            balance: a.currentBalance,
-            isCB: true,
-            ledgerId: a.ledgerId
-        }));
-        
-        const suppliers = ledgers.filter(l => l.type === 'Supplier' || l.groupName?.includes('Creditors')).map(l => ({
-            value: l._id,
-            label: `${l.name} (Supplier)`,
-            type: 'Credit',
-            balance: l.currentBalance,
-            isCB: false,
-            ledgerId: l._id
-        }));
-
-        return [...cb, ...suppliers];
-    }, [cashBankAccounts, ledgers]);
-
-    const handleAccountChange = (val) => {
-        const acc = combinedHeaderAccounts.find(a => a.value === val);
-        if (!acc) return;
-
-        const partyLedger = !acc.isCB ? ledgers.find(l => l._id === val) : null;
-        const supplierState = (partyLedger?.state || '').trim().toUpperCase();
-        const homeState = 'MAHARASHTRA';
-        const isLocal = supplierState === homeState || supplierState === '';
-
-        setFormData(prev => {
-            const next = {
-                ...prev,
-                expenseType: acc.type === 'Cash' || acc.type === 'Bank' ? acc.type : 'Credit',
-                cashBankAccountId: acc.isCB ? acc.value : null,
-                partyId: !acc.isCB ? acc.value : null,
-                partyName: !acc.isCB ? acc.label.replace(' (Supplier)', '') : '',
-                placeOfSupply: partyLedger?.state || prev.placeOfSupply,
-                gstType: isLocal ? 'CGST / SGST' : 'IGST'
-            };
-            const totals = calculateTotals(next.items, next.isGstEnabled, next.gstType);
-            return { ...next, ...totals };
-        });
-    };
-
-    const handleFixAccountLedger = async (accountId) => {
-        if (!accountId) return;
-        setLoading(true);
+    const handlePostRcmLiability = async ({ confirmPost, checkboxAccepted, remarks }) => {
+        const first = formData.items.find((i) => i.ledgerId && Number(i.amount) > 0);
+        setRcmPostBusy(true);
         try {
-            await autoLinkSingleLedger(accountId, 'CashBankAccount');
-            toast.success('Ledger linked successfully');
-            // Refresh accounts and ledgers
-            const [cbAccs, allLedgers] = await Promise.all([
-                getCashBankAccounts({ status: 'Active' }),
-                getLedgers()
-            ]);
-            setCashBankAccounts(cbAccs);
-            setLedgers(allLedgers);
-        } catch (error) {
-            toast.error('Failed to link ledger automatically');
+            const result = await rcmApi.postLiability({
+                decision: rcmPreview,
+                rcmConfirmed: true,
+                confirmPost,
+                checkboxAccepted,
+                remarks,
+                companyId: selectedCompany?._id,
+                financialYear: selectedFY?.name || selectedFY,
+                sourceModule: 'ExpenseVoucher',
+                sourceVoucherId: id,
+                // Deterministic line id — do not use Date.now() / random on retry
+                sourceLineId: first?.ledgerId
+                    ? `line:${id}|${first.ledgerId}|0|${Number(rcmAccountingSim?.rcmLiability?.taxableValue) || 0}`
+                    : 'header',
+                lineIndex: 0,
+                expenseLedgerName: first?.ledgerName,
+                expensePurchaseLedgerName: first?.ledgerName,
+                expensePurchaseLedgerId: first?.ledgerId,
+                supplierName: formData.partyName,
+                supplierId: formData.partyId,
+                taxableValue: rcmAccountingSim?.rcmLiability?.taxableValue,
+                gstType: formData.gstType,
+                rate: rcmAccountingSim?.rcmLiability?.rate,
+                placeOfSupply: formData.placeOfSupply,
+                rcmCategory: rcmPreview?.rcmCategory || rcmQuestions.rcmCategory,
+            });
+            setRcmPostingResult(result);
+        } catch (err) {
+            const msg = err?.response?.data?.message || err?.message || 'RCM liability posting failed';
+            window.alert(msg);
         } finally {
-            setLoading(false);
+            setRcmPostBusy(false);
         }
     };
 
-    const LedgerLinkMissingAlert = ({ accountId, isCB }) => {
-        if (!isCB || !accountId) return null;
-        const account = cashBankAccounts.find(a => a._id === accountId);
-        if (!account || account.ledgerId) return null;
-
-        return (
-            <div style={{ marginTop: 12, padding: '12px 16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <AlertTriangle size={20} color="#f97316" />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 13, color: '#9a3412', fontWeight: 700 }}>Ledger Link Missing</span>
-                        <span style={{ fontSize: 11, color: '#c2410c' }}>"{account.accountName}" needs an accounting ledger to save this entry.</span>
-                    </div>
-                </div>
-                <button 
-                    type="button"
-                    onClick={() => handleFixAccountLedger(account._id)}
-                    style={{ padding: '7px 14px', background: '#f97316', color: '#fff', border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(249,115,22,0.3)' }}
-                    onMouseOver={(e) => e.target.style.background = '#ea580c'}
-                    onMouseOut={(e) => e.target.style.background = '#f97316'}
-                >
-                    Create & Link
-                </button>
-            </div>
-        );
-    };
-
-    const handleQuickCreateLedger = (searchTerm, targetField = 'expenseItem') => {
-        const defaultGroupName = targetField === 'header' ? 'Sundry Creditors' : 'Indirect Expenses';
-        const defaultGroup = groups.find(g => g.name === defaultGroupName);
-
-        openModal({
-            title: `Quick Create Ledger: ${searchTerm}`,
-            size: 'lg',
-            content: (
-                <LedgerForm 
-                    initial={{ name: searchTerm, underGroup: defaultGroup?._id }}
-                    groups={groups}
-                    onCancel={closeModal}
-                    onSave={async (data) => {
-                        try {
-                            const newLedger = await createLedger(data);
-                            toast.success('Ledger created successfully');
-                            
-                            // Refresh lists
-                            const [lData, cbData] = await Promise.all([getLedgers(), getCashBankAccounts({ status: 'Active' })]);
-                            setLedgers(lData);
-                            setCashBankAccounts(cbData);
-
-                            // Auto-select based on where it was created
-                            if (targetField === 'header') {
-                                // We need to determine if it's a CB or Supplier
-                                const isCB = data.underGroup === groups.find(g => g.name === 'Bank Accounts' || g.name === 'Cash-in-hand')?._id;
-                                setFormData(prev => ({
-                                    ...prev,
-                                    expenseType: isCB ? 'Cash' : 'Credit',
-                                    cashBankAccountId: isCB ? newLedger._id : null,
-                                    partyId: !isCB ? newLedger._id : null,
-                                    partyName: !isCB ? newLedger.name : ''
-                                }));
-                            } else if (targetField.startsWith('item-')) {
-                                const itemId = parseInt(targetField.split('-')[1]);
-                                handleItemChange(itemId, 'ledgerId', newLedger._id);
-                            }
-
-                            closeModal();
-                        } catch (err) {
-                            toast.error(err.response?.data?.message || 'Failed to create ledger');
-                        }
-                    }}
-                />
-            )
-        });
-    };
-
-    const handleHeaderChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        const val = type === 'checkbox' ? checked : value;
-        
-        setFormData(prev => {
-            const next = { ...prev, [name]: val };
-            if (name === 'isGstEnabled' || name === 'gstType') {
-                const totals = calculateTotals(next.items, next.isGstEnabled, next.gstType);
-                return { ...next, ...totals };
-            }
-            return next;
-        });
-    };
-
-    const handleItemChange = (id, field, value) => {
-        setFormData(prev => {
-            let isAnyGstEnabled = prev.isGstEnabled;
-            const newItems = prev.items.map(item => {
-                if (item.id === id) {
-                    const updated = { ...item, [field]: value };
-                    
-                    if (field === 'ledgerId') {
-                        const ledger = ledgers.find(l => l._id === value);
-                        updated.ledgerName = ledger ? ledger.name : '';
-                        
-                        // Auto-sync GST Rate and HSN from Ledger Master
-                        if (ledger?.gstRate > 0 || ledger?.hsnCode) {
-                            if (ledger.gstRate > 0) {
-                                updated.gstRate = ledger.gstRate;
-                                isAnyGstEnabled = true; // Auto-enable GST if rate found
-                            }
-                            if (ledger.hsnCode) {
-                                updated.hsnCode = ledger.hsnCode;
-                            }
-                        }
-                    }
-                    return updated;
-                }
-                return item;
+    const handleRecordRcmPayment = async (payload) => {
+        const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+        if (!postingId) {
+            window.alert('No posted RCM liability found to pay.');
+            return;
+        }
+        setRcmPaymentBusy(true);
+        try {
+            const result = await rcmApi.recordPayment(postingId, {
+                ...payload,
+                companyId: selectedCompany?._id,
+                financialYear: selectedFY?.name || selectedFY,
             });
-            const totals = calculateTotals(newItems, isAnyGstEnabled, prev.gstType);
-            return { ...prev, items: newItems, isGstEnabled: isAnyGstEnabled, ...totals };
+            setRcmPostingResult({
+                ...rcmPostingResult,
+                status: result.status || 'PAYMENT_RECORDED',
+                banner: result.banner,
+                message: result.message,
+                posting: result.liability || result.posting || rcmPostingResult?.posting,
+                payment: result.payment,
+            });
+        } catch (err) {
+            window.alert(err?.response?.data?.message || err?.message || 'RCM tax payment failed');
+        } finally {
+            setRcmPaymentBusy(false);
+        }
+    };
+
+    const refreshPostingAfterItc = (result) => {
+        setRcmPostingResult({
+            ...rcmPostingResult,
+            status: result.status || rcmPostingResult?.status,
+            banner: result.banner,
+            message: result.message,
+            posting: result.posting || result.liability || rcmPostingResult?.posting,
+            itcRelease: result.release,
         });
     };
 
-    const addItem = () => {
-        setFormData(prev => ({
-            ...prev,
-            items: [...prev.items, { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', hsnCode: '', gstRate: 0 }]
-        }));
+    const handleSaveItcReview = async (payload) => {
+        const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+        if (!postingId) return;
+        setRcmItcBusy(true);
+        try {
+            const result = await rcmApi.saveItcReview(postingId, {
+                ...payload,
+                companyId: selectedCompany?._id,
+            });
+            refreshPostingAfterItc(result);
+        } catch (err) {
+            window.alert(err?.response?.data?.message || err?.message || 'ITC review failed');
+            throw err;
+        } finally {
+            setRcmItcBusy(false);
+        }
     };
 
-    const removeItem = (id) => {
-        if (formData.items.length === 1) return;
-        setFormData(prev => {
-            const newItems = prev.items.filter(item => item.id !== id);
-            const totals = calculateTotals(newItems, prev.isGstEnabled, prev.gstType);
-            return { ...prev, items: newItems, ...totals };
-        });
-    };
-
-    const buildExpenseTdsPreviewBody = () => {
-        const totals = calculateTotals(formData.items, formData.isGstEnabled, formData.gstType);
-        const processingTotal = formData.isGstEnabled ? totals.grandTotal : totals.totalAmount;
-        return {
-            partyId: toApiId(formData.partyId) || undefined,
-            date: formData.date,
-            items: formData.items.map((item) => ({
-                ...item,
-                ledgerId: toApiId(item.ledgerId) || null,
-                type: item.type || 'Debit',
-            })),
-            isGstEnabled: formData.isGstEnabled,
-            processingTotal,
-            grandTotal: totals.grandTotal,
-            totalAmount: totals.totalAmount,
-            totalTaxableAmount: formData.isGstEnabled ? totals.totalTaxableAmount : undefined,
-            totalTax: formData.isGstEnabled ? totals.totalTax : undefined,
-            totalCgst: formData.isGstEnabled ? totals.totalCgst : undefined,
-            totalSgst: formData.isGstEnabled ? totals.totalSgst : undefined,
-            totalIgst: formData.isGstEnabled ? totals.totalIgst : undefined,
-            roundOff: formData.isGstEnabled ? totals.roundOff : undefined,
-            excludeVoucherId: isEdit ? id : undefined,
-            expenseTdsSectionResolution: expenseTdsSectionResolutionRef.current || undefined,
-        };
+    const handleReleaseItc = async (payload) => {
+        const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+        if (!postingId) return;
+        setRcmItcBusy(true);
+        try {
+            await rcmApi.ensureLedgers({
+                companyId: selectedCompany?._id,
+                confirmCreate: true,
+                includeInputLedgers: true,
+            });
+            const result = await rcmApi.releaseItc(postingId, {
+                ...payload,
+                companyId: selectedCompany?._id,
+                financialYear: selectedFY?.name || selectedFY,
+            });
+            refreshPostingAfterItc(result);
+        } catch (err) {
+            window.alert(err?.response?.data?.message || err?.message || 'ITC release failed');
+        } finally {
+            setRcmItcBusy(false);
+        }
     };
 
     const performSave = async (shouldClose, { tdsUserConfirmed = false, tdsPopupSkipped = false }) => {
+        if (!formData.voucherTypeId) {
+            throw new Error(
+                'No active Expense Voucher series is configured for this company and financial year.',
+            );
+        }
+        if (!toApiId(formData.partyId)) {
+            throw new Error(
+                'Expense Voucher requires a Supplier or Creditor. Use Payment Voucher for Bank or Cash payment.',
+            );
+        }
         const totals = calculateTotals(formData.items, formData.isGstEnabled, formData.gstType);
         const payload = {
             ...formData,
             nature: 'Expense',
+            expenseType: 'Credit',
             partyId: toApiId(formData.partyId) || null,
-            cashBankAccountId: toApiId(formData.cashBankAccountId) || null,
+            cashBankAccountId: null,
             items: formData.items.map((item) => ({
                 ...item,
                 ledgerId: toApiId(item.ledgerId) || null,
@@ -1003,6 +1028,93 @@ const ExpenseEntryPage = () => {
                     </div>
                 </div>
             )}
+
+{/* Phase 2A — RCM / GST treatment preview (no posting) */}
+                        <div style={{ marginTop: 20, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                            <RcmPreviewPanel
+                                result={rcmPreview}
+                                loading={rcmLoading}
+                                canOverride={canOverrideRcm}
+                                onOverride={(ov) => setRcmOverride(ov)}
+                                onQuestionChange={(key, value) => setRcmQuestions((q) => ({ ...q, [key]: value }))}
+                                questions={[
+                                    {
+                                        key: 'rcmCategory',
+                                        label: 'RCM Category',
+                                        type: 'select',
+                                        value: rcmQuestions.rcmCategory,
+                                        options: ['RENT', 'GTA', 'COURIER', 'LEGAL', 'GENERAL', 'OTHER'],
+                                    },
+                                    {
+                                        key: 'propertyType',
+                                        label: 'Property type (Rent)',
+                                        type: 'select',
+                                        value: rcmQuestions.propertyType,
+                                        options: ['Commercial', 'Residential', 'Other'],
+                                    },
+                                    {
+                                        key: 'transportServiceType',
+                                        label: 'Transport service type',
+                                        type: 'select',
+                                        value: rcmQuestions.transportServiceType,
+                                        options: [
+                                            'GTA with consignment note',
+                                            'Courier',
+                                            'Local vehicle hire',
+                                            'Parcel service',
+                                            'Goods transport without GTA conditions',
+                                            'Other transport',
+                                        ],
+                                    },
+                                    {
+                                        key: 'supplierGstOption',
+                                        label: 'Supplier tax option',
+                                        type: 'select',
+                                        value: rcmQuestions.supplierGstOption,
+                                        options: ['Forward Charge', 'Reverse Charge', 'Exempt / Not Applicable', 'Transaction-wise', 'Unknown'],
+                                    },
+                                    {
+                                        key: 'supplierGstCharged',
+                                        label: 'Supplier GST charged on bill?',
+                                        type: 'yesno',
+                                        value: rcmQuestions.supplierGstCharged,
+                                    },
+                                    {
+                                        key: 'consignmentNoteAvailable',
+                                        label: 'Consignment note available?',
+                                        type: 'yesno',
+                                        value: rcmQuestions.consignmentNoteAvailable,
+                                    },
+                                ]}
+                            />
+                            <RcmAccountingPreviewPanel
+                                simulation={rcmAccountingSim}
+                                loading={rcmSimLoading}
+                                rcmConfirmed={rcmConfirmed}
+                                onConfirmChange={setRcmConfirmed}
+                                canConfirm={canOverrideRcm}
+                                canPost={canPostRcm}
+                                canRecordPayment={canRecordRcmPayment}
+                                canReviewItc={canReviewRcmItc}
+                                canReleaseItc={canReleaseRcmItc}
+                                postingEligibility={rcmPostingEligibility}
+                                postingResult={rcmPostingResult}
+                                sourceVoucherId={id || null}
+                                sourceSummary={{
+                                    voucherNumber: formData.voucherNo || id,
+                                    supplierName: formData.partyName,
+                                    ledgerName: formData.items.find((i) => i.ledgerId)?.ledgerName,
+                                    taxPeriod: formData.date,
+                                }}
+                                postBusy={rcmPostBusy}
+                                paymentBusy={rcmPaymentBusy}
+                                itcBusy={rcmItcBusy}
+                                onPostLiability={handlePostRcmLiability}
+                                onRecordPayment={handleRecordRcmPayment}
+                                onSaveItcReview={handleSaveItcReview}
+                                onReleaseItc={handleReleaseItc}
+                            />
+                        </div>
 
             <TdsLiabilityAlertModal
                 open={tdsAlertOpen}
