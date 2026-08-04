@@ -11,6 +11,10 @@ import {
     applyCreditNoteAllocations,
     reverseCreditNoteAllocation,
     rebuildCreditNoteBalance,
+    getCreditNoteLedgerSetup,
+    ensureCreditNoteSalesReturnLedger,
+    mapCreditNoteSalesReturnLedger,
+    listSalesReturnMappingCandidates,
 } from '../../controllers/creditDebitNote.controller.js';
 import { protect } from '../../middlewares/auth.middleware.js';
 
@@ -26,6 +30,11 @@ router.route('/')
 router.get('/available-for-customer', getAvailableCustomerCreditNotes);
 router.post('/allocate', applyCreditNoteAllocations);
 router.post('/allocations/:id/reverse', reverseCreditNoteAllocation);
+
+router.get('/ledger-setup/sales-return', getCreditNoteLedgerSetup);
+router.get('/ledger-setup/sales-return/candidates', listSalesReturnMappingCandidates);
+router.post('/ledger-setup/sales-return/ensure', ensureCreditNoteSalesReturnLedger);
+router.post('/ledger-setup/sales-return/map', mapCreditNoteSalesReturnLedger);
 
 router.route('/:id')
     .get(getCreditDebitNoteById)

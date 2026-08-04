@@ -19,6 +19,14 @@ import {
     applyCustomerCreditNoteAllocations,
     reverseCustomerCreditNoteAllocation,
 } from '../services/creditNoteAllocation.service.js';
+import {
+    getSalesReturnLedgerSetupStatus,
+    createSalesReturnLedger,
+    mapLedgerToSystemCode,
+    isAuthorisedLedgerAdmin,
+    SYSTEM_LEDGER_CODES,
+} from '../services/systemLedger.service.js';
+import { AccountLedger } from '../models/accountLedger.model.js';
 
 const oid = (v) => {
     if (!v) return '';
@@ -218,8 +226,11 @@ export const finalizeCreditDebitNote = asyncHandler(async (req, res) => {
         if (req.companyId && !note.companyId) note.companyId = req.companyId;
 
         // Phase 4A Option B — Customer Credit Note only; Debit Note unchanged (no GL here).
+        // Atomic: session abort leaves note as Draft if posting fails (status not committed).
         if (note.noteType === 'Credit Note') {
-            await postCustomerCreditNoteAccounting(note, req.user.id, req.companyId, session);
+            await postCustomerCreditNoteAccounting(note, req.user.id, req.companyId, session, {
+                user: req.user,
+            });
         } else {
             await note.save({ session });
         }
@@ -317,4 +328,58 @@ export const rebuildCreditNoteBalance = asyncHandler(async (req, res) => {
     const note = await CreditDebitNote.findById(req.params.id);
     const bal = await getCreditNoteAvailableBalance(note);
     res.json(new ApiResponse(httpStatus.OK, { appliedAmount: applied, ...bal }));
+});
+
+/** GET Credit Note Sales Return ledger setup status */
+export const getCreditNoteLedgerSetup = asyncHandler(async (req, res) => {
+    const status = await getSalesReturnLedgerSetupStatus();
+    res.json(new ApiResponse(httpStatus.OK, status));
+});
+
+/** POST ensure/create SALES_RETURN ledger (authorised) */
+export const ensureCreditNoteSalesReturnLedger = asyncHandler(async (req, res) => {
+    if (!isAuthorisedLedgerAdmin(req.user)) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can create or map system ledgers');
+    }
+    const ledger = await createSalesReturnLedger({ userId: req.user.id || req.user._id });
+    res.json(new ApiResponse(httpStatus.OK, {
+        ledger: { _id: ledger._id, name: ledger.name, systemCode: ledger.systemCode },
+        systemCode: SYSTEM_LEDGER_CODES.SALES_RETURN.code,
+    }, 'Sales Return ledger ready'));
+});
+
+/** POST map existing ledger → SALES_RETURN */
+export const mapCreditNoteSalesReturnLedger = asyncHandler(async (req, res) => {
+    if (!isAuthorisedLedgerAdmin(req.user)) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can create or map system ledgers');
+    }
+    const { ledgerId } = req.body || {};
+    if (!ledgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'ledgerId is required');
+    const ledger = await mapLedgerToSystemCode(ledgerId, SYSTEM_LEDGER_CODES.SALES_RETURN.code);
+    res.json(new ApiResponse(httpStatus.OK, {
+        ledger: { _id: ledger._id, name: ledger.name, systemCode: ledger.systemCode },
+    }, 'Ledger mapped to SALES_RETURN'));
+});
+
+/** GET candidate ledgers for mapping (alias search) */
+export const listSalesReturnMappingCandidates = asyncHandler(async (req, res) => {
+    if (!isAuthorisedLedgerAdmin(req.user)) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can map system ledgers');
+    }
+    const aliases = SYSTEM_LEDGER_CODES.SALES_RETURN.aliases;
+    const or = aliases.flatMap((n) => {
+        const esc = String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return [
+            { name: new RegExp(esc, 'i') },
+            { alias: new RegExp(esc, 'i') },
+        ];
+    });
+    const rows = await AccountLedger.find({
+        $or: or,
+        status: { $ne: 'Inactive' },
+    })
+        .select('name alias systemCode groupName status')
+        .limit(50)
+        .lean();
+    res.json(new ApiResponse(httpStatus.OK, { candidates: rows, systemCode: 'SALES_RETURN' }));
 });

@@ -46,10 +46,13 @@ export const errorHandler = (err, req, res, next) => {
     const response = {
         code: statusCode,
         message,
+        ...(typeof err.code === 'string' ? { errorCode: err.code } : {}),
+        ...(err.details != null ? { details: err.details } : {}),
         ...(err.data != null ? { data: err.data } : {}),
         ...(config.env === 'development' &&
             errMsg &&
-            errMsg !== message && { details: errMsg }),
+            errMsg !== message &&
+            err.details == null && { details: errMsg }),
         ...(config.env === 'development' && { stack: err.stack }),
     };
 

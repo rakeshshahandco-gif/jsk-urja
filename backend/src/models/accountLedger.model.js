@@ -104,6 +104,18 @@ const accountLedgerSchema = new mongoose.Schema({
     isTaxLedger: { type: Boolean, default: false },
     isFixedAsset: { type: Boolean, default: false },
 
+    /**
+     * Stable system ledger key (company-scoped). Prefer this over display-name matching
+     * for automated postings (e.g. Credit Note → SALES_RETURN).
+     */
+    systemCode: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        default: '',
+        index: true,
+    },
+
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
@@ -165,6 +177,15 @@ const accountLedgerSchema = new mongoose.Schema({
 accountLedgerSchema.index({ companyId: 1, name: 1 }, { unique: true });
 accountLedgerSchema.index({ underGroup: 1 });
 accountLedgerSchema.index({ type: 1 });
+accountLedgerSchema.index(
+    { companyId: 1, systemCode: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            systemCode: { $exists: true, $type: 'string', $ne: '' },
+        },
+    },
+);
 accountLedgerSchema.index(
     { tdsPayableSectionCode: 1 },
     {

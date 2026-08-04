@@ -223,6 +223,7 @@ const initializeAccountingMasters = async (userId) => {
             { name: 'HDFC Bank', group: 'Bank Accounts', type: 'Bank', isBank: true },
             { name: 'Purchase Account', group: 'Purchase Accounts', type: 'General' },
             { name: 'Sales Account', group: 'Sales Accounts', type: 'General' },
+            { name: 'Sales Return', group: 'Sales Accounts', type: 'Income', systemCode: 'SALES_RETURN', alias: 'Sales Returns' },
             { name: 'CGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
             { name: 'SGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
             { name: 'IGST Output', group: 'GST Collection', type: 'Tax', isTaxLedger: true },
@@ -251,6 +252,11 @@ const initializeAccountingMasters = async (userId) => {
                     createdBy: userId
                 });
                 logger.info(`Created ledger: ${data.name}`);
+            } else if (data.systemCode && !ledger.systemCode) {
+                ledger.systemCode = data.systemCode;
+                if (data.alias && !ledger.alias) ledger.alias = data.alias;
+                await ledger.save();
+                logger.info(`Mapped systemCode ${data.systemCode} → ${ledger.name}`);
             }
         }
 

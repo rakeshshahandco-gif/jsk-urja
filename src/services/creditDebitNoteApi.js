@@ -25,6 +25,26 @@ export const finalizeCreditDebitNote = async (id) => {
   return response.data.data;
 };
 
+export const getCreditNoteSalesReturnSetup = async () => {
+  const response = await api.get('/credit-debit-notes/ledger-setup/sales-return');
+  return response.data.data;
+};
+
+export const ensureCreditNoteSalesReturnLedger = async () => {
+  const response = await api.post('/credit-debit-notes/ledger-setup/sales-return/ensure');
+  return response.data.data;
+};
+
+export const mapCreditNoteSalesReturnLedger = async (ledgerId) => {
+  const response = await api.post('/credit-debit-notes/ledger-setup/sales-return/map', { ledgerId });
+  return response.data.data;
+};
+
+export const listSalesReturnMappingCandidates = async () => {
+  const response = await api.get('/credit-debit-notes/ledger-setup/sales-return/candidates');
+  return response.data.data;
+};
+
 export const cancelCreditDebitNote = async (id, data) => {
   const response = await api.post(`/credit-debit-notes/${id}/cancel`, data);
   return response.data.data;

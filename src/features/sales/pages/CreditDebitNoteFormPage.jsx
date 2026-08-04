@@ -4,7 +4,10 @@ import {
     createCreditDebitNote,
     updateCreditDebitNote,
     getCreditDebitNote,
-    finalizeCreditDebitNote
+    finalizeCreditDebitNote,
+    ensureCreditNoteSalesReturnLedger,
+    mapCreditNoteSalesReturnLedger,
+    listSalesReturnMappingCandidates,
 } from '@/services/creditDebitNoteApi';
 import { getInvoiceSeries, getSalesInvoices, getSalesInvoiceById, previewNextInvoiceNo } from '@/services/salesApi';
 import { getCustomers, getCustomer } from '@/services/customerApi';
@@ -16,6 +19,7 @@ import toast from 'react-hot-toast';
 import VoucherEntryTallyLayout from '@/features/accounts/components/voucherEntryTally';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -101,11 +105,23 @@ export default function CreditDebitNoteFormPage() {
     const [searchParams] = useSearchParams();
     const { selectedFY } = useFinancialYear();
     const { selectedCompany } = useCompany();
+    const { user, hasPermission } = useAuth();
     const pathIsDebit = typeof window !== 'undefined' && window.location.pathname.includes('debit-notes');
     const defaultType = searchParams.get('type')
         || (pathIsDebit ? 'Debit Note' : 'Credit Note');
 
+    const isLedgerAdmin = (() => {
+        const role = String(user?.roleName || user?.role?.name || '').toLowerCase();
+        if (role === 'admin' || role === 'superadmin') return true;
+        return Boolean(
+            hasPermission?.('accounts.ledger_master.add') ||
+            hasPermission?.('accounts.ledger_master.edit'),
+        );
+    })();
+
     const [saving, setSaving] = useState(false);
+    const [ledgerSetupModal, setLedgerSetupModal] = useState(null); // { message, candidates }
+    const [ledgerBusy, setLedgerBusy] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [seriesLoadDone, setSeriesLoadDone] = useState(false);
     const [previewNoteNo, setPreviewNoteNo] = useState('');
@@ -503,9 +519,62 @@ export default function CreditDebitNoteFormPage() {
 
             navigate(form.noteType === 'Credit Note' ? PATHS.ACCOUNTS.CREDIT_NOTES : PATHS.ACCOUNTS.DEBIT_NOTES);
         } catch (e) {
-            toast.error(e.response?.data?.message || 'Save failed');
+            const errData = e.response?.data || {};
+            const msg = errData.message || 'Save failed';
+            const isSalesReturnMissing =
+                errData.errorCode === 'LEDGER_SALES_RETURN_MISSING' ||
+                /Sales Return ledger/i.test(msg) ||
+                /System ledger matching 'Sales Return'/i.test(msg);
+
+            if (finalize && isSalesReturnMissing) {
+                let candidates = [];
+                try {
+                    if (isLedgerAdmin) {
+                        const c = await listSalesReturnMappingCandidates();
+                        candidates = c?.candidates || [];
+                    }
+                } catch {
+                    /* ignore */
+                }
+                setLedgerSetupModal({
+                    message: 'Credit Note cannot be finalised because the Sales Return ledger is not configured.',
+                    candidates,
+                    pendingFinalizeId: null,
+                });
+                toast.error('Sales Return ledger is not configured');
+            } else {
+                toast.error(msg);
+            }
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleEnsureSalesReturnLedger = async () => {
+        if (!isLedgerAdmin) return toast.error('Only authorised users can create system ledgers');
+        setLedgerBusy(true);
+        try {
+            await ensureCreditNoteSalesReturnLedger();
+            toast.success('Sales Return ledger created/mapped. Click Finalize & Issue again.');
+            setLedgerSetupModal(null);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Could not create ledger');
+        } finally {
+            setLedgerBusy(false);
+        }
+    };
+
+    const handleMapSalesReturnLedger = async (ledgerId) => {
+        if (!isLedgerAdmin) return toast.error('Only authorised users can map system ledgers');
+        setLedgerBusy(true);
+        try {
+            await mapCreditNoteSalesReturnLedger(ledgerId);
+            toast.success('Ledger mapped to SALES_RETURN. Click Finalize & Issue again.');
+            setLedgerSetupModal(null);
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Mapping failed');
+        } finally {
+            setLedgerBusy(false);
         }
     };
 
@@ -554,6 +623,7 @@ export default function CreditDebitNoteFormPage() {
     });
 
     return (
+    <>
         <VoucherEntryTallyLayout>
         <div style={{ padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -744,5 +814,93 @@ export default function CreditDebitNoteFormPage() {
             </div>
         </div>
         </VoucherEntryTallyLayout>
+
+        {ledgerSetupModal && (
+            <div
+                style={{
+                    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1200,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+                }}
+                onClick={() => !ledgerBusy && setLedgerSetupModal(null)}
+            >
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                        background: '#fff', borderRadius: 12, maxWidth: 520, width: '100%',
+                        boxShadow: '0 20px 50px rgba(0,0,0,0.15)', padding: 22,
+                    }}
+                >
+                    <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>Sales Return ledger required</h3>
+                    <p style={{ margin: '0 0 14px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
+                        {ledgerSetupModal.message}
+                    </p>
+                    <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>
+                        System code: <strong>SALES_RETURN</strong>. The note stays Draft until accounting can post.
+                    </p>
+                    {isLedgerAdmin && ledgerSetupModal.candidates?.length > 0 && (
+                        <div style={{ marginBottom: 12, maxHeight: 160, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                            {(ledgerSetupModal.candidates || []).map((c) => (
+                                <button
+                                    key={String(c._id)}
+                                    type="button"
+                                    disabled={ledgerBusy}
+                                    onClick={() => handleMapSalesReturnLedger(c._id)}
+                                    style={{
+                                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px',
+                                        border: 'none', borderBottom: '1px solid #f1f5f9', background: '#fff',
+                                        cursor: 'pointer', fontSize: 12,
+                                    }}
+                                >
+                                    <strong>{c.name}</strong>
+                                    <span style={{ color: '#94a3b8' }}> · {c.groupName || '—'}{c.systemCode ? ` · ${c.systemCode}` : ''}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                        {isLedgerAdmin && (
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={ledgerBusy}
+                                    onClick={handleEnsureSalesReturnLedger}
+                                    style={{
+                                        padding: '8px 14px', borderRadius: 8, border: 'none',
+                                        background: '#0d9488', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12,
+                                    }}
+                                >
+                                    {ledgerBusy ? 'Working…' : 'Configure Ledger'}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={ledgerBusy}
+                                    onClick={() => navigate(PATHS.ACCOUNT_MASTER?.LEDGER_MASTER || PATHS.ACCOUNTS?.LEDGER_MASTER || '/account-master/ledgers')}
+                                    style={{
+                                        padding: '8px 14px', borderRadius: 8, border: '1px solid #cbd5e1',
+                                        background: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 12,
+                                    }}
+                                >
+                                    Map Existing Ledger
+                                </button>
+                            </>
+                        )}
+                        <button
+                            type="button"
+                            disabled={ledgerBusy}
+                            onClick={() => setLedgerSetupModal(null)}
+                            style={{
+                                padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0',
+                                background: '#f8fafc', fontWeight: 600, cursor: 'pointer', fontSize: 12,
+                            }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+    </>
     );
 }

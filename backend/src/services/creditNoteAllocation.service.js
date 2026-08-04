@@ -19,6 +19,7 @@ import { getNextVoucherNo } from '../utils/voucherUtils.js';
 import { applyBillPaymentDelta } from './accounting/billWiseSettlement.service.js';
 import { logAccountingAudit } from './accounting/accountingAudit.service.js';
 import { checkUserPermission } from '../utils/permissionUtils.js';
+import { resolveCreditNoteIncomeLedger } from './systemLedger.service.js';
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -72,10 +73,16 @@ export async function rebuildCreditNoteAppliedAmount(creditNoteId, session = nul
 
 /**
  * Option B — one idempotent linked GL voucher on Final Customer Credit Note.
- * Customer Cr once for grandTotal; Sales Returns / Output GST Dr.
+ * Customer Cr once for grandTotal; Sales Return (or mapped income) / Output GST Dr.
  * Does NOT change CN GST statutory amounts — ledger mirror only.
+ *
+ * @param {object} note
+ * @param {string} userId
+ * @param {string|null} companyId
+ * @param {import('mongoose').ClientSession} session
+ * @param {{ user?: object }} [opts]
  */
-export async function postCustomerCreditNoteAccounting(note, userId, companyId, session) {
+export async function postCustomerCreditNoteAccounting(note, userId, companyId, session, opts = {}) {
     if (note.noteType !== 'Credit Note') {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Only Customer Credit Notes post this accounting link');
     }
@@ -94,10 +101,13 @@ export async function postCustomerCreditNoteAccounting(note, userId, companyId, 
         throw new ApiError(httpStatus.BAD_REQUEST, `Customer ledger not found for ${note.customerName}`);
     }
 
-    const salesReturnLedger = await AccountLedger.findOne({ name: /Sales Return/i }).session(session);
-    if (!salesReturnLedger) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "System ledger matching 'Sales Return' is missing");
-    }
+    const incomeResolved = await resolveCreditNoteIncomeLedger(note.reason, {
+        session,
+        user: opts.user || { id: userId, roleName: 'admin' },
+        autoCreate: true,
+    });
+    const salesReturnLedger = incomeResolved.ledger;
+
     const cgstLedger = await AccountLedger.findOne({ name: 'CGST Output' }).session(session);
     const sgstLedger = await AccountLedger.findOne({ name: 'SGST Output' }).session(session);
     const igstLedger = await AccountLedger.findOne({ name: 'IGST Output' }).session(session);
@@ -125,29 +135,42 @@ export async function postCustomerCreditNoteAccounting(note, userId, companyId, 
     const igst = r2(note.totalIgst || 0);
     const roundOff = Number(note.roundOff) || 0;
 
+    const incomeNarration = incomeResolved.usedFallback
+        ? `Credit Note ${note.noteNumber} — discount (posted to ${salesReturnLedger.name})`
+        : `Credit Note ${note.noteNumber} — sales return`;
+
     const items = [
         {
             ledgerId: salesReturnLedger._id,
             ledgerName: salesReturnLedger.name,
             amount: Math.max(0.01, taxable || grand),
             type: 'Debit',
-            narration: `Credit Note ${note.noteNumber} — sales return`,
+            narration: incomeNarration,
             adjustments: [],
         },
     ];
-    if (cgst > 0 && cgstLedger) {
+    if (cgst > 0) {
+        if (!cgstLedger) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "System ledger matching 'CGST Output' is missing");
+        }
         items.push({
             ledgerId: cgstLedger._id, ledgerName: cgstLedger.name, amount: cgst, type: 'Debit',
             narration: `CN ${note.noteNumber} Output CGST reverse`, adjustments: [],
         });
     }
-    if (sgst > 0 && sgstLedger) {
+    if (sgst > 0) {
+        if (!sgstLedger) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "System ledger matching 'SGST Output' is missing");
+        }
         items.push({
             ledgerId: sgstLedger._id, ledgerName: sgstLedger.name, amount: sgst, type: 'Debit',
             narration: `CN ${note.noteNumber} Output SGST reverse`, adjustments: [],
         });
     }
-    if (igst > 0 && igstLedger) {
+    if (igst > 0) {
+        if (!igstLedger) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "System ledger matching 'IGST Output' is missing");
+        }
         items.push({
             ledgerId: igstLedger._id, ledgerName: igstLedger.name, amount: igst, type: 'Debit',
             narration: `CN ${note.noteNumber} Output IGST reverse`, adjustments: [],
@@ -171,6 +194,15 @@ export async function postCustomerCreditNoteAccounting(note, userId, companyId, 
         narration: `Credit Note ${note.noteNumber}`,
         adjustments: [],
     });
+
+    const debitSum = r2(items.filter((i) => i.type === 'Debit').reduce((s, i) => s + i.amount, 0));
+    const creditSum = r2(items.filter((i) => i.type === 'Credit').reduce((s, i) => s + i.amount, 0));
+    if (Math.abs(debitSum - creditSum) > 0.05) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            `Credit Note accounting is out of balance (Dr ${debitSum} ≠ Cr ${creditSum}). Fix amounts before finalising.`,
+        );
+    }
 
     const [voucher] = await Voucher.create([{
         voucherNo,
