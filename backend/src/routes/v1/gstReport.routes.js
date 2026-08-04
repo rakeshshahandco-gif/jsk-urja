@@ -39,4 +39,11 @@ router.get('/gstr9-reconcile', checkPermission('gst.gstr3b.view'), gstCtrl.getGs
 router.get('/missing-pos-preview', authorize('superadmin', 'admin'), gstCtrl.getMissingPosPreview);
 router.post('/sync-missing-pos', authorize('superadmin', 'admin'), gstCtrl.syncMissingPos);
 
+// Controlled Fix from Customer Master (never silent cascade)
+router.post('/fix-from-master/bulk-preview', checkPermission('gst.gstr1.invoice_correction'), gstCtrl.bulkPreviewFixFromCustomerMaster);
+router.get('/fix-from-master/:invoiceId/preview', checkPermission('gst.gstr1.invoice_correction'), gstCtrl.previewFixFromCustomerMaster);
+router.post('/fix-from-master/:invoiceId/apply', checkPermission('gst.gstr1.invoice_correction'), gstCtrl.applyFixFromCustomerMaster);
+router.get('/customers/:customerId/affected-invoices', checkPermission('gst.gstr1.view'), gstCtrl.getAffectedInvoicesMissingGst);
+router.post('/gstr1-period/mark-filed', checkPermission('gst.gstr1.invoice_correction'), gstCtrl.markGstr1PeriodFiled);
+
 export default router;

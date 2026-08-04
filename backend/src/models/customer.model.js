@@ -372,6 +372,29 @@ const customerSchema = mongoose.Schema(
             trim: true,
             default: '',
         },
+        /** GST registration lifecycle — optional; blank on existing customers */
+        gstRegistrationEffectiveDate: {
+            type: Date,
+            default: null,
+        },
+        gstCancellationDate: {
+            type: Date,
+            default: null,
+        },
+        gstStatus: {
+            type: String,
+            enum: ['Active', 'Cancelled', 'Suspended', 'Unknown', ''],
+            default: 'Unknown',
+        },
+        gstVerificationDate: {
+            type: Date,
+            default: null,
+        },
+        gstVerificationSource: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         bankName: { type: String, trim: true, default: '' },
         bankBranch: { type: String, trim: true, default: '' },
         bankAccountNumber: { type: String, trim: true, default: '' },

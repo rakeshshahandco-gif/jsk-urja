@@ -498,6 +498,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentType) filter.paymentType = paymentType;
     if (customerId) filter.customerId = customerId;
+    if (req.query.status) filter.status = req.query.status;
 
     // Series Filter (Robust with Prefix Match)
     if (series && series !== 'All Series' && series !== '') {
@@ -534,6 +535,21 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
         }).distinct('_id');
         filter.$and = filter.$and || [];
         filter.$and.push({ seriesId: { $in: estimateSeriesIds } });
+    }
+
+    // Credit/Debit Note linking: tax invoices only (exclude Estimate series)
+    if (req.query.excludeEstimates === 'true') {
+        const estimateSeriesIds = await InvoiceSeries.find({
+            $or: [{ isEstimate: true }, { documentType: 'Estimate' }],
+        }).distinct('_id');
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+            $or: [
+                { seriesId: { $nin: estimateSeriesIds } },
+                { seriesId: null },
+                { seriesId: { $exists: false } },
+            ],
+        });
     }
 
     if (search) {

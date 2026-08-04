@@ -1,0 +1,1 @@
+import{j as o}from"./index-xKDdcBrO.js";import t from"./ModuleHomePage-CHdx5Iq-.js";import"./chart-pie-L8N12QOl.js";const m=()=>o.jsx(t,{moduleName:"dashboard",title:"Home",subtitle:"Your Global Shortcuts"});export{m as default};

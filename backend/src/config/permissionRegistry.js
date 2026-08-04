@@ -404,7 +404,7 @@ export const PERMISSION_REGISTRY = [
         id: 'gst',
         name: 'GST',
         submodules: [
-            { id: 'gstr1', name: 'GSTR-1', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
+            { id: 'gstr1', name: 'GSTR-1', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }, { id: 'invoice_correction', label: 'Invoice GST Correction', type: 'boolean' }] },
             { id: 'gstr3b', name: 'GSTR-3B', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'gst_reconciliation', name: '2A / 2B Reconciliation', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'import', label: 'Import', type: 'boolean' }] },
             { id: 'gst_payable', name: 'GST Payable Summary', actions: [{ id: 'view', label: 'View', type: 'boolean' }] },

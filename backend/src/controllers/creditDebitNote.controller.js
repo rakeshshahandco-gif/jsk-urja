@@ -20,11 +20,56 @@ import {
     reverseCustomerCreditNoteAllocation,
 } from '../services/creditNoteAllocation.service.js';
 
+const oid = (v) => {
+    if (!v) return '';
+    if (typeof v === 'object' && v._id) return String(v._id);
+    return String(v);
+};
+
+/**
+ * Ensure linked original invoice belongs to the same customer/company and is not an Estimate.
+ * Does not change GST/accounting posting rules — validation only.
+ */
+async function assertOriginalInvoiceCustomerMatch(body, companyId) {
+    const invoiceId = oid(body.originalInvoiceId);
+    if (!invoiceId) return;
+
+    if (!mongoose.Types.ObjectId.isValid(invoiceId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid original invoice id');
+    }
+
+    const inv = await SalesInvoice.findById(invoiceId).populate('seriesId', 'isEstimate documentType seriesName');
+    if (!inv || inv.isDeleted) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Original invoice not found or deleted');
+    }
+
+    if (companyId && inv.companyId && String(inv.companyId) !== String(companyId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Original invoice belongs to another company');
+    }
+
+    const noteCustomerId = oid(body.customerId);
+    const invCustomerId = oid(inv.customerId);
+    if (!noteCustomerId || !invCustomerId || noteCustomerId !== invCustomerId) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            'Customer on the Credit/Debit Note must match the selected original invoice customer',
+        );
+    }
+
+    const series = inv.seriesId;
+    if (series?.isEstimate === true || series?.documentType === 'Estimate') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Estimate documents cannot be linked to a Credit/Debit Note');
+    }
+}
+
 export const createCreditDebitNote = asyncHandler(async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
         const body = req.body;
+        const companyId = req.companyId || body.companyId || null;
+        await assertOriginalInvoiceCustomerMatch(body, companyId);
+
         const fy = body.financialYear || getFYFromDate(body.noteDate || new Date());
 
         let noteNumber = body.noteNumber;
@@ -49,7 +94,7 @@ export const createCreditDebitNote = asyncHandler(async (req, res) => {
             financialYear: fy,
             createdBy: req.user.id,
             status: body.status || 'Draft',
-            companyId: req.companyId || body.companyId || null,
+            companyId,
             appliedAmount: 0,
         };
 
@@ -138,9 +183,17 @@ export const updateCreditDebitNote = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot edit finalized or cancelled notes');
     }
 
+    const body = { ...req.body };
+    const companyId = req.companyId || note.companyId || body.companyId || null;
+    const mergedForCheck = {
+        customerId: body.customerId !== undefined ? body.customerId : note.customerId,
+        originalInvoiceId: body.originalInvoiceId !== undefined ? body.originalInvoiceId : note.originalInvoiceId,
+    };
+    await assertOriginalInvoiceCustomerMatch(mergedForCheck, companyId);
+
     const updatedNote = await CreditDebitNote.findByIdAndUpdate(
         req.params.id,
-        { ...req.body, updatedBy: req.user.id },
+        { ...body, updatedBy: req.user.id },
         { new: true },
     );
     res.json(new ApiResponse(httpStatus.OK, updatedNote, 'Note updated successfully'));

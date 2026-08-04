@@ -14,6 +14,8 @@ export default function SearchableSelect({
     noOptionsMessage = null,
     onKeyDown: parentOnKeyDown,
     renderOption,
+    /** Minimum portal dropdown width (px). Useful for long customer names. */
+    dropdownMinWidth = 350,
     ...props
 }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -62,9 +64,10 @@ export default function SearchableSelect({
         options.forEach(opt => {
             const label = opt.label.toLowerCase();
             const meta = (opt.meta || '').toLowerCase();
+            const searchText = (opt.searchText || '').toLowerCase();
 
-            // Check if all search words are present in label or meta
-            const isMatch = terms.every(t => label.includes(t) || meta.includes(t));
+            // Check if all search words are present in label, meta, or explicit searchText
+            const isMatch = terms.every(t => label.includes(t) || meta.includes(t) || searchText.includes(t));
             if (!isMatch) return;
 
             // Prioritize exact start matches
@@ -87,7 +90,7 @@ export default function SearchableSelect({
             setDropdownPos({
                 top: rect.bottom + window.scrollY,
                 left: rect.left + window.scrollX,
-                width: Math.max(rect.width, 350)
+                width: Math.max(rect.width, Number(dropdownMinWidth) || 350)
             });
         }
     };
@@ -102,7 +105,7 @@ export default function SearchableSelect({
             window.removeEventListener('scroll', updatePos, true);
             window.removeEventListener('resize', updatePos);
         };
-    }, [isOpen]);
+    }, [isOpen, dropdownMinWidth]);
 
 
     useEffect(() => {
@@ -305,8 +308,8 @@ export default function SearchableSelect({
                                 >
                                     {renderOption ? renderOption(opt) : (
                                         <>
-                                            <div style={{ fontWeight: 600 }}>{opt.label}</div>
-                                            {opt.meta && <div style={{ fontSize: '10px', color: theme.muted, marginTop: '2px' }}>{opt.meta}</div>}
+                                            <div style={{ fontWeight: 600, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{opt.label}</div>
+                                            {opt.meta && <div style={{ fontSize: '10px', color: theme.muted, marginTop: '2px', whiteSpace: 'normal', wordBreak: 'break-word' }}>{opt.meta}</div>}
                                         </>
                                     )}
                                 </div>

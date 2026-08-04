@@ -1,12 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { 
-    createCreditDebitNote, 
-    updateCreditDebitNote, 
+import {
+    createCreditDebitNote,
+    updateCreditDebitNote,
     getCreditDebitNote,
-    finalizeCreditDebitNote 
+    finalizeCreditDebitNote
 } from '@/services/creditDebitNoteApi';
 import { getInvoiceSeries, getSalesInvoices, getSalesInvoiceById, previewNextInvoiceNo } from '@/services/salesApi';
+import { getCustomers, getCustomer } from '@/services/customerApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
@@ -14,6 +15,7 @@ import { numberToWords } from '@/utils/numberToWords';
 import toast from 'react-hot-toast';
 import VoucherEntryTallyLayout from '@/features/accounts/components/voucherEntryTally';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { useCompany } from '@/contexts/CompanyContext';
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -36,21 +38,85 @@ const BLANK_ITEM = () => ({
 
 const Field = ({ label, children, style = {} }) => <div style={style}><label style={labelStyle}>{label}</label>{children}</div>;
 
+const fmtInvDate = (d) => {
+    if (!d) return '—';
+    try {
+        return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+        return '—';
+    }
+};
+
+const fmtAmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+const emptyInvoiceLinkage = () => ({
+    originalInvoiceId: '',
+    originalInvoiceNumber: '',
+    originalInvoiceDate: '',
+    items: [BLANK_ITEM()],
+    freightAmount: '',
+    freightGstRate: 18,
+});
+
+/** CRM stores display name in company / contactPersons more often than customerName. */
+function resolveCustomerDisplayName(c) {
+    if (!c) return '';
+    const primary = Array.isArray(c.contactPersons)
+        ? (c.contactPersons.find((p) => p?.isPrimary) || c.contactPersons[0])
+        : null;
+    return String(
+        c.company
+        || c.name
+        || c.customerName
+        || c.legalName
+        || c.tradeName
+        || primary?.name
+        || c.sticker
+        || ''
+    ).trim();
+}
+
+function resolveCustomerMobile(c) {
+    if (!c) return '';
+    const primary = Array.isArray(c.contactPersons)
+        ? (c.contactPersons.find((p) => p?.isPrimary) || c.contactPersons[0])
+        : null;
+    return String(
+        c.mobile
+        || c.phone
+        || primary?.mobile
+        || primary?.whatsApp
+        || ''
+    ).trim();
+}
+
+function resolveCustomerGstin(c) {
+    if (!c) return '';
+    return String(c.gstin || c.gstNumber || '').trim();
+}
+
 export default function CreditDebitNoteFormPage() {
     const navigate = useNavigate();
     const { id } = useParams();
     const [searchParams] = useSearchParams();
     const { selectedFY } = useFinancialYear();
+    const { selectedCompany } = useCompany();
     const pathIsDebit = typeof window !== 'undefined' && window.location.pathname.includes('debit-notes');
     const defaultType = searchParams.get('type')
         || (pathIsDebit ? 'Debit Note' : 'Credit Note');
-    
+
     const [saving, setSaving] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [seriesLoadDone, setSeriesLoadDone] = useState(false);
     const [previewNoteNo, setPreviewNoteNo] = useState('');
     const [invoices, setInvoices] = useState([]);
+    const [invoicesLoading, setInvoicesLoading] = useState(false);
     const [allItems, setAllItems] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [customersLoading, setCustomersLoading] = useState(false);
+    const invoiceLoadSeq = useRef(0);
+    const customerLoadSeq = useRef(0);
+    const prevCompanyIdRef = useRef(selectedCompany?._id);
 
     const [form, setForm] = useState({
         noteType: defaultType,
@@ -87,6 +153,42 @@ export default function CreditDebitNoteFormPage() {
             setPreviewNoteNo('');
         }
     }, []);
+
+    const loadCustomerInvoices = useCallback(async (customerId, search = '') => {
+        if (!customerId) {
+            setInvoices([]);
+            return;
+        }
+        const seq = ++invoiceLoadSeq.current;
+        setInvoicesLoading(true);
+        try {
+            const params = {
+                customerId,
+                excludeEstimates: 'true',
+                status: 'Confirmed',
+                view: 'active',
+                limit: 100,
+                page: 1,
+            };
+            if (selectedFY) params.financialYear = selectedFY;
+            if (search && String(search).trim()) params.search = String(search).trim();
+
+            const res = await getSalesInvoices(params);
+            if (seq !== invoiceLoadSeq.current) return;
+            const list = (res.invoices || []).slice().sort((a, b) => {
+                const da = new Date(a.invoiceDate || 0).getTime();
+                const db = new Date(b.invoiceDate || 0).getTime();
+                return db - da;
+            });
+            setInvoices(list);
+        } catch {
+            if (seq !== invoiceLoadSeq.current) return;
+            setInvoices([]);
+            toast.error('Failed to load customer invoices');
+        } finally {
+            if (seq === invoiceLoadSeq.current) setInvoicesLoading(false);
+        }
+    }, [selectedFY]);
 
     useEffect(() => {
         setSeriesLoadDone(false);
@@ -127,44 +229,191 @@ export default function CreditDebitNoteFormPage() {
             setSeriesLoadDone(true);
         });
 
-        getSalesInvoices({ limit: 50, status: 'Confirmed' }).then(res => {
-            setInvoices(res.invoices || []);
-        });
-
         getItems({ limit: 1000, active: true }).then(res => {
             setAllItems(res.data || []);
         });
     }, [form.noteType, selectedFY, loadPreview]);
 
+    const loadAllCustomers = useCallback(async () => {
+        const seq = ++customerLoadSeq.current;
+        setCustomersLoading(true);
+        try {
+            // Customer list API enforces limit <= 100 — page until complete (same as Sales Invoice).
+            const pageSize = 100;
+            let page = 1;
+            let totalPages = 1;
+            const byId = new Map();
+            do {
+                const res = await getCustomers({
+                    limit: pageSize,
+                    page,
+                    sortBy: '_id:asc',
+                });
+                if (seq !== customerLoadSeq.current) return;
+                const list = res?.results || res?.data || [];
+                if (Array.isArray(list)) {
+                    for (const c of list) {
+                        const cid = String(c?._id || c?.id || '');
+                        if (!cid || byId.has(cid)) continue;
+                        byId.set(cid, c);
+                    }
+                }
+                totalPages = Number(res?.totalPages) || page;
+                if (!Array.isArray(list) || list.length < pageSize) break;
+                page += 1;
+            } while (page <= totalPages && page <= 50);
+            if (seq !== customerLoadSeq.current) return;
+            setCustomers(Array.from(byId.values()));
+        } catch (e) {
+            if (seq !== customerLoadSeq.current) return;
+            console.error('Error loading customers:', e);
+            setCustomers([]);
+            toast.error(e?.message || 'Failed to load customers');
+        } finally {
+            if (seq === customerLoadSeq.current) setCustomersLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadAllCustomers();
+    }, [loadAllCustomers, selectedCompany?._id]);
+
+    // Company switch: clear customer/invoice linkage and rely on reload above.
+    useEffect(() => {
+        const nextId = selectedCompany?._id;
+        const prevId = prevCompanyIdRef.current;
+        prevCompanyIdRef.current = nextId;
+        if (!prevId || !nextId || String(prevId) === String(nextId)) return;
+        setForm((p) => ({
+            ...p,
+            customerId: '',
+            customerName: '',
+            customerGstin: '',
+            billingAddress: '',
+            billingStateCode: '',
+            placeOfSupply: '',
+            ...emptyInvoiceLinkage(),
+        }));
+        setInvoices([]);
+    }, [selectedCompany?._id]);
+
     useEffect(() => {
         if (id) {
             getCreditDebitNote(id).then(data => {
+                const cust = data.customerId && typeof data.customerId === 'object' ? data.customerId : null;
+                const custId = cust?._id || data.customerId || '';
+                const custName = resolveCustomerDisplayName(cust) || data.customerName || '';
                 setForm({
                     ...data,
                     noteDate: data.noteDate.slice(0, 10),
-                    originalInvoiceDate: data.originalInvoiceDate?.slice(0, 10) || ''
+                    originalInvoiceDate: data.originalInvoiceDate?.slice(0, 10) || '',
+                    customerId: custId,
+                    customerName: custName,
+                    customerGstin: data.customerGstin || resolveCustomerGstin(cust) || '',
                 });
+                if (custId) loadCustomerInvoices(custId);
             });
         }
-    }, [id]);
+    }, [id, loadCustomerInvoices]);
+
+    const hasLinkedInvoiceData = (f) => {
+        if (f.originalInvoiceId) return true;
+        if (f.originalInvoiceNumber) return true;
+        if (f.originalInvoiceDate) return true;
+        if (Number(f.freightAmount) > 0) return true;
+        return (f.items || []).some((it) => it.itemId || it.itemName || Number(it.qty) > 0 || Number(it.rate) > 0);
+    };
+
+    const handleCustomerSelect = async (customerId) => {
+        if (!customerId) {
+            if (hasLinkedInvoiceData(form)) {
+                const ok = window.confirm(
+                    'Clearing customer will also clear the selected invoice and imported items. Continue?'
+                );
+                if (!ok) return;
+            }
+            setForm((p) => ({
+                ...p,
+                customerId: '',
+                customerName: '',
+                customerGstin: '',
+                billingAddress: '',
+                billingStateCode: '',
+                placeOfSupply: '',
+                ...emptyInvoiceLinkage(),
+            }));
+            setInvoices([]);
+            return;
+        }
+
+        if (
+            form.customerId
+            && String(form.customerId) !== String(customerId)
+            && hasLinkedInvoiceData(form)
+        ) {
+            const ok = window.confirm(
+                'Changing customer will clear the selected invoice and imported items. Continue?'
+            );
+            if (!ok) return;
+        }
+
+        try {
+            const fullCustomer = await getCustomer(customerId);
+            const name = resolveCustomerDisplayName(fullCustomer);
+            const gstin = resolveCustomerGstin(fullCustomer);
+            const sameCustomer = String(form.customerId) === String(customerId);
+            setForm((p) => ({
+                ...p,
+                customerId,
+                customerName: name,
+                customerGstin: gstin,
+                billingAddress: fullCustomer.billingAddress || fullCustomer.address || '',
+                billingStateCode: fullCustomer.stateCode || fullCustomer.billingStateCode || '',
+                placeOfSupply: fullCustomer.stateCode || fullCustomer.billingStateCode || p.placeOfSupply || '',
+                ...(sameCustomer ? {} : emptyInvoiceLinkage()),
+            }));
+            await loadCustomerInvoices(customerId);
+        } catch {
+            toast.error('Failed to load customer details');
+        }
+    };
 
     const handleInvoiceSelect = async (invId) => {
-        if (!invId) return;
+        if (!invId) {
+            setForm((p) => ({ ...p, ...emptyInvoiceLinkage() }));
+            return;
+        }
+        if (!form.customerId) {
+            toast.error('Select customer first');
+            return;
+        }
         try {
             const inv = await getSalesInvoiceById(invId);
+            const invCustomerId = inv.customerId?._id || inv.customerId;
+            if (String(invCustomerId) !== String(form.customerId)) {
+                toast.error('Selected invoice does not belong to this customer');
+                return;
+            }
+            const series = inv.seriesId;
+            if (series?.isEstimate === true || series?.documentType === 'Estimate') {
+                toast.error('Estimate documents cannot be linked');
+                return;
+            }
             setForm(p => ({
                 ...p,
                 originalInvoiceId: inv._id,
                 originalInvoiceNumber: inv.invoiceNumber,
                 originalInvoiceDate: inv.invoiceDate.slice(0, 10),
-                customerId: inv.customerId?._id || inv.customerId,
-                customerName: inv.customerName,
-                customerGstin: inv.customerGstin || '',
-                billingAddress: inv.billingAddress || '',
-                billingStateCode: inv.billingStateCode || '',
-                placeOfSupply: inv.placeOfSupply || '',
+                customerId: invCustomerId,
+                customerName: inv.customerName || p.customerName,
+                customerGstin: inv.customerGstin || p.customerGstin || '',
+                billingAddress: inv.billingAddress || p.billingAddress || '',
+                billingStateCode: inv.billingStateCode || p.billingStateCode || '',
+                placeOfSupply: inv.placeOfSupply || p.placeOfSupply || '',
                 gstType: inv.gstType || 'CGST / SGST',
-                items: inv.items.map(i => ({
+                freightAmount: inv.freightAmount ?? '',
+                freightGstRate: inv.freightGstRate ?? 18,
+                items: (inv.items || []).map(i => ({
                     itemId: i.itemId,
                     itemCode: i.itemCode,
                     itemName: i.itemName,
@@ -212,12 +461,22 @@ export default function CreditDebitNoteFormPage() {
 
     const handleSubmit = async (finalize = false) => {
         if (!form.seriesId) return toast.error('Select Series');
-        if (!form.customerName) return toast.error('Customer is required');
-        
+        if (!form.customerId || !form.customerName) return toast.error('Customer is required');
+        if (form.originalInvoiceId) {
+            const linked = invoices.find((inv) => String(inv._id) === String(form.originalInvoiceId));
+            if (linked) {
+                const linkedCust = linked.customerId?._id || linked.customerId;
+                if (linkedCust && String(linkedCust) !== String(form.customerId)) {
+                    return toast.error('Customer must match the selected invoice');
+                }
+            }
+        }
+
         setSaving(true);
         try {
             const payload = {
                 ...form,
+                customerId: form.customerId,
                 items: processedItems,
                 subTotal: processedItems.reduce((s, i) => s + i.taxable, 0),
                 totalTaxableAmount: totalTaxable,
@@ -227,7 +486,8 @@ export default function CreditDebitNoteFormPage() {
                 totalIgst: isIGST ? totalGst : 0,
                 grandTotal,
                 roundedTotal,
-                amountInWords: numberToWords(roundedTotal)
+                amountInWords: numberToWords(roundedTotal),
+                financialYear: selectedFY || form.financialYear,
             };
 
             let res;
@@ -240,7 +500,7 @@ export default function CreditDebitNoteFormPage() {
             } else {
                 toast.success('Note Saved as Draft');
             }
-            
+
             navigate(form.noteType === 'Credit Note' ? PATHS.ACCOUNTS.CREDIT_NOTES : PATHS.ACCOUNTS.DEBIT_NOTES);
         } catch (e) {
             toast.error(e.response?.data?.message || 'Save failed');
@@ -248,6 +508,50 @@ export default function CreditDebitNoteFormPage() {
             setSaving(false);
         }
     };
+
+    const customerOptions = (() => {
+        const base = customers.map((c) => {
+            const name = resolveCustomerDisplayName(c);
+            const code = c.customerCode || c.code || '';
+            const mobile = resolveCustomerMobile(c);
+            const gstin = resolveCustomerGstin(c);
+            const city = String(c.city || c.shippingCity || '').trim();
+            const sticker = Array.isArray(c.stickers) && c.stickers[0]?.name
+                ? c.stickers[0].name
+                : String(c.sticker || '').trim();
+            const metaParts = [];
+            if (gstin) metaParts.push(`GSTIN: ${gstin}`);
+            if (city) metaParts.push(`City: ${city}`);
+            if (code) metaParts.push(`Code: ${code}`);
+            if (mobile) metaParts.push(`Mobile: ${mobile}`);
+            return {
+                value: c._id,
+                label: name || code || 'Unnamed customer',
+                meta: metaParts.join(' | '),
+                // Extra haystack so SearchableSelect progressive search covers all fields
+                searchText: `${name} ${code} ${gstin} ${mobile} ${city} ${sticker}`.toLowerCase(),
+            };
+        });
+        if (form.customerId && !base.find((b) => String(b.value) === String(form.customerId))) {
+            base.unshift({
+                value: form.customerId,
+                label: form.customerName || 'Customer',
+                meta: form.customerGstin ? `GSTIN: ${form.customerGstin}` : '',
+                searchText: `${form.customerName || ''} ${form.customerGstin || ''}`.toLowerCase(),
+            });
+        }
+        return base;
+    })();
+
+    const invoiceOptions = invoices.map((inv) => {
+        const amt = inv.roundedTotal ?? inv.grandTotal ?? 0;
+        const label = `${inv.invoiceNumber} | ${fmtInvDate(inv.invoiceDate)} | ${fmtAmt(amt)}`;
+        return {
+            value: inv._id,
+            label,
+            meta: String(inv.invoiceNumber || ''),
+        };
+    });
 
     return (
         <VoucherEntryTallyLayout>
@@ -304,18 +608,55 @@ export default function CreditDebitNoteFormPage() {
                     )}
                 </Field>
 
+                <Field label="Customer" style={{ gridColumn: '1 / -1' }}>
+                    <SearchableSelect
+                        options={customerOptions}
+                        value={form.customerId}
+                        onChange={handleCustomerSelect}
+                        placeholder={customersLoading ? 'Loading customers...' : 'Search customer (name / mobile / GSTIN / code)...'}
+                        disabled={customersLoading}
+                        dropdownMinWidth={560}
+                        style={inp}
+                        renderOption={(opt) => (
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>
+                                    {opt.label}
+                                </div>
+                                {opt.meta ? (
+                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                        {opt.meta}
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
+                    />
+                    {form.customerId && form.customerName && (
+                        <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                            {form.customerName}
+                        </div>
+                    )}
+                    {form.customerGstin && (
+                        <div style={{ marginTop: 2, fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                            GSTIN: {form.customerGstin}
+                        </div>
+                    )}
+                </Field>
+
                 <Field label="Link Original Invoice">
-                    <SearchableSelect 
-                        options={invoices.map(inv => ({ value: inv._id, label: `${inv.invoiceNumber} (${inv.customerName})` }))}
+                    <SearchableSelect
+                        options={invoiceOptions}
                         value={form.originalInvoiceId}
                         onChange={handleInvoiceSelect}
-                        placeholder="Search Invoice..."
+                        placeholder={form.customerId ? (invoicesLoading ? 'Loading invoices...' : 'Search invoice number...') : 'Select customer first'}
+                        disabled={!form.customerId || invoicesLoading}
+                        noOptionsMessage={form.customerId ? 'No eligible invoices for this customer' : 'Select customer first'}
+                        style={{ ...inp, background: form.customerId ? '#fff' : '#f9fafb' }}
                     />
                 </Field>
                 <Field label="Original Date">
                     <input type="date" value={form.originalInvoiceDate} readOnly style={{ ...inp, background: '#f9fafb' }} />
                 </Field>
-                <Field label="Reason for Issuing Note">
+                <Field label="Reason for Issuing Note" style={{ gridColumn: '1 / -1' }}>
                     <select value={form.reason} onChange={e => setF('reason', e.target.value)} style={inp}>
                         <option value="">-- Select Reason --</option>
                         <option>Sales Return</option>
@@ -340,7 +681,7 @@ export default function CreditDebitNoteFormPage() {
                         {form.items.map((item, i) => (
                             <tr key={i}>
                                 <td style={{ ...td, width: '25%' }}>
-                                    <SearchableSelect 
+                                    <SearchableSelect
                                         options={allItems.map(it => ({ value: it._id, label: it.itemName }))}
                                         value={item.itemId}
                                         onChange={val => {

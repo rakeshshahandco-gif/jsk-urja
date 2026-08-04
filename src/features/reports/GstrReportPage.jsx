@@ -7,6 +7,9 @@ import {
   AlertTriangle, AlertCircle, CheckCircle, RefreshCw,
   ChevronDown, ChevronUp, Settings
 } from 'lucide-react';
+import Gstr1FixFromMasterModal from './components/Gstr1FixFromMasterModal';
+import { PATHS } from '@/routes/paths';
+import { useNavigate } from 'react-router-dom';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -126,17 +129,21 @@ function SheetPreviewTable({ title, data, columns }) {
 // ─── main component ──────────────────────────────────────────────────────────
 
 export default function GstrReportPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.roleName === 'admin' || user?.roleName === 'superadmin';
+  const canFixFromMaster = isAdmin || hasPermission?.('gst.gstr1.invoice_correction');
 
   const [fy, setFy] = useState('2025-2026');
   const [month, setMonth] = useState('04');
 
-  const [loading, setLoading] = useState({ validate: false, preview: false, download: false, missingPos: false, syncPos: false });
+  const [loading, setLoading] = useState({ validate: false, preview: false, download: false, missingPos: false, syncPos: false, bulkFix: false });
   const [validation, setValidation] = useState(null);
   const [preview, setPreview] = useState(null);
   const [missingPosList, setMissingPosList] = useState(null);
   const [gstr3bSummary, setGstr3bSummary] = useState(null);
+  const [fixInvoiceId, setFixInvoiceId] = useState(null);
+  const [bulkPreview, setBulkPreview] = useState(null);
 
 
   const range = fyToRange(fy, month);
@@ -180,6 +187,7 @@ export default function GstrReportPage() {
     if (!range) return toast.error('Select FY and Month first');
     setLoading(l => ({ ...l, validate: true }));
     setValidation(null);
+    setBulkPreview(null);
     try {
       const { data } = await api.get('/gst-reports/validate', { params: range });
       setValidation(data);
@@ -189,6 +197,21 @@ export default function GstrReportPage() {
       toast.error('Validation failed: ' + (e?.response?.data?.message || e.message));
     } finally {
       setLoading(l => ({ ...l, validate: false }));
+    }
+  }
+
+  async function handleBulkFixPreview() {
+    if (!range) return toast.error('Select FY and Month first');
+    if (!canFixFromMaster) return toast.error('Permission gst.gstr1.invoice_correction required');
+    setLoading(l => ({ ...l, bulkFix: true }));
+    try {
+      const { data } = await api.post('/gst-reports/fix-from-master/bulk-preview', range);
+      setBulkPreview(data.data || data);
+      toast.success(`Bulk preview ready (${data.data?.safeCount ?? 0} safe)`);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Bulk preview failed');
+    } finally {
+      setLoading(l => ({ ...l, bulkFix: false }));
     }
   }
 
@@ -396,6 +419,23 @@ export default function GstrReportPage() {
             Validate Data
           </button>
 
+          {canFixFromMaster && (
+            <button
+              onClick={handleBulkFixPreview}
+              disabled={loading.bulkFix}
+              style={{
+                background: loading.bulkFix ? '#e2e8f0' : 'linear-gradient(135deg,#0d9488,#0f766e)',
+                color: loading.bulkFix ? '#94a3b8' : '#fff',
+                border: 'none', borderRadius: '8px', padding: '11px 20px',
+                fontSize: '14px', fontWeight: 600, cursor: loading.bulkFix ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: '8px',
+              }}
+            >
+              {loading.bulkFix ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <AlertTriangle size={16} />}
+              Bulk Fix from Customer Master
+            </button>
+          )}
+
           <button
             onClick={handlePreview}
             disabled={loading.preview}
@@ -470,7 +510,7 @@ export default function GstrReportPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ background: '#1e3a5f' }}>
-                    {['#', 'Severity', 'Error Type', 'Invoice No.', 'Date', 'Customer', 'GSTIN', 'Message', 'Suggested Fix'].map(h => (
+                    {['#', 'Severity', 'Error Type', 'Invoice No.', 'Date', 'Customer', 'GSTIN', 'Message', 'Suggested Fix', 'Action'].map(h => (
                       <th key={h} style={{ padding: '10px 12px', color: '#fff', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -486,7 +526,21 @@ export default function GstrReportPage() {
                       <td style={{ padding: '8px 12px', color: '#334155', whiteSpace: 'nowrap' }}>{e.customerName || '–'}</td>
                       <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#64748b', whiteSpace: 'nowrap' }}>{e.gstin || '–'}</td>
                       <td style={{ padding: '8px 12px', color: '#475569', minWidth: '200px' }}>{e.message}</td>
-                      <td style={{ padding: '8px 12px', color: '#0891b2', minWidth: '200px' }}>{e.suggestedFix}</td>
+                      <td style={{ padding: '8px 12px', color: '#0891b2', minWidth: '160px' }}>{e.suggestedFix}</td>
+                      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                        {canFixFromMaster && e.canFixFromMaster && e.invoiceId ? (
+                          <button
+                            type="button"
+                            onClick={() => setFixInvoiceId(e.invoiceId)}
+                            style={{
+                              padding: '5px 10px', borderRadius: 6, border: '1px solid #0d9488',
+                              background: '#f0fdfa', color: '#0f766e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                            }}
+                          >
+                            Fix from Customer Master
+                          </button>
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -609,6 +663,80 @@ export default function GstrReportPage() {
           </div>
         </div>
       )}
+
+      {/* Bulk Fix Preview */}
+      {bulkPreview && (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.05)', marginBottom: 24 }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b', margin: '0 0 8px 0' }}>
+            Bulk Fix from Customer Master — Preview
+          </h3>
+          <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px' }}>
+            Never auto-applied. Safe matches: <strong>{bulkPreview.safeCount ?? 0}</strong>
+            {' · '}Blocked/skipped: <strong>{bulkPreview.blockedCount ?? 0}</strong>
+            {' · '}Tax impact flagged: <strong>{bulkPreview.taxChangeCount ?? 0}</strong>
+          </p>
+          <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#0f766e' }}>
+                  {['Invoice No.', 'Invoice Date', 'Customer', 'Current GSTIN', 'Master GSTIN', 'Current POS', 'Master POS', 'Reg. Effective Date', 'Proposed Classification', 'Tax Impact', 'Action'].map((h) => (
+                    <th key={h} style={{ padding: '10px 12px', color: '#fff', fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(bulkPreview.rows || []).map((r, i) => (
+                  <tr key={r.invoiceId || i} style={{ background: i % 2 === 0 ? '#fff' : '#f0fdfa' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 600, color: '#2563eb', whiteSpace: 'nowrap' }}>{r.invoiceNo || '–'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{r.invoiceDate ? String(r.invoiceDate).slice(0, 10) : '–'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{r.customer || r.customerName || '–'}</td>
+                    <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.currentGstin || '–'}</td>
+                    <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.masterGstin || '–'}</td>
+                    <td style={{ padding: '8px 12px' }}>{r.currentPos || '–'}</td>
+                    <td style={{ padding: '8px 12px' }}>{r.masterPos || '–'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                      {r.registrationEffectiveDate ? String(r.registrationEffectiveDate).slice(0, 10) : '–'}
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>{r.proposedClassification || '–'}</td>
+                    <td style={{ padding: '8px 12px', color: r.taxImpact && r.taxImpact !== 'MetadataOnly' ? '#b45309' : '#64748b' }}>{r.taxImpact || 'None'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                      {!r.blocked && (r.action === 'SafeFix' || r.action === 'Amendment') && canFixFromMaster ? (
+                        <button
+                          type="button"
+                          onClick={() => setFixInvoiceId(r.invoiceId)}
+                          style={{
+                            padding: '5px 10px', borderRadius: 6, border: '1px solid #0d9488',
+                            background: '#f0fdfa', color: '#0f766e', fontWeight: 700, fontSize: 11, cursor: 'pointer',
+                          }}
+                        >
+                          Review &amp; Apply
+                        </button>
+                      ) : (
+                        <span style={{ color: '#94a3b8' }} title={r.blockReason || ''}>{r.action || 'Skip'}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(!bulkPreview.rows || bulkPreview.rows.length === 0) && (
+                  <tr>
+                    <td colSpan={11} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>No candidate invoices in this period.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <Gstr1FixFromMasterModal
+        open={Boolean(fixInvoiceId)}
+        invoiceId={fixInvoiceId}
+        onClose={() => setFixInvoiceId(null)}
+        onApplied={() => {
+          setFixInvoiceId(null);
+          handleValidate();
+        }}
+      />
 
       {/* Sheets Info */}
       <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px 24px', marginTop: '24px' }}>

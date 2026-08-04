@@ -11,6 +11,7 @@ import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { InvoiceSeries } from '../models/invoiceSeries.model.js';
 import Customer from '../models/customer.model.js';
 import { AuditLog } from '../models/auditLog.model.js';
+import * as gstr1Fix from '../services/gstr1InvoiceCorrection.service.js';
 
 const STATE_CODE_MAP = {
   '01': 'Jammu and Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh', '05': 'Uttarakhand', '06': 'Haryana',
@@ -499,4 +500,82 @@ export async function postGenerateIrn(req, res) {
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
+}
+
+/** GET /gst-reports/fix-from-master/:invoiceId/preview */
+export async function previewFixFromCustomerMaster(req, res) {
+  try {
+    const data = await gstr1Fix.previewFixFromCustomerMaster(req.params.invoiceId, req.companyId);
+    res.json({ success: true, data });
+  } catch (error) {
+    const code = error.statusCode || error.status || 500;
+    res.status(code).json({ success: false, message: error.message });
+  }
+}
+
+/** POST /gst-reports/fix-from-master/:invoiceId/apply */
+export async function applyFixFromCustomerMaster(req, res) {
+  try {
+    const { reason, confirmBlankEffectiveDate, approveGstTypeChange } = req.body || {};
+    const data = await gstr1Fix.applyFixFromCustomerMaster({
+      invoiceId: req.params.invoiceId,
+      companyId: req.companyId,
+      userId: req.user.id,
+      reason,
+      confirmBlankEffectiveDate: Boolean(confirmBlankEffectiveDate),
+      approveGstTypeChange: Boolean(approveGstTypeChange),
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+    res.json({ success: true, ...data });
+  } catch (error) {
+    const code = error.statusCode || error.status || 500;
+    res.status(code).json({ success: false, message: error.message });
+  }
+}
+
+/** POST /gst-reports/fix-from-master/bulk-preview */
+export async function bulkPreviewFixFromCustomerMaster(req, res) {
+  try {
+    const { startDate, endDate, invoiceIds } = req.body || {};
+    const data = await gstr1Fix.previewBulkFixFromCustomerMaster({
+      companyId: req.companyId,
+      startDate: startDate || req.query.startDate,
+      endDate: endDate || req.query.endDate,
+      invoiceIds,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    const code = error.statusCode || error.status || 500;
+    res.status(code).json({ success: false, message: error.message });
+  }
+}
+
+/** GET /gst-reports/customers/:customerId/affected-invoices */
+export async function getAffectedInvoicesMissingGst(req, res) {
+  try {
+    const list = await gstr1Fix.listAffectedInvoicesMissingGst(req.params.customerId, req.companyId);
+    res.json({ success: true, data: { invoices: list, count: list.length } });
+  } catch (error) {
+    const code = error.statusCode || error.status || 500;
+    res.status(code).json({ success: false, message: error.message });
+  }
+}
+
+/** POST /gst-reports/gstr1-period/mark-filed */
+export async function markGstr1PeriodFiled(req, res) {
+  try {
+    const { returnPeriod, financialYear, remarks } = req.body || {};
+    const doc = await gstr1Fix.markGstr1PeriodFiled({
+      companyId: req.companyId,
+      returnPeriod,
+      financialYear,
+      userId: req.user.id,
+      remarks,
+    });
+    res.json({ success: true, data: doc });
+  } catch (error) {
+    const code = error.statusCode || error.status || 500;
+    res.status(code).json({ success: false, message: error.message });
+  }
 }

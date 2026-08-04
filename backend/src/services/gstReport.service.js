@@ -718,12 +718,36 @@ function validateInvoices(invoices) {
 
     // 3. Missing Place of Supply
     if (!inv.placeOfSupply || inv.placeOfSupply.length < 2) {
-      errors.push({ ...base, errorType: 'Missing Place of Supply', severity: 'Blocking Error', message: 'Place of supply is missing', suggestedFix: 'Set place of supply on invoice or customer master' });
+      errors.push({
+        ...base,
+        invoiceId: inv._id ? String(inv._id) : '',
+        customerId: inv.customerId ? String(inv.customerId) : '',
+        errorType: 'Missing Place of Supply',
+        severity: 'Blocking Error',
+        message: 'Place of supply is missing',
+        suggestedFix: 'Fix from Customer Master (if master has POS/GSTIN)',
+        canFixFromMaster: true,
+      });
+    }
+
+    // 3b. Missing GSTIN on snapshot while GST invoice — flagged for master-fix workflow when blank
+    const gstinBlank = !inv.customerGstin || String(inv.customerGstin).trim().length < 15;
+    if (inv.gstApplicable !== false && gstinBlank) {
+      errors.push({
+        ...base,
+        invoiceId: inv._id ? String(inv._id) : '',
+        customerId: inv.customerId ? String(inv.customerId) : '',
+        errorType: 'Missing GSTIN',
+        severity: 'Warning',
+        message: 'Invoice GST snapshot has no GSTIN (historical B2C/unregistered classification may apply)',
+        suggestedFix: 'If customer is now registered, use Fix from Customer Master after checking effective date',
+        canFixFromMaster: true,
+      });
     }
 
     // 4. Invalid GSTIN format (if registered)
     if (inv.customerGstin && !gstinRegex.test(inv.customerGstin)) {
-      errors.push({ ...base, errorType: 'Invalid GSTIN Format', severity: 'Blocking Error', message: `GSTIN "${inv.customerGstin}" does not match the 15-char format`, suggestedFix: 'Correct the GSTIN in customer master' });
+      errors.push({ ...base, invoiceId: inv._id ? String(inv._id) : '', errorType: 'Invalid GSTIN Format', severity: 'Blocking Error', message: `GSTIN "${inv.customerGstin}" does not match the 15-char format`, suggestedFix: 'Correct the GSTIN via Fix from Customer Master or GST Return Details' });
     }
 
     // 5. GSTIN state code mismatch with place of supply
@@ -1263,6 +1287,38 @@ export async function validateGSTR1(startDate, endDate) {
   const baseErrors = validateInvoices(invoices);
   const noteErrors = validateInvoices(notes); // Reuse validation for notes as well
 
+  // Enrich Missing GSTIN / POS with Customer Master availability (no silent rewrite)
+  try {
+    const Customer = (await import('../models/customer.model.js')).default;
+    const custIds = [...new Set(
+      invoices.map((i) => (i.customerId ? String(i.customerId) : '')).filter(Boolean)
+    )];
+    if (custIds.length) {
+      const customers = await Customer.find({ _id: { $in: custIds } })
+        .select('gstNumber defaultPlaceOfSupply billingStateCode gstState gstRegistrationEffectiveDate')
+        .lean();
+      const byId = new Map(customers.map((c) => [String(c._id), c]));
+      for (const err of baseErrors) {
+        if (!err.canFixFromMaster || !err.customerId) continue;
+        const c = byId.get(String(err.customerId));
+        if (!c) continue;
+        const masterGstin = String(c.gstNumber || '').trim().toUpperCase();
+        if (err.errorType === 'Missing GSTIN' && masterGstin.length === 15) {
+          err.severity = 'Blocking Error';
+          err.message = 'Invoice snapshot missing GSTIN but Customer Master has a valid GSTIN';
+          err.suggestedFix = 'FIX FROM CUSTOMER MASTER';
+          err.masterGstin = masterGstin;
+        }
+        if (err.errorType === 'Missing Place of Supply' && (c.defaultPlaceOfSupply || masterGstin)) {
+          err.suggestedFix = 'FIX FROM CUSTOMER MASTER';
+          err.masterPos = c.defaultPlaceOfSupply || (masterGstin ? masterGstin.substring(0, 2) : '');
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[GSTR1] Master enrichment skipped:', e.message);
+  }
+
   // Cross-check: Ensure all docs are covered in Document Summary
   const docs = await buildDocsSummary(startDate, endDate, invoices, notes);
   const docErrors = [];
@@ -1292,6 +1348,7 @@ export async function validateGSTR1(startDate, endDate) {
         invoiceNo: inv.invoiceNumber,
         date: formatDate(inv.invoiceDate),
         customerName: inv.customerName,
+        invoiceId: inv._id ? String(inv._id) : '',
         errorType: 'Summary Mismatch',
         severity: 'Blocking Error',
         message: `Invoice exists in GSTR-1 data but missing from Document Summary (Table 13).`,

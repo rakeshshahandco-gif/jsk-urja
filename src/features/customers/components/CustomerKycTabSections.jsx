@@ -114,6 +114,30 @@ export function CustomerGstTaxTab({
             )}
             {gstOn && (
                 <>
+                    <Field label="GST REGISTRATION EFFECTIVE DATE" help="Used to decide if GSTIN can be applied to historical invoices">
+                        <Input type="date" {...register('gstRegistrationEffectiveDate')} />
+                    </Field>
+                    <Field label="GST CANCELLATION DATE">
+                        <Input type="date" {...register('gstCancellationDate')} />
+                    </Field>
+                    <Field label="GST STATUS">
+                        <select {...register('gstStatus')} className={styles['form-select']}>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Active">Active</option>
+                            <option value="Suspended">Suspended</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </Field>
+                    <Field label="GST VERIFICATION DATE">
+                        <Input type="date" {...register('gstVerificationDate')} />
+                    </Field>
+                    <Field label="GST VERIFICATION SOURCE">
+                        <Input {...register('gstVerificationSource')} placeholder="Portal / CA / Manual" />
+                    </Field>
+                </>
+            )}
+            {gstOn && (
+                <>
                     <Field label="GST TYPE">
                         <select {...register('gstType')} className={styles['form-select']}>
                             <option value="">Select Type</option>
