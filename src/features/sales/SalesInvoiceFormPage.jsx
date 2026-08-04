@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
+import { useCompany } from '@/contexts/CompanyContext';
 import { scanEntryApi } from '@/services/scanEntryApi';
 import gridStyles from '@/features/sales/styles/salesItemGrid.module.scss';
 
@@ -146,6 +147,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [searchParams] = useSearchParams();
     const { isFeatureEnabled } = useFeatureSettings();
     const { selectedFY } = useFinancialYear();
+    const { selectedCompany } = useCompany();
     const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
     const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
@@ -154,6 +156,8 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
     /** Sales Order series to apply once Tax Invoice series list is ready */
     const soSeriesPrefRef = useRef({ id: '', name: '' });
+    /** Bumps on company change so in-flight customer page loops are ignored */
+    const customersLoadGenRef = useRef(0);
 
     // Fetch accurate next invoice number from backend (self-healing sync)
     const fetchPreviewNo = async (seriesId) => {
@@ -208,6 +212,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
 
     const [allItems, setAllItems] = useState([]);
     const [allCustomers, setAllCustomers] = useState([]);
+    const [customersLoading, setCustomersLoading] = useState(false);
 
     useEffect(() => {
         // Pre-load all active items (inclusive of all saleable categories)
@@ -218,12 +223,68 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 setAllItems(sorted);
             }
         }).catch(e => console.error('Error loading items:', e));
-
-        getCustomers({ limit: 5000 }).then(res => {
-            const list = res?.results || res?.data || res || [];
-            setAllCustomers(list);
-        }).catch(e => console.error('Error loading customers:', e));
     }, []);
+
+    // Customer list API max limit=100. Page once per company; dedupe; ignore stale loads.
+    // Note: /customers/search exists for typeahead, but this form uses SearchableSelect over a
+    // preloaded list — keep paginated preload (no backend limit change).
+    useEffect(() => {
+        const companyId = selectedCompany?._id ? String(selectedCompany._id) : '';
+        if (!companyId) {
+            setAllCustomers([]);
+            setCustomersLoading(false);
+            return undefined;
+        }
+
+        const gen = ++customersLoadGenRef.current;
+        let cancelled = false;
+
+        (async () => {
+            setCustomersLoading(true);
+            setAllCustomers([]);
+            try {
+                const pageSize = 100;
+                let page = 1;
+                let totalPages = 1;
+                const byId = new Map();
+
+                do {
+                    if (cancelled || gen !== customersLoadGenRef.current) return;
+                    const res = await getCustomers({ limit: pageSize, page, sortBy: '_id:asc' });
+                    if (cancelled || gen !== customersLoadGenRef.current) return;
+
+                    const list = res?.results || res?.data || [];
+                    if (Array.isArray(list)) {
+                        for (const c of list) {
+                            const id = c?._id != null ? String(c._id) : '';
+                            if (id && !byId.has(id)) byId.set(id, c);
+                        }
+                    }
+
+                    totalPages = Number(res?.totalPages) || page;
+                    const got = Array.isArray(list) ? list.length : 0;
+                    if (got < pageSize) break;
+                    page += 1;
+                } while (page <= totalPages && page <= 50);
+
+                if (cancelled || gen !== customersLoadGenRef.current) return;
+                setAllCustomers(Array.from(byId.values()));
+            } catch (e) {
+                if (cancelled || gen !== customersLoadGenRef.current) return;
+                console.error('Error loading customers:', e);
+                toast.error(e?.message || 'Failed to load customers');
+                setAllCustomers([]);
+            } finally {
+                if (!cancelled && gen === customersLoadGenRef.current) {
+                    setCustomersLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedCompany?._id]);
 
     useEffect(() => {
         const state = (form.billingState || '').trim().toLowerCase();
@@ -707,10 +768,10 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                             options={(() => {
                                 const base = allCustomers.map(c => ({
                                     value: c._id,
-                                    label: `${c.name} ${c.gstin ? `(${c.gstin})` : ''}`,
-                                    meta: `${c.name} ${c.gstin || ''} ${c.mobile || ''}`
+                                    label: `${c.name || c.customerName || c.company || ''} ${c.gstin ? `(${c.gstin})` : ''}`.trim(),
+                                    meta: `${c.name || c.customerName || c.company || ''} ${c.gstin || ''} ${c.mobile || ''}`
                                 }));
-                                // If current selection is not in list (e.g. pagination), add it
+                                // If current selection is not in list (e.g. still loading), keep it visible
                                 if (form.customerId && !base.find(b => b.value === form.customerId)) {
                                     base.unshift({
                                         value: form.customerId,
@@ -722,9 +783,14 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                             })()}
                             value={form.customerId}
                             onChange={handleCustomerSelect}
-                            placeholder="Search Customer..."
+                            placeholder={customersLoading ? 'Loading customers…' : 'Search Customer...'}
                             style={{ ...inp, fontWeight: 700, fontSize: 14, border: '1px solid #1e293b' }}
                         />
+                        {customersLoading && (
+                            <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontWeight: 600 }}>
+                                Loading customers…
+                            </div>
+                        )}
                         {form.customerGstin && <div style={{ fontSize: 10, color: '#64748b', marginTop: 4, fontWeight: 600 }}>GSTIN: {form.customerGstin}</div>}
                     </Field>
                 </div>
