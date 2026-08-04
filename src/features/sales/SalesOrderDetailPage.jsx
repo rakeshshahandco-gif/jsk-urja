@@ -17,6 +17,7 @@ import { Mail, MessageSquare, Send } from "lucide-react";
 import { BrandedLoader } from "@/components/ui";
 import SalesOrderPrintDocument from "@/features/sales/print/SalesOrderPrintDocument";
 import { getActivePrintFormat } from "@/services/printFormatApi";
+import CreateTaxInvoiceFromSoModal from "@/features/sales/components/CreateTaxInvoiceFromSoModal";
 
 const STATUS_COLORS = {
   Draft: { color: "#64748b", bg: "#f1f5f9", border: "#e2e8f0" },
@@ -57,6 +58,7 @@ export default function SalesOrderDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [isCommModalOpen, setIsCommModalOpen] = useState(false);
   const [activePrintFormat, setActivePrintFormat] = useState(null);
+  const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -392,9 +394,7 @@ export default function SalesOrderDetailPage() {
               )}
               {(so.status === "Draft" || so.status === "Confirmed" || so.status === "Partially Invoiced" || so.status === "Dispatched") && !isInvoiceLocked && (
                 <button
-                  onClick={() =>
-                    navigate(`${PATHS.SALES.NEW_INVOICE}?soId=${id}`)
-                  }
+                  onClick={() => setShowCreateInvoiceModal(true)}
                   style={{
                     padding: "9px 16px",
                     background: "#0d9488",
@@ -976,6 +976,12 @@ export default function SalesOrderDetailPage() {
           items: so.items,
           total: so.roundedTotal || so.grandTotal,
         }}
+      />
+
+      <CreateTaxInvoiceFromSoModal
+        open={showCreateInvoiceModal}
+        so={so}
+        onClose={() => setShowCreateInvoiceModal(false)}
       />
     </div>
   );

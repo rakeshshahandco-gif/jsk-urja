@@ -1,0 +1,235 @@
+/**
+ * Shared Sales Order / Sales Invoice item-grid layout.
+ * Presentation only — does not affect calculations.
+ */
+
+.wrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  /* Always show a usable scrollbar track on overflow */
+  scrollbar-gutter: stable;
+}
+
+.table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+  table-layout: fixed;
+}
+
+.th {
+  padding: 10px 10px;
+  text-align: left;
+  color: #64748b;
+  font-weight: 700;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: #f8fafc;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  vertical-align: middle;
+  background: #fff;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.center {
+  text-align: center;
+}
+
+.inp {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background: #fff;
+  color: #374151;
+  min-width: 0;
+}
+
+.tableInp {
+  padding: 7px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.tableInpNum {
+  padding: 7px 12px 7px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.readonly {
+  background: #f8fafc;
+  color: #475569;
+  cursor: default;
+}
+
+.money {
+  color: #0f172a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.moneyGst {
+  color: #2563eb;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.moneyTotal {
+  color: #15803d;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Column minimum widths — Sale Type hidden; space reallocated */
+.colSr { width: 44px; min-width: 44px; max-width: 44px; }
+.colCode { width: 160px; min-width: 160px; }
+.colDesc { width: 240px; min-width: 220px; }
+.colNotes { width: 180px; min-width: 160px; }
+.colHsn { width: 120px; min-width: 120px; }
+.colUom { width: 88px; min-width: 88px; }
+.colQty { width: 100px; min-width: 100px; }
+.colRate { width: 130px; min-width: 130px; }
+.colDisc { width: 72px; min-width: 72px; }
+.colTaxable { width: 120px; min-width: 120px; }
+.colGstPct { width: 80px; min-width: 80px; }
+.colGstAmt { width: 110px; min-width: 110px; }
+.colTotal { width: 120px; min-width: 120px; }
+.colAction { width: 48px; min-width: 48px; max-width: 48px; }
+
+/* Sticky identity columns + trailing action */
+.stickyLeft1 {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  box-shadow: 1px 0 0 #e5e7eb;
+}
+.stickyLeft2 {
+  position: sticky;
+  left: 44px;
+  z-index: 3;
+  box-shadow: 1px 0 0 #e5e7eb;
+}
+.stickyLeft3 {
+  position: sticky;
+  /* Sr 44 + Code 160 */
+  left: 204px;
+  z-index: 3;
+  box-shadow: 2px 0 6px rgba(15, 23, 42, 0.06);
+}
+.stickyRight {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  box-shadow: -1px 0 0 #e5e7eb;
+  text-align: center;
+}
+
+.th.stickyLeft1,
+.th.stickyLeft2,
+.th.stickyLeft3,
+.th.stickyRight {
+  z-index: 4;
+  background: #f8fafc;
+}
+
+.td.stickyLeft1,
+.td.stickyLeft2,
+.td.stickyLeft3,
+.td.stickyRight {
+  background: #fff;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.addBtn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px dashed #0d9488;
+  background: #f0fdfa;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #0d9488;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Hide number spinners that clip values */
+:global(.no-spin)::-webkit-inner-spin-button,
+:global(.no-spin)::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+:global(.no-spin) {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+@media (max-width: 900px) {
+  .colDesc { min-width: 160px; }
+  .colNotes { min-width: 120px; }
+}
+
+@media (max-width: 640px) {
+  /* Controlled horizontal scroll — do not crush columns */
+  .colHsn,
+  .colUom,
+  .colQty,
+  .colRate {
+    min-width: 96px;
+  }
+}

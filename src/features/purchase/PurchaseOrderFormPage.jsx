@@ -8,6 +8,7 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { BrandedLoader } from '@/components/ui';
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import gridStyles from '@/features/purchase/styles/purchaseItemGrid.module.scss';
 
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
@@ -338,27 +339,35 @@ export default function PurchaseOrderFormPage() {
                                 <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ITEMS</h2>
                                 <button type="button" onClick={addItem} style={{ padding: '6px 14px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 700 }}>+ Add Row</button>
                             </div>
-                            <div style={{ position: 'relative' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                            <div className={gridStyles.wrap}>
+                                <table className={gridStyles.table}>
                                     <thead>
-                                        <tr style={{ background: '#f8fafc', color: '#64748b' }}>
-                                            {['#', 'Item', 'Group', 'Additional Notes', 'HSN/SAC', 'UOM', 'Qty', 'Rate', 'Amount', ''].map(h => (
-                                                <th key={h} style={{ padding: '12px 10px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: h === 'Qty' ? '80px' : h === 'UOM' ? '100px' : 'auto' }}>{h}</th>
-                                            ))}
+                                        <tr>
+                                            <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colItem} ${gridStyles.stickyLeft2}`}>Item</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colGroup}`}>Group</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colNotes}`}>Additional Notes</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN/SAC</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colTaxable} ${gridStyles.num}`}>Taxable</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colTotal} ${gridStyles.num}`}>Total</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colAction} ${gridStyles.stickyRight}`} />
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {lineItems.map((item, i) => {
                                             const c = calcRow(item);
                                             return (
-                                                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '8px 10px', color: '#475569', width: '30px' }}>{i + 1}</td>
-                                                    <td style={{ padding: '8px 10px', minWidth: '200px' }}>
+                                                <tr key={i}>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colItem} ${gridStyles.stickyLeft2}`}>
                                                         <SearchableSelect
-                                                            options={items.map(it => ({ 
-                                                                value: it._id, 
-                                                                label: `${it.itemCode} — ${it.itemName || ''}`, 
-                                                                meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}` 
+                                                            options={items.map(it => ({
+                                                                value: it._id,
+                                                                label: `${it.itemCode} — ${it.itemName || ''}`,
+                                                                meta: `${it.itemCode} ${it.itemName || ''} ${it.description || ''} ${it.hsnCode || ''}`
                                                             }))}
                                                             value={item.itemId}
                                                             onChange={v => setItem(i, 'itemId', v)}
@@ -368,28 +377,31 @@ export default function PurchaseOrderFormPage() {
                                                             placeholder="— Search Item —"
                                                         />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', minWidth: '120px' }}>
-                                                        <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 2)} data-row={i} data-col={2} placeholder="Item Group" style={{ ...inp, fontSize: '12px' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colGroup}`}>
+                                                        <input value={item.itemGroup} onChange={e => setItem(i, 'itemGroup', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 2)} data-row={i} data-col={2} placeholder="Item Group" className={gridStyles.inp} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', minWidth: '150px' }}>
-                                                        <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} placeholder="Additional Notes" style={{ ...inp, fontSize: '12px' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colNotes}`}>
+                                                        <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} placeholder="Additional Notes" className={gridStyles.inp} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', width: '100px' }}>
-                                                        <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} placeholder="HSN/SAC" style={{ ...inp, fontSize: '12px' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colHsn}`}>
+                                                        <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} placeholder="HSN/SAC" className={gridStyles.inp} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', width: '100px' }}>
-                                                        <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={{ ...inp, fontSize: '12px' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colUom}`}>
+                                                        <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} className={gridStyles.inp} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', minWidth: '80px' }}>
-                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...inp, fontSize: '12px', fontWeight: 'bold' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colQty}`}>
+                                                        <input type="number" min="0.01" step="0.01" value={item.orderedQty} onChange={e => setItem(i, 'orderedQty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} />
                                                     </td>
-                                                    <td style={{ padding: '8px 10px', minWidth: '140px' }}>
-                                                        <input type="number" min="0" step="0.01" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...inp, fontSize: '13px', fontWeight: 'bold' }} />
+                                                    <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
+                                                        <input type="number" min="0" step="0.01" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} />
                                                     </td>
-
-
-                                                    <td style={{ padding: '8px 10px', color: '#059669', fontWeight: 700, whiteSpace: 'nowrap' }}>₹{c.total.toLocaleString()}</td>
-                                                    <td style={{ padding: '8px 10px' }}>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colTaxable} ${gridStyles.num} ${gridStyles.money}`}>
+                                                        ₹{c.net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colTotal} ${gridStyles.num} ${gridStyles.moneyTotal}`}>
+                                                        ₹{c.net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colAction} ${gridStyles.stickyRight}`}>
                                                         {lineItems.length > 1 && (
                                                             <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>
                                                         )}
@@ -427,17 +439,17 @@ export default function PurchaseOrderFormPage() {
 
                                     {header.gstType === 'IGST' ? (
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
-                                            <span>IGST (+)</span>
+                                            <span>IGST {lineItems[0]?.taxPercent != null ? `${lineItems[0].taxPercent}%` : ''} (+)</span>
                                             <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                         </div>
                                     ) : (
                                         <>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
-                                                <span>CGST (+)</span>
+                                                <span>CGST {lineItems[0]?.taxPercent != null ? `${(Number(lineItems[0].taxPercent) / 2)}%` : ''} (+)</span>
                                                 <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{fmt(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
-                                                <span>SGST (+)</span>
+                                                <span>SGST {lineItems[0]?.taxPercent != null ? `${(Number(lineItems[0].taxPercent) / 2)}%` : ''} (+)</span>
                                                 <span style={{ color: '#1e293b', fontWeight: 600 }}>₹{fmt(totalTax / 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                             </div>
                                         </>

@@ -12,10 +12,11 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { scanEntryApi } from '@/services/scanEntryApi';
+import gridStyles from '@/features/sales/styles/salesItemGrid.module.scss';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
-const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
+const tableInp = { padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#111827', fontWeight: 600, textAlign: 'center' };
 const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
 const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
@@ -151,6 +152,8 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [uploadingScan, setUploadingScan] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
+    /** Sales Order series to apply once Tax Invoice series list is ready */
+    const soSeriesPrefRef = useRef({ id: '', name: '' });
 
     // Fetch accurate next invoice number from backend (self-healing sync)
     const fetchPreviewNo = async (seriesId) => {
@@ -237,9 +240,34 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 ? all.filter(isEstimateSeriesDoc)
                 : all.filter((x) => !isEstimateSeriesDoc(x));
             setSeriesList(list);
-            // When creating from a Sales Order, the series will be inherited from the SO —
-            // skip default pick and the "no default" warning here.
-            if (soId) return;
+
+            // From Sales Order: pull the same series the SO used (by id, then by name).
+            if (soId) {
+                const prefId = String(soSeriesPrefRef.current.id || '').trim();
+                const prefName = String(soSeriesPrefRef.current.name || '').trim().toLowerCase();
+                let match = null;
+                if (prefId) {
+                    match = list.find((x) => String(x._id) === prefId) || null;
+                }
+                if (!match && prefName) {
+                    match = list.find(
+                        (x) => String(x.seriesName || '').trim().toLowerCase() === prefName
+                    ) || null;
+                }
+                if (match) {
+                    const matchId = String(match._id);
+                    const gstOn = isEstimateForm
+                        ? false
+                        : (match.gstApplicable !== undefined ? match.gstApplicable !== false : true);
+                    setForm((p) => {
+                        if (String(p.seriesId || '') === matchId) return p;
+                        return { ...p, seriesId: matchId, gstApplicable: p.gstApplicable !== undefined ? p.gstApplicable : gstOn };
+                    });
+                    await fetchPreviewNo(matchId);
+                }
+                return;
+            }
+
             if (!form.seriesId && list.length > 0) {
                 const autoSelect = isEstimateForm
                     ? (list.find((x) => x.isDefault) || list[0])
@@ -248,7 +276,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     const gstOn = isEstimateForm
                         ? false
                         : (autoSelect.gstApplicable !== undefined ? autoSelect.gstApplicable : true);
-                    setForm((p) => ({ ...p, seriesId: autoSelect._id, gstApplicable: gstOn }));
+                    setForm((p) => ({ ...p, seriesId: String(autoSelect._id), gstApplicable: gstOn }));
                     await fetchPreviewNo(autoSelect._id);
                 } else {
                     toast.error(
@@ -271,7 +299,12 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
         getSalesOrderById(soId).then(so => {
             // Inherit series from the Sales Order — so.seriesId may be populated (object) or raw id.
             const soSeries = so.seriesId && typeof so.seriesId === 'object' ? so.seriesId : null;
-            const soSeriesId = soSeries ? soSeries._id : (so.seriesId || '');
+            const soSeriesId = String(soSeries?._id || so.seriesId || '').trim();
+            const soSeriesName = String(
+                soSeries?.seriesName || so.seriesName || ''
+            ).trim();
+            soSeriesPrefRef.current = { id: soSeriesId, name: soSeriesName };
+
             if (soSeriesId) fetchPreviewNo(soSeriesId);
             setForm(p => ({
                 ...p,
@@ -318,8 +351,28 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     saleType: i.saleType || 'MANUFACTURED_SALE'
                 })) : [BLANK_ITEM()],
             }));
+
+            // Series list may already be loaded — re-apply SO series into the dropdown now.
+            getInvoiceSeries({ active: true }).then(async (all) => {
+                const list = isEstimateForm
+                    ? (all || []).filter(isEstimateSeriesDoc)
+                    : (all || []).filter((x) => !isEstimateSeriesDoc(x));
+                setSeriesList(list);
+                let match = list.find((x) => String(x._id) === soSeriesId) || null;
+                if (!match && soSeriesName) {
+                    const nameKey = soSeriesName.toLowerCase();
+                    match = list.find(
+                        (x) => String(x.seriesName || '').trim().toLowerCase() === nameKey
+                    ) || null;
+                }
+                if (match) {
+                    const matchId = String(match._id);
+                    setForm((p) => ({ ...p, seriesId: matchId }));
+                    await fetchPreviewNo(matchId);
+                }
+            }).catch(() => {});
         }).catch(() => toast.error('Failed to load SO details'));
-    }, [soId]);
+    }, [soId, isEstimateForm]);
 
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
     const setItem = (i, k, v) => setForm(p => ({
@@ -437,7 +490,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 prev.focus();
             }
         } else if (e.key === 'Enter') {
-            const nextColTargets = [1, 3, 4, 5, 6, 7, 8];
+            const nextColTargets = [1, 3, 4, 5, 6, 7, 8, 9];
             const currentTargetIdx = nextColTargets.indexOf(colIdx);
             
             if (currentTargetIdx < nextColTargets.length - 1) {
@@ -596,14 +649,14 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 </div>
             </div>
 
-            <div style={{ padding: '20px 28px', maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ padding: '20px 24px', maxWidth: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
                 {/* PRIMARY HEADER INFO (TALLY STYLE) */}
                 <div style={{ background: '#fff', border: '1px solid #1e293b', borderLeft: '8px solid #0d9488', borderRadius: '8px 12px 12px 8px', padding: '20px', marginBottom: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
                     <Field label="Invoice Series">
                         <div style={{ display: 'flex', gap: 6 }}>
-                            <select value={form.seriesId} onChange={async e => {
+                            <select value={String(form.seriesId || '')} onChange={async e => {
                                 const val = e.target.value;
-                                const selected = seriesList.find(s => s._id === val);
+                                const selected = seriesList.find(s => String(s._id) === String(val));
                                 const isEstimate = selected?.isEstimate === true || selected?.documentType === 'Estimate';
                                 const isGst = isEstimate ? false : (selected ? (selected.gstApplicable !== false) : true);
                                 
@@ -623,7 +676,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                                 style={{ ...inp, cursor: 'pointer', fontWeight: 700, fontSize: 14, borderColor: !form.seriesId ? '#fca5a5' : '#1e293b' }}
                             >
                                 <option value="">-- Select Series --</option>
-                                {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName} ({s.prefix})</option>)}
+                                {seriesList.map(s => <option key={s._id} value={String(s._id)}>{s.seriesName} ({s.prefix})</option>)}
                             </select>
                             <button type="button" onClick={() => setShowAddSeries(true)} style={{ width: 32, height: 35, background: '#f8fafc', border: '1px solid #1e293b', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Add Series">＋</button>
                         </div>
@@ -707,20 +760,39 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     </div>
                 </div>
 
-                {/* Production Details */}
-                <Section title="Production Details">
-                    <div style={{ position: 'relative' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+                {/* Items & Taxes */}
+                <Section title="Items & Taxes">
+                    <div className={gridStyles.wrap}>
+                        <table className={gridStyles.table}>
                             <thead>
                                 <tr>
-                                    {['Sr', 'Item Code', 'Sale Type', 'Description *', 'Additional Notes', 'HSN', 'UOM', 'Qty *', 'Rate *', 'Disc%', 'Amount', ''].filter(Boolean).map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : h === 'Sale Type' ? '140px' : 'auto' }}>{h}</th>)}
+                                    <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>Item Code</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>Description *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colNotes}`}>Additional Notes</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colDisc} ${gridStyles.center}`}>Disc%</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colTaxable} ${gridStyles.num}`}>Taxable</th>
+                                    {gstApplicable && (
+                                        <>
+                                            <th className={`${gridStyles.th} ${gridStyles.colGstPct} ${gridStyles.center}`}>GST%</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colGstAmt} ${gridStyles.num}`}>GST Amt</th>
+                                        </>
+                                    )}
+                                    <th className={`${gridStyles.th} ${gridStyles.colTotal} ${gridStyles.num}`}>Total</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colAction} ${gridStyles.stickyRight}`} />
                                 </tr>
                             </thead>
                             <tbody>
-                                {processedItems.map((item, i) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
-                                        <td style={{ ...td, minWidth: 140 }}>
+                                {processedItems.map((item, i) => {
+                                    const gstAmt = gstApplicable ? (isIGST ? item.igstAmt : item.cgstAmt * 2) : 0;
+                                    return (
+                                    <tr key={i}>
+                                        <td className={`${gridStyles.td} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                        <td className={`${gridStyles.td} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>
                                             <SearchableSelect
                                                 options={(() => {
                                                     const base = allItems.map(it => ({ 
@@ -745,50 +817,53 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                                                 placeholder="Item Code..."
                                             />
                                         </td>
-                                        <td style={{ ...td, minWidth: 140 }}>
-                                            <select 
-                                                value={item.saleType}
-                                                onChange={e => setItem(i, 'saleType', e.target.value)}
-                                                style={{ ...inp, padding: '4px', fontSize: '11px', fontWeight: 600, color: item.saleType === 'TRADING_SALE' ? '#2563eb' : '#1e293b' }}
-                                            >
-                                                <option value="MANUFACTURED_SALE">Manufactured</option>
-                                                <option value="TRADING_SALE">Trading</option>
-                                            </select>
+                                        <td className={`${gridStyles.td} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>
+                                            <input value={item.description || item.itemName || ''} readOnly className={`${gridStyles.inp} ${gridStyles.readonly}`} placeholder="Description" tabIndex="-1" />
                                         </td>
-                                        <td style={{ ...td, minWidth: 160 }}>
-                                            <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" tabIndex="-1" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colNotes}`}>
+                                            <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} className={gridStyles.inp} placeholder="Additional Notes" autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, minWidth: 120 }}>
-                                            <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} style={inp} placeholder="Additional Notes" autoComplete="off" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colHsn}`}>
+                                            <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} className={gridStyles.inp} placeholder="HSN" autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, width: 90 }}>
-                                            <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} style={inp} placeholder="HSN" autoComplete="off" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colUom}`}>
+                                            <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} className={gridStyles.inp} placeholder="UOM" autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, width: 70 }}>
-                                            <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={inp} placeholder="UOM" autoComplete="off" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colQty}`}>
+                                            <input type="number" min="0" step="any" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, minWidth: '120px' }}>
-                                            <input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...tableInp, textAlign: 'center', fontSize: '12px', fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
+                                            <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, width: 90 }}>
-                                            <input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colDisc}`}>
+                                            <input type="number" min="0" max="100" step="any" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
                                         </td>
-                                        <td style={{ ...td, width: 60 }}>
-                                            <input type="number" min="0" max="100" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} style={{ ...tableInp, textAlign: 'center' }} autoComplete="off" className="no-spin" />
+                                        <td className={`${gridStyles.td} ${gridStyles.colTaxable} ${gridStyles.num} ${gridStyles.money}`}>
+                                            ₹{(item.taxable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </td>
-
-                                        <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 100, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                            ₹{item.lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        {gstApplicable && (
+                                            <>
+                                                <td className={`${gridStyles.td} ${gridStyles.colGstPct}`}>
+                                                    <input type="number" min="0" max="28" step="any" value={item.gstRate} onChange={e => setItem(i, 'gstRate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 9)} data-row={i} data-col={9} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
+                                                </td>
+                                                <td className={`${gridStyles.td} ${gridStyles.colGstAmt} ${gridStyles.num} ${gridStyles.moneyGst}`}>
+                                                    ₹{(gstAmt || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </td>
+                                            </>
+                                        )}
+                                        <td className={`${gridStyles.td} ${gridStyles.colTotal} ${gridStyles.num} ${gridStyles.moneyTotal}`}>
+                                            ₹{(item.lineTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td style={{ ...td, width: 36 }}>
-                                            {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+                                        <td className={`${gridStyles.td} ${gridStyles.colAction} ${gridStyles.stickyRight}`}>
+                                            {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
-                        <button onClick={addItem} style={{ padding: '7px 16px', border: '1px dashed #0d9488', background: '#f0fdfa', borderRadius: 7, cursor: 'pointer', color: '#0d9488', fontSize: 13, fontWeight: 600 }}>+ Add Item</button>
                     </div>
+                    <button type="button" onClick={addItem} className={gridStyles.addBtn}>+ Add Item</button>
                 </Section>
 
                 {/* Totals */}

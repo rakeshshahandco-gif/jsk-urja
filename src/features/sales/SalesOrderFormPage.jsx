@@ -10,10 +10,11 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { BrandedLoader } from '@/components/ui';
+import gridStyles from '@/features/sales/styles/salesItemGrid.module.scss';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
-const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
+const tableInp = { padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#111827', fontWeight: 600, textAlign: 'center' };
 const label = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase' };
 const th = { padding: '8px 10px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', fontSize: 11, textTransform: 'uppercase', background: '#f9fafb' };
 const td = { padding: '8px 10px', borderBottom: '1px solid #f3f4f6', fontSize: 13 };
@@ -430,7 +431,7 @@ export default function SalesOrderFormPage() {
                 prev.focus();
             }
         } else if (e.key === 'Enter') {
-            const nextColTargets = [1, 3, 4, 5, 6, 7]; // Columns that are inputs (skipping readonly 2)
+            const nextColTargets = [1, 3, 4, 5, 6, 7, 8]; // Columns that are inputs (skipping readonly description)
             const currentTargetIdx = nextColTargets.indexOf(colIdx);
             
             if (currentTargetIdx < nextColTargets.length - 1) {
@@ -484,18 +485,6 @@ export default function SalesOrderFormPage() {
 
     return (
         <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            <style>
-                {`
-                    .no-spin::-webkit-inner-spin-button, 
-                    .no-spin::-webkit-outer-spin-button { 
-                        -webkit-appearance: none; 
-                        margin: 0; 
-                    }
-                    .no-spin {
-                        -moz-appearance: textfield;
-                    }
-                `}
-            </style>
             <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '14px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <button onClick={() => { if (window.confirm('Discard changes?')) navigate(PATHS.SALES.ORDERS); }} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}>← Sales Orders</button>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -504,7 +493,7 @@ export default function SalesOrderFormPage() {
                 </div>
             </div>
 
-            <div style={{ padding: '20px 28px', maxWidth: 1100, margin: '0 auto' }}>
+            <div style={{ padding: '20px 24px', maxWidth: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
                 {loading ? <BrandedLoader size={120} /> : (
                 <>
                 <Section title="Order Information">
@@ -722,19 +711,38 @@ export default function SalesOrderFormPage() {
                     </Grid>
                 </Section>
 
-                <Section title="Production Details">
-                    <div style={{ position: 'relative' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
-                            <thead><tr>
-                                {['Sr', 'Item Code *', 'Description', 'Additional Notes', 'HSN Code', 'UOM', 'Qty *', 'Rate *', 'Amount', ''].map(h => <th key={h} style={{ ...th, minWidth: h === 'Qty *' ? '150px' : 'auto' }}>{h}</th>)}
-                            </tr></thead>
+                <Section title="Items & Taxes">
+                    <div className={gridStyles.wrap}>
+                        <table className={gridStyles.table}>
+                            <thead>
+                                <tr>
+                                    <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>Item Code *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>Description</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colNotes}`}>Additional Notes</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colTaxable} ${gridStyles.num}`}>Taxable</th>
+                                    {gstApplicable && (
+                                        <>
+                                            <th className={`${gridStyles.th} ${gridStyles.colGstPct} ${gridStyles.center}`}>GST%</th>
+                                            <th className={`${gridStyles.th} ${gridStyles.colGstAmt} ${gridStyles.num}`}>GST Amt</th>
+                                        </>
+                                    )}
+                                    <th className={`${gridStyles.th} ${gridStyles.colTotal} ${gridStyles.num}`}>Total</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colAction} ${gridStyles.stickyRight}`} />
+                                </tr>
+                            </thead>
                             <tbody>
-                                {form.items.map((item, i) => {
-                                    const amt = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                {processedItems.map((item, i) => {
+                                    const gstAmt = gstApplicable ? ((isIGST ? item.igstAmt : (item.cgstAmt || 0) * 2) || 0) : 0;
+                                    const lineTotal = (item.amount || 0) + gstAmt;
                                     return (
-                                        <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                            <td style={{ ...td, color: '#9ca3af', width: 36 }}>{i + 1}</td>
-                                            <td style={{ ...td, minWidth: 140 }}>
+                                        <tr key={i}>
+                                            <td className={`${gridStyles.td} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>
                                                 <SearchableSelect
                                                     options={allItems.map(it => ({ 
                                                         value: it._id, 
@@ -758,26 +766,50 @@ export default function SalesOrderFormPage() {
                                                     }
                                                 />
                                             </td>
-                                            <td style={{ ...td, minWidth: 160 }}>
-                                                <input value={item.description || item.itemName || ''} readOnly style={{ ...inp, background: '#f9fafb', color: '#6b7280', cursor: 'not-allowed' }} placeholder="Description" tabIndex="-1" />
+                                            <td className={`${gridStyles.td} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>
+                                                <input value={item.description || item.itemName || ''} readOnly className={`${gridStyles.inp} ${gridStyles.readonly}`} placeholder="Description" tabIndex="-1" />
                                             </td>
-                                            <td style={{ ...td, minWidth: 120 }}><input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 90 }}><input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, width: 70 }}><input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} style={inp} autoComplete="off" /></td>
-                                            <td style={{ ...td, minWidth: '120px' }}><input type="number" min="0" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} style={{ ...tableInp, textAlign: 'center', fontSize: 12, fontWeight: 'bold', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
-                                            <td style={{ ...td, width: 90 }}><input type="number" min="0" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} style={{ ...tableInp, textAlign: 'right', borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" className="no-spin" /></td>
-
-                                            <td style={{ ...td, color: '#16a34a', fontWeight: 600, width: 90, whiteSpace: 'nowrap' }}>₹{amt.toLocaleString('en-IN')}</td>
-                                            <td style={{ ...td, width: 36 }}>
-                                                {form.items.length > 1 && <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }}>✕</button>}
+                                            <td className={`${gridStyles.td} ${gridStyles.colNotes}`}>
+                                                <input value={item.additionalNotes} onChange={e => setItem(i, 'additionalNotes', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 3)} data-row={i} data-col={3} className={gridStyles.inp} autoComplete="off" />
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colHsn}`}>
+                                                <input value={item.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 4)} data-row={i} data-col={4} className={gridStyles.inp} autoComplete="off" />
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colUom}`}>
+                                                <input value={item.uom} onChange={e => setItem(i, 'uom', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 5)} data-row={i} data-col={5} className={gridStyles.inp} autoComplete="off" />
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colQty}`}>
+                                                <input type="number" min="0" step="any" value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 6)} data-row={i} data-col={6} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center', borderColor: !item.qty ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
+                                                <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colTaxable} ${gridStyles.num} ${gridStyles.money}`}>
+                                                ₹{(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            {gstApplicable && (
+                                                <>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colGstPct}`}>
+                                                        <input type="number" min="0" max="28" step="any" value={item.gstRate} onChange={e => setItem(i, 'gstRate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
+                                                    </td>
+                                                    <td className={`${gridStyles.td} ${gridStyles.colGstAmt} ${gridStyles.num} ${gridStyles.moneyGst}`}>
+                                                        ₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </td>
+                                                </>
+                                            )}
+                                            <td className={`${gridStyles.td} ${gridStyles.colTotal} ${gridStyles.num} ${gridStyles.moneyTotal}`}>
+                                                ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colAction} ${gridStyles.stickyRight}`}>
+                                                {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }}>✕</button>}
                                             </td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
-                        <button onClick={addItem} style={{ padding: '7px 16px', border: '1px dashed #0d9488', background: '#f0fdfa', borderRadius: 7, cursor: 'pointer', color: '#0d9488', fontSize: 13, fontWeight: 600 }}>+ Add Item</button>
                     </div>
+                    <button type="button" onClick={addItem} className={gridStyles.addBtn}>+ Add Item</button>
                 </Section>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
