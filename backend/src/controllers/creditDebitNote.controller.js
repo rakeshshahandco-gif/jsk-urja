@@ -21,12 +21,16 @@ import {
 } from '../services/creditNoteAllocation.service.js';
 import {
     getSalesReturnLedgerSetupStatus,
-    createSalesReturnLedger,
-    mapLedgerToSystemCode,
-    isAuthorisedLedgerAdmin,
     SYSTEM_LEDGER_CODES,
 } from '../services/systemLedger.service.js';
-import { AccountLedger } from '../models/accountLedger.model.js';
+import {
+    getCreditNoteLedgerConfigStatus,
+    searchLedgersForMapping,
+    selectExistingLedger,
+    createNewSalesReturnLedger,
+    useDefaultSystemLedger,
+    saveReasonMappings,
+} from '../services/creditNoteLedgerConfig.service.js';
 
 const oid = (v) => {
     if (!v) return '';
@@ -330,56 +334,104 @@ export const rebuildCreditNoteBalance = asyncHandler(async (req, res) => {
     res.json(new ApiResponse(httpStatus.OK, { appliedAmount: applied, ...bal }));
 });
 
-/** GET Credit Note Sales Return ledger setup status */
+/** GET Credit Note Sales Return ledger setup status (legacy + config) */
 export const getCreditNoteLedgerSetup = asyncHandler(async (req, res) => {
+    const companyId = req.companyId;
+    if (companyId) {
+        const status = await getCreditNoteLedgerConfigStatus(companyId);
+        res.json(new ApiResponse(httpStatus.OK, status));
+        return;
+    }
     const status = await getSalesReturnLedgerSetupStatus();
     res.json(new ApiResponse(httpStatus.OK, status));
 });
 
-/** POST ensure/create SALES_RETURN ledger (authorised) */
-export const ensureCreditNoteSalesReturnLedger = asyncHandler(async (req, res) => {
-    if (!isAuthorisedLedgerAdmin(req.user)) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can create or map system ledgers');
-    }
-    const ledger = await createSalesReturnLedger({ userId: req.user.id || req.user._id });
-    res.json(new ApiResponse(httpStatus.OK, {
-        ledger: { _id: ledger._id, name: ledger.name, systemCode: ledger.systemCode },
-        systemCode: SYSTEM_LEDGER_CODES.SALES_RETURN.code,
-    }, 'Sales Return ledger ready'));
+/** GET full Credit Note ledger configuration */
+export const getCreditNoteLedgerConfig = asyncHandler(async (req, res) => {
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await getCreditNoteLedgerConfigStatus(req.companyId);
+    res.json(new ApiResponse(httpStatus.OK, status));
 });
 
-/** POST map existing ledger → SALES_RETURN */
+/** GET searchable ledgers for CN mapping */
+export const searchCreditNoteMappingLedgers = asyncHandler(async (req, res) => {
+    const rows = await searchLedgersForMapping({ q: req.query.q, limit: req.query.limit });
+    res.json(new ApiResponse(httpStatus.OK, { ledgers: rows }));
+});
+
+/** POST select existing ledger → SALES_RETURN (or given code) */
+export const selectCreditNoteExistingLedger = asyncHandler(async (req, res) => {
+    const { ledgerId, systemCode } = req.body || {};
+    if (!ledgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'ledgerId is required');
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await selectExistingLedger({
+        companyId: req.companyId,
+        user: req.user,
+        ledgerId,
+        systemCode: systemCode || 'SALES_RETURN',
+    });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Ledger mapped for Credit Notes'));
+});
+
+/** POST create new Sales Return ledger from setup */
+export const createCreditNoteConfigLedger = asyncHandler(async (req, res) => {
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const { name, groupName } = req.body || {};
+    const status = await createNewSalesReturnLedger({
+        companyId: req.companyId,
+        user: req.user,
+        name,
+        groupName,
+    });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Sales Return ledger created'));
+});
+
+/** POST use default system ledger mode */
+export const useCreditNoteDefaultSystemLedger = asyncHandler(async (req, res) => {
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await useDefaultSystemLedger({ companyId: req.companyId, user: req.user });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Default system ledger configured'));
+});
+
+/** PUT reason → systemCode mappings */
+export const updateCreditNoteReasonMappings = asyncHandler(async (req, res) => {
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await saveReasonMappings({
+        companyId: req.companyId,
+        user: req.user,
+        reasonMappings: req.body?.reasonMappings,
+    });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Reason mappings saved'));
+});
+
+/** POST ensure/create SALES_RETURN ledger (authorised) — legacy path */
+export const ensureCreditNoteSalesReturnLedger = asyncHandler(async (req, res) => {
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await createNewSalesReturnLedger({
+        companyId: req.companyId,
+        user: req.user,
+        name: req.body?.name,
+        groupName: req.body?.groupName,
+    });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Sales Return ledger ready'));
+});
+
+/** POST map existing ledger → SALES_RETURN — legacy path */
 export const mapCreditNoteSalesReturnLedger = asyncHandler(async (req, res) => {
-    if (!isAuthorisedLedgerAdmin(req.user)) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can create or map system ledgers');
-    }
     const { ledgerId } = req.body || {};
     if (!ledgerId) throw new ApiError(httpStatus.BAD_REQUEST, 'ledgerId is required');
-    const ledger = await mapLedgerToSystemCode(ledgerId, SYSTEM_LEDGER_CODES.SALES_RETURN.code);
-    res.json(new ApiResponse(httpStatus.OK, {
-        ledger: { _id: ledger._id, name: ledger.name, systemCode: ledger.systemCode },
-    }, 'Ledger mapped to SALES_RETURN'));
+    if (!req.companyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Company is required');
+    const status = await selectExistingLedger({
+        companyId: req.companyId,
+        user: req.user,
+        ledgerId,
+        systemCode: SYSTEM_LEDGER_CODES.SALES_RETURN.code,
+    });
+    res.json(new ApiResponse(httpStatus.OK, status, 'Ledger mapped to SALES_RETURN'));
 });
 
 /** GET candidate ledgers for mapping (alias search) */
 export const listSalesReturnMappingCandidates = asyncHandler(async (req, res) => {
-    if (!isAuthorisedLedgerAdmin(req.user)) {
-        throw new ApiError(httpStatus.FORBIDDEN, 'Only authorised users can map system ledgers');
-    }
-    const aliases = SYSTEM_LEDGER_CODES.SALES_RETURN.aliases;
-    const or = aliases.flatMap((n) => {
-        const esc = String(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return [
-            { name: new RegExp(esc, 'i') },
-            { alias: new RegExp(esc, 'i') },
-        ];
-    });
-    const rows = await AccountLedger.find({
-        $or: or,
-        status: { $ne: 'Inactive' },
-    })
-        .select('name alias systemCode groupName status')
-        .limit(50)
-        .lean();
+    const rows = await searchLedgersForMapping({ q: req.query.q || 'return', limit: 50 });
     res.json(new ApiResponse(httpStatus.OK, { candidates: rows, systemCode: 'SALES_RETURN' }));
 });

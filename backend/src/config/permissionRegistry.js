@@ -1145,6 +1145,11 @@ export const PERMISSION_REGISTRY = [
             { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'group_master', name: 'Group Master', actions: STANDARD_ACTIONS },
             { id: 'ledger_master', name: 'Ledger Master', actions: STANDARD_ACTIONS },
+            {
+                id: 'system_ledger',
+                name: 'System Ledger Configuration',
+                actions: [{ id: 'configure', label: 'Configure System Ledgers', type: 'boolean' }],
+            },
             { id: 'financial_year', name: 'Financial Year Master', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'ledger_report', name: 'Ledger Report', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'sales_register', name: 'Sales Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },

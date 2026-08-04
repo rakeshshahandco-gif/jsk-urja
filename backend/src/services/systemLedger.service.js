@@ -86,11 +86,12 @@ async function resolveSalesAccountsGroup(session = null) {
 
 /**
  * Stamp systemCode on an existing ledger (idempotent, no rename).
+ * @param {string} systemCode — e.g. SALES_RETURN, DISCOUNT_ALLOWED
  */
 export async function mapLedgerToSystemCode(ledgerId, systemCode, session = null) {
     const code = String(systemCode || '').trim().toUpperCase();
-    if (!code || !SYSTEM_LEDGER_CODES[code]) {
-        throw new ApiError(httpStatus.BAD_REQUEST, `Unknown system ledger code: ${systemCode}`);
+    if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Invalid system ledger code: ${systemCode}`);
     }
     const existing = await findLedgerBySystemCode(code, session);
     if (existing && String(existing._id) !== String(ledgerId)) {
@@ -103,6 +104,9 @@ export async function mapLedgerToSystemCode(ledgerId, systemCode, session = null
     if (session) q = q.session(session);
     const ledger = await q;
     if (!ledger) throw new ApiError(httpStatus.NOT_FOUND, 'Ledger not found');
+    if (ledger.status === 'Inactive') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Ledger "${ledger.name}" is inactive.`);
+    }
     if (ledger.systemCode && ledger.systemCode !== code) {
         throw new ApiError(
             httpStatus.BAD_REQUEST,

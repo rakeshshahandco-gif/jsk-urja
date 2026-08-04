@@ -199,6 +199,27 @@ const companySchema = new mongoose.Schema(
             capturedAt: { type: Date, default: null },
         },
 
+        // Credit Note income-ledger mapping (system codes; avoids separate Atlas collection)
+        creditNoteLedgerConfig: {
+            mode: {
+                type: String,
+                enum: ['default_system', 'select_existing', 'create_new'],
+                default: 'default_system',
+            },
+            defaultSystemCode: { type: String, trim: true, uppercase: true, default: 'SALES_RETURN' },
+            mappedLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+            reasonMappings: {
+                type: [{
+                    reasonKey: { type: String, trim: true, required: true },
+                    systemCode: { type: String, trim: true, uppercase: true, required: true },
+                    ledgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+                }],
+                default: undefined,
+            },
+            updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+            updatedAt: { type: Date, default: null },
+        },
+
         // Status
         isActive: { type: Boolean, default: true },
         isDefault: { type: Boolean, default: false },  // True for the primary/existing company

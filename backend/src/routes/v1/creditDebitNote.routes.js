@@ -12,6 +12,12 @@ import {
     reverseCreditNoteAllocation,
     rebuildCreditNoteBalance,
     getCreditNoteLedgerSetup,
+    getCreditNoteLedgerConfig,
+    searchCreditNoteMappingLedgers,
+    selectCreditNoteExistingLedger,
+    createCreditNoteConfigLedger,
+    useCreditNoteDefaultSystemLedger,
+    updateCreditNoteReasonMappings,
     ensureCreditNoteSalesReturnLedger,
     mapCreditNoteSalesReturnLedger,
     listSalesReturnMappingCandidates,
@@ -30,6 +36,13 @@ router.route('/')
 router.get('/available-for-customer', getAvailableCustomerCreditNotes);
 router.post('/allocate', applyCreditNoteAllocations);
 router.post('/allocations/:id/reverse', reverseCreditNoteAllocation);
+
+router.get('/ledger-config', getCreditNoteLedgerConfig);
+router.get('/ledger-config/search', searchCreditNoteMappingLedgers);
+router.post('/ledger-config/select-existing', selectCreditNoteExistingLedger);
+router.post('/ledger-config/create-new', createCreditNoteConfigLedger);
+router.post('/ledger-config/use-default', useCreditNoteDefaultSystemLedger);
+router.put('/ledger-config/reason-mappings', updateCreditNoteReasonMappings);
 
 router.get('/ledger-setup/sales-return', getCreditNoteLedgerSetup);
 router.get('/ledger-setup/sales-return/candidates', listSalesReturnMappingCandidates);

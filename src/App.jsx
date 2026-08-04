@@ -126,6 +126,7 @@ import PettyCashEntryPage from '@/features/pettyCash/PettyCashEntryPage';
 import PettyCashImportPage from '@/features/pettyCash/PettyCashImportPage';
 import PettyCashReportsPage from '@/features/pettyCash/PettyCashReportsPage';
 import PettyCashSettingsPage from '@/features/pettyCash/PettyCashSettingsPage';
+import CreditNoteLedgerConfigPage from '@/features/accounts/CreditNoteLedgerConfigPage';
 import WhatsappBulkCampaignsPage from '@/features/whatsappBulk/WhatsappBulkCampaignsPage';
 import WhatsappBulkMatterPage from '@/features/whatsappBulk/WhatsappBulkMatterPage';
 import WhatsappBulkBlacklistPage from '@/features/whatsappBulk/WhatsappBulkBlacklistPage';
@@ -857,6 +858,7 @@ const AppLayout = () => {
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_IMPORT} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.import"><PettyCashImportPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_REPORTS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.view"><PettyCashReportsPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_SETTINGS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.edit"><PettyCashSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.CREDIT_NOTE_LEDGER_CONFIG} element={<ProtectedRoute requirePermission="accounts.ledger_master.edit"><CreditNoteLedgerConfigPage /></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SMART_IMPORT_HUB} element={<ProtectedRoute requirePermission="import_utility.import_utility.view"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportHubPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/documents/smart-import/batch/:importType" element={<ProtectedRoute requirePermission="import_utility.import_utility.upload"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportBatchPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_DRAFTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryDraftsPage /></FeatureGuard></ProtectedRoute>} />

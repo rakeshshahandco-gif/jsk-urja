@@ -19,7 +19,7 @@ import { getNextVoucherNo } from '../utils/voucherUtils.js';
 import { applyBillPaymentDelta } from './accounting/billWiseSettlement.service.js';
 import { logAccountingAudit } from './accounting/accountingAudit.service.js';
 import { checkUserPermission } from '../utils/permissionUtils.js';
-import { resolveCreditNoteIncomeLedger } from './systemLedger.service.js';
+import { resolveConfiguredCreditNoteIncomeLedger } from './creditNoteLedgerConfig.service.js';
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -101,10 +101,9 @@ export async function postCustomerCreditNoteAccounting(note, userId, companyId, 
         throw new ApiError(httpStatus.BAD_REQUEST, `Customer ledger not found for ${note.customerName}`);
     }
 
-    const incomeResolved = await resolveCreditNoteIncomeLedger(note.reason, {
+    const incomeResolved = await resolveConfiguredCreditNoteIncomeLedger(note.reason, {
+        companyId: companyId || note.companyId,
         session,
-        user: opts.user || { id: userId, roleName: 'admin' },
-        autoCreate: true,
     });
     const salesReturnLedger = incomeResolved.ledger;
 

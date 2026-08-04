@@ -30,6 +30,36 @@ export const getCreditNoteSalesReturnSetup = async () => {
   return response.data.data;
 };
 
+export const getCreditNoteLedgerConfig = async () => {
+  const response = await api.get('/credit-debit-notes/ledger-config');
+  return response.data.data;
+};
+
+export const searchCreditNoteMappingLedgers = async (q = '') => {
+  const response = await api.get('/credit-debit-notes/ledger-config/search', { params: { q } });
+  return response.data.data;
+};
+
+export const selectCreditNoteExistingLedger = async (ledgerId, systemCode = 'SALES_RETURN') => {
+  const response = await api.post('/credit-debit-notes/ledger-config/select-existing', { ledgerId, systemCode });
+  return response.data.data;
+};
+
+export const createCreditNoteConfigLedger = async (body = {}) => {
+  const response = await api.post('/credit-debit-notes/ledger-config/create-new', body);
+  return response.data.data;
+};
+
+export const useCreditNoteDefaultSystemLedger = async () => {
+  const response = await api.post('/credit-debit-notes/ledger-config/use-default');
+  return response.data.data;
+};
+
+export const updateCreditNoteReasonMappings = async (reasonMappings) => {
+  const response = await api.put('/credit-debit-notes/ledger-config/reason-mappings', { reasonMappings });
+  return response.data.data;
+};
+
 export const ensureCreditNoteSalesReturnLedger = async () => {
   const response = await api.post('/credit-debit-notes/ledger-setup/sales-return/ensure');
   return response.data.data;

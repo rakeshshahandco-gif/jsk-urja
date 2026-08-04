@@ -277,6 +277,7 @@ export const PATHS = {
         PETTY_CASH_IMPORT: '/accounts/petty-cash/import',
         PETTY_CASH_REPORTS: '/accounts/petty-cash/reports',
         PETTY_CASH_SETTINGS: '/accounts/petty-cash/settings',
+        CREDIT_NOTE_LEDGER_CONFIG: '/accounts/credit-note-ledger-config',
         /** @deprecated Bookmarks only — redirects to {@link PATHS.TDS.DASHBOARD} */
         TDS_COMPLIANCE: '/accounts/tds-compliance',
     },

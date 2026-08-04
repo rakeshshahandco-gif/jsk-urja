@@ -514,6 +514,7 @@ export const menuConfig = [
             { id: 'cost-center-pl', title: 'Cost Centre P&L', path: PATHS.COST_CENTERS.PL_REPORT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
             { id: 'accounting-audit', title: 'Accounting Audit Trail', path: PATHS.ACCOUNTS.ACCOUNTING_AUDIT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
             { id: 'period-lock', title: 'Period Lock Settings', path: PATHS.ACCOUNTS.PERIOD_LOCK, roles: [ROLES.ADMIN], permission: 'accounts.vouchers.view' },
+            { id: 'credit-note-ledger-config', title: 'Credit Note Ledger Config', path: PATHS.ACCOUNTS.CREDIT_NOTE_LEDGER_CONFIG, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.ledger_master.edit' },
             {
                 id: 'petty-cash-group',
                 title: 'Petty Cash',

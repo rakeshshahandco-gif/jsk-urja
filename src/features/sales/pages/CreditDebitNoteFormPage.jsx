@@ -114,6 +114,7 @@ export default function CreditDebitNoteFormPage() {
         const role = String(user?.roleName || user?.role?.name || '').toLowerCase();
         if (role === 'admin' || role === 'superadmin') return true;
         return Boolean(
+            hasPermission?.('accounts.system_ledger.configure') ||
             hasPermission?.('accounts.ledger_master.add') ||
             hasPermission?.('accounts.ledger_master.edit'),
         );
@@ -523,6 +524,7 @@ export default function CreditDebitNoteFormPage() {
             const msg = errData.message || 'Save failed';
             const isSalesReturnMissing =
                 errData.errorCode === 'LEDGER_SALES_RETURN_MISSING' ||
+                /Credit Note ledger is not configured/i.test(msg) ||
                 /Sales Return ledger/i.test(msg) ||
                 /System ledger matching 'Sales Return'/i.test(msg);
 
@@ -537,11 +539,11 @@ export default function CreditDebitNoteFormPage() {
                     /* ignore */
                 }
                 setLedgerSetupModal({
-                    message: 'Credit Note cannot be finalised because the Sales Return ledger is not configured.',
+                    message: 'Credit Note ledger is not configured.',
                     candidates,
                     pendingFinalizeId: null,
                 });
-                toast.error('Sales Return ledger is not configured');
+                toast.error('Credit Note ledger is not configured');
             } else {
                 toast.error(msg);
             }
@@ -555,7 +557,7 @@ export default function CreditDebitNoteFormPage() {
         setLedgerBusy(true);
         try {
             await ensureCreditNoteSalesReturnLedger();
-            toast.success('Sales Return ledger created/mapped. Click Finalize & Issue again.');
+            toast.success('Ledger ready. Click Finalize & Issue again.');
             setLedgerSetupModal(null);
         } catch (e) {
             toast.error(e.response?.data?.message || 'Could not create ledger');
@@ -576,6 +578,11 @@ export default function CreditDebitNoteFormPage() {
         } finally {
             setLedgerBusy(false);
         }
+    };
+
+    const openLedgerConfig = (action = '') => {
+        const base = PATHS.ACCOUNTS.CREDIT_NOTE_LEDGER_CONFIG;
+        navigate(action ? `${base}?mode=${action}` : base);
     };
 
     const customerOptions = (() => {
@@ -832,12 +839,12 @@ export default function CreditDebitNoteFormPage() {
                         boxShadow: '0 20px 50px rgba(0,0,0,0.15)', padding: 22,
                     }}
                 >
-                    <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>Sales Return ledger required</h3>
+                    <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800 }}>Credit Note ledger is not configured</h3>
                     <p style={{ margin: '0 0 14px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
                         {ledgerSetupModal.message}
                     </p>
                     <p style={{ margin: '0 0 12px', fontSize: 12, color: '#64748b' }}>
-                        System code: <strong>SALES_RETURN</strong>. The note stays Draft until accounting can post.
+                        Internal system code: <strong>SALES_RETURN</strong>. The note stays Draft until a valid ledger is mapped.
                     </p>
                     {isLedgerAdmin && ledgerSetupModal.candidates?.length > 0 && (
                         <div style={{ marginBottom: 12, maxHeight: 160, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
@@ -865,24 +872,24 @@ export default function CreditDebitNoteFormPage() {
                                 <button
                                     type="button"
                                     disabled={ledgerBusy}
+                                    onClick={() => openLedgerConfig('select_existing')}
+                                    style={{
+                                        padding: '8px 14px', borderRadius: 8, border: '1px solid #cbd5e1',
+                                        background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12,
+                                    }}
+                                >
+                                    Select Existing Ledger
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={ledgerBusy}
                                     onClick={handleEnsureSalesReturnLedger}
                                     style={{
                                         padding: '8px 14px', borderRadius: 8, border: 'none',
                                         background: '#0d9488', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12,
                                     }}
                                 >
-                                    {ledgerBusy ? 'Working…' : 'Configure Ledger'}
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={ledgerBusy}
-                                    onClick={() => navigate(PATHS.ACCOUNT_MASTER?.LEDGER_MASTER || PATHS.ACCOUNTS?.LEDGER_MASTER || '/account-master/ledgers')}
-                                    style={{
-                                        padding: '8px 14px', borderRadius: 8, border: '1px solid #cbd5e1',
-                                        background: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 12,
-                                    }}
-                                >
-                                    Map Existing Ledger
+                                    {ledgerBusy ? 'Working…' : 'Create New Ledger'}
                                 </button>
                             </>
                         )}
