@@ -29,6 +29,16 @@ connectDB().then((connected) => {
         startReminderCron();
         startWhatsappBulkCron();
         startEmailBulkCron();
+
+        // SLS: reclaim stale CP6–CP8 processing locks after restart (no auto campaign restart)
+        setTimeout(() => {
+            import('./services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.autoProcessing.service.js')
+                .then((mod) => mod.recoverStaleAutoProcessingOnStartup())
+                .then((summary) => {
+                    logger.info(`[SLS] Startup stale-job recovery: ${JSON.stringify(summary)}`);
+                })
+                .catch((err) => logger.error(`[SLS] Startup recovery failed: ${err?.message || err}`));
+        }, 8000);
     }
 
     // Create HTTP server wrapping Express app

@@ -325,6 +325,7 @@ async function processJob(jobId) {
                 const my = idx;
                 idx += 1;
                 const enrichment = enrichments[my];
+                if (!enrichment) continue;
                 await RawCaptureQualificationJob.updateOne(
                     { _id: jobId },
                     { $set: { currentDomain: enrichment.canonicalDomain || enrichment.companyName || '' } },

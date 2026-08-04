@@ -1838,12 +1838,27 @@ export default function DataExtractorSimpleLeadSearchPage() {
         ?? (waitingEnrichmentCount + enrichingCount
             + Number(autoProcessing?.counts?.waitingQualification || 0)
             + Number(autoProcessing?.counts?.waitingVerification || 0)));
+    const stuckProcessing = Number(
+        autoProcessing?.stuckProcessing
+        ?? autoProcessing?.counts?.reconcileProcessing
+        ?? 0,
+    );
+    const lastWorkerHeartbeat = autoProcessing?.lastWorkerHeartbeat || autoProcessing?.lastTickAt || null;
+    const lastProgressAt = autoProcessing?.lastProcessedAt
+        || autoProcessing?.lastBatchCompletedAt
+        || lastWorkerHeartbeat;
+    const workerStatusMessage = autoProcessing?.workerStatusMessage || '';
+    const workerActive = Boolean(autoProcessing?.workerActive);
     const backlogSummary = autoProcessing?.backlogSummary
         || (capturedUnique
             ? `${capturedUnique} captured. ${processingBacklog} waiting for processing.`
             : '');
     const autoResumeBanner = (autoProcessing?.autoResumed || autoProcessing?.autoResumeMessage)
         ? (autoProcessing.autoResumeMessage || AUTO_RESUME_BACKLOG_MESSAGE)
+        : '';
+    const tickFailedBanner = (autoProcessing?.lastErrorCode === 'pipeline_tick_failed'
+        || autoProcessing?.lastErrorCode === 'atlas_collection_limit')
+        ? (autoProcessing.lastErrorMessage || 'Automatic processing tick failed.')
         : '';
     const reconcile = reconcileBucketsFromCounts(autoProcessing?.counts || {});
     const queryIndex = safeQueryIndex(campaignProgress, result, autoCollection);
@@ -2302,7 +2317,36 @@ export default function DataExtractorSimpleLeadSearchPage() {
                                 fontWeight: 600,
                             }}>
                                 Processing Backlog: {processingBacklog}
+                                {stuckProcessing > 0 ? ` · Stuck Processing: ${stuckProcessing}` : ''}
                                 {capturedUnique ? ` · ${backlogSummary}` : ''}
+                            </div>
+                        )}
+                        {tickFailedBanner && (
+                            <div style={{
+                                marginBottom: 12,
+                                padding: '10px 12px',
+                                borderRadius: 8,
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                color: '#991b1b',
+                                fontSize: 13,
+                                fontWeight: 600,
+                            }} role="alert">
+                                Worker inactive / tick failed: {tickFailedBanner}
+                                {' '}Click <strong>Resume Campaign</strong> after the cause is fixed.
+                            </div>
+                        )}
+                        {(!workerActive && pipeRunning && !tickFailedBanner) && (
+                            <div style={{
+                                marginBottom: 12,
+                                padding: '10px 12px',
+                                borderRadius: 8,
+                                background: '#f8fafc',
+                                border: '1px solid #cbd5e1',
+                                color: '#334155',
+                                fontSize: 13,
+                            }}>
+                                {workerStatusMessage || 'No recent worker heartbeat. Keep this page open or click Resume Campaign.'}
                             </div>
                         )}
                         <div className={styles.metaGrid}>
@@ -2312,6 +2356,10 @@ export default function DataExtractorSimpleLeadSearchPage() {
                             <div><div className={styles.metaLabel}>Google Page</div><div className={styles.metaValue}>{googlePage}</div></div>
                             <div><div className={styles.metaLabel}>Status</div><div><span className={`${styles.badge} ${statusBadge.cls}`}>{statusBadge.text}</span></div></div>
                             <div><div className={styles.metaLabel}>Processing Backlog</div><div className={styles.metaValue}>{processingBacklog}</div></div>
+                            <div><div className={styles.metaLabel}>Stuck Processing</div><div className={styles.metaValue} style={{ color: stuckProcessing ? '#b45309' : undefined }}>{stuckProcessing}</div></div>
+                            <div><div className={styles.metaLabel}>Worker</div><div className={styles.metaValue}>{workerActive ? 'Active' : 'Inactive'}</div></div>
+                            <div><div className={styles.metaLabel}>Last Worker Heartbeat</div><div className={styles.metaValue}>{lastWorkerHeartbeat ? new Date(lastWorkerHeartbeat).toLocaleString() : '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Last Progress</div><div className={styles.metaValue}>{lastProgressAt ? new Date(lastProgressAt).toLocaleString() : '—'}</div></div>
                             <div><div className={styles.metaLabel}>Current Batch</div><div className={styles.metaValue}>{autoProcessing?.currentBatchNumber || 0} · size {autoProcessing?.currentBatchSize || 0}</div></div>
                             <div><div className={styles.metaLabel}>Batches Completed</div><div className={styles.metaValue}>{autoProcessing?.counts?.batchesCompleted || 0}</div></div>
                             <div><div className={styles.metaLabel}>Last Batch Completed</div><div className={styles.metaValue}>{autoProcessing?.lastBatchCompletedAt ? new Date(autoProcessing.lastBatchCompletedAt).toLocaleString() : '—'}</div></div>
@@ -2434,8 +2482,8 @@ export default function DataExtractorSimpleLeadSearchPage() {
                             )}
                             {processPaused && !processManual && (
                                 <button type="button" className={`${styles.ctrlBtn} ${styles.ctrlResume}`} disabled={!!busy} onClick={onResumeAutomaticProcess}>
-                                    Resume Automatic Process
-                                    <span>Continue from the stored query/page/stage.</span>
+                                    Resume Campaign
+                                    <span>Continue unfinished records only (no duplicates).</span>
                                 </button>
                             )}
                             {processManual && (
@@ -3090,7 +3138,7 @@ export default function DataExtractorSimpleLeadSearchPage() {
                                 Pause Automatic Processing
                             </button>
                             <button type="button" disabled={!!busy} onClick={onResumeAutoProcessing} style={btn('#0f766e', !!busy)}>
-                                Resume Automatic Processing
+                                {busy === 'pipeResume' ? 'Resuming…' : 'Resume Campaign'}
                             </button>
                             <button type="button" disabled={!!busy} onClick={onStopAutoProcessing} style={btn('#b91c1c', !!busy)}>
                                 Stop Automatic Processing

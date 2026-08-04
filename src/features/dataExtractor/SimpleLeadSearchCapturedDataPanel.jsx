@@ -561,9 +561,19 @@ export default function SimpleLeadSearchCapturedDataPanel({
                                 <td>{dash(r.currentStage)}</td>
                                 <td>
                                     <span className={styles.capturedStatus}>{dash(r.exclusiveStatus)}</span>
+                                    {r.exclusiveStatus === 'processing' && (
+                                        <div style={{ fontSize: 11, color: '#b45309', marginTop: 4 }}>
+                                            Checkpoint: {dash(r.currentStage)}
+                                            {r.lastProcessedAt ? ` · Updated ${new Date(r.lastProcessedAt).toLocaleString()}` : ''}
+                                        </div>
+                                    )}
                                 </td>
                                 <td title={r.failureReason}>{dash(r.failureReason)}</td>
-                                <td>{r.retryAvailable ? `Yes (${r.retryCount || 0})` : '—'}</td>
+                                <td>
+                                    {r.retryAvailable
+                                        ? `Yes (${r.retryCount || 0})`
+                                        : (r.exclusiveStatus === 'failed' ? 'No (permanent / blocked)' : '—')}
+                                </td>
                                 <td>
                                     <button type="button" className={styles.linkBtn} onClick={() => setDetailId(r._id === detailId ? '' : r._id)}>
                                         {r._id === detailId ? 'Hide' : 'View Details'}

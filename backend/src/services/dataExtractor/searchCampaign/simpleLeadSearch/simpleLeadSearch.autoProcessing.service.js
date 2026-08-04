@@ -479,6 +479,28 @@ export function progressView(session) {
         lastBatchCompletedAt: ap.lastBatchCompletedAt || null,
         nextRetryAt: ap.nextRetryAt || null,
         lastTickAt: ap.lastTickAt || null,
+        lastWorkerHeartbeat: ap.lastTickAt || null,
+        stuckProcessing: reconcileProcessing,
+        workerActive: Boolean(
+            status === 'running'
+            && ap.lastTickAt
+            && (Date.now() - new Date(ap.lastTickAt).getTime()) < 120_000
+            && ap.lastErrorCode !== 'pipeline_tick_failed',
+        ),
+        workerStatusMessage: (() => {
+            if (status === 'paused_owner') return 'Paused by owner — no new jobs will start.';
+            if (status === 'stopped') return 'Stopped — automatic processing is off.';
+            if (ap.lastErrorCode === 'pipeline_tick_failed') {
+                return `Worker tick failed: ${ap.lastErrorMessage || 'unknown error'}. Use Resume Campaign after fixing the cause.`;
+            }
+            if (status === 'running' && (!ap.lastTickAt || (Date.now() - new Date(ap.lastTickAt).getTime()) > 120_000)) {
+                return 'No recent worker heartbeat. Open this page or click Resume Campaign to advance the pipeline.';
+            }
+            if (reconcileProcessing > 0 && status === 'running') {
+                return `${reconcileProcessing} record(s) stuck in processing (awaiting qualify/verify).`;
+            }
+            return '';
+        })(),
         counts: {
             capturedUnique,
             waitingEnrichment: c.waitingEnrichment || 0,
@@ -650,17 +672,244 @@ function isJobActive(status) {
     return ACTIVE_JOB.includes(String(status || ''));
 }
 
+/** Enrich jobs usually heartbeat often; CP7/CP8 AI can sit quiet between items. */
+const STALE_ENRICH_MS = 90_000;
+const STALE_DOWNSTREAM_MS = 15 * 60_000;
+
 /** Recover from worker crash / backend restart leaving jobs stuck in queued|processing */
-function isStaleActiveJob(job, maxAgeMs = 90_000) {
+function isStaleActiveJob(job, maxAgeMs = STALE_ENRICH_MS) {
     if (!job || !isJobActive(job.status)) return false;
     const t = new Date(job.updatedAt || job.startedAt || job.createdAt || 0).getTime();
     if (!Number.isFinite(t) || t <= 0) return true;
     return (Date.now() - t) > maxAgeMs;
 }
 
+async function markJobStopped(Model, jobId, reason) {
+    if (!jobId || !Model) return null;
+    try {
+        return await Model.findByIdAndUpdate(
+            jobId,
+            {
+                $set: {
+                    status: 'stopped',
+                    stoppedAt: new Date(),
+                    lastError: String(reason || 'Stale processing lock released').slice(0, 500),
+                },
+            },
+            { new: true },
+        ).lean();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Clear stale job pointers and mark job docs stopped (idempotent).
+ * Preserves evidence; does not delete captures/enrichments.
+ */
+async function reclaimStaleJobsForSession(session, ap, maxAgeMs = STALE_ENRICH_MS) {
+    const enrichAge = maxAgeMs;
+    const downstreamAge = Math.max(maxAgeMs, STALE_DOWNSTREAM_MS);
+    const summary = { enrich: 0, qualify: 0, verify: 0 };
+    if (ap.currentEnrichJobId) {
+        const job = await loadJobStatus(RawCaptureEnrichmentJob, ap.currentEnrichJobId);
+        if (!job || isStaleActiveJob(job, enrichAge) || isJobTerminal(job.status)) {
+            if (job && isStaleActiveJob(job, enrichAge)) {
+                await markJobStopped(RawCaptureEnrichmentJob, job._id, 'Stale enrichment job released on reclaim');
+                summary.enrich += 1;
+            }
+            ap.currentEnrichJobId = null;
+            if (ap.currentStage === 'enriching') ap.currentStage = 'waiting_batch';
+        }
+    }
+    if (ap.currentQualifyJobId) {
+        const job = await loadJobStatus(RawCaptureQualificationJob, ap.currentQualifyJobId);
+        if (!job || isStaleActiveJob(job, downstreamAge) || isJobTerminal(job.status)) {
+            if (job && isStaleActiveJob(job, downstreamAge)) {
+                await markJobStopped(RawCaptureQualificationJob, job._id, 'Stale qualification job released on reclaim');
+                summary.qualify += 1;
+            }
+            ap.currentQualifyJobId = null;
+            if (ap.currentStage === 'qualifying') ap.currentStage = 'waiting_batch';
+        }
+    }
+    if (ap.currentVerifyJobId) {
+        const job = await loadJobStatus(RawCaptureGenuinenessJob, ap.currentVerifyJobId);
+        if (!job || isStaleActiveJob(job, downstreamAge) || isJobTerminal(job.status)) {
+            if (job && isStaleActiveJob(job, downstreamAge)) {
+                await markJobStopped(RawCaptureGenuinenessJob, job._id, 'Stale verification job released on reclaim');
+                summary.verify += 1;
+            }
+            ap.currentVerifyJobId = null;
+            if (ap.currentStage === 'verifying') ap.currentStage = 'waiting_batch';
+        }
+    }
+    // Orphan active jobs for this session (pointer already cleared)
+    try {
+        const [eJobs, qJobs, vJobs] = await Promise.all([
+            RawCaptureEnrichmentJob.find({
+                companyId: session.companyId,
+                sessionId: session._id,
+                status: { $in: ACTIVE_JOB },
+                updatedAt: { $lt: new Date(Date.now() - enrichAge) },
+            }).select('_id').lean(),
+            RawCaptureQualificationJob.find({
+                companyId: session.companyId,
+                sessionId: session._id,
+                status: { $in: ACTIVE_JOB },
+                updatedAt: { $lt: new Date(Date.now() - downstreamAge) },
+            }).select('_id').lean(),
+            RawCaptureGenuinenessJob.find({
+                companyId: session.companyId,
+                sessionId: session._id,
+                status: { $in: ACTIVE_JOB },
+                updatedAt: { $lt: new Date(Date.now() - downstreamAge) },
+            }).select('_id').lean(),
+        ]);
+        for (const j of eJobs) {
+            await markJobStopped(RawCaptureEnrichmentJob, j._id, 'Orphan stale enrichment job released');
+            summary.enrich += 1;
+        }
+        for (const j of qJobs) {
+            await markJobStopped(RawCaptureQualificationJob, j._id, 'Orphan stale qualification job released');
+            summary.qualify += 1;
+        }
+        for (const j of vJobs) {
+            await markJobStopped(RawCaptureGenuinenessJob, j._id, 'Orphan stale verification job released');
+            summary.verify += 1;
+        }
+    } catch {
+        /* models may lack sessionId index on older docs — non-fatal */
+    }
+    const total = summary.enrich + summary.qualify + summary.verify;
+    if (total > 0) {
+        ap.lastErrorCode = 'stale_jobs_reclaimed';
+        ap.lastErrorMessage = `Released ${total} stale processing job(s). Automatic processing can resume.`;
+        ap.autoResumeNotice = true;
+    }
+    return summary;
+}
+
 async function loadJobStatus(Model, id) {
     if (!id) return null;
     return Model.findById(id).lean();
+}
+
+/**
+ * Enrichments that finished CP6 but have no qualification yet (downstream backlog).
+ */
+async function findEnrichmentsAwaitingQualification(companyId, campaignId, limit = 10) {
+    const enrichDocs = await RawCaptureEnrichment.find({
+        companyId,
+        campaignId,
+        enrichmentStatus: { $in: ENRICH_DONE },
+    }).select('_id').sort({ createdAt: 1 }).limit(Math.max(limit * 5, 50)).lean();
+    if (!enrichDocs.length) return [];
+    const ids = enrichDocs.map((d) => d._id);
+    const existing = await RawCaptureQualification.find({
+        companyId,
+        campaignId,
+        enrichmentId: { $in: ids },
+    }).select('enrichmentId').lean();
+    const done = new Set(existing.map((e) => String(e.enrichmentId)));
+    return ids.filter((id) => !done.has(String(id))).slice(0, limit);
+}
+
+/**
+ * Eligible qualifications waiting for genuineness/verification.
+ */
+async function findQualificationsAwaitingVerification(companyId, campaignId, limit = 10) {
+    const quals = await RawCaptureQualification.find({
+        companyId,
+        campaignId,
+        systemDecision: { $in: QUALIFY_ELIGIBLE },
+    }).select('_id').sort({ createdAt: 1 }).limit(Math.max(limit * 5, 50)).lean();
+    if (!quals.length) return [];
+    const ids = quals.map((d) => d._id);
+    const existing = await RawCaptureGenuineness.find({
+        companyId,
+        campaignId,
+        qualificationId: { $in: ids },
+    }).select('qualificationId').lean();
+    const done = new Set(existing.map((e) => String(e.qualificationId)));
+    return ids.filter((id) => !done.has(String(id))).slice(0, limit);
+}
+
+/**
+ * When enrichment backlog is empty but CP7/CP8 backlog remains, start those stages.
+ * Idempotent: uses selected IDs that have no downstream docs yet.
+ */
+async function drainDownstreamBacklog(session, user, ap) {
+    const batchSize = Number(ap.batchSize || 10);
+    if (ap.autoQualify !== false && !ap.currentQualifyJobId && !ap.currentVerifyJobId) {
+        const toQualify = await findEnrichmentsAwaitingQualification(
+            session.companyId,
+            session.campaignId,
+            batchSize,
+        );
+        if (toQualify.length) {
+            const { startQualificationJob } = await import('../rawCaptureQualification/rawCaptureQualification.service.js');
+            const result = await startQualificationJob({
+                companyId: session.companyId,
+                user,
+                sessionId: String(session._id),
+                mode: 'selected',
+                enrichmentIds: toQualify,
+            });
+            if (result?.job?._id) {
+                ap.currentBatchEnrichmentIds = toQualify;
+                ap.currentQualifyJobId = result.job._id;
+                ap.currentStage = 'qualifying';
+                ap.retryCount = 0;
+                ap.lastErrorCode = '';
+                ap.lastErrorMessage = '';
+                return { started: 'qualify', count: toQualify.length };
+            }
+        }
+    }
+    if (ap.autoVerify !== false && !ap.currentVerifyJobId && !ap.currentQualifyJobId) {
+        const toVerify = await findQualificationsAwaitingVerification(
+            session.companyId,
+            session.campaignId,
+            batchSize,
+        );
+        if (toVerify.length) {
+            const { startVerificationJob } = await import('../rawCaptureGenuineness/rawCaptureGenuineness.service.js');
+            const result = await startVerificationJob({
+                companyId: session.companyId,
+                user,
+                sessionId: String(session._id),
+                mode: 'selected',
+                qualificationIds: toVerify,
+            });
+            if (result?.job?._id) {
+                ap.currentBatchQualificationIds = toVerify;
+                ap.currentVerifyJobId = result.job._id;
+                ap.currentStage = 'verifying';
+                ap.retryCount = 0;
+                ap.lastErrorCode = '';
+                ap.lastErrorMessage = '';
+                return { started: 'verify', count: toVerify.length };
+            }
+        }
+    }
+    return { started: false };
+}
+
+/**
+ * Campaign is complete when every capture is in an exclusive final bucket.
+ */
+function isExclusivePipelineComplete(counts) {
+    const waiting = Number(counts?.reconcileWaiting || 0);
+    const processing = Number(counts?.reconcileProcessing || 0);
+    const total = Number(counts?.reconcileTotal || 0)
+        || (waiting + processing
+            + Number(counts?.reconcileCompleted || 0)
+            + Number(counts?.reconcileReviewRequired || 0)
+            + Number(counts?.reconcileRejectedSkipped || 0)
+            + Number(counts?.reconcileFailed || 0));
+    if (total <= 0) return false;
+    return waiting === 0 && processing === 0;
 }
 
 export async function enableAutoProcessing({ companyId, user, sessionId, body = {} }) {
@@ -730,17 +979,29 @@ export async function resumeAutoProcessing({ companyId, user, sessionId }) {
     assertAssistedCaptureStart(user);
     const session = await loadOwnedSession(cid, sessionId);
     const ap = ensureAp(session);
+    if (!ap.enabled && !ap.ownerWorkflowEnabled && !ap.startedAt) {
+        // Allow resume of previously enabled pipelines even if a crash flipped enabled
+        if (Number(ap.counts?.processingBacklog || 0) <= 0) {
+            throw new ApiError(400, 'Enable automatic processing first');
+        }
+        ap.enabled = true;
+        ap.ownerWorkflowEnabled = true;
+    }
     if (!ap.enabled) {
-        throw new ApiError(400, 'Enable automatic processing first');
+        ap.enabled = true;
+        ap.ownerWorkflowEnabled = true;
     }
     ap.status = 'running';
     ap.currentStage = ap.currentStage === 'done' ? 'waiting_batch' : (ap.currentStage || 'waiting_batch');
     ap.lastErrorCode = '';
     ap.lastErrorMessage = '';
     ap.flushRequested = true; // flush leftovers after resume
+    await reclaimStaleJobsForSession(session, ap);
     await repairStaleProcessedQueue(session, ap);
+    await refreshCounts(session);
     await session.save();
-    return { autoProcessing: progressView(session.toObject()) };
+    // Advance immediately so Resume is not poll-dependent
+    return tickAutoProcessing({ companyId: cid, user, sessionId });
 }
 
 export async function stopAutoProcessing({ companyId, user, sessionId, body = {} }) {
@@ -860,7 +1121,8 @@ async function startEnrichBatch(session, user, ap) {
 
 async function advanceAfterEnrich(session, user, ap, enrichJob) {
     if (isJobActive(enrichJob?.status)) {
-        if (isStaleActiveJob(enrichJob)) {
+        if (isStaleActiveJob(enrichJob, STALE_ENRICH_MS)) {
+            await markJobStopped(RawCaptureEnrichmentJob, enrichJob._id, 'Stale enrichment job released (>90s)');
             ap.currentEnrichJobId = null;
             ap.currentStage = 'waiting_batch';
             ap.lastErrorCode = 'stale_enrich_job_cleared';
@@ -931,7 +1193,8 @@ async function advanceAfterEnrich(session, user, ap, enrichJob) {
 
 async function advanceAfterQualify(session, user, ap, qualifyJob) {
     if (isJobActive(qualifyJob?.status)) {
-        if (isStaleActiveJob(qualifyJob)) {
+        if (isStaleActiveJob(qualifyJob, STALE_DOWNSTREAM_MS)) {
+            await markJobStopped(RawCaptureQualificationJob, qualifyJob._id, 'Stale qualification job released (>15m)');
             ap.currentQualifyJobId = null;
             ap.currentStage = 'waiting_batch';
             ap.lastErrorCode = 'stale_qualify_job_cleared';
@@ -1007,7 +1270,8 @@ async function advanceAfterQualify(session, user, ap, qualifyJob) {
 
 async function advanceAfterVerify(session, ap, verifyJob) {
     if (isJobActive(verifyJob?.status)) {
-        if (isStaleActiveJob(verifyJob)) {
+        if (isStaleActiveJob(verifyJob, STALE_DOWNSTREAM_MS)) {
+            await markJobStopped(RawCaptureGenuinenessJob, verifyJob._id, 'Stale verification job released (>15m)');
             ap.currentVerifyJobId = null;
             ap.currentStage = 'waiting_batch';
             ap.lastErrorCode = 'stale_verify_job_cleared';
@@ -1070,6 +1334,7 @@ export async function tickAutoProcessing({ companyId, user, sessionId }) {
     ap.lastTickAt = new Date();
 
     try {
+        await reclaimStaleJobsForSession(session, ap);
         await refreshCounts(session);
 
         if (ap.currentStage === 'enriching' || ap.currentEnrichJobId) {
@@ -1086,21 +1351,30 @@ export async function tickAutoProcessing({ companyId, user, sessionId }) {
             await repairStaleProcessedQueue(session, ap);
             const collecting = session.autoCollection?.status === 'running';
             if (!collecting) ap.flushRequested = true;
-            await startEnrichBatch(session, user, ap);
+            const enrichStart = await startEnrichBatch(session, user, ap);
 
-            // If nothing pending and not collecting → completed (only when backlog truly empty)
+            // Downstream drain: enriched-but-not-qualified / qualified-but-not-verified
+            if (!ap.currentEnrichJobId && !ap.currentQualifyJobId && !ap.currentVerifyJobId
+                && (!enrichStart?.started)) {
+                await drainDownstreamBacklog(session, user, ap);
+            }
+
+            // If nothing pending and not collecting → completed (exclusive finals only)
             const pending = await findNextBatchCaptureIds(session, ap);
             await refreshCounts(session);
             const backlogLeft = Number(ap.counts?.processingBacklog || 0);
+            const exclusiveDone = isExclusivePipelineComplete(ap.counts);
             if (!pending.length && !ap.currentEnrichJobId && !ap.currentQualifyJobId && !ap.currentVerifyJobId
                 && !collecting
-                && backlogLeft <= 0
+                && (exclusiveDone || backlogLeft <= 0)
                 && !['enriching', 'qualifying', 'verifying'].includes(ap.currentStage)) {
                 ap.currentStage = 'done';
                 ap.status = 'completed';
                 ap.flushRequested = false;
                 ap.autoResumeNotice = false;
-            } else if (backlogLeft > 0 && ap.status === 'completed') {
+                ap.lastErrorCode = exclusiveDone ? '' : ap.lastErrorCode;
+                ap.lastErrorMessage = exclusiveDone ? '' : ap.lastErrorMessage;
+            } else if ((!exclusiveDone || backlogLeft > 0) && ap.status === 'completed') {
                 ap.status = 'running';
                 ap.currentStage = 'waiting_batch';
             }
@@ -1116,6 +1390,10 @@ export async function tickAutoProcessing({ companyId, user, sessionId }) {
     } catch (err) {
         ap.lastErrorCode = 'pipeline_tick_failed';
         ap.lastErrorMessage = String(err?.message || err).slice(0, 500);
+        if (/500 collections|cannot create a new collection/i.test(ap.lastErrorMessage)) {
+            ap.lastErrorCode = 'atlas_collection_limit';
+            ap.lastErrorMessage = 'MongoDB Atlas collection limit reached. Free empty collections or upgrade the cluster, then Resume Campaign.';
+        }
         // Do not permanently kill pipeline on transient tick errors
         if (!TEMP_ERROR_RE.test(ap.lastErrorMessage)) {
             // keep running; owner can pause
@@ -1150,4 +1428,70 @@ export async function onCaptureStoppedFlush({ companyId, user, sessionId }) {
         await session.save();
     }
     return { autoProcessing: progressView(session.toObject()) };
+}
+
+/**
+ * Backend startup: reclaim stale processing jobs across active SLS pipelines.
+ * Does not auto-start new campaigns; only releases locks and logs a summary.
+ */
+export async function recoverStaleAutoProcessingOnStartup({ maxAgeMs = STALE_ENRICH_MS } = {}) {
+    const summary = {
+        sessionsScanned: 0,
+        sessionsTouched: 0,
+        enrichJobsStopped: 0,
+        qualifyJobsStopped: 0,
+        verifyJobsStopped: 0,
+    };
+    try {
+        const sessions = await AssistedCaptureSession.find({
+            $or: [
+                { 'autoProcessing.status': 'running' },
+                { 'autoProcessing.enabled': true },
+                { 'autoProcessing.currentEnrichJobId': { $ne: null } },
+                { 'autoProcessing.currentQualifyJobId': { $ne: null } },
+                { 'autoProcessing.currentVerifyJobId': { $ne: null } },
+            ],
+        }).limit(100);
+        summary.sessionsScanned = sessions.length;
+        for (const session of sessions) {
+            const ap = ensureAp(session);
+            const before = {
+                e: ap.currentEnrichJobId,
+                q: ap.currentQualifyJobId,
+                v: ap.currentVerifyJobId,
+            };
+            const reclaimed = await reclaimStaleJobsForSession(session, ap, maxAgeMs);
+            summary.enrichJobsStopped += reclaimed.enrich;
+            summary.qualifyJobsStopped += reclaimed.qualify;
+            summary.verifyJobsStopped += reclaimed.verify;
+            const changed = before.e !== ap.currentEnrichJobId
+                || before.q !== ap.currentQualifyJobId
+                || before.v !== ap.currentVerifyJobId
+                || (reclaimed.enrich + reclaimed.qualify + reclaimed.verify) > 0;
+            if (changed) {
+                summary.sessionsTouched += 1;
+                await session.save();
+            }
+        }
+        // Also stop orphan jobs with no session pointer (cluster-wide safety)
+        const cutoff = new Date(Date.now() - maxAgeMs);
+        const orphanQ = { status: { $in: ACTIVE_JOB }, updatedAt: { $lt: cutoff } };
+        const [eN, qN, vN] = await Promise.all([
+            RawCaptureEnrichmentJob.updateMany(orphanQ, {
+                $set: { status: 'stopped', stoppedAt: new Date(), lastError: 'Startup reclaim: stale processing job' },
+            }),
+            RawCaptureQualificationJob.updateMany(orphanQ, {
+                $set: { status: 'stopped', stoppedAt: new Date(), lastError: 'Startup reclaim: stale processing job' },
+            }),
+            RawCaptureGenuinenessJob.updateMany(orphanQ, {
+                $set: { status: 'stopped', stoppedAt: new Date(), lastError: 'Startup reclaim: stale processing job' },
+            }),
+        ]);
+        summary.enrichJobsStopped += eN.modifiedCount || 0;
+        summary.qualifyJobsStopped += qN.modifiedCount || 0;
+        summary.verifyJobsStopped += vN.modifiedCount || 0;
+    } catch (err) {
+        summary.error = String(err?.message || err).slice(0, 300);
+    }
+    return summary;
 }
