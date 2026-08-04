@@ -13,6 +13,7 @@ import { useCompany } from '@/contexts/CompanyContext';
 import InvoiceBarcodeSettingsCard from './InvoiceBarcodeSettingsCard';
 import PrintFormatDesignerSettingsCard from './PrintFormatDesignerSettingsCard';
 import toast from 'react-hot-toast';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
 
 const inp = {
     padding: '10px 14px',
@@ -304,6 +305,7 @@ export default function CompanyProfilePage() {
     return (
         <div style={{ padding: '32px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+                <ModuleHomeBackLink to={PATHS.SETTINGS.HOME} label="Back to Admin Home" />
                 <div style={{ marginBottom: '24px' }}>
                     <h1 style={{ margin: '0 0 8px', fontSize: '26px', fontWeight: 800, color: '#0f172a' }}>
                         🏢 Company Profile

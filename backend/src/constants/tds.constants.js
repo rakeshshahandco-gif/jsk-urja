@@ -57,7 +57,7 @@ export const TDS_MASTER_DEFAULTS = [
     {
         sectionCode: '194C',
         sectionName: 'Contractor / Labour / Manpower Supply',
-        description: 'Labour, fabrication, job work, manpower, security, transport contract',
+        description: 'Labour, fabrication, job work, manpower, security, transport, courier contract',
         rateIndividualHuf: 1,
         rateOthers: 2,
         defaultRate: 1,
@@ -65,22 +65,28 @@ export const TDS_MASTER_DEFAULTS = [
         thresholdAmount: 100000,
         thresholdCalculationMethod: 'Both',
         calculationType: 'YearlyCumulative',
-        natureOfPayment: 'Contract',
+        natureOfPayment: 'Contractor',
+        tdsNature: 'Contractor',
+        section393TableItem: '6(i)',
+        section393Label: 'Section 393(1), Table Sl. No. 6(i)',
         panMandatory: true,
     },
     {
         sectionCode: '194J',
-        sectionName: 'Professional Fees',
-        description: 'Professional fees; technical services @ 2%',
+        sectionName: 'Professional / Technical Fees',
+        description: 'Professional fees @ 10%; technical services @ 2% (select nature on expense ledger)',
         rateIndividualHuf: 10,
         rateOthers: 10,
         rateTechnicalServices: 2,
         defaultRate: 10,
-        singleBillThreshold: 30000,
-        thresholdAmount: 30000,
-        thresholdCalculationMethod: 'Both',
+        singleBillThreshold: 0,
+        thresholdAmount: 50000,
+        thresholdCalculationMethod: 'AggregateFY',
         calculationType: 'YearlyCumulative',
-        natureOfPayment: 'Professional',
+        natureOfPayment: 'Professional Services',
+        tdsNature: 'Professional Services',
+        section393TableItem: '6(iii)',
+        section393Label: 'Section 393(1), Table Sl. No. 6(iii)',
         panMandatory: true,
     },
     {
@@ -224,8 +230,9 @@ export const TDS_MASTER_DEFAULTS = [
 export function suggestTdsSectionFromLedgerName(ledgerName) {
     const n = String(ledgerName || '').toUpperCase();
     if (!n.trim()) return null;
-    if (/(PROFESSIONAL|PROF\.|PROF\s|CONSULT|TECHNICAL|LEGAL\s*&\s*PROF|AUDIT|ADVOCATE)/.test(n)) return '194J';
-    if (/(LABOUR|LABOR|CONTRACT|SUB[-\s]?CONTRACT|WORK\s*ORDER|MANPOWER|SECURITY|JOB\s*WORK|FABRICATION)/.test(n))
+    if (/TECHNICAL/.test(n)) return '194J';
+    if (/(PROFESSIONAL|PROF\.|PROF\s|CONSULT|LEGAL\s*&\s*PROF|AUDIT|ADVOCATE|DESIGN\s*FEE)/.test(n)) return '194J';
+    if (/(COURIER|FREIGHT|TRANSPORT|LABOUR|LABOR|CONTRACT|SUB[-\s]?CONTRACT|WORK\s*ORDER|MANPOWER|SECURITY|JOB\s*WORK|FABRICATION|INSTALL)/.test(n))
         return '194C';
     if (/(RENT|LEASE)/.test(n)) return '194I';
     if (/(COMMISSION|BROKER)/.test(n)) return '194H';
@@ -252,6 +259,98 @@ export function suggestedTdsPayableLedgerName(sectionCode, sectionNameFromMaster
 
 export const TDS_RETURN_TYPES = ['24Q', '26Q', '27Q'];
 export const TDS_QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+/**
+ * Payment natures — expense line decides why; supplier constitution decides rate where needed.
+ * Same supplier may use several natures in one FY (separate threshold buckets).
+ */
+export const TDS_NATURES = [
+    'Contractor',
+    'Professional Services',
+    'Technical Services',
+    'Rent',
+    'Commission',
+    'Interest',
+    'Purchase of Goods',
+    'Other',
+];
+
+/**
+ * FY 2026-27+ display: keep legacy 194* labels for users, quote Income-tax Act, 2025 s.393 table items for returns.
+ * Rates/thresholds remain in TdsMasterSection (editable).
+ */
+export const TDS_SECTION_393_MAP = {
+    '194C': {
+        tableItem: '6(i)',
+        actLabel: 'Section 393(1), Table Sl. No. 6(i)',
+        defaultNature: 'Contractor',
+        display: '194C / 393-6(i)',
+    },
+    '194J': {
+        tableItem: '6(iii)',
+        actLabel: 'Section 393(1), Table Sl. No. 6(iii)',
+        defaultNature: 'Professional Services',
+        display: '194J / 393-6(iii)',
+    },
+    '194I': {
+        tableItem: '6(iv)',
+        actLabel: 'Section 393(1), Table Sl. No. 6(iv)',
+        defaultNature: 'Rent',
+        display: '194I / 393-6(iv)',
+    },
+    '194H': {
+        tableItem: '6(ii)',
+        actLabel: 'Section 393(1), Table Sl. No. 6(ii)',
+        defaultNature: 'Commission',
+        display: '194H / 393-6(ii)',
+    },
+    '194A': {
+        tableItem: '5',
+        actLabel: 'Section 393(1), Table (interest)',
+        defaultNature: 'Interest',
+        display: '194A / 393',
+    },
+};
+
+export function normalizeTdsNatureKey(nature) {
+    const n = String(nature || '').trim().toLowerCase();
+    if (!n) return '';
+    if (/technical/.test(n)) return 'TECHNICAL';
+    if (/professional|consultancy|consult/.test(n)) return 'PROFESSIONAL';
+    if (/contract|courier|labour|labor|job\s*work|manpower|freight|transport/.test(n)) return 'CONTRACTOR';
+    if (/rent|lease/.test(n)) return 'RENT';
+    if (/commission|broker/.test(n)) return 'COMMISSION';
+    if (/interest/.test(n)) return 'INTEREST';
+    if (/purchase|goods|194q/.test(n)) return 'PURCHASE';
+    return String(nature || '').trim().toUpperCase().replace(/\s+/g, '_').slice(0, 40);
+}
+
+export function defaultNatureForSection(sectionCode) {
+    const c = String(sectionCode || '').trim().toUpperCase();
+    return TDS_SECTION_393_MAP[c]?.defaultNature || '';
+}
+
+export function formatTdsSectionDisplay(sectionCode, nature = '') {
+    const c = String(sectionCode || '').trim().toUpperCase();
+    const map = TDS_SECTION_393_MAP[c];
+    const base = map?.display || c;
+    const nat = String(nature || '').trim();
+    if (nat && /technical/i.test(nat) && c === '194J') return `${base} (Technical 2%)`;
+    return base;
+}
+
+export function suggestTdsNatureFromLedgerName(ledgerName) {
+    const n = String(ledgerName || '').toUpperCase();
+    if (!n.trim()) return '';
+    if (/TECHNICAL/.test(n)) return 'Technical Services';
+    if (/(PROFESSIONAL|PROF\.|CONSULT|LEGAL|AUDIT|ADVOCATE|DESIGN\s*FEE)/.test(n)) return 'Professional Services';
+    if (/(COURIER|FREIGHT|TRANSPORT|LABOUR|LABOR|CONTRACT|SUB[-\s]?CONTRACT|MANPOWER|SECURITY|JOB\s*WORK|FABRICATION|INSTALL)/.test(n))
+        return 'Contractor';
+    if (/(RENT|LEASE)/.test(n)) return 'Rent';
+    if (/(COMMISSION|BROKER)/.test(n)) return 'Commission';
+    if (/INTEREST/.test(n)) return 'Interest';
+    return '';
+}
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 

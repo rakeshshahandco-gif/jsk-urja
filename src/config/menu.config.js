@@ -242,6 +242,7 @@ export const menuConfig = [
         id: 'whatsapp-root',
         title: 'WhatsApp',
         icon: 'ChatIcon',
+        path: PATHS.SETTINGS.WHATSAPP_HOME,
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: null,
         children: [
@@ -570,7 +571,7 @@ export const menuConfig = [
             { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: PATHS.GST.GSTR3B, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
             { id: 'gstr9-annual', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
             { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_reconciliation.view' },
-            { id: 'itc-register', title: 'ITC Register', path: PATHS.GST.ITC_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.itc_register.view' },
+            { id: 'itc-register', title: 'GST Inward & ITC Register', path: PATHS.GST.ITC_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.itc_register.view' },
             { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_payable.view' },
             { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.hsn_summary.view' },
             { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_ledger.view' },
@@ -679,6 +680,7 @@ export const menuConfig = [
     {
         id: 'communication-bulk-group',
         title: 'Communication',
+        path: PATHS.SETTINGS.COMMUNICATION_HOME,
         icon: 'ChatIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER],
         permission: null,
@@ -762,7 +764,7 @@ export const menuConfig = [
         id: 'super-admin',
         title: 'Super Admin',
         icon: 'SettingsIcon',
-        path: PATHS.SAAS_ADMIN.DASHBOARD,
+        path: PATHS.SAAS_ADMIN.HOME,
         roles: [ROLES.SUPERADMIN],
         permission: null,
         children: [

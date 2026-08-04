@@ -4,6 +4,14 @@ import api from './api';
 const SUP = '/suppliers';
 export const getSuppliers = async (params) => { const r = await api.get(SUP, { params }); return r.data.data; };
 export const getSupplierById = async (id) => { const r = await api.get(`${SUP}/${id}`); return r.data.data; };
+export const getSuppliersByLedgerId = async (ledgerId) => {
+    const r = await api.get(`${SUP}/by-ledger/${ledgerId}`);
+    return r.data.data;
+};
+export const ensureSupplierForLedger = async (body) => {
+    const r = await api.post(`${SUP}/ensure-for-ledger`, body);
+    return r.data.data;
+};
 export const createSupplier = async (data) => { const r = await api.post(SUP, data); return r.data.data; };
 export const updateSupplier = async (id, data) => { const r = await api.put(`${SUP}/${id}`, data); return r.data.data; };
 export const deleteSupplier = async (id) => { const r = await api.delete(`${SUP}/${id}`); return r.data; };

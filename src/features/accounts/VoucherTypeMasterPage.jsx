@@ -95,7 +95,9 @@ const VoucherTypeMasterPage = () => {
                                 { label: 'Journal', value: 'Journal' },
                                 { label: 'Sales', value: 'Sales' },
                                 { label: 'Purchase', value: 'Purchase' },
-                                { label: 'Expense', value: 'Expense' }
+                                { label: 'Expense', value: 'Expense' },
+                                { label: 'Credit Note', value: 'Credit Note' },
+                                { label: 'Debit Note', value: 'Debit Note' },
                             ]}
                         />
                     </div>
@@ -210,6 +212,8 @@ const VoucherTypeMasterPage = () => {
                                             type.nature === 'Receipt' ? 'bg-green-100 text-green-700' :
                                             type.nature === 'Payment' ? 'bg-red-100 text-red-700' :
                                             type.nature === 'Journal' ? 'bg-blue-100 text-blue-700' :
+                                            type.nature === 'Credit Note' ? 'bg-emerald-100 text-emerald-700' :
+                                            type.nature === 'Debit Note' ? 'bg-indigo-100 text-indigo-700' :
                                             'bg-gray-100 text-gray-700'
                                         }`}>
                                             {type.nature}

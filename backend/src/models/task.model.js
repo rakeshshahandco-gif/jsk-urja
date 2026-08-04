@@ -50,6 +50,15 @@ const taskSchema = new mongoose.Schema({
         ref: 'TaskGroup',
         required: false // Relaxed for legacy compatibility
     },
+    /** Shared recurring / compliance group task (one record visible to group members). */
+    isGroupTask: {
+        type: Boolean,
+        default: false,
+    },
+    visibleToGroupMembers: {
+        type: Boolean,
+        default: true,
+    },
     assigneeIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'

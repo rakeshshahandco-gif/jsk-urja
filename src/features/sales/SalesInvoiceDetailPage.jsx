@@ -37,7 +37,8 @@ export default function SalesInvoiceDetailPage() {
     const { isFeatureEnabled } = useFeatureSettings();
     const isAdmin = hasRole('admin') || hasRole('superadmin');
     const canCancelInvoice = hasPermission('sales.sales_invoices.cancel');
-    const canDeleteInvoice = hasPermission('sales.sales_invoices.delete');
+    const canDeleteTaxInvoice = isAdmin || hasPermission('sales.sales_invoices.delete');
+    const canDeleteEstimate = isAdmin || hasPermission('sales.internal_sales.delete');
     const { id } = useParams();
     const navigate = useNavigate();
     const [inv, setInv] = useState(null);
@@ -114,9 +115,17 @@ export default function SalesInvoiceDetailPage() {
                 load();
             } else {
                 const res = await deleteSalesInvoice(id, payload);
-                toast.success(res.message || 'Invoice deleted and number freed.');
+                const isEst = res.documentType === 'Estimate'
+                    || inv?.seriesId?.isEstimate === true
+                    || inv?.seriesId?.documentType === 'Estimate';
+                toast.success(
+                    res.message
+                    || (isEst
+                        ? 'Estimate deleted successfully. Later Estimate numbers remain unchanged.'
+                        : 'Invoice deleted and number freed.'),
+                );
                 setCancelDeleteModal(null);
-                navigate(PATHS.SALES.INVOICES);
+                navigate(isEst ? PATHS.SALES.ESTIMATES : PATHS.SALES.INVOICES);
             }
         } catch (e) {
             toast.error(e.response?.data?.message || 'Action failed');
@@ -206,9 +215,12 @@ export default function SalesInvoiceDetailPage() {
     const pc = PAY_COLORS[inv.paymentStatus] || PAY_COLORS.Unpaid;
     const isIGST = inv.gstType === 'IGST';
     const gstApplicable = inv.gstApplicable !== false;
-    const isEstimate = inv.seriesId?.isEstimate === true || 
-                       inv.seriesId?.seriesName?.toLowerCase().includes('estimate') ||
-                       (inv.invoiceNumber || '').toLowerCase().includes('est');
+    const isEstimateSeriesVerified = inv.seriesId?.isEstimate === true
+        || inv.seriesId?.documentType === 'Estimate';
+    const isEstimate = isEstimateSeriesVerified
+        || inv.seriesId?.seriesName?.toLowerCase().includes('estimate')
+        || (inv.invoiceNumber || '').toLowerCase().includes('est');
+    const canDeleteInvoice = isEstimateSeriesVerified ? canDeleteEstimate : canDeleteTaxInvoice;
     const docTitle = isEstimate ? 'ESTIMATE' : (gstApplicable ? 'TAX INVOICE' : 'SALES INVOICE');
     const docNumberLabel = isEstimate ? 'Estimate No' : 'Invoice No';
     const notCancelled = inv.status !== 'Cancelled';
@@ -346,9 +358,11 @@ export default function SalesInvoiceDetailPage() {
                                      onClick={() => setCancelDeleteModal('delete')}
                                      disabled={cancelling}
                                      style={{ padding: '9px 18px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
-                                     title="Delete Invoice (Frees Number, Latest Only)"
+                                     title={isEstimateSeriesVerified ? 'Delete Estimate' : 'Delete Invoice (Frees Number, Latest Only)'}
                                  >
-                                     {cancelling ? 'Processing...' : '🗑️ Delete Invoice'}
+                                     {cancelling
+                                         ? 'Processing...'
+                                         : (isEstimateSeriesVerified ? '🗑️ Delete Estimate' : '🗑️ Delete Invoice')}
                                  </button>
                              )}
                             {/* Receive Payment */}
@@ -358,6 +372,8 @@ export default function SalesInvoiceDetailPage() {
                                         onClick={() => navigate('/accounts/receipt-entry', { 
                                             state: { 
                                                 source: 'sales_invoice',
+                                                returnTo: PATHS.SALES.INVOICES,
+                                                cancelTo: PATHS.SALES.INVOICE_DETAIL(inv._id),
                                                 invoiceId: inv._id, 
                                                 invoiceNumber: inv.invoiceNumber, 
                                                 customerId: inv.customerId?._id || inv.customerId, 
@@ -375,6 +391,8 @@ export default function SalesInvoiceDetailPage() {
                                         onClick={() => navigate('/accounts/receipt-entry', { 
                                             state: { 
                                                 source: 'sales_invoice',
+                                                returnTo: PATHS.SALES.INVOICES,
+                                                cancelTo: PATHS.SALES.INVOICE_DETAIL(inv._id),
                                                 invoiceId: inv._id, 
                                                 invoiceNumber: inv.invoiceNumber, 
                                                 customerId: inv.customerId?._id || inv.customerId, 
@@ -434,25 +452,95 @@ export default function SalesInvoiceDetailPage() {
                     )}
                     {billWiseRows.length > 0 && (
                         <div style={{ marginTop: 16, padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                            <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>Bill-wise adjustments</div>
+                            <div style={{ fontWeight: 800, fontSize: 12, color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>Settlement breakup</div>
+                            {(() => {
+                                const active = billWiseRows.filter((r) => !r.isReversed);
+                                const parseDiscRemark = (r) => {
+                                    const m = String(r.remarks || '').match(/Discount\s*₹\s*([\d,.]+)/i);
+                                    return m ? (parseFloat(String(m[1]).replace(/,/g, '')) || 0) : 0;
+                                };
+                                const bank = active
+                                    .filter((r) => r.settlementSourceType !== 'CreditDebitNote' && (r.paymentNature === 'Receipt' || r.paymentNature === 'Adjustment' || !r.settlementSourceType))
+                                    .reduce((s, r) => {
+                                        const disc = Number(r.discountAmount) > 0.009
+                                            ? Number(r.discountAmount)
+                                            : parseDiscRemark(r);
+                                        const bankPart = r.bankAmount != null && r.bankAmount !== ''
+                                            ? Number(r.bankAmount)
+                                            : Math.max(0, (Number(r.adjustedAmount) || 0) - disc);
+                                        return s + bankPart;
+                                    }, 0);
+                                const discount = active
+                                    .filter((r) => r.settlementSourceType !== 'CreditDebitNote' && (r.paymentNature === 'Receipt' || r.paymentNature === 'Adjustment' || !r.settlementSourceType))
+                                    .reduce((s, r) => {
+                                        const disc = Number(r.discountAmount) > 0.009
+                                            ? Number(r.discountAmount)
+                                            : parseDiscRemark(r);
+                                        return s + disc;
+                                    }, 0);
+                                const cn = active
+                                    .filter((r) => r.settlementSourceType === 'CreditDebitNote' || r.paymentNature === 'Credit Note')
+                                    .reduce((s, r) => s + (Number(r.adjustedAmount) || 0), 0);
+                                const totalInv = Number(inv.roundedTotal || inv.grandTotal || 0);
+                                const remaining = Math.max(0, totalInv - (Number(inv.paidAmount) || 0));
+                                const row = { display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f1f5f9' };
+                                return (
+                                    <div style={{ marginBottom: 12 }}>
+                                        <div style={row}><span>Bank Receipt</span><span>₹{fmtCur(bank)}</span></div>
+                                        <div style={row}><span>Credit Note</span><span>₹{fmtCur(cn)}</span></div>
+                                        <div style={row}><span>Discount</span><span>₹{fmtCur(discount)}</span></div>
+                                        <div style={row}><span>Round-off</span><span>₹{fmtCur(0)}</span></div>
+                                        <div style={{ ...row, fontWeight: 700, borderBottom: 'none' }}><span>Remaining Outstanding</span><span>₹{fmtCur(remaining)}</span></div>
+                                    </div>
+                                );
+                            })()}
+                            <div style={{ fontWeight: 700, fontSize: 11, color: '#64748b', marginBottom: 6, textTransform: 'uppercase' }}>Bill-wise adjustments</div>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                                 <thead>
                                     <tr>
-                                        <th style={{ ...th, fontSize: 10 }}>Receipt No.</th>
+                                        <th style={{ ...th, fontSize: 10 }}>Source</th>
+                                        <th style={{ ...th, fontSize: 10 }}>Ref No.</th>
                                         <th style={{ ...th, fontSize: 10 }}>Date</th>
                                         <th style={{ ...th, fontSize: 10 }}>Amount</th>
                                         <th style={{ ...th, fontSize: 10 }}>Reversed</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {billWiseRows.map((r) => (
-                                        <tr key={r._id}>
-                                            <td style={td}>{r.paymentNo}</td>
-                                            <td style={td}>{fmt(r.adjustmentDate)}</td>
-                                            <td style={td}>{fmtCur(r.adjustedAmount)}</td>
-                                            <td style={td}>{r.isReversed ? 'Yes' : 'No'}</td>
-                                        </tr>
-                                    ))}
+                                    {billWiseRows.map((r) => {
+                                        const disc = Number(r.discountAmount) > 0.009
+                                            ? Number(r.discountAmount)
+                                            : (() => {
+                                                const m = String(r.remarks || '').match(/Discount\s*₹\s*([\d,.]+)/i);
+                                                return m ? (parseFloat(String(m[1]).replace(/,/g, '')) || 0) : 0;
+                                            })();
+                                        const bankPart = r.bankAmount != null && r.bankAmount !== ''
+                                            ? Number(r.bankAmount)
+                                            : Math.max(0, (Number(r.adjustedAmount) || 0) - disc);
+                                        const isCn = r.settlementSourceType === 'CreditDebitNote' || r.paymentNature === 'Credit Note';
+                                        const sourceLabel = isCn
+                                            ? `Credit Note${r.settlementSourceNumber ? ` (${r.settlementSourceNumber})` : ''}`
+                                            : 'Bank Receipt';
+                                        return (
+                                            <React.Fragment key={r._id}>
+                                                <tr>
+                                                    <td style={td}>{sourceLabel}</td>
+                                                    <td style={td}>{r.paymentNo}</td>
+                                                    <td style={td}>{fmt(r.adjustmentDate)}</td>
+                                                    <td style={td}>{fmtCur(isCn ? r.adjustedAmount : bankPart)}</td>
+                                                    <td style={td}>{r.isReversed ? 'Yes' : 'No'}</td>
+                                                </tr>
+                                                {!isCn && disc > 0.009 && (
+                                                    <tr>
+                                                        <td style={td}>Discount Allowed</td>
+                                                        <td style={td}>{r.paymentNo}</td>
+                                                        <td style={td}>{fmt(r.adjustmentDate)}</td>
+                                                        <td style={td}>{fmtCur(disc)}</td>
+                                                        <td style={td}>{r.isReversed ? 'Yes' : 'No'}</td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -709,8 +797,14 @@ export default function SalesInvoiceDetailPage() {
             <SalesInvoiceCancelDeleteModal
                 open={!!cancelDeleteModal}
                 mode={cancelDeleteModal || 'cancel'}
+                documentKind={isEstimateSeriesVerified ? 'estimate' : 'invoice'}
                 invoiceNumber={inv.displayInvoiceNumber || inv.invoiceNumber}
                 salesInvoiceId={id}
+                estimateDate={fmt(inv.invoiceDate)}
+                customerName={inv.customerName}
+                amount={inv.roundedTotal || inv.grandTotal}
+                soId={inv.soId}
+                soNumber={inv.soNumber}
                 onClose={() => setCancelDeleteModal(null)}
                 onConfirm={handleCancelDeleteConfirm}
                 submitting={cancelling}

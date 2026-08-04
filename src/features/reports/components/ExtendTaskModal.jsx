@@ -7,19 +7,37 @@ export const ExtendTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
     const [newDueDate, setNewDueDate] = useState('');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     if (!isOpen || !task) return null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!newDueDate || !reason) return;
+        setError('');
+        if (!newDueDate) {
+            setError('Please select a new due date.');
+            return;
+        }
+
+        if (task?.dueDate) {
+            const currentDay = new Date(task.dueDate);
+            currentDay.setHours(0, 0, 0, 0);
+            const nextDay = new Date(newDueDate);
+            nextDay.setHours(0, 0, 0, 0);
+            if (nextDay.getTime() <= currentDay.getTime()) {
+                setError('Extended date must be later than the current due date.');
+                return;
+            }
+        }
 
         setLoading(true);
         try {
-            await onConfirm(task._id, { newDueDate, reason });
+            await onConfirm(task._id, { newDueDate, reason: reason?.trim() || '' });
+            setNewDueDate('');
+            setReason('');
             onClose();
-        } catch (error) {
-            console.error('Failed to extend task:', error);
+        } catch (err) {
+            setError(err?.response?.data?.message || 'Failed to extend task.');
         } finally {
             setLoading(false);
         }
@@ -55,19 +73,23 @@ export const ExtendTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
 
                     <div>
                         <label className="text-sm font-medium text-gray-700 mb-2 block flex items-center gap-2">
-                            Reason for Extension:
-                            <span className="text-red-500">*</span>
+                            Reason for extension (Optional)
                         </label>
                         <div className="relative">
                             <textarea
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
-                                placeholder="Provide a reason for the due date extension..."
+                                placeholder="Reason for extension (Optional)"
                                 className="w-full min-h-[100px] p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none text-sm"
-                                required
                             />
                         </div>
                     </div>
+
+                    {error ? (
+                        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">
+                            {error}
+                        </div>
+                    ) : null}
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                         <Button
@@ -81,7 +103,7 @@ export const ExtendTaskModal = ({ task, isOpen, onClose, onConfirm }) => {
                         <Button
                             type="submit"
                             loading={loading}
-                            disabled={!newDueDate || !reason}
+                            disabled={!newDueDate}
                             className="px-8 bg-primary hover:bg-primary/90 text-white font-semibold shadow-sm"
                         >
                             Confirm

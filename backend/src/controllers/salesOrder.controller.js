@@ -9,7 +9,8 @@ import { AuditLog } from '../models/auditLog.model.js';
 import mongoose from 'mongoose';
 import { getFYFromDate } from '../utils/fyUtils.js';
 import { getNextNumberFromSeries } from '../utils/numberingUtils.js';
-import { assertSalesOrderCanBeUpdated } from '../utils/salesOrderBilling.utils.js';
+import { assertSalesOrderCanBeUpdated, getSalesOrderBillingSnapshot, prepareSalesOrderForInvoiceCreation } from '../utils/salesOrderBilling.utils.js';
+import { checkUserPermission } from '../utils/permissionUtils.js';
 
 // --- helpers ---
 const numWords = (n) => {
@@ -284,7 +285,142 @@ export const getSOById = asyncHandler(async (req, res) => {
         if (matched) so.seriesId = matched;
     }
 
+    so.billingState = await getSalesOrderBillingSnapshot(so);
+
     res.json({ success: true, data: so });
+});
+
+/**
+ * Confirm & create Tax Invoice from Sales Order (remaining qty).
+ * Does not create on GET / preview — only this POST after user confirmation.
+ */
+export const createTaxInvoiceFromSalesOrder = asyncHandler(async (req, res, next) => {
+    if (!checkUserPermission(req.user, 'sales.sales_invoices.add')) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Permission denied: sales.sales_invoices.add required');
+    }
+
+    const soId = req.params.id;
+    const soDoc = await SalesOrder.findById(soId);
+    if (!soDoc) throw new ApiError(httpStatus.NOT_FOUND, 'Sales Order not found');
+    if (soDoc.isDeleted === true) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is deleted and cannot be invoiced');
+    }
+
+    const soPrepared = await prepareSalesOrderForInvoiceCreation(soId);
+    const billing = await getSalesOrderBillingSnapshot(soPrepared);
+
+    if (!soPrepared.customerId && !soPrepared.customerName) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order is missing a customer');
+    }
+    if (!soPrepared.items?.length) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Sales Order has no valid item lines');
+    }
+
+    const { seriesId, invoiceDate, idempotencyKey } = req.body || {};
+    if (!seriesId) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            'No valid Tax Invoice series is configured. Set a default Tax Invoice series in Series Master, or select a series.'
+        );
+    }
+
+    const series = await InvoiceSeries.findById(seriesId);
+    if (!series || series.isActive === false) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Selected Tax Invoice series is missing or inactive');
+    }
+    if (series.isEstimate === true || series.documentType === 'Estimate') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot create a Tax Invoice using an Estimate series');
+    }
+
+    const gstApplicable = soPrepared.gstApplicable !== false && series.gstApplicable !== false;
+    const isIGST = soPrepared.gstType === 'IGST';
+    const lineById = new Map((billing.lines || []).map((l) => [String(l.lineId), l]));
+
+    const items = [];
+    for (const i of soPrepared.items || []) {
+        const line = lineById.get(String(i._id));
+        const qty = line ? Number(line.remainingQty) : Number(i.qty) || 0;
+        if (qty <= 0.0001) continue;
+        const rate = Number(i.rate) || 0;
+        const gstRate = gstApplicable ? (Number(i.gstRate) || 18) : 0;
+        const taxable = qty * rate;
+        const cgstAmt = gstApplicable && !isIGST ? Math.round(taxable * gstRate / 2 / 100 * 100) / 100 : 0;
+        const igstAmt = gstApplicable && isIGST ? Math.round(taxable * gstRate / 100 * 100) / 100 : 0;
+        items.push({
+            itemId: i.itemId || null,
+            itemCode: i.itemCode || '',
+            itemName: i.itemName || '',
+            modelNo: i.modelNo || '',
+            description: i.description || i.itemName || '',
+            additionalNotes: i.additionalNotes || '',
+            hsnCode: i.hsnCode || '',
+            uom: i.uom || 'NOS',
+            qty,
+            rate,
+            saleType: i.saleType || 'MANUFACTURED_SALE',
+            gstRate,
+            discountPercent: 0,
+            discountAmount: 0,
+            taxableAmount: taxable,
+            cgstRate: isIGST ? 0 : gstRate / 2,
+            cgstAmount: cgstAmt,
+            sgstRate: isIGST ? 0 : gstRate / 2,
+            sgstAmount: cgstAmt,
+            igstRate: isIGST ? gstRate : 0,
+            igstAmount: igstAmt,
+            totalAmount: taxable + (isIGST ? igstAmt : cgstAmt * 2),
+        });
+    }
+
+    if (!items.length) {
+        const existing = billing.activeInvoices?.[0] || null;
+        const err = new ApiError(
+            httpStatus.CONFLICT,
+            'A Tax Invoice has already been created from this Sales Order.'
+        );
+        err.data = {
+            code: 'SO_ALREADY_INVOICED',
+            existingInvoice: existing,
+            activeInvoices: billing.activeInvoices || [],
+        };
+        throw err;
+    }
+
+    const invDate = invoiceDate ? new Date(invoiceDate) : new Date();
+    const fy = soPrepared.financialYear || getFYFromDate(invDate);
+
+    req.body = {
+        soId: String(soPrepared._id),
+        soNumber: soPrepared.soNumber,
+        seriesId: String(seriesId),
+        invoiceDate: invDate.toISOString().slice(0, 10),
+        financialYear: fy,
+        customerId: soPrepared.customerId || '',
+        customerName: soPrepared.customerName || '',
+        customerGstin: soPrepared.customerGstin || '',
+        customerPhone: soPrepared.customerPhone || '',
+        billingAddress: soPrepared.billingAddress || '',
+        billingState: soPrepared.customerState || '',
+        billingStateCode: soPrepared.customerStateCode || '',
+        shippingAddress: soPrepared.shippingAddress || '',
+        gstType: soPrepared.gstType || 'CGST / SGST',
+        gstApplicable,
+        buyerOrderNo: soPrepared.customerPO || '',
+        buyerOrderDate: soPrepared.customerPODate
+            ? new Date(soPrepared.customerPODate).toISOString().slice(0, 10)
+            : '',
+        paymentType: soPrepared.paymentType || 'Credit',
+        remarks: soPrepared.remarks || '',
+        freightAmount: soPrepared.freightAmount || 0,
+        freightGstRate: soPrepared.freightGstRate || 0,
+        referralDetails: soPrepared.referralDetails || undefined,
+        items,
+        status: 'Confirmed',
+        idempotencyKey: idempotencyKey || req.headers['idempotency-key'] || null,
+    };
+
+    const { createSalesInvoice } = await import('./salesInvoice.controller.js');
+    return createSalesInvoice(req, res, next);
 });
 
 // ------- UPDATE SO -------

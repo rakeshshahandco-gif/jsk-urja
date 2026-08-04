@@ -133,6 +133,117 @@ export async function recalculateSalesOrderBillingFromInvoices(soId, session = n
 }
 
 /**
+ * Read-only billing snapshot for UI / validation (active invoices only).
+ * Supports partial invoicing display: ordered / invoiced / remaining qty per line.
+ */
+export async function getSalesOrderBillingSnapshot(soOrId, session = null) {
+    const soId = soOrId?._id || soOrId;
+    if (!soId) {
+        return {
+            hasActiveInvoices: false,
+            anyInvoiced: false,
+            fullyInvoiced: false,
+            lines: [],
+            activeInvoices: [],
+        };
+    }
+
+    let so = soOrId;
+    if (!so?.items) {
+        so = await SalesOrder.findById(soId).session(session).lean();
+    } else if (typeof so.toObject === 'function') {
+        so = so.toObject();
+    }
+    if (!so) {
+        return {
+            hasActiveInvoices: false,
+            anyInvoiced: false,
+            fullyInvoiced: false,
+            lines: [],
+            activeInvoices: [],
+        };
+    }
+
+    const activeInvoicesFull = await SalesInvoice.find({
+        soId: so._id,
+        isDeleted: { $ne: true },
+        status: { $ne: 'Cancelled' },
+    })
+        .sort({ invoiceDate: 1, createdAt: 1 })
+        .session(session)
+        .lean();
+
+    const invoicedByKey = sumActiveInvoicedQtyByKey(activeInvoicesFull);
+    const activeInvoices = activeInvoicesFull.map((inv) => ({
+        _id: inv._id,
+        invoiceNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
+        invoiceDate: inv.invoiceDate,
+        status: inv.status,
+    }));
+
+    const soItems = so.items || [];
+    let anyInvoiced = false;
+    let allFullyInvoiced = soItems.length > 0;
+
+    const lines = soItems.map((soItem) => {
+        const orderedQty = Number(soItem.qty) || 0;
+        const invoicedQty = invoicedByKey.get(lineKey(soItem)) || 0;
+        const remainingQty = r2(Math.max(0, orderedQty - invoicedQty));
+        if (invoicedQty > 0.0001) anyInvoiced = true;
+        if (invoicedQty < orderedQty - 0.0001) allFullyInvoiced = false;
+        return {
+            lineId: soItem._id,
+            itemId: soItem.itemId || null,
+            itemName: soItem.itemName || '',
+            orderedQty,
+            invoicedQty: r2(invoicedQty),
+            remainingQty,
+        };
+    });
+
+    if (soItems.length === 0) allFullyInvoiced = false;
+
+    return {
+        hasActiveInvoices: activeInvoices.length > 0,
+        anyInvoiced,
+        fullyInvoiced: anyInvoiced && allFullyInvoiced,
+        lines,
+        activeInvoices,
+    };
+}
+
+/**
+ * Block creating invoice lines that exceed remaining (ordered − active invoiced) qty.
+ * Preserves partial invoicing; does not change full-remaining behaviour.
+ */
+export function assertInvoiceItemsWithinRemaining(so, invoiceItems, billingSnapshot) {
+    const snap = billingSnapshot;
+    if (!so || !snap?.lines?.length) return;
+
+    const remainingByKey = new Map();
+    for (const soItem of so.items || []) {
+        const line = snap.lines.find((l) => String(l.lineId) === String(soItem._id));
+        const rem = line ? line.remainingQty : (Number(soItem.qty) || 0);
+        remainingByKey.set(lineKey(soItem), rem);
+    }
+
+    for (const invItem of invoiceItems || []) {
+        const key = lineKey(invItem);
+        if (!remainingByKey.has(key)) continue;
+        const rem = remainingByKey.get(key);
+        const qty = Number(invItem.qty) || 0;
+        if (qty > rem + 0.0001) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                `Cannot invoice more than remaining quantity for "${invItem.itemName || key}". ` +
+                `Requested ${qty}, available ${rem}.`
+            );
+        }
+        remainingByKey.set(key, r2(rem - qty));
+    }
+}
+
+/**
  * Before creating a new invoice: refresh SO billing from ACTIVE invoices only,
  * then block only when an active invoice still fully covers the order.
  */
@@ -141,6 +252,12 @@ export async function prepareSalesOrderForInvoiceCreation(soId, session = null) 
     if (!so) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Linked Sales Order not found');
     }
+    if (so.status === 'Draft') {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            'Sales Order must be Confirmed before creating a Tax Invoice'
+        );
+    }
     if (ORDER_TERMINAL_STATUSES.has(so.status)) {
         throw new ApiError(
             httpStatus.BAD_REQUEST,
@@ -148,11 +265,18 @@ export async function prepareSalesOrderForInvoiceCreation(soId, session = null) 
         );
     }
     if (so.status === 'Invoiced') {
-        throw new ApiError(
-            httpStatus.BAD_REQUEST,
-            'This sales order is already fully invoiced by active invoice(s). ' +
-            'Cancelled and deleted invoices do not count — cancel/delete the active invoice first, or use a new sales order.'
+        const billing = await getSalesOrderBillingSnapshot(so, session);
+        const existing = billing.activeInvoices?.[0] || null;
+        const err = new ApiError(
+            httpStatus.CONFLICT,
+            'A Tax Invoice has already been created from this Sales Order.'
         );
+        err.data = {
+            code: 'SO_ALREADY_INVOICED',
+            existingInvoice: existing,
+            activeInvoices: billing.activeInvoices || [],
+        };
+        throw err;
     }
     return so;
 }

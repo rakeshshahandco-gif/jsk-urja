@@ -65,6 +65,13 @@ const creditDebitNoteSchema = new mongoose.Schema({
     financialYear: { type: String, trim: true },
     sequenceNumber: { type: Number, default: 0 },
 
+    // Phase 4A — Customer Credit Note accounting link + derived application cache (not manually editable)
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null, index: true },
+    linkedVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', default: null },
+    accountingPostedAt: { type: Date, default: null },
+    /** Cached sum of active Credit Note→SI allocations; rebuilt from BillWiseAdjustment. */
+    appliedAmount: { type: Number, default: 0, min: 0 },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     

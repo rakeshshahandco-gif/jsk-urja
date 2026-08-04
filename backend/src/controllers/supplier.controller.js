@@ -230,8 +230,74 @@ const supplierSchema = Joi.object({
     country: Joi.string().optional().allow(''),
     gstNumber: Joi.string().optional().allow(''),
     gstType: Joi.string().valid('CGST / SGST', 'IGST', '').optional().allow(''),
+    gstRegistrationStatus: Joi.string().valid(
+        '',
+        'Registered Regular',
+        'Composition',
+        'Unregistered',
+        'SEZ',
+        'Overseas',
+        'Exempt Entity',
+        'Not Applicable',
+    ).optional().allow(''),
+    supplierChargesGst: Joi.string().valid(
+        '', 'Forward Charge', 'Reverse Charge', 'Transaction-wise', 'Not Applicable',
+    ).optional().allow(''),
+    defaultRcmTreatment: Joi.string().valid(
+        '', 'Not Applicable', 'RCM May Apply', 'Default RCM Supplier', 'Transaction-wise Review',
+    ).optional().allow(''),
+    defaultRcmCategories: Joi.array().items(Joi.string().valid(
+        'RENT', 'GTA', 'COURIER', 'LEGAL', 'SECURITY', 'GENERAL', 'OTHER',
+    )).optional().default([]),
+    defaultPropertyType: Joi.string().valid(
+        '', 'Commercial', 'Residential', 'Mixed', 'Other', 'Transaction-wise',
+    ).optional().allow(''),
+    transportServiceSupplier: Joi.boolean().optional(),
+    transportSupplierType: Joi.string().valid(
+        '',
+        'GTA — Issues Consignment Note',
+        'Courier Agency',
+        'Local Transporter — No Consignment Note',
+        'Vehicle Owner / Vehicle Hire',
+        'Parcel Service',
+        'Freight Forwarder',
+        'Other',
+    ).optional().allow(''),
+    consignmentNoteNormallyIssued: Joi.string().valid(
+        '', 'Yes', 'No', 'Transaction-wise',
+    ).optional().allow(''),
+    transportGstPaymentOption: Joi.string().valid(
+        '',
+        'Recipient Pays under RCM',
+        'Supplier Pays under Forward Charge',
+        'Exempt / Not Applicable',
+        'Transaction-wise',
+        'Unknown / Review Required',
+    ).optional().allow(''),
+    defaultTransportRcmCategory: Joi.string().valid(
+        '', 'GTA', 'OTHER', 'COURIER', 'RENT', 'LEGAL', 'SECURITY', 'GENERAL', 'None',
+    ).optional().allow(''),
+    defaultPlaceOfSupply: Joi.string().optional().allow(''),
+    companyId: Joi.string().optional().allow('', null),
+    ledgerId: Joi.string().optional().allow('', null),
     panNumber: Joi.string().optional().allow(''),
+    panAvailable: Joi.boolean().optional(),
+    panVerificationStatus: Joi.string().valid('', 'Verified', 'Pending', 'Invalid').optional().allow(''),
     deducteeConstitution: Joi.string().optional().allow(''),
+    allowedTdsNatures: Joi.array().items(Joi.string()).optional().default([]),
+    allowedTdsSections: Joi.array().items(Joi.string()).optional().default([]),
+    tdsSection: Joi.string().optional().allow(''),
+    tdsLowerDeductionPercent: Joi.number().min(0).max(100).optional(),
+    tdsLowerDeductionValidFrom: Joi.date().optional().allow(null, ''),
+    tdsLowerDeductionValidTo: Joi.date().optional().allow(null, ''),
+    tdsLowerDeductionCertificates: Joi.array().items(Joi.object({
+        section: Joi.string().optional().allow(''),
+        certificateNo: Joi.string().optional().allow(''),
+        rate: Joi.number().min(0).max(100).optional(),
+        validFrom: Joi.date().optional().allow(null, ''),
+        validTo: Joi.date().optional().allow(null, ''),
+        active: Joi.boolean().optional(),
+    })).optional(),
     paymentTerms: Joi.string().optional().allow(''),
     bankName: Joi.string().optional().allow(''),
     bankAccountNo: Joi.string().optional().allow(''),
@@ -305,8 +371,9 @@ export const createSupplier = asyncHandler(async (req, res) => {
 });
 
 export const getSuppliers = asyncHandler(async (req, res) => {
-    const { search, isActive, page = 1, limit = 50 } = req.query;
-    const query = {};
+    const { search, isActive, page = 1, limit = 50, ledgerId } = req.query;
+    const query = { isDeleted: { $ne: true } };
+    if (ledgerId) query.ledgerId = ledgerId;
     if (search) query.$or = [{ supplierName: { $regex: search, $options: 'i' } }, { supplierCode: { $regex: search, $options: 'i' } }];
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
@@ -315,6 +382,113 @@ export const getSuppliers = asyncHandler(async (req, res) => {
     const suppliers = await Supplier.find(query).sort({ supplierName: 1 }).skip(skip).limit(Number(limit));
 
     res.json(new ApiResponse(200, { suppliers, total, page: Number(page), pages: Math.ceil(total / Number(limit)) }, 'Suppliers fetched'));
+});
+
+/**
+ * Resolve suppliers linked to a ledger by ledgerId only (never by name).
+ * GET /suppliers/by-ledger/:ledgerId
+ */
+export const getSuppliersByLedgerId = asyncHandler(async (req, res) => {
+    const ledgerId = req.params.ledgerId;
+    if (!ledgerId) throw new ApiError(400, 'ledgerId is required');
+    const suppliers = await Supplier.find({
+        ledgerId,
+        isDeleted: { $ne: true },
+    }).sort({ updatedAt: -1 }).lean();
+    res.json(new ApiResponse(200, {
+        suppliers,
+        matchCount: suppliers.length,
+        ambiguous: suppliers.length > 1,
+        resolution: suppliers.length === 0 ? 'not_found' : suppliers.length === 1 ? 'ledger' : 'ambiguous',
+    }, 'Suppliers by ledger'));
+});
+
+/**
+ * Idempotent Sync Master: link existing ledger to exactly one Supplier.
+ * Never matches by name only. Repeated calls do not create duplicates.
+ * POST /suppliers/ensure-for-ledger
+ * body: { ledgerId, companyId?, supplierName? }
+ */
+export const ensureSupplierForLedger = asyncHandler(async (req, res) => {
+    const ledgerId = req.body?.ledgerId;
+    const companyId = req.body?.companyId || null;
+    if (!ledgerId) throw new ApiError(400, 'ledgerId is required');
+
+    const ledger = await AccountLedger.findById(ledgerId).lean();
+    if (!ledger) throw new ApiError(404, 'Ledger not found');
+
+    const matches = await Supplier.find({
+        ledgerId,
+        isDeleted: { $ne: true },
+    }).lean();
+
+    if (matches.length > 1) {
+        return res.status(409).json(new ApiResponse(409, {
+            resolution: 'ambiguous',
+            matchCount: matches.length,
+            suppliers: matches.map((s) => ({ _id: s._id, supplierName: s.supplierName })),
+        }, 'Multiple suppliers link to this ledger. Review Required — select the correct supplier.'));
+    }
+
+    if (matches.length === 1) {
+        return res.json(new ApiResponse(200, {
+            supplier: matches[0],
+            resolution: 'existing',
+            created: false,
+            matchCount: 1,
+        }, 'Linked supplier found'));
+    }
+
+    const supplierName = String(req.body?.supplierName || ledger.name || '').trim();
+    if (!supplierName) throw new ApiError(400, 'supplierName is required to create Supplier Profile');
+
+    const supplierCode = await generateSupplierCode();
+    const supplier = await Supplier.create({
+        supplierName,
+        supplierCode,
+        ledgerId,
+        companyId: companyId || null,
+        isActive: true,
+        gstRegistrationStatus: ledger.registrationType === 'Unregistered'
+            ? 'Unregistered'
+            : ledger.registrationType === 'Composition'
+                ? 'Composition'
+                : ledger.gstin
+                    ? 'Registered Regular'
+                    : '',
+        gstNumber: ledger.gstin || '',
+        panNumber: ledger.pan || '',
+        phone: ledger.mobile || '',
+        email: ledger.email || '',
+        address: ledger.address || '',
+        city: ledger.city || '',
+        state: ledger.state || '',
+        pincode: ledger.pincode || '',
+        openingBalance: ledger.openingBalance || 0,
+        openingBalanceDrCr: ledger.drCr || 'Cr',
+        createdBy: req.user._id,
+    });
+
+    // Keep explicit ledgerId — do not rely on name matching
+    if (String(supplier.ledgerId || '') !== String(ledgerId)) {
+        supplier.ledgerId = ledgerId;
+        await supplier.save();
+    }
+
+    await AccountLedger.findByIdAndUpdate(ledgerId, {
+        $set: {
+            type: 'Supplier',
+            isSupplier: true,
+            msmeApplicable: supplier.msmeApplicable || false,
+        },
+    });
+
+    res.status(201).json(new ApiResponse(201, {
+        supplier,
+        resolution: 'created',
+        created: true,
+        matchCount: 1,
+    }, 'Supplier Profile created and linked to ledger'));
 });
 
 export const getSupplierById = asyncHandler(async (req, res) => {

@@ -36,6 +36,11 @@ const tdsMasterSectionSchema = new mongoose.Schema(
         /** Legacy: suggested / fallback label; posting prefers tdsPayableLedgerId. */
         tdsLedgerMapping: { type: String, trim: true, default: '' },
         natureOfPayment: { type: String, trim: true, default: '' },
+        /** Payment nature for rate/threshold disambiguation (Professional vs Technical under 194J). */
+        tdsNature: { type: String, trim: true, default: '' },
+        /** Income-tax Act, 2025 s.393 table item (FY 2026-27+ returns). */
+        section393TableItem: { type: String, trim: true, default: '' },
+        section393Label: { type: String, trim: true, default: '' },
         panMandatory: { type: Boolean, default: false },
         lowerDeductionCertificateAllowed: { type: Boolean, default: true },
         isActive: { type: Boolean, default: true },

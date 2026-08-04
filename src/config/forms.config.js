@@ -157,7 +157,7 @@ export const ALL_FORMS = [
     { id: 'gstr9', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, icon: 'gst', permission: 'gst.gstr3b.view', module: 'GST' },
     { id: 'gst-recon', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, icon: 'gst', permission: 'gst.gst_reconciliation.view', module: 'GST' },
     { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, icon: 'gst', permission: 'gst.gst_payable.view', module: 'GST' },
-    { id: 'itc-register', title: 'ITC Register', path: PATHS.GST.ITC_REGISTER, icon: 'gst', permission: 'gst.itc_register.view', module: 'GST' },
+    { id: 'itc-register', title: 'GST Inward & ITC Register', path: PATHS.GST.ITC_REGISTER, icon: 'gst', permission: 'gst.itc_register.view', module: 'GST' },
     { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, icon: 'gst', permission: 'gst.hsn_summary.view', module: 'GST' },
     { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, icon: 'gst', permission: 'gst.gst_ledger.view', module: 'GST' },
 

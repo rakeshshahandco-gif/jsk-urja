@@ -9,6 +9,8 @@ import { userService } from '@/services/user.service';
 import { ROLE_CONFIG, PERMISSION_LABELS, ROLES } from '@/utils/permissions';
 import styles from './UserManagement.module.scss';
 import { toast } from 'react-hot-toast'; // Assuming toast is available or use console
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
+import { PATHS } from '@/routes/paths';
 
 export const UserManagement = () => {
     const { openModal } = useModal();
@@ -212,6 +214,7 @@ export const UserManagement = () => {
 
     return (
         <div className={styles.container}>
+            <ModuleHomeBackLink to={PATHS.SETTINGS.HOME} label="Back to Admin Home" />
             <div className={styles.header}>
                 <div>
                     <h1 className={styles.title}>User Management</h1>

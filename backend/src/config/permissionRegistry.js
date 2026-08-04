@@ -188,7 +188,15 @@ export const PERMISSION_REGISTRY = [
         name: 'Task Management',
         submodules: [
             { id: 'task_list', name: 'Manage Tasks', actions: STANDARD_ACTIONS },
-            { id: 'task_groups', name: 'Task Groups', actions: [...STANDARD_ACTIONS, { id: 'manage', label: 'Manage Items', type: 'boolean' }] },
+            { id: 'task_groups', name: 'Task Groups', actions: [
+                ...STANDARD_ACTIONS,
+                { id: 'manage', label: 'Manage Items', type: 'boolean' },
+                { id: 'highlight', label: 'Highlight Groups', type: 'boolean' },
+                { id: 'reorder_highlights', label: 'Reorder Highlights', type: 'boolean' },
+                { id: 'manage_members', label: 'Manage Members', type: 'boolean' },
+                { id: 'manage_tasks', label: 'Manage Group Tasks', type: 'boolean' },
+                { id: 'complete_shared_task', label: 'Complete Shared Group Task', type: 'boolean' },
+            ] },
             { id: 'reminders', name: 'Reminders', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] }
         ]
     },
@@ -237,7 +245,20 @@ export const PERMISSION_REGISTRY = [
                     { id: 'email', label: 'Email Send', type: 'boolean' },
                 ],
             },
-            { id: 'internal_sales', name: 'Estimate / Internal Sale', actions: EXTENDED_ACTIONS },
+            {
+                id: 'internal_sales',
+                name: 'Estimate / Internal Sale',
+                actions: [
+                    { id: 'view', label: 'View Estimates', type: 'boolean' },
+                    { id: 'add', label: 'Create Estimate', type: 'boolean' },
+                    { id: 'edit', label: 'Edit Estimate', type: 'boolean' },
+                    { id: 'delete', label: 'Estimate Delete', type: 'boolean' },
+                    { id: 'print', label: 'Print', type: 'boolean' },
+                    { id: 'export', label: 'Export', type: 'boolean' },
+                    { id: 'cancel', label: 'Cancel Estimate', type: 'boolean' },
+                    { id: 'approve', label: 'Approve', type: 'boolean' },
+                ],
+            },
             { id: 'eway_bills', name: 'E-Way Bill Tracking', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'invoice_series', name: 'Invoice Series', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'manage', label: 'Manage', type: 'boolean' }] },
             { id: 'logistics', name: 'Logistics & Courier Master', actions: STANDARD_ACTIONS }
@@ -327,7 +348,16 @@ export const PERMISSION_REGISTRY = [
             { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
             { id: 'petty_cash', name: 'Petty Cash', actions: [...STANDARD_ACTIONS, { id: 'import', label: 'Import', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }, { id: 'approve', label: 'Approve Import', type: 'boolean' }] },
             { id: 'debit_notes', name: 'Debit Note', actions: EXTENDED_ACTIONS },
-            { id: 'credit_notes', name: 'Credit Note', actions: EXTENDED_ACTIONS }
+            { id: 'credit_notes', name: 'Credit Note', actions: EXTENDED_ACTIONS },
+            {
+                id: 'bill_adjustment',
+                name: 'Bill Adjustment / Credit Notes',
+                actions: [
+                    { id: 'view_note_balance', label: 'View Credit Note Balance', type: 'boolean' },
+                    { id: 'use_credit_note', label: 'Apply Credit Note to Invoice', type: 'boolean' },
+                    { id: 'reverse_note_allocation', label: 'Reverse Credit Note Allocation', type: 'boolean' },
+                ],
+            },
         ]
     },
     {
@@ -1077,6 +1107,15 @@ export const PERMISSION_REGISTRY = [
             { id: 'expense_entry', name: 'Expense Voucher', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'add', label: 'Add', type: 'boolean' }] },
             { id: 'credit_notes', name: 'Credit Note', actions: EXTENDED_ACTIONS },
             { id: 'debit_notes', name: 'Debit Note', actions: EXTENDED_ACTIONS },
+            {
+                id: 'bill_adjustment',
+                name: 'Bill Adjustment / Credit Notes',
+                actions: [
+                    { id: 'view_note_balance', label: 'View Credit Note Balance', type: 'boolean' },
+                    { id: 'use_credit_note', label: 'Apply Credit Note to Invoice', type: 'boolean' },
+                    { id: 'reverse_note_allocation', label: 'Reverse Credit Note Allocation', type: 'boolean' },
+                ],
+            },
             { id: 'vouchers', name: 'Voucher Register', actions: [{ id: 'view', label: 'View', type: 'boolean' }, { id: 'edit', label: 'Edit', type: 'boolean' }, { id: 'export', label: 'Export', type: 'boolean' }] },
             { id: 'group_master', name: 'Group Master', actions: STANDARD_ACTIONS },
             { id: 'ledger_master', name: 'Ledger Master', actions: STANDARD_ACTIONS },

@@ -7,6 +7,7 @@ import { SalesOrder } from '../models/salesOrder.model.js';
 import { PurchaseOrder } from '../models/purchaseOrder.model.js';
 import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { GRN } from '../models/grn.model.js';
+import { CreditDebitNote } from '../models/creditDebitNote.model.js';
 import logger from '../utils/logger.js';
 import { getLatestSequenceNumber, formatInvoiceNumber } from '../utils/numberingUtils.js';
 
@@ -24,7 +25,11 @@ export const getSeriesById = asyncHandler(async (req, res) => {
 });
 
 export const createSeries = asyncHandler(async (req, res) => {
-    const { seriesName, financialYear, prefix, startNumber, padLength, gstApplicable, isDefault, isDefaultForSalesOrder, isDefaultForTaxInvoice, description } = req.body;
+    const {
+        seriesName, financialYear, prefix, startNumber, padLength, gstApplicable,
+        isDefault, isDefaultForSalesOrder, isDefaultForTaxInvoice, description,
+        isEstimate, documentType,
+    } = req.body;
     if (!seriesName || !financialYear || !prefix) throw new ApiError(httpStatus.BAD_REQUEST, 'seriesName, financialYear and prefix are required');
 
     // If new series is default, unset others
@@ -38,13 +43,18 @@ export const createSeries = asyncHandler(async (req, res) => {
         await InvoiceSeries.updateMany({}, { isDefaultForTaxInvoice: false });
     }
 
+    const estimateFlag = isEstimate === true || String(isEstimate) === 'true' || documentType === 'Estimate';
     const s = await InvoiceSeries.create({
         seriesName,
         financialYear,
         prefix,
         startNumber: startNumber || 1,
         padLength: padLength || 5,
-        gstApplicable: String(gstApplicable) === 'true' || gstApplicable === true,
+        gstApplicable: estimateFlag
+            ? false
+            : (String(gstApplicable) === 'true' || gstApplicable === true),
+        isEstimate: estimateFlag,
+        documentType: estimateFlag ? 'Estimate' : (documentType || ''),
         isDefault: String(isDefault) === 'true' || isDefault === true,
         isDefaultForSalesOrder: String(isDefaultForSalesOrder) === 'true' || isDefaultForSalesOrder === true,
         isDefaultForTaxInvoice: String(isDefaultForTaxInvoice) === 'true' || isDefaultForTaxInvoice === true,
@@ -105,6 +115,28 @@ export const updateSeries = asyncHandler(async (req, res) => {
         s.isActive = String(body.isActive) === 'true' || body.isActive === true;
     }
 
+    // Persist Estimate series identity (required for Estimate-only flexible delete).
+    if (body.isEstimate !== undefined || body.documentType !== undefined) {
+        const wantEstimate = body.isEstimate === true
+            || String(body.isEstimate) === 'true'
+            || body.documentType === 'Estimate';
+        const wantClear = body.isEstimate === false || String(body.isEstimate) === 'false';
+        if (wantEstimate) {
+            s.isEstimate = true;
+            s.documentType = 'Estimate';
+            s.gstApplicable = false;
+        } else if (wantClear) {
+            s.isEstimate = false;
+            if (body.documentType !== undefined && body.documentType !== 'Estimate') {
+                s.documentType = body.documentType || '';
+            } else if (s.documentType === 'Estimate') {
+                s.documentType = '';
+            }
+        } else if (body.documentType !== undefined) {
+            s.documentType = body.documentType || '';
+        }
+    }
+
     if (body.description !== undefined) s.description = body.description;
 
     logger.info(`DEBUG_BEFORE_SAVE: ${s.seriesName} gstApplicable: ${s.gstApplicable}`);
@@ -137,7 +169,8 @@ export const previewNextNumber = asyncHandler(async (req, res) => {
         'SalesOrder': SalesOrder,
         'PurchaseOrder': PurchaseOrder,
         'PurchaseInvoice': PurchaseInvoice,
-        'GRN': GRN
+        'GRN': GRN,
+        'CreditDebitNote': CreditDebitNote,
     };
 
     const TargetModel = modelMap[modelName] || SalesInvoice;

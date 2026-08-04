@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient as axiosInstance } from '@/lib/apiClient';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
+import { PATHS } from '@/routes/paths';
 
 const MODULES = [
   'crm','accounts','inventory','gst','tds','production','service','hr','rd','reports','payroll',
@@ -357,6 +359,7 @@ export default function SaasAdminPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-6">
+        <ModuleHomeBackLink to={PATHS.SAAS_ADMIN.HOME} label="Back to Super Admin Home" />
         <h1 className="text-xl font-bold text-gray-800 mb-4">SaaS Super Admin</h1>
         <div className="flex gap-1 bg-white rounded-xl shadow px-2 py-1 mb-4 overflow-x-auto">
           {TABS.map(t => (

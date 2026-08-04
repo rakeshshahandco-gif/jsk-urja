@@ -18,6 +18,7 @@ import { useSocket } from '@/contexts/SocketContext';
 import toast from 'react-hot-toast';
 import ConvertFromWhatsAppModal from '@/features/leads/components/ConvertFromWhatsAppModal';
 import ProductCatalogPicker from '@/features/productCatalog/components/ProductCatalogPicker';
+import WhatsAppHomeBackLink from '@/features/whatsapp/components/WhatsAppHomeBackLink';
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status, phone }) => {
@@ -327,6 +328,7 @@ export default function WhatsAppSettingsPage() {
 
     return (
         <div style={{ padding: '32px 40px', maxWidth: 920, margin: '0 auto', fontFamily: "'Inter', sans-serif" }}>
+            <WhatsAppHomeBackLink />
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
                 <div>

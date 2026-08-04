@@ -10,6 +10,7 @@ import { isPlatformAdminUser } from '@/constants/platformAccess';
 import { FEATURE_SETTINGS_TABS, FEATURE_SETTINGS_FIELDS, FEATURE_SETTINGS_SELECTS, CUSTOMER_FIELD_SECTIONS } from '@/config/featureSettingsFields';
 import { PATHS } from '@/routes/paths';
 import FeatureEngineRegistryPanel, { ENGINE_REGISTRY_TABS, ENGINE_REGISTRY_TAB_IDS } from './FeatureEngineRegistryPanel';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
 
 const COMPLIANCE_TABS = FEATURE_SETTINGS_TABS;
 const FIELDS = FEATURE_SETTINGS_FIELDS;
@@ -129,6 +130,7 @@ export default function FeatureComplianceSettingsPage() {
 
     return (
         <div style={{ padding: '24px 30px', maxWidth: 960, margin: '0 auto', fontFamily: "'Inter', sans-serif" }}>
+            <ModuleHomeBackLink to={PATHS.SETTINGS.HOME} label="Back to Admin Home" />
             <div style={{ marginBottom: 8, fontSize: 13, color: '#64748b' }}>
                 <Link to={PATHS.SETTINGS.HOME} style={{ color: '#2563eb', textDecoration: 'none' }}>Admin</Link>
                 {' / '}

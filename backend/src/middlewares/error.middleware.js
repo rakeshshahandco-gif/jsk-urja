@@ -46,6 +46,7 @@ export const errorHandler = (err, req, res, next) => {
     const response = {
         code: statusCode,
         message,
+        ...(err.data != null ? { data: err.data } : {}),
         ...(config.env === 'development' &&
             errMsg &&
             errMsg !== message && { details: errMsg }),

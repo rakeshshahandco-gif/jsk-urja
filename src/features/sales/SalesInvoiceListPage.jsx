@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getSalesInvoices, restoreSalesInvoice, getInvoiceSeries } from '@/services/salesApi';
 import { deleteSalesInvoice } from '@/services/salesApi';
 import { PATHS } from '@/routes/paths';
@@ -9,6 +9,7 @@ import useDebounce from '@/hooks/useDebounce';
 import toast from 'react-hot-toast';
 import { Trash2, ScanLine } from 'lucide-react';
 import InvoiceScannerModal from '@/components/invoice/InvoiceScannerModal';
+import SalesInvoiceCancelDeleteModal from './components/SalesInvoiceCancelDeleteModal';
 import { TableSkeleton } from '@/components/ui/BrandedLoading';
 
 function getInvoiceLoadErrorMessage(err) {
@@ -45,8 +46,12 @@ function isEstimateSeries(s) {
 export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
     const isEstimateList = listMode === 'estimate';
     const navigate = useNavigate();
+    const location = useLocation();
     const { hasRole, hasPermission } = useAuth();
-    const canDeleteInvoice = hasPermission('sales.sales_invoices.delete');
+    const isAdmin = hasRole('admin') || hasRole('superadmin');
+    const canDeleteInvoice = isAdmin || hasPermission('sales.sales_invoices.delete');
+    const canDeleteEstimate = isAdmin || hasPermission('sales.internal_sales.delete');
+    const canDeleteRow = isEstimateList ? canDeleteEstimate : canDeleteInvoice;
     const { selectedCompany, loading: companyLoading } = useCompany();
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -55,6 +60,8 @@ export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
     const loadSeqRef = useRef(0);
     const lastToastRef = useRef('');
     const [showScanner, setShowScanner] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
     // Persistent Filter State
     const { filters, setFilter, resetFilters } = useFilterPersistence(
@@ -137,19 +144,51 @@ export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
         load();
     }, [load, companyLoading]);
 
+    // After Receive Payment save — force fresh list (paid / outstanding / status)
+    useEffect(() => {
+        if (!location.state?.refreshInvoices || companyLoading) return;
+        load();
+        navigate(location.pathname, { replace: true, state: {} });
+    }, [location.state?.refreshInvoices, location.pathname, companyLoading, load, navigate]);
+
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—';
 
     const handleDelete = (e, inv) => {
         e.stopPropagation();
-        if (!canDeleteInvoice) return toast.error('You do not have permission to delete invoices');
+        if (!canDeleteRow) {
+            return toast.error(
+                isEstimateList
+                    ? 'You do not have permission to delete estimates (sales.internal_sales.delete).'
+                    : 'You do not have permission to delete invoices',
+            );
+        }
         if (inv.paidAmount > 0) return toast.error('Delete Blocked: Payments exist.');
+        if (isEstimateList) {
+            setDeleteTarget(inv);
+            return;
+        }
         const msg = `STRICT DELETE RULE (Rule 3):\n\nOnly the LATEST invoice can be DELETED to reuse its number.\n\nEnter reason for deletion:`;
         const reason = window.prompt(msg);
         if (!reason || !reason.trim()) return;
-        
+
         deleteSalesInvoice(inv._id, { reason })
             .then(() => { toast.success('Invoice deleted and number freed.'); load(); })
-            .catch(e => toast.error(e.response?.data?.message || 'Delete failed'));
+            .catch((err) => toast.error(err.response?.data?.message || 'Delete failed'));
+    };
+
+    const handleEstimateDeleteConfirm = async (payload) => {
+        if (!deleteTarget?._id) return;
+        setDeleteSubmitting(true);
+        try {
+            const res = await deleteSalesInvoice(deleteTarget._id, payload);
+            toast.success(res.message || 'Estimate deleted successfully. Later Estimate numbers remain unchanged.');
+            setDeleteTarget(null);
+            load();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Delete failed');
+        } finally {
+            setDeleteSubmitting(false);
+        }
     };
 
     const handleRestore = (e, inv) => {
@@ -335,8 +374,9 @@ export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
                                                         style={{ padding: '5px 10px', background: '#f1f5f9', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                                                         View
                                                     </button>
-                                                    {canDeleteInvoice && inv.status !== 'Cancelled' && (
+                                                    {canDeleteRow && inv.status !== 'Cancelled' && (
                                                         <button onClick={(e) => handleDelete(e, inv)}
+                                                            title={isEstimateList ? 'Delete Estimate' : 'Delete Invoice (Latest Only)'}
                                                             style={{ padding: '5px 10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
                                                             🗑
                                                         </button>
@@ -357,6 +397,22 @@ export default function SalesInvoiceListPage({ listMode = 'invoice' }) {
                 </table>
                 )}
             </div>
+
+            <SalesInvoiceCancelDeleteModal
+                open={!!deleteTarget}
+                mode="delete"
+                documentKind="estimate"
+                invoiceNumber={deleteTarget?.displayInvoiceNumber || deleteTarget?.invoiceNumber}
+                salesInvoiceId={deleteTarget?._id}
+                estimateDate={deleteTarget?.invoiceDate ? fmt(deleteTarget.invoiceDate) : '—'}
+                customerName={deleteTarget?.customerName || '—'}
+                amount={deleteTarget?.roundedTotal ?? deleteTarget?.grandTotal}
+                soId={deleteTarget?.soId}
+                soNumber={deleteTarget?.soNumber}
+                onClose={() => !deleteSubmitting && setDeleteTarget(null)}
+                onConfirm={handleEstimateDeleteConfirm}
+                submitting={deleteSubmitting}
+            />
         </div>
     );
 }

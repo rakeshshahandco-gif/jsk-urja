@@ -53,11 +53,12 @@ export async function logTdsAudit({ action, supplierId, section, financialYear, 
     }
 }
 
-export async function getSectionBalance(supplierId, section, financialYear) {
+export async function getSectionBalance(supplierId, section, financialYear, natureKey = '') {
     if (!supplierId || !section || !financialYear) return { cumulativePaid: 0, transactionCount: 0 };
     const row = await TdsVendorSectionBalance.findOne({
         supplierId,
         section: String(section).trim().toUpperCase(),
+        natureKey: String(natureKey || '').trim().toUpperCase(),
         financialYear: String(financialYear).trim(),
     })
         .select('cumulativePaid cumulativeTdsDeducted transactionCount')
@@ -89,6 +90,7 @@ export async function applyPaymentToBalance(paymentEntry, userId) {
         {
             supplierId: paymentEntry.supplierId,
             section,
+            natureKey: String(paymentEntry.tdsNatureKey || '').trim().toUpperCase(),
             financialYear: fy,
         },
         {
@@ -113,17 +115,18 @@ export async function applyPaymentToBalance(paymentEntry, userId) {
  * Expense / bill voucher: add TDS-applicable base to FY cumulative for supplier+section.
  */
 export async function applyVoucherBillToTdsBalance(
-    { supplierId, section, financialYear, baseAmount, tdsAmount, voucherId },
+    { supplierId, section, financialYear, baseAmount, tdsAmount, voucherId, natureKey = '' },
     userId,
     session = null,
 ) {
     if (!supplierId || !section || !financialYear) return;
     const sec = String(section).trim().toUpperCase();
+    const nat = String(natureKey || '').trim().toUpperCase();
     const inc = r2(Number(baseAmount) || 0);
     if (!(inc > 0)) return;
 
     const q = TdsVendorSectionBalance.findOneAndUpdate(
-        { supplierId, section: sec, financialYear: String(financialYear).trim() },
+        { supplierId, section: sec, natureKey: nat, financialYear: String(financialYear).trim() },
         {
             $inc: {
                 cumulativePaid: inc,
@@ -144,45 +147,60 @@ export async function applyVoucherBillToTdsBalance(
         financialYear: String(financialYear).trim(),
         voucherId: voucherId || null,
         userId,
-        details: { base: inc, tdsAmount: r2(Number(tdsAmount) || 0) },
+        details: { base: inc, tdsAmount: r2(Number(tdsAmount) || 0), natureKey: nat },
     });
 }
 
 export async function reverseVoucherBillFromTdsBalance(voucherLean, userId, session = null) {
-    if (!voucherLean?.tdsSupplierId || !voucherLean.tdsSection) return;
-    const base = r2(Number(voucherLean.tdsThresholdBaseAmount || 0));
-    if (!(base > 0)) return;
-    const sec = String(voucherLean.tdsSection).trim().toUpperCase();
+    if (!voucherLean?.tdsSupplierId) return;
     const fy = String(voucherLean.financialYear || '').trim();
-    const tdsAmt = r2(Number(voucherLean.tdsAmount || 0));
+    const lines = Array.isArray(voucherLean.tdsLines) ? voucherLean.tdsLines.filter((l) => l && (l.tdsBase > 0 || l.tdsAmount > 0 || l.section)) : [];
 
-    const q = TdsVendorSectionBalance.findOneAndUpdate(
-        {
-            supplierId: voucherLean.tdsSupplierId,
-            section: sec,
-            financialYear: fy,
-        },
-        {
-            $inc: {
-                cumulativePaid: -base,
-                cumulativeTdsDeducted: -tdsAmt,
-                transactionCount: -1,
+    const buckets = lines.length
+        ? lines.map((l) => ({
+            section: String(l.section || '').trim().toUpperCase(),
+            natureKey: String(l.natureKey || '').trim().toUpperCase(),
+            base: r2(Number(l.tdsBase || 0)),
+            tdsAmt: r2(Number(l.tdsAmount || 0)),
+        }))
+        : [{
+            section: String(voucherLean.tdsSection || '').trim().toUpperCase(),
+            natureKey: '',
+            base: r2(Number(voucherLean.tdsThresholdBaseAmount || 0)),
+            tdsAmt: r2(Number(voucherLean.tdsAmount || 0)),
+        }];
+
+    for (const b of buckets) {
+        if (!b.section || !(b.base > 0)) continue;
+        const q = TdsVendorSectionBalance.findOneAndUpdate(
+            {
+                supplierId: voucherLean.tdsSupplierId,
+                section: b.section,
+                natureKey: b.natureKey,
+                financialYear: fy,
             },
-            $set: { lastUpdatedAt: new Date() },
-        },
-    );
-    if (session) await q.session(session);
-    else await q;
+            {
+                $inc: {
+                    cumulativePaid: -b.base,
+                    cumulativeTdsDeducted: -b.tdsAmt,
+                    transactionCount: -1,
+                },
+                $set: { lastUpdatedAt: new Date() },
+            },
+        );
+        if (session) await q.session(session);
+        else await q;
 
-    await logTdsAudit({
-        action: 'VOUCHER_TDS_THRESHOLD_REVERSED',
-        supplierId: voucherLean.tdsSupplierId,
-        section: sec,
-        financialYear: fy,
-        voucherId: voucherLean._id,
-        userId,
-        details: { base, tdsAmount: tdsAmt },
-    });
+        await logTdsAudit({
+            action: 'VOUCHER_TDS_THRESHOLD_REVERSED',
+            supplierId: voucherLean.tdsSupplierId,
+            section: b.section,
+            financialYear: fy,
+            voucherId: voucherLean._id,
+            userId,
+            details: { base: b.base, tdsAmount: b.tdsAmt, natureKey: b.natureKey },
+        });
+    }
 }
 
 /** Purchase invoice bill posted TDS — same cumulative bucket */

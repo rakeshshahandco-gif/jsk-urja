@@ -32,16 +32,33 @@ import {
     recalculateSalesOrderBillingFromInvoices,
     prepareSalesOrderForInvoiceCreation,
     resolveSalesOrderId,
+    getSalesOrderBillingSnapshot,
+    assertInvoiceItemsWithinRemaining,
 } from '../utils/salesOrderBilling.utils.js';
 import logger from '../utils/logger.js';
 
-/** Admin/superadmin by role, or explicit User Rights permission. */
-export function assertSalesInvoiceAdminAction(user, action) {
+/** True only when linked Invoice Series is verified as Estimate (never trust UI/listMode). */
+export function isVerifiedEstimateSeries(seriesDoc) {
+    if (!seriesDoc) return false;
+    return seriesDoc.isEstimate === true || seriesDoc.documentType === 'Estimate';
+}
+
+/**
+ * Admin/superadmin by role, or explicit User Rights permission.
+ * @param {'cancel'|'delete'} action
+ * @param {{ isEstimate?: boolean }} [opts] — delete of Estimate requires sales.internal_sales.delete
+ */
+export function assertSalesInvoiceAdminAction(user, action, opts = {}) {
     const roleName = (user?.role?.name || user?.roleName || '').toLowerCase();
     if (roleName === 'superadmin' || roleName === 'admin') return;
-    const permissionKey = action === 'cancel'
-        ? 'sales.sales_invoices.cancel'
-        : 'sales.sales_invoices.delete';
+    let permissionKey;
+    if (action === 'cancel') {
+        permissionKey = 'sales.sales_invoices.cancel';
+    } else if (opts.isEstimate) {
+        permissionKey = 'sales.internal_sales.delete';
+    } else {
+        permissionKey = 'sales.sales_invoices.delete';
+    }
     if (!checkUserPermission(user, permissionKey)) {
         throw new ApiError(
             httpStatus.FORBIDDEN,
@@ -56,9 +73,31 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
     try {
         const body = req.body;
         const linkedSoId = resolveSalesOrderId(body);
+        const idemKey = body.idempotencyKey || req.headers['idempotency-key'] || null;
+
+        if (idemKey) {
+            const prior = await AuditLog.findOne({
+                action: 'CREATE',
+                module: 'SalesInvoice',
+                'details.idempotencyKey': idemKey,
+            }).lean();
+            if (prior?.resourceId) {
+                const existingInv = await SalesInvoice.findById(prior.resourceId).lean();
+                if (existingInv && existingInv.isDeleted !== true && existingInv.status !== 'Cancelled') {
+                    await session.abortTransaction();
+                    return res.status(httpStatus.OK).json({
+                        success: true,
+                        data: existingInv,
+                        idempotentReplay: true,
+                    });
+                }
+            }
+        }
 
         if (linkedSoId) {
-            await prepareSalesOrderForInvoiceCreation(linkedSoId, session);
+            const soPrepared = await prepareSalesOrderForInvoiceCreation(linkedSoId, session);
+            const billingSnap = await getSalesOrderBillingSnapshot(soPrepared, session);
+            assertInvoiceItemsWithinRemaining(soPrepared, body.items, billingSnap);
         }
 
         // Financial Year Tagging
@@ -86,6 +125,14 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 displayInvoiceNumber = numbering.displayInvoiceNumber;
                 invoiceNumber = displayInvoiceNumber; // Sync for module compatibility
             }
+        } else if (body.seriesId && !seriesDoc) {
+            seriesDoc = await InvoiceSeries.findById(body.seriesId).session(session);
+        }
+
+        const isEstimateCreate = isVerifiedEstimateSeries(seriesDoc);
+        const createPerm = isEstimateCreate ? 'sales.internal_sales.add' : 'sales.sales_invoices.add';
+        if (!checkUserPermission(req.user, createPerm)) {
+            throw new ApiError(httpStatus.FORBIDDEN, `Permission denied: ${createPerm} required`);
         }
         
         if (!invoiceNumber) {
@@ -407,6 +454,25 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             });
         }
 
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'CREATE',
+            module: 'SalesInvoice',
+            resourceId: invoice._id,
+            description: linkedSoId
+                ? `Created Tax Invoice ${invoice.invoiceNumber} from Sales Order ${invoice.soNumber || linkedSoId}`
+                : `Created Tax Invoice ${invoice.invoiceNumber}`,
+            details: {
+                soId: linkedSoId || null,
+                soNumber: invoice.soNumber || null,
+                invoiceNumber: invoice.invoiceNumber,
+                seriesId: invoice.seriesId || null,
+                idempotencyKey: idemKey || null,
+            },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        }], { session });
+
         await session.commitTransaction();
         res.status(httpStatus.CREATED).json({ success: true, data: invoice });
 
@@ -491,7 +557,7 @@ export const getSalesInvoices = asyncHandler(async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [invoices, total] = await Promise.all([
         SalesInvoice.find(filter)
-            .populate('seriesId', 'seriesName')
+            .populate('seriesId', 'seriesName isEstimate documentType')
             .populate('createdBy', 'name mobile')
             .sort({ invoiceDate: -1 })
             .skip(skip)
@@ -696,8 +762,6 @@ export const cancelSalesInvoice = asyncHandler(async (req, res) => {
 });
 
 export const deleteSalesInvoice = asyncHandler(async (req, res) => {
-    assertSalesInvoiceAdminAction(req.user, 'delete');
-
     const { reason } = req.body;
     if (!reason || !String(reason).trim()) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Deletion reason is required for administrative tracking');
@@ -710,18 +774,32 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         if (!inv) throw new ApiError(httpStatus.NOT_FOUND, 'Invoice not found');
         if (inv.isDeleted) throw new ApiError(httpStatus.BAD_REQUEST, 'Invoice is already deleted');
 
+        // Backend-verified Estimate series only (never trust frontend listMode / documentType).
+        let seriesDoc = null;
+        if (inv.seriesId) {
+            seriesDoc = await InvoiceSeries.findById(inv.seriesId).session(session);
+        }
+        const isEstimateDoc = isVerifiedEstimateSeries(seriesDoc);
+        assertSalesInvoiceAdminAction(req.user, 'delete', { isEstimate: isEstimateDoc });
+
         const invoiceNo = inv.invoiceNumber;
         const displayNo = inv.displayInvoiceNumber || invoiceNo;
+        const deleteReason = String(reason).trim();
 
         if (inv.paidAmount > 0 || (inv.payments && inv.payments.length > 0)) {
-            throw new ApiError(httpStatus.BAD_REQUEST, `Invoice ${invoiceNo} cannot be deleted because payments are linked.`);
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                `${isEstimateDoc ? 'Estimate' : 'Invoice'} ${invoiceNo} cannot be deleted because payments are linked.`,
+            );
         }
 
-        if (inv.seriesId) {
+        // Estimate-only exception: any sequence may be deleted; gaps allowed; later numbers unchanged.
+        // Non-Estimate series keep the existing latest-number-only rule unchanged.
+        if (inv.seriesId && !isEstimateDoc) {
             const fy = inv.financialYear;
             const lastSeq = await getLatestSequenceNumber(SalesInvoice, inv.seriesId, fy, session);
             const thisSeq = inv.sequenceNumber || extractSequenceNumber(
-                (await InvoiceSeries.findById(inv.seriesId).session(session))?.prefix || '',
+                seriesDoc?.prefix || '',
                 displayNo
             );
 
@@ -741,7 +819,7 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
         inv.isDeleted = true;
         inv.deletedAt = new Date();
         inv.deletedBy = req.user.id;
-        inv.deleteReason = String(reason).trim();
+        inv.deleteReason = deleteReason;
         inv.updatedBy = req.user.id;
 
         const renamedNumber = `${invoiceNo}-DEL-${Date.now()}`;
@@ -756,31 +834,71 @@ export const deleteSalesInvoice = asyncHandler(async (req, res) => {
             await recomputeSeriesState(SalesInvoice, inv.seriesId, session);
         }
 
-        await AuditLog.create([{
-            user: req.user.id,
-            action: 'DELETE',
-            module: 'SalesInvoice',
-            resourceId: inv._id,
-            description: `DELETED Sales Invoice ${invoiceNo}. Reason: ${reason}. NUMBER FREED FOR REUSE WHEN LATEST.`,
-            details: {
-                reason,
+        const convertedRef = !!(inv.soId || inv.soNumber);
+        const auditDetails = isEstimateDoc
+            ? {
+                documentType: 'Estimate',
+                reason: deleteReason,
+                originalNumber: invoiceNo,
+                displayNumber: displayNo,
+                renamedTo: renamedNumber,
+                seriesId: inv.seriesId,
+                seriesName: seriesDoc?.seriesName || seriesDoc?.name || '',
+                sequenceNumber: inv.sequenceNumber,
+                estimateDate: inv.invoiceDate,
+                customer: inv.customerName || '',
+                customerId: inv.customerId || null,
+                amount: inv.roundedTotal ?? inv.grandTotal ?? 0,
+                companyId: inv.companyId || null,
+                financialYear: inv.financialYear || '',
+                laterNumberGapAllowed: true,
+                converted: convertedRef,
+                conversionReference: convertedRef
+                    ? { soId: inv.soId || null, soNumber: inv.soNumber || null }
+                    : null,
+                previousStatus: inv.status,
+                softDelete: true,
+            }
+            : {
+                reason: deleteReason,
                 originalNumber: invoiceNo,
                 renamedTo: renamedNumber,
                 seriesId: inv.seriesId,
                 sequenceNumber: inv.sequenceNumber,
-            },
+            };
+
+        await AuditLog.create([{
+            user: req.user.id,
+            action: 'DELETE',
+            module: isEstimateDoc ? 'Estimate' : 'SalesInvoice',
+            resourceId: inv._id,
+            description: isEstimateDoc
+                ? `DELETED Estimate ${invoiceNo}. Later Estimate numbers remain unchanged; numbering gap allowed. Reason: ${deleteReason}.`
+                : `DELETED Sales Invoice ${invoiceNo}. Reason: ${deleteReason}. NUMBER FREED FOR REUSE WHEN LATEST.`,
+            details: auditDetails,
             ipAddress: req.ip,
             userAgent: req.headers['user-agent'],
         }], { session });
 
         if (inv.soId) {
+            // Billing summary only — does not delete or alter SO document / GST / stock.
             await recalculateSalesOrderBillingFromInvoices(inv.soId, session);
         }
 
         await session.commitTransaction();
         res.json({
             success: true,
-            message: `Invoice ${invoiceNo} deleted successfully. The number is now available for the next entry when it was the latest.`,
+            documentType: isEstimateDoc ? 'Estimate' : 'SalesInvoice',
+            converted: convertedRef,
+            conversionWarning: convertedRef
+                ? 'This Estimate has been converted. Deleting it will not delete or alter the linked Sales Order, Invoice, Delivery Challan or other downstream document.'
+                : null,
+            conversionReference: convertedRef
+                ? { soId: inv.soId || null, soNumber: inv.soNumber || null }
+                : null,
+            message: isEstimateDoc
+                ? `Estimate deleted successfully. Later Estimate numbers remain unchanged.`
+                : `Invoice ${invoiceNo} deleted successfully. The number is now available for the next entry when it was the latest.`,
         });
     } catch (error) {
         await session.abortTransaction();

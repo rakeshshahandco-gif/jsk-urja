@@ -11,11 +11,12 @@ import { TaskHubSummaryStrip } from './TaskHubSummaryStrip';
 import { TaskHubConfirmDialog } from './TaskHubConfirmDialog';
 import { getReportOptions } from '@/services/reportApi';
 import { ExtendTaskModal } from '@/features/reports/components/ExtendTaskModal';
-import { extendTask, closeTask, deleteTask } from '@/services/taskApi';
+import { extendTask, closeTask, deleteTask, getHighlightedTaskGroups, getTaskGroup } from '@/services/taskApi';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { TABLE_TABS, VIEW_MODES } from './taskHubConstants';
 import { ViewTabs, FilterChips } from '@/components/ui';
+import { HighlightedGroupsStrip, SelectedGroupSummary } from './HighlightedGroupsStrip';
 import pageStyles from './ManageTasksPage.module.scss';
 
 const MONGO_ID_RE = /^[a-f\d]{24}$/i;
@@ -72,6 +73,10 @@ const ManageTasksPage = () => {
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [confirm, setConfirm] = useState(null);
     const [workboardRefresh, setWorkboardRefresh] = useState(0);
+    const [highlightedGroups, setHighlightedGroups] = useState([]);
+    const [highlightedLoading, setHighlightedLoading] = useState(false);
+    const [hubSelectedGroupId, setHubSelectedGroupId] = useState(null);
+    const [hubGroupDetail, setHubGroupDetail] = useState(null);
 
     useEffect(() => {
         if (filters.viewMode !== viewMode) {
@@ -82,6 +87,9 @@ const ManageTasksPage = () => {
     useEffect(() => {
         if (routeTaskId && MONGO_ID_RE.test(routeTaskId)) {
             setSelectedTaskId(routeTaskId);
+        } else {
+            // Left /tasks/:taskId (e.g. X / backdrop / post-extend navigate) — keep drawer closed.
+            setSelectedTaskId(null);
         }
     }, [routeTaskId]);
 
@@ -97,6 +105,51 @@ const ManageTasksPage = () => {
             })
             .catch(() => {});
     }, []);
+
+    const loadHighlightedGroups = useCallback(async () => {
+        setHighlightedLoading(true);
+        try {
+            const rows = await getHighlightedTaskGroups();
+            const list = Array.isArray(rows) ? rows : [];
+            setHighlightedGroups(list);
+            const defaultGroup = list.find((g) => g.isDefaultSelected);
+            if (defaultGroup && !hubSelectedGroupId) {
+                setHubSelectedGroupId(defaultGroup._id);
+            }
+        } catch {
+            setHighlightedGroups([]);
+        } finally {
+            setHighlightedLoading(false);
+        }
+    }, [hubSelectedGroupId]);
+
+    useEffect(() => {
+        loadHighlightedGroups();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!hubSelectedGroupId) {
+            setHubGroupDetail(null);
+            return;
+        }
+        let cancelled = false;
+        getTaskGroup(hubSelectedGroupId)
+            .then((data) => {
+                if (!cancelled) setHubGroupDetail(data);
+            })
+            .catch(() => {
+                if (!cancelled) setHubGroupDetail(null);
+            });
+        return () => { cancelled = true; };
+    }, [hubSelectedGroupId]);
+
+    // When a highlighted group is selected, drive the existing group filter.
+    useEffect(() => {
+        if (hubSelectedGroupId) {
+            setFilter('groupFilter', String(hubSelectedGroupId));
+            setFilter('page', 1);
+        }
+    }, [hubSelectedGroupId, setFilter]);
 
     const filterParams = useMemo(
         () => ({
@@ -213,10 +266,11 @@ const ManageTasksPage = () => {
 
     const closeDrawer = useCallback(() => {
         setSelectedTaskId(null);
-        if (routeTaskId && MONGO_ID_RE.test(routeTaskId)) {
+        const pathTaskId = location.pathname.match(/^\/tasks\/([a-f\d]{24})$/i)?.[1];
+        if ((routeTaskId && MONGO_ID_RE.test(routeTaskId)) || pathTaskId) {
             navigate('/tasks/list', { replace: true });
         }
-    }, [navigate, routeTaskId]);
+    }, [navigate, routeTaskId, location.pathname]);
 
     const handleTab = (id) => {
         setFilter('activeTab', id);
@@ -283,7 +337,11 @@ const ManageTasksPage = () => {
         const chips = [];
         if (groupFilter) {
             const g = options.taskGroups.find((x) => x._id === groupFilter);
-            chips.push({ key: 'group', label: `Group: ${g?.name || 'Selected'}`, clear: () => setFilter('groupFilter', '') });
+            chips.push({ key: 'group', label: `Group: ${g?.name || 'Selected'}`, clear: () => {
+                setFilter('groupFilter', '');
+                setHubSelectedGroupId(null);
+                setHubGroupDetail(null);
+            } });
         }
         if (assigneeFilter) {
             const u = options.users.find((x) => x._id === assigneeFilter);
@@ -350,9 +408,45 @@ const ManageTasksPage = () => {
 
             <TaskHubSummaryStrip stats={summaryStats} loading={viewMode === 'table' ? summaryLoading : false} />
 
+            <HighlightedGroupsStrip
+                groups={highlightedGroups}
+                selectedGroupId={hubSelectedGroupId}
+                loading={highlightedLoading}
+                canManage={user?.role === 'admin'}
+                onManage={() => navigate('/tasks/groups')}
+                onSelect={(g) => {
+                    const next = String(hubSelectedGroupId) === String(g._id) ? null : g._id;
+                    setHubSelectedGroupId(next);
+                    if (!next) {
+                        setFilter('groupFilter', '');
+                        setHubGroupDetail(null);
+                    }
+                }}
+            />
+
+            {hubSelectedGroupId && hubGroupDetail && (
+                <SelectedGroupSummary
+                    groupDetail={hubGroupDetail}
+                    onClear={() => {
+                        setHubSelectedGroupId(null);
+                        setHubGroupDetail(null);
+                        setFilter('groupFilter', '');
+                    }}
+                />
+            )}
+
             <div className={pageStyles.filterPanel}>
                 <div className={pageStyles.filterRow}>
-                    <select className={pageStyles.sel} value={groupFilter} onChange={(e) => setFilter('groupFilter', e.target.value)}>
+                    <select
+                        className={pageStyles.sel}
+                        value={groupFilter}
+                        onChange={(e) => {
+                            const v = e.target.value;
+                            setFilter('groupFilter', v);
+                            setHubSelectedGroupId(v || null);
+                            if (!v) setHubGroupDetail(null);
+                        }}
+                    >
                         <option value="">All Groups</option>
                         {options.taskGroups.map((g) => (
                             <option key={g._id} value={g._id}>

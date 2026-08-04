@@ -20,6 +20,10 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import CompanyProfilePage from '@/features/settings/CompanyProfilePage';
 import CompaniesListPage from '@/features/companies/CompaniesListPage';
 import WhatsAppSettingsPage from '@/features/settings/WhatsAppSettingsPage';
+import WhatsAppHomePage from '@/features/whatsapp/pages/WhatsAppHomePage';
+import CommunicationHomePage from '@/features/communication/pages/CommunicationHomePage';
+import AdminHomePage from '@/features/admin/pages/AdminHomePage';
+import SuperAdminHomePage from '@/features/superAdmin/pages/SuperAdminHomePage';
 import { CustomerMasterReport } from '@/features/reports/CustomerMasterReport';
 import CustomerKycReportsPage from '@/features/reports/CustomerKycReportsPage';
 import SupplierKycReportsPage from '@/features/reports/SupplierKycReportsPage';
@@ -569,7 +573,8 @@ const AppLayout = () => {
                         <Route path="/tasks" element={<Navigate to="/tasks/home" replace />} />
                         <Route path="/tasks/home" element={<ProtectedRoute><ModuleHomePage moduleName="Task Management" title="Task Management - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path="/admin" element={<Navigate to="/admin/home" replace />} />
-                        <Route path="/admin/home" element={<ProtectedRoute><ModuleHomePage moduleName="Admin" title="Admin - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path="/admin/home" element={<ProtectedRoute requirePermission="admin"><AdminHomePage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.COMMUNICATION_HOME} element={<ProtectedRoute><CommunicationHomePage /></ProtectedRoute>} />
                         <Route path={PATHS.CHINA_SUPPLIER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="China Sourcing" title="China Sourcing - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.EWAY_BILL.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="eway-bill" title="E-Way Bills - Home" isStatic={false} /></ProtectedRoute>} />
                         <Route path={PATHS.TRANSPORTERS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="transporters" title="Transporters - Home" isStatic={false} /></ProtectedRoute>} />
@@ -608,6 +613,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.PRINT_FORMAT_DESIGNER} element={<ProtectedRoute requirePermission="admin.print_format_designer.view"><PrintFormatDesignerPage /></ProtectedRoute>} />
                         <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_HOME} element={<ProtectedRoute><WhatsAppHomePage /></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
                         <Route path="/whatsapp/chat" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppChatPage /></ProtectedRoute>} />
                         {/* Legacy redirect for old URL */}
@@ -952,6 +958,7 @@ const AppLayout = () => {
                         <Route path={PATHS.EINVOICE} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         <Route path={PATHS.E_INVOICE.ROOT} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         {/* SaaS Super Admin Routes */}
+                        <Route path={PATHS.SAAS_ADMIN.HOME} element={<ProtectedPlatformRoute><SuperAdminHomePage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.DASHBOARD} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.COMPANIES} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.SUBSCRIPTIONS} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />

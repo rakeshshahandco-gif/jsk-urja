@@ -16,6 +16,11 @@ import {
     isIndividualHufConstitution,
     constitutionFromLegacyDeductorType,
     suggestTdsSectionFromLedgerName,
+    suggestTdsNatureFromLedgerName,
+    normalizeTdsNatureKey,
+    defaultNatureForSection,
+    formatTdsSectionDisplay,
+    TDS_SECTION_393_MAP,
 } from '../constants/tds.constants.js';
 import { resolveLowerDeductionRate } from '../utils/tdsLowerDeduction.util.js';
 
@@ -168,43 +173,62 @@ function computeLineAmountForTdsBase(item, isGstEnabled, deductOn) {
     return r2(Number(item.amount || 0));
 }
 
-/** Returns { expenseLineLedger, section, gross } or null if no TDS debit line */
-export async function collectExpenseTdsDebitContext(items, isGstEnabled) {
+/** Group TDS-applicable expense debit lines by section + nature (multi-section vouchers allowed). */
+export async function collectExpenseTdsDebitGroups(items, isGstEnabled) {
     const debitItems = (items || []).filter((i) => itemIsExpenseDebitLine(i) && normalizeMongoRefId(i.ledgerId));
-    if (!debitItems.length) return null;
+    if (!debitItems.length) return [];
     const ids = [...new Set(debitItems.map((i) => normalizeMongoRefId(i.ledgerId)).filter(Boolean))];
     const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
-    if (!validIds.length) return null;
+    if (!validIds.length) return [];
     const ledgers = await AccountLedger.find({ _id: { $in: validIds } }).lean();
     const byId = Object.fromEntries(ledgers.map((l) => [String(l._id), l]));
 
-    let expenseLine = null;
-    let section = '';
+    const groupsMap = new Map();
     for (const it of debitItems) {
         const lid = normalizeMongoRefId(it.ledgerId);
         const L = byId[String(lid)];
         if (!L?.tdsApplicable || !String(L.tdsSection || '').trim()) continue;
-        const sec = String(L.tdsSection).trim().toUpperCase();
-        if (section && sec !== section) {
-            throw new ApiError(
-                httpStatus.BAD_REQUEST,
-                'This voucher has debit lines with different TDS sections — use separate vouchers.',
-            );
+        const section = String(L.tdsSection).trim().toUpperCase();
+        const tdsNature =
+            String(L.tdsNature || '').trim()
+            || suggestTdsNatureFromLedgerName(L.name)
+            || defaultNatureForSection(section)
+            || '';
+        const natureKey = normalizeTdsNatureKey(tdsNature);
+        const groupKey = `${section}|${natureKey}`;
+        const deductOn = L.tdsDeductOn || 'with_gst';
+        const amt = computeLineAmountForTdsBase(it, isGstEnabled, deductOn);
+        if (!groupsMap.has(groupKey)) {
+            groupsMap.set(groupKey, {
+                section,
+                tdsNature,
+                natureKey,
+                expenseLineLedger: { ...L, tdsNature: tdsNature || L.tdsNature || '' },
+                gross: 0,
+            });
         }
-        section = sec;
-        expenseLine = L;
+        const g = groupsMap.get(groupKey);
+        g.gross = r2(g.gross + amt);
     }
-    if (!expenseLine) return null;
+    return [...groupsMap.values()].filter((g) => g.gross > 0);
+}
 
-    const deductOn = expenseLine.tdsDeductOn || 'with_gst';
-    let gross = 0;
-    for (const it of debitItems) {
-        const lid = normalizeMongoRefId(it.ledgerId);
-        const L = byId[String(lid)];
-        if (!L?.tdsApplicable || String(L.tdsSection || '').trim().toUpperCase() !== section) continue;
-        gross += computeLineAmountForTdsBase(it, isGstEnabled, deductOn);
-    }
-    return { expenseLineLedger: expenseLine, section, gross: r2(gross) };
+/**
+ * Returns { expenseLineLedger, section, gross } for a single TDS group, or null.
+ * Multi-section vouchers: returns the first group and sets `groups` / `multiSection`.
+ * No longer throws when lines use different sections.
+ */
+export async function collectExpenseTdsDebitContext(items, isGstEnabled) {
+    const groups = await collectExpenseTdsDebitGroups(items, isGstEnabled);
+    if (!groups.length) return null;
+    const first = groups[0];
+    return {
+        expenseLineLedger: first.expenseLineLedger,
+        section: first.section,
+        gross: first.gross,
+        groups,
+        multiSection: groups.length > 1,
+    };
 }
 
 /**
@@ -306,6 +330,7 @@ export function mergeExpenseLineIntoVendorLedger(vendorLedger, expenseLineLedger
         ...vendorLedger,
         tdsApplicable: true,
         tdsSection: expenseLineLedger.tdsSection || vendorLedger.tdsSection,
+        tdsNature: expenseLineLedger.tdsNature || vendorLedger.tdsNature || '',
         tdsRateSource: expenseLineLedger.tdsRateSource || vendorLedger.tdsRateSource || 'auto',
         tdsDefaultRate: expenseLineLedger.tdsDefaultRate ?? vendorLedger.tdsDefaultRate ?? 0,
         tdsThresholdOverride: expenseLineLedger.tdsThresholdOverride ?? vendorLedger.tdsThresholdOverride ?? 0,
@@ -330,8 +355,10 @@ export async function getCumulativeForSection(
     excludePaymentEntryId,
     excludeVoucherId,
     excludePurchaseInvoiceId,
+    natureKey = '',
 ) {
-    const bal = await getSectionBalance(supplierId, section, financialYear);
+    const nat = String(natureKey || '').trim().toUpperCase();
+    const bal = await getSectionBalance(supplierId, section, financialYear, nat);
     let cum = r2(bal.cumulativePaid || 0);
     let cumTds = r2(bal.cumulativeTdsDeducted || 0);
     if (excludePaymentEntryId) {
@@ -346,18 +373,18 @@ export async function getCumulativeForSection(
     }
     if (excludeVoucherId) {
         const v = await Voucher.findById(excludeVoucherId)
-            .select('tdsSupplierId tdsSection tdsThresholdBaseAmount tdsAmount status nature')
+            .select('tdsSupplierId tdsSection tdsThresholdBaseAmount tdsAmount status nature tdsLines')
             .lean();
-        if (
-            v &&
-            v.status !== 'Cancelled' &&
-            v.nature === 'Expense' &&
-            String(v.tdsSection || '').toUpperCase() === String(section).toUpperCase() &&
-            String(v.tdsSupplierId || '') === String(supplierId || '')
-        ) {
-            const b = r2(Number(v.tdsThresholdBaseAmount || 0));
-            cum = r2(Math.max(0, cum - b));
-            cumTds = r2(Math.max(0, cumTds - r2(Number(v.tdsAmount || 0))));
+        if (v && v.status !== 'Cancelled' && v.nature === 'Expense' && String(v.tdsSupplierId || '') === String(supplierId || '')) {
+            const lines = Array.isArray(v.tdsLines) && v.tdsLines.length
+                ? v.tdsLines
+                : [{ section: v.tdsSection, natureKey: '', tdsBase: v.tdsThresholdBaseAmount, tdsAmount: v.tdsAmount }];
+            for (const line of lines) {
+                if (String(line.section || '').toUpperCase() !== String(section).toUpperCase()) continue;
+                if (String(line.natureKey || '').toUpperCase() !== nat) continue;
+                cum = r2(Math.max(0, cum - r2(Number(line.tdsBase || line.thresholdBase || 0))));
+                cumTds = r2(Math.max(0, cumTds - r2(Number(line.tdsAmount || 0))));
+            }
         }
     }
     if (excludePurchaseInvoiceId) {
@@ -369,6 +396,7 @@ export async function getCumulativeForSection(
             !pi.isDeleted &&
             String(pi.tdsSection || '').toUpperCase() === String(section).toUpperCase() &&
             String(pi.supplierId || '') === String(supplierId || '')
+            && !nat
         ) {
             const b = r2(Number(pi.tdsThresholdBaseAmount || 0));
             cum = r2(Math.max(0, cum - b));
@@ -393,6 +421,10 @@ function resolveSpecifiedRate({ master, ledger, constitution }) {
     const source = ledger.tdsRateSource || 'auto';
     if (source === 'manual') {
         return r2(Number(ledger.tdsDefaultRate || 0));
+    }
+    const nature = String(ledger.tdsNature || master?.tdsNature || '').trim();
+    if (/technical/i.test(nature) && Number(master?.rateTechnicalServices) > 0) {
+        return r2(Number(master.rateTechnicalServices));
     }
     const indiv = isIndividualHufConstitution(constitution);
     let r0 = indiv
@@ -717,8 +749,8 @@ export async function previewPurchasePaymentTds({
 }
 
 /**
- * Expense voucher — TDS section priority: (1) expense ledger master, (2) supplier default when expense not mapped,
- * (3) user choice when expense section and supplier default differ.
+ * Expense voucher — line-wise TDS: expense ledger decides nature/section; supplier constitution decides rate.
+ * One voucher may produce multiple TDS lines (e.g. 194C + 194J) with separate threshold buckets.
  * Does not throw: uses previewFailed + previewErrorMessage for client-visible errors.
  */
 export async function previewExpenseVoucherTds({
@@ -731,26 +763,15 @@ export async function previewExpenseVoucherTds({
     excludeVoucherId,
     expenseTdsSectionResolution,
     voucherDate = null,
+    tdsLineOverrides = [],
 }) {
     const previewStart = Date.now();
-    let lastTick = previewStart;
-    const phase = (label) => {
-        const now = Date.now();
-        const slice = now - lastTick;
-        lastTick = now;
-        logger.debug(
-            `[tds.preview.expense] ${label} +${slice}ms (elapsed ${now - previewStart}ms)`,
-        );
-    };
-
     const settings = { ...(await getTdsSettings()), financialYear: String(financialYear || '').trim() };
-    phase('after_settings');
-
     const partyRef = normalizeMongoRefId(partyLedgerId);
 
-    let ctx;
+    let groups = [];
     try {
-        ctx = await collectExpenseTdsDebitContext(items, isGstEnabled);
+        groups = await collectExpenseTdsDebitGroups(items, isGstEnabled);
     } catch (e) {
         if (e instanceof ApiError) {
             return {
@@ -758,6 +779,7 @@ export async function previewExpenseVoucherTds({
                 previewFailed: true,
                 previewErrorMessage: e.message,
                 decision: null,
+                tdsLines: [],
                 settings,
                 blocked: false,
             };
@@ -766,8 +788,8 @@ export async function previewExpenseVoucherTds({
     }
 
     if (!partyRef || !mongoose.Types.ObjectId.isValid(partyRef)) {
-        if (!ctx) {
-            return { engineActive: false, decision: null, settings, blocked: false, previewFailed: false };
+        if (!groups.length) {
+            return { engineActive: false, decision: null, tdsLines: [], settings, blocked: false, previewFailed: false };
         }
         return {
             engineActive: true,
@@ -775,6 +797,7 @@ export async function previewExpenseVoucherTds({
             previewErrorMessage:
                 'Select Party (supplier / contractor ledger) in the header so TDS can be calculated for this expense.',
             decision: null,
+            tdsLines: [],
             settings,
             blocked: false,
             supplier: null,
@@ -782,7 +805,6 @@ export async function previewExpenseVoucherTds({
     }
 
     const supplierId = await resolveSupplierIdFromPartyLedger(partyRef);
-    phase('after_party_to_supplier');
     if (!supplierId) {
         return {
             engineActive: true,
@@ -790,6 +812,7 @@ export async function previewExpenseVoucherTds({
             previewErrorMessage:
                 'Could not link the selected party to a supplier. Use a supplier ledger or link this ledger in Supplier Master.',
             decision: null,
+            tdsLines: [],
             settings,
             supplier: null,
             blocked: false,
@@ -797,23 +820,33 @@ export async function previewExpenseVoucherTds({
     }
 
     const vendorLed = await resolveVendorLedger(supplierId);
-    phase('after_vendor_ledger');
     if (!vendorLed) {
         return {
             engineActive: true,
             previewFailed: true,
             previewErrorMessage: 'Could not resolve vendor ledger for this supplier.',
             decision: null,
+            tdsLines: [],
             settings,
             blocked: false,
         };
     }
 
-    if (!ctx) {
-        ctx = await tryBuildExpenseTdsSupplierFallbackContext(items, isGstEnabled, vendorLed);
+    if (!groups.length) {
+        const fallback = await tryBuildExpenseTdsSupplierFallbackContext(items, isGstEnabled, vendorLed);
+        if (fallback) {
+            groups = [{
+                section: fallback.section,
+                tdsNature: defaultNatureForSection(fallback.section) || '',
+                natureKey: normalizeTdsNatureKey(defaultNatureForSection(fallback.section)),
+                expenseLineLedger: fallback.expenseLineLedger,
+                gross: fallback.gross,
+                fromSupplierSectionFallback: true,
+            }];
+        }
     }
 
-    if (!ctx) {
+    if (!groups.length) {
         const diag = await diagnoseExpenseTdsLedgerMapping(items, vendorLed);
         if (diag?.previewErrorMessage) {
             return {
@@ -821,24 +854,27 @@ export async function previewExpenseVoucherTds({
                 previewFailed: true,
                 previewErrorMessage: diag.previewErrorMessage,
                 decision: null,
+                tdsLines: [],
                 settings,
                 blocked: false,
             };
         }
-        return { engineActive: false, decision: null, settings, blocked: false, previewFailed: false };
+        return { engineActive: false, decision: null, tdsLines: [], settings, blocked: false, previewFailed: false };
     }
 
     const resolution = String(expenseTdsSectionResolution || '').trim().toUpperCase();
-    const expenseSectionFromLedger = String(ctx.expenseLineLedger.tdsSection || '').trim().toUpperCase();
     const supplierSection = String(vendorLed.tdsSection || '').trim().toUpperCase();
+    const multiSection = groups.length > 1;
 
+    // Single-group conflict: expense ledger section ≠ supplier default (suggestion only).
     if (
-        !ctx.fromSupplierSectionFallback &&
-        expenseSectionFromLedger &&
-        supplierSection &&
-        expenseSectionFromLedger !== supplierSection &&
-        resolution !== 'SUPPLIER_DEFAULT' &&
-        resolution !== 'EXPENSE_LEDGER'
+        !multiSection
+        && !groups[0].fromSupplierSectionFallback
+        && groups[0].section
+        && supplierSection
+        && groups[0].section !== supplierSection
+        && resolution !== 'SUPPLIER_DEFAULT'
+        && resolution !== 'EXPENSE_LEDGER'
     ) {
         return {
             engineActive: true,
@@ -846,158 +882,238 @@ export async function previewExpenseVoucherTds({
             blocked: false,
             sectionConflict: {
                 supplierSection,
-                expenseSection: expenseSectionFromLedger,
-                expenseLedgerName: ctx.expenseLineLedger.name || '',
-                message: `Supplier default TDS section is ${supplierSection}, but selected expense ledger ${ctx.expenseLineLedger.name} is mapped to ${expenseSectionFromLedger}. Which section do you want to apply?`,
+                expenseSection: groups[0].section,
+                expenseLedgerName: groups[0].expenseLineLedger?.name || '',
+                message: `Supplier default TDS section is ${supplierSection}, but selected expense ledger ${groups[0].expenseLineLedger?.name} is mapped to ${groups[0].section}. Which section do you want to apply?`,
             },
             decision: null,
+            tdsLines: [],
             settings: {
                 tdsCalculationBasis: settings.tdsCalculationBasis,
                 tdsPostingMode: settings.tdsPostingMode,
             },
             supplierId,
-            expenseLineLedgerId: ctx.expenseLineLedger._id,
+            expenseLineLedgerId: groups[0].expenseLineLedger?._id,
         };
     }
-
-    const mergeSource =
-        resolution === 'SUPPLIER_DEFAULT' || ctx.fromSupplierSectionFallback
-            ? { ...ctx.expenseLineLedger, tdsSection: '', tdsApplicable: false }
-            : ctx.expenseLineLedger;
-
-    const merged = mergeExpenseLineIntoVendorLedger(vendorLed, mergeSource);
-    const section = String(merged.tdsSection || '').trim().toUpperCase();
-
-    let master;
-    try {
-        master = await getMasterSectionOrDefaults(section);
-        phase('after_master');
-    } catch (e) {
-        logger.debug(`[tds.preview.expense] failed at master (${Date.now() - previewStart}ms)`);
-        return {
-            engineActive: true,
-            previewFailed: true,
-            previewErrorMessage: e instanceof ApiError ? e.message : `TDS Master ${section} missing or inactive.`,
-            decision: null,
-            settings,
-            blocked: false,
-        };
-    }
-
-    const gt = Number(processingTotal) || 0;
-    const invoiceSnapshot = {
-        grandTotal: gt > 0 ? gt : ctx.gross,
-        totalTaxableAmount: voucherTaxSnapshot?.totalTaxableAmount,
-        totalTax: voucherTaxSnapshot?.totalTax,
-        totalCgst: voucherTaxSnapshot?.totalCgst,
-        totalSgst: voucherTaxSnapshot?.totalSgst,
-        totalIgst: voucherTaxSnapshot?.totalIgst,
-        freightTotalGst: 0,
-        roundOff: voucherTaxSnapshot?.roundOff,
-    };
-
-    const currentBase = computeInvoiceTdsPaymentBase({
-        amountPaid: ctx.gross,
-        tdsBaseAmount: 0,
-        ledger: merged,
-        invoiceSnapshot: gt > 0 ? invoiceSnapshot : { grandTotal: ctx.gross, totalTaxableAmount: ctx.gross },
-    });
-
-    const cumState = await getCumulativeForSection(
-        supplierId,
-        section,
-        financialYear,
-        undefined,
-        excludeVoucherId,
-        undefined,
-    );
-    const cumulativeBefore = cumState.cumulativePaid;
-    phase('after_cumulative');
 
     const supplier = await Supplier.findById(supplierId)
-        .select('supplierName panNumber deducteeConstitution')
+        .select('supplierName panNumber deducteeConstitution allowedTdsNatures allowedTdsSections')
         .lean();
-    phase('after_supplier');
 
-    const constitution = String(merged.effectiveDeducteeConstitution || '').trim();
-    const auto = (merged.tdsRateSource || 'auto') === 'auto';
-    const hasCert = Number(merged.tdsLowerDeductionPercent) > 0;
-    const supplierConstitutionMissing = Boolean(auto && !hasCert && !constitution);
-
+    const gt = Number(processingTotal) || 0;
+    const tdsLines = [];
+    let totalTds = 0;
+    let totalBase = 0;
+    let primaryDecision = null;
+    let primaryMaster = null;
+    let supplierConstitutionMissing = false;
     const previewMessages = [];
+
+    for (const group of groups) {
+        let expenseLedger = group.expenseLineLedger;
+        const ov = (Array.isArray(tdsLineOverrides) ? tdsLineOverrides : []).find(
+            (o) => o && String(o.expenseLedgerId || '') === String(expenseLedger?._id || ''),
+        );
+        const overridePrevious = {
+            tdsNature: group.tdsNature || expenseLedger?.tdsNature || '',
+            section: String(group.section || expenseLedger?.tdsSection || '').trim().toUpperCase(),
+            rate: null,
+        };
+        if (ov?.tdsNature) {
+            group.tdsNature = String(ov.tdsNature).trim();
+            group.natureKey = normalizeTdsNatureKey(group.tdsNature);
+            expenseLedger = { ...expenseLedger, tdsNature: group.tdsNature };
+        }
+        if (ov?.section) {
+            expenseLedger = { ...expenseLedger, tdsSection: String(ov.section).trim().toUpperCase(), tdsApplicable: true };
+            group.section = String(ov.section).trim().toUpperCase();
+        }
+        if (ov && ov.tdsApplicable === false) {
+            continue;
+        }
+        if (resolution === 'SUPPLIER_DEFAULT' && !multiSection) {
+            expenseLedger = { ...expenseLedger, tdsSection: '', tdsApplicable: false };
+        }
+        const merged = mergeExpenseLineIntoVendorLedger(vendorLed, expenseLedger);
+        if (group.tdsNature) merged.tdsNature = group.tdsNature;
+        if (ov?.rate != null && Number(ov.rate) >= 0 && String(ov.overrideReason || '').trim()) {
+            merged.tdsRateSource = 'manual';
+            merged.tdsDefaultRate = Number(ov.rate);
+        }
+        const section = String(merged.tdsSection || group.section || '').trim().toUpperCase();
+        if (!section) continue;
+
+        const allowedSections = Array.isArray(supplier?.allowedTdsSections)
+            ? supplier.allowedTdsSections.map((s) => String(s).trim().toUpperCase()).filter(Boolean)
+            : [];
+        if (allowedSections.length && !allowedSections.includes(section)) {
+            previewMessages.push(`Section ${section} is not in supplier allowed TDS sections.`);
+        }
+
+        let master;
+        try {
+            master = await getMasterSectionOrDefaults(section);
+        } catch (e) {
+            return {
+                engineActive: true,
+                previewFailed: true,
+                previewErrorMessage: e instanceof ApiError ? e.message : `TDS Master ${section} missing or inactive.`,
+                decision: null,
+                tdsLines: [],
+                settings,
+                blocked: false,
+            };
+        }
+
+        const currentBase = r2(group.gross);
+        const cumState = await getCumulativeForSection(
+            supplierId,
+            section,
+            financialYear,
+            undefined,
+            excludeVoucherId,
+            undefined,
+            group.natureKey || '',
+        );
+
+        const constitution = String(merged.effectiveDeducteeConstitution || '').trim();
+        const auto = (merged.tdsRateSource || 'auto') === 'auto';
+        const hasCert = Number(merged.tdsLowerDeductionPercent) > 0;
+        if (auto && !hasCert && !constitution) supplierConstitutionMissing = true;
+
+        const decision = computeTdsDecision({
+            ledger: merged,
+            master,
+            cumulativeBefore: cumState.cumulativePaid,
+            currentBase,
+            supplierPan: supplier?.panNumber,
+            paymentTdsDeducteePan: '',
+            settings,
+            cumulativeTdsDeductedBefore: cumState.cumulativeTdsDeducted,
+            paymentDate: voucherDate,
+        });
+
+        let payableId = null;
+        if (decision.tdsApplicable && decision.tdsAmount > 0) {
+            payableId = await resolveTdsPayableLedgerId(decision.tdsSection, master);
+            if (!payableId) {
+                return {
+                    engineActive: true,
+                    previewFailed: true,
+                    previewErrorCode: 'TDS_PAYABLE_LEDGER_MISSING',
+                    missingTdsSection: decision.tdsSection,
+                    previewErrorMessage: `TDS payable ledger is not mapped for Section ${decision.tdsSection}. Please create or select ledger.`,
+                    decision,
+                    tdsLines,
+                    settings: {
+                        tdsCalculationBasis: settings.tdsCalculationBasis,
+                        tdsPostingMode: settings.tdsPostingMode,
+                    },
+                    supplierId,
+                    blocked: false,
+                };
+            }
+        }
+
+        const map393 = TDS_SECTION_393_MAP[section];
+        let rateReason = `${decision.tdsRate || decision.specifiedRate || 0}% from TDS Master for section ${section}.`;
+        if (/technical/i.test(group.tdsNature || '') && Number(master?.rateTechnicalServices) > 0) {
+            rateReason = `${decision.tdsRate}% selected because this line is classified as Technical Services under ${section}.`;
+        } else if (/contract/i.test(group.tdsNature || '') && isIndividualHufConstitution(constitution)) {
+            rateReason = `${decision.tdsRate}% selected because the supplier is a ${constitution || 'Proprietorship'} and this line is classified as Contractor.`;
+        } else if (/contract/i.test(group.tdsNature || '')) {
+            rateReason = `${decision.tdsRate}% selected because the supplier is a ${constitution || 'company'} and this line is classified as Contractor.`;
+        } else if (/professional/i.test(group.tdsNature || '')) {
+            rateReason = `${decision.tdsRate}% selected because this line is classified as Professional Services under ${section}.`;
+        }
+
+        const line = {
+            expenseLedgerId: expenseLedger?._id || null,
+            expenseLedgerName: expenseLedger?.name || '',
+            tdsApplicable: !!decision.tdsApplicable,
+            tdsNature: group.tdsNature || merged.tdsNature || master?.tdsNature || '',
+            natureKey: group.natureKey || normalizeTdsNatureKey(group.tdsNature),
+            section,
+            sectionDisplay: formatTdsSectionDisplay(section, group.tdsNature),
+            section393Label: master?.section393Label || map393?.actLabel || '',
+            section393TableItem: master?.section393TableItem || map393?.tableItem || '',
+            rate: decision.tdsRate || decision.specifiedRate || 0,
+            specifiedRate: decision.specifiedRate || 0,
+            tdsBase: currentBase,
+            tdsAmount: decision.tdsApplicable ? r2(decision.tdsAmount) : 0,
+            payableLedgerId: payableId,
+            thresholdStatus: decision.thresholdCrossed ? 'Crossed' : (decision.thresholdWillCross ? 'WillCross' : 'Within'),
+            previousAggregate: decision.cumulativeBefore,
+            currentTransaction: currentBase,
+            newAggregate: decision.cumulativeAfter,
+            singleBillThreshold: Number(master?.singleBillThreshold || 0),
+            annualThreshold: Number(master?.thresholdAmount || 0),
+            thresholdCrossed: !!decision.thresholdCrossed,
+            tdsApplicableReason: decision.tdsApplicable
+                ? (decision.thresholdCrossed
+                    ? 'Threshold crossed — TDS applies under master rules for this nature/section.'
+                    : 'TDS applies under master rules for this nature/section.')
+                : (decision.warnings?.[0] || 'Within threshold / not applicable yet.'),
+            rateReason,
+            supplierConstitution: constitution,
+            overrideReason: ov?.overrideReason ? String(ov.overrideReason).trim() : '',
+            overrideApplied: Boolean(ov && String(ov.overrideReason || '').trim()),
+            overridePrevious: Boolean(ov && String(ov.overrideReason || '').trim())
+                ? {
+                    tdsNature: overridePrevious.tdsNature,
+                    section: overridePrevious.section,
+                    rate: overridePrevious.rate,
+                }
+                : null,
+            decision,
+            master: master
+                ? {
+                    sectionCode: master.sectionCode,
+                    sectionName: master.sectionName,
+                    rateIndividualHuf: master.rateIndividualHuf,
+                    rateOthers: master.rateOthers,
+                    rateTechnicalServices: master.rateTechnicalServices,
+                    thresholdAmount: master.thresholdAmount,
+                    singleBillThreshold: master.singleBillThreshold,
+                    tdsNature: master.tdsNature,
+                    section393Label: master.section393Label,
+                    section393TableItem: master.section393TableItem,
+                }
+                : null,
+        };
+        tdsLines.push(line);
+        totalTds = r2(totalTds + line.tdsAmount);
+        totalBase = r2(totalBase + currentBase);
+        if (!primaryDecision) {
+            primaryDecision = {
+                ...decision,
+                tdsAmount: totalTds,
+                tdsBase: totalBase,
+                multiSection,
+            };
+            primaryMaster = line.master;
+        }
+    }
+
     if (supplierConstitutionMissing) {
         previewMessages.push('Supplier constitution missing.');
     }
 
-    const decision = computeTdsDecision({
-        ledger: merged,
-        master,
-        cumulativeBefore,
-        currentBase,
-        supplierPan: supplier?.panNumber,
-        paymentTdsDeducteePan: '',
-        settings,
-        cumulativeTdsDeductedBefore: cumState.cumulativeTdsDeducted,
-        paymentDate: voucherDate,
-    });
-
-    if (decision.tdsApplicable && decision.tdsAmount > 0) {
-        const payId = await resolveTdsPayableLedgerId(decision.tdsSection, master);
-        if (!payId) {
-            logger.debug(`[tds.preview.expense] total ${Date.now() - previewStart}ms (failed payable)`);
-            return {
-                engineActive: true,
-                previewFailed: true,
-                previewErrorCode: 'TDS_PAYABLE_LEDGER_MISSING',
-                missingTdsSection: decision.tdsSection,
-                previewErrorMessage: `TDS payable ledger is not mapped for Section ${decision.tdsSection}. Please create or select ledger.`,
-                decision,
-                settings: {
-                    tdsCalculationBasis: settings.tdsCalculationBasis,
-                    tdsPostingMode: settings.tdsPostingMode,
-                },
-                mergedLedgerPreview: {
-                    tdsSection: merged.tdsSection,
-                    tdsRateSource: merged.tdsRateSource,
-                    effectiveDeducteeConstitution: constitution,
-                },
-                master: master
-                    ? {
-                          sectionCode: master.sectionCode,
-                          sectionName: master.sectionName,
-                          defaultRate: master.defaultRate,
-                          rateIndividualHuf: master.rateIndividualHuf,
-                          rateOthers: master.rateOthers,
-                          panMissingRate: master.panMissingRate,
-                          thresholdAmount: master.thresholdAmount,
-                          singleBillThreshold: master.singleBillThreshold,
-                          thresholdCalculationMethod: master.thresholdCalculationMethod,
-                          calculationType: master.calculationType,
-                          natureOfPayment: master.natureOfPayment,
-                          tdsLedgerMapping: master.tdsLedgerMapping,
-                          tdsPayableLedgerId: master.tdsPayableLedgerId,
-                      }
-                    : null,
-                supplier: supplier
-                    ? {
-                            _id: supplier._id,
-                            supplierName: supplier.supplierName,
-                            panNumber: supplier.panNumber || '',
-                            deducteeConstitution: supplier.deducteeConstitution || '',
-                        }
-                    : null,
-                blocked: false,
-                supplierConstitutionMissing,
-                previewMessages,
-                tdsThresholdBaseAmount: currentBase,
-                expenseLineLedgerId: ctx.expenseLineLedger._id,
-                supplierId,
-            };
+    // Header decision uses summed TDS for posting net-of-TDS cash; section = primary or MULTI
+    const headerDecision = primaryDecision
+        ? {
+            ...primaryDecision,
+            tdsApplicable: totalTds > 0 || primaryDecision.tdsApplicable,
+            tdsAmount: totalTds,
+            tdsBase: totalBase,
+            tdsSection: multiSection ? tdsLines.map((l) => l.section).join('+') : (tdsLines[0]?.section || ''),
+            liabilityAlert: tdsLines.some((l) => l.decision?.liabilityAlert) || totalTds > 0,
+            multiSection,
         }
-        phase('after_payable_led');
-    }
+        : null;
 
-    logger.debug(`[tds.preview.expense] total ${Date.now() - previewStart}ms`);
+    logger.debug(`[tds.preview.expense] total ${Date.now() - previewStart}ms lines=${tdsLines.length}`);
 
     return {
         engineActive: true,
@@ -1006,43 +1122,32 @@ export async function previewExpenseVoucherTds({
         previewFailed: false,
         supplierConstitutionMissing,
         previewMessages,
+        multiSection,
         settings: {
             tdsCalculationBasis: settings.tdsCalculationBasis,
             tdsPostingMode: settings.tdsPostingMode,
         },
         mergedLedgerPreview: {
-            tdsSection: merged.tdsSection,
-            tdsRateSource: merged.tdsRateSource,
-            effectiveDeducteeConstitution: constitution,
+            tdsSection: tdsLines[0]?.section || '',
+            tdsNature: tdsLines[0]?.tdsNature || '',
+            tdsRateSource: 'auto',
+            effectiveDeducteeConstitution: String(vendorLed.effectiveDeducteeConstitution || '').trim(),
         },
-        master: master
-            ? {
-                  sectionCode: master.sectionCode,
-                  sectionName: master.sectionName,
-                  defaultRate: master.defaultRate,
-                  rateIndividualHuf: master.rateIndividualHuf,
-                  rateOthers: master.rateOthers,
-                  panMissingRate: master.panMissingRate,
-                  thresholdAmount: master.thresholdAmount,
-                  singleBillThreshold: master.singleBillThreshold,
-                  thresholdCalculationMethod: master.thresholdCalculationMethod,
-                  calculationType: master.calculationType,
-                  natureOfPayment: master.natureOfPayment,
-                  tdsLedgerMapping: master.tdsLedgerMapping,
-                  tdsPayableLedgerId: master.tdsPayableLedgerId,
-              }
-            : null,
+        master: primaryMaster,
         supplier: supplier
             ? {
-                  _id: supplier._id,
-                  supplierName: supplier.supplierName,
-                  panNumber: supplier.panNumber || '',
-                  deducteeConstitution: supplier.deducteeConstitution || '',
-              }
+                _id: supplier._id,
+                supplierName: supplier.supplierName,
+                panNumber: supplier.panNumber || '',
+                deducteeConstitution: supplier.deducteeConstitution || '',
+                allowedTdsNatures: supplier.allowedTdsNatures || [],
+                allowedTdsSections: supplier.allowedTdsSections || [],
+            }
             : null,
-        decision,
-        tdsThresholdBaseAmount: currentBase,
-        expenseLineLedgerId: ctx.expenseLineLedger._id,
+        decision: headerDecision,
+        tdsLines,
+        tdsThresholdBaseAmount: totalBase,
+        expenseLineLedgerId: tdsLines[0]?.expenseLedgerId || null,
         supplierId,
     };
 }

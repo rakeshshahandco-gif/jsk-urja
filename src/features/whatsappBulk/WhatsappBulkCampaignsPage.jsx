@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { whatsappBulkApi } from '@/services/whatsappBulkApi';
+import WhatsAppHomeBackLink from '@/features/whatsapp/components/WhatsAppHomeBackLink';
 
 const page = { padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' };
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 20, marginBottom: 16 };
@@ -441,6 +442,7 @@ export default function WhatsappBulkCampaignsPage() {
 
     return (
         <div style={page}>
+            <WhatsAppHomeBackLink />
             <h1>WhatsApp Bulk Message Utility</h1>
             <p style={{ color: '#64748b' }}>
                 Step 1: Pick or save a <strong>Matter template</strong> (message only). Step 2: Choose recipients and send.

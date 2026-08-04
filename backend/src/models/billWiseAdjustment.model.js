@@ -17,7 +17,7 @@ const billWiseAdjustmentSchema = new mongoose.Schema({
     paymentVoucherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Voucher', required: true, index: true },
     paymentVoucherType: { type: String, default: '' },
     paymentNo: { type: String, default: '' },
-    paymentNature: { type: String, enum: ['Receipt', 'Payment', 'Adjustment', 'Journal'], required: true },
+    paymentNature: { type: String, enum: ['Receipt', 'Payment', 'Adjustment', 'Journal', 'Credit Note'], required: true },
 
     adjustmentType: {
         type: String,
@@ -25,8 +25,33 @@ const billWiseAdjustmentSchema = new mongoose.Schema({
         default: 'Against Bill',
     },
 
+    // Phase 4A — settlement source (Credit Note). Target bill remains billDocumentId/Type.
+    settlementSourceType: {
+        type: String,
+        enum: ['Bank', 'CreditDebitNote', ''],
+        default: '',
+    },
+    settlementSourceId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+    settlementSourceNumber: { type: String, default: '' },
+    settlementSourceModel: { type: String, default: '' },
+    availableBefore: { type: Number, default: null },
+    availableAfter: { type: Number, default: null },
+    sourceMode: { type: String, default: '' }, // Receipt | Adjustment | BillWisePage | CreditNoteFinalize
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
+    /** When CN was applied together with a bank Receipt/Adjustment voucher (audit + cancel link). */
+    parentReceiptVoucherId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Voucher',
+        default: null,
+        index: true,
+    },
+
     adjustmentDate: { type: Date, default: Date.now },
     adjustedAmount: { type: Number, required: true, min: 0.01 },
+    /** Bank / cash portion (excludes discount). Optional for legacy rows. */
+    bankAmount: { type: Number, default: null },
+    /** Discount Allowed / Received portion on this settlement. Optional for legacy rows. */
+    discountAmount: { type: Number, default: 0 },
     remarks: { type: String, default: '' },
 
     voucherItemIndex: { type: Number, required: true },

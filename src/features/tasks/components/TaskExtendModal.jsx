@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 export const TaskExtendModal = ({ task, onSuccess, onCancel }) => {
     const { register, handleSubmit, formState: { errors } } = useForm({
         defaultValues: {
-            newDueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '',
+            newDueDate: '',
             reason: ''
         }
     });
@@ -15,11 +15,25 @@ export const TaskExtendModal = ({ task, onSuccess, onCancel }) => {
     const [submitting, setSubmitting] = useState(false);
 
     const onSubmit = async (data) => {
+        if (!data.newDueDate) {
+            toast.error('Please select a new due date.');
+            return;
+        }
+        if (task?.dueDate) {
+            const currentDay = new Date(task.dueDate);
+            currentDay.setHours(0, 0, 0, 0);
+            const nextDay = new Date(data.newDueDate);
+            nextDay.setHours(0, 0, 0, 0);
+            if (nextDay.getTime() <= currentDay.getTime()) {
+                toast.error('Extended date must be later than the current due date.');
+                return;
+            }
+        }
         try {
             setSubmitting(true);
             await extendTask(task._id, {
                 newDueDate: new Date(data.newDueDate).toISOString(),
-                reason: data.reason
+                reason: data.reason?.trim() || '',
             });
             toast.success('Task duration extended');
             onSuccess();
@@ -46,14 +60,13 @@ export const TaskExtendModal = ({ task, onSuccess, onCancel }) => {
             </div>
 
             <div>
-                <label className="block text-sm font-medium mb-1">Reason for Extension *</label>
+                <label className="block text-sm font-medium mb-1">Reason for extension (Optional)</label>
                 <textarea
                     className="w-full border rounded p-2 text-sm"
-                    {...register('reason', { required: 'Reason is required' })}
+                    {...register('reason')}
                     rows="3"
-                    placeholder="Provide a brief explanation..."
+                    placeholder="Reason for extension (Optional)"
                 />
-                {errors.reason && <span className="text-red-500 text-xs">{errors.reason.message}</span>}
             </div>
 
             <div className="flex justify-end gap-2 pt-4">

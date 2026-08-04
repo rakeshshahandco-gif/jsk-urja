@@ -15,6 +15,7 @@ const inp = {
     fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none',
 };
 const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 };
+const metaRow = { display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, color: '#334155', marginBottom: 6 };
 
 export default function SalesInvoiceCancelDeleteModal({
     open,
@@ -24,18 +25,29 @@ export default function SalesInvoiceCancelDeleteModal({
     onClose,
     onConfirm,
     submitting,
+    /** 'estimate' | 'invoice' — UI copy only; backend verifies series type */
+    documentKind = 'invoice',
+    estimateDate,
+    customerName,
+    amount,
+    soId,
+    soNumber,
 }) {
     const [reason, setReason] = useState('');
+    const [convertedAck, setConvertedAck] = useState(false);
     const [ewayBillCancelStatus, setEwayBillCancelStatus] = useState('');
     const [ewayBillCancelRef, setEwayBillCancelRef] = useState('');
     const [ewayBillCancelDate, setEwayBillCancelDate] = useState('');
     const [ewayInfo, setEwayInfo] = useState(null);
 
     const isCancel = mode === 'cancel';
+    const isEstimate = documentKind === 'estimate';
+    const isConverted = !!(soId || soNumber);
 
     useEffect(() => {
         if (!open) {
             setReason('');
+            setConvertedAck(false);
             setEwayBillCancelStatus('');
             setEwayBillCancelRef('');
             setEwayBillCancelDate('');
@@ -58,12 +70,17 @@ export default function SalesInvoiceCancelDeleteModal({
 
     if (!open) return null;
 
-    const title = isCancel ? 'Cancel Invoice' : 'Delete Invoice';
-    const confirmLabel = isCancel ? 'Confirm Cancel' : 'Confirm Delete';
+    const title = isCancel
+        ? (isEstimate ? 'Cancel Estimate' : 'Cancel Invoice')
+        : (isEstimate ? 'Delete Estimate?' : 'Delete Invoice');
+    const confirmLabel = isCancel
+        ? (isEstimate ? 'Confirm Cancel' : 'Confirm Cancel')
+        : (isEstimate ? 'Confirm Delete Estimate' : 'Confirm Delete');
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!reason.trim()) return;
+        if (!isCancel && isEstimate && isConverted && !convertedAck) return;
         const payload = { reason: reason.trim() };
         if (isCancel) {
             if (ewayBillCancelStatus) payload.ewayBillCancelStatus = ewayBillCancelStatus;
@@ -72,6 +89,8 @@ export default function SalesInvoiceCancelDeleteModal({
         }
         onConfirm(payload);
     };
+
+    const deleteBlockedByConversionAck = !isCancel && isEstimate && isConverted && !convertedAck;
 
     return (
         <div style={overlay} onClick={onClose}>
@@ -83,21 +102,68 @@ export default function SalesInvoiceCancelDeleteModal({
                     </button>
                 </div>
 
-                <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: '0 0 16px' }}>
-                    {isCancel ? (
-                        <>
-                            Cancel Invoice No. <strong>{invoiceNumber}</strong>? This will permanently block this invoice number.
-                            It will remain in Sales Register / GSTR document summary as <strong>CANCELLED</strong>.
-                            Ledger and stock impact will be removed. This action cannot reuse the invoice number.
-                        </>
-                    ) : (
-                        <>
-                            Delete Invoice No. <strong>{invoiceNumber}</strong>? This will remove the invoice from Sales Register and GST reports
-                            and release the number if it is the latest in the series. Ledger and stock impact will be removed.
-                            This is different from Cancel.
-                        </>
-                    )}
-                </p>
+                {!isCancel && isEstimate ? (
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={metaRow}><span>Estimate Number</span><strong>{invoiceNumber || '—'}</strong></div>
+                        <div style={metaRow}><span>Estimate Date</span><strong>{estimateDate || '—'}</strong></div>
+                        <div style={metaRow}><span>Customer</span><strong>{customerName || '—'}</strong></div>
+                        <div style={metaRow}>
+                            <span>Amount</span>
+                            <strong>
+                                {amount != null
+                                    ? `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                    : '—'}
+                            </strong>
+                        </div>
+                        <div style={metaRow}>
+                            <span>Conversion status</span>
+                            <strong>{isConverted ? `Converted${soNumber ? ` → SO ${soNumber}` : ''}` : 'Not converted'}</strong>
+                        </div>
+                        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: '12px 0 0' }}>
+                            This Estimate will be deleted. Later Estimate numbers will remain unchanged, and a numbering gap is allowed.
+                        </p>
+                    </div>
+                ) : (
+                    <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.55, margin: '0 0 16px' }}>
+                        {isCancel ? (
+                            <>
+                                Cancel Invoice No. <strong>{invoiceNumber}</strong>? This will permanently block this invoice number.
+                                It will remain in Sales Register / GSTR document summary as <strong>CANCELLED</strong>.
+                                Ledger and stock impact will be removed. This action cannot reuse the invoice number.
+                            </>
+                        ) : (
+                            <>
+                                Delete Invoice No. <strong>{invoiceNumber}</strong>? This will remove the invoice from Sales Register and GST reports
+                                and release the number if it is the latest in the series. Ledger and stock impact will be removed.
+                                This is different from Cancel.
+                            </>
+                        )}
+                    </p>
+                )}
+
+                {!isCancel && isEstimate && isConverted && (
+                    <div style={{
+                        display: 'flex', flexDirection: 'column', gap: 10, padding: 12, marginBottom: 16,
+                        background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8,
+                    }}>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <AlertTriangle size={20} color="#d97706" style={{ flexShrink: 0 }} />
+                            <p style={{ margin: 0, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                                This Estimate has been converted. Deleting it will not delete or alter the linked Sales Order, Invoice,
+                                Delivery Challan or other downstream document.
+                            </p>
+                        </div>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: '#78350f', fontWeight: 600 }}>
+                            <input
+                                type="checkbox"
+                                checked={convertedAck}
+                                onChange={(e) => setConvertedAck(e.target.checked)}
+                                style={{ marginTop: 2 }}
+                            />
+                            I understand — only this Estimate will be deleted; the linked document remains unchanged.
+                        </label>
+                    </div>
+                )}
 
                 {isCancel && ewayInfo && (
                     <div style={{
@@ -165,12 +231,12 @@ export default function SalesInvoiceCancelDeleteModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={submitting || !reason.trim()}
+                            disabled={submitting || !reason.trim() || deleteBlockedByConversionAck}
                             style={{
                                 padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
                                 fontWeight: 700, fontSize: 13, color: '#fff',
                                 background: isCancel ? '#d97706' : '#dc2626',
-                                opacity: submitting || !reason.trim() ? 0.6 : 1,
+                                opacity: submitting || !reason.trim() || deleteBlockedByConversionAck ? 0.6 : 1,
                             }}
                         >
                             {submitting ? 'Processing…' : confirmLabel}

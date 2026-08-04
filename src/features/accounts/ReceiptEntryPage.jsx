@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     Button, Input, Select, useModal, SearchableSelect, BrandedLoader
 } from '@/components/ui';
@@ -6,18 +6,84 @@ import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModul
 import { Plus, Trash2, Save, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers, getAccountGroups,
-    getOutstandingBills, createVoucher, createLedger, getVoucher, updateVoucher,
+    createVoucher, createLedger, getVoucher, updateVoucher,
     autoLinkSingleLedger
 } from '@/services/accountApi';
+import BillAdjustmentPopup from './components/BillAdjustmentPopup';
 import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useCompany } from '@/contexts/CompanyContext';
 import VoucherEntryTallyLayout from './components/voucherEntryTally';
+import { useAuth } from '@/hooks/useAuth';
+import {
+    coerceInstrumentForAccount,
+    defaultInstrumentForAccount,
+    getInstrumentOptionsForAccount,
+    getInstrumentRefMeta,
+    validateInstrumentForAccount,
+} from './utils/cashBankInstrument';
 
 function getLoadErrorMessage(err, fallback = 'Failed to load initial data') {
     return err?.response?.data?.message || err?.message || fallback;
+}
+
+/** Only allow internal Sales Invoice routes as post-save / cancel destinations. */
+function resolveSafeSalesReturnPath(candidate, fallback) {
+    if (!candidate || typeof candidate !== 'string') return fallback;
+    const raw = candidate.trim();
+    if (!raw.startsWith('/') || raw.startsWith('//') || /:\/\//.test(raw)) return fallback;
+    const pathOnly = raw.split('?')[0].split('#')[0];
+    if (pathOnly === '/sales/invoices' || pathOnly.startsWith('/sales/invoices/')) {
+        return pathOnly;
+    }
+    return fallback;
+}
+
+/** Prefer a real Receipt series; never default to a Journal-named type. */
+function pickDefaultReceiptVoucherType(types = []) {
+    const list = (Array.isArray(types) ? types : []).filter((t) => t && t._id);
+    if (!list.length) return null;
+
+    const norm = (t) => String(t.name || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const isJournalNamed = (t) => {
+        const n = norm(t);
+        return n === 'JOURNAL' || n === 'JRNL' || n.startsWith('JOURNAL ');
+    };
+    const isReceiptNamed = (t) => {
+        const n = norm(t);
+        if (isJournalNamed(t)) return false;
+        return (
+            n === 'RECEIPT VOUCHER'
+            || n === 'RECEIPT'
+            || n === 'RCPT'
+            || n === 'RECEIOT VOUCHER' // legacy misspelling
+            || /^RECEIPT\b/.test(n)
+            || /^RCPT\b/.test(n)
+        );
+    };
+
+    const exact = list.find((t) => norm(t) === 'RECEIPT VOUCHER');
+    if (exact) return exact;
+
+    const receiptNamed = list.find(isReceiptNamed);
+    if (receiptNamed) return receiptNamed;
+
+    const nonJournal = list.find((t) => !isJournalNamed(t));
+    return nonJournal || null;
+}
+
+function sortReceiptVoucherTypesForDisplay(types = []) {
+    const preferredId = pickDefaultReceiptVoucherType(types)?._id;
+    return [...(Array.isArray(types) ? types : [])].sort((a, b) => {
+        if (preferredId && String(a._id) === String(preferredId)) return -1;
+        if (preferredId && String(b._id) === String(preferredId)) return 1;
+        const aJ = /^JOURNAL|^JRNL$/i.test(String(a.name || '').trim());
+        const bJ = /^JOURNAL|^JRNL$/i.test(String(b.name || '').trim());
+        if (aJ !== bJ) return aJ ? 1 : -1;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+    });
 }
 
 const inp = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -26,6 +92,10 @@ const ReceiptEntryPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { openModal, closeModal } = useModal();
+    const { hasRole, hasPermission } = useAuth();
+    const isAdmin = hasRole('admin') || hasRole('superadmin');
+    const canUseCreditNote = isAdmin || hasPermission('accounts.bill_adjustment.use_credit_note');
+    const canViewNoteBalance = isAdmin || hasPermission('accounts.bill_adjustment.view_note_balance');
 
     const [voucherTypes, setVoucherTypes] = useState([]);
     const [cashBankAccounts, setCashBankAccounts] = useState([]);
@@ -36,6 +106,15 @@ const ReceiptEntryPage = () => {
     const { id } = useParams();
     const isEdit = !!id;
     const { selectedCompany, loading: companyLoading } = useCompany();
+    const [pendingCreditNoteAllocations, setPendingCreditNoteAllocations] = useState([]);
+    /** Direct Sales Invoice receive screen — Discount Allowed (persisted onto adjustments). */
+    const [directDiscount, setDirectDiscount] = useState('');
+    const [directDiscountReason, setDirectDiscountReason] = useState('Bill adjustment discount');
+    const [directDiscountLedgerId, setDirectDiscountLedgerId] = useState('');
+    /** Refs so Save never posts a stale bank-only payload if React state lags behind the inputs. */
+    const directDiscountRef = useRef('');
+    const directDiscountReasonRef = useRef('Bill adjustment discount');
+    const directDiscountLedgerIdRef = useRef('');
 
     const INITIAL_FORM_STATE = {
         voucherTypeId: '',
@@ -44,7 +123,7 @@ const ReceiptEntryPage = () => {
         paymentMode: 'Cash/Bank', // 'Cash/Bank' or 'Adjustment'
         totalAmount: 0,
         narration: '',
-        instrumentType: 'Cash',
+        instrumentType: '',
         instrumentNo: '',
         items: [
             { 
@@ -62,7 +141,66 @@ const ReceiptEntryPage = () => {
     const [formData, setFormData] = useState(INITIAL_FORM_STATE);
 
     // Detect if launched from a Sales Invoice
-    const fromInvoice = !!(location.state?.source === 'sales_invoice' || location.state?.invoiceId);
+    const fromSalesInvoice = location.state?.source === 'sales_invoice' && !!location.state?.invoiceId;
+    const fromInvoice = fromSalesInvoice || !!(location.state?.invoiceId);
+    const salesRegisterPath = PATHS.SALES.INVOICES;
+    const salesCancelPath = resolveSafeSalesReturnPath(
+        location.state?.cancelTo,
+        location.state?.invoiceId
+            ? PATHS.SALES.INVOICE_DETAIL(location.state.invoiceId)
+            : salesRegisterPath,
+    );
+    const salesReturnPath = resolveSafeSalesReturnPath(location.state?.returnTo, salesRegisterPath);
+
+    const discountAllowedLedgers = useMemo(() => {
+        const preferred = (ledgers || []).filter((l) =>
+            /discount\s*allowed|discount\s*on\s*sales|sales\s*discount|^discount$/i.test(String(l.name || '').trim()),
+        );
+        return preferred.length ? preferred : (ledgers || []).filter((l) => /discount/i.test(l.name || ''));
+    }, [ledgers]);
+
+    useEffect(() => {
+        if (!fromInvoice) return;
+        if (directDiscountLedgerId) return;
+        if (discountAllowedLedgers[0]?._id) {
+            const idStr = String(discountAllowedLedgers[0]._id);
+            directDiscountLedgerIdRef.current = idStr;
+            setDirectDiscountLedgerId(idStr);
+        }
+    }, [fromInvoice, discountAllowedLedgers, directDiscountLedgerId]);
+
+    const syncDirectInvoiceAdjustment = useCallback((bankAmt, discountAmt, reason, ledgerId) => {
+        const invoiceId = location.state?.invoiceId;
+        const invoiceNo = location.state?.invoiceNumber;
+        if (!invoiceId) return;
+        const bank = Math.max(0, Math.round((Number(bankAmt) || 0) * 100) / 100);
+        const disc = Math.max(0, Math.round((Number(discountAmt) || 0) * 100) / 100);
+        const reasonStr = String(reason || 'Bill adjustment discount').trim();
+        const ledgerStr = ledgerId ? String(ledgerId) : '';
+        directDiscountRef.current = disc > 0.009 ? String(disc) : '';
+        directDiscountReasonRef.current = reasonStr;
+        if (ledgerStr) directDiscountLedgerIdRef.current = ledgerStr;
+        setFormData((prev) => {
+            const newItems = [...prev.items];
+            if (!newItems[0]) return prev;
+            newItems[0] = {
+                ...newItems[0],
+                amount: bank,
+                adjustments: [{
+                    refId: invoiceId,
+                    refNumber: invoiceNo,
+                    amount: bank,
+                    adjustmentType: 'Against Bill',
+                    refModel: 'SalesInvoice',
+                    discountAmount: disc,
+                    discountLedgerId: disc > 0.009 ? (ledgerStr || undefined) : undefined,
+                    discountReason: disc > 0.009 ? reasonStr : '',
+                    remarks: disc > 0.009 ? reasonStr : '',
+                }],
+            };
+            return { ...prev, totalAmount: bank, items: newItems };
+        });
+    }, [location.state?.invoiceId, location.state?.invoiceNumber]);
 
     useEffect(() => {
         if (companyLoading) return;
@@ -92,7 +230,7 @@ const ReceiptEntryPage = () => {
                 const ledgerList = Array.isArray(allLedgers) ? allLedgers : [];
                 const groupList = Array.isArray(allGroups) ? allGroups : [];
 
-                setVoucherTypes(types);
+                setVoucherTypes(sortReceiptVoucherTypesForDisplay(types));
                 setCashBankAccounts(cb);
                 setLedgers(ledgerList);
                 setGroups(groupList);
@@ -117,17 +255,21 @@ const ReceiptEntryPage = () => {
                 } else {
                     setFormData((prev) => {
                         const next = { ...prev };
-                        if (types.length > 0) {
-                            const defaultType =
-                                types.find(
-                                    (v) =>
-                                        v.name.toUpperCase() === 'RECEIPT VOUCHER' ||
-                                        v.name.toUpperCase() === 'RECEIPT',
-                                ) || types[0];
+                        const defaultType = pickDefaultReceiptVoucherType(types);
+                        if (defaultType?._id) {
                             next.voucherTypeId = defaultType._id;
+                        } else if (types.length > 1) {
+                            next.voucherTypeId = '';
+                            toast.error('Select a Receipt Voucher type (multiple Receipt series found).');
+                        } else if (types[0]?._id) {
+                            next.voucherTypeId = types[0]._id;
                         }
-                        if (cb.length > 0) {
+                        if (cb.length > 0 && !next.cashBankAccountId) {
                             next.cashBankAccountId = cb[0]._id;
+                            next.instrumentType = defaultInstrumentForAccount(cb[0]);
+                        } else if (next.cashBankAccountId) {
+                            const acc = cb.find((a) => String(a._id) === String(next.cashBankAccountId));
+                            next.instrumentType = coerceInstrumentForAccount(acc, next.instrumentType);
                         }
                         return next;
                     });
@@ -200,27 +342,47 @@ const ReceiptEntryPage = () => {
             toast.error(`Accounting Ledger for "${customerName}" not found. Please ensure the customer is properly linked to a ledger.`, { duration: 5000 });
         }
 
-        setFormData(prev => ({
-            ...prev,
-            paymentMode: location.state?.paymentMode || prev.paymentMode,
-            totalAmount: defaultAmount,
-            narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
-            items: [{
-                ...prev.items[0],
-                ledgerId: targetLedgerId,
-                ledgerName: targetLedgerName,
-                amount: defaultAmount,
-                narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prev.items[0].narration,
-                adjustments: defaultInvoiceId ? [{
-                    refId: defaultInvoiceId,
-                    refNumber: defaultInvoiceNo,
+        setFormData(prev => {
+            const prevItem = prev.items?.[0];
+            const prevAdj = prevItem?.adjustments?.[0];
+            const alreadySeeded = !!(prevAdj?.refId && String(prevAdj.refId) === String(defaultInvoiceId));
+            // Re-runs when ledgers load: only fill missing party ledger — never wipe bank/discount.
+            if (alreadySeeded) {
+                return {
+                    ...prev,
+                    paymentMode: location.state?.paymentMode || prev.paymentMode,
+                    items: [{
+                        ...prevItem,
+                        ledgerId: targetLedgerId || prevItem.ledgerId,
+                        ledgerName: targetLedgerName || prevItem.ledgerName,
+                    }],
+                };
+            }
+            return {
+                ...prev,
+                paymentMode: location.state?.paymentMode || prev.paymentMode,
+                totalAmount: defaultAmount,
+                narration: defaultInvoiceNo ? `Receipt against Sales Invoice ${defaultInvoiceNo}` : prev.narration,
+                items: [{
+                    ...prevItem,
+                    ledgerId: targetLedgerId,
+                    ledgerName: targetLedgerName,
                     amount: defaultAmount,
-                    adjustmentType: 'Against Bill',
-                    refModel: 'SalesInvoice'
-                }] : []
-            }]
-        }));
-    }, [location.state, ledgers]);
+                    narration: defaultInvoiceNo ? `Against ${defaultInvoiceNo}` : prevItem?.narration,
+                    adjustments: defaultInvoiceId ? [{
+                        refId: defaultInvoiceId,
+                        refNumber: defaultInvoiceNo,
+                        amount: defaultAmount,
+                        adjustmentType: 'Against Bill',
+                        refModel: 'SalesInvoice',
+                        discountAmount: 0,
+                        discountLedgerId: undefined,
+                        discountReason: '',
+                    }] : [],
+                }],
+            };
+        });
+    }, [location.state, ledgers, fromInvoice]);
 
     useEffect(() => {
         if (!location.state?.tallyPrefill || !location.state?.ledgerId || !ledgers?.length) return;
@@ -239,7 +401,16 @@ const ReceiptEntryPage = () => {
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'cashBankAccountId') {
+            const acc = cashBankAccounts.find((a) => String(a._id) === String(value));
+            setFormData((prev) => ({
+                ...prev,
+                cashBankAccountId: value,
+                instrumentType: coerceInstrumentForAccount(acc, prev.instrumentType),
+            }));
+            return;
+        }
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleItemChange = (id, field, value) => {
@@ -381,118 +552,38 @@ const ReceiptEntryPage = () => {
         });
     };
 
-    const BillAdjustmentPopup = ({ itemId, ledgerId, amountToAdjust }) => {
-        const [bills, setBills] = useState([]);
-        const [selectedBills, setSelectedBills] = useState([]);
-        const [loading, setLoading] = useState(false);
-
-        useEffect(() => {
-            const fetchBills = async () => {
-                setLoading(true);
-                try {
-                    const data = await getOutstandingBills(ledgerId);
-                    setBills(data);
-                } catch (error) {
-                    toast.error('Failed to fetch outstanding bills');
-                } finally {
-                    setLoading(false);
-                }
-            };
-            fetchBills();
-        }, [ledgerId]);
-
-        const totalSelected = selectedBills.reduce((sum, b) => sum + b.amount, 0);
-
-        const toggleBill = (bill) => {
-            setSelectedBills(prev => {
-                const exists = prev.find(b => b.refId === bill._id);
-                if (exists) return prev.filter(b => b.refId !== bill._id);
-
-                const remaining = amountToAdjust - totalSelected;
-                const billBalance = bill.roundedTotal - bill.paidAmount;
-                const amount = Math.min(remaining, billBalance);
-
-                return [...prev, {
-                    refId: bill._id,
-                    refNumber: bill.invoiceNumber,
-                    amount: amount,
-                    adjustmentType: 'Against Bill',
-                    refModel: 'SalesInvoice'
-                }];
-            });
-        };
-
-        const handleConfirm = () => {
-            const finalAdjustments = [...selectedBills];
-            if (totalSelected < amountToAdjust) {
-                finalAdjustments.push({
-                    adjustmentType: 'On Account',
-                    amount: amountToAdjust - totalSelected
-                });
-            }
-            handleItemChange(itemId, 'adjustments', finalAdjustments);
-            closeModal();
-        };
-
-        return (
-            <div className="space-y-4 pt-4">
-                <div className="flex justify-between items-center bg-primary/5 p-3 rounded-lg border border-primary/20">
-                    <span className="font-medium">Amount to Adjusted: <span className="text-primary font-bold">₹{amountToAdjust}</span></span>
-                    <span className="font-medium text-green-600">Selected: ₹{totalSelected}</span>
-                </div>
-
-                <div className="max-h-[300px] overflow-y-auto border rounded-lg">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 bg-white">
-                            <tr className="bg-gray-50 border-b">
-                                <th className="px-4 py-2 text-xs font-semibold uppercase">Select</th>
-                                <th className="px-4 py-2 text-xs font-semibold uppercase">Invoice #</th>
-                                <th className="px-4 py-2 text-xs font-semibold uppercase">Date</th>
-                                <th className="px-4 py-2 text-xs font-semibold uppercase text-right">Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {bills.map(bill => (
-                                <tr key={bill._id} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedBills.some(s => s.refId === bill._id)}
-                                            onChange={() => toggleBill(bill)}
-                                        />
-                                    </td>
-                                    <td className="px-4 py-2 text-sm">{bill.invoiceNumber}</td>
-                                    <td className="px-4 py-2 text-sm">{new Date(bill.invoiceDate).toLocaleDateString()}</td>
-                                    <td className="px-4 py-2 text-sm font-semibold text-right">₹{bill.roundedTotal - bill.paidAmount}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {bills.length === 0 && !loading && <div className="p-10 text-center text-gray-400">No outstanding invoices</div>}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                    <Button onClick={handleConfirm}>Confirm Adjustments</Button>
-                </div>
-            </div>
-        );
-    };
-
     const handleOpenAdjustment = (item) => {
         if (!item.ledgerId || !item.amount) return toast.error('Set ledger and amount first');
         if (item.ledgerType !== 'Customer') {
             handleItemChange(item.id, 'adjustments', [{ adjustmentType: 'On Account', amount: item.amount }]);
             return toast.success('Non-customer ledger: Adjusted on account');
         }
+        const ledger = ledgers.find((l) => String(l._id) === String(item.ledgerId));
         openModal({
             title: `Bill Adjustment - ${item.ledgerName}`,
-            content: <BillAdjustmentPopup itemId={item.id} ledgerId={item.ledgerId} amountToAdjust={item.amount} />,
-            size: 'lg'
+            content: (
+                <BillAdjustmentPopup
+                    mode="receipt"
+                    ledgerId={item.ledgerId}
+                    amountToAdjust={item.amount}
+                    customerId={ledger?.referenceId}
+                    ledgers={ledgers}
+                    canUseCreditNote={canUseCreditNote}
+                    canViewNoteBalance={canViewNoteBalance}
+                    onCancel={closeModal}
+                    onConfirm={({ adjustments, creditNoteAllocations }) => {
+                        handleItemChange(item.id, 'adjustments', adjustments);
+                        setPendingCreditNoteAllocations(creditNoteAllocations || []);
+                        closeModal();
+                    }}
+                />
+            ),
+            size: 'wide',
         });
     };
 
     const handleSave = async (shouldClose = false) => {
+        if (isSubmitting) return;
         const isAdj = formData.paymentMode === 'Adjustment';
         if (!isAdj && !formData.cashBankAccountId) return toast.error('Select Cash/Bank account');
         if (formData.totalAmount <= 0) return toast.error('Entry amount must be greater than zero');
@@ -502,6 +593,13 @@ const ReceiptEntryPage = () => {
             if (selectedAcc && !selectedAcc.ledgerId) {
                 return toast.error('Selected Cash/Bank account is not linked to an accounting ledger. Please fix it first.');
             }
+            const instrumentErr = validateInstrumentForAccount(
+                selectedAcc,
+                formData.instrumentType,
+                formData.instrumentNo,
+                'receipt',
+            );
+            if (instrumentErr) return toast.error(instrumentErr);
         }
 
         if (!fromInvoice) {
@@ -512,41 +610,142 @@ const ReceiptEntryPage = () => {
         const firstItem = formData.items[0];
         if (!firstItem?.ledgerId) return toast.error('Ledger selection required');
 
+        if (!formData.voucherTypeId) {
+            return toast.error('Select a Receipt Voucher type');
+        }
+        const selectedVType = voucherTypes.find((v) => String(v._id) === String(formData.voucherTypeId));
+        if (selectedVType && String(selectedVType.nature || '') !== 'Receipt') {
+            return toast.error(
+                `Voucher type "${selectedVType.name}" is not a Receipt series. Select Receipt Voucher.`,
+            );
+        }
+        if (selectedVType && /^JOURNAL$|^JRNL$/i.test(String(selectedVType.name || '').trim())) {
+            return toast.error(
+                'JOURNAL cannot be used from Receipt Entry. Select Receipt Voucher.',
+            );
+        }
+
+        // Phase 1 — discount must be on adjustments before Save (popup Confirm must persist it)
+        // Direct invoice receive rebuilds adjustments below from screen refs — skip formData check there.
+        if (!fromInvoice) {
+            for (const item of formData.items || []) {
+                for (const adj of item.adjustments || []) {
+                    if (adj.adjustmentType !== 'Against Bill') continue;
+                    const disc = Number(adj.discountAmount) || 0;
+                    if (disc > 0.009) {
+                        if (!adj.discountLedgerId) {
+                            return toast.error(
+                                `Bill ${adj.refNumber || ''}: Discount ₹${disc} is missing Discount ledger. Open Bill Adjustment, enter discount, Confirm Adjustments again.`,
+                            );
+                        }
+                        if (!String(adj.discountReason || adj.remarks || '').trim()) {
+                            return toast.error(
+                                `Bill ${adj.refNumber || ''}: Discount reason is required. Confirm Adjustments again.`,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         setIsSubmitting(true);
         try {
+            // Direct invoice receive: force discount fields from screen refs (never UI-only / never stale state)
+            let saveForm = formData;
+            if (fromInvoice && location.state?.invoiceId) {
+                const bank = Math.max(0, Number(formData.totalAmount) || 0);
+                const disc = Math.max(
+                    0,
+                    Number(directDiscountRef.current !== '' ? directDiscountRef.current : directDiscount) || 0,
+                );
+                const discLedgerId = String(
+                    directDiscountLedgerIdRef.current || directDiscountLedgerId || '',
+                ).trim();
+                const discReason = String(
+                    directDiscountReasonRef.current || directDiscountReason || 'Bill adjustment discount',
+                ).trim();
+                const outstanding = Math.max(0, Number(location.state?.amount) || 0);
+                if (bank + disc > outstanding + 0.01) {
+                    setIsSubmitting(false);
+                    return toast.error('Total settlement cannot exceed invoice outstanding');
+                }
+                if (disc > 0.009) {
+                    if (!discLedgerId) {
+                        setIsSubmitting(false);
+                        return toast.error('Select Discount Allowed ledger');
+                    }
+                    if (!discReason) {
+                        setIsSubmitting(false);
+                        return toast.error('Discount reason is required');
+                    }
+                }
+                const adj = [{
+                    refId: location.state.invoiceId,
+                    refNumber: location.state.invoiceNumber,
+                    amount: bank,
+                    adjustmentType: 'Against Bill',
+                    refModel: 'SalesInvoice',
+                    discountAmount: disc,
+                    discountLedgerId: disc > 0.009 ? discLedgerId : undefined,
+                    discountReason: disc > 0.009 ? discReason : '',
+                    remarks: disc > 0.009 ? discReason : '',
+                }];
+                saveForm = {
+                    ...formData,
+                    totalAmount: bank,
+                    partyId: formData.items[0]?.ledgerId || formData.partyId,
+                    // Top-level mirror so backend can re-attach if nested fields are dropped
+                    billDiscountAmount: disc,
+                    billDiscountLedgerId: disc > 0.009 ? discLedgerId : undefined,
+                    billDiscountReason: disc > 0.009 ? discReason : undefined,
+                    items: [{
+                        ...formData.items[0],
+                        amount: bank,
+                        adjustments: adj,
+                    }],
+                };
+            }
+
             if (isEdit) {
                 await updateVoucher(id, { 
-                    ...formData, 
-                    nature: 'Receipt'
+                    ...saveForm, 
+                    nature: 'Receipt',
+                    partyId: saveForm.items[0]?.ledgerId || saveForm.partyId,
+                    creditNoteAllocations: pendingCreditNoteAllocations,
                 });
                 toast.success(`Voucher updated successfully`);
+                setPendingCreditNoteAllocations([]);
                 navigate(PATHS.ACCOUNTS.VOUCHER_LIST);
             } else {
-                let payload = { ...formData };
+                let payload = {
+                    ...saveForm,
+                    partyId: saveForm.items[0]?.ledgerId || saveForm.partyId,
+                    creditNoteAllocations: pendingCreditNoteAllocations,
+                };
                 
                 if (isAdj) {
                     // Logic: To record an adjustment without double-counting the ledger balance,
                     // we create a zero-sum voucher:
                     // 1. Existing Credit items (the user entered these to adjust against bills)
                     // 2. Automated Debit item (the "source" of the adjustment - Opening Credit)
-                    const custLedgerId = formData.items[0]?.ledgerId;
+                    const custLedgerId = saveForm.items[0]?.ledgerId;
                     if (!custLedgerId) throw new Error('Customer ledger required for adjustment');
 
                     const adjItem = {
                         id: 'adj-source',
                         ledgerId: custLedgerId,
-                        ledgerName: formData.items[0]?.ledgerName,
-                        amount: formData.totalAmount,
+                        ledgerName: saveForm.items[0]?.ledgerName,
+                        amount: saveForm.totalAmount,
                         type: 'Debit',
                         narration: 'Adjusted from Opening Credit/Advance',
                         adjustments: [{
                             adjustmentType: 'Opening Credit',
-                            amount: formData.totalAmount,
+                            amount: saveForm.totalAmount,
                             refId: custLedgerId, // Link to self for audit
                             refNumber: 'Opening Balance'
                         }]
                     };
-                    payload.items = [...formData.items, adjItem];
+                    payload.items = [...saveForm.items, adjItem];
                 }
 
                 const response = await createVoucher({ 
@@ -554,19 +753,34 @@ const ReceiptEntryPage = () => {
                     nature: isAdj ? 'Adjustment' : 'Receipt',
                     voucherType: formData.voucherTypeId 
                 });
-                const savedNo = response?.data?.voucherNo || 'Voucher';
-                toast.success(`${savedNo} saved successfully`);
-                
-                if (fromInvoice || shouldClose) {
+                const savedNo = response?.data?.voucherNo || response?.voucherNo || 'Voucher';
+                setPendingCreditNoteAllocations([]);
+
+                if (fromSalesInvoice) {
+                    toast.success('Receipt saved successfully. Sales Invoice outstanding has been updated.');
+                    navigate(salesReturnPath, {
+                        replace: true,
+                        state: {
+                            refreshInvoices: true,
+                            updatedInvoiceId: location.state?.invoiceId,
+                            savedReceiptNo: savedNo,
+                        },
+                    });
+                } else if (shouldClose) {
+                    toast.success(`${savedNo} saved successfully`);
                     navigate(-1);
                 } else {
-                    // RESET FOR NEXT ENTRY (KEEP DATE/ACCOUNTS)
-                    setFormData(prev => ({
+                    toast.success(`${savedNo} saved successfully`);
+                    // RESET FOR NEXT ENTRY (KEEP DATE/BANK) — force Receipt Voucher (never Journal)
+                    const receiptTypeId = pickDefaultReceiptVoucherType(voucherTypes)?._id || formData.voucherTypeId;
+                    setFormData(prev => {
+                        const acc = cashBankAccounts.find((a) => String(a._id) === String(prev.cashBankAccountId));
+                        return {
                         ...INITIAL_FORM_STATE,
-                        voucherTypeId: prev.voucherTypeId,
+                        voucherTypeId: receiptTypeId,
                         date: prev.date,
                         cashBankAccountId: prev.cashBankAccountId,
-                        instrumentType: prev.instrumentType,
+                        instrumentType: coerceInstrumentForAccount(acc, defaultInstrumentForAccount(acc) || prev.instrumentType),
                         items: [{ 
                             id: Date.now(), 
                             ledgerId: '', 
@@ -576,7 +790,8 @@ const ReceiptEntryPage = () => {
                             narration: '', 
                             adjustments: []
                         }]
-                    }));
+                    };
+                    });
                 }
             }
         } catch (error) {
@@ -595,8 +810,56 @@ const ReceiptEntryPage = () => {
     if (fromInvoice) {
         const invNo = location.state?.invoiceNumber || '—';
         const custName = location.state?.customerName || formData.items[0]?.ledgerName || '—';
-        const amount = formData.totalAmount || location.state?.amount || 0;
+        const outstanding = Math.max(0, Number(location.state?.amount) || 0);
+        const bankAmt = Math.max(0, Number(formData.totalAmount) || 0);
+        const discAmt = Math.max(0, Number(directDiscount) || 0);
+        const totalSettlement = Math.round((bankAmt + discAmt) * 100) / 100;
+        const balanceAfter = Math.max(0, Math.round((outstanding - totalSettlement) * 100) / 100);
+        const settlementStatus = totalSettlement <= 0.009
+            ? 'Unallocated'
+            : totalSettlement > outstanding + 0.01
+                ? 'Over-allocated'
+                : Math.abs(totalSettlement - outstanding) <= 0.01
+                    ? (discAmt > 0.009 ? 'Settled with Discount' : 'Settled')
+                    : 'Partially Settled';
         const selectedAccount = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+        const instrumentOptions = getInstrumentOptionsForAccount(selectedAccount);
+        const instrumentRefMeta = getInstrumentRefMeta(formData.instrumentType);
+        const fmtInr = (n) => (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const onBankChange = (val) => {
+            const bank = Math.max(0, parseFloat(val) || 0);
+            if (bank + discAmt > outstanding + 0.01) {
+                toast.error(`Total settlement cannot exceed outstanding ₹${fmtInr(outstanding)}`);
+                return;
+            }
+            syncDirectInvoiceAdjustment(bank, discAmt, directDiscountReason, directDiscountLedgerId);
+        };
+
+        const onDiscountChange = (raw) => {
+            if (raw === '') {
+                directDiscountRef.current = '';
+                setDirectDiscount('');
+                syncDirectInvoiceAdjustment(bankAmt, 0, directDiscountReason, directDiscountLedgerId);
+                return;
+            }
+            let disc = parseFloat(raw);
+            if (Number.isNaN(disc) || disc < 0) disc = 0;
+            disc = Math.round(disc * 100) / 100;
+            const maxDisc = Math.max(0, Math.round((outstanding - bankAmt) * 100) / 100);
+            if (disc > maxDisc + 0.01) {
+                toast.error(`Discount cannot exceed remaining outstanding ₹${fmtInr(maxDisc)}`);
+                disc = maxDisc;
+            }
+            directDiscountRef.current = String(disc);
+            setDirectDiscount(String(disc));
+            const ledgerId = directDiscountLedgerId || (discountAllowedLedgers[0]?._id ? String(discountAllowedLedgers[0]._id) : '');
+            if (ledgerId && !directDiscountLedgerId) {
+                directDiscountLedgerIdRef.current = ledgerId;
+                setDirectDiscountLedgerId(ledgerId);
+            }
+            syncDirectInvoiceAdjustment(bankAmt, disc, directDiscountReason || 'Bill adjustment discount', ledgerId);
+        };
 
         return (
             <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', padding: '32px 24px', color: '#1e293b' }}>
@@ -604,7 +867,7 @@ const ReceiptEntryPage = () => {
                     {/* Header */}
                     <div style={{ marginBottom: 24 }}>
                         <button
-                            onClick={() => navigate(-1)}
+                            onClick={() => navigate(salesCancelPath)}
                             style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 8 }}
                         >← Back to Invoice</button>
                         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>{isEdit ? 'Edit Payment' : 'Record Payment'}</h1>
@@ -615,7 +878,8 @@ const ReceiptEntryPage = () => {
                     <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 4px 16px rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 20 }}>
                         <div style={{ background: 'linear-gradient(135deg,#0d9488,#0891b2)', padding: '18px 24px' }}>
                             <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Invoice Payment</div>
-                            <div style={{ color: '#fff', fontSize: 26, fontWeight: 900 }}>₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                            <div style={{ color: '#fff', fontSize: 26, fontWeight: 900 }}>₹{fmtInr(bankAmt)}</div>
+                            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 4 }}>Bank receipt only (discount settled separately)</div>
                         </div>
 
                         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -654,6 +918,12 @@ const ReceiptEntryPage = () => {
                                     )}
                                 </div>
                             </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Invoice Outstanding</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: '#b45309' }}>₹{fmtInr(outstanding)}</span>
+                            </div>
+
                             {/* Amount */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Amount to Receive</span>
@@ -661,25 +931,90 @@ const ReceiptEntryPage = () => {
                                     <span style={{ position: 'absolute', left: 10, fontWeight: 700, color: '#0d9488' }}>₹</span>
                                     <input
                                         type="number"
+                                        min="0"
+                                        step="0.01"
                                         value={formData.totalAmount || ''}
-                                        onChange={(e) => {
-                                            const val = parseFloat(e.target.value) || 0;
-                                            setFormData(prev => {
-                                                const newItems = [...prev.items];
-                                                if (newItems.length > 0) {
-                                                    newItems[0].amount = val;
-                                                    // Also update adjustment if it was automated
-                                                    if (newItems[0].adjustments?.length === 1 && newItems[0].adjustments[0].adjustmentType === 'Against Bill') {
-                                                        newItems[0].adjustments[0].amount = val;
-                                                    }
-                                                }
-                                                return { ...prev, totalAmount: val, items: newItems };
-                                            });
-                                        }}
+                                        onChange={(e) => onBankChange(e.target.value)}
                                         style={{ ...inp, width: 140, padding: '6px 10px 6px 22px', fontSize: 15, fontWeight: 800, color: '#0d9488', textAlign: 'right', border: '2px solid #0d9488', background: '#f0fdfa' }}
                                     />
                                 </div>
                             </div>
+
+                            {/* Discount Allowed */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Discount Allowed</span>
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                    <span style={{ position: 'absolute', left: 10, fontWeight: 700, color: '#b45309' }}>₹</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={directDiscount}
+                                        placeholder="0.00"
+                                        onChange={(e) => onDiscountChange(e.target.value)}
+                                        style={{ ...inp, width: 140, padding: '6px 10px 6px 22px', fontSize: 15, fontWeight: 800, color: '#b45309', textAlign: 'right', border: '2px solid #f59e0b', background: '#fffbeb' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Balance After Settlement</span>
+                                <span style={{ fontSize: 15, fontWeight: 800, color: balanceAfter <= 0.009 ? '#166534' : '#334155' }}>
+                                    ₹{fmtInr(balanceAfter)}
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Settlement Status</span>
+                                <span style={{
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    color: settlementStatus.includes('Settled') ? '#166534' : '#475569',
+                                    background: settlementStatus.includes('Settled') ? '#f0fdf4' : '#f8fafc',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: 999,
+                                    padding: '3px 10px',
+                                }}>
+                                    {settlementStatus}
+                                </span>
+                            </div>
+
+                            {discAmt > 0.009 && (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                                        <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Discount Ledger *</span>
+                                        <select
+                                            value={directDiscountLedgerId}
+                                            onChange={(e) => {
+                                                directDiscountLedgerIdRef.current = e.target.value;
+                                                setDirectDiscountLedgerId(e.target.value);
+                                                syncDirectInvoiceAdjustment(bankAmt, discAmt, directDiscountReason, e.target.value);
+                                            }}
+                                            style={{ ...inp, width: 240, padding: '6px 10px', fontSize: 12, fontWeight: 600 }}
+                                        >
+                                            <option value="">— Select Discount ledger —</option>
+                                            {discountAllowedLedgers.map((l) => (
+                                                <option key={l._id} value={l._id}>{l.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                                        <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, paddingTop: 6 }}>Discount Reason *</span>
+                                        <textarea
+                                            value={directDiscountReason}
+                                            onChange={(e) => {
+                                                directDiscountReasonRef.current = e.target.value;
+                                                setDirectDiscountReason(e.target.value);
+                                                syncDirectInvoiceAdjustment(bankAmt, discAmt, e.target.value, directDiscountLedgerId);
+                                            }}
+                                            rows={2}
+                                            placeholder="Mandatory when discount is used"
+                                            style={{ ...inp, width: '100%', maxWidth: 240, padding: '8px 10px', fontSize: 12, resize: 'vertical' }}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
                             {/* Date */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Receipt Date</span>
@@ -711,11 +1046,11 @@ const ReceiptEntryPage = () => {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>Instrument Type</span>
                                     <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
-                                        style={{ ...inp, width: 140, padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
-                                        <option value="Cash">Cash</option>
-                                        <option value="Bank Transfer">Bank Transfer</option>
-                                        <option value="Cheque">Cheque</option>
-                                        <option value="UPI">UPI/QR</option>
+                                        style={{ ...inp, width: 160, padding: '6px 10px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer' }}>
+                                        {!formData.instrumentType && <option value="">Select Instrument Type</option>}
+                                        {instrumentOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        ))}
                                     </select>
                                 </div>
                              )}
@@ -740,6 +1075,26 @@ const ReceiptEntryPage = () => {
                                     style={{ ...inp, width: '100%', maxWidth: 260, height: 60, padding: '8px 10px', fontSize: 12, color: '#4b5563', resize: 'vertical', textAlign: 'left' }}
                                 />
                             </div>
+
+                            {formData.items[0]?.ledgerId && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenAdjustment(formData.items[0])}
+                                    style={{
+                                        marginTop: 4,
+                                        padding: '8px 12px',
+                                        borderRadius: 8,
+                                        border: '1px solid #6366f1',
+                                        background: '#eef2ff',
+                                        color: '#4338ca',
+                                        fontWeight: 700,
+                                        fontSize: 12,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Advanced Bill Adjustment (Credit Note / multi-bill)
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -777,10 +1132,10 @@ const ReceiptEntryPage = () => {
                                 {(formData.instrumentType !== 'Cash') && (
                                     <>
                                         <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 8 }}>
-                                            {formData.instrumentType} Ref / No.
+                                            {instrumentRefMeta.label}{instrumentRefMeta.required ? ' *' : ''}
                                         </label>
                                         <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
-                                            placeholder={`Enter ${formData.instrumentType} number`}
+                                            placeholder={instrumentRefMeta.placeholder}
                                             style={{ ...inp, borderRadius: 9, padding: '11px 14px' }} />
                                     </>
                                 )}
@@ -794,21 +1149,46 @@ const ReceiptEntryPage = () => {
                         )}
                     </div>
 
+                    {/* Settlement summary — bank button stays bank-only */}
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '14px 18px', marginBottom: 14, fontSize: 13 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: '#64748b' }}>Bank Receipt</span>
+                            <strong>₹{fmtInr(bankAmt)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: '#64748b' }}>Discount Allowed</span>
+                            <strong style={{ color: '#b45309' }}>₹{fmtInr(discAmt)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: '#64748b' }}>Total Invoice Settlement</span>
+                            <strong>₹{fmtInr(totalSettlement)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
+                            <span style={{ color: '#64748b' }}>Balance After</span>
+                            <strong style={{ color: balanceAfter <= 0.009 ? '#166534' : '#334155' }}>₹{fmtInr(balanceAfter)}</strong>
+                        </div>
+                    </div>
+
                     {/* Action Buttons */}
                     <div style={{ display: 'flex', gap: 12 }}>
                         <button
                             onClick={(e) => { 
                                 e.preventDefault();
-                                if (window.confirm('Discard changes?')) navigate(-1); 
+                                if (window.confirm('Discard changes?')) navigate(salesCancelPath); 
                             }}
-                            style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                            disabled={isSubmitting}
+                            style={{ flex: 1, padding: '13px', border: '1px solid #e5e7eb', borderRadius: 9, background: '#fff', color: '#6b7280', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14 }}
                         >Cancel</button>
                         <button
-                            onClick={handleSave}
+                            onClick={() => handleSave(true)}
                             disabled={isSubmitting || loading}
                             style={{ flex: 2, padding: '13px', border: 'none', borderRadius: 9, background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg,#0d9488,#0891b2)', color: '#fff', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 15, boxShadow: '0 4px 12px rgba(13,148,136,0.35)' }}
                         >
-                            {isSubmitting ? 'Saving...' : (isEdit ? `💳  Update Receipt  ₹${amount.toLocaleString('en-IN')}` : `💳  Save Receipt  ₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`)}
+                            {isSubmitting
+                                ? 'Saving...'
+                                : (isEdit
+                                    ? `💳  Update Receipt  ₹${fmtInr(bankAmt)}`
+                                    : `💳  Save Receipt & Return  ₹${fmtInr(bankAmt)}`)}
                         </button>
                     </div>
                 </div>
@@ -874,6 +1254,9 @@ const ReceiptEntryPage = () => {
                                         onChange={handleHeaderChange}
                                         style={{ ...inp, cursor: 'pointer' }}
                                     >
+                                        {!formData.voucherTypeId && (
+                                            <option value="">— Select Receipt Voucher —</option>
+                                        )}
                                         {voucherTypes.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
                                     </select>
                                 )}
@@ -944,15 +1327,24 @@ const ReceiptEntryPage = () => {
                                     onChange={handleHeaderChange}
                                     style={{ ...inp, cursor: 'pointer' }}
                                 >
-                                    <option value="Cash">Cash</option>
-                                    <option value="Bank Transfer">Bank Transfer</option>
-                                    <option value="Cheque">Cheque</option>
-                                    <option value="UPI">UPI/QR</option>
+                                    {!formData.instrumentType && <option value="">Select Instrument Type</option>}
+                                    {getInstrumentOptionsForAccount(cashBankAccounts.find((a) => a._id === formData.cashBankAccountId)).map((o) => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div>
-                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument / Ref No.</span>
-                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange} placeholder="UTR / Cheque No" style={inp} />
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                    {getInstrumentRefMeta(formData.instrumentType).label}
+                                    {getInstrumentRefMeta(formData.instrumentType).required ? ' *' : ''}
+                                </span>
+                                <input
+                                    name="instrumentNo"
+                                    value={formData.instrumentNo}
+                                    onChange={handleHeaderChange}
+                                    placeholder={getInstrumentRefMeta(formData.instrumentType).placeholder}
+                                    style={inp}
+                                />
                             </div>
                         </div>
                     </div>

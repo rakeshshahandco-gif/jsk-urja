@@ -9,7 +9,15 @@ const billAdjustmentSchema = new mongoose.Schema({
     refId: { type: mongoose.Schema.Types.ObjectId, refPath: 'items.adjustments.refModel' },
     refModel: { type: String, /* enum: ['SalesInvoice', 'PurchaseInvoice'], */ default: 'SalesInvoice' },
     refNumber: { type: String, default: '' },
+    /** Bank / cash portion allocated to the bill */
     amount: { type: Number, required: true },
+    /** Phase 1 — Discount Allowed (Receipt) / Discount Received (Payment) */
+    discountAmount: { type: Number, default: 0 },
+    discountLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    discountReason: { type: String, default: '' },
+    roundOff: { type: Number, default: 0 },
+    remarks: { type: String, default: '' },
+    settlementStatus: { type: String, default: '' },
 });
 
 const voucherItemSchema = new mongoose.Schema({
@@ -28,6 +36,15 @@ const voucherItemSchema = new mongoose.Schema({
     igstAmount: { type: Number, default: 0 },
 
     adjustments: [billAdjustmentSchema],
+
+    // Phase 1 — linked discount / round-off lines on Receipt/Payment
+    lineRole: {
+        type: String,
+        enum: ['', 'BillAdjustmentDiscount', 'BillAdjustmentRoundOff'],
+        default: '',
+    },
+    linkedBillRefId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    linkedBillRefNumber: { type: String, default: '' },
 
     // Cost / Profit Centre tagging on each voucher line
     costCenterId: { type: mongoose.Schema.Types.ObjectId, ref: 'CostCenter', default: null },
@@ -97,6 +114,12 @@ const voucherSchema = new mongoose.Schema({
 
     isSystemGenerated: { type: Boolean, default: false },
 
+    /**
+     * Phase 2B-B — RCM liability posting audit on Journal vouchers (no new collection).
+     * Stored only on system-generated RCM liability / reversal journals.
+     */
+    rcmLiabilityMeta: { type: mongoose.Schema.Types.Mixed, default: null },
+
     /** Expense TDS (194C etc.) — threshold + posting audit */
     tdsSection: { type: String, trim: true, default: '' },
     tdsAmount: { type: Number, default: 0, min: 0 },
@@ -104,6 +127,26 @@ const voucherSchema = new mongoose.Schema({
     tdsSupplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null },
     tdsPayableLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
     tdsExpenseLineLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+    /**
+     * Line-wise / multi-section TDS on one expense voucher.
+     * Header tdsSection/tdsAmount remain totals (or primary) for backward-compatible reports.
+     */
+    tdsLines: [
+        {
+            expenseLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+            expenseLedgerName: { type: String, trim: true, default: '' },
+            tdsNature: { type: String, trim: true, default: '' },
+            natureKey: { type: String, trim: true, uppercase: true, default: '' },
+            section: { type: String, trim: true, uppercase: true, default: '' },
+            sectionDisplay: { type: String, trim: true, default: '' },
+            section393Label: { type: String, trim: true, default: '' },
+            rate: { type: Number, default: 0, min: 0 },
+            tdsBase: { type: Number, default: 0, min: 0 },
+            tdsAmount: { type: Number, default: 0, min: 0 },
+            payableLedgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
+            overrideReason: { type: String, trim: true, default: '' },
+        },
+    ],
     tdsUserConfirmed: { type: Boolean, default: false },
     tdsPopupSkipped: { type: Boolean, default: false },
     tdsDisabledReason: { type: String, trim: true, default: '' },

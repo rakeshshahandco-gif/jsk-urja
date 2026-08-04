@@ -13,6 +13,7 @@ import { PurchaseInvoice } from '../models/purchaseInvoice.model.js';
 import { getFYFromDate, getShortFY } from '../utils/fyUtils.js';
 import { calculateVoucherGstTotals, getNextVoucherNo } from '../utils/voucherUtils.js';
 import { autoLinkEntityLedger, autoLinkCashBankLedger } from '../utils/ledgerLinking.utils.js';
+import { assertExpenseVoucherPartyIsCreditor } from '../utils/ledgerClassification.utils.js';
 import { previewExpenseVoucherTds, resolveTdsPayableLedgerId, collectExpenseTdsDebitContext, normalizeMongoRefId } from '../services/tdsDecisionEngine.service.js';
 import * as tdsTh from '../services/tdsThreshold.service.js';
 import {
@@ -31,8 +32,36 @@ import {
     syncBillWiseAuditFromVoucher,
     reverseAllBillWiseForVoucher,
 } from '../services/accounting/billWiseSettlement.service.js';
+import {
+    enrichItemsWithBillAdjustmentDiscount,
+    buildReceiptPaymentBalanceLines,
+} from '../services/accounting/billAdjustmentDiscount.service.js';
+import { assertCashBankInstrumentCompatible } from '../services/accounting/cashBankInstrument.service.js';
+import {
+    applyCustomerCreditNoteAllocations,
+    reverseCreditNoteAllocationsForParentReceipt,
+} from '../services/creditNoteAllocation.service.js';
 
 const r2v = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+const EXPENSE_PARTY_ERR =
+    'Expense Voucher requires a Supplier or Creditor. Use Payment Voucher for Bank or Cash payment.';
+
+/**
+ * Expense Voucher must credit a Supplier/Creditor (payable). Cash/Bank payment is Payment Voucher only.
+ */
+async function enforceExpenseVoucherCreditorParty(body, { session } = {}) {
+    const expenseType = String(body.expenseType || '').trim();
+    if (expenseType === 'Cash' || expenseType === 'Bank' || body.cashBankAccountId) {
+        throw new ApiError(httpStatus.BAD_REQUEST, EXPENSE_PARTY_ERR);
+    }
+    body.expenseType = 'Credit';
+    try {
+        await assertExpenseVoucherPartyIsCreditor(body.partyId, { session });
+    } catch (e) {
+        throw new ApiError(e.statusCode || httpStatus.BAD_REQUEST, e.message || EXPENSE_PARTY_ERR);
+    }
+}
 
 async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGstEnabled, lineItems, fy, excludeVoucherId, userId }) {
     const preview = await previewExpenseVoucherTds({
@@ -51,6 +80,7 @@ async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGst
         },
         excludeVoucherId,
         expenseTdsSectionResolution: body.expenseTdsSectionResolution || undefined,
+        tdsLineOverrides: Array.isArray(body.tdsLineOverrides) ? body.tdsLineOverrides : [],
     });
 
     if (preview.sectionConflict?.message && !body.expenseTdsSectionResolution) {
@@ -68,6 +98,8 @@ async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGst
     }
 
     const d = preview.decision;
+    if (!d) return null;
+
     if (d.panBlock) {
         throw new ApiError(
             httpStatus.BAD_REQUEST,
@@ -75,11 +107,44 @@ async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGst
         );
     }
 
+    const auditSection = preview.multiSection
+        ? (preview.tdsLines || []).map((l) => l.section).join('+')
+        : d.tdsSection;
+
+    for (const line of preview.tdsLines || []) {
+        if (!line?.overrideApplied || !line.overrideReason) continue;
+        await tdsTh.logTdsAudit({
+            action: 'MANUAL_TDS_EDIT',
+            supplierId: preview.supplierId,
+            section: line.section,
+            financialYear: fy,
+            userId,
+            details: {
+                flow: 'Expense',
+                expenseLedgerId: line.expenseLedgerId,
+                expenseLedgerName: line.expenseLedgerName,
+                tdsNature: line.tdsNature,
+                rate: line.rate,
+                tdsAmount: line.tdsAmount,
+                overrideReason: line.overrideReason,
+                previousValue: line.overridePrevious || null,
+                newValue: {
+                    tdsNature: line.tdsNature,
+                    section: line.section,
+                    rate: line.rate,
+                    tdsApplicable: line.tdsAmount > 0,
+                },
+                userId,
+                at: new Date().toISOString(),
+            },
+        });
+    }
+
     if (body.tdsDisabledReason && String(body.tdsDisabledReason).trim()) {
         await tdsTh.logTdsAudit({
             action: 'TDS_DISABLED_ON_VOUCHER',
             supplierId: preview.supplierId,
-            section: d.tdsSection,
+            section: auditSection,
             financialYear: fy,
             userId,
             details: { reason: body.tdsDisabledReason, flow: 'Expense' },
@@ -91,10 +156,10 @@ async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGst
         await tdsTh.logTdsAudit({
             action: 'POPUP_SKIPPED',
             supplierId: preview.supplierId,
-            section: d.tdsSection,
+            section: auditSection,
             financialYear: fy,
             userId,
-            details: { wouldBeTds: d.tdsAmount, flow: 'Expense' },
+            details: { wouldBeTds: d.tdsAmount, flow: 'Expense', tdsLines: preview.tdsLines?.length || 0 },
         });
         return { engineActive: true, skipTds: true, skipReason: 'popup_skipped' };
     }
@@ -106,27 +171,49 @@ async function resolveExpenseVoucherTdsForPosting(body, { processingTotal, isGst
         );
     }
 
-    const master = preview.master;
-    let payableId = null;
-    if (d.tdsApplicable && d.tdsAmount > 0) {
-        payableId = await resolveTdsPayableLedgerId(d.tdsSection, master);
-        if (!payableId) {
+    const tdsLines = (preview.tdsLines || [])
+        .filter((l) => l && (l.tdsAmount > 0 || l.tdsBase > 0))
+        .map((l) => ({
+            expenseLedgerId: l.expenseLedgerId || null,
+            expenseLedgerName: l.expenseLedgerName || '',
+            tdsNature: l.tdsNature || '',
+            natureKey: l.natureKey || '',
+            section: l.section || '',
+            sectionDisplay: l.sectionDisplay || '',
+            section393Label: l.section393Label || '',
+            rate: l.rate || 0,
+            tdsBase: r2v(l.tdsBase),
+            tdsAmount: r2v(l.tdsAmount),
+            payableLedgerId: l.payableLedgerId || null,
+            overrideReason: '',
+        }));
+
+    for (const line of tdsLines) {
+        if (line.tdsAmount > 0 && !line.payableLedgerId) {
             throw new ApiError(
                 httpStatus.BAD_REQUEST,
-                `TDS payable ledger is not mapped for Section ${d.tdsSection}. Please create or select ledger.`,
+                `TDS payable ledger is not mapped for Section ${line.section}. Please create or select ledger.`,
             );
         }
     }
 
+    const totalTds = r2v(tdsLines.reduce((s, l) => s + (l.tdsAmount || 0), 0));
+    const totalBase = r2v(tdsLines.reduce((s, l) => s + (l.tdsBase || 0), 0));
+    const primaryPayable = tdsLines.find((l) => l.payableLedgerId)?.payableLedgerId || null;
+
     return {
         engineActive: true,
         skipTds: false,
-        tdsAmount: d.tdsApplicable ? r2v(d.tdsAmount) : 0,
-        tdsSection: d.tdsSection,
+        tdsAmount: totalTds,
+        tdsSection: preview.multiSection
+            ? tdsLines.map((l) => l.section).filter(Boolean).join('+')
+            : (tdsLines[0]?.section || d.tdsSection || ''),
         supplierId: preview.supplierId,
-        thresholdBase: r2v(preview.tdsThresholdBaseAmount ?? d.tdsBase ?? 0),
-        payableLedgerId: payableId,
+        thresholdBase: totalBase,
+        payableLedgerId: primaryPayable,
         expenseLineLedgerId: preview.expenseLineLedgerId,
+        tdsLines,
+        multiSection: !!preview.multiSection,
         decision: d,
     };
 }
@@ -139,6 +226,33 @@ const postToLedger = (data, session) => postAccountingEntry(data, session);
 /** Bill-wise settlement (Against Bill / New Reference / Opening Credit handled in engine). */
 const adjustBill = (adj, nature, voucherNo, date, session) =>
     applyBillPaymentDelta(adj, nature, voucherNo, date, session, false);
+
+/**
+ * Direct Receive Payment may send billDiscountAmount at voucher root.
+ * Merge onto the single Against Bill adjustment when nested discountAmount is missing.
+ * Does not invent a parallel posting path — enrichment still owns GL lines.
+ */
+function mergeTopLevelBillDiscountIntoItems(items, body = {}) {
+    const disc = Math.round((Number(body.billDiscountAmount) || 0) * 100) / 100;
+    if (!(disc > 0.009) || !Array.isArray(items)) return items;
+    const against = [];
+    for (const it of items) {
+        for (const adj of it.adjustments || []) {
+            if (adj.adjustmentType === 'Against Bill' || adj.adjustmentType === 'New Reference') {
+                against.push(adj);
+            }
+        }
+    }
+    if (against.length !== 1) return items;
+    if ((Number(against[0].discountAmount) || 0) > 0.009) return items;
+    const ledgerId = body.billDiscountLedgerId || body.discountLedgerId || null;
+    const reason = String(body.billDiscountReason || body.discountReason || 'Bill adjustment discount').trim();
+    against[0].discountAmount = disc;
+    if (ledgerId) against[0].discountLedgerId = ledgerId;
+    against[0].discountReason = reason;
+    against[0].remarks = against[0].remarks || reason;
+    return items;
+}
 
 export const createVoucher = asyncHandler(async (req, res) => {
     const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
@@ -176,6 +290,52 @@ export const createVoucher = asyncHandler(async (req, res) => {
             if (!vType) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher type not found');
 
             const fy = req.body.financialYear || getFYFromDate(date || new Date());
+            const requestedNature = String(nature || '').trim();
+            // Receipt Entry must not silently post under a Journal (or other) series
+            if (requestedNature === 'Receipt') {
+                if (vType.nature !== 'Receipt') {
+                    throw new ApiError(
+                        httpStatus.BAD_REQUEST,
+                        `Voucher type "${vType.name}" is ${vType.nature}, not Receipt. Select a Receipt Voucher type.`,
+                    );
+                }
+                if (/^JOURNAL$|^JRNL$/i.test(String(vType.name || '').trim())) {
+                    throw new ApiError(
+                        httpStatus.BAD_REQUEST,
+                        'JOURNAL series cannot be used for Receipt Entry. Select Receipt Voucher.',
+                    );
+                }
+            }
+            const actualNature = vType.nature || nature;
+
+            let workingItems = Array.isArray(items)
+                ? items.map((i) => ({ ...i, adjustments: [...(i.adjustments || [])] }))
+                : [];
+            workingItems = mergeTopLevelBillDiscountIntoItems(workingItems, req.body);
+            if (actualNature === 'Receipt' || actualNature === 'Payment') {
+                const enriched = await enrichItemsWithBillAdjustmentDiscount({
+                    items: workingItems,
+                    nature: actualNature,
+                    companyId: req.companyId,
+                    session,
+                });
+                workingItems = enriched.items;
+                const hasDiscMeta = workingItems.some((it) =>
+                    (it.adjustments || []).some((a) => r2v(a.discountAmount) > 0),
+                );
+                const hasDiscLine = workingItems.some((it) => it.lineRole === 'BillAdjustmentDiscount');
+                if (hasDiscMeta && !hasDiscLine) {
+                    throw new ApiError(
+                        httpStatus.BAD_REQUEST,
+                        'Discount metadata present but discount ledger line was not generated',
+                    );
+                }
+            }
+
+            if (actualNature === 'Expense' && req.body.paymentMode !== 'Adjustment') {
+                await enforceExpenseVoucherCreditorParty(req.body, { session });
+            }
+
             await assertPostingAllowed({
                 voucherDate: date,
                 financialYear: fy,
@@ -189,10 +349,12 @@ export const createVoucher = asyncHandler(async (req, res) => {
                 voucherNo,
                 session,
             });
-            const actualNature = vType.nature || nature;
 
             const voucher = new Voucher({
                 ...req.body,
+                items: (actualNature === 'Receipt' || actualNature === 'Payment')
+                    ? workingItems
+                    : (req.body.items || items),
                 voucherNo,
                 financialYear: fy,
                 voucherType: vType._id,
@@ -200,6 +362,12 @@ export const createVoucher = asyncHandler(async (req, res) => {
                 voucherTypeName: vType.name,
                 createdBy: req.user.id
             });
+            if (!voucher.partyId && Array.isArray(voucher.items)) {
+                const partyItem = voucher.items.find(
+                    (it) => it.ledgerId && it.lineRole !== 'BillAdjustmentDiscount' && it.lineRole !== 'BillAdjustmentRoundOff',
+                );
+                if (partyItem?.ledgerId) voucher.partyId = partyItem.ledgerId;
+            }
 
             if (actualNature === 'Journal') {
                 assertBalancedEntries(
@@ -261,6 +429,7 @@ export const createVoucher = asyncHandler(async (req, res) => {
                         voucher.tdsSupplierId = expenseTdsCtx.supplierId || null;
                         voucher.tdsPayableLedgerId = expenseTdsCtx.payableLedgerId || null;
                         voucher.tdsExpenseLineLedgerId = expenseTdsCtx.expenseLineLedgerId || null;
+                        voucher.tdsLines = expenseTdsCtx.tdsLines || [];
                         voucher.tdsUserConfirmed = !!req.body.tdsUserConfirmed;
                         voucher.tdsPopupSkipped = false;
                         voucher.tdsDisabledReason = (req.body.tdsDisabledReason && String(req.body.tdsDisabledReason)) || '';
@@ -298,6 +467,16 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     voucher.paidAmount = processingTotal;
                 } else {
                     if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required for this voucher type');
+                    if (actualNature === 'Receipt' || actualNature === 'Payment') {
+                        await assertCashBankInstrumentCompatible({
+                            cashBankAccountId,
+                            instrumentType: req.body.instrumentType,
+                            instrumentNo: req.body.instrumentNo,
+                            nature: actualNature,
+                            session,
+                            companyId: req.companyId,
+                        });
+                    }
                     const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
                     if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
                     mainLedgerId = await autoLinkCashBankLedger(cbAcc, session);
@@ -306,6 +485,18 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     voucher.paidAmount = processingTotal;
                     if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
                     else if (actualNature === 'Contra') mainEntryType = req.body.headerType || 'Debit';
+                }
+
+                if ((actualNature === 'Receipt' || actualNature === 'Payment')
+                    && req.body.paymentMode !== 'Adjustment') {
+                    assertBalancedEntries(
+                        buildReceiptPaymentBalanceLines({
+                            nature: actualNature,
+                            bankAmount: mainVoucherCredit,
+                            items: voucher.items,
+                        }),
+                        `${actualNature} voucher (bank + party + discount)`,
+                    );
                 }
 
                 if (mainLedgerId) {
@@ -347,29 +538,39 @@ export const createVoucher = asyncHandler(async (req, res) => {
                     if (voucher.roundOff !== 0 && roundOffLedger) await postToLedger({ voucherId: voucher._id, voucherNo, date, ledgerId: roundOffLedger._id, amount: Math.abs(voucher.roundOff), type: voucher.roundOff > 0 ? 'Debit' : 'Credit', narration: 'Round Off', financialYear: fy }, session);
                 }
 
-                if (actualNature === 'Expense' && expenseTdsCtx && !expenseTdsCtx.skipTds && tdsAmtApply > 0 && expenseTdsCtx.payableLedgerId) {
-                    if (isCreditExpense && req.body.partyId) {
+                if (actualNature === 'Expense' && expenseTdsCtx && !expenseTdsCtx.skipTds && tdsAmtApply > 0) {
+                    const payLines = (expenseTdsCtx.tdsLines || []).filter((l) => (l.tdsAmount || 0) > 0 && l.payableLedgerId);
+                    const linesToPost = payLines.length
+                        ? payLines
+                        : (expenseTdsCtx.payableLedgerId
+                            ? [{ tdsAmount: tdsAmtApply, payableLedgerId: expenseTdsCtx.payableLedgerId, section: expenseTdsCtx.tdsSection }]
+                            : []);
+                    for (const line of linesToPost) {
+                        const amt = r2v(line.tdsAmount);
+                        if (!(amt > 0) || !line.payableLedgerId) continue;
+                        if (isCreditExpense && req.body.partyId) {
+                            await postToLedger({
+                                voucherId: voucher._id,
+                                voucherNo,
+                                date,
+                                ledgerId: req.body.partyId,
+                                amount: amt,
+                                type: 'Debit',
+                                narration: `TDS deducted u/s ${line.section || expenseTdsCtx.tdsSection}`,
+                                financialYear: fy,
+                            }, session);
+                        }
                         await postToLedger({
                             voucherId: voucher._id,
                             voucherNo,
                             date,
-                            ledgerId: req.body.partyId,
-                            amount: tdsAmtApply,
-                            type: 'Debit',
-                            narration: `TDS deducted u/s ${expenseTdsCtx.tdsSection}`,
+                            ledgerId: line.payableLedgerId,
+                            amount: amt,
+                            type: 'Credit',
+                            narration: `TDS u/s ${line.section || expenseTdsCtx.tdsSection}${line.tdsNature ? ` (${line.tdsNature})` : ''}`,
                             financialYear: fy,
                         }, session);
                     }
-                    await postToLedger({
-                        voucherId: voucher._id,
-                        voucherNo,
-                        date,
-                        ledgerId: expenseTdsCtx.payableLedgerId,
-                        amount: tdsAmtApply,
-                        type: 'Credit',
-                        narration: `TDS u/s ${expenseTdsCtx.tdsSection}`,
-                        financialYear: fy,
-                    }, session);
                 }
             }
 
@@ -381,6 +582,23 @@ export const createVoucher = asyncHandler(async (req, res) => {
                 req.user?.id || req.user?._id,
                 req.companyId,
             );
+
+            // Phase 4A — optional Customer Credit Note allocations with this Receipt/Adjustment
+            const cnLinesCreate = Array.isArray(req.body.creditNoteAllocations)
+                ? req.body.creditNoteAllocations
+                : [];
+            if (cnLinesCreate.length && (actualNature === 'Receipt' || actualNature === 'Adjustment')) {
+                await applyCustomerCreditNoteAllocations({
+                    lines: cnLinesCreate,
+                    userId: req.user?.id || req.user?._id,
+                    companyId: req.companyId,
+                    sourceMode: actualNature === 'Adjustment' ? 'Adjustment' : 'Receipt',
+                    parentReceiptVoucherId: voucher._id,
+                    remarks: req.body.narration || '',
+                    user: req.user,
+                    session,
+                });
+            }
 
             await logAccountingAudit({
                 action: 'CREATE',
@@ -396,24 +614,31 @@ export const createVoucher = asyncHandler(async (req, res) => {
 
             if (
                 actualNature === 'Expense' &&
-                voucher.tdsThresholdBaseAmount > 0 &&
                 voucher.tdsSupplierId &&
-                voucher.tdsSection &&
                 !voucher.tdsPopupSkipped &&
                 !(voucher.tdsDisabledReason && String(voucher.tdsDisabledReason).trim())
             ) {
-                await tdsTh.applyVoucherBillToTdsBalance(
-                    {
-                        supplierId: voucher.tdsSupplierId,
-                        section: voucher.tdsSection,
-                        financialYear: fy,
-                        baseAmount: voucher.tdsThresholdBaseAmount,
-                        tdsAmount: voucher.tdsAmount || 0,
-                        voucherId: voucher._id,
-                    },
-                    req.user?.id || req.user?._id,
-                    session,
-                );
+                const thrLines = (voucher.tdsLines || []).length
+                    ? voucher.tdsLines
+                    : (voucher.tdsSection && voucher.tdsThresholdBaseAmount > 0
+                        ? [{ section: voucher.tdsSection, natureKey: '', tdsBase: voucher.tdsThresholdBaseAmount, tdsAmount: voucher.tdsAmount || 0 }]
+                        : []);
+                for (const line of thrLines) {
+                    if (!(Number(line.tdsBase) > 0) || !line.section) continue;
+                    await tdsTh.applyVoucherBillToTdsBalance(
+                        {
+                            supplierId: voucher.tdsSupplierId,
+                            section: line.section,
+                            natureKey: line.natureKey || '',
+                            financialYear: fy,
+                            baseAmount: line.tdsBase,
+                            tdsAmount: line.tdsAmount || 0,
+                            voucherId: voucher._id,
+                        },
+                        req.user?.id || req.user?._id,
+                        session,
+                    );
+                }
             }
 
             await session.commitTransaction();
@@ -502,6 +727,14 @@ export const cancelVoucher = asyncHandler(async (req, res) => {
             req.body?.reason || '',
         );
 
+        // Phase 4A — reverse CN allocations linked to this receipt (separate from bank path, same txn)
+        await reverseCreditNoteAllocationsForParentReceipt(
+            voucher._id,
+            req.user?.id || req.user?._id,
+            req.body?.reason || 'Receipt/Adjustment cancelled',
+            session,
+        );
+
         voucher.status = 'Cancelled';
         await voucher.save({ session });
 
@@ -559,16 +792,67 @@ export const updateVoucher = asyncHandler(async (req, res) => {
             'Voucher edit — reversing prior settlement',
         );
 
+        await reverseCreditNoteAllocationsForParentReceipt(
+            oldVoucher._id,
+            req.user?.id || req.user?._id,
+            'Voucher edit — reversing prior Credit Note allocations',
+            session,
+        );
+
         // 2. APPLY NEW DATA
         const { voucherTypeId, date, cashBankAccountId, totalAmount, items, narration, nature } = req.body;
         const fy = req.body.financialYear || getFYFromDate(date || new Date());
         const voucherNo = oldVoucher.voucherNo; // Keep existing number
 
         const vType = await VoucherType.findById(voucherTypeId || oldVoucher.voucherType).session(session);
+        const requestedNature = String(nature || oldVoucher.nature || '').trim();
+        if (requestedNature === 'Receipt') {
+            if (vType && vType.nature !== 'Receipt') {
+                throw new ApiError(
+                    httpStatus.BAD_REQUEST,
+                    `Voucher type "${vType.name}" is ${vType.nature}, not Receipt. Select a Receipt Voucher type.`,
+                );
+            }
+            if (vType && /^JOURNAL$|^JRNL$/i.test(String(vType.name || '').trim())) {
+                throw new ApiError(
+                    httpStatus.BAD_REQUEST,
+                    'JOURNAL series cannot be used for Receipt Entry. Select Receipt Voucher.',
+                );
+            }
+        }
         const actualNature = vType?.nature || nature || oldVoucher.nature;
+
+        if (actualNature === 'Expense' && req.body.paymentMode !== 'Adjustment') {
+            await enforceExpenseVoucherCreditorParty(req.body, { session });
+        }
+
+        let updateItems = Array.isArray(items)
+            ? items.map((i) => ({ ...i, adjustments: [...(i.adjustments || [])] }))
+            : (oldVoucher.items || []);
+        updateItems = mergeTopLevelBillDiscountIntoItems(updateItems, req.body);
+        if (actualNature === 'Receipt' || actualNature === 'Payment') {
+            const enriched = await enrichItemsWithBillAdjustmentDiscount({
+                items: updateItems,
+                nature: actualNature,
+                companyId: req.companyId,
+                session,
+            });
+            updateItems = enriched.items;
+            const hasDiscMeta = updateItems.some((it) =>
+                (it.adjustments || []).some((a) => r2v(a.discountAmount) > 0),
+            );
+            const hasDiscLine = updateItems.some((it) => it.lineRole === 'BillAdjustmentDiscount');
+            if (hasDiscMeta && !hasDiscLine) {
+                throw new ApiError(
+                    httpStatus.BAD_REQUEST,
+                    'Discount metadata present but discount ledger line was not generated',
+                );
+            }
+        }
 
         // Update the document fields
         Object.assign(oldVoucher, req.body, {
+            items: updateItems,
             voucherNo,
             financialYear: fy,
             voucherType: vType?._id || oldVoucher.voucherType,
@@ -638,6 +922,7 @@ export const updateVoucher = asyncHandler(async (req, res) => {
                     oldVoucher.tdsSupplierId = expenseTdsCtx.supplierId || null;
                     oldVoucher.tdsPayableLedgerId = expenseTdsCtx.payableLedgerId || null;
                     oldVoucher.tdsExpenseLineLedgerId = expenseTdsCtx.expenseLineLedgerId || null;
+                    oldVoucher.tdsLines = expenseTdsCtx.tdsLines || [];
                     oldVoucher.tdsUserConfirmed = !!req.body.tdsUserConfirmed;
                     oldVoucher.tdsPopupSkipped = false;
                     oldVoucher.tdsDisabledReason = (req.body.tdsDisabledReason && String(req.body.tdsDisabledReason)) || '';
@@ -668,6 +953,17 @@ export const updateVoucher = asyncHandler(async (req, res) => {
                 oldVoucher.paidAmount = 0;
             } else {
                 if (!cashBankAccountId) throw new ApiError(httpStatus.BAD_REQUEST, 'Cash/Bank account is required');
+
+                if (actualNature === 'Receipt' || actualNature === 'Payment') {
+                    await assertCashBankInstrumentCompatible({
+                        cashBankAccountId,
+                        instrumentType: req.body.instrumentType,
+                        instrumentNo: req.body.instrumentNo,
+                        nature: actualNature,
+                        session,
+                        companyId: req.companyId,
+                    });
+                }
                 
                 const cbAcc = await CashBankAccount.findById(cashBankAccountId).session(session);
                 if (!cbAcc) throw new ApiError(httpStatus.NOT_FOUND, 'Cash/Bank account not found');
@@ -679,6 +975,18 @@ export const updateVoucher = asyncHandler(async (req, res) => {
                 oldVoucher.paidAmount = processingTotal;
                 if (actualNature === 'Payment' || actualNature === 'Expense') mainEntryType = 'Credit';
                 else if (actualNature === 'Contra') mainEntryType = req.body.headerType || 'Debit';
+            }
+
+            if ((actualNature === 'Receipt' || actualNature === 'Payment')
+                && req.body.paymentMode !== 'Adjustment') {
+                assertBalancedEntries(
+                    buildReceiptPaymentBalanceLines({
+                        nature: actualNature,
+                        bankAmount: mainVoucherCredit,
+                        items: oldVoucher.items,
+                    }),
+                    `${actualNature} voucher (bank + party + discount)`,
+                );
             }
 
             await postToLedger({
@@ -717,29 +1025,39 @@ export const updateVoucher = asyncHandler(async (req, res) => {
                 if (oldVoucher.roundOff !== 0 && roundOffLedger) await postToLedger({ voucherId: oldVoucher._id, voucherNo, date, ledgerId: roundOffLedger._id, amount: Math.abs(oldVoucher.roundOff), type: oldVoucher.roundOff > 0 ? 'Debit' : 'Credit', narration: 'Round Off', financialYear: fy }, session);
             }
 
-            if (actualNature === 'Expense' && expenseTdsCtx && !expenseTdsCtx.skipTds && tdsAmtApply > 0 && expenseTdsCtx.payableLedgerId) {
-                if (isCreditExpense && req.body.partyId) {
+            if (actualNature === 'Expense' && expenseTdsCtx && !expenseTdsCtx.skipTds && tdsAmtApply > 0) {
+                const payLines = (expenseTdsCtx.tdsLines || []).filter((l) => (l.tdsAmount || 0) > 0 && l.payableLedgerId);
+                const linesToPost = payLines.length
+                    ? payLines
+                    : (expenseTdsCtx.payableLedgerId
+                        ? [{ tdsAmount: tdsAmtApply, payableLedgerId: expenseTdsCtx.payableLedgerId, section: expenseTdsCtx.tdsSection }]
+                        : []);
+                for (const line of linesToPost) {
+                    const amt = r2v(line.tdsAmount);
+                    if (!(amt > 0) || !line.payableLedgerId) continue;
+                    if (isCreditExpense && req.body.partyId) {
+                        await postToLedger({
+                            voucherId: oldVoucher._id,
+                            voucherNo,
+                            date,
+                            ledgerId: req.body.partyId,
+                            amount: amt,
+                            type: 'Debit',
+                            narration: `TDS deducted u/s ${line.section || expenseTdsCtx.tdsSection}`,
+                            financialYear: fy,
+                        }, session);
+                    }
                     await postToLedger({
                         voucherId: oldVoucher._id,
                         voucherNo,
                         date,
-                        ledgerId: req.body.partyId,
-                        amount: tdsAmtApply,
-                        type: 'Debit',
-                        narration: `TDS deducted u/s ${expenseTdsCtx.tdsSection}`,
+                        ledgerId: line.payableLedgerId,
+                        amount: amt,
+                        type: 'Credit',
+                        narration: `TDS u/s ${line.section || expenseTdsCtx.tdsSection}${line.tdsNature ? ` (${line.tdsNature})` : ''}`,
                         financialYear: fy,
                     }, session);
                 }
-                await postToLedger({
-                    voucherId: oldVoucher._id,
-                    voucherNo,
-                    date,
-                    ledgerId: expenseTdsCtx.payableLedgerId,
-                    amount: tdsAmtApply,
-                    type: 'Credit',
-                    narration: `TDS u/s ${expenseTdsCtx.tdsSection}`,
-                    financialYear: fy,
-                }, session);
             }
         }
 
@@ -752,26 +1070,49 @@ export const updateVoucher = asyncHandler(async (req, res) => {
             req.companyId,
         );
 
+        const cnLinesUpdate = Array.isArray(req.body.creditNoteAllocations)
+            ? req.body.creditNoteAllocations
+            : [];
+        if (cnLinesUpdate.length && (actualNature === 'Receipt' || actualNature === 'Adjustment')) {
+            await applyCustomerCreditNoteAllocations({
+                lines: cnLinesUpdate,
+                userId: req.user?.id || req.user?._id,
+                companyId: req.companyId,
+                sourceMode: actualNature === 'Adjustment' ? 'Adjustment' : 'Receipt',
+                parentReceiptVoucherId: oldVoucher._id,
+                remarks: narration || '',
+                user: req.user,
+                session,
+            });
+        }
+
         if (
             actualNature === 'Expense' &&
-            oldVoucher.tdsThresholdBaseAmount > 0 &&
             oldVoucher.tdsSupplierId &&
-            oldVoucher.tdsSection &&
             !oldVoucher.tdsPopupSkipped &&
             !(oldVoucher.tdsDisabledReason && String(oldVoucher.tdsDisabledReason).trim())
         ) {
-            await tdsTh.applyVoucherBillToTdsBalance(
-                {
-                    supplierId: oldVoucher.tdsSupplierId,
-                    section: oldVoucher.tdsSection,
-                    financialYear: fy,
-                    baseAmount: oldVoucher.tdsThresholdBaseAmount,
-                    tdsAmount: oldVoucher.tdsAmount || 0,
-                    voucherId: oldVoucher._id,
-                },
-                req.user?.id || req.user?._id,
-                session,
-            );
+            const thrLines = (oldVoucher.tdsLines || []).length
+                ? oldVoucher.tdsLines
+                : (oldVoucher.tdsSection && oldVoucher.tdsThresholdBaseAmount > 0
+                    ? [{ section: oldVoucher.tdsSection, natureKey: '', tdsBase: oldVoucher.tdsThresholdBaseAmount, tdsAmount: oldVoucher.tdsAmount || 0 }]
+                    : []);
+            for (const line of thrLines) {
+                if (!(Number(line.tdsBase) > 0) || !line.section) continue;
+                await tdsTh.applyVoucherBillToTdsBalance(
+                    {
+                        supplierId: oldVoucher.tdsSupplierId,
+                        section: line.section,
+                        natureKey: line.natureKey || '',
+                        financialYear: fy,
+                        baseAmount: line.tdsBase,
+                        tdsAmount: line.tdsAmount || 0,
+                        voucherId: oldVoucher._id,
+                    },
+                    req.user?.id || req.user?._id,
+                    session,
+                );
+            }
         }
 
         await session.commitTransaction();

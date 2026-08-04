@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { emailBulkApi } from '@/services/emailBulkApi';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
+import { PATHS } from '@/routes/paths';
 
 const page = { padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' };
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 20, marginBottom: 16 };
@@ -62,6 +64,7 @@ export default function EmailBulkTemplatesPage() {
 
     return (
         <div style={page}>
+            <ModuleHomeBackLink to={PATHS.SETTINGS.COMMUNICATION_HOME} label="Back to Communication Home" />
             <h1>Email Template Master</h1>
             <form style={card} onSubmit={onSave}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

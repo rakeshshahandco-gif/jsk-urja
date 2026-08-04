@@ -13,8 +13,13 @@ router
     .post(validate(taskGroupValidation.createGroup), taskGroupController.createGroup)
     .get(validate(taskGroupValidation.getGroups), taskGroupController.getGroups);
 
-// ── My accessible groups (filtered by user) ──────────────────────────────
 router.get('/my', taskGroupController.getMyGroups);
+router.get('/highlighted', taskGroupController.getHighlightedGroups);
+router.post(
+    '/reorder-highlights',
+    validate(taskGroupValidation.reorderHighlights),
+    taskGroupController.reorderHighlights,
+);
 
 router
     .route('/:groupId')

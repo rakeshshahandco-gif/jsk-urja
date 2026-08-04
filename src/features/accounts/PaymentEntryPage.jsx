@@ -6,14 +6,22 @@ import { BrandedModuleLoader } from '@/components/ui/BrandedLoading/BrandedModul
 import { Plus, Trash2, Save, Layers, AlertTriangle, AlertCircle } from 'lucide-react';
 import {
     getVoucherTypes, getCashBankAccounts, getLedgers, getAccountGroups,
-    getOutstandingBills, createVoucher, createLedger, getVoucher, updateVoucher,
+    createVoucher, createLedger, getVoucher, updateVoucher,
     autoLinkSingleLedger
 } from '@/services/accountApi';
+import BillAdjustmentPopup from './components/BillAdjustmentPopup';
 import LedgerForm from './components/LedgerForm';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import VoucherEntryTallyLayout from './components/voucherEntryTally';
+import {
+    coerceInstrumentForAccount,
+    defaultInstrumentForAccount,
+    getInstrumentOptionsForAccount,
+    getInstrumentRefMeta,
+    validateInstrumentForAccount,
+} from './utils/cashBankInstrument';
 
 const inp = { padding: '9px 12px', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '7px', color: '#1e293b', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', transition: 'border-color 0.2s' };
 
@@ -37,7 +45,7 @@ const PaymentEntryPage = () => {
         cashBankAccountId: '',
         totalAmount: 0,
         narration: '',
-        instrumentType: 'Bank Transfer',
+        instrumentType: '',
         instrumentNo: '',
         items: [
             { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }
@@ -68,7 +76,11 @@ const PaymentEntryPage = () => {
                     setFormData(prev => ({ ...prev, voucherTypeId: defaultType._id }));
                 }
                 if (cbAccs.length > 0) {
-                    setFormData(prev => ({ ...prev, cashBankAccountId: cbAccs[0]._id }));
+                    setFormData(prev => ({
+                        ...prev,
+                        cashBankAccountId: cbAccs[0]._id,
+                        instrumentType: defaultInstrumentForAccount(cbAccs[0]),
+                    }));
                 }
 
                 // If launched from Invoice Detail, pre-fill details
@@ -147,7 +159,16 @@ const PaymentEntryPage = () => {
 
     const handleHeaderChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'cashBankAccountId') {
+            const acc = cashBankAccounts.find((a) => String(a._id) === String(value));
+            setFormData((prev) => ({
+                ...prev,
+                cashBankAccountId: value,
+                instrumentType: coerceInstrumentForAccount(acc, prev.instrumentType),
+            }));
+            return;
+        }
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleItemChange = (id, field, value) => {
@@ -282,107 +303,6 @@ const PaymentEntryPage = () => {
         });
     };
 
-    const BillAdjustmentPopup = ({ itemId, ledgerId, amountToAdjust }) => {
-        const [bills, setBills] = useState([]);
-        const [selectedBills, setSelectedBills] = useState([]);
-        const [loading, setLoading] = useState(false);
-
-        useEffect(() => {
-            const fetchBills = async () => {
-                setLoading(true);
-                try {
-                    const data = await getOutstandingBills(ledgerId);
-                    setBills(data);
-                } catch (error) {
-                    toast.error('Failed to fetch outstanding bills');
-                } finally {
-                    setLoading(false);
-                }
-            };
-            fetchBills();
-        }, [ledgerId]);
-
-        const totalSelected = selectedBills.reduce((sum, b) => sum + b.amount, 0);
-
-        const toggleBill = (bill) => {
-            setSelectedBills(prev => {
-                const exists = prev.find(b => b.refId === bill._id);
-                if (exists) return prev.filter(b => b.refId !== bill._id);
-
-                const remaining = amountToAdjust - totalSelected;
-                const billBalance = bill.grandTotal - bill.paidAmount;
-                const amount = Math.min(remaining, billBalance);
-
-                return [...prev, {
-                    refId: bill._id,
-                    refNumber: bill.invoiceNumber,
-                    amount: amount,
-                    adjustmentType: 'Against Bill',
-                    refModel: 'PurchaseInvoice'
-                }];
-            });
-        };
-
-        const handleConfirm = () => {
-            const finalAdjustments = [...selectedBills];
-            if (totalSelected < amountToAdjust) {
-                finalAdjustments.push({
-                    adjustmentType: 'On Account',
-                    amount: amountToAdjust - totalSelected
-                });
-            }
-            handleItemChange(itemId, 'adjustments', finalAdjustments);
-            closeModal();
-        };
-
-        return (
-            <div className="space-y-4 pt-4">
-                <div className="flex justify-between items-center bg-primary/5 p-3 rounded-lg border border-primary/20">
-                    <span className="font-medium text-gray-700 text-sm">Amount to Adjusted: <span className="text-primary font-bold">₹{amountToAdjust}</span></span>
-                    <span className="font-medium text-green-600 text-sm">Selected: ₹{totalSelected}</span>
-                </div>
-
-                <div className="max-h-[300px] overflow-y-auto border rounded-xl shadow-inner bg-white">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="sticky top-0 bg-gray-50 border-b">
-                            <tr>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Select</th>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Invoice #</th>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Date</th>
-                                <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400 text-right">Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 font-medium">
-                            {bills.map(bill => (
-                                <tr key={bill._id} className="hover:bg-blue-50/50 transition-colors">
-                                    <td className="px-4 py-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedBills.some(s => s.refId === bill._id)}
-                                            onChange={() => toggleBill(bill)}
-                                            className="w-4 h-4 rounded text-primary"
-                                        />
-                                    </td>
-                                    <td className="px-4 py-3 text-sm">{bill.invoiceNumber}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-500">{new Date(bill.invoiceDate).toLocaleDateString()}</td>
-                                    <td className="px-4 py-3 text-sm font-bold text-red-600 text-right">₹{(bill.grandTotal - bill.paidAmount).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {bills.length === 0 && !loading && (
-                        <div className="p-10 text-center text-gray-400 italic text-sm">No outstanding purchase invoices found.</div>
-                    )}
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4">
-                    <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                    <Button onClick={handleConfirm}>Confirm Adjustments</Button>
-                </div>
-            </div>
-        );
-    };
-
     const handleOpenAdjustment = (item) => {
         if (!item.ledgerId || !item.amount) return toast.error('Set supplier ledger and amount first');
         if (item.ledgerType !== 'Supplier') {
@@ -391,8 +311,20 @@ const PaymentEntryPage = () => {
         }
         openModal({
             title: `Bill Adjustment - ${item.ledgerName}`,
-            content: <BillAdjustmentPopup itemId={item.id} ledgerId={item.ledgerId} amountToAdjust={item.amount} />,
-            size: 'lg'
+            content: (
+                <BillAdjustmentPopup
+                    mode="payment"
+                    ledgerId={item.ledgerId}
+                    amountToAdjust={item.amount}
+                    ledgers={ledgers}
+                    onCancel={closeModal}
+                    onConfirm={({ adjustments }) => {
+                        handleItemChange(item.id, 'adjustments', adjustments);
+                        closeModal();
+                    }}
+                />
+            ),
+            size: 'wide',
         });
     };
 
@@ -404,6 +336,13 @@ const PaymentEntryPage = () => {
         if (selectedAcc && !selectedAcc.ledgerId) {
             return toast.error('Selected account is not linked to an accounting ledger. Please fix it first.');
         }
+        const instrumentErr = validateInstrumentForAccount(
+            selectedAcc,
+            formData.instrumentType,
+            formData.instrumentNo,
+            'payment',
+        );
+        if (instrumentErr) return toast.error(instrumentErr);
 
         if (!fromInvoice) {
             const invalidItem = formData.items.find(item => !item.ledgerId || item.amount <= 0);
@@ -418,14 +357,34 @@ const PaymentEntryPage = () => {
             }
         }
 
+        for (const item of formData.items || []) {
+            for (const adj of item.adjustments || []) {
+                if (adj.adjustmentType !== 'Against Bill') continue;
+                const disc = Number(adj.discountAmount) || 0;
+                if (disc > 0.009 && !adj.discountLedgerId) {
+                    return toast.error(
+                        `Bill ${adj.refNumber || ''}: Discount missing ledger. Confirm Bill Adjustment again.`,
+                    );
+                }
+            }
+        }
+
         setIsSubmitting(true);
         try {
             if (isEdit) {
-                await updateVoucher(id, { ...formData, nature: 'Payment' });
+                await updateVoucher(id, {
+                    ...formData,
+                    nature: 'Payment',
+                    partyId: formData.items[0]?.ledgerId || formData.partyId,
+                });
                 toast.success('Voucher updated successfully');
                 navigate(PATHS.ACCOUNTS.VOUCHERS);
             } else {
-                const response = await createVoucher({ ...formData, nature: 'Payment' });
+                const response = await createVoucher({
+                    ...formData,
+                    nature: 'Payment',
+                    partyId: formData.items[0]?.ledgerId || formData.partyId,
+                });
                 const savedNo = response?.data?.voucherNo || 'Voucher';
                 toast.success(`${savedNo} saved successfully`);
                 
@@ -434,16 +393,19 @@ const PaymentEntryPage = () => {
                     navigate(-1);
                 } else {
                 // RESET FORM FOR NEXT ENTRY
-                setFormData(prev => ({
+                setFormData(prev => {
+                    const acc = cashBankAccounts.find((a) => String(a._id) === String(prev.cashBankAccountId));
+                    return {
                     ...INITIAL_FORM_STATE,
                     voucherTypeId: prev.voucherTypeId,
                     date: prev.date,
                     cashBankAccountId: prev.cashBankAccountId,
-                    instrumentType: prev.instrumentType,
+                    instrumentType: coerceInstrumentForAccount(acc, defaultInstrumentForAccount(acc) || prev.instrumentType),
                     items: [
                         { id: Date.now(), ledgerId: '', ledgerName: '', amount: 0, type: 'Debit', narration: '', adjustments: [] }
                     ]
-                }));
+                };
+                });
                 }
             }
         } catch (error) {
@@ -464,6 +426,8 @@ const PaymentEntryPage = () => {
         const supplierName = location.state?.supplierName || formData.items[0]?.ledgerName || '—';
         const amount = formData.totalAmount || location.state?.amount || 0;
         const selectedAccount = cashBankAccounts.find(a => a._id === formData.cashBankAccountId);
+        const instrumentOptions = getInstrumentOptionsForAccount(selectedAccount);
+        const instrumentRefMeta = getInstrumentRefMeta(formData.instrumentType);
 
         return (
             <div style={{ fontFamily: "'Inter',sans-serif", background: '#f8f9fa', minHeight: '100vh', padding: '32px 24px', color: '#1e293b' }}>
@@ -547,19 +511,19 @@ const PaymentEntryPage = () => {
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 10 }}>Payment Mode</label>
                         <select name="instrumentType" value={formData.instrumentType} onChange={handleHeaderChange}
                             style={{ width: '100%', padding: '11px 14px', border: '2px solid #e5e7eb', borderRadius: 9, fontSize: 14, fontWeight: 600, background: '#f9fafb', color: '#374151', outline: 'none', cursor: 'pointer', marginBottom: 16 }}>
-                            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
-                            <option value="Cash">Cash</option>
-                            <option value="Cheque">Cheque</option>
-                            <option value="UPI">UPI</option>
+                            {!formData.instrumentType && <option value="">Select Instrument Type</option>}
+                            {instrumentOptions.map((o) => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
                         </select>
 
-                        {(formData.instrumentType === 'Cheque' || formData.instrumentType === 'Bank Transfer') && (
+                        {(formData.instrumentType && formData.instrumentType !== 'Cash') && (
                             <>
                                 <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, color: '#374151', marginBottom: 8 }}>
-                                    {formData.instrumentType === 'Cheque' ? 'Cheque No.' : 'UTR / Reference No.'}
+                                    {instrumentRefMeta.label}{instrumentRefMeta.required ? ' *' : ''}
                                 </label>
                                 <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange}
-                                    placeholder={formData.instrumentType === 'Cheque' ? 'Enter cheque number' : 'Enter UTR / ref number'}
+                                    placeholder={instrumentRefMeta.placeholder}
                                     style={{ width: '100%', padding: '11px 14px', border: '2px solid #e5e7eb', borderRadius: 9, fontSize: 14, background: '#f9fafb', color: '#374151', outline: 'none', boxSizing: 'border-box' }} />
                             </>
                         )}
@@ -673,15 +637,24 @@ const PaymentEntryPage = () => {
                                     onChange={handleHeaderChange}
                                     style={{ ...inp, cursor: 'pointer' }}
                                 >
-                                    <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
-                                    <option value="Cash">Cash</option>
-                                    <option value="Cheque">Cheque</option>
-                                    <option value="UPI">UPI</option>
+                                    {!formData.instrumentType && <option value="">Select Instrument Type</option>}
+                                    {getInstrumentOptionsForAccount(cashBankAccounts.find((a) => a._id === formData.cashBankAccountId)).map((o) => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
                                 </select>
                             </div>
                             <div>
-                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>Instrument / Ref No.</span>
-                                <input name="instrumentNo" value={formData.instrumentNo} onChange={handleHeaderChange} placeholder="UTR / Cheque No" style={inp} />
+                                <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '4px', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                    {getInstrumentRefMeta(formData.instrumentType).label}
+                                    {getInstrumentRefMeta(formData.instrumentType).required ? ' *' : ''}
+                                </span>
+                                <input
+                                    name="instrumentNo"
+                                    value={formData.instrumentNo}
+                                    onChange={handleHeaderChange}
+                                    placeholder={getInstrumentRefMeta(formData.instrumentType).placeholder}
+                                    style={inp}
+                                />
                             </div>
                         </div>
                     </div>

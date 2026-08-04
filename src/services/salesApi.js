@@ -38,6 +38,14 @@ export const getSalesInvoiceById = (id) =>
 export const createSalesInvoice = (data) =>
     apiClient.post('/sales-invoices', data, { timeout: 120000 }).then(r => r.data.data);
 
+export const createTaxInvoiceFromSalesOrder = (soId, data, config = {}) =>
+    apiClient.post(`/sales-orders/${soId}/create-tax-invoice`, data, {
+        timeout: 120000,
+        headers: config.idempotencyKey
+            ? { 'Idempotency-Key': config.idempotencyKey }
+            : undefined,
+    }).then(r => r.data.data);
+
 export const cancelSalesInvoice = (id, data) =>
     apiClient.post(`/sales-invoices/${id}/cancel`, data).then(r => r.data);
 

@@ -80,6 +80,11 @@ export const getTaskGroups = async (params = {}) => {
   return response.data.data;
 };
 
+export const getHighlightedTaskGroups = async () => {
+  const response = await api.get("/task-groups/highlighted");
+  return response.data.data;
+};
+
 export const getTaskGroup = async (id) => {
   const response = await api.get(`/task-groups/${id}`);
   return response.data.data;
@@ -97,5 +102,10 @@ export const updateTaskGroup = async (id, data) => {
 
 export const deleteTaskGroup = async (id) => {
   const response = await api.delete(`/task-groups/${id}`);
+  return response.data;
+};
+
+export const reorderHighlightedTaskGroups = async (orderedIds) => {
+  const response = await api.post("/task-groups/reorder-highlights", { orderedIds });
   return response.data;
 };

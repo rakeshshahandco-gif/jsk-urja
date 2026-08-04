@@ -190,7 +190,7 @@ const extendTask = {
     }),
     body: Joi.object().keys({
         newDueDate: Joi.date().required(),
-        reason: Joi.string().required().trim(),
+        reason: Joi.string().allow('', null).optional().trim(),
     })
 };
 

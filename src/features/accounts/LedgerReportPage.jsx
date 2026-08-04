@@ -201,11 +201,11 @@ const LedgerReportPage = ({ defaultType = null }) => {
                             <p className={s.cardLabel}>Period Activity</p>
                             <div className={s.activityMetrics}>
                                 <div className={`${s.metric} ${s.debit}`}>
-                                    <span>Debit (+)</span>
+                                    <span>Debit (+) → Deposit / Receipt</span>
                                     <span>₹{cur(data.periodDebit)}</span>
                                 </div>
                                 <div className={`${s.metric} ${s.credit}`}>
-                                    <span>Credit (-)</span>
+                                    <span>Credit (-) → Withdrawal / Payment</span>
                                     <span>₹{cur(data.periodCredit)}</span>
                                 </div>
                             </div>
@@ -223,8 +223,16 @@ const LedgerReportPage = ({ defaultType = null }) => {
                                     <th>Date</th>
                                     <th>Voucher Details</th>
                                     <th className="text-center">Type</th>
-                                    <th className="text-right">Debit (₹)</th>
-                                    <th className="text-right">Credit (₹)</th>
+                                    <th className="text-right">
+                                        {defaultType === 'Bank' || defaultType === 'Cash'
+                                            ? 'Debit (+) Deposit / Receipt (₹)'
+                                            : 'Debit (₹)'}
+                                    </th>
+                                    <th className="text-right">
+                                        {defaultType === 'Bank' || defaultType === 'Cash'
+                                            ? 'Credit (-) Withdrawal / Payment (₹)'
+                                            : 'Credit (₹)'}
+                                    </th>
                                     <th className="text-right">Balance (₹)</th>
                                     <th className="text-center">Manage</th>
                                 </tr>
@@ -256,10 +264,21 @@ const LedgerReportPage = ({ defaultType = null }) => {
                                             </div>
                                         </td>
                                         <td className="text-center">
-                                            {entry.type === 'Debit' ?
-                                                <ArrowUpRight className="w-5 h-5 text-emerald-500 mx-auto" /> :
-                                                <ArrowDownLeft className="w-5 h-5 text-rose-500 mx-auto" />
-                                            }
+                                            {entry.type === 'Debit' ? (
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <ArrowUpRight className="w-5 h-5 text-emerald-500 mx-auto" />
+                                                    {(defaultType === 'Bank' || defaultType === 'Cash') && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Deposit / Receipt</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <ArrowDownLeft className="w-5 h-5 text-rose-500 mx-auto" />
+                                                    {(defaultType === 'Bank' || defaultType === 'Cash') && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-rose-600">Withdrawal / Payment</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="text-right font-black">
                                             {entry.type === 'Debit' ? 

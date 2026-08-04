@@ -70,7 +70,7 @@ export const getNextVoucherNo = async (typeId, date, session) => {
 
     const num = vType.nextNumber;
     
-    let prefix = vType.prefix;
+    let prefix = String(vType.prefix || '').replace(/\/+$/, '');
     if (!prefix) {
         const naturePrefixes = {
             'Receipt': 'RV',

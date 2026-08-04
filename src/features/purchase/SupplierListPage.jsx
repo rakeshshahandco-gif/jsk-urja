@@ -35,12 +35,36 @@ const EMPTY = {
     supplierName: '', contactPerson: '', phone: '', email: '',
     address: '', area: '', city: '', state: '', pincode: '',
     gstNumber: '', gstType: '', panNumber: '',
+    gstRegistrationStatus: '',
+    supplierChargesGst: '',
+    defaultPlaceOfSupply: '',
+    defaultRcmTreatment: '',
+    defaultRcmCategories: [],
+    defaultPropertyType: '',
+    transportServiceSupplier: false,
+    transportSupplierType: '',
+    consignmentNoteNormallyIssued: '',
+    transportGstPaymentOption: '',
+    defaultTransportRcmCategory: '',
     deducteeConstitution: '',
+    allowedTdsNatures: [],
+    tdsSection: '',
     openingBalance: 0, openingBalanceDrCr: 'Cr',
     paymentTerms: '',
     bankName: '', bankAccountNo: '', bankIfsc: '',
     remarks: '',
     msmeApplicable: false, msmeRegNo: '', msmeCategory: '',
+};
+
+const RCM_CATEGORY_CODES = ['RENT', 'GTA', 'COURIER', 'LEGAL', 'SECURITY', 'GENERAL', 'OTHER'];
+const RCM_CATEGORY_LABELS = {
+    RENT: 'Rent (category code)',
+    GTA: 'GTA (category code)',
+    COURIER: 'Courier (category code)',
+    LEGAL: 'Legal (category code)',
+    SECURITY: 'Security (category code)',
+    GENERAL: 'General (category code)',
+    OTHER: 'Other (category code)',
 };
 
 export default function SupplierListPage() {
@@ -359,13 +383,49 @@ export default function SupplierListPage() {
                             </div>
                         </div>
 
-                        {/* ── Section 3: GST & Tax ── */}
-                        <div style={secTitle}>🔰 GST & Tax Details</div>
+                        {/* ── Section 3: GST Profile ── */}
+                        <div style={secTitle}>🔰 GST Profile</div>
+                        <p style={{ fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 14, lineHeight: 1.45 }}>
+                            Party GST registration. Recipient/company GST is taken from Active Company — not entered here.
+                            Blank GSTIN alone does not create RCM.
+                        </p>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
-                            {show('gstNumber') && (
+                            <div>
+                                <label style={lbl}>GST Registration Status</label>
+                                <select value={modal.data.gstRegistrationStatus || ''} onChange={e => set('gstRegistrationStatus', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— Select —</option>
+                                    <option value="Registered Regular">Registered Regular</option>
+                                    <option value="Composition">Composition</option>
+                                    <option value="Unregistered">Unregistered</option>
+                                    <option value="SEZ">SEZ</option>
+                                    <option value="Overseas">Overseas</option>
+                                    <option value="Exempt Entity">Exempt Entity</option>
+                                    <option value="Not Applicable">Not Applicable</option>
+                                </select>
+                            </div>
+                            {(['Unregistered', 'Not Applicable', 'Exempt Entity', 'Overseas'].includes(modal.data.gstRegistrationStatus)) ? (
                             <div>
                                 <label style={lbl}>{fieldLabel('gstNumber', 'GST Number (GSTIN)')}</label>
-                                <input value={modal.data.gstNumber || ''} onChange={e => set('gstNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="22AAAAA0000A1Z5" {...fieldProps('gstNumber')} />
+                                <input
+                                    value=""
+                                    disabled
+                                    style={{ ...inp, fontFamily: 'monospace', background: '#f1f5f9', color: '#94a3b8' }}
+                                    placeholder="Hidden — not required for this status"
+                                />
+                                <span style={{ fontSize: 11, color: '#b45309', display: 'block', marginTop: 4 }}>
+                                    Do not invent a GSTIN. Blank GSTIN alone does not create RCM.
+                                </span>
+                            </div>
+                            ) : show('gstNumber') && (
+                            <div>
+                                <label style={lbl}>{fieldLabel('gstNumber', 'GST Number (GSTIN)')}</label>
+                                <input
+                                    value={modal.data.gstNumber || ''}
+                                    onChange={e => set('gstNumber', e.target.value.toUpperCase())}
+                                    style={{ ...inp, fontFamily: 'monospace' }}
+                                    placeholder="22AAAAA0000A1Z5"
+                                    {...fieldProps('gstNumber')}
+                                />
                             </div>
                             )}
                             {show('gstNumber') && (
@@ -378,12 +438,160 @@ export default function SupplierListPage() {
                                 </select>
                             </div>
                             )}
+                            <div>
+                                <label style={lbl}>Supplier Charges GST</label>
+                                <select value={modal.data.supplierChargesGst || ''} onChange={e => set('supplierChargesGst', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— Select —</option>
+                                    <option value="Forward Charge">Forward Charge</option>
+                                    <option value="Reverse Charge">Reverse Charge</option>
+                                    <option value="Transaction-wise">Transaction-wise</option>
+                                    <option value="Not Applicable">Not Applicable</option>
+                                </select>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
+                                    Profile hint only — voucher captures “GST charged on this bill: Yes/No” separately. Not charging GST does not auto-create RCM.
+                                </span>
+                            </div>
+                            <div>
+                                <label style={lbl}>Default Place of Supply</label>
+                                <input value={modal.data.defaultPlaceOfSupply || ''} onChange={e => set('defaultPlaceOfSupply', e.target.value)} style={inp} placeholder="State / POS" />
+                            </div>
+                        </div>
+
+                        {/* ── Section 3b: RCM Profile (suggestions only) ── */}
+                        <div style={secTitle}>↩️ RCM Profile (defaults / suggestions only)</div>
+                        <p style={{ fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 14, lineHeight: 1.45 }}>
+                            These values may prefill Expense/Purchase vouchers. Final RCM is decided transaction-wise by the RCM engine and approved rules. Master settings never post RCM liability.
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                            <div>
+                                <label style={lbl}>Default RCM Treatment</label>
+                                <select value={modal.data.defaultRcmTreatment || ''} onChange={e => set('defaultRcmTreatment', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— Select —</option>
+                                    <option value="Not Applicable">Not Applicable</option>
+                                    <option value="RCM May Apply">RCM May Apply</option>
+                                    <option value="Default RCM Supplier">Default RCM Supplier</option>
+                                    <option value="Transaction-wise Review">Transaction-wise Review</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style={lbl}>Default Property Type (Rent)</label>
+                                <select value={modal.data.defaultPropertyType || ''} onChange={e => set('defaultPropertyType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— Select —</option>
+                                    <option value="Commercial">Commercial</option>
+                                    <option value="Residential">Residential</option>
+                                    <option value="Mixed">Mixed</option>
+                                    <option value="Other">Other</option>
+                                    <option value="Transaction-wise">Transaction-wise</option>
+                                </select>
+                            </div>
+                            <div style={{ gridColumn: 'span 3' }}>
+                                <label style={lbl}>Default RCM Categories (canonical codes)</label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+                                    {RCM_CATEGORY_CODES.map((code) => {
+                                        const selected = Array.isArray(modal.data.defaultRcmCategories) && modal.data.defaultRcmCategories.includes(code);
+                                        return (
+                                            <label key={code} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!selected}
+                                                    onChange={() => {
+                                                        const cur = Array.isArray(modal.data.defaultRcmCategories) ? [...modal.data.defaultRcmCategories] : [];
+                                                        const next = selected ? cur.filter((x) => x !== code) : [...cur, code];
+                                                        set('defaultRcmCategories', next);
+                                                    }}
+                                                />
+                                                {code} — {RCM_CATEGORY_LABELS[code]}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6 }}>
+                                    Labels are category codes; approved rule titles from RCM Rule Master are used at evaluation — not hard-coded legal conclusions here.
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* ── Section 3c: Transport / GTA Profile ── */}
+                        <div style={secTitle}>🚚 Transport / GTA Profile</div>
+                        <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!modal.data.transportServiceSupplier}
+                                    onChange={(e) => set('transportServiceSupplier', e.target.checked)}
+                                />
+                                Transport Service Supplier
+                            </label>
+                        </div>
+                        {modal.data.transportServiceSupplier ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+                                <div>
+                                    <label style={lbl}>Transport Supplier Type</label>
+                                    <select value={modal.data.transportSupplierType || ''} onChange={e => set('transportSupplierType', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                        <option value="">— Select —</option>
+                                        <option value="GTA — Issues Consignment Note">GTA — Issues Consignment Note</option>
+                                        <option value="Courier Agency">Courier Agency</option>
+                                        <option value="Local Transporter — No Consignment Note">Local Transporter — No Consignment Note</option>
+                                        <option value="Vehicle Owner / Vehicle Hire">Vehicle Owner / Vehicle Hire</option>
+                                        <option value="Parcel Service">Parcel Service</option>
+                                        <option value="Freight Forwarder">Freight Forwarder</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={lbl}>Consignment Note Normally Issued</label>
+                                    <select value={modal.data.consignmentNoteNormallyIssued || ''} onChange={e => set('consignmentNoteNormallyIssued', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                        <option value="">— Select —</option>
+                                        <option value="Yes">Yes</option>
+                                        <option value="No">No</option>
+                                        <option value="Transaction-wise">Transaction-wise</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={lbl}>GST Payment Option</label>
+                                    <select value={modal.data.transportGstPaymentOption || ''} onChange={e => set('transportGstPaymentOption', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                        <option value="">— Select —</option>
+                                        <option value="Recipient Pays under RCM">Recipient Pays under RCM</option>
+                                        <option value="Supplier Pays under Forward Charge">Supplier Pays under Forward Charge</option>
+                                        <option value="Exempt / Not Applicable">Exempt / Not Applicable</option>
+                                        <option value="Transaction-wise">Transaction-wise</option>
+                                        <option value="Unknown / Review Required">Unknown / Review Required</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={lbl}>Default Transport RCM Category</label>
+                                    <select value={modal.data.defaultTransportRcmCategory || ''} onChange={e => set('defaultTransportRcmCategory', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                        <option value="">— Select —</option>
+                                        <option value="GTA">GTA</option>
+                                        <option value="OTHER">OTHER (e.g. vehicle hire)</option>
+                                        <option value="COURIER">COURIER</option>
+                                        <option value="None">None</option>
+                                    </select>
+                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
+                                        Courier and local transport must not automatically become GTA RCM.
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>Enable for GTA / courier / vehicle-hire suppliers.</p>
+                        )}
+
+                        {/* ── Section 3d: TDS Profile ── */}
+                        <div style={secTitle}>📑 TDS Profile</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
                             {show('panNumber') && (
                             <div>
                                 <label style={lbl}>{fieldLabel('panNumber', 'PAN Number')}</label>
                                 <input value={modal.data.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())} style={{ ...inp, fontFamily: 'monospace' }} placeholder="AAAAA0000A" {...fieldProps('panNumber')} />
                             </div>
                             )}
+                            <div>
+                                <label style={lbl}>PAN available</label>
+                                <select value={modal.data.panAvailable === false ? 'no' : 'yes'} onChange={e => set('panAvailable', e.target.value !== 'no')} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="yes">Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                            </div>
                             <div style={{ gridColumn: 'span 3' }}>
                                 <label style={lbl}>Deductee type / constitution</label>
                                 <select value={modal.data.deducteeConstitution || ''} onChange={e => set('deducteeConstitution', e.target.value)} style={{ ...inp, cursor: 'pointer' }} title="Used with TDS Master to pick Individual/HUF vs company rate (e.g. 194C 1% vs 2%).">
@@ -392,8 +600,54 @@ export default function SupplierListPage() {
                                     ))}
                                 </select>
                                 <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6 }}>
-                                    Drives auto TDS rate from TDS Master by section (e.g. 194C: Individual/HUF/Proprietorship vs company).
+                                    Drives auto TDS rate from TDS Master by section. Not a permanent TDS section lock.
                                 </span>
+                            </div>
+                            <div style={{ gridColumn: 'span 3' }}>
+                                <label style={lbl}>Allowed TDS natures (optional multi-select)</label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+                                    {['Contractor', 'Professional Services', 'Technical Services', 'Rent', 'Commission', 'Interest'].map((n) => {
+                                        const selected = Array.isArray(modal.data.allowedTdsNatures) && modal.data.allowedTdsNatures.includes(n);
+                                        return (
+                                            <label key={n} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!selected}
+                                                    onChange={() => {
+                                                        const cur = Array.isArray(modal.data.allowedTdsNatures) ? [...modal.data.allowedTdsNatures] : [];
+                                                        const next = selected ? cur.filter((x) => x !== n) : [...cur, n];
+                                                        set('allowedTdsNatures', next);
+                                                    }}
+                                                />
+                                                {n}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 6 }}>
+                                    Empty = any nature allowed. Expense ledger still decides the default nature/section per line.
+                                </span>
+                            </div>
+                            <div>
+                                <label style={lbl}>Default TDS section (suggestion only)</label>
+                                <select value={modal.data.tdsSection || ''} onChange={e => set('tdsSection', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                                    <option value="">— None —</option>
+                                    {['194C', '194J', '194I', '194H', '194A', '194Q'].map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={lbl}>Lower / nil TDS cert. %</label>
+                                <input type="number" min={0} max={100} step="0.01" value={modal.data.tdsLowerDeductionPercent ?? 0} onChange={e => set('tdsLowerDeductionPercent', Number(e.target.value) || 0)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>LDC valid from</label>
+                                <input type="date" value={modal.data.tdsLowerDeductionValidFrom ? String(modal.data.tdsLowerDeductionValidFrom).slice(0, 10) : ''} onChange={e => set('tdsLowerDeductionValidFrom', e.target.value || null)} style={inp} />
+                            </div>
+                            <div>
+                                <label style={lbl}>LDC valid to</label>
+                                <input type="date" value={modal.data.tdsLowerDeductionValidTo ? String(modal.data.tdsLowerDeductionValidTo).slice(0, 10) : ''} onChange={e => set('tdsLowerDeductionValidTo', e.target.value || null)} style={inp} />
                             </div>
                         </div>
 

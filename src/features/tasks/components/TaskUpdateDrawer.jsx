@@ -14,6 +14,7 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
     const [resolutionText, setResolutionText] = useState('');
     const [isExtending, setIsExtending] = useState(false);
     const [extensionData, setExtensionData] = useState({ newDueDate: '', reason: '' });
+    const [extendSubmitting, setExtendSubmitting] = useState(false);
 
     const loadTask = useCallback(async () => {
         if (!taskId) return;
@@ -75,15 +76,35 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
     };
 
     const handleExtend = async () => {
+        if (extendSubmitting) return;
         if (!extensionData.newDueDate) return addToast('Please select a new due date.', 'warning');
+        if (task?.dueDate) {
+            const currentDay = new Date(task.dueDate);
+            currentDay.setHours(0, 0, 0, 0);
+            const nextDay = new Date(extensionData.newDueDate);
+            nextDay.setHours(0, 0, 0, 0);
+            if (nextDay.getTime() <= currentDay.getTime()) {
+                return addToast('Extended date must be later than the current due date.', 'warning');
+            }
+        }
+        setExtendSubmitting(true);
         try {
-            await extendTask(taskId, extensionData);
-            addToast('Task due date extended.', 'success');
+            await extendTask(taskId, {
+                newDueDate: extensionData.newDueDate,
+                reason: extensionData.reason?.trim() || '',
+            });
+            // Close route-aware drawer FIRST (same handler as X), then refresh list.
+            // Do not call closeTask — task status stays unchanged.
+            addToast('Task due date extended successfully.', 'success');
             setIsExtending(false);
-            loadTask();
+            setExtensionData({ newDueDate: '', reason: '' });
+            if (onClose) onClose();
             if (onUpdate) onUpdate();
         } catch (err) {
-            addToast('Failed to extend task.', 'error');
+            // Keep panel open; preserve entered new date + optional reason for retry.
+            addToast(err?.response?.data?.message || 'Failed to extend task.', 'error');
+        } finally {
+            setExtendSubmitting(false);
         }
     };
 
@@ -111,7 +132,31 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
         btn: (bg, color) => ({ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', border: 'none', borderRadius: '6px', background: bg, color: color, fontWeight: 700, cursor: 'pointer', fontSize: '13px' })
     };
 
-    const sortedHistory = task?.updates ? [...task.updates].sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+    const sortedHistory = (() => {
+        const updates = (task?.updates || []).map((h) => ({
+            ...h,
+            _sortDate: new Date(h.date),
+            _kind: 'update',
+        }));
+        const extensions = (task?.extensionHistory || []).map((h, i) => {
+            const oldLabel = h.oldDate ? format(new Date(h.oldDate), 'dd/MM/yyyy') : '—';
+            const newLabel = h.newDate ? format(new Date(h.newDate), 'dd/MM/yyyy') : '—';
+            const reasonLabel = h.reason && String(h.reason).trim()
+                ? String(h.reason).trim()
+                : 'No reason provided';
+            return {
+                _id: `ext-${h._id || i}-${h.extendedAt || i}`,
+                date: h.extendedAt || h.newDate,
+                _sortDate: new Date(h.extendedAt || h.newDate || 0),
+                _kind: 'extension',
+                userName: h.extendedBy?.name || 'User',
+                text: `Due date extended: ${oldLabel} → ${newLabel}\nReason: ${reasonLabel}`,
+                status: 'OPEN',
+                isResolution: false,
+            };
+        });
+        return [...updates, ...extensions].sort((a, b) => b._sortDate - a._sortDate);
+    })();
     const isCompleted = task?.status === 'COMPLETED';
 
     return (
@@ -160,11 +205,35 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
                                 <div style={{ marginBottom: '24px', background: '#fef2f2', borderRadius: '10px', padding: '16px', border: '1px solid #fee2e2' }}>
                                     <div style={{ ...s.sectionTitle, color: '#991b1b' }}>Extend Due Date</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <input type="date" style={{ ...s.input, minHeight: 'unset' }} value={extensionData.newDueDate} onChange={e => setExtensionData({...extensionData, newDueDate: e.target.value})} />
-                                        <input type="text" style={{ ...s.input, minHeight: 'unset' }} placeholder="Reason for extension..." value={extensionData.reason} onChange={e => setExtensionData({...extensionData, reason: e.target.value})} />
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7f1d1d', marginBottom: 4 }}>New Due Date</label>
+                                            <input type="date" style={{ ...s.input, minHeight: 'unset' }} value={extensionData.newDueDate} onChange={e => setExtensionData({...extensionData, newDueDate: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#7f1d1d', marginBottom: 4 }}>Reason for extension (Optional)</label>
+                                            <input type="text" style={{ ...s.input, minHeight: 'unset' }} placeholder="Reason for extension (Optional)" value={extensionData.reason} onChange={e => setExtensionData({...extensionData, reason: e.target.value})} />
+                                        </div>
                                         <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button onClick={handleExtend} style={{ ...s.btn('#dc2626', '#fff') }}>Confirm Extension</button>
-                                            <button onClick={() => setIsExtending(false)} style={{ ...s.btn('#fff', '#475569'), border: '1px solid #d1d5db' }}>Cancel</button>
+                                            <button
+                                                type="button"
+                                                onClick={handleExtend}
+                                                disabled={extendSubmitting}
+                                                style={{
+                                                    ...s.btn('#dc2626', '#fff'),
+                                                    opacity: extendSubmitting ? 0.7 : 1,
+                                                    cursor: extendSubmitting ? 'not-allowed' : 'pointer',
+                                                }}
+                                            >
+                                                {extendSubmitting ? 'Extending...' : 'Confirm Extension'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsExtending(false)}
+                                                disabled={extendSubmitting}
+                                                style={{ ...s.btn('#fff', '#475569'), border: '1px solid #d1d5db', opacity: extendSubmitting ? 0.7 : 1 }}
+                                            >
+                                                Cancel
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -192,7 +261,7 @@ export const TaskUpdateDrawer = ({ taskId, isOpen, onClose, onUpdate }) => {
                                                 </div>
                                                 <div style={{ fontSize: '13px', color: '#334155', lineHeight: 1.5, wordBreak: 'break-word' }}>{h.text}</div>
                                                 
-                                                {!isCompleted && h.status !== 'RESOLVED' && !h.isResolution && (
+                                                {!isCompleted && h._kind !== 'extension' && h.status !== 'RESOLVED' && !h.isResolution && (
                                                     <div style={{ marginTop: '8px' }}>
                                                         {resolvingId === h._id ? (
                                                             <div style={{ display: 'flex', gap: '6px', flexDirection: 'column', background: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>

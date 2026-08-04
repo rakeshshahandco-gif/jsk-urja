@@ -7,6 +7,7 @@ import { CreditDebitNote } from '../../models/creditDebitNote.model.js';
 import { BillWiseAdjustment } from '../../models/billWiseAdjustment.model.js';
 import { assertPostingAllowed } from './accountingValidation.service.js';
 import { logAccountingAudit } from './accountingAudit.service.js';
+import { settlementAmountFromAdjustment } from './billAdjustmentDiscount.service.js';
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -46,29 +47,32 @@ export function computeOverdueDays(dueDate, pendingAmount) {
  * Apply or reverse bill / on-account payment impact on source documents.
  */
 export async function applyBillPaymentDelta(adj, nature, voucherNo, date, session, reverse = false) {
-    const { refId, amount, adjustmentType, refModel } = adj;
+    const { refId, adjustmentType, refModel } = adj;
     if (!refId) return;
     if (adjustmentType === 'Opening Credit' || adjustmentType === 'On Account' || adjustmentType === 'Advance') {
         return;
     }
     if (adjustmentType !== 'Against Bill' && adjustmentType !== 'New Reference') return;
 
-    const amt = reverse ? -amount : amount;
+    // Bank + Discount + Round-off settle the bill; GL already splits bank vs discount lines.
+    const settleAmt = settlementAmountFromAdjustment(adj);
+    if (!(settleAmt > 0.009) && !reverse) return;
+    const amt = reverse ? -settleAmt : settleAmt;
+    const displayAmount = settleAmt;
 
     if (nature === 'Receipt' || nature === 'Adjustment' || nature === 'Credit Note') {
         const modelType = refModel || 'SalesInvoice';
         if (modelType === 'CreditDebitNote') {
-            const note = await CreditDebitNote.findById(refId).session(session);
-            if (!note) throw new ApiError(httpStatus.NOT_FOUND, 'Credit note not found');
-            if (note.originalInvoiceId) {
-                const invoice = await SalesInvoice.findById(note.originalInvoiceId).session(session);
-                if (invoice) await applySalesInvoicePaymentDelta(invoice, amt, amount, voucherNo, date, session, reverse);
-            }
-            return;
+            // Phase 4A: do NOT settle invoices via CN-as-bill stub.
+            // Controlled path uses billDocumentType=SalesInvoice + settlementSourceType=CreditDebitNote.
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                'Credit Note cannot be used as the bill target. Allocate Credit Note as settlement source against a Sales Invoice.',
+            );
         }
         const invoice = await SalesInvoice.findById(refId).session(session);
         if (!invoice) throw new ApiError(httpStatus.NOT_FOUND, 'Sales invoice not found');
-        await applySalesInvoicePaymentDelta(invoice, amt, amount, voucherNo, date, session, reverse);
+        await applySalesInvoicePaymentDelta(invoice, amt, displayAmount, voucherNo, date, session, reverse, adj);
         return;
     }
 
@@ -77,24 +81,22 @@ export async function applyBillPaymentDelta(adj, nature, voucherNo, date, sessio
         if (modelType === 'Voucher') {
             const doc = await Voucher.findById(refId).session(session);
             if (!doc) throw new ApiError(httpStatus.NOT_FOUND, 'Expense voucher bill not found');
-            await applyVoucherBillPaymentDelta(doc, amt, amount, voucherNo, date, session, reverse);
+            await applyVoucherBillPaymentDelta(doc, amt, displayAmount, voucherNo, date, session, reverse);
             return;
         }
         if (modelType === 'CreditDebitNote') {
-            const note = await CreditDebitNote.findById(refId).session(session);
-            if (note?.originalInvoiceId) {
-                const pi = await PurchaseInvoice.findById(note.originalInvoiceId).session(session);
-                if (pi) await applyPurchaseInvoicePaymentDelta(pi, amt, amount, voucherNo, date, session, reverse);
-            }
-            return;
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                'Credit/Debit Note cannot be used as the purchase bill target in this path.',
+            );
         }
         const doc = await PurchaseInvoice.findById(refId).session(session);
         if (!doc) throw new ApiError(httpStatus.NOT_FOUND, 'Purchase bill not found');
-        await applyPurchaseInvoicePaymentDelta(doc, amt, amount, voucherNo, date, session, reverse);
+        await applyPurchaseInvoicePaymentDelta(doc, amt, displayAmount, voucherNo, date, session, reverse, adj);
     }
 }
 
-async function applySalesInvoicePaymentDelta(invoice, amt, displayAmount, voucherNo, date, session, reverse) {
+async function applySalesInvoicePaymentDelta(invoice, amt, displayAmount, voucherNo, date, session, reverse, adj = null) {
     if (invoice.paymentStatus === 'Cancelled') {
         throw new ApiError(httpStatus.BAD_REQUEST, `Sales Invoice ${invoice.invoiceNumber} is cancelled`);
     }
@@ -107,6 +109,11 @@ async function applySalesInvoicePaymentDelta(invoice, amt, displayAmount, vouche
         invoice.paidAmount = 0;
     }
     const remarkTag = reverse ? 'Bill-wise reversal' : 'Bill-wise Settlement';
+    const disc = r2(adj?.discountAmount);
+    const bankPart = r2(adj?.amount);
+    const settleRemark = disc > 0.009
+        ? `Receipt ${voucherNo} (Bank ₹${bankPart.toFixed(2)} + Discount ₹${disc.toFixed(2)}; ${remarkTag})`
+        : `Receipt ${voucherNo} (${remarkTag})`;
     if (!reverse) {
         if (!invoice.payments) invoice.payments = [];
         invoice.payments.push({
@@ -114,7 +121,7 @@ async function applySalesInvoicePaymentDelta(invoice, amt, displayAmount, vouche
             amountPaid: displayAmount,
             paymentMode: 'Voucher',
             reference: voucherNo,
-            remarks: `Receipt ${voucherNo} (${remarkTag})`,
+            remarks: settleRemark,
         });
     } else {
         invoice.payments = (invoice.payments || []).filter(
@@ -124,7 +131,7 @@ async function applySalesInvoicePaymentDelta(invoice, amt, displayAmount, vouche
     await invoice.save({ session });
 }
 
-async function applyPurchaseInvoicePaymentDelta(doc, amt, displayAmount, voucherNo, date, session, reverse) {
+async function applyPurchaseInvoicePaymentDelta(doc, amt, displayAmount, voucherNo, date, session, reverse, adj = null) {
     if (doc.paymentStatus === 'Cancelled') {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Purchase bill is cancelled');
     }
@@ -133,9 +140,14 @@ async function applyPurchaseInvoicePaymentDelta(doc, amt, displayAmount, voucher
     if (doc.paidAmount >= total - 0.009) doc.paymentStatus = 'Paid';
     else if (doc.paidAmount > 0.009) doc.paymentStatus = 'Partially Paid';
     else {
-        doc.paymentStatus = 'Unpaid';
         doc.paidAmount = 0;
+        doc.paymentStatus = 'Unpaid';
     }
+    const disc = r2(adj?.discountAmount);
+    const bankPart = r2(adj?.amount);
+    const settleRemark = disc > 0.009
+        ? `Payment ${voucherNo} (Bank ₹${bankPart.toFixed(2)} + Discount ₹${disc.toFixed(2)}; Bill-wise Settlement)`
+        : `Payment ${voucherNo} (Bill-wise Settlement)`;
     if (!reverse) {
         if (!doc.payments) doc.payments = [];
         doc.payments.push({
@@ -143,7 +155,7 @@ async function applyPurchaseInvoicePaymentDelta(doc, amt, displayAmount, voucher
             amountPaid: displayAmount,
             paymentMode: 'Voucher',
             reference: voucherNo,
-            remarks: `Payment ${voucherNo} (Bill-wise Settlement)`,
+            remarks: settleRemark,
         });
     } else {
         doc.payments = (doc.payments || []).filter(
@@ -224,8 +236,12 @@ export async function syncBillWiseAuditFromVoucher(voucher, session, userId, com
                 paymentNo: voucher.voucherNo,
                 paymentNature: voucher.nature,
                 adjustmentType: adj.adjustmentType,
-                adjustedAmount: adj.amount,
-                remarks: voucher.narration || '',
+                adjustedAmount: settlementAmountFromAdjustment(adj),
+                bankAmount: r2(adj.amount),
+                discountAmount: r2(adj.discountAmount),
+                remarks: adj.discountAmount
+                    ? `${voucher.narration || ''}${voucher.narration ? ' | ' : ''}Discount ₹${Number(adj.discountAmount).toFixed(2)}`.trim()
+                    : (voucher.narration || ''),
                 voucherItemIndex: itemIdx,
                 voucherAdjustmentSubId: adj._id,
                 createdBy: userId,

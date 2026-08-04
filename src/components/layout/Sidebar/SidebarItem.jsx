@@ -79,6 +79,10 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
             'FIXED_ASSETS_PARENT': PATHS.FIXED_ASSETS?.HOME,
             'CHINA_SUPPLIER': PATHS.CHINA_SUPPLIER?.HOME,
             'RD_SAMPLES': PATHS.RD_SAMPLES?.HOME,
+            'WHATSAPP_ROOT': PATHS.SETTINGS?.WHATSAPP_HOME || '/whatsapp/home',
+            'COMMUNICATION_BULK_GROUP': PATHS.SETTINGS?.COMMUNICATION_HOME || '/communication/home',
+            'ADMIN': PATHS.SETTINGS?.HOME || '/admin/home',
+            'SUPER_ADMIN': PATHS.SAAS_ADMIN?.HOME || '/super-admin/home',
         };
         if (specialMappings[id]) return specialMappings[id];
         if (PATHS[id] && PATHS[id].HOME) return PATHS[id].HOME;
@@ -103,7 +107,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // we stop overriding their choice so it never re-opens itself.
     const [isExpanded, setIsExpanded] = useState(
         (isActive && hasChildren)
-        || ((item.id === 'admin' || item.id === 'communication-bulk-group' || item.id === 'whatsapp-root' || item.id === 'textile-foundation') && hasChildren),
+        || ((item.id === 'textile-foundation') && hasChildren),
     );
     const userToggledRef = useRef(false);
 
@@ -141,8 +145,8 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // legacy expand-on-click behaviour — they are not rendered inside the
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
-    /** Top-level groups that expand inline (WhatsApp + email utilities + Handloom testing hub). */
-    const inlineTopLevelGroup = item.id === 'admin' || item.id === 'super-admin' || item.id === 'communication-bulk-group' || item.id === 'whatsapp-root' || item.id === 'textile-foundation';
+    /** Top-level groups that expand inline (Handloom testing hub). WhatsApp / Communication / Admin / Super Admin use Module Home hubs. */
+    const inlineTopLevelGroup = item.id === 'textile-foundation';
     const isTopLevelParent = level === 1 && hasChildren && !inlineTopLevelGroup;
     const alwaysShowChildren = inlineTopLevelGroup;
 

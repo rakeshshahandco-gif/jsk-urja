@@ -11,6 +11,11 @@ import {
     getBillWiseHistory,
     reverseBillWiseAdjustment,
 } from '@/services/billWiseAdjustmentApi';
+import {
+    getAvailableCustomerCreditNotes,
+    applyCreditNoteAllocations,
+    reverseCreditNoteAllocation,
+} from '@/services/creditDebitNoteApi';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -22,8 +27,11 @@ export default function BillWiseAdjustmentPage() {
     const [searchParams] = useSearchParams();
     const { selectedCompany } = useCompany();
     const { selectedFY } = useFinancialYear();
-    const { hasRole } = useAuth();
+    const { hasRole, hasPermission } = useAuth();
     const isAdmin = hasRole('admin') || hasRole('superadmin');
+    const canUseCreditNote = isAdmin || hasPermission('accounts.bill_adjustment.use_credit_note');
+    const canViewNoteBalance = isAdmin || hasPermission('accounts.bill_adjustment.view_note_balance');
+    const canReverseNote = isAdmin || hasPermission('accounts.bill_adjustment.reverse_note_allocation');
 
     const [ledgerType, setLedgerType] = useState('Customer');
     const [ledgers, setLedgers] = useState([]);
@@ -45,6 +53,14 @@ export default function BillWiseAdjustmentPage() {
 
     const [history, setHistory] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+
+    // Phase 4A — Customer Credit Notes
+    const [availableCNs, setAvailableCNs] = useState([]);
+    const [cnLoading, setCnLoading] = useState(false);
+    const [selectedCnId, setSelectedCnId] = useState('');
+    const [cnBillId, setCnBillId] = useState('');
+    const [cnAmount, setCnAmount] = useState('');
+    const [cnBusy, setCnBusy] = useState(false);
 
     const paymentIdParam = searchParams.get('paymentVoucherId');
 
@@ -98,6 +114,62 @@ export default function BillWiseAdjustmentPage() {
     useEffect(() => {
         loadHistory();
     }, [loadHistory]);
+
+    const loadAvailableCNs = useCallback(async () => {
+        if (ledgerType !== 'Customer' || !workspace.ledger?.referenceId) {
+            setAvailableCNs([]);
+            return;
+        }
+        if (!canViewNoteBalance && !canUseCreditNote) {
+            setAvailableCNs([]);
+            return;
+        }
+        setCnLoading(true);
+        try {
+            const rows = await getAvailableCustomerCreditNotes({
+                customerId: workspace.ledger.referenceId,
+                financialYear: financialYear || undefined,
+            });
+            setAvailableCNs(Array.isArray(rows) ? rows : []);
+        } catch (e) {
+            setAvailableCNs([]);
+            if (e.response?.status !== 403) {
+                toast.error(e.response?.data?.message || 'Could not load Credit Notes');
+            }
+        } finally {
+            setCnLoading(false);
+        }
+    }, [ledgerType, workspace.ledger, financialYear, canViewNoteBalance, canUseCreditNote]);
+
+    useEffect(() => {
+        loadAvailableCNs();
+    }, [loadAvailableCNs]);
+
+    const applyCnAllocation = async () => {
+        if (!canUseCreditNote) return toast.error('Permission denied: accounts.bill_adjustment.use_credit_note');
+        const amt = Number(cnAmount);
+        if (!selectedCnId || !cnBillId || !(amt > 0)) {
+            toast.error('Select Credit Note, Sales Invoice, and amount');
+            return;
+        }
+        setCnBusy(true);
+        try {
+            await applyCreditNoteAllocations({
+                sourceMode: 'BillWisePage',
+                remarks,
+                lines: [{ creditNoteId: selectedCnId, salesInvoiceId: cnBillId, amount: amt }],
+            });
+            toast.success('Credit Note allocated to Sales Invoice (no bank receipt created)');
+            setCnAmount('');
+            loadWorkspace();
+            loadHistory();
+            loadAvailableCNs();
+        } catch (e) {
+            toast.error(e.response?.data?.message || 'Credit Note allocation failed');
+        } finally {
+            setCnBusy(false);
+        }
+    };
 
     const fifoPreview = async () => {
         if (!ledgerId) return;
@@ -412,6 +484,95 @@ export default function BillWiseAdjustmentPage() {
                 </button>
             </div>
 
+            {ledgerType === 'Customer' && (canViewNoteBalance || canUseCreditNote) && (
+                <div style={{ background: '#fff', border: '1px solid #ddd6fe', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                    <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#5b21b6' }}>AVAILABLE CUSTOMER CREDIT NOTES</h3>
+                    <p style={{ margin: '0 0 10px', fontSize: 12, color: '#64748b' }}>
+                        Apply Final Credit Notes to pending Sales Invoices without creating a bank receipt. Bank allocations remain separate above.
+                    </p>
+                    {cnLoading ? (
+                        <p style={{ color: '#94a3b8' }}>Loading Credit Notes…</p>
+                    ) : (
+                        <table style={tbl}>
+                            <thead>
+                                <tr>
+                                    <th style={th}>Select</th>
+                                    <th style={th}>CN No</th>
+                                    <th style={th}>Date</th>
+                                    <th style={th}>Original</th>
+                                    <th style={th}>Applied</th>
+                                    <th style={th}>Available</th>
+                                    <th style={th}>Linked Invoice</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {availableCNs.length === 0 ? (
+                                    <tr><td style={td} colSpan={7}>No Final Credit Notes with available balance (and linked accounting) for this customer.</td></tr>
+                                ) : availableCNs.map((n) => (
+                                    <tr key={n._id} style={{ background: String(selectedCnId) === String(n._id) ? '#f5f3ff' : undefined }}>
+                                        <td style={td}>
+                                            <input
+                                                type="radio"
+                                                name="cnSelect"
+                                                checked={String(selectedCnId) === String(n._id)}
+                                                onChange={() => setSelectedCnId(n._id)}
+                                                disabled={!canUseCreditNote}
+                                            />
+                                        </td>
+                                        <td style={td}>{n.noteNumber}</td>
+                                        <td style={td}>{fmtDate(n.noteDate)}</td>
+                                        <td style={td}>₹{fmt(n.originalAmount)}</td>
+                                        <td style={td}>₹{fmt(n.appliedAmount)}</td>
+                                        <td style={{ ...td, fontWeight: 700, color: '#5b21b6' }}>₹{fmt(n.availableBalance)}</td>
+                                        <td style={td}>{n.linkedOriginalInvoice?.invoiceNumber || '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                    {canUseCreditNote && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 12, alignItems: 'flex-end' }}>
+                            <div>
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Sales Invoice</label>
+                                <select
+                                    value={cnBillId}
+                                    onChange={(e) => setCnBillId(e.target.value)}
+                                    style={{ display: 'block', marginTop: 4, minWidth: 200, padding: '6px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                                >
+                                    <option value="">— Select invoice —</option>
+                                    {(workspace.bills || [])
+                                        .filter((b) => (b.billDocumentType || 'SalesInvoice') === 'SalesInvoice' && Number(b.pendingAmount) > 0)
+                                        .map((b) => (
+                                            <option key={b._id} value={b._id}>
+                                                {b.billNo || b.invoiceNumber} (₹{fmt(b.pendingAmount)} pending)
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Amount to use</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={cnAmount}
+                                    onChange={(e) => setCnAmount(e.target.value)}
+                                    style={{ display: 'block', marginTop: 4, width: 140, padding: 6, borderRadius: 6, border: '1px solid #cbd5e1' }}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                disabled={cnBusy}
+                                onClick={applyCnAllocation}
+                                style={{ padding: '8px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}
+                            >
+                                {cnBusy ? 'Applying…' : 'Apply Credit Note'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14 }}>
                 <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>Adjustment history (this ledger)</h3>
                 {historyLoading ? (
@@ -419,24 +580,26 @@ export default function BillWiseAdjustmentPage() {
                 ) : (
                     <table style={tbl}>
                         <thead>
-                            <tr>
+                                <tr>
                                 <th style={th}>Date</th>
                                 <th style={th}>Bill</th>
-                                <th style={th}>Payment</th>
+                                <th style={th}>Payment / Source</th>
+                                <th style={th}>CN Source</th>
                                 <th style={th}>Amount</th>
                                 <th style={th}>Reversed</th>
-                                {isAdmin && <th style={th} />}
+                                {(isAdmin || canReverseNote) && <th style={th} />}
                             </tr>
-                        </thead>
+                            </thead>
                         <tbody>
                             {history.map((h) => (
                                 <tr key={h._id}>
                                     <td style={td}>{fmtDate(h.adjustmentDate)}</td>
                                     <td style={td}>{h.billNo}</td>
-                                    <td style={td}>{h.paymentNo}</td>
+                                    <td style={td}>{h.paymentNo}{h.paymentNature === 'Credit Note' ? ' (CN voucher)' : ''}</td>
+                                    <td style={td}>{h.settlementSourceNumber || '—'}</td>
                                     <td style={td}>₹{fmt(h.adjustedAmount)}</td>
                                     <td style={td}>{h.isReversed ? 'Yes' : 'No'}</td>
-                                    {isAdmin && (
+                                    {(isAdmin || canReverseNote) && (
                                         <td style={td}>
                                             {!h.isReversed && (
                                                 <button
@@ -445,10 +608,15 @@ export default function BillWiseAdjustmentPage() {
                                                         const reason = window.prompt('Reversal reason?');
                                                         if (!reason?.trim()) return;
                                                         try {
-                                                            await reverseBillWiseAdjustment(h._id, { reason });
+                                                            if (h.settlementSourceType === 'CreditDebitNote') {
+                                                                await reverseCreditNoteAllocation(h._id, { reason });
+                                                            } else {
+                                                                await reverseBillWiseAdjustment(h._id, { reason });
+                                                            }
                                                             toast.success('Reversed');
                                                             loadHistory();
                                                             loadWorkspace();
+                                                            loadAvailableCNs();
                                                         } catch (e) {
                                                             toast.error(e.response?.data?.message || 'Reverse failed');
                                                         }

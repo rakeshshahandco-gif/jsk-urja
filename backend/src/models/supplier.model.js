@@ -15,7 +15,97 @@ const supplierSchema = new mongoose.Schema({
     country: { type: String, trim: true, default: 'India' },
     gstNumber: { type: String, trim: true, uppercase: true, default: '' },
     gstType: { type: String, enum: ['CGST / SGST', 'IGST', ''], default: '' },
+    /**
+     * Party GST registration status (not on expense/income ledgers).
+     * GSTIN required only when status indicates registered.
+     */
+    gstRegistrationStatus: {
+        type: String,
+        enum: [
+            '',
+            'Registered Regular',
+            'Composition',
+            'Unregistered',
+            'SEZ',
+            'Overseas',
+            'Exempt Entity',
+            'Not Applicable',
+        ],
+        default: '',
+    },
+    /**
+     * How this supplier typically charges GST on invoices.
+     * Does not auto-create RCM — voucher/RCM engine decides transaction-wise.
+     * Never map a generic "No" to Reverse Charge.
+     */
+    supplierChargesGst: {
+        type: String,
+        enum: ['', 'Forward Charge', 'Reverse Charge', 'Transaction-wise', 'Not Applicable'],
+        default: '',
+    },
+    /**
+     * Default / suggestion only — never posts RCM liability from master settings.
+     */
+    defaultRcmTreatment: {
+        type: String,
+        enum: ['', 'Not Applicable', 'RCM May Apply', 'Default RCM Supplier', 'Transaction-wise Review'],
+        default: '',
+    },
+    /** Canonical RCM category codes (RENT, GTA, …). Labels come from RCM Rule Master. */
+    defaultRcmCategories: { type: [String], default: [] },
+    /** Rent / property defaults (suggestions only). */
+    defaultPropertyType: {
+        type: String,
+        enum: ['', 'Commercial', 'Residential', 'Mixed', 'Other', 'Transaction-wise'],
+        default: '',
+    },
+    /** Transport / GTA profile — shown when transportServiceSupplier is true. */
+    transportServiceSupplier: { type: Boolean, default: false },
+    transportSupplierType: {
+        type: String,
+        enum: [
+            '',
+            'GTA — Issues Consignment Note',
+            'Courier Agency',
+            'Local Transporter — No Consignment Note',
+            'Vehicle Owner / Vehicle Hire',
+            'Parcel Service',
+            'Freight Forwarder',
+            'Other',
+        ],
+        default: '',
+    },
+    consignmentNoteNormallyIssued: {
+        type: String,
+        enum: ['', 'Yes', 'No', 'Transaction-wise'],
+        default: '',
+    },
+    /**
+     * Transport GST payment option (suggestion).
+     * Maps into voucher supplierGstOption; does not auto-post RCM.
+     */
+    transportGstPaymentOption: {
+        type: String,
+        enum: [
+            '',
+            'Recipient Pays under RCM',
+            'Supplier Pays under Forward Charge',
+            'Exempt / Not Applicable',
+            'Transaction-wise',
+            'Unknown / Review Required',
+        ],
+        default: '',
+    },
+    defaultTransportRcmCategory: {
+        type: String,
+        enum: ['', 'GTA', 'OTHER', 'COURIER', 'RENT', 'LEGAL', 'SECURITY', 'GENERAL', 'None'],
+        default: '',
+    },
+    defaultPlaceOfSupply: { type: String, trim: true, default: '' },
+    /** Optional company scope for ledger→supplier resolution (additive; existing docs may omit). */
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
     panNumber: { type: String, trim: true, uppercase: true, default: '' },
+    panAvailable: { type: Boolean, default: true },
     paymentTerms: { type: String, trim: true, default: '' },
     bankName: { type: String, trim: true, default: '' },
     bankAccountNo: { type: String, trim: true, default: '' },
@@ -32,7 +122,12 @@ const supplierSchema = new mongoose.Schema({
     ledgerId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountLedger', default: null },
     /** TDS — mirrored on linked ledger; used when ledger not yet linked */
     tdsApplicable: { type: Boolean, default: false },
+    /** Optional default suggestion only — not a lock for all payments to this supplier. */
     tdsSection: { type: String, trim: true, default: '' },
+    /** Allowed payment natures for this supplier (multi-select). Empty = any nature allowed. */
+    allowedTdsNatures: { type: [String], default: [] },
+    /** Allowed legacy section codes (194C, 194J, …). Empty = any section allowed. */
+    allowedTdsSections: { type: [String], default: [] },
     panVerificationStatus: { type: String, enum: ['', 'Verified', 'Pending', 'Invalid'], default: '' },
     /** Income-tax deductee constitution — drives auto rate (Individual/HUF vs Others) from TDS Master */
     deducteeConstitution: { type: String, trim: true, default: '' },

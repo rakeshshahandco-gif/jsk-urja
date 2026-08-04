@@ -195,7 +195,7 @@ export async function listTdsDeductionRegister(financialYear) {
         .limit(2500)
         .populate('tdsPayableLedgerId', 'name')
         .populate('tdsExpenseLineLedgerId', 'name')
-        .populate('tdsSupplierId', 'supplierName panNumber')
+        .populate('tdsSupplierId', 'supplierName panNumber deducteeConstitution')
         .lean();
 
     const rows = [];
@@ -204,6 +204,79 @@ export async function listTdsDeductionRegister(financialYear) {
         if (getFYFromDate(v.date) !== fy && String(v.financialYear || '').trim() !== fy) {
             continue;
         }
+        const supplierName = (v.tdsSupplierId && v.tdsSupplierId.supplierName) || v.partyName || '';
+        const pan = ((v.tdsSupplierId && v.tdsSupplierId.panNumber) || '').toUpperCase();
+        const constitution = (v.tdsSupplierId && v.tdsSupplierId.deducteeConstitution) || '';
+        const effFy = String(v.financialYear || '').trim() || getFYFromDate(v.date);
+        const q = quarterForDateInFY(v.date, effFy) || '';
+        const skipped = !!v.tdsPopupSkipped;
+        const paidV = getVoucherTdsChallanPaidAmount(v);
+        const balV = getVoucherTdsChallanBalance(v);
+        const challanPayStatus = challanPaymentStatus(balV, paidV);
+        let challanLbl = 'Unpaid';
+        if (balV <= RUPEE_EPS) challanLbl = 'Paid';
+        else if (paidV > RUPEE_EPS) challanLbl = `Part paid · bal ₹${balV.toFixed(2)}`;
+
+        const lineRows = Array.isArray(v.tdsLines) && v.tdsLines.length
+            ? v.tdsLines.map((line, idx) => {
+                const section = String(line.section || v.tdsSection || '').trim().toUpperCase() || 'OTHER';
+                const master = secMap[section] || {};
+                const base = Number(line.tdsBase || 0);
+                const tdsAmt = Number(line.tdsAmount || 0);
+                const rate = line.rate != null && line.rate !== ''
+                    ? Number(line.rate)
+                    : (base > 0 && tdsAmt > 0 ? Math.round((tdsAmt / base) * 10000) / 100 : null);
+                let status = 'Pending';
+                if (skipped) status = 'Skipped';
+                else if (tdsAmt > 0) status = 'Deducted';
+                return {
+                    rowKey: `voucher:${v._id}:line:${idx}`,
+                    source: 'voucher',
+                    voucherId: v._id,
+                    voucherNo: v.voucherNo,
+                    voucherDate: v.date,
+                    voucherNature: v.nature,
+                    voucherTypeName: v.voucherTypeName || '',
+                    supplierId: v.tdsSupplierId || null,
+                    payableLedgerId: line.payableLedgerId || v.tdsPayableLedgerId?._id || v.tdsPayableLedgerId || null,
+                    supplierName,
+                    deducteePan: pan,
+                    deducteeConstitution: constitution,
+                    tdsNature: line.tdsNature || '',
+                    natureKey: line.natureKey || '',
+                    sectionCode: section,
+                    sectionName: master.sectionName || '',
+                    section393Label: line.section393Label || '',
+                    sectionDisplay: line.sectionDisplay || section,
+                    expenseLedgerName: line.expenseLedgerName || (v.tdsExpenseLineLedgerId && v.tdsExpenseLineLedgerId.name) || '',
+                    partyName: v.partyName || '',
+                    grossAmount: base,
+                    taxableAmount: base,
+                    tdsRate: rate,
+                    tdsAmount: tdsAmt,
+                    netPayable: Math.round((base - tdsAmt) * 100) / 100,
+                    tdsPayableLedgerName: (v.tdsPayableLedgerId && v.tdsPayableLedgerId.name) || '',
+                    status,
+                    skippedReason: v.tdsDisabledReason || '',
+                    alreadyPaidAmount: paidV,
+                    balancePayable: balV,
+                    tdsChallanPaymentStatus: challanPayStatus,
+                    challanStatus: challanLbl,
+                    quarter: q,
+                    financialYear: effFy,
+                    deductionId: null,
+                    paymentEntryId: null,
+                    challanId: null,
+                    multiNatureLine: true,
+                };
+            })
+            : null;
+
+        if (lineRows) {
+            rows.push(...lineRows);
+            continue;
+        }
+
         const section = String(v.tdsSection || '').trim().toUpperCase() || 'OTHER';
         const master = secMap[section] || {};
         const base =
@@ -214,25 +287,13 @@ export async function listTdsDeductionRegister(financialYear) {
         const taxable = Number(v.totalTaxableAmount || 0);
         const grossBill = Number(v.grandTotal || v.totalAmount || 0);
         const rate = base > 0 && tdsAmt > 0 ? Math.round((tdsAmt / base) * 10000) / 100 : null;
-        const skipped = !!v.tdsPopupSkipped;
         let status = 'Pending';
         if (skipped) status = 'Skipped';
         else if (tdsAmt > 0) status = 'Deducted';
-        const supplierName = (v.tdsSupplierId && v.tdsSupplierId.supplierName) || v.partyName || '';
-        const pan = ((v.tdsSupplierId && v.tdsSupplierId.panNumber) || '').toUpperCase();
-        const effFy = String(v.financialYear || '').trim() || getFYFromDate(v.date);
-        const q = quarterForDateInFY(v.date, effFy) || '';
         const netPayable =
             grossBill > 0
                 ? Math.round((grossBill - tdsAmt) * 100) / 100
                 : Math.round((base - tdsAmt) * 100) / 100;
-
-        const paidV = getVoucherTdsChallanPaidAmount(v);
-        const balV = getVoucherTdsChallanBalance(v);
-        const challanPayStatus = challanPaymentStatus(balV, paidV);
-        let challanLbl = 'Unpaid';
-        if (balV <= RUPEE_EPS) challanLbl = 'Paid';
-        else if (paidV > RUPEE_EPS) challanLbl = `Part paid · bal ₹${balV.toFixed(2)}`;
 
         rows.push({
             rowKey: `voucher:${v._id}`,
@@ -246,6 +307,8 @@ export async function listTdsDeductionRegister(financialYear) {
             payableLedgerId: v.tdsPayableLedgerId?._id || v.tdsPayableLedgerId || null,
             supplierName,
             deducteePan: pan,
+            deducteeConstitution: constitution,
+            tdsNature: '',
             sectionCode: section,
             sectionName: master.sectionName || '',
             expenseLedgerName: (v.tdsExpenseLineLedgerId && v.tdsExpenseLineLedgerId.name) || '',

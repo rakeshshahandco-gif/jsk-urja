@@ -4,6 +4,7 @@ import { PATHS } from '@/routes/paths';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { importCenterApi } from '@/services/importCenterApi';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
 
 const page = { padding: '24px 28px', fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh' };
 const card = { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, textDecoration: 'none', color: 'inherit', display: 'block' };
@@ -51,6 +52,7 @@ export default function ImportCenterPage() {
 
     return (
         <div style={page}>
+            <ModuleHomeBackLink to={PATHS.SETTINGS.HOME} label="Back to Admin Home" />
             <h1 style={{ margin: '0 0 8px' }}>Import Center</h1>
             <p style={{ color: '#64748b', maxWidth: 720, marginBottom: 20 }}>
                 Unified entry for all imports. Flow: Upload → mapping → validation → missing master detection → preview → approval → posting.

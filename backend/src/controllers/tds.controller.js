@@ -483,6 +483,7 @@ export const postExpenseVoucherTdsPreview = asyncHandler(async (req, res) => {
         excludeVoucherId: b.excludeVoucherId || undefined,
         expenseTdsSectionResolution: b.expenseTdsSectionResolution || undefined,
         voucherDate: b.date ? new Date(b.date) : null,
+        tdsLineOverrides: Array.isArray(b.tdsLineOverrides) ? b.tdsLineOverrides : undefined,
     });
     const ms = Date.now() - t0;
     logger.info(

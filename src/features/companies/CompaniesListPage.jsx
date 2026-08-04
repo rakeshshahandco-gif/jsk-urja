@@ -5,6 +5,7 @@ import { listCompanies } from '@/services/companyApi';
 import { useCompany } from '@/contexts/CompanyContext';
 import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
+import ModuleHomeBackLink from '@/features/dashboard/components/ModuleHomeBackLink';
 
 export default function CompaniesListPage() {
     const navigate = useNavigate();
@@ -52,6 +53,7 @@ export default function CompaniesListPage() {
     return (
         <div style={{ padding: '32px', fontFamily: "'Inter', sans-serif", background: '#f8fafc', minHeight: '100vh', color: '#1e293b' }}>
             <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+                <ModuleHomeBackLink to={PATHS.SAAS_ADMIN.HOME} label="Back to Super Admin Home" />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
                     <div>
                         <h1 style={{ margin: '0 0 8px', fontSize: '26px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 10 }}>

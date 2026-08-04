@@ -4,6 +4,7 @@ import { PATHS } from '@/routes/paths';
 import { FOUNDATION_NOTICE } from '../constants';
 import { useAuth } from '@/hooks/useAuth';
 import { WHATSAPP_AI_PERMISSIONS } from '../constants';
+import WhatsAppHomeBackLink from '@/features/whatsapp/components/WhatsAppHomeBackLink';
 
 const page = {
     padding: '16px 20px 28px',
@@ -125,6 +126,7 @@ export default function WhatsAppAiPageShell({
 
     return (
         <div style={page} data-whatsapp-ai-shell="1">
+            <WhatsAppHomeBackLink />
             <div style={{ marginBottom: 12 }}>
                 <h1 style={{ margin: 0, fontSize: 22, color: '#0f172a' }}>{title}</h1>
                 {subtitle ? (

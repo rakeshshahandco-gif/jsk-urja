@@ -29,3 +29,19 @@ export const cancelCreditDebitNote = async (id, data) => {
   const response = await api.post(`/credit-debit-notes/${id}/cancel`, data);
   return response.data.data;
 };
+
+/** Phase 4A — Customer Credit Note bill allocation */
+export const getAvailableCustomerCreditNotes = async (params) => {
+  const response = await api.get('/credit-debit-notes/available-for-customer', { params });
+  return response.data.data;
+};
+
+export const applyCreditNoteAllocations = async (body) => {
+  const response = await api.post('/credit-debit-notes/allocate', body);
+  return response.data.data;
+};
+
+export const reverseCreditNoteAllocation = async (id, body) => {
+  const response = await api.post(`/credit-debit-notes/allocations/${id}/reverse`, body);
+  return response.data.data;
+};

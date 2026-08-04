@@ -618,10 +618,12 @@ const TdsCompliancePage = () => {
                                     <th style={{ padding: 6 }}>Date</th>
                                     <th style={{ padding: 6 }}>Ref / voucher</th>
                                     <th style={{ padding: 6 }}>Nature</th>
+                                    <th style={{ padding: 6 }}>TDS Nature</th>
                                     <th style={{ padding: 6 }}>Party</th>
                                     <th style={{ padding: 6 }}>PAN</th>
+                                    <th style={{ padding: 6 }}>Constitution</th>
                                     <th style={{ padding: 6 }}>Section</th>
-                                    <th style={{ padding: 6 }}>Section name</th>
+                                    <th style={{ padding: 6 }}>§393 mapping</th>
                                     <th style={{ padding: 6 }}>Expense / exp. led.</th>
                                     <th style={{ padding: 6 }}>Gross</th>
                                     <th style={{ padding: 6 }}>Taxable</th>
@@ -639,7 +641,7 @@ const TdsCompliancePage = () => {
                             <tbody>
                                 {deductionRegister.length === 0 ? (
                                     <tr>
-                                        <td colSpan={19} style={{ padding: 16, color: '#64748b' }}>
+                                        <td colSpan={22} style={{ padding: 16, color: '#64748b' }}>
                                             No TDS rows for this financial year. Post expense or other vouchers with TDS, or add register rows under Manual adjustment.
                                         </td>
                                     </tr>
@@ -649,10 +651,12 @@ const TdsCompliancePage = () => {
                                             <td style={{ padding: 6 }}>{r.voucherDate ? new Date(r.voucherDate).toLocaleDateString('en-IN') : '—'}</td>
                                             <td style={{ padding: 6 }}>{r.voucherNo || '—'}</td>
                                             <td style={{ padding: 6 }}>{r.voucherNature || '—'}</td>
+                                            <td style={{ padding: 6 }}>{r.tdsNature || r.sectionDisplay || '—'}</td>
                                             <td style={{ padding: 6 }}>{r.supplierName || r.partyName || '—'}</td>
                                             <td style={{ padding: 6 }}>{r.deducteePan || '—'}</td>
+                                            <td style={{ padding: 6 }}>{r.deducteeConstitution || '—'}</td>
                                             <td style={{ padding: 6 }}>{r.sectionCode || '—'}</td>
-                                            <td style={{ padding: 6 }}>{r.sectionName || '—'}</td>
+                                            <td style={{ padding: 6 }}>{r.section393Label || r.sectionName || '—'}</td>
                                             <td style={{ padding: 6 }}>{r.expenseLedgerName || '—'}</td>
                                             <td style={{ padding: 6 }}>{Number(r.grossAmount || 0).toFixed(2)}</td>
                                             <td style={{ padding: 6 }}>{Number(r.taxableAmount || 0).toFixed(2)}</td>

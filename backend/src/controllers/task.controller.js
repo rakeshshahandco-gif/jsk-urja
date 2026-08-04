@@ -284,6 +284,24 @@ export const getTasks = asyncHandler(async (req, res) => {
   if (query.groupId) andConditions.push({ groupId: toObjectId(query.groupId) });
   if (query.taskMasterId) andConditions.push({ taskMasterId: toObjectId(query.taskMasterId) });
 
+  // Hide pinned compliance group tasks from general lists unless a group is selected
+  if (!query.groupId) {
+    const { TaskGroup } = await import('../models/taskGroup.model.js');
+    const excludedGroupIds = await TaskGroup.find({
+      showInGeneralTaskLists: false,
+      isActive: { $ne: false },
+    }).distinct('_id');
+    if (excludedGroupIds.length) {
+      andConditions.push({
+        $or: [
+          { groupId: null },
+          { groupId: { $exists: false } },
+          { groupId: { $nin: excludedGroupIds } },
+        ],
+      });
+    }
+  }
+
   if (query.search) {
     andConditions.push({
       $or: [
@@ -362,7 +380,8 @@ export const getTask = asyncHandler(async (req, res) => {
     .populate('taskCategoryId', 'name')
     .populate('assignedGroupId', 'name')
     .populate('groupId', 'name')
-    .populate('taskMasterId');
+    .populate('taskMasterId')
+    .populate('extensionHistory.extendedBy', 'name');
 
   if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
   res.send({ success: true, data: task });
@@ -561,16 +580,40 @@ export const extendTask = asyncHandler(async (req, res) => {
     if (!task) throw new ApiError(httpStatus.NOT_FOUND, 'Task not found');
   
     const { newDueDate, reason } = req.body;
-  
+    if (!newDueDate) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'New due date is required');
+    }
+
+    const nextDue = new Date(newDueDate);
+    if (Number.isNaN(nextDue.getTime())) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid new due date');
+    }
+
+    if (task.dueDate) {
+        const currentDay = new Date(task.dueDate);
+        currentDay.setHours(0, 0, 0, 0);
+        const nextDay = new Date(nextDue);
+        nextDay.setHours(0, 0, 0, 0);
+        if (nextDay.getTime() <= currentDay.getTime()) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                'Extended date must be later than the current due date',
+            );
+        }
+    }
+
+    const reasonText =
+        reason != null && String(reason).trim() ? String(reason).trim() : '';
+
     task.extensionHistory.push({
       oldDate: task.dueDate,
-      newDate: new Date(newDueDate),
-      reason,
+      newDate: nextDue,
+      reason: reasonText,
       extendedBy: req.user.id,
       extendedAt: new Date()
     });
   
-    task.dueDate = new Date(newDueDate);
+    task.dueDate = nextDue;
     await task.save();
 
     // NOTIFICATION: Task Extended
@@ -582,7 +625,7 @@ export const extendTask = asyncHandler(async (req, res) => {
                 task: task._id,
                 type: 'STATUS_CHANGE', // or a new type if we want
                 title: 'Task Due Date Updated',
-                message: `The due date for "${task.title}" has been updated to ${new Date(newDueDate).toLocaleDateString()}. Reason: ${reason || 'N/A'}`
+                message: `The due date for "${task.title}" has been updated to ${nextDue.toLocaleDateString()}. Reason: ${reasonText || 'N/A'}`
             });
         }
     }

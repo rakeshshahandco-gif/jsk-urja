@@ -42,6 +42,39 @@ const accountLedgerSchema = new mongoose.Schema({
     gstRate: { type: Number, default: 0 },
     hsnCode: { type: String, trim: true },
 
+    /**
+     * Phase 2A — transaction-nature ledger tax settings (additive).
+     * Defaults do NOT auto-enable RCM on existing ledgers.
+     */
+    gstTreatmentDefault: {
+        type: String,
+        enum: [
+            'TRANSACTION_WISE',
+            'FORWARD_CHARGE',
+            'RCM_CANDIDATE',
+            'EXEMPT',
+            'NIL_RATED',
+            'NON_GST',
+            '',
+        ],
+        default: 'TRANSACTION_WISE',
+    },
+    rcmCandidate: { type: Boolean, default: false },
+    defaultRcmCategory: { type: String, trim: true, default: '' },
+    supplyType: {
+        type: String,
+        enum: ['GOODS', 'SERVICES', 'BOTH', ''],
+        default: '',
+    },
+    defaultHsnSac: { type: String, trim: true, default: '' },
+    defaultGstRateId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    defaultItcEligibility: {
+        type: String,
+        enum: ['Eligible', 'Ineligible', 'Blocked', 'Review Required', ''],
+        default: '',
+    },
+    allowTransactionTaxOverride: { type: Boolean, default: true },
+
     // Tax Details
     gstin: { type: String, trim: true },
     pan: { type: String, trim: true },
@@ -77,6 +110,11 @@ const accountLedgerSchema = new mongoose.Schema({
     /** TDS applicability (vendor / expense ledgers) — used by payment TDS engine */
     tdsApplicable: { type: Boolean, default: false },
     tdsSection: { type: String, trim: true, default: '' },
+    /**
+     * Default TDS payment nature for this expense ledger (suggestion on voucher lines).
+     * Examples: Contractor, Professional Services, Technical Services, Rent.
+     */
+    tdsNature: { type: String, trim: true, default: '' },
     /** auto = rate from TDS Master by supplier constitution; manual = use tdsDefaultRate */
     tdsRateSource: { type: String, enum: ['auto', 'manual'], default: 'auto' },
     /** Manual rate % — used only when tdsRateSource is manual */

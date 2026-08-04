@@ -6,13 +6,14 @@ import {
     getCreditDebitNote,
     finalizeCreditDebitNote 
 } from '@/services/creditDebitNoteApi';
-import { getInvoiceSeries, getSalesInvoices, getSalesInvoiceById } from '@/services/salesApi';
+import { getInvoiceSeries, getSalesInvoices, getSalesInvoiceById, previewNextInvoiceNo } from '@/services/salesApi';
 import { getItems } from '@/services/itemApi';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 import { PATHS } from '@/routes/paths';
 import { numberToWords } from '@/utils/numberToWords';
 import toast from 'react-hot-toast';
 import VoucherEntryTallyLayout from '@/features/accounts/components/voucherEntryTally';
+import { useFinancialYear } from '@/contexts/FinancialYearContext';
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
 const tableInp = { padding: '7px 4px', border: 'none', borderBottom: '1px solid #e5e7eb', borderRadius: 0, fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'transparent', color: '#111827', fontWeight: 600, textAlign: 'center' };
@@ -39,10 +40,15 @@ export default function CreditDebitNoteFormPage() {
     const navigate = useNavigate();
     const { id } = useParams();
     const [searchParams] = useSearchParams();
-    const defaultType = searchParams.get('type') || 'Credit Note';
+    const { selectedFY } = useFinancialYear();
+    const pathIsDebit = typeof window !== 'undefined' && window.location.pathname.includes('debit-notes');
+    const defaultType = searchParams.get('type')
+        || (pathIsDebit ? 'Debit Note' : 'Credit Note');
     
     const [saving, setSaving] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
+    const [seriesLoadDone, setSeriesLoadDone] = useState(false);
+    const [previewNoteNo, setPreviewNoteNo] = useState('');
     const [invoices, setInvoices] = useState([]);
     const [allItems, setAllItems] = useState([]);
 
@@ -69,26 +75,66 @@ export default function CreditDebitNoteFormPage() {
         remarks: ''
     });
 
+    const loadPreview = useCallback(async (seriesId) => {
+        if (!seriesId) {
+            setPreviewNoteNo('');
+            return;
+        }
+        try {
+            const res = await previewNextInvoiceNo(seriesId, 'CreditDebitNote');
+            setPreviewNoteNo(res?.nextInvoiceNo || '');
+        } catch {
+            setPreviewNoteNo('');
+        }
+    }, []);
+
     useEffect(() => {
-        // Load Series
+        setSeriesLoadDone(false);
         getInvoiceSeries({ active: true }).then(s => {
-            const filtered = s.filter(x => x.documentType === form.noteType);
+            const all = s || [];
+            const fyShort = String(selectedFY || '')
+                .replace(/^20(\d{2})-20?(\d{2})$/, '$1-$2')
+                .replace(/^20(\d{2})-(\d{2})$/, '$1-$2');
+            const byType = all.filter((x) => x.documentType === form.noteType && x.isActive !== false);
+            const byFy = fyShort
+                ? byType.filter((x) => !x.financialYear || String(x.financialYear) === fyShort || String(x.financialYear) === String(selectedFY))
+                : byType;
+            const filtered = byFy.length ? byFy : byType;
             setSeriesList(filtered);
-            if (filtered.length > 0 && !form.seriesId) {
-                setForm(p => ({ ...p, seriesId: filtered[0]._id }));
+            setSeriesLoadDone(true);
+            if (filtered.length === 1) {
+                setForm((p) => {
+                    if (p.seriesId === filtered[0]._id) return p;
+                    return { ...p, seriesId: filtered[0]._id };
+                });
+                loadPreview(filtered[0]._id);
+            } else if (filtered.length > 0) {
+                setForm((p) => {
+                    const stillValid = filtered.some((x) => String(x._id) === String(p.seriesId));
+                    if (stillValid && p.seriesId) {
+                        loadPreview(p.seriesId);
+                        return p;
+                    }
+                    return { ...p, seriesId: '' };
+                });
+                setPreviewNoteNo('');
+            } else {
+                setForm((p) => ({ ...p, seriesId: '' }));
+                setPreviewNoteNo('');
             }
+        }).catch(() => {
+            setSeriesList([]);
+            setSeriesLoadDone(true);
         });
 
-        // Load Invoices for selection
         getSalesInvoices({ limit: 50, status: 'Confirmed' }).then(res => {
             setInvoices(res.invoices || []);
         });
 
-        // Load Items
         getItems({ limit: 1000, active: true }).then(res => {
             setAllItems(res.data || []);
         });
-    }, [form.noteType]);
+    }, [form.noteType, selectedFY, loadPreview]);
 
     useEffect(() => {
         if (id) {
@@ -226,10 +272,36 @@ export default function CreditDebitNoteFormPage() {
                     <input type="date" value={form.noteDate} onChange={e => setF('noteDate', e.target.value)} style={inp} />
                 </Field>
                 <Field label="Note Series">
-                    <select value={form.seriesId} onChange={e => setF('seriesId', e.target.value)} style={inp}>
+                    <select
+                        value={String(form.seriesId || '')}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setF('seriesId', val);
+                            loadPreview(val);
+                        }}
+                        style={inp}
+                    >
                         <option value="">-- Select Series --</option>
-                        {seriesList.map(s => <option key={s._id} value={s._id}>{s.seriesName}</option>)}
+                        {seriesList.map(s => (
+                            <option key={s._id} value={String(s._id)}>{s.seriesName}{s.prefix ? ` (${s.prefix})` : ''}</option>
+                        ))}
                     </select>
+                    {seriesLoadDone && seriesList.length === 0 && (
+                        <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c', fontWeight: 600 }}>
+                            {form.noteType === 'Debit Note'
+                                ? 'No active Debit Note series is configured.'
+                                : 'No active Credit Note series is configured.'}
+                        </div>
+                    )}
+                    {previewNoteNo && (
+                        <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Number preview</div>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: '#0d9488', fontFamily: 'monospace' }}>
+                                {previewNoteNo}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>Preview only — number is not reserved until you save.</div>
+                        </div>
+                    )}
                 </Field>
 
                 <Field label="Link Original Invoice">

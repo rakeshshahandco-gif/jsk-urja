@@ -6,6 +6,7 @@ import {
     RefreshCw, PlusCircle, Info, X, Download, Copy, Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PATHS } from '@/routes/paths';
 import { useSocket } from '@/contexts/SocketContext';
 import {
     listChats, listMessages, markRead, sendChatMessage, syncChats, startChat,
@@ -815,8 +816,8 @@ const WhatsAppChatPage = () => {
                 <div className={styles.sidebarHeader}>
                     <button
                         className={styles.iconBtn}
-                        onClick={() => navigate('/whatsapp')}
-                        title="Back to WhatsApp Settings"
+                        onClick={() => navigate(PATHS.SETTINGS.WHATSAPP_HOME)}
+                        title="Back to WhatsApp Home"
                     >
                         <ArrowLeft size={18} />
                     </button>

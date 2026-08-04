@@ -16,7 +16,9 @@ export const initializeVoucherTypes = async (userId, financialYear = '2026-2027'
             { name: 'RCPT', nature: 'Receipt', prefix: 'RCPT/', startingNumber: 1, remarks: 'Automated Receipt Series' },
             { name: 'PMT', nature: 'Payment', prefix: 'PMT/', startingNumber: 1, remarks: 'Automated Payment Series' },
             { name: 'CONT', nature: 'Contra', prefix: 'CONT/', startingNumber: 1, remarks: 'Automated Contra Series' },
-            { name: 'JRNL', nature: 'Journal', prefix: 'JRNL/', startingNumber: 1, remarks: 'Automated Journal Series' }
+            { name: 'JRNL', nature: 'Journal', prefix: 'JRNL/', startingNumber: 1, remarks: 'Automated Journal Series' },
+            { name: 'CREDIT NOTE', nature: 'Credit Note', prefix: 'CN/', startingNumber: 1, remarks: 'Customer Credit Note Series' },
+            { name: 'DEBIT NOTE', nature: 'Debit Note', prefix: 'DN/', startingNumber: 1, remarks: 'Debit Note Series' },
         ];
 
         for (const type of standardTypes) {

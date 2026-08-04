@@ -46,6 +46,7 @@ export const PATHS = {
         ACCOUNTS_SUNDRY_DEBTOR: '/admin/accounts-settings/sundry-debtor',
         CUSTOMER_SETTINGS: '/customers/settings',
         WHATSAPP: '/whatsapp',
+        WHATSAPP_HOME: '/whatsapp/home',
         WHATSAPP_BULK: {
             CAMPAIGNS: '/communication/whatsapp-bulk/campaigns',
             MATTERS: '/communication/whatsapp-bulk/matters',
@@ -68,6 +69,7 @@ export const PATHS = {
             SETTINGS: '/communication/whatsapp-ai/settings',
             AUDIT: '/communication/whatsapp-ai/audit',
         },
+        COMMUNICATION_HOME: '/communication/home',
         EMAIL: '/communication/email-settings',
         COMMUNICATION_HISTORY: '/communication/history',
         EMAIL_BULK: {
@@ -442,6 +444,7 @@ export const PATHS = {
     // ── SaaS Super Admin ──────────────────────────────────────────────────
     SAAS_ADMIN: {
         ROOT: '/saas-admin',
+        HOME: '/super-admin/home',
         DASHBOARD: '/saas-admin/dashboard',
         COMPANIES: '/saas-admin/companies',
         SUBSCRIPTIONS: '/saas-admin/subscriptions',
