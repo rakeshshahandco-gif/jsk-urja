@@ -41,6 +41,7 @@ import {
     applyCustomerCreditNoteAllocations,
     reverseCreditNoteAllocationsForParentReceipt,
 } from '../services/creditNoteAllocation.service.js';
+import { assertSourceCancelAllowedForRcm } from '../services/rcmLiabilityPostingStore.service.js';
 
 const r2v = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -704,6 +705,11 @@ export const cancelVoucher = asyncHandler(async (req, res) => {
         const voucher = await Voucher.findById(req.params.id).session(session);
         if (!voucher) throw new ApiError(httpStatus.NOT_FOUND, 'Voucher not found');
         if (voucher.status === 'Cancelled') throw new ApiError(httpStatus.BAD_REQUEST, 'Voucher already cancelled');
+
+        await assertSourceCancelAllowedForRcm({
+            companyId: voucher.companyId,
+            sourceVoucherId: voucher._id,
+        });
 
         await tdsTh.reverseVoucherBillFromTdsBalance(voucher.toObject(), req.user?.id || req.user?._id, session);
 

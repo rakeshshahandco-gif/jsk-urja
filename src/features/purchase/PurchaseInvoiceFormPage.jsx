@@ -21,6 +21,11 @@ import { DOCUMENT_ATTACHMENTS_FEATURE } from '@/features/documents/DocumentsFeat
 import VoucherAttachmentPanel from '@/features/documents/components/VoucherAttachmentPanel';
 import PostSaveAttachModal from '@/features/documents/components/PostSaveAttachModal';
 import { scanEntryApi } from '@/services/scanEntryApi';
+import RcmPreviewPanel from '@/features/accounts/components/RcmPreviewPanel';
+import RcmAccountingPreviewPanel from '@/features/accounts/components/RcmAccountingPreviewPanel';
+import { rcmApi } from '@/services/rcmApi';
+import { useCompany } from '@/contexts/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 import gridStyles from '@/features/purchase/styles/purchaseItemGrid.module.scss';
 
 
@@ -46,6 +51,38 @@ export default function PurchaseInvoiceFormPage() {
     const prefillPoId = searchParams.get('poId') || '';
     const prefillGrnId = searchParams.get('grnId') || '';
 
+    const { selectedCompany } = useCompany();
+    const { user, hasPermission } = useAuth();
+    const canConfirmRcm = ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+        String(user?.role || user?.roleName || '').toLowerCase(),
+    ) || hasPermission?.('gst.rcm.confirm');
+    const canPostRcm = hasPermission?.('gst.rcm.post_liability')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canRecordRcmPayment = hasPermission?.('gst.rcm.record_payment')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReviewRcmItc = hasPermission?.('gst.rcm.review_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const canReleaseRcmItc = hasPermission?.('gst.rcm.release_itc')
+        || ['admin', 'superadmin', 'system admin', 'systemadmin'].includes(
+            String(user?.role || user?.roleName || '').toLowerCase(),
+        );
+    const [rcmPreview, setRcmPreview] = useState(null);
+    const [rcmLoading, setRcmLoading] = useState(false);
+    const [rcmConfirmed, setRcmConfirmed] = useState(false);
+    const [rcmAccountingSim, setRcmAccountingSim] = useState(null);
+    const [rcmSimLoading, setRcmSimLoading] = useState(false);
+    const [rcmPostingEligibility, setRcmPostingEligibility] = useState(null);
+    const [rcmPostingResult, setRcmPostingResult] = useState(null);
+    const [rcmPostBusy, setRcmPostBusy] = useState(false);
+    const [rcmPaymentBusy, setRcmPaymentBusy] = useState(false);
+    const [rcmItcBusy, setRcmItcBusy] = useState(false);
+    const [rcmAdvancedOpen, setRcmAdvancedOpen] = useState(false);
     const [taxDetailsOpen, setTaxDetailsOpen] = useState(false);
 
     const [flowType, setFlowType] = useState('PO→GRN→Invoice');
@@ -499,6 +536,111 @@ export default function PurchaseInvoiceFormPage() {
         .map((r) => r.itemName || r.itemCode || 'Item')
         .filter(Boolean);
 
+    const rcmTreatmentKey = String(
+        rcmPreview?.suggestedTreatment || rcmPreview?.treatment || ''
+    ).toUpperCase().replace(/\s+/g, '_');
+    const rcmNeedsAttention = rcmTreatmentKey.includes('REVERSE') || rcmTreatmentKey.includes('REVIEW');
+    const rcmChipLabel = rcmLoading
+        ? 'Evaluating…'
+        : rcmTreatmentKey.includes('REVERSE')
+            ? 'Reverse Charge'
+            : rcmTreatmentKey.includes('REVIEW')
+                ? 'Review Required'
+                : (rcmPreview?.suggestedTreatmentLabel || rcmPreview?.treatmentLabel || 'Forward Charge');
+
+    useEffect(() => {
+        if (rcmNeedsAttention) setRcmAdvancedOpen(true);
+    }, [rcmNeedsAttention, rcmTreatmentKey]);
+
+    useEffect(() => {
+        if (!header.supplierId || !totals.taxable) {
+            setRcmPreview(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            setRcmLoading(true);
+            try {
+                const docGst = totals.cgst + totals.sgst + totals.igst + freightGstTotal;
+                const data = await rcmApi.evaluate({
+                    companyId: selectedCompany?._id,
+                    transactionDate: header.invoiceDate,
+                    supplierId: header.supplierId,
+                    supplierGstin: header.supplierGstin,
+                    placeOfSupply: header.placeOfSupply,
+                    gstType: header.gstType,
+                    taxableValue: totals.taxable,
+                    suggestedGstRate: rows[0]?.gstRate,
+                    hsnSac: rows[0]?.hsnCode,
+                    documentGstAmount: docGst,
+                    supplierGstCharged: docGst > 0 ? true : undefined,
+                    supplierGstOption: docGst > 0 ? 'Forward Charge' : undefined,
+                }, { includeDraftRules: true });
+                setRcmPreview(data);
+            } catch {
+                setRcmPreview(null);
+            } finally {
+                setRcmLoading(false);
+            }
+        }, 500);
+        return () => clearTimeout(t);
+    }, [
+        header.supplierId,
+        header.invoiceDate,
+        header.supplierGstin,
+        header.placeOfSupply,
+        header.gstType,
+        totals.taxable,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        freightGstTotal,
+        rows,
+        selectedCompany?._id,
+    ]);
+
+    // Phase 2B-A — accounting simulation only
+    useEffect(() => {
+        if (!rcmPreview) {
+            setRcmAccountingSim(null);
+            return undefined;
+        }
+        const t = setTimeout(async () => {
+            setRcmSimLoading(true);
+            try {
+                const supplier = suppliers.find((s) => s._id === header.supplierId);
+                const sim = await rcmApi.simulateAccounting({
+                    decision: rcmPreview,
+                    rcmConfirmed,
+                    expenseLedgerName: 'Purchase / Stock',
+                    supplierName: supplier?.name || 'Supplier',
+                    taxableValue: totals.taxable,
+                    gstType: header.gstType,
+                    rate: rows[0]?.gstRate || rcmPreview.suggestedGstRate,
+                    supplierChargedGst: totals.cgst + totals.sgst + totals.igst + freightGstTotal,
+                    rcmCategory: rcmPreview.rcmCategory,
+                });
+                setRcmAccountingSim(sim);
+            } catch {
+                setRcmAccountingSim(null);
+            } finally {
+                setRcmSimLoading(false);
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [
+        rcmPreview,
+        rcmConfirmed,
+        header.supplierId,
+        header.gstType,
+        totals.taxable,
+        totals.cgst,
+        totals.sgst,
+        totals.igst,
+        freightGstTotal,
+        rows,
+        suppliers,
+    ]);
+
     // ── Keyboard Navigation ───────────────────────────────────────────────
     const handleRowKeyDown = (e, rowIdx, colIdx) => {
         if (e.key === 'ArrowDown') {
@@ -893,7 +1035,6 @@ export default function PurchaseInvoiceFormPage() {
                                             <tr>
                                                 <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
                                                 <th className={`${gridStyles.th} ${gridStyles.colItem} ${gridStyles.stickyLeft2}`}>Item</th>
-                                                <th className={`${gridStyles.th} ${gridStyles.colPurchaseType}`}>Purchase Type</th>
                                                 <th className={`${gridStyles.th} ${gridStyles.colDesc}`}>Description</th>
                                                 <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN</th>
                                                 <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
@@ -927,47 +1068,6 @@ export default function PurchaseInvoiceFormPage() {
                                                             ) : (
                                                                 <div style={{ color: '#1e293b', fontWeight: 500 }}>{row.itemName}<div style={{ color: '#64748b', fontSize: '10px' }}>{row.itemCode}</div></div>
                                                             )}
-                                                        </td>
-                                                        <td className={`${gridStyles.td} ${gridStyles.colPurchaseType}`}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                <select
-                                                                    value={row.purchaseType}
-                                                                    onChange={e => {
-                                                                        const val = e.target.value;
-                                                                        const isCons = val === 'CONSUMABLE_PURCHASE';
-                                                                        setRows(prev => prev.map((r, idx) => idx === i ? { ...r, purchaseType: val, isConsumable: isCons } : r));
-                                                                    }}
-                                                                    className={gridStyles.inp}
-                                                                    style={{ fontSize: '11px', fontWeight: 600, color: row.purchaseType === 'TRADING_PURCHASE' ? '#2563eb' : (row.purchaseType === 'CONSUMABLE_PURCHASE' ? '#92400e' : '#1e293b') }}
-                                                                >
-                                                                    <option value="RAW_MATERIAL_PURCHASE">Raw Material</option>
-                                                                    <option value="TRADING_PURCHASE">Trading</option>
-                                                                    <option value="CONSUMABLE_PURCHASE">Consumable</option>
-                                                                </select>
-                                                                {row.purchaseType === 'CONSUMABLE_PURCHASE' && (
-                                                                    <select
-                                                                        value={row.allocation?.type || 'General'}
-                                                                        onChange={e => setRow(i, 'allocation', { ...row.allocation, type: e.target.value })}
-                                                                        className={gridStyles.inp}
-                                                                        style={{ fontSize: '10px', padding: '4px 6px' }}
-                                                                    >
-                                                                        <option value="General">General</option>
-                                                                        <option value="Product">Product</option>
-                                                                        <option value="Sales Order">SO</option>
-                                                                        <option value="Work Order">WO</option>
-                                                                        <option value="Department">Dept</option>
-                                                                    </select>
-                                                                )}
-                                                                {row.purchaseType === 'CONSUMABLE_PURCHASE' && row.allocation?.type !== 'General' && (
-                                                                    <input
-                                                                        value={row.allocation?.referenceName || ''}
-                                                                        onChange={e => setRow(i, 'allocation', { ...row.allocation, referenceName: e.target.value })}
-                                                                        className={gridStyles.inp}
-                                                                        style={{ fontSize: '10px', padding: '4px 6px' }}
-                                                                        placeholder={`Ref ${row.allocation?.type}...`}
-                                                                    />
-                                                                )}
-                                                            </div>
                                                         </td>
                                                         <td className={`${gridStyles.td} ${gridStyles.colDesc}`}>
                                                             <textarea
@@ -1019,7 +1119,158 @@ export default function PurchaseInvoiceFormPage() {
                                     </div>
                                 )}
 
-                                
+                                <div className={gridStyles.rcmBar}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>RCM / GST Treatment</span>
+                                    <span className={`${gridStyles.rcmChip} ${rcmNeedsAttention ? (rcmTreatmentKey.includes('REVERSE') ? gridStyles.rcmChipRcm : gridStyles.rcmChipWarn) : ''}`}>
+                                        {rcmChipLabel}
+                                    </span>
+                                    {rcmNeedsAttention && (
+                                        <span className={gridStyles.rcmWarnText}>
+                                            Review recommended — open Advanced GST / RCM Review before posting if unsure.
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className={gridStyles.rcmAdvBtn}
+                                        onClick={() => setRcmAdvancedOpen((v) => !v)}
+                                    >
+                                        {rcmAdvancedOpen ? 'Hide Advanced GST / RCM Review' : 'Advanced GST / RCM Review'}
+                                    </button>
+                                </div>
+
+                                {rcmAdvancedOpen && (
+                                <div style={{ marginTop: 12 }}>
+                                    <RcmPreviewPanel result={rcmPreview} loading={rcmLoading} />
+                                    <RcmAccountingPreviewPanel
+                                        simulation={rcmAccountingSim}
+                                        loading={rcmSimLoading}
+                                        rcmConfirmed={rcmConfirmed}
+                                        onConfirmChange={setRcmConfirmed}
+                                        canConfirm={canConfirmRcm}
+                                        canPost={canPostRcm}
+                                        canRecordPayment={canRecordRcmPayment}
+                                        canReviewItc={canReviewRcmItc}
+                                        canReleaseItc={canReleaseRcmItc}
+                                        postingEligibility={rcmPostingEligibility}
+                                        postingResult={rcmPostingResult}
+                                        sourceVoucherId={id || null}
+                                        sourceSummary={{
+                                            voucherNumber: header.supplierInvoiceNo || id,
+                                            supplierName: suppliers.find((s) => s._id === header.supplierId)?.name,
+                                            ledgerName: 'Purchase',
+                                            taxPeriod: header.invoiceDate,
+                                        }}
+                                        postBusy={rcmPostBusy}
+                                        paymentBusy={rcmPaymentBusy}
+                                        itcBusy={rcmItcBusy}
+                                        onPostLiability={async ({ confirmPost, checkboxAccepted, remarks }) => {
+                                            setRcmPostBusy(true);
+                                            try {
+                                                const result = await rcmApi.postLiability({
+                                                    decision: rcmPreview,
+                                                    rcmConfirmed: true,
+                                                    confirmPost,
+                                                    checkboxAccepted,
+                                                    remarks,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                    sourceModule: 'PurchaseInvoice',
+                                                    sourceVoucherId: id,
+                                                    supplierName: suppliers.find((s) => s._id === header.supplierId)?.name,
+                                                    supplierId: header.supplierId,
+                                                    taxableValue: rcmAccountingSim?.rcmLiability?.taxableValue,
+                                                    gstType: header.gstType,
+                                                    rate: rcmAccountingSim?.rcmLiability?.rate,
+                                                    placeOfSupply: header.placeOfSupply,
+                                                    rcmCategory: rcmPreview?.rcmCategory,
+                                                });
+                                                setRcmPostingResult(result);
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'RCM posting failed');
+                                            } finally {
+                                                setRcmPostBusy(false);
+                                            }
+                                        }}
+                                        onRecordPayment={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) {
+                                                toast.error('No posted RCM liability found to pay.');
+                                                return;
+                                            }
+                                            setRcmPaymentBusy(true);
+                                            try {
+                                                const result = await rcmApi.recordPayment(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    status: result.status || 'PAYMENT_RECORDED',
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                    posting: result.liability || result.posting || rcmPostingResult?.posting,
+                                                    payment: result.payment,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'RCM tax payment failed');
+                                            } finally {
+                                                setRcmPaymentBusy(false);
+                                            }
+                                        }}
+                                        onSaveItcReview={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) return;
+                                            setRcmItcBusy(true);
+                                            try {
+                                                const result = await rcmApi.saveItcReview(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    posting: result.posting || rcmPostingResult?.posting,
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'ITC review failed');
+                                                throw err;
+                                            } finally {
+                                                setRcmItcBusy(false);
+                                            }
+                                        }}
+                                        onReleaseItc={async (payload) => {
+                                            const postingId = rcmPostingResult?.posting?._id || rcmPostingResult?.postingId;
+                                            if (!postingId) return;
+                                            setRcmItcBusy(true);
+                                            try {
+                                                await rcmApi.ensureLedgers({
+                                                    companyId: selectedCompany?._id,
+                                                    confirmCreate: true,
+                                                    includeInputLedgers: true,
+                                                });
+                                                const result = await rcmApi.releaseItc(postingId, {
+                                                    ...payload,
+                                                    companyId: selectedCompany?._id,
+                                                    financialYear: selectedFY?.name || selectedFY,
+                                                });
+                                                setRcmPostingResult({
+                                                    ...rcmPostingResult,
+                                                    posting: result.posting || rcmPostingResult?.posting,
+                                                    banner: result.banner,
+                                                    message: result.message,
+                                                    itcRelease: result.release,
+                                                });
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.message || 'ITC release failed');
+                                            } finally {
+                                                setRcmItcBusy(false);
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                )}
 
                                 {/* Totals — GST in summary only */}
                                 <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>

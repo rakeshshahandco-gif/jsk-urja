@@ -1253,6 +1253,24 @@ const queryManageTasks = async (filters, options) => {
     if (filters.assigneeId) andConditions.push({ assigneeIds: filters.assigneeId });
     if (filters.createdById) andConditions.push({ createdBy: filters.createdById });
 
+    // Group tasks with showInGeneralTaskLists=false stay out of Today/Upcoming/Overdue
+    // unless the user explicitly selected that group.
+    if (!filters.groupId) {
+        const excludedGroupIds = await TaskGroup.find({
+            showInGeneralTaskLists: false,
+            isActive: { $ne: false },
+        }).distinct('_id');
+        if (excludedGroupIds.length) {
+            andConditions.push({
+                $or: [
+                    { groupId: null },
+                    { groupId: { $exists: false } },
+                    { groupId: { $nin: excludedGroupIds } },
+                ],
+            });
+        }
+    }
+
     if (filters.dateFrom || filters.dateTo) {
         const dateFilter = {};
         if (filters.dateFrom) dateFilter.$gte = new Date(filters.dateFrom);
@@ -1294,7 +1312,7 @@ const queryManageTasks = async (filters, options) => {
         Task.find(filter)
             .populate('assigneeIds', 'name email')
             .populate('createdBy', 'name email')
-            .populate('groupId', 'name')
+            .populate('groupId', 'name showInGeneralTaskLists isHighlighted recurrenceType')
             .sort({ status: -1, dueDate: 1, createdAt: -1 })
             .skip(skip)
             .limit(limit),

@@ -22,7 +22,7 @@ router.get('/gstr3b-adjustment', checkPermission('gst.gstr3b.view'), gstCtrl.get
 router.post('/gstr3b-adjustment', checkPermission('gst.gstr3b.view'), gstCtrl.saveGSTR3BAdjustment);
 
 // New Reports
-router.get('/itc-register', checkPermission('admin.company_profile.view'), gstCtrl.getItcRegister);
+router.get('/itc-register', checkPermission('gst.itc_register.view'), gstCtrl.getItcRegister);
 router.get('/payable-summary', checkPermission('admin.company_profile.view'), gstCtrl.getGstPayableSummary);
 router.get('/hsn-summary', checkPermission('admin.company_profile.view'), gstCtrl.getHsnSummary);
 router.get('/ledger', checkPermission('admin.company_profile.view'), gstCtrl.getGstLedger);

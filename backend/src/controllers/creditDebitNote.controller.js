@@ -196,14 +196,6 @@ export const cancelCreditDebitNote = asyncHandler(async (req, res) => {
                 'This Credit Note has been adjusted against one or more Sales Invoices. Reverse the bill allocations before cancelling the Credit Note.',
             );
         }
-        // Exclude unfinished CN cancel → linked voucher GL reversal from this release.
-        // Block cancel when a finalize-linked voucher exists until that path is shipped safely.
-        if (note.linkedVoucherId) {
-            throw new ApiError(
-                httpStatus.BAD_REQUEST,
-                'This Credit Note is linked to an accounting voucher. Cancel with automatic voucher reversal is not enabled in this release. Reverse or cancel the linked voucher separately first, then retry.',
-            );
-        }
     }
 
     note.status = 'Cancelled';

@@ -39,7 +39,6 @@ describe('Phase 4A Credit Note allocation — source contracts', () => {
             'utf8',
         );
         assert.match(ctrl, /Reverse the bill allocations before cancelling/);
-        assert.match(ctrl, /Cancel with automatic voucher reversal is not enabled/);
         assert.match(ctrl, /postCustomerCreditNoteAccounting/);
         assert.match(ctrl, /getAvailableCustomerCreditNotes/);
     });

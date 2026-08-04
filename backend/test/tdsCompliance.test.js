@@ -2,7 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeTdsDecision } from '../src/services/tdsDecisionEngine.service.js';
 import { resolveLowerDeductionRate, listActiveLowerDeductionCertificates } from '../src/utils/tdsLowerDeduction.util.js';
-import { isValidPan, normalizePan } from '../src/constants/tds.constants.js';
+import {
+    isValidPan,
+    normalizePan,
+    normalizeTdsNatureKey,
+    formatTdsSectionDisplay,
+} from '../src/constants/tds.constants.js';
 
 const master194J = {
     sectionCode: '194J',
@@ -119,6 +124,133 @@ describe('tdsCompliance.computeTdsDecision', () => {
 
     it('invalid PAN format', () => {
         assert.equal(isValidPan(normalizePan('INVALID')), false);
+    });
+});
+
+describe('tdsCompliance.multiNatureSameSupplier (ABC proprietorship)', () => {
+    const master194C = {
+        sectionCode: '194C',
+        thresholdAmount: 100000,
+        singleBillThreshold: 30000,
+        thresholdCalculationMethod: 'Both',
+        rateIndividualHuf: 1,
+        rateOthers: 2,
+        autoDeductTds: true,
+        panMissingRate: 20,
+        section393TableItem: '6(i)',
+        section393Label: 'Section 393(1), Table Sl. No. 6(i)',
+        tdsNature: 'Contractor',
+    };
+    const master194J = {
+        sectionCode: '194J',
+        thresholdAmount: 50000,
+        singleBillThreshold: 0,
+        thresholdCalculationMethod: 'AggregateFY',
+        rateIndividualHuf: 10,
+        rateOthers: 10,
+        rateTechnicalServices: 2,
+        autoDeductTds: true,
+        panMissingRate: 20,
+        section393TableItem: '6(iii)',
+        section393Label: 'Section 393(1), Table Sl. No. 6(iii)',
+        tdsNature: 'Professional Services',
+    };
+
+    it('ABC contractor line: proprietorship → 1% under 194C / 393-6(i)', () => {
+        const d = computeTdsDecision({
+            ledger: {
+                tdsApplicable: true,
+                tdsSection: '194C',
+                tdsNature: 'Contractor',
+                tdsRateSource: 'auto',
+                effectiveDeducteeConstitution: 'Proprietorship',
+                tdsPanAssumedAvailable: true,
+                tdsPanStatus: 'Valid',
+                tdsIgnoreThreshold: true,
+            },
+            master: master194C,
+            cumulativeBefore: 0,
+            currentBase: 100000,
+            supplierPan: 'ABCDE1234F',
+            settings: { financialYear: '2026-2027' },
+        });
+        assert.equal(d.tdsApplicable, true);
+        assert.equal(d.tdsRate, 1);
+        assert.equal(d.tdsAmount, 1000);
+        assert.equal(normalizeTdsNatureKey('Contractor'), 'CONTRACTOR');
+        assert.match(formatTdsSectionDisplay('194C'), /194C/);
+        assert.match(formatTdsSectionDisplay('194C'), /393-6\(i\)/);
+    });
+
+    it('ABC professional line: 10% under 194J / 393-6(iii) — separate from contractor', () => {
+        const d = computeTdsDecision({
+            ledger: {
+                tdsApplicable: true,
+                tdsSection: '194J',
+                tdsNature: 'Professional Services',
+                tdsRateSource: 'auto',
+                effectiveDeducteeConstitution: 'Proprietorship',
+                tdsPanAssumedAvailable: true,
+                tdsPanStatus: 'Valid',
+                tdsIgnoreThreshold: true,
+            },
+            master: master194J,
+            cumulativeBefore: 0,
+            currentBase: 100000,
+            supplierPan: 'ABCDE1234F',
+            settings: { financialYear: '2026-2027' },
+        });
+        assert.equal(d.tdsApplicable, true);
+        assert.equal(d.tdsRate, 10);
+        assert.equal(d.tdsAmount, 10000);
+        assert.equal(normalizeTdsNatureKey('Professional Services'), 'PROFESSIONAL');
+        assert.notEqual(normalizeTdsNatureKey('Contractor'), normalizeTdsNatureKey('Professional Services'));
+    });
+
+    it('ABC technical line under 194J uses 2% technical rate', () => {
+        const d = computeTdsDecision({
+            ledger: {
+                tdsApplicable: true,
+                tdsSection: '194J',
+                tdsNature: 'Technical Services',
+                tdsRateSource: 'auto',
+                effectiveDeducteeConstitution: 'Proprietorship',
+                tdsPanAssumedAvailable: true,
+                tdsPanStatus: 'Valid',
+                tdsIgnoreThreshold: true,
+            },
+            master: master194J,
+            cumulativeBefore: 0,
+            currentBase: 100000,
+            supplierPan: 'ABCDE1234F',
+            settings: {},
+        });
+        assert.equal(d.tdsApplicable, true);
+        assert.equal(d.tdsRate, 2);
+        assert.equal(d.tdsAmount, 2000);
+        assert.equal(normalizeTdsNatureKey('Technical Services'), 'TECHNICAL');
+    });
+
+    it('company (non-individual) contractor rate is 2%', () => {
+        const d = computeTdsDecision({
+            ledger: {
+                tdsApplicable: true,
+                tdsSection: '194C',
+                tdsNature: 'Contractor',
+                tdsRateSource: 'auto',
+                effectiveDeducteeConstitution: 'Private Limited Company',
+                tdsPanAssumedAvailable: true,
+                tdsPanStatus: 'Valid',
+                tdsIgnoreThreshold: true,
+            },
+            master: master194C,
+            cumulativeBefore: 0,
+            currentBase: 100000,
+            supplierPan: 'ABCDE1234F',
+            settings: {},
+        });
+        assert.equal(d.tdsRate, 2);
+        assert.equal(d.tdsAmount, 2000);
     });
 });
 

@@ -1042,11 +1042,48 @@ export async function generateGSTR3BData(startDate, endDate) {
       summary.table51.interest = (adjustment.table51.interest?.integratedTax || 0) + (adjustment.table51.interest?.centralTax || 0) + (adjustment.table51.interest?.stateUtTax || 0);
       summary.table51.lateFee = (adjustment.table51.lateFee?.centralTax || 0) + (adjustment.table51.lateFee?.stateUtTax || 0);
     }
+
+    // Phase 2D — approved RCM liability inclusion (manualAdjustments.rcmLiability), additive only
+    if (adjustment.manualAdjustments?.rcmLiability) {
+      applyAdj(summary.table31.inwardReverseCharge, adjustment.manualAdjustments.rcmLiability);
+    }
+
+    if (adjustment.rcmPhase2) {
+      const includedAtRaw = adjustment.rcmPhase2.inclusion?.includedAt;
+      summary.rcmPhase2 = {
+        workflowStatus: adjustment.rcmPhase2.workflowStatus || null,
+        version: adjustment.rcmPhase2.version || null,
+        inclusion: adjustment.rcmPhase2.inclusion
+          ? {
+              version: adjustment.rcmPhase2.inclusion.version,
+              includedAt: includedAtRaw
+                ? new Date(includedAtRaw).toISOString()
+                : null,
+              liabilityTotals: adjustment.rcmPhase2.inclusion.liabilityTotals,
+              itcTotals: adjustment.rcmPhase2.inclusion.itcTotals,
+            }
+          : null,
+        banner: adjustment.rcmPhase2.workflowStatus === 'INCLUDED_IN_DRAFT_RETURN'
+          || adjustment.rcmPhase2.workflowStatus === 'FILED_LOCKED'
+          ? 'Approved RCM figures included in draft GSTR-3B working data — not filed unless period locked.'
+          : 'PREVIEW ONLY — Phase 2 RCM mapping not yet included (or awaiting approval).',
+      };
+    }
   }
 
-  // Rounding
+  // Rounding — plain objects/arrays only (Date/ObjectId have read-only props like offset)
   const deepRound = (obj) => {
-    for (const key in obj) {
+    if (!obj || typeof obj !== 'object') return;
+    if (obj instanceof Date) return;
+    if (typeof obj._bsontype === 'string') return;
+    if (Array.isArray(obj)) {
+      for (const item of obj) deepRound(item);
+      return;
+    }
+    if (Object.getPrototypeOf(obj) !== Object.prototype && Object.getPrototypeOf(obj) !== null) {
+      return;
+    }
+    for (const key of Object.keys(obj)) {
       if (typeof obj[key] === 'number') obj[key] = Number(obj[key].toFixed(2));
       else if (typeof obj[key] === 'object' && obj[key] !== null) deepRound(obj[key]);
     }
