@@ -390,26 +390,53 @@ export default function SalesInvoiceBuiltinPrint({
                 fontSize: '10pt',
             }}
         >
-            {isEstimate ? renderEstimate() : renderTaxInvoicePages()}
-
+            {/* Styles first so .si-builtin-page:last-of-type is not defeated by a trailing <style> node. */}
             <style>{`
                 .si-builtin-print { display: none; }
                 @media print {
-                    @page { size: A4 portrait; margin: 8mm; }
-                    html, body {
+                    /* Win over global main.scss @page { margin: 0 } and mobile shell max-width:100vw. */
+                    @page { size: A4 portrait; margin: 8mm !important; }
+                    html, body, #root {
                         margin: 0 !important;
                         padding: 0 !important;
                         width: 210mm !important;
+                        max-width: none !important;
+                        min-width: 0 !important;
                         background: #fff !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
+                        transform: none !important;
+                        zoom: 1 !important;
+                    }
+                    [data-jsk-ui-component="app-shell"],
+                    [data-jsk-ui-component="main-column"],
+                    [data-jsk-ui-component="main-column"] > main,
+                    .jsk-main-content {
+                        display: block !important;
+                        position: static !important;
+                        width: 210mm !important;
+                        max-width: none !important;
+                        height: auto !important;
+                        max-height: none !important;
+                        overflow: visible !important;
+                        transform: none !important;
+                        flex: none !important;
                     }
                     .sales-invoice-page-root,
                     .sales-invoice-page-root > * {
                         max-width: none !important;
                         min-width: 0 !important;
+                        width: auto !important;
+                        transform: none !important;
                     }
-                    .no-print, .no-print * { display: none !important; }
+                    .no-print, .no-print *,
+                    [data-jsk-ui-component="sidebar"],
+                    [data-jsk-ui-component="header"],
+                    [data-jsk-ui-component="top-menu-bar"],
+                    .jsk-mobile-backdrop,
+                    .jsk-mobile-menu-btn {
+                        display: none !important;
+                    }
                     .si-builtin-print.invoice-print-page {
                         display: block !important;
                         position: static !important;
@@ -422,6 +449,7 @@ export default function SalesInvoiceBuiltinPrint({
                         transform: none !important;
                         zoom: 1 !important;
                     }
+                    /* :last-of-type — NOT :last-child — because a <style> sibling used to force a blank trailing page. */
                     .si-builtin-print .si-builtin-page {
                         width: 194mm !important;
                         margin: 0 auto !important;
@@ -429,13 +457,13 @@ export default function SalesInvoiceBuiltinPrint({
                         display: block !important;
                         height: auto !important;
                         min-height: 0 !important;
-                        page-break-after: always;
-                        break-after: page;
                         position: relative;
-                    }
-                    .si-builtin-print .si-builtin-page:last-child {
                         page-break-after: auto;
                         break-after: auto;
+                    }
+                    .si-builtin-print .si-builtin-page:not(:last-of-type) {
+                        page-break-after: always;
+                        break-after: page;
                     }
                     .si-builtin-print .si-builtin-sheet {
                         width: 100% !important;
@@ -839,6 +867,7 @@ export default function SalesInvoiceBuiltinPrint({
                     .si-builtin-print .si-builtin-td-bold { font-weight: 700; }
                 }
             `}</style>
+            {isEstimate ? renderEstimate() : renderTaxInvoicePages()}
         </div>
     );
 }
