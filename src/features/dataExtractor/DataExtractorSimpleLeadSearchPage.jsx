@@ -306,11 +306,13 @@ export default function DataExtractorSimpleLeadSearchPage() {
     const [showAutoOptions, setShowAutoOptions] = useState(false);
     const [autoCollectionOptions, setAutoCollectionOptions] = useState({
         mode: 'auto',
+        collectionMode: 'unlimited',
         pageCollectionMode: 'until_no_more',
         maxPagesPerQuery: 3, maxQueries: 24, delayMinSec: 20, delayMaxSec: 40,
         pagesPerBatch: 10, maxSafetyPagesPerQuery: 30, pauseAfterEachBatch: false,
-        stopAtUnique: '', stopOnNoNewUniquePages: true, autoEnrichAfter: false, autoQualifyAfterEnrich: false,
+        stopAtUnique: '', stopOnNoNewUniquePages: false, autoEnrichAfter: false, autoQualifyAfterEnrich: false,
         autoVerifyAfterQualify: false,
+        requestedCaptureTarget: 100,
     });
     const [autoProcessing, setAutoProcessing] = useState(null);
     const [showManualStages, setShowManualStages] = useState(false);
@@ -941,7 +943,9 @@ export default function DataExtractorSimpleLeadSearchPage() {
         if (!sessionId || autoBootInFlightRef.current) return false;
         autoBootInFlightRef.current = true;
         try {
+            const isFixedTarget = (autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target';
             const acBody = {
+                collectionMode: autoCollectionOptions.collectionMode || 'unlimited',
                 pageCollectionMode: autoCollectionOptions.pageCollectionMode || 'until_no_more',
                 maxPagesPerQuery: Number(autoCollectionOptions.maxPagesPerQuery) || 3,
                 pagesPerBatch: Number(autoCollectionOptions.pagesPerBatch) || 10,
@@ -950,10 +954,14 @@ export default function DataExtractorSimpleLeadSearchPage() {
                 maxQueries: Number(autoCollectionOptions.maxQueries) || 24,
                 delayMinSec: Number(autoCollectionOptions.delayMinSec) || 20,
                 delayMaxSec: Number(autoCollectionOptions.delayMaxSec) || 40,
-                stopAtUnique: autoCollectionOptions.stopAtUnique === '' || autoCollectionOptions.stopAtUnique == null
-                    ? 0
-                    : Number(autoCollectionOptions.stopAtUnique) || 0,
-                stopOnNoNewUniquePages: true,
+                stopAtUnique: 0,
+                stopOnNoNewUniquePages: false,
+                requestedCaptureTarget: isFixedTarget
+                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
+                    : 0,
+                captureTarget: isFixedTarget
+                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
+                    : 0,
                 autoEnrichAfter: false,
                 autoQualifyAfterEnrich: false,
                 autoVerifyAfterQualify: false,
@@ -1094,7 +1102,9 @@ export default function DataExtractorSimpleLeadSearchPage() {
         }
         setBusy('autoStart');
         try {
+            const isFixedTarget = (autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target';
             const body = {
+                collectionMode: autoCollectionOptions.collectionMode || 'unlimited',
                 pageCollectionMode: autoCollectionOptions.pageCollectionMode || 'until_no_more',
                 maxPagesPerQuery: Number(autoCollectionOptions.maxPagesPerQuery) || 3,
                 pagesPerBatch: Number(autoCollectionOptions.pagesPerBatch) || 10,
@@ -1103,10 +1113,14 @@ export default function DataExtractorSimpleLeadSearchPage() {
                 maxQueries: Number(autoCollectionOptions.maxQueries) || 3,
                 delayMinSec: Number(autoCollectionOptions.delayMinSec) || 20,
                 delayMaxSec: Number(autoCollectionOptions.delayMaxSec) || 40,
-                stopAtUnique: autoCollectionOptions.stopAtUnique === '' || autoCollectionOptions.stopAtUnique == null
-                    ? 0
-                    : Number(autoCollectionOptions.stopAtUnique) || 0,
-                stopOnNoNewUniquePages: !!autoCollectionOptions.stopOnNoNewUniquePages,
+                stopAtUnique: 0,
+                stopOnNoNewUniquePages: false,
+                requestedCaptureTarget: isFixedTarget
+                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
+                    : 0,
+                captureTarget: isFixedTarget
+                    ? (Number(autoCollectionOptions.requestedCaptureTarget) || 100)
+                    : 0,
                 autoEnrichAfter: !!autoCollectionOptions.autoEnrichAfter,
                 autoQualifyAfterEnrich: !!autoCollectionOptions.autoQualifyAfterEnrich,
                 autoVerifyAfterQualify: !!autoCollectionOptions.autoVerifyAfterQualify,
@@ -2225,6 +2239,44 @@ export default function DataExtractorSimpleLeadSearchPage() {
                     </div>
                 )}
 
+                <label className={styles.fieldWrap} style={{ marginBottom: 12, maxWidth: 360 }}>
+                    <span className={styles.label}>Collection Mode</span>
+                    <select
+                        className={styles.select}
+                        value={autoCollectionOptions.collectionMode || 'unlimited'}
+                        disabled={formLocked}
+                        onChange={(e) => setAutoCollectionOptions((o) => ({
+                            ...o,
+                            collectionMode: e.target.value,
+                            pageCollectionMode: e.target.value === 'unlimited' ? 'until_no_more' : o.pageCollectionMode,
+                        }))}
+                    >
+                        <option value="unlimited">Unlimited — Until No More Results</option>
+                        <option value="fixed_target">Fixed Target</option>
+                    </select>
+                </label>
+                {(autoCollectionOptions.collectionMode || 'unlimited') === 'unlimited' ? (
+                    <p className={styles.helperText} style={{ marginTop: -4, marginBottom: 12 }}>
+                        The campaign will continue until all available pages and approved queries are exhausted.
+                    </p>
+                ) : (
+                    <label className={styles.fieldWrap} style={{ marginBottom: 12, maxWidth: 280 }}>
+                        <span className={styles.label}>Capture Target (raw source results)</span>
+                        <select
+                            className={styles.select}
+                            value={Number(autoCollectionOptions.requestedCaptureTarget) || 100}
+                            disabled={formLocked}
+                            onChange={(e) => setAutoCollectionOptions((o) => ({ ...o, requestedCaptureTarget: Number(e.target.value) || 100 }))}
+                        >
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                            <option value={250}>250</option>
+                            <option value={500}>500</option>
+                        </select>
+                    </label>
+                )}
+
                 <button type="submit" className={styles.primaryBtn} disabled={!!busy || formLocked}>
                     <span className={styles.primaryBtnRow}>
                         <Rocket size={18} aria-hidden />
@@ -2245,11 +2297,11 @@ export default function DataExtractorSimpleLeadSearchPage() {
                 <div className={styles.stripItem}>
                     <span className={styles.stripIcon}><Layers size={14} aria-hidden /></span>
                     <div>
-                        <div className={styles.stripLabel}>Collection Limit</div>
+                        <div className={styles.stripLabel}>Collection Mode</div>
                         <div className={styles.stripValue}>
-                            {(autoCollectionOptions.pageCollectionMode || 'until_no_more') === 'until_no_more'
-                                ? 'Until No More Results'
-                                : (autoCollectionOptions.pageCollectionMode === 'batches' ? 'Batches' : 'Fixed Pages')}
+                            {(autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target'
+                                ? `Fixed Target (${Number(autoCollectionOptions.requestedCaptureTarget) || 100})`
+                                : 'Unlimited — Until No More Results'}
                         </div>
                     </div>
                 </div>
@@ -2271,7 +2323,7 @@ export default function DataExtractorSimpleLeadSearchPage() {
                 </div>
             </div>
             <p className={styles.helperText} style={{ marginTop: 4, marginBottom: 12 }}>
-                CRM will continue through available Google pages and queries until no more unique results are found or you stop the search.
+                Discovery continues Google pages and queries until the capture target is reached, no more source results are available, or you stop. Unique companies are counted separately and do not end discovery early.
             </p>
 
             {processManual && (
@@ -2351,15 +2403,26 @@ export default function DataExtractorSimpleLeadSearchPage() {
                         )}
                         <div className={styles.metaGrid}>
                             <div><div className={styles.metaLabel}>Campaign</div><div className={styles.metaValue}>{campaignName}</div></div>
-                            <div><div className={styles.metaLabel}>Total Queries</div><div className={styles.metaValue}>{queryTotal || '—'}</div></div>
+                            <div><div className={styles.metaLabel}>Collection Mode</div><div className={styles.metaValue}>
+                                {(autoCollection?.collectionMode || autoCollectionOptions.collectionMode || 'unlimited') === 'fixed_target'
+                                    ? `Fixed Target (${autoCollection?.requestedCaptureTarget || autoCollectionOptions.requestedCaptureTarget || 100})`
+                                    : 'Unlimited — Until No More Results'}
+                            </div></div>
+                            <div><div className={styles.metaLabel}>Source Results Found</div><div className={styles.metaValue}>{autoCollection?.sourceResultsFound ?? session?.visibleResultCount ?? 0}</div></div>
+                            <div><div className={styles.metaLabel}>Raw Records Captured</div><div className={styles.metaValue}>{autoCollection?.rawRecordsCaptured ?? session?.acceptedCount ?? 0}</div></div>
+                            <div><div className={styles.metaLabel}>Unique Companies</div><div className={styles.metaValue}>{autoCollection?.uniqueCompanies ?? capturedUnique ?? 0}</div></div>
                             <div><div className={styles.metaLabel}>Current Query</div><div className={styles.metaValue}>{queryIndex} of {queryTotal || '—'}</div></div>
-                            <div><div className={styles.metaLabel}>Google Page</div><div className={styles.metaValue}>{googlePage}</div></div>
+                            <div><div className={styles.metaLabel}>Query Progress</div><div className={styles.metaValue}>
+                                {Number(autoCollection?.queriesCompleted ?? 0)} / {Number(autoCollection?.totalApprovedQueries || queryTotal || 0) || '—'}
+                            </div></div>
+                            <div><div className={styles.metaLabel}>Current Google Page</div><div className={styles.metaValue}>{googlePage}</div></div>
+                            <div><div className={styles.metaLabel}>Discovery Status</div><div className={styles.metaValue}>{autoCollection?.discoveryStatus || autoCollection?.status || 'idle'}</div></div>
+                            <div><div className={styles.metaLabel}>Last Progress</div><div className={styles.metaValue}>{(autoCollection?.lastDiscoveryAt || lastProgressAt) ? new Date(autoCollection?.lastDiscoveryAt || lastProgressAt).toLocaleString() : '—'}</div></div>
                             <div><div className={styles.metaLabel}>Status</div><div><span className={`${styles.badge} ${statusBadge.cls}`}>{statusBadge.text}</span></div></div>
                             <div><div className={styles.metaLabel}>Processing Backlog</div><div className={styles.metaValue}>{processingBacklog}</div></div>
                             <div><div className={styles.metaLabel}>Stuck Processing</div><div className={styles.metaValue} style={{ color: stuckProcessing ? '#b45309' : undefined }}>{stuckProcessing}</div></div>
                             <div><div className={styles.metaLabel}>Worker</div><div className={styles.metaValue}>{workerActive ? 'Active' : 'Inactive'}</div></div>
                             <div><div className={styles.metaLabel}>Last Worker Heartbeat</div><div className={styles.metaValue}>{lastWorkerHeartbeat ? new Date(lastWorkerHeartbeat).toLocaleString() : '—'}</div></div>
-                            <div><div className={styles.metaLabel}>Last Progress</div><div className={styles.metaValue}>{lastProgressAt ? new Date(lastProgressAt).toLocaleString() : '—'}</div></div>
                             <div><div className={styles.metaLabel}>Current Batch</div><div className={styles.metaValue}>{autoProcessing?.currentBatchNumber || 0} · size {autoProcessing?.currentBatchSize || 0}</div></div>
                             <div><div className={styles.metaLabel}>Batches Completed</div><div className={styles.metaValue}>{autoProcessing?.counts?.batchesCompleted || 0}</div></div>
                             <div><div className={styles.metaLabel}>Last Batch Completed</div><div className={styles.metaValue}>{autoProcessing?.lastBatchCompletedAt ? new Date(autoProcessing.lastBatchCompletedAt).toLocaleString() : '—'}</div></div>
@@ -2800,6 +2863,43 @@ export default function DataExtractorSimpleLeadSearchPage() {
                                 background: '#fff',
                                 border: '1px solid #e0e7ff',
                             }}>
+                                <label style={labelStyle}>
+                                    Collection Mode
+                                    <select
+                                        value={autoCollectionOptions.collectionMode || 'unlimited'}
+                                        disabled={autoActive || formLocked}
+                                        onChange={(e) => setAutoCollectionOptions((o) => ({
+                                            ...o,
+                                            collectionMode: e.target.value,
+                                            pageCollectionMode: e.target.value === 'unlimited' ? 'until_no_more' : o.pageCollectionMode,
+                                        }))}
+                                        style={fieldStyle}
+                                    >
+                                        <option value="unlimited">Unlimited — Until No More Results</option>
+                                        <option value="fixed_target">Fixed Target</option>
+                                    </select>
+                                </label>
+                                {(autoCollectionOptions.collectionMode || 'unlimited') === 'unlimited' ? (
+                                    <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#3730a3' }}>
+                                        The campaign will continue until all available pages and approved queries are exhausted.
+                                    </div>
+                                ) : (
+                                <label style={labelStyle}>
+                                    Capture Target (raw source results)
+                                    <select
+                                        value={Number(autoCollectionOptions.requestedCaptureTarget) || 100}
+                                        disabled={autoActive || formLocked}
+                                        onChange={(e) => setAutoCollectionOptions((o) => ({ ...o, requestedCaptureTarget: Number(e.target.value) || 100 }))}
+                                        style={fieldStyle}
+                                    >
+                                        <option value={25}>25</option>
+                                        <option value={50}>50</option>
+                                        <option value={100}>100</option>
+                                        <option value={250}>250</option>
+                                        <option value={500}>500</option>
+                                    </select>
+                                </label>
+                                )}
                                 <label style={labelStyle}>
                                     Mode
                                     <select

@@ -6,6 +6,7 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { AssistedCaptureSession } from '../../../../models/assistedCaptureSession.model.js';
+import { AssistedCaptureEvent } from '../../../../models/assistedCaptureEvent.model.js';
 import { RawCapture } from '../../../../models/rawCapture.model.js';
 import { assertAssistedCaptureStart, assertAssistedCaptureView } from '../assistedCapture/permissions.util.js';
 import { requestCaptureVisibleResults } from '../assistedCapture/captureRequest.service.js';
@@ -21,6 +22,11 @@ import {
 const ACTIVE_AUTO = ['running', 'paused_owner', 'paused_manual', 'paused_batch'];
 const READY = new Set(['awaiting_user', 'ready_to_capture']);
 const ENDED = new Set(['completed', 'cancelled', 'expired', 'failed']);
+export const CAPTURE_TARGET_OPTIONS = Object.freeze([25, 50, 100, 250, 500]);
+const DEFAULT_FIXED_CAPTURE_TARGET = 100;
+const DEFAULT_COLLECTION_MODE = 'unlimited';
+/** Pages processed per worker cycle before persisting and auto-continuing (not a campaign total). */
+const DEFAULT_WORKER_CYCLE_PAGES = 30;
 
 function requireCompanyId(companyId) {
     if (!companyId || !mongoose.isValidObjectId(companyId)) throw new ApiError(400, 'Company context required');
@@ -49,13 +55,20 @@ function sanitizeSession(session) {
 function defaultAuto() {
     return {
         enabled: false, status: 'idle', phase: 'none',
+        collectionMode: DEFAULT_COLLECTION_MODE,
         pageCollectionMode: 'until_no_more',
         maxPagesPerQuery: 3, maxQueries: 24, delayMinSec: 20, delayMaxSec: 40,
-        pagesPerBatch: 10, maxSafetyPagesPerQuery: 30, pauseAfterEachBatch: true,
+        pagesPerBatch: 10, maxSafetyPagesPerQuery: DEFAULT_WORKER_CYCLE_PAGES, pauseAfterEachBatch: true,
         currentBatch: 1, pagesInCurrentBatch: 0, batchStartPage: 1,
+        pagesInWorkerCycle: 0, workerCycleCount: 0,
         lastSuccessfullyCapturedPage: 0,
         resumeQueryId: null, resumeQueryIndex: 1, resumeMessage: '', batchMessage: '',
-        stopAtUnique: 0, stopOnNoNewUniquePages: true,
+        stopAtUnique: 0, stopOnNoNewUniquePages: false,
+        requestedCaptureTarget: 0,
+        sourceResultsFound: 0, rawRecordsCaptured: 0, lastQueryIndex: 1,
+        queriesCompleted: 0, totalApprovedQueries: 0,
+        lastCursor: '', nextPageToken: '', lastDiscoveryAt: null, discoveryStatus: 'idle',
+        pauseReason: '', ownerStoppedAt: null,
         autoEnrichAfter: false, autoQualifyAfterEnrich: false, autoVerifyAfterQualify: false,
         nextActionAt: null, tickLockUntil: null,
         pagesCapturedThisQuery: 0, pagesProcessedTotal: 0, queriesProcessedTotal: 0,
@@ -72,15 +85,58 @@ function defaultAuto() {
         rootSessionId: null, campaignId: null,
     };
 }
+function normalizeCaptureTarget(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return DEFAULT_FIXED_CAPTURE_TARGET;
+    if (CAPTURE_TARGET_OPTIONS.includes(n)) return n;
+    let best = DEFAULT_FIXED_CAPTURE_TARGET;
+    let bestDist = Infinity;
+    for (const opt of CAPTURE_TARGET_OPTIONS) {
+        const d = Math.abs(opt - n);
+        if (d < bestDist) { best = opt; bestDist = d; }
+    }
+    return best;
+}
+function normalizeCollectionMode(body = {}) {
+    const raw = String(body.collectionMode || body.captureMode || '').toLowerCase().trim();
+    if (raw === 'unlimited' || raw === 'until_no_more' || raw === 'until_no_more_results') return 'unlimited';
+    if (raw === 'fixed_target' || raw === 'fixed' || raw === 'target') return 'fixed_target';
+    // Infer from explicit positive target only when mode omitted
+    const targetHint = Number(body.requestedCaptureTarget ?? body.captureTarget ?? body.target ?? 0);
+    if (Number.isFinite(targetHint) && targetHint > 0 && (body.requestedCaptureTarget != null || body.captureTarget != null || body.target != null)) {
+        return 'fixed_target';
+    }
+    return DEFAULT_COLLECTION_MODE;
+}
+/** Resolve mode from persisted autoCollection (legacy sessions may only have a target). */
+function resolveCollectionMode(ac = {}) {
+    const raw = String(ac.collectionMode || '').toLowerCase().trim();
+    if (raw === 'unlimited' || raw === 'fixed_target') return raw;
+    if (Number(ac.requestedCaptureTarget || 0) > 0) return 'fixed_target';
+    return DEFAULT_COLLECTION_MODE;
+}
 function readSettings(body = {}) {
     const delayMinSec = clampInt(body.delayMinSec ?? 20, 5, 120, 20);
     let delayMaxSec = clampInt(body.delayMaxSec ?? 40, 5, 180, 40);
     if (delayMaxSec < delayMinSec) delayMaxSec = delayMinSec;
+    const collectionMode = normalizeCollectionMode(body);
     const modeRaw = String(body.pageCollectionMode || body.pageMode || 'until_no_more').toLowerCase();
-    const pageCollectionMode = ['fixed', 'batches', 'until_no_more'].includes(modeRaw) ? modeRaw : 'until_no_more';
+    // Unlimited discovery always uses until_no_more pagination semantics
+    const pageCollectionMode = collectionMode === 'unlimited'
+        ? 'until_no_more'
+        : (['fixed', 'batches', 'until_no_more'].includes(modeRaw) ? modeRaw : 'until_no_more');
     const pagesPerBatch = clampInt(body.pagesPerBatch, 1, 10, 10);
-    const maxSafetyPagesPerQuery = clampInt(body.maxSafetyPagesPerQuery, 10, 50, 30);
+    const maxSafetyPagesPerQuery = clampInt(
+        body.maxSafetyPagesPerQuery ?? body.workerCyclePages,
+        10,
+        50,
+        DEFAULT_WORKER_CYCLE_PAGES,
+    );
+    const requestedCaptureTarget = collectionMode === 'fixed_target'
+        ? normalizeCaptureTarget(body.requestedCaptureTarget ?? body.captureTarget ?? body.target ?? DEFAULT_FIXED_CAPTURE_TARGET)
+        : 0;
     return {
+        collectionMode,
         pageCollectionMode,
         maxPagesPerQuery: clampInt(body.maxPagesPerQuery, 1, 10, 3),
         pagesPerBatch,
@@ -88,10 +144,10 @@ function readSettings(body = {}) {
         pauseAfterEachBatch: !(body.pauseAfterEachBatch === false || body.pauseAfterEachBatch === 'false' || body.pauseAfterEachBatch === 0),
         maxQueries: clampInt(body.maxQueries ?? body.maxGeneratedQueries, 1, 24, 24),
         delayMinSec, delayMaxSec,
-        stopAtUnique: clampInt(body.stopAtUnique ?? body.stopWhenUniqueReach ?? 0, 0, 100000, 0),
-        stopOnNoNewUniquePages: pageCollectionMode === 'until_no_more'
-            ? true
-            : !(body.stopOnNoNewUniquePages === false || body.stopOnNoNewUniquePages === 'false' || body.stopOnNoNewUniquePages === 0),
+        // Unique-company rules must never terminate source discovery
+        stopAtUnique: 0,
+        stopOnNoNewUniquePages: false,
+        requestedCaptureTarget,
         autoEnrichAfter: Boolean(body.autoEnrichAfter),
         autoQualifyAfterEnrich: Boolean(body.autoQualifyAfterEnrich),
         autoVerifyAfterQualify: Boolean(body.autoVerifyAfterQualify),
@@ -134,21 +190,45 @@ function progressView(session, campaignProgress = null) {
         status: ac.status || 'idle',
         phase: ac.phase || 'none',
         settings: {
+            collectionMode: resolveCollectionMode(ac),
             pageCollectionMode: ac.pageCollectionMode || 'fixed',
             maxPagesPerQuery: ac.maxPagesPerQuery, maxQueries: ac.maxQueries,
             pagesPerBatch: ac.pagesPerBatch || 10,
-            maxSafetyPagesPerQuery: ac.maxSafetyPagesPerQuery || 30,
+            maxSafetyPagesPerQuery: ac.maxSafetyPagesPerQuery || DEFAULT_WORKER_CYCLE_PAGES,
+            workerCyclePages: ac.maxSafetyPagesPerQuery || DEFAULT_WORKER_CYCLE_PAGES,
             pauseAfterEachBatch: ac.pauseAfterEachBatch !== false,
             delayMinSec: ac.delayMinSec, delayMaxSec: ac.delayMaxSec,
-            stopAtUnique: ac.stopAtUnique, stopOnNoNewUniquePages: ac.stopOnNoNewUniquePages,
+            stopAtUnique: 0, stopOnNoNewUniquePages: false,
+            requestedCaptureTarget: Number(ac.requestedCaptureTarget || 0) || null,
             autoEnrichAfter: ac.autoEnrichAfter, autoQualifyAfterEnrich: ac.autoQualifyAfterEnrich,
             autoVerifyAfterQualify: ac.autoVerifyAfterQualify,
         },
+        collectionMode: resolveCollectionMode(ac),
         pageCollectionMode: ac.pageCollectionMode || 'fixed',
+        requestedCaptureTarget: resolveCollectionMode(ac) === 'fixed_target'
+            ? Number(ac.requestedCaptureTarget || 0)
+            : null,
+        sourceResultsFound: Number(ac.sourceResultsFound || session.visibleResultCount || 0),
+        rawRecordsCaptured: Number(ac.rawRecordsCaptured || session.acceptedCount || 0),
+        uniqueCompanies: Number(campaignProgress?.totalCampaignUniqueRecords
+            ?? campaignProgress?.uniqueResultsCollected
+            ?? ac.summary?.finalCampaignUnique
+            ?? 0),
+        discoveryStatus: ac.discoveryStatus || ac.status || 'idle',
+        pauseReason: ac.pauseReason || '',
+        ownerStoppedAt: ac.ownerStoppedAt || null,
+        lastDiscoveryAt: ac.lastDiscoveryAt || session.lastCaptureAt || null,
+        lastQueryIndex: Number(ac.lastQueryIndex || ac.resumeQueryIndex || campaignProgress?.queryIndex || 1),
+        queriesCompleted: Number(ac.queriesCompleted || ac.queriesProcessedTotal || 0),
+        totalApprovedQueries: Number(ac.totalApprovedQueries || campaignProgress?.queryTotal || ac.maxQueries || 0),
+        lastCursor: ac.lastCursor || '',
+        nextPageToken: ac.nextPageToken || '',
+        pagesInWorkerCycle: Number(ac.pagesInWorkerCycle || 0),
+        workerCycleCount: Number(ac.workerCycleCount || 0),
         currentBatch: Number(ac.currentBatch || 1),
         pagesInCurrentBatch: Number(ac.pagesInCurrentBatch || 0),
         pagesPerBatch: Number(ac.pagesPerBatch || 10),
-        maxSafetyPagesPerQuery: Number(ac.maxSafetyPagesPerQuery || 30),
+        maxSafetyPagesPerQuery: Number(ac.maxSafetyPagesPerQuery || DEFAULT_WORKER_CYCLE_PAGES),
         lastSuccessfullyCapturedPage: Number(ac.lastSuccessfullyCapturedPage || 0),
         batchMessage: ac.batchMessage || '',
         resumeMessage: ac.resumeMessage || '',
@@ -156,7 +236,7 @@ function progressView(session, campaignProgress = null) {
         canResumeCheckpoint: ['paused_owner', 'paused_manual', 'paused_batch', 'stopped', 'failed'].includes(ac.status)
             && Number(ac.lastSuccessfullyCapturedPage || 0) > 0,
         queryIndex: campaignProgress?.queryIndex || 1,
-        queryTotal: Math.min(Number(ac.maxQueries || 3), campaignProgress?.queryTotal || Number(ac.maxQueries || 3)),
+        queryTotal: Math.min(Number(ac.maxQueries || 24), campaignProgress?.queryTotal || Number(ac.maxQueries || 24)),
         businessType: campaignProgress?.currentBusinessType || '',
         locationLabel: campaignProgress?.currentLocationLabel || '',
         googlePage: Number(session.googlePageIndex || campaignProgress?.googlePage || 1),
@@ -175,6 +255,7 @@ function progressView(session, campaignProgress = null) {
         lastErrorMessage: ac.lastErrorMessage || '',
         manualActionRequired: session.status === 'manual_action_required' || ac.status === 'paused_manual',
         uiLabel: labelMap[ac.status] || 'Auto Collection Idle',
+        captureTargetOptions: CAPTURE_TARGET_OPTIONS,
     };
 }
 async function loadOwnedSession(companyId, sessionId) {
@@ -195,6 +276,22 @@ async function finalizeStop(session, { status, reason, user }) {
     session.autoCollection.summary = summary;
     session.autoCollection.nextActionAt = null;
     session.autoCollection.tickLockUntil = null;
+    const discoveryMap = {
+        capture_target_reached: 'target_reached',
+        google_no_more_pages: 'no_more_results',
+        all_queries_exhausted: 'completed',
+        collection_complete: 'completed',
+        collection_complete_pipeline_active: 'completed',
+        owner_stop: 'stopped',
+        agent_offline: 'paused',
+    };
+    session.autoCollection.discoveryStatus = discoveryMap[reason]
+        || (status === 'failed' ? 'failed' : status === 'stopped' ? 'stopped' : 'completed');
+    if (reason === 'owner_stop') {
+        session.autoCollection.ownerStoppedAt = new Date();
+        session.autoCollection.pauseReason = '';
+    }
+    session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
     // Flush continuous CP6→CP7→CP8 pipeline for remaining records below batch size
     try {
@@ -235,26 +332,62 @@ export async function stopCompanyAutoCollection({ companyId, user, reason = 'new
     return { stoppedCount: res.modifiedCount || 0, reason };
 }
 
+async function acceptedSourceAppearances(session) {
+    const fromAc = Number(session.autoCollection?.rawRecordsCaptured || 0);
+    const fromSession = Number(session.acceptedCount || 0);
+    if (fromAc > 0 || fromSession > 0) return Math.max(fromAc, fromSession);
+    const agg = await AssistedCaptureEvent.aggregate([
+        {
+            $match: {
+                sessionId: session._id,
+                companyId: session.companyId,
+                status: { $in: ['completed', 'partially_completed'] },
+            },
+        },
+        { $group: { _id: null, accepted: { $sum: '$acceptedCount' }, visible: { $sum: '$visibleResultCount' } } },
+    ]);
+    return Number(agg[0]?.accepted || 0);
+}
+
 async function maybeFinishLimits(session, user) {
     const ac = session.autoCollection;
-    const unique = await campaignUnique(session.companyId, session.campaignId);
-    const mode = ac.pageCollectionMode || 'fixed';
-    const pagesThisQ = Number(ac.pagesCapturedThisQuery || 0);
-    const safety = Number(ac.maxSafetyPagesPerQuery || 30);
+    const collectionMode = resolveCollectionMode(ac);
+    const target = Number(ac.requestedCaptureTarget || 0);
+    const rawAccepted = await acceptedSourceAppearances(session);
+    ac.rawRecordsCaptured = rawAccepted;
+    ac.sourceResultsFound = Math.max(Number(ac.sourceResultsFound || 0), Number(session.visibleResultCount || 0));
+    ac.queriesCompleted = Number(ac.queriesProcessedTotal || 0);
 
-    if (ac.stopAtUnique > 0 && unique >= ac.stopAtUnique) {
-        await finalizeStop(session, { status: 'completed', reason: 'unique_target_reached', user });
+    // Fixed-target only: stop on raw accepted appearances (never unique-company count)
+    if (collectionMode === 'fixed_target' && target > 0 && rawAccepted >= target) {
+        ac.discoveryStatus = 'target_reached';
+        await finalizeStop(session, { status: 'completed', reason: 'capture_target_reached', user });
         return true;
     }
-    if (ac.stopOnNoNewUniquePages && Number(ac.consecutiveNoNewPages || 0) >= 2) {
-        await finalizeStop(session, { status: 'completed', reason: 'no_new_unique_consecutive_pages', user });
-        return true;
-    }
-    if ((mode === 'batches' || mode === 'until_no_more') && pagesThisQ >= safety) {
-        await finalizeStop(session, { status: 'completed', reason: 'max_safety_pages_reached', user });
-        return true;
-    }
+    // Unlimited / otherwise: never stop for unique plateau, unique target, or worker-cycle safety here.
+    // Worker-cycle safety is handled in decide_next as auto-continue.
     return false;
+}
+
+/** Persist progress and schedule the next worker cycle — does NOT complete the campaign. */
+function scheduleWorkerCycleContinue(session) {
+    const ac = session.autoCollection;
+    const page = Number(ac.lastSuccessfullyCapturedPage || session.googlePageIndex || 0);
+    const qIndex = Number(ac.lastQueryIndex || ac.resumeQueryIndex || 1);
+    ac.pagesInWorkerCycle = 0;
+    ac.workerCycleCount = Number(ac.workerCycleCount || 0) + 1;
+    ac.discoveryStatus = 'running';
+    ac.pauseReason = '';
+    ac.lastErrorCode = 'worker_cycle_continue';
+    ac.lastErrorMessage = `Worker cycle ${ac.workerCycleCount} complete at query ${qIndex} page ${page}. Continuing automatically.`;
+    ac.resumeQueryId = session.queryId;
+    ac.resumeQueryIndex = qIndex;
+    ac.resumeMessage = `Continuing Auto Collection from Query ${qIndex}, Page ${page || 1}`;
+    ac.lastDiscoveryAt = new Date();
+    ac.phase = 'await_cycle';
+    ac.nextActionAt = new Date(Date.now() + randomDelayMs(ac.delayMinSec || 5, Math.max(ac.delayMinSec || 5, Math.min(ac.delayMaxSec || 20, 20))));
+    ac.status = 'running';
+    ac.enabled = true;
 }
 
 async function startPostCollectionJobs(session, user) {
@@ -269,11 +402,11 @@ async function startPostCollectionJobs(session, user) {
                 sessionId: String(session._id),
             });
         } catch { /* soft */ }
-        await finalizeStop(session, { status: 'completed', reason: 'collection_complete_pipeline_active', user });
+        await finalizeStop(session, { status: 'completed', reason: 'all_queries_exhausted', user });
         return;
     }
     if (!ac.autoEnrichAfter) {
-        await finalizeStop(session, { status: 'completed', reason: 'collection_complete', user });
+        await finalizeStop(session, { status: 'completed', reason: 'all_queries_exhausted', user });
         return;
     }
     try {
@@ -312,9 +445,28 @@ async function startPostCollectionJobs(session, user) {
 
 async function pauseForManual(session, message) {
     session.autoCollection.status = 'paused_manual';
+    session.autoCollection.enabled = true;
     session.autoCollection.nextActionAt = null;
+    session.autoCollection.discoveryStatus = 'paused';
+    session.autoCollection.pauseReason = 'provider_block';
     session.autoCollection.lastErrorCode = 'manual_action_required';
     session.autoCollection.lastErrorMessage = String(message || 'Manual action required in the Google window.').slice(0, 500);
+    session.autoCollection.lastDiscoveryAt = new Date();
+    await session.save();
+}
+
+/** Soft pause for CAPTCHA/rate-limit/agent offline — does not complete the campaign. */
+async function pauseForTechnical(session, { reason = 'technical_retry', message = '' } = {}) {
+    session.autoCollection = session.autoCollection || defaultAuto();
+    session.autoCollection.status = 'paused_owner';
+    session.autoCollection.enabled = true;
+    session.autoCollection.nextActionAt = null;
+    session.autoCollection.tickLockUntil = null;
+    session.autoCollection.discoveryStatus = 'paused';
+    session.autoCollection.pauseReason = String(reason || 'technical_retry').slice(0, 80);
+    session.autoCollection.lastErrorCode = String(reason || 'technical_retry').slice(0, 80);
+    session.autoCollection.lastErrorMessage = String(message || 'Paused for technical retry. Resume when ready.').slice(0, 500);
+    session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
 }
 
@@ -340,14 +492,32 @@ export async function startAutoCollection({ companyId, user, sessionId, body = {
     const unique = await campaignUnique(cid, session.campaignId);
     const base = defaultAuto();
     const pausedManual = session.status === 'manual_action_required';
+    const campaignProgressSeed = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
+    const totalApprovedQueries = Math.min(
+        Number(settings.maxQueries || 24),
+        Number(campaignProgressSeed?.queryTotal || settings.maxQueries || 24),
+    );
     session.autoCollection = {
         ...base, ...settings, enabled: true,
         status: pausedManual ? 'paused_manual' : 'running',
         phase: pausedManual ? 'none' : 'delay',
+        discoveryStatus: pausedManual ? 'paused' : 'running',
+        pauseReason: pausedManual ? 'provider_block' : '',
+        ownerStoppedAt: null,
+        collectionMode: settings.collectionMode,
+        requestedCaptureTarget: settings.requestedCaptureTarget,
+        sourceResultsFound: Number(session.visibleResultCount || 0),
+        rawRecordsCaptured: Number(session.acceptedCount || 0),
+        lastQueryIndex: Number(campaignProgressSeed?.queryIndex || 1),
+        queriesCompleted: 0,
+        totalApprovedQueries,
+        pagesInWorkerCycle: 0,
+        workerCycleCount: 0,
+        lastDiscoveryAt: new Date(),
         uniqueAtStart: unique, startedAt: new Date(), startedBy: actorId(user),
         currentBatch: 1, pagesInCurrentBatch: 0, batchStartPage: Number(session.googlePageIndex || 1),
-        lastSuccessfullyCapturedPage: 0, batchMessage: '',
-        resumeQueryId: session.queryId, resumeQueryIndex: 1,
+        lastSuccessfullyCapturedPage: Number(session.googlePageIndex || 0), batchMessage: '',
+        resumeQueryId: session.queryId, resumeQueryIndex: Number(campaignProgressSeed?.queryIndex || 1),
         resumeMessage: '',
         pagesPerBatch: settings.pagesPerBatch, maxSafetyPagesPerQuery: settings.maxSafetyPagesPerQuery,
         pauseAfterEachBatch: settings.pauseAfterEachBatch, pageCollectionMode: settings.pageCollectionMode,
@@ -357,13 +527,16 @@ export async function startAutoCollection({ companyId, user, sessionId, body = {
     };
     await session.save();
     const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
+    const modeLabel = settings.collectionMode === 'fixed_target'
+        ? `Fixed Target (${settings.requestedCaptureTarget} raw source results)`
+        : 'Unlimited — Until No More Results';
     return {
         session: sanitizeSession(session.toObject()),
         autoCollection: progressView(session.toObject(), campaignProgress),
         campaignProgress,
         message: pausedManual
             ? 'Manual action required in the Google window. Resolve it, then click Continue Auto Collection.'
-            : 'Auto Collection started. It will capture pages and advance queries within your limits. CAPTCHA/consent pause for you.',
+            : `Auto Collection started (${modeLabel}). CAPTCHA/consent pause for you.`,
     };
 }
 
@@ -373,7 +546,11 @@ export async function pauseAutoCollection({ companyId, user, sessionId }) {
     const session = await loadOwnedSession(cid, sessionId);
     if ((session.autoCollection?.status || 'idle') !== 'running') throw new ApiError(400, 'Auto Collection is not running');
     session.autoCollection.status = 'paused_owner';
+    session.autoCollection.enabled = true;
     session.autoCollection.nextActionAt = null;
+    session.autoCollection.discoveryStatus = 'paused';
+    session.autoCollection.pauseReason = 'owner_pause';
+    session.autoCollection.lastDiscoveryAt = new Date();
     await session.save();
     const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
     return {
@@ -398,6 +575,9 @@ export async function resumeAutoCollection({ companyId, user, sessionId }) {
     }
     session.autoCollection.status = 'running';
     session.autoCollection.enabled = true;
+    session.autoCollection.discoveryStatus = 'running';
+    session.autoCollection.pauseReason = '';
+    session.autoCollection.lastDiscoveryAt = new Date();
     scheduleDelay(session);
     await session.save();
     const campaignProgress = await buildCampaignProgress({ companyId: cid, campaignId: session.campaignId, session: session.toObject() });
@@ -462,6 +642,21 @@ async function runPhase(session, user, cid) {
     const ac = session.autoCollection;
     const now = Date.now();
 
+    if (ac.phase === 'await_cycle') {
+        if (ac.nextActionAt && new Date(ac.nextActionAt).getTime() > now) {
+            await session.save();
+            return {};
+        }
+        // Worker-cycle safety reached — continue from next page (do not re-capture same page)
+        ac.discoveryStatus = 'running';
+        ac.pauseReason = '';
+        ac.lastErrorCode = '';
+        ac.lastErrorMessage = '';
+        ac.phase = 'next_page';
+        await session.save();
+        return runPhase(session, user, cid);
+    }
+
     if (ac.phase === 'delay' || ac.phase === 'none') {
         if (ac.nextActionAt && new Date(ac.nextActionAt).getTime() > now) {
             await session.save();
@@ -522,28 +717,59 @@ async function runPhase(session, user, cid) {
         const pending = session.pendingCaptureStatus || 'none';
         const events = Number(session.captureEventCount || 0);
         const baseline = Number(ac.captureEventsAtLastRequest || 0);
-        if (['pending', 'acked'].includes(pending) || session.status === 'capturing') {
+        // Fallback: completed events may exist even if pendingCaptureStatus stuck at acked
+        // (legacy race). Count terminal events since baseline.
+        const terminalEvents = await AssistedCaptureEvent.countDocuments({
+            companyId: cid,
+            sessionId: session._id,
+            status: { $in: ['completed', 'partially_completed'] },
+        });
+        const acceptedDelta = Math.max(0, Number(session.acceptedCount || 0) - Number(ac.insertedAtLastRequest || 0));
+        const captureDone = terminalEvents > baseline
+            || acceptedDelta > 0
+            || (READY.has(session.status) && !['pending', 'acked'].includes(pending) && events > baseline);
+
+        if (['pending', 'acked'].includes(pending) && !captureDone) {
+            if (session.status === 'capturing') {
+                await session.save();
+                return {};
+            }
             await session.save();
             return {};
         }
-        if (events <= baseline && !READY.has(session.status)) {
+        if (!captureDone && events <= baseline && !READY.has(session.status)) {
             await session.save();
             return {};
+        }
+        // Clear stuck pending if we already have accepted capture progress
+        if (['pending', 'acked'].includes(pending) && captureDone) {
+            session.pendingCaptureStatus = 'none';
+            session.pendingCaptureAckedAt = null;
         }
         const uniqueAfter = await campaignUnique(cid, session.campaignId);
         const newUnique = Math.max(0, uniqueAfter - Number(ac.uniqueBeforeLastCapture || 0));
         const insertedDelta = Math.max(0, Number(session.insertedCount || 0) - Number(ac.insertedAtLastRequest || 0));
         const updatedDelta = Math.max(0, Number(session.updatedExistingCount || 0) - Number(ac.updatedAtLastRequest || 0));
-        ac.lastPageVisible = Number(session.visibleResultCount || 0);
+        const pageAccepted = Math.max(insertedDelta + updatedDelta, acceptedDelta, Number(session.visibleResultCount || 0) ? Number(ac.lastPageVisible || 0) : 0);
+        ac.lastPageVisible = Number(session.visibleResultCount || ac.lastPageVisible || 0);
         ac.lastPageNewUnique = newUnique || insertedDelta;
         ac.lastPageUpdated = updatedDelta;
         ac.pagesCapturedThisQuery = Number(ac.pagesCapturedThisQuery || 0) + 1;
         ac.pagesProcessedTotal = Number(ac.pagesProcessedTotal || 0) + 1;
         ac.pagesInCurrentBatch = Number(ac.pagesInCurrentBatch || 0) + 1;
+        ac.pagesInWorkerCycle = Number(ac.pagesInWorkerCycle || 0) + 1;
         ac.lastSuccessfullyCapturedPage = Number(session.googlePageIndex || ac.pagesCapturedThisQuery);
+        ac.lastQueryIndex = Number(ac.queriesProcessedTotal || 0) + 1;
+        ac.lastCursor = String(session.googlePageIndex || ac.lastSuccessfullyCapturedPage || '');
+        ac.nextPageToken = String(Number(session.googlePageIndex || 0) + 1);
+        ac.lastDiscoveryAt = new Date();
+        ac.discoveryStatus = 'running';
+        ac.rawRecordsCaptured = await acceptedSourceAppearances(session);
+        ac.sourceResultsFound = Math.max(Number(ac.sourceResultsFound || 0), Number(session.visibleResultCount || 0));
+        ac.queriesCompleted = Number(ac.queriesProcessedTotal || 0);
         if (!ac.batchStartPage) ac.batchStartPage = Number(session.googlePageIndex || 1);
         if (!ac.currentBatch) ac.currentBatch = 1;
-        ac.consecutiveNoNewPages = ((newUnique || insertedDelta) <= 0)
+        ac.consecutiveNoNewPages = ((newUnique || insertedDelta || pageAccepted) <= 0)
             ? Number(ac.consecutiveNoNewPages || 0) + 1
             : 0;
         await refreshQueryCaptureStats({ companyId: cid, campaignId: session.campaignId, queryId: session.queryId });
@@ -558,15 +784,29 @@ async function runPhase(session, user, cid) {
         ac.resumeQueryId = session.queryId;
         ac.resumeQueryIndex = Number(ac.queriesProcessedTotal || 0) + 1;
         ac.resumeMessage = `Resume Auto Collection from Query ${ac.resumeQueryIndex}, Page ${ac.lastSuccessfullyCapturedPage || 1}`;
+        ac.lastCursor = String(ac.lastSuccessfullyCapturedPage || '');
+        ac.nextPageToken = String(Number(ac.lastSuccessfullyCapturedPage || 0) + 1);
 
         if (await maybeFinishLimits(session, user)) return { reload: true };
 
-        const mode = ac.pageCollectionMode || 'fixed';
+        const collectionMode = resolveCollectionMode(ac);
+        const mode = collectionMode === 'unlimited'
+            ? 'until_no_more'
+            : (ac.pageCollectionMode || 'until_no_more');
         const pagesThisQ = Number(ac.pagesCapturedThisQuery || 0);
         const pagesInBatch = Number(ac.pagesInCurrentBatch || 0);
         const pagesPerBatch = Number(ac.pagesPerBatch || 10);
         const fixedLimit = Number(ac.maxPagesPerQuery || 3);
-        const safety = Number(ac.maxSafetyPagesPerQuery || 30);
+        const workerCycleLimit = Number(ac.maxSafetyPagesPerQuery || DEFAULT_WORKER_CYCLE_PAGES);
+        const pagesInCycle = Number(ac.pagesInWorkerCycle || 0);
+
+        // Worker-cycle safety: persist + auto-continue (never mark campaign completed)
+        if ((mode === 'until_no_more' || mode === 'batches')
+            && pagesInCycle >= workerCycleLimit) {
+            scheduleWorkerCycleContinue(session);
+            await session.save();
+            return { reload: true };
+        }
 
         if (mode === 'fixed') {
             if (pagesThisQ >= fixedLimit) {
@@ -575,10 +815,6 @@ async function runPhase(session, user, cid) {
                 return runPhase(session, user, cid);
             }
         } else if (mode === 'batches') {
-            if (pagesThisQ >= safety) {
-                await finalizeStop(session, { status: 'completed', reason: 'max_safety_pages_reached', user });
-                return { reload: true };
-            }
             if (pagesInBatch >= pagesPerBatch) {
                 if (ac.pauseAfterEachBatch !== false) {
                     const startP = Number(ac.batchStartPage || 1);
@@ -587,6 +823,8 @@ async function runPhase(session, user, cid) {
                     ac.status = 'paused_batch';
                     ac.phase = 'await_batch_continue';
                     ac.enabled = true;
+                    ac.discoveryStatus = 'paused';
+                    ac.pauseReason = 'batch_pause';
                     ac.nextActionAt = null;
                     ac.batchMessage = `Batch completed: Pages ${startP}–${endP}. Campaign unique records: ${uniqueNow}. More Google pages may be available.`;
                     await session.save();
@@ -598,12 +836,8 @@ async function runPhase(session, user, cid) {
                 ac.batchStartPage = Number(ac.lastSuccessfullyCapturedPage || pagesThisQ) + 1;
                 ac.batchMessage = '';
             }
-        } else if (mode === 'until_no_more') {
-            if (pagesThisQ >= safety) {
-                await finalizeStop(session, { status: 'completed', reason: 'max_safety_pages_reached', user });
-                return { reload: true };
-            }
         }
+        // until_no_more / unlimited: never stop for page count here — only worker-cycle continue above
 
         ac.phase = 'next_page';
         await session.save();
@@ -634,7 +868,10 @@ async function runPhase(session, user, cid) {
     if (ac.phase === 'complete_query') {
         await markQueryComplete({ companyId: cid, user, sessionId: session._id });
         ac.queriesProcessedTotal = Number(ac.queriesProcessedTotal || 0) + 1;
-        if (Number(ac.queriesProcessedTotal || 0) >= Number(ac.maxQueries || 3)) {
+        ac.queriesCompleted = Number(ac.queriesProcessedTotal || 0);
+        ac.pagesInWorkerCycle = 0;
+        ac.lastDiscoveryAt = new Date();
+        if (Number(ac.queriesProcessedTotal || 0) >= Number(ac.maxQueries || ac.totalApprovedQueries || 3)) {
             await startPostCollectionJobs(session, user);
             return { reload: true };
         }
@@ -685,7 +922,12 @@ async function runPhase(session, user, cid) {
         const transferred = {
             ...(snapshot.autoCollection || {}),
             status: 'running', enabled: true, phase: 'await_query_ready',
-            pagesCapturedThisQuery: 0, pagesInCurrentBatch: 0, currentBatch: 1, batchStartPage: 1, lastSuccessfullyCapturedPage: 0, batchMessage: '', consecutiveNoNewPages: 0, nextActionAt: null, tickLockUntil: null,
+            discoveryStatus: 'running', pauseReason: '',
+            pagesCapturedThisQuery: 0, pagesInCurrentBatch: 0, pagesInWorkerCycle: 0,
+            currentBatch: 1, batchStartPage: 1, lastSuccessfullyCapturedPage: 0, batchMessage: '', consecutiveNoNewPages: 0, nextActionAt: null, tickLockUntil: null,
+            queriesCompleted: Number(snapshot.autoCollection?.queriesProcessedTotal || 0) + 1,
+            lastQueryIndex: Number(snapshot.autoCollection?.queriesProcessedTotal || 0) + 2,
+            lastDiscoveryAt: new Date(),
             rootSessionId: snapshot.autoCollection?.rootSessionId || snapshot._id,
             campaignId: snapshot.campaignId,
         };
@@ -734,6 +976,51 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     const cid = requireCompanyId(companyId);
     assertAssistedCaptureView(user);
 
+    // Soft-reclaim discovery when a prior race marked session/AC failed after accepted ingest
+    const probe = await AssistedCaptureSession.findOne({ _id: sessionId, companyId: cid }).lean();
+    if (probe) {
+        const accepted = Math.max(
+            Number(probe.acceptedCount || 0),
+            Number(probe.autoCollection?.rawRecordsCaptured || 0),
+        );
+        const collectionMode = resolveCollectionMode(probe.autoCollection || {});
+        const target = Number(probe.autoCollection?.requestedCaptureTarget || 0);
+        const stopReason = String(probe.autoCollection?.summary?.stopReason || '');
+        const targetMet = collectionMode === 'fixed_target' && target > 0 && accepted >= target;
+        const canReclaim = accepted > 0
+            && !targetMet
+            && (
+                probe.status === 'failed'
+                || probe.autoCollection?.status === 'failed'
+                || stopReason === 'session_failed'
+                || stopReason === 'max_safety_pages_reached'
+            )
+            && !['owner_stop', 'capture_target_reached', 'google_no_more_pages', 'all_queries_exhausted'].includes(stopReason);
+        if (canReclaim) {
+            await AssistedCaptureSession.updateOne(
+                { _id: sessionId, companyId: cid },
+                {
+                    $set: {
+                        status: 'awaiting_user',
+                        failCode: '',
+                        failMessage: '',
+                        pendingCaptureStatus: 'none',
+                        'autoCollection.status': 'running',
+                        'autoCollection.enabled': true,
+                        'autoCollection.phase': ['await_capture', 'done', 'none'].includes(probe.autoCollection?.phase)
+                            ? 'decide_next'
+                            : (probe.autoCollection?.phase || 'decide_next'),
+                        'autoCollection.discoveryStatus': 'running',
+                        'autoCollection.summary.stopReason': '',
+                        'autoCollection.lastErrorCode': 'session_recovered_after_accepted_ingest',
+                        'autoCollection.lastErrorMessage': 'Recovered after accepted capture; continuing discovery.',
+                    },
+                    $unset: { failedAt: 1 },
+                },
+            );
+        }
+    }
+
     let session = await AssistedCaptureSession.findOneAndUpdate(
         {
             _id: sessionId, companyId: cid, 'autoCollection.status': 'running',
@@ -767,12 +1054,63 @@ export async function tickAutoCollection({ companyId, user, sessionId }) {
     if (session.status === 'manual_action_required') {
         await pauseForManual(session, session.manualActionMessage || 'Manual action required in the Google window.');
     } else if (ENDED.has(session.status)) {
-        await finalizeStop(session, { status: 'failed', reason: `session_${session.status}`, user });
+        // If capture batch already succeeded, recover and keep discovering — do not stop on
+        // stale bookkeeping / agent ASSISTED_SESSION_FAILED after accepted ingest.
+        const accepted = await acceptedSourceAppearances(session);
+        const collectionMode = resolveCollectionMode(session.autoCollection || {});
+        const target = Number(session.autoCollection?.requestedCaptureTarget || 0);
+        const targetMet = collectionMode === 'fixed_target' && target > 0 && accepted >= target;
+        const stopReason = String(session.autoCollection?.summary?.stopReason || '');
+        const recoverableFail = !targetMet
+            && accepted > 0
+            && (
+                session.status === 'failed'
+                || stopReason === 'session_failed'
+                || stopReason === 'max_safety_pages_reached'
+                || ['ASSISTED_SESSION_FAILED', 'EVENT_INGEST_FAILED', 'AGENT_FAILED', ''].includes(String(session.failCode || ''))
+            )
+            && !['owner_stop', 'capture_target_reached', 'google_no_more_pages', 'all_queries_exhausted'].includes(stopReason);
+        if (recoverableFail) {
+            session.status = 'awaiting_user';
+            session.failCode = '';
+            session.failMessage = '';
+            session.failedAt = undefined;
+            session.pendingCaptureStatus = 'none';
+            session.autoCollection = session.autoCollection || defaultAuto();
+            session.autoCollection.discoveryStatus = 'running';
+            session.autoCollection.lastErrorCode = 'session_recovered_after_accepted_ingest';
+            session.autoCollection.lastErrorMessage = 'Recovered after accepted capture; continuing discovery.';
+            if (['await_capture', 'done', 'none'].includes(session.autoCollection.phase)) {
+                session.autoCollection.phase = 'decide_next';
+            }
+            session.autoCollection.status = 'running';
+            session.autoCollection.enabled = true;
+            session.autoCollection.summary = {
+                ...(session.autoCollection.summary || {}),
+                stopReason: '',
+            };
+            await session.save();
+            try {
+                const outcome = await runPhase(session, user, cid);
+                if (outcome?.sessionId && String(outcome.sessionId) !== String(session._id)) {
+                    switchedSessionId = String(outcome.sessionId);
+                }
+            } catch (err) {
+                session.autoCollection.lastErrorCode = 'tick_error';
+                session.autoCollection.lastErrorMessage = String(err?.message || 'Auto Collection step failed').slice(0, 500);
+                await session.save();
+            }
+        } else {
+            await finalizeStop(session, { status: 'failed', reason: `session_${session.status}`, user });
+        }
     } else {
         const agentStatus = await getAgentStatusForCompany(cid, { sessionId: session._id });
         const clearlyOffline = agentStatus && (agentStatus.online === false || agentStatus.connected === false || agentStatus.agentOnline === false);
         if (clearlyOffline) {
-            await finalizeStop(session, { status: 'failed', reason: 'agent_offline', user });
+            await pauseForTechnical(session, {
+                reason: 'agent_offline',
+                message: 'Discovery agent offline. Campaign paused — resume when the agent is back.',
+            });
         } else {
             try {
                 const outcome = await runPhase(session, user, cid);

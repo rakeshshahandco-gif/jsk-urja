@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { AssistedCaptureSession } from '../../../../models/assistedCaptureSession.model.js';
+import { AssistedCaptureEvent } from '../../../../models/assistedCaptureEvent.model.js';
 import { SearchQuery } from '../../../../models/searchQuery.model.js';
 import { DiscoveryAgentJob } from '../../../../models/discoveryAgentJob.model.js';
 import { ApiError } from '../../../../utils/ApiError.js';
@@ -169,10 +170,38 @@ export async function heartbeatAssistedCapture({ companyId, sessionId, agentInst
     if (nextStatus && !AGENT_HEARTBEAT_STATUS_ALLOWED.includes(nextStatus)) {
         throw new ApiError(400, 'Unsupported heartbeat status');
     }
-    session.lastHeartbeatAt = new Date();
-    if (nextStatus) session.status = nextStatus;
-    await session.save();
-    return { session: sanitizeSession(session) };
+
+    const now = new Date();
+    const $set = { lastHeartbeatAt: now, updatedAt: now };
+    // Heartbeat must never clobber terminal states or overwrite capture counters.
+    // Only advance ephemeral agent presence statuses when session is still in-flight.
+    const terminal = ['completed', 'cancelled', 'expired', 'failed'];
+    const filter = {
+        _id: session._id,
+        companyId,
+        status: { $nin: terminal },
+    };
+    if (nextStatus) {
+        // Do not demote capturing/manual_action_required/ready back incorrectly from weaker heartbeats
+        // except when agent explicitly reports those allowed statuses.
+        $set.status = nextStatus;
+    }
+
+    const updated = await AssistedCaptureSession.findOneAndUpdate(
+        filter,
+        { $set },
+        { new: true },
+    );
+    // If session already terminal, still touch heartbeat timestamp only (no status overwrite)
+    if (!updated) {
+        const terminalDoc = await AssistedCaptureSession.findOneAndUpdate(
+            { _id: session._id, companyId, status: { $in: terminal } },
+            { $set: { lastHeartbeatAt: now, updatedAt: now } },
+            { new: true },
+        );
+        return { session: sanitizeSession(terminalDoc || session) };
+    }
+    return { session: sanitizeSession(updated) };
 }
 
 export async function setManualActionRequired({ companyId, sessionId, agentInstanceId, token, message }) {
@@ -212,10 +241,42 @@ export async function completeAssistedByAgent({ companyId, sessionId, agentInsta
 export async function failAssistedByAgent({ companyId, sessionId, agentInstanceId, token, code, message }) {
     const session = await loadClaimedSessionForAgent({ companyId, sessionId, agentInstanceId });
     await validateAgentSessionToken({ companyId, session, tokenHeaderValue: token });
-    session.status = 'failed';
-    session.failedAt = new Date();
-    session.failCode = String(code || 'AGENT_FAILED').slice(0, 80);
-    session.failMessage = String(message || 'Assisted capture failed').replace(/[\r\n]+/g, ' ').slice(0, 500);
-    await session.save();
-    return { session: sanitizeSession(session) };
+
+    // Do not fail a session that already accepted capture events — bookkeeping/agent errors are non-fatal.
+    const accepted = Number(session.acceptedCount || 0);
+    const hasTerminalEvents = await AssistedCaptureEvent.countDocuments({
+        companyId,
+        sessionId: session._id,
+        status: { $in: ['completed', 'partially_completed'] },
+    });
+    if (accepted > 0 || hasTerminalEvents > 0) {
+        const updated = await AssistedCaptureSession.findOneAndUpdate(
+            { _id: session._id, companyId, status: { $nin: ['completed', 'cancelled', 'expired'] } },
+            {
+                $set: {
+                    status: 'awaiting_user',
+                    'autoCollection.lastErrorCode': 'agent_fail_ignored_after_accepted_ingest',
+                    'autoCollection.lastErrorMessage': String(message || code || 'ignored').slice(0, 500),
+                    'autoCollection.discoveryStatus': 'running',
+                    lastHeartbeatAt: new Date(),
+                },
+            },
+            { new: true },
+        );
+        return { session: sanitizeSession(updated || session), ignoredFail: true };
+    }
+
+    const updated = await AssistedCaptureSession.findOneAndUpdate(
+        { _id: session._id, companyId, status: { $nin: ['completed', 'cancelled', 'expired'] } },
+        {
+            $set: {
+                status: 'failed',
+                failedAt: new Date(),
+                failCode: String(code || 'AGENT_FAILED').slice(0, 80),
+                failMessage: String(message || 'Assisted capture failed').replace(/[\r\n]+/g, ' ').slice(0, 500),
+            },
+        },
+        { new: true },
+    );
+    return { session: sanitizeSession(updated || session) };
 }
