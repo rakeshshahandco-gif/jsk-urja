@@ -192,4 +192,157 @@ describe('CP5 concurrency', () => {
         const batchIds = new Set(fulfilled.map((f) => String(f.event.rawCaptureBatchId || f.ingest?.batchId || '')));
         assert.equal([...batchIds].filter(Boolean).length, 1);
     });
+
+    it('heartbeat during ingest does not convert accepted event to EVENT_INGEST_FAILED', async () => {
+        const { heartbeatAssistedCapture } = await import('../../src/services/dataExtractor/searchCampaign/assistedCapture/agentAdapter.service.js');
+        const created = await createAssistedCaptureSession({
+            companyId, user: fullUser, campaignId: campaign._id, queryId: query._id,
+            body: { idempotencyKey: nextKey('hb-ingest') },
+            headers: { 'x-financial-year': '2025-26' },
+        });
+        const claim = await claimAssistedCaptureSession({
+            companyId, sessionId: created.session._id, agentInstanceId: `hb-agent-${TAG}`,
+        });
+        await acknowledgeBrowserOpened({
+            companyId,
+            sessionId: created.session._id,
+            agentInstanceId: `hb-agent-${TAG}`,
+            token: claim.sessionToken,
+        });
+
+        const payload = {
+            eventIdempotencyKey: nextKey('hb-evt'),
+            eventSequence: 1,
+            visibleResultCount: 2,
+            results: [
+                {
+                    title: `HB A ${TAG}`,
+                    snippet: 'a',
+                    resultUrl: `https://hb-a-${TAG.toLowerCase()}.example.com/`,
+                    resultPosition: 1,
+                    resultTypeHint: 'unknown',
+                },
+                {
+                    title: `HB B ${TAG}`,
+                    snippet: 'b',
+                    resultUrl: `https://hb-b-${TAG.toLowerCase()}.example.com/`,
+                    resultPosition: 2,
+                    resultTypeHint: 'unknown',
+                },
+            ],
+        };
+
+        const ingestPromise = submitAgentAssistedEvent({
+            companyId,
+            sessionId: created.session._id,
+            agentInstanceId: `hb-agent-${TAG}`,
+            token: claim.sessionToken,
+            payload,
+        });
+        const heartbeats = Promise.all(Array.from({ length: 12 }, (_, i) => heartbeatAssistedCapture({
+            companyId,
+            sessionId: created.session._id,
+            agentInstanceId: `hb-agent-${TAG}`,
+            token: claim.sessionToken,
+            status: i % 2 === 0 ? 'capturing' : 'awaiting_user',
+        }).catch(() => null)));
+
+        const [ingestResult] = await Promise.all([ingestPromise, heartbeats]);
+        assert.ok(ingestResult?.event);
+        assert.notEqual(ingestResult.event.status, 'failed');
+        assert.notEqual(ingestResult.event.failureCode, 'EVENT_INGEST_FAILED');
+        assert.ok(Number(ingestResult.event.acceptedCount || ingestResult.ingest?.acceptedCount || 0) >= 1);
+        const rawCount = await RawCapture.countDocuments({ companyId, campaignId: campaign._id });
+        assert.ok(rawCount >= 1);
+    });
+
+    it('duplicate event retry with same idempotency key does not duplicate RawCapture', async () => {
+        const created = await createAssistedCaptureSession({
+            companyId, user: fullUser, campaignId: campaign._id, queryId: query._id,
+            body: { idempotencyKey: nextKey('dup') },
+            headers: { 'x-financial-year': '2025-26' },
+        });
+        const claim = await claimAssistedCaptureSession({
+            companyId, sessionId: created.session._id, agentInstanceId: `dup-agent-${TAG}`,
+        });
+        await acknowledgeBrowserOpened({
+            companyId,
+            sessionId: created.session._id,
+            agentInstanceId: `dup-agent-${TAG}`,
+            token: claim.sessionToken,
+        });
+        const payload = {
+            eventIdempotencyKey: nextKey('dup-evt'),
+            eventSequence: 1,
+            visibleResultCount: 1,
+            results: [{
+                title: `Dup ${TAG}`,
+                snippet: 'd',
+                resultUrl: `https://dup-${TAG.toLowerCase()}.example.com/page`,
+                resultPosition: 1,
+                resultTypeHint: 'unknown',
+            }],
+        };
+        const first = await submitAgentAssistedEvent({
+            companyId, sessionId: created.session._id, agentInstanceId: `dup-agent-${TAG}`,
+            token: claim.sessionToken, payload,
+        });
+        const second = await submitAgentAssistedEvent({
+            companyId, sessionId: created.session._id, agentInstanceId: `dup-agent-${TAG}`,
+            token: claim.sessionToken, payload,
+        });
+        assert.equal(String(first.event._id), String(second.event._id));
+        assert.equal(second.idempotentReplay, true);
+        const captures = await RawCapture.countDocuments({
+            companyId,
+            campaignId: campaign._id,
+            resultUrlNormalized: { $regex: `dup-${TAG.toLowerCase()}` },
+        });
+        // Identity may normalize URL; count by title fallback
+        const byTitle = await RawCapture.countDocuments({ companyId, campaignId: campaign._id, title: `Dup ${TAG}` });
+        assert.equal(Math.max(captures, byTitle), 1);
+    });
+
+    it('bookkeeping conflict after successful ingest keeps event completed', async () => {
+        const { recalculateAssistedSessionTotals } = await import('../../src/services/dataExtractor/searchCampaign/assistedCapture/event.service.js');
+        const created = await createAssistedCaptureSession({
+            companyId, user: fullUser, campaignId: campaign._id, queryId: query._id,
+            body: { idempotencyKey: nextKey('bk') },
+            headers: { 'x-financial-year': '2025-26' },
+        });
+        const claim = await claimAssistedCaptureSession({
+            companyId, sessionId: created.session._id, agentInstanceId: `bk-agent-${TAG}`,
+        });
+        await acknowledgeBrowserOpened({
+            companyId,
+            sessionId: created.session._id,
+            agentInstanceId: `bk-agent-${TAG}`,
+            token: claim.sessionToken,
+        });
+        const payload = {
+            eventIdempotencyKey: nextKey('bk-evt'),
+            eventSequence: 1,
+            visibleResultCount: 1,
+            results: [{
+                title: `BK ${TAG}`,
+                snippet: 'k',
+                resultUrl: `https://bk-${TAG.toLowerCase()}.example.com/`,
+                resultPosition: 1,
+                resultTypeHint: 'unknown',
+            }],
+        };
+        const result = await submitAgentAssistedEvent({
+            companyId, sessionId: created.session._id, agentInstanceId: `bk-agent-${TAG}`,
+            token: claim.sessionToken, payload,
+        });
+        assert.ok(['completed', 'partially_completed'].includes(result.event.status));
+        // Concurrent counter refreshes must not fail
+        await Promise.all(Array.from({ length: 8 }, () => recalculateAssistedSessionTotals(created.session._id, companyId)));
+        const event = await AssistedCaptureEvent.findById(result.event._id).lean();
+        assert.ok(['completed', 'partially_completed'].includes(event.status));
+        assert.notEqual(event.failureCode, 'EVENT_INGEST_FAILED');
+        const session = await AssistedCaptureSession.findById(created.session._id).lean();
+        assert.ok(Number(session.acceptedCount || 0) >= 1);
+        assert.notEqual(session.status, 'failed');
+    });
 });
