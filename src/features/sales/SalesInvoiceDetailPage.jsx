@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { 
     getSalesInvoiceById, cancelSalesInvoice, deleteSalesInvoice, 
@@ -209,6 +210,25 @@ export default function SalesInvoiceDetailPage() {
         }
     };
 
+    /** Print outside app-shell so sidebar/flex never squeezes A4 width. */
+    const handlePrint = useCallback((pdfTitle) => {
+        document.body.classList.add('si-printing');
+        const cleanup = () => {
+            document.body.classList.remove('si-printing');
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        const origTitle = document.title;
+        if (pdfTitle) document.title = pdfTitle;
+        window.setTimeout(() => {
+            window.print();
+            window.setTimeout(() => {
+                cleanup();
+                if (pdfTitle) document.title = origTitle;
+            }, 2000);
+        }, 50);
+    }, []);
+
     if (loading) return <BrandedLoader size={120} />;
     if (!inv) return <div style={{ padding: 60, textAlign: 'center', color: '#dc2626', background: '#f8f9fa', minHeight: '100vh' }}>Invoice not found.</div>;
 
@@ -228,17 +248,54 @@ export default function SalesInvoiceDetailPage() {
 
     return (
         <div className="sales-invoice-page-root" style={{ fontFamily: "'Inter', sans-serif", background: '#f8f9fa', minHeight: '100vh', color: '#1e293b' }}>
-            <SalesInvoiceBuiltinPrint
-                inv={inv}
-                company={company}
-                invoiceId={id}
-                printBarcodePayload={printBarcodePayload}
-                isEstimate={isEstimate}
-                gstApplicable={gstApplicable}
-                isIGST={isIGST}
-                docTitle={docTitle}
-                docNumberLabel={docNumberLabel}
-            />
+            {/* PRINT ONLY — body portal so app-shell flex/sidebar cannot shrink A4 */}
+            {typeof document !== 'undefined'
+                && createPortal(
+                    <div className="si-print-portal" data-si-print-portal="1">
+                        <SalesInvoiceBuiltinPrint
+                            inv={inv}
+                            company={company}
+                            invoiceId={id}
+                            printBarcodePayload={printBarcodePayload}
+                            isEstimate={isEstimate}
+                            gstApplicable={gstApplicable}
+                            isIGST={isIGST}
+                            docTitle={docTitle}
+                            docNumberLabel={docNumberLabel}
+                        />
+                    </div>,
+                    document.body,
+                )}
+
+            <style>{`
+                .si-print-portal { display: none; }
+                @media print {
+                    /* PROTECTED SALES INVOICE PRINT LAYOUT — portal isolation only; document rules live in SalesInvoiceBuiltinPrint */
+                    body.si-printing > *:not(.si-print-portal),
+                    body > #root,
+                    body > *:not(.si-print-portal):not(script):not(style) {
+                        display: none !important;
+                    }
+                    body > .si-print-portal,
+                    .si-print-portal {
+                        display: block !important;
+                        position: static !important;
+                        width: 210mm !important;
+                        max-width: 210mm !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        background: #fff !important;
+                        visibility: visible !important;
+                        transform: none !important;
+                        zoom: 1 !important;
+                    }
+                    .si-print-portal .sales-invoice-print-document,
+                    .si-print-portal .si-builtin-print {
+                        display: block !important;
+                        visibility: visible !important;
+                    }
+                }
+            `}</style>
 
             <div className="no-print">
 
@@ -299,7 +356,7 @@ export default function SalesInvoiceDetailPage() {
                              )}
                             {/* Print Button */}
                             <button
-                                onClick={() => window.print()}
+                                onClick={() => handlePrint()}
                                 style={{ padding: '9px 18px', borderRadius: 8, background: '#1e293b', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                                 title="Print Invoice"
                             >
@@ -307,17 +364,12 @@ export default function SalesInvoiceDetailPage() {
                             </button>
                             {/* Export PDF Button */}
                             <button
-                                onClick={() => {
-                                    const origTitle = document.title;
-                                    document.title = `Invoice-${inv.invoiceNumber}`;
-                                    window.print();
-                                    setTimeout(() => { document.title = origTitle; }, 2000);
-                                }}
+                                onClick={() => handlePrint(`Invoice-${inv.invoiceNumber}`)}
                                 style={{ padding: '9px 18px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                                 title="Export as PDF (Save as PDF in print dialog)"
                             >
                                 📄 Export PDF
-                             </button>
+                            </button>
 
                             {/* Send WhatsApp Button */}
                             {notCancelled && (

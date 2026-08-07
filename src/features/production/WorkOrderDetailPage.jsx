@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     getWorkOrderById, releaseWorkOrder, updateWorkOrder, updateStage, updateMaterialStatus, refreshMaterialStock,
     addProductionLog, deleteProductionLog
@@ -45,10 +45,15 @@ import { BrandedLoader } from '@/components/ui/BrandedLoading';
 export default function WorkOrderDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { selectedCompany } = useCompany();
     const [wo, setWo] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState(0);
+    const initialTab = (() => {
+        const raw = parseInt(searchParams.get('tab') || '0', 10);
+        return Number.isFinite(raw) && raw >= 0 && raw <= 5 ? raw : 0;
+    })();
+    const [tab, setTab] = useState(initialTab);
     const [saving, setSaving] = useState(false);
 
     const load = useCallback(() => {

@@ -39,6 +39,10 @@ router
     .get(reportController.exportFollowupDashboardList);
 
 router
+    .route('/followup-dashboard/export-product-chats')
+    .get(reportController.exportFollowupProductChats);
+
+router
     .route('/followup-dashboard/:customerId')
     .get(reportController.getFollowupDashboardDetail);
 

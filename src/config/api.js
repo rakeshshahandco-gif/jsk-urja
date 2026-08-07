@@ -1,6 +1,7 @@
 import { env } from './env';
 const currentLocation = env.API_URL;
 import { getAuthData } from '../utils/auth';
+import { getActiveCompanyId } from '../utils/activeCompany';
 
 // API Configuration
 const API_BASE_URL = env.API_URL;
@@ -21,6 +22,10 @@ export const apiRequest = async (endpoint, options = {}) => {
 
     if (authData && authData.token) {
         defaultHeaders['Authorization'] = `Bearer ${authData.token}`;
+        const companyId = getActiveCompanyId();
+        if (companyId) {
+            defaultHeaders['X-Company-Id'] = companyId;
+        }
     }
 
     const config = {

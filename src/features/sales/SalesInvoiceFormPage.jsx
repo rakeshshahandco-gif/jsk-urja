@@ -12,7 +12,10 @@ import { ArrowUp, ArrowDown } from 'lucide-react';
 import { useFeatureSettings } from '@/contexts/FeatureSettingsContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { scanEntryApi } from '@/services/scanEntryApi';
-import gridStyles from '@/features/sales/styles/salesItemGrid.module.scss';
+import gridStyles from '@/features/sales/styles/salesOrderItemGrid.module.scss';
+import api from '@/services/api';
+import GstinStatusWarningModal from '@/features/sales/components/GstinStatusWarningModal';
+import { useAuth } from '@/hooks/useAuth';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -146,9 +149,15 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
     const [searchParams] = useSearchParams();
     const { isFeatureEnabled } = useFeatureSettings();
     const { selectedFY } = useFinancialYear();
+    const { hasPermission } = useAuth();
     const scanEntryEnabled = isFeatureEnabled('accounting.enableAiSmartImport');
     const soId = searchParams.get('soId') || searchParams.get('sold');
     const [saving, setSaving] = useState(false);
+    const [gstWarning, setGstWarning] = useState(null);
+    const [gstSnapshot, setGstSnapshot] = useState(null);
+    const [gstBusy, setGstBusy] = useState(false);
+    const pendingSubmitRef = useRef(false);
+    const gstDecisionRef = useRef(null); // { confirmedB2c, override }
     const [uploadingScan, setUploadingScan] = useState(false);
     const [seriesList, setSeriesList] = useState([]);
     const [previewInvoiceNo, setPreviewInvoiceNo] = useState('');
@@ -425,6 +434,59 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
         });
     };
 
+    const resolveGstForForm = async ({ forceRefresh = false, customerId, gstin, invoiceDate } = {}) => {
+        const cid = customerId || form.customerId;
+        const g = gstin || form.customerGstin;
+        const d = invoiceDate || form.invoiceDate;
+        if (!g || String(g).trim().length < 15) {
+            setGstWarning(null);
+            setGstSnapshot(null);
+            return null;
+        }
+        try {
+            setGstBusy(true);
+            const { data } = await api.post('/gst-verification/resolve-transaction', {
+                customerId: cid,
+                gstin: g,
+                transactionDate: d,
+                documentType: 'Sales Invoice',
+                forceRefresh,
+            });
+            const res = data?.data;
+            if (!res) return null;
+            const snap = {
+                gstinUsed: res.gstin,
+                gstLegalNameSnapshot: res.verification?.legalName || '',
+                gstTradeNameSnapshot: res.verification?.tradeName || '',
+                gstStatusSnapshot: res.currentPortalStatus || '',
+                gstStatusOnTransactionDate: res.statusOnTransactionDate || '',
+                gstRegistrationTypeSnapshot: res.verification?.registrationType || '',
+                gstTreatmentSnapshot: res.recommendedGSTTreatment || '',
+                gstr1CategorySnapshot: res.recommendedReturnCategory || '',
+                cancellationDateSnapshot: res.cancellationDate || null,
+                verificationDateSnapshot: res.verification?.fetchedAt || null,
+                verificationProviderSnapshot: res.verification?.providerName || '',
+                gstHistoryId: res.sourceHistoryId || null,
+                decisionReason: res.resolutionReason || '',
+                manualOverride: false,
+                overrideReason: '',
+            };
+            setGstSnapshot(snap);
+            if (res.statusOnTransactionDate === 'Cancelled' || res.requiresUserConfirmation) {
+                setGstWarning({ ...res, invoiceDate: d });
+            } else {
+                setGstWarning(null);
+            }
+            return res;
+        } catch (e) {
+            // Provider absent / permission — do not block invoice; no false cancellation
+            console.warn('[GST verify]', e?.response?.data?.message || e.message);
+            return null;
+        } finally {
+            setGstBusy(false);
+        }
+    };
+
     const handleCustomerSelect = async (customerId) => {
         const selected = allCustomers.find(c => c._id === customerId);
         if (!selected) return;
@@ -436,7 +498,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 ...p,
                 customerName: fullCustomer.name,
                 customerId: customerId,
-                customerGstin: fullCustomer.gstin || '',
+                customerGstin: fullCustomer.gstin || fullCustomer.gstNumber || '',
                 customerPhone: fullCustomer.mobile || '',
                 billingAddress: fullCustomer.billingAddress || '',
                 billingState: fullCustomer.state || '',
@@ -451,6 +513,11 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     incentiveValue: 0,
                 }
             }));
+            await resolveGstForForm({
+                customerId,
+                gstin: fullCustomer.gstin || fullCustomer.gstNumber || '',
+                invoiceDate: form.invoiceDate,
+            });
         } catch (error) {
             toast.error('Failed to load customer details');
         }
@@ -506,7 +573,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 prev.focus();
             }
         } else if (e.key === 'Enter') {
-            const nextColTargets = [1, 3, 4, 5, 6, 7, 8, 9];
+            const nextColTargets = [1, 3, 4, 5, 6, 7]; // Inputs only (Disc%/GST% hidden from row UI; values still in form/calc)
             const currentTargetIdx = nextColTargets.indexOf(colIdx);
             
             if (currentTargetIdx < nextColTargets.length - 1) {
@@ -540,11 +607,25 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
 
         if (!form.customerName) return toast.error('Customer name is required');
         if (form.items.some(i => !i.itemName || !i.qty || !i.rate)) return toast.error('All items need name, qty, and rate');
+
+        if (form.customerGstin && String(form.customerGstin).length >= 15) {
+            const res = await resolveGstForForm({ forceRefresh: false });
+            const decided = gstDecisionRef.current;
+            const confirmedB2c = decided?.confirmedB2c || ['B2C', 'B2CS', 'B2CL'].includes(String(gstSnapshot?.gstr1CategorySnapshot || ''));
+            const overridden = decided?.override || gstSnapshot?.manualOverride;
+            if (res && (res.statusOnTransactionDate === 'Cancelled' || res.requiresUserConfirmation) && !overridden && !confirmedB2c) {
+                pendingSubmitRef.current = true;
+                setGstWarning({ ...res, invoiceDate: form.invoiceDate });
+                return;
+            }
+        }
+
         setSaving(true);
         try {
             const payload = {
                 ...form,
                 gstApplicable: isEstimate ? false : gstApplicable,
+                gstVerificationSnapshot: gstSnapshot || undefined,
                 items: processedItems.map(i => {
                     const itemGstRate = gstApplicable ? (Number(i.gstRate) || 18) : 0;
                     return {
@@ -776,39 +857,29 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     </div>
                 </div>
 
-                {/* Items & Taxes */}
-                <Section title="Items & Taxes">
+                {/* Items */}
+                <Section title="Items">
                     <div className={gridStyles.wrap}>
                         <table className={gridStyles.table}>
                             <thead>
                                 <tr>
-                                    <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>Item Code</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>Description *</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colSr}`}>Sr</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colCode}`}>Item Code</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colDesc}`}>Description *</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colNotes}`}>Additional Notes</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty *</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate *</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colDisc} ${gridStyles.center}`}>Disc%</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colTaxable} ${gridStyles.num}`}>Taxable</th>
-                                    {gstApplicable && (
-                                        <>
-                                            <th className={`${gridStyles.th} ${gridStyles.colGstPct} ${gridStyles.center}`}>GST%</th>
-                                            <th className={`${gridStyles.th} ${gridStyles.colGstAmt} ${gridStyles.num}`}>GST Amt</th>
-                                        </>
-                                    )}
-                                    <th className={`${gridStyles.th} ${gridStyles.colTotal} ${gridStyles.num}`}>Total</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colAction} ${gridStyles.stickyRight}`} />
+                                    <th className={`${gridStyles.th} ${gridStyles.colAmount} ${gridStyles.num}`}>Amount</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colAction}`} />
                                 </tr>
                             </thead>
                             <tbody>
-                                {processedItems.map((item, i) => {
-                                    const gstAmt = gstApplicable ? (isIGST ? item.igstAmt : item.cgstAmt * 2) : 0;
-                                    return (
+                                {processedItems.map((item, i) => (
                                     <tr key={i}>
-                                        <td className={`${gridStyles.td} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
-                                        <td className={`${gridStyles.td} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>
+                                        <td className={`${gridStyles.td} ${gridStyles.colSr}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                        <td className={`${gridStyles.td} ${gridStyles.colCode}`}>
                                             <SearchableSelect
                                                 options={(() => {
                                                     const base = allItems.map(it => ({ 
@@ -833,7 +904,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                                                 placeholder="Item Code..."
                                             />
                                         </td>
-                                        <td className={`${gridStyles.td} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>
+                                        <td className={`${gridStyles.td} ${gridStyles.colDesc}`}>
                                             <input value={item.description || item.itemName || ''} readOnly className={`${gridStyles.inp} ${gridStyles.readonly}`} placeholder="Description" tabIndex="-1" />
                                         </td>
                                         <td className={`${gridStyles.td} ${gridStyles.colNotes}`}>
@@ -851,31 +922,14 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                                         <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
                                             <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                         </td>
-                                        <td className={`${gridStyles.td} ${gridStyles.colDisc}`}>
-                                            <input type="number" min="0" max="100" step="any" value={item.discountPercent} onChange={e => setItem(i, 'discountPercent', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
-                                        </td>
-                                        <td className={`${gridStyles.td} ${gridStyles.colTaxable} ${gridStyles.num} ${gridStyles.money}`}>
+                                        <td className={`${gridStyles.td} ${gridStyles.colAmount} ${gridStyles.num} ${gridStyles.money}`}>
                                             ₹{(item.taxable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                         </td>
-                                        {gstApplicable && (
-                                            <>
-                                                <td className={`${gridStyles.td} ${gridStyles.colGstPct}`}>
-                                                    <input type="number" min="0" max="28" step="any" value={item.gstRate} onChange={e => setItem(i, 'gstRate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 9)} data-row={i} data-col={9} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
-                                                </td>
-                                                <td className={`${gridStyles.td} ${gridStyles.colGstAmt} ${gridStyles.num} ${gridStyles.moneyGst}`}>
-                                                    ₹{(gstAmt || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                </td>
-                                            </>
-                                        )}
-                                        <td className={`${gridStyles.td} ${gridStyles.colTotal} ${gridStyles.num} ${gridStyles.moneyTotal}`}>
-                                            ₹{(item.lineTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td className={`${gridStyles.td} ${gridStyles.colAction} ${gridStyles.stickyRight}`}>
-                                            {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }}>✕</button>}
+                                        <td className={`${gridStyles.td} ${gridStyles.colAction}`}>
+                                            {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16 }} aria-label="Remove item">✕</button>}
                                         </td>
                                     </tr>
-                                    );
-                                })}
+                                ))}
                             </tbody>
                         </table>
                     </div>
@@ -949,6 +1003,63 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 onSave={(newSeries) => {
                     setSeriesList(p => [newSeries, ...p]);
                     setF('seriesId', newSeries._id);
+                }}
+            />
+            <GstinStatusWarningModal
+                open={Boolean(gstWarning)}
+                data={gstWarning}
+                busy={gstBusy}
+                canApprove={Boolean(hasPermission?.('gst.transaction.override'))}
+                onConfirmB2C={() => {
+                    gstDecisionRef.current = { confirmedB2c: true };
+                    setGstSnapshot((prev) => ({
+                        ...(prev || {}),
+                        gstTreatmentSnapshot: 'Unregistered',
+                        gstr1CategorySnapshot: 'B2C',
+                        decisionReason: gstWarning?.resolutionReason || 'User confirmed B2C for this transaction',
+                        manualOverride: false,
+                        overrideReason: 'User confirmed B2C for this transaction',
+                    }));
+                    setForm((p) => ({
+                        ...p,
+                        customerRegistrationType: 'Consumer',
+                    }));
+                    setGstWarning(null);
+                    if (pendingSubmitRef.current) {
+                        pendingSubmitRef.current = false;
+                        setTimeout(() => handleSubmit(), 0);
+                    }
+                }}
+                onEnterAnotherGstin={() => {
+                    gstDecisionRef.current = null;
+                    setGstWarning(null);
+                    setForm((p) => ({ ...p, customerGstin: '' }));
+                    toast('Enter another GSTIN on the invoice');
+                }}
+                onRefresh={async () => {
+                    await resolveGstForForm({ forceRefresh: true });
+                }}
+                onContinueWithApproval={() => {
+                    const reason = window.prompt('Override reason (required):');
+                    if (!reason) return;
+                    gstDecisionRef.current = { override: true };
+                    setGstSnapshot((prev) => ({
+                        ...(prev || {}),
+                        gstTreatmentSnapshot: prev?.gstTreatmentSnapshot || 'Registered',
+                        gstr1CategorySnapshot: prev?.gstr1CategorySnapshot || 'B2B',
+                        manualOverride: true,
+                        overrideReason: reason,
+                        decisionReason: `Approved override: ${reason}`,
+                    }));
+                    setGstWarning(null);
+                    if (pendingSubmitRef.current) {
+                        pendingSubmitRef.current = false;
+                        setTimeout(() => handleSubmit(), 0);
+                    }
+                }}
+                onCancel={() => {
+                    pendingSubmitRef.current = false;
+                    setGstWarning(null);
                 }}
             />
         </div>

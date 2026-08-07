@@ -11,6 +11,13 @@ import { documentLogoImgProps } from '@/config/documentBranding';
  * A4 portrait 210mm × 297mm, @page margin 8mm, usable width 194mm.
  * Item table full width; totals box uses full right panel.
  * Do not apply Print Format Designer draft layouts to live Sales Invoice print.
+ *
+ * PROTECTED SALES INVOICE PRINT LAYOUT — Do not modify through general responsive,
+ * table or UI cleanup. Any change requires invoice print regression testing.
+ *
+ * Page-break note: never rely on `.si-builtin-page:last-child` while a trailing
+ * `<style>` sibling exists — that never matches and forces a blank Chrome page 2.
+ * Use per-page pageBreakAfter from JS + `:last-of-type` as CSS backup.
  */
 export default function SalesInvoiceBuiltinPrint({
     inv,
@@ -43,7 +50,10 @@ export default function SalesInvoiceBuiltinPrint({
     const fmtAmt = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
     const renderEstimate = () => (
-        <div className="si-builtin-page">
+        <div
+            className="si-builtin-page"
+            style={{ pageBreakAfter: 'auto', breakAfter: 'auto' }}
+        >
             <div className="si-builtin-sheet si-builtin-estimate">
                 <div className="si-builtin-estimate-head">
                     <div className="si-builtin-estimate-title">ESTIMATE</div>
@@ -99,7 +109,14 @@ export default function SalesInvoiceBuiltinPrint({
             const totalPages = pages.length;
 
             return (
-                <div key={pageIdx} className="si-builtin-page">
+                <div
+                    key={pageIdx}
+                    className="si-builtin-page"
+                    style={{
+                        pageBreakAfter: isLastPage ? 'auto' : 'always',
+                        breakAfter: isLastPage ? 'auto' : 'page',
+                    }}
+                >
                     <div className="si-builtin-sheet">
                         {isFirstPage ? (
                             <div className="si-builtin-header si-builtin-header-main">
@@ -376,8 +393,9 @@ export default function SalesInvoiceBuiltinPrint({
 
     return (
         <div
-            className="print-only si-builtin-print invoice-print-page"
+            className="print-only si-builtin-print invoice-print-page sales-invoice-print-document"
             data-golden-format={GOLDEN_INVOICE_FORMAT_VERSION}
+            data-jsk-print-doc="sales-invoice"
             style={{
                 display: 'none',
                 width: `${GOLDEN_INVOICE_USABLE_WIDTH_MM}mm`,
@@ -390,27 +408,38 @@ export default function SalesInvoiceBuiltinPrint({
                 fontSize: '10pt',
             }}
         >
-            {isEstimate ? renderEstimate() : renderTaxInvoicePages()}
-
+            {/* Style first so page nodes can use :last-of-type safely */}
             <style>{`
-                .si-builtin-print { display: none; }
+                /* PROTECTED SALES INVOICE PRINT LAYOUT — Do not modify through general responsive, table or UI cleanup. Any change requires invoice print regression testing. */
+                .si-builtin-print,
+                .sales-invoice-print-document { display: none; }
                 @media print {
                     @page { size: A4 portrait; margin: 8mm; }
                     html, body {
                         margin: 0 !important;
                         padding: 0 !important;
                         width: 210mm !important;
+                        height: auto !important;
+                        overflow: visible !important;
                         background: #fff !important;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
+                        zoom: 1 !important;
+                        transform: none !important;
                     }
-                    .sales-invoice-page-root,
+                    .sales-invoice-page-root {
+                        min-height: 0 !important;
+                        height: auto !important;
+                        background: transparent !important;
+                        max-width: none !important;
+                    }
                     .sales-invoice-page-root > * {
                         max-width: none !important;
                         min-width: 0 !important;
                     }
                     .no-print, .no-print * { display: none !important; }
-                    .si-builtin-print.invoice-print-page {
+                    .si-builtin-print.invoice-print-page,
+                    .sales-invoice-print-document {
                         display: block !important;
                         position: static !important;
                         width: 194mm !important;
@@ -421,21 +450,27 @@ export default function SalesInvoiceBuiltinPrint({
                         box-sizing: border-box !important;
                         transform: none !important;
                         zoom: 1 !important;
+                        page-break-after: auto !important;
+                        break-after: auto !important;
                     }
-                    .si-builtin-print .si-builtin-page {
+                    .si-builtin-print .si-builtin-page,
+                    .sales-invoice-print-document .si-builtin-page {
                         width: 194mm !important;
                         margin: 0 auto !important;
                         padding: 0 !important;
                         display: block !important;
                         height: auto !important;
                         min-height: 0 !important;
+                        position: relative;
+                        /* Default: continue to next page; last page cleared via JS + :last-of-type */
                         page-break-after: always;
                         break-after: page;
-                        position: relative;
                     }
-                    .si-builtin-print .si-builtin-page:last-child {
-                        page-break-after: auto;
-                        break-after: auto;
+                    /* Backup when style is not last sibling — never use :last-child here */
+                    .si-builtin-print .si-builtin-page:last-of-type,
+                    .sales-invoice-print-document .si-builtin-page:last-of-type {
+                        page-break-after: auto !important;
+                        break-after: auto !important;
                     }
                     .si-builtin-print .si-builtin-sheet {
                         width: 100% !important;
@@ -445,6 +480,23 @@ export default function SalesInvoiceBuiltinPrint({
                         height: auto !important;
                         min-height: 0 !important;
                     }
+                    .si-builtin-print .si-builtin-header,
+                    .si-builtin-print .si-builtin-split2,
+                    .si-builtin-print .si-builtin-items-table,
+                    .si-builtin-print .si-builtin-bottom,
+                    .si-builtin-print .si-builtin-footer {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        box-sizing: border-box !important;
+                    }
+                }
+            `}</style>
+
+            {isEstimate ? renderEstimate() : renderTaxInvoicePages()}
+
+            <style>{`
+                /* Remaining SI visual rules (scoped) — keep after pages; page-break uses :last-of-type + JS */
+                @media print {
                     .si-builtin-print .si-builtin-header,
                     .si-builtin-print .si-builtin-split2,
                     .si-builtin-print .si-builtin-items-table,

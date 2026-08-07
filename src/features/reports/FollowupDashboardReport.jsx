@@ -20,8 +20,58 @@ const getFollowupDashboardDetail = async (customerId) => {
     return data;
 };
 
+const parseBlobError = async (error) => {
+    const data = error?.response?.data;
+    if (data instanceof Blob) {
+        try {
+            const text = await data.text();
+            const json = JSON.parse(text);
+            return json?.message || json?.error || text || 'Export failed';
+        } catch {
+            return 'Export failed';
+        }
+    }
+    return error?.response?.data?.message || error?.message || 'Export failed';
+};
+
+const toTelHref = (mobile) => {
+    const digits = String(mobile || '').replace(/[^\d+]/g, '');
+    return digits ? `tel:${digits}` : null;
+};
+
+const getCustomerMobiles = (customerOrTask) => {
+    if (!customerOrTask) return [];
+    if (Array.isArray(customerOrTask.mobiles) && customerOrTask.mobiles.length) {
+        return customerOrTask.mobiles.filter(Boolean);
+    }
+    const persons = customerOrTask.contactPersons || [];
+    const fromPersons = persons.flatMap((p) => [p?.mobile, p?.mobile2, p?.mobile3].filter(Boolean));
+    if (fromPersons.length) return [...new Set(fromPersons)];
+    const primary = customerOrTask.primaryContact?.mobile;
+    return primary ? [primary] : [];
+};
+
+const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+};
+
 const exportFollowupDashboardList = async (format, filters) => {
     const response = await api.get('/reports/followup-dashboard/export', {
+        params: { ...filters, format },
+        responseType: 'blob'
+    });
+    return response.data;
+};
+
+const exportFollowupProductChats = async (format, filters) => {
+    const response = await api.get('/reports/followup-dashboard/export-product-chats', {
         params: { ...filters, format },
         responseType: 'blob'
     });
@@ -45,10 +95,12 @@ const FollowupDashboardReport = () => {
     const [loadingTasks, setLoadingTasks] = useState(false);
     const [filters, setFilters] = useState({
         q: '',
+        product: '',
         type: '',
         priority: '',
         due: 'ALL'
     });
+    const [listMeta, setListMeta] = useState({ total: 0 });
 
     const [selectedCustomerId, setSelectedCustomerId] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
@@ -63,8 +115,13 @@ const FollowupDashboardReport = () => {
     const fetchTasks = async (silent = false) => {
         if (!silent) setLoadingTasks(true);
         try {
-            const result = await getFollowupDashboardList(filters);
+            const result = await getFollowupDashboardList({
+                ...filters,
+                limit: 500,
+                page: 1,
+            });
             setTasks(result.data || []);
+            setListMeta(result.meta || { total: (result.data || []).length });
         } catch (error) {
             console.error(error);
             addToast('Failed to load tasks', 'error');
@@ -123,19 +180,44 @@ const FollowupDashboardReport = () => {
                 filename = `customer_report_${selectedCustomerId}.${format === 'excel' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'doc'}`;
             } else {
                 blob = await exportFollowupDashboardList(format, filters);
-                filename = `followup_list.${format === 'excel' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'doc'}`;
+                // Global Excel includes product chats sheet when product filter is set
+                const ext = format === 'excel' ? 'xlsx' : format === 'pdf' ? 'pdf' : 'doc';
+                const productTag = String(filters.product || '').trim().replace(/[^\w\-]+/g, '_').slice(0, 30);
+                filename = productTag
+                    ? `followup_${productTag}.${ext === 'pdf' ? 'xlsx' : ext}` // PDF may fall back to xlsx
+                    : `followup_list.${ext}`;
+                if (format === 'pdf' && blob?.type?.includes('sheet')) {
+                    filename = productTag ? `followup_${productTag}.xlsx` : 'followup_list.xlsx';
+                }
             }
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', filename);
-            document.body.appendChild(link);
-            link.click();
-            link.parentNode.removeChild(link);
+            downloadBlob(blob, filename);
+            addToast(
+                filters.product && !selectedCustomerId
+                    ? `Exported follow-ups + related "${filters.product}" chats`
+                    : 'Export ready',
+                'success'
+            );
         } catch (error) {
             console.error(error);
-            addToast('Export failed', 'error');
+            addToast(await parseBlobError(error), 'error');
+        }
+    };
+
+    const handleExportProductChats = async () => {
+        const product = String(filters.product || '').trim();
+        if (!product) {
+            addToast('Enter a product (e.g. DALI) first, then click Go', 'error');
+            return;
+        }
+        try {
+            const blob = await exportFollowupProductChats('excel', filters);
+            const safe = product.replace(/[^\w\-]+/g, '_').slice(0, 40);
+            downloadBlob(blob, `product-chats-${safe}.xlsx`);
+            addToast(`Exported chats related to "${product}"`, 'success');
+        } catch (error) {
+            console.error(error);
+            addToast(await parseBlobError(error), 'error');
         }
     };
 
@@ -156,11 +238,18 @@ const FollowupDashboardReport = () => {
         }
     };
 
-    // Filtered History
-    const filteredHistory = customerData?.conversations?.filter(c =>
-        (c.discussionDetails || '').toLowerCase().includes(historySearch.toLowerCase()) ||
-        (c.outcome || '').toLowerCase().includes(historySearch.toLowerCase())
-    ) || [];
+    // Filtered History (discussion + product fields)
+    const filteredHistory = customerData?.conversations?.filter((c) => {
+        const q = historySearch.toLowerCase().trim();
+        if (!q) return true;
+        const products = (c.interestedProducts || []).map((p) => String(p).toLowerCase()).join(' ');
+        return (
+            (c.discussionDetails || '').toLowerCase().includes(q) ||
+            (c.outcome || '').toLowerCase().includes(q) ||
+            (c.productNotes || '').toLowerCase().includes(q) ||
+            products.includes(q)
+        );
+    }) || [];
 
     // ── STYLES ───────────────────────────────────────────────────────────────────
     const s = {
@@ -213,10 +302,12 @@ const FollowupDashboardReport = () => {
                     <h2 style={s.headerTitle}><Calendar size={18} color="#3b82f6" /> Follow-up Tasks</h2>
                     <div style={s.controlsRow}>
                         <select style={s.select} value={filters.due} onChange={(e) => setFilters({ ...filters, due: e.target.value })}>
-                            <option value="ALL">All Open</option>
+                            <option value="ALL">All Follow-ups</option>
+                            <option value="ALL_OPEN">All Open</option>
                             <option value="TODAY">Today</option>
                             <option value="OVERDUE">Overdue</option>
                             <option value="UPCOMING">Upcoming</option>
+                            <option value="CLOSED">Closed</option>
                         </select>
                         <select style={s.select} value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}>
                             <option value="">All Priority</option>
@@ -225,72 +316,118 @@ const FollowupDashboardReport = () => {
                             <option value="Low">Low</option>
                         </select>
                     </div>
-                    <form onSubmit={handleSearch} style={s.searchRow}>
-                        <input
-                            style={s.input}
-                            placeholder="Search customer..."
-                            value={filters.q}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                setFilters({ ...filters, q: val });
-                                if (val.length > 1) {
-                                    getCustomers({ search: val, limit: 10 }).then(res => {
-                                        setSuggestions(res.results || []);
-                                        setShowSuggestions(true);
-                                    }).catch(err => console.error(err));
-                                } else {
-                                    setSuggestions([]);
-                                    setShowSuggestions(false);
-                                }
-                            }}
-                            onFocus={() => { if (filters.q.length > 1) setShowSuggestions(true); }}
-                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        />
-                        <button type="submit" style={s.iconBtn}><Search size={14} /></button>
+                    <form onSubmit={handleSearch} style={{ ...s.searchRow, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+                            <input
+                                style={s.input}
+                                placeholder="Search customer / company / mobile..."
+                                value={filters.q}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFilters({ ...filters, q: val });
+                                    if (val.length > 1) {
+                                        getCustomers({ search: val, limit: 10 }).then(res => {
+                                            setSuggestions(res.results || []);
+                                            setShowSuggestions(true);
+                                        }).catch(err => console.error(err));
+                                    } else {
+                                        setSuggestions([]);
+                                        setShowSuggestions(false);
+                                    }
+                                }}
+                                onFocus={() => { if (filters.q.length > 1) setShowSuggestions(true); }}
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                            />
+                            <button type="submit" style={s.iconBtn} title="Search"><Search size={14} /></button>
 
-                        {/* Auto-suggest dropdown */}
-                        {showSuggestions && suggestions.length > 0 && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 42, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 250, overflowY: 'auto' }}>
-                                {suggestions.map(customer => (
-                                    <div
-                                        key={customer.id}
-                                        style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
-                                        onClick={() => {
-                                            setFilters({ ...filters, q: customer.customerName || customer.company });
-                                            setSelectedCustomerId(customer.id);
-                                            setSuggestions([]);
-                                            setShowSuggestions(false);
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
-                                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                                    >
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{customer.customerName}</div>
-                                        <div style={{ fontSize: 11, color: '#64748b' }}>{customer.company}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                            {showSuggestions && suggestions.length > 0 && (
+                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 42, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 250, overflowY: 'auto' }}>
+                                    {suggestions.map(customer => (
+                                        <div
+                                            key={customer._id || customer.id}
+                                            style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                                            onClick={() => {
+                                                setFilters({ ...filters, q: customer.customerName || customer.company });
+                                                setSelectedCustomerId(customer._id || customer.id);
+                                                setSuggestions([]);
+                                                setShowSuggestions(false);
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{customer.customerName}</div>
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>{customer.company}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <input
+                                style={{ ...s.input, flex: 1, minWidth: 140 }}
+                                placeholder="Search product-wise (e.g. DALI)..."
+                                value={filters.product}
+                                onChange={(e) => setFilters({ ...filters, product: e.target.value })}
+                            />
+                            <button type="submit" style={{ ...s.iconBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 600 }}>Go</button>
+                            {String(filters.product || '').trim() && (
+                                <button
+                                    type="button"
+                                    style={{ ...s.iconBtn, width: 'auto', padding: '0 12px', fontSize: 12, fontWeight: 600, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}
+                                    onClick={handleExportProductChats}
+                                    title={`Export all chats related to ${filters.product}`}
+                                >
+                                    <Download size={14} /> Export chats
+                                </button>
+                            )}
+                        </div>
                     </form>
+                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                        Showing {tasks.length} of {listMeta.total || tasks.length} follow-up{listMeta.total === 1 ? '' : 's'}
+                    </div>
                 </div>
 
                 <div style={s.listWrap}>
                     {loadingTasks ? (
                         <div style={s.emptyState}><BrandedLoader size={60} /></div>
                     ) : tasks.length === 0 ? (
-                        <div style={s.emptyState}>No open tasks found.</div>
+                        <div style={s.emptyState}>No follow-ups found.</div>
                     ) : (
                         tasks.map(task => {
-                            const isSelected = selectedCustomerId === task.customerId;
-                            const isOverdue = new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0);
+                            const cid = task.customerId?._id || task.customerId;
+                            const isSelected = String(selectedCustomerId) === String(cid);
+                            const isOverdue = !task.isClosed && new Date(task.reminderDate) < new Date().setHours(0, 0, 0, 0);
                             return (
-                                <div key={task._id} style={s.taskCard(isSelected)} onClick={() => setSelectedCustomerId(task.customerId)}>
+                                <div key={task._id} style={s.taskCard(isSelected)} onClick={() => setSelectedCustomerId(cid)}>
                                     <div style={s.taskHeader}>
-                                        <span style={s.taskPill(task.priority)}>{task.priority || 'Normal'}</span>
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                            <span style={s.taskPill(task.priority)}>{task.priority || 'Normal'}</span>
+                                            {task.isClosed && (
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: '#e2e8f0', color: '#475569' }}>CLOSED</span>
+                                            )}
+                                        </div>
                                         <span style={s.taskDate(isOverdue)}>{format(new Date(task.reminderDate), 'dd MMM yy')}</span>
                                     </div>
                                     <h4 style={s.taskTitle}>{task.companyName || task.customerName || '—'}</h4>
                                     {task.customerName && task.companyName && task.customerName !== task.companyName && (
                                         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{task.customerName}</div>
+                                    )}
+                                    {task.taskNote && (
+                                        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{task.taskNote}</div>
+                                    )}
+                                    {getCustomerMobiles(task).length > 0 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }} onClick={(e) => e.stopPropagation()}>
+                                            {getCustomerMobiles(task).slice(0, 2).map((m) => (
+                                                <a
+                                                    key={m}
+                                                    href={toTelHref(m)}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#2563eb', textDecoration: 'none' }}
+                                                    title={`Call ${m}`}
+                                                >
+                                                    <Phone size={11} /> {m}
+                                                </a>
+                                            ))}
+                                        </div>
                                     )}
                                     <div style={s.taskMetaRow}>
                                         <div style={s.taskMetaItem}>
@@ -316,9 +453,18 @@ const FollowupDashboardReport = () => {
                         <Building size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
                         <p style={{ fontSize: 18, fontWeight: 600, color: '#64748b', margin: '0 0 8px 0' }}>Select a customer</p>
                         <p style={{ fontSize: 13, margin: '0 0 24px 0' }}>View open tasks and complete conversation history</p>
-                        <div style={s.actionBtns}>
+                        <div style={{ ...s.actionBtns, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 420 }}>
                             <button style={s.btnOutlined} onClick={() => handleExport('excel')}><Download size={14} /> Global Export (Excel)</button>
                             <button style={s.btnOutlined} onClick={() => handleExport('pdf')}><Download size={14} /> PDF</button>
+                            {String(filters.product || '').trim() && (
+                                <button
+                                    style={{ ...s.btnOutlined, borderColor: '#2563eb', color: '#2563eb' }}
+                                    onClick={handleExportProductChats}
+                                    title={`Export all conversation/chat rows matching "${filters.product}"`}
+                                >
+                                    <Download size={14} /> Export {String(filters.product).trim()} Chats
+                                </button>
+                            )}
                         </div>
                     </div>
                 ) : loadingDetail ? (
@@ -334,11 +480,23 @@ const FollowupDashboardReport = () => {
                                 <h1 style={s.detailTitle}>{customerData.customer.company || customerData.customer.customerName}</h1>
                                 <div style={s.contactTags}>
                                     <div style={s.contactTag}><User size={14} /> {customerData.customer.customerName}</div>
-                                    {customerData.customer.contactPersons?.[0]?.mobile && (
-                                        <div style={s.contactTag}><Phone size={14} /> {customerData.customer.contactPersons[0].mobile}</div>
-                                    )}
+                                    {getCustomerMobiles(customerData.customer).map((m) => (
+                                        <a
+                                            key={m}
+                                            href={toTelHref(m)}
+                                            style={{ ...s.contactTag, color: '#2563eb', textDecoration: 'none', cursor: 'pointer', fontWeight: 700 }}
+                                            title={`Call ${m}`}
+                                        >
+                                            <Phone size={14} /> {m}
+                                        </a>
+                                    ))}
                                     {customerData.customer.email && (
-                                        <div style={s.contactTag}><span style={{ color: '#94a3b8', fontWeight: 700 }}>@</span> {customerData.customer.email}</div>
+                                        <a
+                                            href={`mailto:${customerData.customer.email}`}
+                                            style={{ ...s.contactTag, color: '#2563eb', textDecoration: 'none' }}
+                                        >
+                                            <span style={{ color: '#94a3b8', fontWeight: 700 }}>@</span> {customerData.customer.email}
+                                        </a>
                                     )}
                                 </div>
                             </div>
@@ -403,7 +561,7 @@ const FollowupDashboardReport = () => {
                                         <Search size={14} style={{ position: 'absolute', left: 10, color: '#94a3b8' }} />
                                         <input
                                             type="text"
-                                            placeholder="Search history..."
+                                            placeholder="Search history / product (e.g. DALI)..."
                                             style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: 12, border: '1px solid #cbd5e1', borderRadius: 6, outline: 'none' }}
                                             value={historySearch}
                                             onChange={(e) => setHistorySearch(e.target.value)}

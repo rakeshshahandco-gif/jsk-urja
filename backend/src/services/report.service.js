@@ -790,27 +790,59 @@ const generateOpenReminderPDFReport = async (filters, options) => {
 // --- Follow-up Dashboard Services ---
 
 const queryFollowupDashboardList = async (filters, options) => {
-    // Re-use existing query logic but specific for Dashboard list (Open tasks)
     const query = {};
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    query.isClosed = false; // Always open
+    const due = String(filters.due || 'ALL').toUpperCase();
 
-    if (filters.due) {
-        if (filters.due === 'TODAY') {
-            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+    // ALL = open + closed; ALL_OPEN / default open buckets; CLOSED = closed only
+    if (due === 'CLOSED') {
+        query.isClosed = true;
+    } else if (due === 'ALL') {
+        // no isClosed filter — every follow-up / reminder
+    } else {
+        query.isClosed = { $ne: true };
+        if (due === 'TODAY') {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
             query.reminderDate = { $gte: today, $lt: tomorrow };
-        } else if (filters.due === 'UPCOMING') {
-            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        } else if (due === 'UPCOMING') {
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
             query.reminderDate = { $gte: tomorrow };
-        } else if (filters.due === 'OVERDUE') {
+        } else if (due === 'OVERDUE') {
             query.reminderDate = { $lt: today };
         }
+        // ALL_OPEN / OPEN / empty → all open (no date constraint)
     }
 
-    if (filters.type) query.followUpType = filters.type; // CALL/WHATSAPP
-    if (filters.priority) query.priority = filters.priority;
+    if (filters.type) query.followUpType = filters.type;
+    if (filters.priority) {
+        // UI sends High/Medium/Low; DB may store lowercase
+        const p = String(filters.priority);
+        query.priority = { $in: [p, p.toLowerCase(), p.toUpperCase()] };
+    }
+
+    const searchText = String(filters.q || filters.search || '').trim();
+    const productText = String(filters.product || '').trim();
+
+    // Product-wise: find customers with matching conversation products / notes / discussion
+    let productCustomerIds = null;
+    const productQuery = productText || searchText;
+    if (productText || searchText) {
+        const productRegex = new RegExp(productQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        if (productText) {
+            productCustomerIds = await Conversation.distinct('customerId', {
+                $or: [
+                    { interestedProducts: productRegex },
+                    { productNotes: productRegex },
+                    { discussionDetails: productRegex },
+                    { outcome: productRegex },
+                ],
+            });
+        }
+    }
 
     const pipeline = [
         { $match: query },
@@ -818,47 +850,73 @@ const queryFollowupDashboardList = async (filters, options) => {
         { $unwind: '$customer' },
         { $lookup: { from: 'users', localField: 'createdBy', foreignField: '_id', as: 'creator' } },
         { $unwind: { path: '$creator', preserveNullAndEmptyArrays: true } },
-        { $sort: { reminderDate: 1, reminderTime: 1 } } // Sort by due date asc
+        { $sort: { reminderDate: due === 'CLOSED' || due === 'ALL' ? -1 : 1 } },
     ];
 
-    if (filters.q) {
-        const qRegex = new RegExp(filters.q, 'i');
-        pipeline.push({
-            $match: {
+    if (searchText || productText) {
+        const qRegex = new RegExp((searchText || productText).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        const orClauses = [
+            { 'customer.customerName': qRegex },
+            { 'customer.company': qRegex },
+            { 'customer.companyBrand': qRegex },
+            { 'customer.contactPersons.mobile': qRegex },
+            { taskNote: qRegex },
+        ];
+
+        // When dedicated product filter set, restrict to product-matched customers
+        if (productText && Array.isArray(productCustomerIds)) {
+            pipeline.push({
+                $match: {
+                    customerId: { $in: productCustomerIds },
+                },
+            });
+        } else if (searchText) {
+            // Unified search: also match customers who discussed this product
+            const convCustomerIds = await Conversation.distinct('customerId', {
                 $or: [
-                    { 'customer.customerName': qRegex },
-                    { 'customer.company': qRegex },
-                    { 'customer.contactPersons.mobile': qRegex },
-                    { taskNote: qRegex }
-                ]
+                    { interestedProducts: qRegex },
+                    { productNotes: qRegex },
+                    { discussionDetails: qRegex },
+                    { outcome: qRegex },
+                ],
+            });
+            if (convCustomerIds.length) {
+                orClauses.push({ customerId: { $in: convCustomerIds } });
             }
-        });
+            pipeline.push({ $match: { $or: orClauses } });
+        }
     }
 
-    // Pagination
-    const limit = options.limit && parseInt(options.limit, 10) > 0 ? parseInt(options.limit, 10) : 25;
+    const limit =
+        options.limit === 'all' || options.limit === -1
+            ? null
+            : options.limit && parseInt(options.limit, 10) > 0
+              ? parseInt(options.limit, 10)
+              : 500;
     const page = options.page && parseInt(options.page, 10) > 0 ? parseInt(options.page, 10) : 1;
-    const skip = (page - 1) * limit;
+    const skip = limit ? (page - 1) * limit : 0;
 
     const totalPipeline = [...pipeline, { $count: 'total' }];
     const totalRes = await Reminder.aggregate(totalPipeline);
     const total = totalRes[0]?.total || 0;
 
-    if (options.limit !== 'all') {
+    if (limit != null) {
         pipeline.push({ $skip: skip }, { $limit: limit });
     }
 
     const results = await Reminder.aggregate(pipeline);
 
     return {
-        data: results.map(r => ({
+        data: results.map((r) => ({
             ...r,
+            customerId: r.customerId?._id || r.customerId,
             customerName: r.customer.customerName,
             companyName: r.customer.company,
-            mobiles: r.customer.contactPersons?.map(c => c.mobile).filter(Boolean) || [],
-            primaryContact: r.customer.contactPersons?.find(c => c.isPrimary) || r.customer.contactPersons?.[0]
+            mobiles: r.customer.contactPersons?.map((c) => c.mobile).filter(Boolean) || [],
+            primaryContact: r.customer.contactPersons?.find((c) => c.isPrimary) || r.customer.contactPersons?.[0],
+            isClosed: !!r.isClosed,
         })),
-        meta: { total, page, limit }
+        meta: { total, page, limit: limit ?? total },
     };
 };
 
@@ -882,57 +940,311 @@ const queryCustomerTimeline = async (customerId) => {
     };
 };
 
+const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Customers who ever mentioned the product, then ALL of their conversations
+ * (not only the product-matching chat — so Excel has full history).
+ */
+const findProductRelatedConversations = async (productText) => {
+    const product = String(productText || '').trim();
+    if (!product) return [];
+    const productRegex = new RegExp(escapeRegex(product), 'i');
+    const matchedCustomerIds = await Conversation.distinct('customerId', {
+        $or: [
+            { interestedProducts: productRegex },
+            { productNotes: productRegex },
+            { discussionDetails: productRegex },
+            { outcome: productRegex },
+        ],
+    });
+    if (!matchedCustomerIds.length) return [];
+
+    return Conversation.find({ customerId: { $in: matchedCustomerIds } })
+        .populate('customerId', 'customerName company companyBrand contactPersons')
+        .sort({ conversationDate: -1, createdAt: -1 })
+        .lean();
+};
+
+const primaryMobileFromCustomer = (cust = {}) => {
+    const persons = cust.contactPersons || [];
+    const primary = persons.find((p) => p.isPrimary) || persons[0] || {};
+    return primary.mobile || primary.mobile2 || '';
+};
+
+const allMobilesFromCustomer = (cust = {}) => {
+    const persons = cust.contactPersons || [];
+    const nums = persons.flatMap((p) => [p?.mobile, p?.mobile2, p?.mobile3, p?.mobile4, p?.mobile5].filter(Boolean));
+    return [...new Set(nums)].join(', ');
+};
+
+const formatChatDate = (value) =>
+    value ? new Date(value).toLocaleDateString('en-IN') : '';
+
+/** One Excel row per customer; each chat as its own paragraph (readable, wrap text). */
+const formatChatParagraph = (c) => {
+    const date = formatChatDate(c.conversationDate) || '-';
+    const mode = (c.mode || '').trim();
+    const disc = (c.discussionDetails || '').trim();
+    const out = (c.outcome || '').trim();
+    const notes = (c.productNotes || '').trim();
+    const lines = [`[${date}]${mode ? ` ${mode}` : ''}`];
+    if (disc) lines.push(disc);
+    if (out) lines.push(`Outcome: ${out}`);
+    if (notes) lines.push(`Notes: ${notes}`);
+    if (!disc && !out && !notes) lines.push('(no discussion text)');
+    return lines.join('\n');
+};
+
+const buildProductChatsByCustomerWorksheet = (workbook, chats, productLabel) => {
+    const sheet = workbook.addWorksheet(
+        productLabel ? `By Customer-${String(productLabel).slice(0, 18)}` : 'Chats By Customer'
+    );
+    sheet.columns = [
+        { header: 'Company', key: 'company', width: 28 },
+        { header: 'Customer', key: 'customer', width: 22 },
+        { header: 'Mobile', key: 'mobile', width: 18 },
+        { header: 'Chat Count', key: 'chatCount', width: 12 },
+        { header: 'Chat History (one paragraph per chat)', key: 'fullHistory', width: 80 },
+        { header: 'Products Mentioned', key: 'products', width: 28 },
+    ];
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { vertical: 'middle', wrapText: true };
+
+    const byCustomer = new Map();
+    chats.forEach((c) => {
+        const cust = c.customerId || {};
+        const id = String(cust._id || c.customerId || '');
+        if (!id) return;
+        if (!byCustomer.has(id)) {
+            byCustomer.set(id, { cust, chats: [] });
+        }
+        byCustomer.get(id).chats.push(c);
+    });
+
+    for (const { cust, chats: rows } of byCustomer.values()) {
+        // Chronological for reading (oldest → newest)
+        const ordered = [...rows].sort(
+            (a, b) => new Date(a.conversationDate || 0) - new Date(b.conversationDate || 0)
+        );
+        // Blank line between chats so each finishes before the next paragraph
+        const fullHistory = ordered.map(formatChatParagraph).join('\n\n');
+        const products = [
+            ...new Set(ordered.flatMap((c) => (Array.isArray(c.interestedProducts) ? c.interestedProducts : []))),
+        ];
+
+        const row = sheet.addRow({
+            company: cust.company || cust.companyBrand || '',
+            customer: cust.customerName || '',
+            mobile: primaryMobileFromCustomer(cust) || allMobilesFromCustomer(cust),
+            chatCount: ordered.length,
+            fullHistory,
+            products: products.join(', '),
+        });
+        row.alignment = { vertical: 'top', wrapText: true };
+        // ~18px per text line; cap so Excel stays usable
+        const lineCount = fullHistory.split('\n').length;
+        row.height = Math.min(20 + lineCount * 15, 420);
+    }
+    return sheet;
+};
+
+/** One row per conversation (all chats of product-matched customers). */
+const buildProductChatsWorksheet = (workbook, chats, productLabel) => {
+    buildProductChatsByCustomerWorksheet(workbook, chats, productLabel);
+
+    const sheet = workbook.addWorksheet(
+        productLabel ? `Chat Rows-${String(productLabel).slice(0, 18)}` : 'Chat Detail Rows'
+    );
+    sheet.columns = [
+        { header: 'Date', key: 'date', width: 14 },
+        { header: 'Company', key: 'company', width: 28 },
+        { header: 'Customer', key: 'customer', width: 22 },
+        { header: 'Mobile', key: 'mobile', width: 16 },
+        { header: 'Mode', key: 'mode', width: 12 },
+        { header: 'Products', key: 'products', width: 28 },
+        { header: 'Product Notes', key: 'productNotes', width: 28 },
+        { header: 'Discussion', key: 'discussion', width: 45 },
+        { header: 'Outcome', key: 'outcome', width: 28 },
+        { header: 'Status', key: 'status', width: 18 },
+    ];
+    chats.forEach((c) => {
+        const cust = c.customerId || {};
+        sheet.addRow({
+            date: formatChatDate(c.conversationDate),
+            company: cust.company || cust.companyBrand || '',
+            customer: cust.customerName || '',
+            mobile: primaryMobileFromCustomer(cust) || allMobilesFromCustomer(cust),
+            mode: c.mode || '',
+            products: Array.isArray(c.interestedProducts) ? c.interestedProducts.join(', ') : '',
+            productNotes: c.productNotes || '',
+            discussion: c.discussionDetails || '',
+            outcome: c.outcome || '',
+            status: c.followUpStatus || '',
+        });
+    });
+    return sheet;
+};
+
 const generateDashboardListExport = async (format, filters) => {
     const { data } = await queryFollowupDashboardList(filters, { limit: 'all' });
+    const product = String(filters.product || '').trim();
+    const chats = product ? await findProductRelatedConversations(product) : [];
 
-    if (format === 'excel') {
+    const fmt = String(format || 'excel').toLowerCase();
+
+    if (fmt === 'excel' || fmt === 'xlsx') {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('Follow-ups');
         sheet.columns = [
             { header: 'Company', key: 'company', width: 25 },
             { header: 'Customer', key: 'customer', width: 20 },
+            { header: 'Mobile', key: 'mobile', width: 16 },
             { header: 'Due Date', key: 'date', width: 15 },
             { header: 'Priority', key: 'priority', width: 10 },
-            { header: 'Type', key: 'type', width: 10 },
-            { header: 'Note', key: 'note', width: 30 }
+            { header: 'Type', key: 'type', width: 12 },
+            { header: 'Status', key: 'status', width: 10 },
+            { header: 'Note', key: 'note', width: 35 },
         ];
-        data.forEach(r => sheet.addRow({
-            company: r.companyName,
-            customer: r.customerName,
-            date: new Date(r.reminderDate).toLocaleDateString(),
-            priority: r.priority,
-            type: r.followUpType,
-            note: r.taskNote
-        }));
+        data.forEach((r) =>
+            sheet.addRow({
+                company: r.companyName,
+                customer: r.customerName,
+                mobile: r.primaryContact?.mobile || (r.mobiles || [])[0] || '',
+                date: r.reminderDate ? new Date(r.reminderDate).toLocaleDateString('en-IN') : '',
+                priority: r.priority,
+                type: r.followUpType,
+                status: r.isClosed ? 'Closed' : 'Open',
+                note: r.taskNote,
+            })
+        );
+        if (product) {
+            buildProductChatsWorksheet(workbook, chats, product);
+            const summary = workbook.addWorksheet('Export Summary');
+            summary.addRow(['Product filter', product]);
+            summary.addRow(['Follow-ups exported', data.length]);
+            summary.addRow(['Related chats exported', chats.length]);
+            summary.addRow(['Generated at', new Date().toLocaleString('en-IN')]);
+        }
         return workbook.xlsx.writeBuffer();
     }
 
-    if (format === 'pdf') {
-        // Simple HTML PDF
-        const html = `<html><body><h1>Follow-up Dashboard</h1>
-            <table border="1" style="width:100%;border-collapse:collapse;">
-            <tr><th>Company</th><th>Customer</th><th>Due</th><th>Priority</th><th>Type</th><th>Note</th></tr>
-            ${data.map(r => `<tr><td>${r.companyName}</td><td>${r.customerName}</td><td>${new Date(r.reminderDate).toLocaleDateString()}</td><td>${r.priority}</td><td>${r.followUpType}</td><td>${r.taskNote}</td></tr>`).join('')}
-            </table></body></html>`;
-        const browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
-        await page.setContent(html);
-        const pdf = await page.pdf({ format: 'A4' });
-        await browser.close();
-        return pdf;
+    // Prefer Excel for reliability; PDF via puppeteer is best-effort
+    if (fmt === 'pdf') {
+        try {
+            const html = `<html><body>
+                <h1>Follow-up Dashboard${product ? ` — Product: ${product}` : ''}</h1>
+                <h2>Follow-ups (${data.length})</h2>
+                <table border="1" style="width:100%;border-collapse:collapse;font-size:11px;">
+                <tr><th>Company</th><th>Customer</th><th>Due</th><th>Priority</th><th>Type</th><th>Note</th></tr>
+                ${data
+                    .map(
+                        (r) =>
+                            `<tr><td>${r.companyName || ''}</td><td>${r.customerName || ''}</td><td>${
+                                r.reminderDate ? new Date(r.reminderDate).toLocaleDateString('en-IN') : ''
+                            }</td><td>${r.priority || ''}</td><td>${r.followUpType || ''}</td><td>${
+                                r.taskNote || ''
+                            }</td></tr>`
+                    )
+                    .join('')}
+                </table>
+                ${
+                    product
+                        ? `<h2>Related Chats (${chats.length})</h2>
+                <table border="1" style="width:100%;border-collapse:collapse;font-size:11px;">
+                <tr><th>Date</th><th>Company</th><th>Products</th><th>Discussion</th><th>Outcome</th></tr>
+                ${chats
+                    .map((c) => {
+                        const cust = c.customerId || {};
+                        return `<tr><td>${
+                            c.conversationDate ? new Date(c.conversationDate).toLocaleDateString('en-IN') : ''
+                        }</td><td>${cust.company || cust.customerName || ''}</td><td>${
+                            Array.isArray(c.interestedProducts) ? c.interestedProducts.join(', ') : ''
+                        }</td><td>${(c.discussionDetails || '').replace(/</g, '&lt;')}</td><td>${
+                            (c.outcome || '').replace(/</g, '&lt;')
+                        }</td></tr>`;
+                    })
+                    .join('')}
+                </table>`
+                        : ''
+                }
+                </body></html>`;
+            const browser = await puppeteer.launch({
+                headless: 'new',
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            });
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdf = await page.pdf({ format: 'A4', printBackground: true });
+            await browser.close();
+            return pdf;
+        } catch (err) {
+            // Fall back to Excel so export still works when Chrome/puppeteer is unavailable
+            console.error('Follow-up dashboard PDF export failed, falling back to Excel:', err?.message || err);
+            return generateDashboardListExport('excel', filters);
+        }
     }
 
-    if (format === 'docx') {
-        // HTML to Doc workaround
-        return `<html><body><h1>Follow-up Dashboard</h1>
+    if (fmt === 'docx') {
+        return Buffer.from(
+            `<html><body><h1>Follow-up Dashboard${product ? ` — ${product}` : ''}</h1>
+            <p>Follow-ups: ${data.length}${product ? ` | Related chats: ${chats.length}` : ''}</p>
             <table border="1">
             <tr><th>Company</th><th>Customer</th><th>Due</th><th>Priority</th><th>Type</th><th>Note</th></tr>
-            ${data.map(r => `<tr><td>${r.companyName}</td><td>${r.customerName}</td><td>${new Date(r.reminderDate).toLocaleDateString()}</td><td>${r.priority}</td><td>${r.followUpType}</td><td>${r.taskNote}</td></tr>`).join('')}
-            </table></body></html>`;
+            ${data
+                .map(
+                    (r) =>
+                        `<tr><td>${r.companyName || ''}</td><td>${r.customerName || ''}</td><td>${
+                            r.reminderDate ? new Date(r.reminderDate).toLocaleDateString('en-IN') : ''
+                        }</td><td>${r.priority || ''}</td><td>${r.followUpType || ''}</td><td>${
+                            r.taskNote || ''
+                        }</td></tr>`
+                )
+                .join('')}
+            </table></body></html>`
+        );
     }
 
+    throw new Error(`Unsupported export format: ${format}`);
+};
 
+/** Export only conversation/chat rows matching a product filter (e.g. DALI). */
+const generateProductChatExport = async (format, filters) => {
+    const product = String(filters.product || filters.q || '').trim();
+    if (!product) {
+        const err = new Error('Enter a product (e.g. DALI) to export related chats');
+        err.statusCode = 400;
+        throw err;
+    }
+    const chats = await findProductRelatedConversations(product);
+    const fmt = String(format || 'excel').toLowerCase();
 
+    if (fmt === 'excel' || fmt === 'xlsx' || fmt === 'pdf') {
+        // Excel is the reliable deliverable; PDF requested still gets Excel content if puppeteer fails
+        if (fmt === 'excel' || fmt === 'xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            buildProductChatsWorksheet(workbook, chats, product);
+            const summary = workbook.addWorksheet('Summary');
+            summary.addRow(['Product', product]);
+            summary.addRow(['Chat rows (all chats of matched customers)', chats.length]);
+            summary.addRow([
+                'Customers',
+                new Set(chats.map((c) => String(c.customerId?._id || c.customerId || ''))).size,
+            ]);
+            summary.addRow(['Generated at', new Date().toLocaleString('en-IN')]);
+            summary.addRow(['Note', 'Sheet 1 = one row per customer (all chats comma-separated); Sheet 2 = each chat as a row']);
+            return workbook.xlsx.writeBuffer();
+        }
+        try {
+            return generateDashboardListExport('pdf', { ...filters, product });
+        } catch {
+            const workbook = new ExcelJS.Workbook();
+            buildProductChatsWorksheet(workbook, chats, product);
+            return workbook.xlsx.writeBuffer();
+        }
+    }
+
+    throw new Error(`Unsupported export format: ${format}`);
 };
 
 
@@ -1600,6 +1912,7 @@ export default {
     queryFollowupDashboardList,
     queryCustomerTimeline,
     generateDashboardListExport,
+    generateProductChatExport,
     // Task Report
     queryFollowupTaskReportAll,
     queryFollowupTaskReportSingle,

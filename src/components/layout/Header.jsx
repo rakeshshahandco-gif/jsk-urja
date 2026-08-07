@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useModal } from '@/components/ui';
-import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare, LayoutDashboard, Menu } from 'lucide-react';
+import { LogOut, KeyRound, ChevronDown, Bell, MessageSquare, ChevronLeft, Menu } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useNotification } from '@/contexts/NotificationContext';
 import { useMessenger } from '@/contexts/MessengerContext';
@@ -165,12 +165,15 @@ export const Header = () => {
                         </button>
                     ) : null}
                     {location.pathname !== '/' && (
-                        <button 
-                            className={styles.backToDashboard} 
-                            onClick={() => navigate(breadcrumb.parentPath || '/')}
-                            title={breadcrumb.parentTitle ? `Back to ${breadcrumb.parentTitle}` : "Back to Home"}
+                        <button
+                            type="button"
+                            className={styles.backToDashboard}
+                            onClick={() => navigate(breadcrumb.parentPath || -1)}
+                            title={breadcrumb.parentTitle ? `Back to ${breadcrumb.parentTitle}` : 'Back'}
+                            aria-label={breadcrumb.parentTitle ? `Back to ${breadcrumb.parentTitle}` : 'Back'}
                         >
-                            <LayoutDashboard size={18} />
+                            <ChevronLeft size={18} />
+                            <span className={styles.backLabel}>Back</span>
                         </button>
                     )}
                     <h2 className={styles.pageTitle}>
