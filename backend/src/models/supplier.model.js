@@ -33,6 +33,26 @@ const supplierSchema = new mongoose.Schema({
         ],
         default: '',
     },
+    /** Date-effective GST registration (no separate Supplier GST collection) */
+    gstRegistrationEffectiveDate: { type: Date, default: null },
+    gstCancellationEffectiveDate: { type: Date, default: null },
+    /**
+     * Bounded embedded GST registration history (max ~20).
+     * Also mirrored into GstStatusHistory with entityType=Supplier when altered.
+     */
+    gstRegistrationHistory: [
+        {
+            gstin: { type: String, default: '' },
+            registrationStatus: { type: String, default: '' },
+            status: { type: String, default: '' },
+            effectiveFrom: { type: Date, default: null },
+            effectiveTo: { type: Date, default: null },
+            cancellationEffectiveDate: { type: Date, default: null },
+            changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+            changedAt: { type: Date, default: Date.now },
+            reason: { type: String, default: '' },
+        },
+    ],
     /**
      * How this supplier typically charges GST on invoices.
      * Does not auto-create RCM — voucher/RCM engine decides transaction-wise.
@@ -152,6 +172,13 @@ const supplierSchema = new mongoose.Schema({
     tdsExemptionApplicable: { type: Boolean, default: false },
     tdsThresholdOverride: { type: Number, default: 0, min: 0 },
     tdsIgnoreThreshold: { type: Boolean, default: false },
+    /** Tenant ownership (also injected by tenantSchemaPlugin when loaded via db.js) */
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company',
+        index: true,
+        default: null,
+    },
 }, { timestamps: true });
 
 supplierSchema.index({ supplierName: 'text', supplierCode: 'text' });

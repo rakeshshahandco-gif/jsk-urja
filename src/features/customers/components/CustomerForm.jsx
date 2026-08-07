@@ -27,6 +27,8 @@ import { CUSTOMER_FORM_TABS } from '@/config/customerKyc.config';
 import { CustomerGstTaxTab, CustomerBankingTab, CustomerExportTab } from './CustomerKycTabSections';
 import { CustomerDocumentsKycTab } from './CustomerDocumentsKycTab';
 import api from '@/services/api';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -297,6 +299,27 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 ? String(customerData.gstCancellationDate).slice(0, 10)
                 : '',
             gstStatus: customerData.gstStatus || 'Unknown',
+            gstStatusEffectiveFrom: customerData.gstStatusEffectiveFrom
+                ? String(customerData.gstStatusEffectiveFrom).slice(0, 10)
+                : '',
+            gstRevocationDate: customerData.gstRevocationDate
+                ? String(customerData.gstRevocationDate).slice(0, 10)
+                : '',
+            gstLegalName: customerData.gstLegalName || '',
+            gstTradeName: customerData.gstTradeName || '',
+            gstTaxpayerType: customerData.gstTaxpayerType || '',
+            gstConstitutionOfBusiness: customerData.gstConstitutionOfBusiness || '',
+            gstRegisteredAddress: customerData.gstRegisteredAddress || '',
+            gstAddressLine1: customerData.gstAddressLine1 || '',
+            gstAddressLine2: customerData.gstAddressLine2 || '',
+            gstDistrict: customerData.gstDistrict || '',
+            gstCity: customerData.gstCity || '',
+            gstPincode: customerData.gstPincode || '',
+            gstFilingFrequency: customerData.gstFilingFrequency || '',
+            gstTreatment: customerData.gstTreatment || '',
+            gstVerificationReference: customerData.gstVerificationReference || '',
+            gstVerificationResult: customerData.gstVerificationResult || '',
+            gstVerificationError: customerData.gstVerificationError || '',
             gstVerificationDate: customerData.gstVerificationDate
                 ? String(customerData.gstVerificationDate).slice(0, 10)
                 : '',
@@ -349,6 +372,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const [generatingCode, setGeneratingCode] = useState(false);
     const [isFetchingPin, setIsFetchingPin] = useState(false);
     const [gstinWarning, setGstinWarning] = useState(null); // { payload, invoices, showList }
+    const [alterationPending, setAlterationPending] = useState(null);
     const initialCompanyName = customer?.company || '';
     const currentCompanyName = watch('company');
     const isNameChanged = customer && initialCompanyName && currentCompanyName && initialCompanyName !== currentCompanyName;
@@ -357,7 +381,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const totalDueDays = computeCustomerDueDays(creditPeriodVal, gracePeriodVal, fieldCtrl.isVisible('gracePeriod'));
 
     const finishSubmit = (payload) => {
-        onSubmit(payload);
+        const cleaned = { ...(payload || {}) };
+        delete cleaned.__skipMasterAlterationGate;
+        onSubmit(cleaned);
     };
 
     const handleFormSubmit = async (data) => {
@@ -385,7 +411,35 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         const nextGst = String(payload.gstNumber || '').trim();
         const gstinNewlyAdded = Boolean(customer?._id) && !prevGst && nextGst.length >= 15;
 
-        if (gstinNewlyAdded && !gstinWarning) {
+        const sensitiveProposed = {};
+        const sensFields = [
+            'gstNumber',
+            'gstRegistrationType',
+            'gstStatus',
+            'gstRegistrationEffectiveDate',
+            'gstCancellationEffectiveDate',
+            'state',
+            'billingStateCode',
+            'gstState',
+            'panNumber',
+            'customerName',
+            'company',
+        ];
+        if (customer?._id && !data?.__skipMasterAlterationGate) {
+            for (const f of sensFields) {
+                if (payload[f] !== undefined && String(payload[f] ?? '') !== String(customer[f] ?? '')) {
+                    sensitiveProposed[f] = payload[f];
+                }
+            }
+        }
+
+        if (Object.keys(sensitiveProposed).length && !alterationPending) {
+            setAlterationPending({ payload, proposedChanges: sensitiveProposed });
+            return;
+        }
+
+        // Live production: warn when GSTIN newly added and open invoices may be affected
+        if (gstinNewlyAdded && !gstinWarning && !alterationPending) {
             try {
                 const { data: res } = await api.get(`/gst-reports/customers/${customer._id}/affected-invoices`);
                 const invoices = res?.data?.invoices || [];
@@ -651,6 +705,11 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     {/* Left Sidebar Navigation */}
                     <nav className={styles['form-sidebar']}>
                         <span className={styles['sidebar-label']}>Sections</span>
+                        {customer?._id && (
+                            <div style={{ marginBottom: 10 }}>
+                                <MasterUsagePanel masterType="Customer" masterId={customer._id} />
+                            </div>
+                        )}
                         <a className={styles['sidebar-item']} href="#sec-basic" onClick={e => { e.preventDefault(); document.getElementById('sec-basic')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>👤</span> Basic Info
                         </a>
@@ -1759,6 +1818,24 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 }}
             />
 
+            {alterationPending && customer?._id && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Customer"
+                    masterId={customer._id}
+                    proposedChanges={alterationPending.proposedChanges}
+                    onClose={() => setAlterationPending(null)}
+                    onApplied={() => {
+                        const full = { ...alterationPending.payload };
+                        const proposed = alterationPending.proposedChanges || {};
+                        // Engine already applied sensitive fields — omit them so normal Save cannot bypass/re-write GST.
+                        for (const f of Object.keys(proposed)) delete full[f];
+                        setAlterationPending(null);
+                        addToast('Sensitive Master fields applied via Impact Preview engine', 'success');
+                        finishSubmit({ ...full, __skipMasterAlterationGate: true });
+                    }}
+                />
+            )}
             {gstinWarning && (
                 <div
                     style={{

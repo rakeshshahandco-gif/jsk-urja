@@ -10,6 +10,9 @@ import { useDocumentsKycTemplateSettings } from '@/hooks/useDocumentsKycTemplate
 import { useCompany } from '@/contexts/CompanyContext';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { SupplierDocumentsKycTab } from './components/SupplierDocumentsKycTab';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
+import { useMasterAlterationGate } from '@/hooks/useMasterAlterationGate';
 
 const inp = { padding: '8px 12px', background: '#fff', border: '1px solid #d1d5db', borderRadius: 7, color: '#374151', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' };
 const th = { padding: '10px 14px', textAlign: 'left', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.03em', background: '#f9fafb' };
@@ -73,6 +76,7 @@ export default function SupplierListPage() {
     const { isEnabled } = useFeatureConfiguration();
     const { fieldCtrl } = useSupplierTemplateFieldSettings(selectedCompany?._id, isEnabled);
     const { docCtrl: supplierDocCtrl } = useDocumentsKycTemplateSettings(selectedCompany?._id, 'supplier', isEnabled, fieldCtrl);
+    const { pending, clearPending, gateSensitiveSave } = useMasterAlterationGate('Supplier');
     const show = (key) => fieldCtrl.isVisible(key);
     const showDocumentsSection = supplierDocCtrl.anyVisible() || show('documentsKyc') || isEnabled('supplier.complianceDocuments');
     const fieldLabel = (key, fallback) => {
@@ -139,6 +143,11 @@ export default function SupplierListPage() {
                 await createSupplier(modal.data);
                 toast.success('Supplier created! Ledger under Sundry Creditors auto-created.');
             } else {
+                const existing = suppliers.find((s) => s._id === modal.data._id) || modal.data;
+                if (gateSensitiveSave(existing, modal.data)) {
+                    setSaving(false);
+                    return;
+                }
                 await updateSupplier(modal.data._id, modal.data);
                 toast.success('Supplier updated! Ledger synced.');
             }
@@ -300,7 +309,12 @@ export default function SupplierListPage() {
                             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
                                 {modal.mode === 'create' ? '🏭 Add New Supplier' : `✎ Edit: ${modal.data.supplierName}`}
                             </h2>
-                            <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                {modal.mode === 'edit' && modal.data._id && (
+                                    <MasterUsagePanel masterType="Supplier" masterId={modal.data._id} />
+                                )}
+                                <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                            </div>
                         </div>
 
                         {/* ── Section 1: Basic Info ── */}
@@ -797,6 +811,22 @@ export default function SupplierListPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {pending && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Supplier"
+                    masterId={pending.masterId}
+                    proposedChanges={pending.proposedChanges}
+                    onClose={clearPending}
+                    onApplied={() => {
+                        clearPending();
+                        setModal(null);
+                        load();
+                        toast.success('Supplier Master alteration applied');
+                    }}
+                />
             )}
 
         </div>

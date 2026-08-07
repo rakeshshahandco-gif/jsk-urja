@@ -371,6 +371,32 @@ export const PERMISSION_REGISTRY = [
         ]
     },
     {
+        id: 'masters',
+        name: 'Master Alteration',
+        submodules: [
+            {
+                id: 'alteration',
+                name: 'Central Master Alteration',
+                actions: [
+                    { id: 'alter_customer', label: 'Alter Customer Master', type: 'boolean' },
+                    { id: 'alter_supplier', label: 'Alter Supplier Master', type: 'boolean' },
+                    { id: 'alter_ledger', label: 'Alter Ledger Master', type: 'boolean' },
+                    { id: 'alter_item', label: 'Alter Item Master', type: 'boolean' },
+                    { id: 'alter_ledger_group', label: 'Alter Ledger Group', type: 'boolean' },
+                    { id: 'alter_gstin', label: 'Alter GSTIN', type: 'boolean' },
+                    { id: 'alter_gst_registration', label: 'Alter GST Registration Status', type: 'boolean' },
+                    { id: 'alter_gst_effective_dates', label: 'Alter GST Effective Dates', type: 'boolean' },
+                    { id: 'alter_state', label: 'Alter State', type: 'boolean' },
+                    { id: 'alter_hsn', label: 'Alter Item HSN', type: 'boolean' },
+                    { id: 'alter_name', label: 'Alter Master Name', type: 'boolean' },
+                    { id: 'override_locked', label: 'Override Locked Master Change', type: 'boolean' },
+                    { id: 'rollback', label: 'Rollback Master Alteration', type: 'boolean' },
+                    { id: 'view_usage', label: 'View Master Usage / Dependencies', type: 'boolean' },
+                ],
+            },
+        ],
+    },
+    {
         id: 'accounts_reports',
         name: 'Accounts',
         submodules: [
