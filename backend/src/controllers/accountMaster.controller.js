@@ -193,13 +193,48 @@ const updateLedger = catchAsync(async (req, res) => {
     const oldLedger = await AccountLedger.findById(req.params.id);
     if (!oldLedger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
 
+    const ugChanging = Object.prototype.hasOwnProperty.call(updateData, 'underGroup')
+        && String(updateData.underGroup || '') !== String(oldLedger.underGroup || '');
+
+    // Central Master Alteration gate for Ledger Group (Category B)
+    if (ugChanging) {
+        const { buildImpactPreview, applyMasterAlteration } = await import('../services/masterAlteration/index.js');
+        if (!req.body.confirmMasterAlteration) {
+            const preview = await buildImpactPreview({
+                masterType: 'Ledger',
+                masterId: req.params.id,
+                proposedChanges: { underGroup: updateData.underGroup },
+                companyId: req.companyId || oldLedger.companyId,
+                effectiveFrom: req.body.effectiveFrom || null,
+            });
+            return res.status(409).send(
+                new ApiResponse(
+                    409,
+                    { requiresImpactPreview: true, preview },
+                    preview.blockReason || 'Impact Preview required before Ledger Group alteration',
+                ),
+            );
+        }
+        const result = await applyMasterAlteration({
+            masterType: 'Ledger',
+            masterId: req.params.id,
+            proposedChanges: { underGroup: updateData.underGroup, ...(updateData.name ? { name: updateData.name } : {}) },
+            companyId: req.companyId || oldLedger.companyId,
+            user: req.user,
+            reason: req.body.reason || req.body._masterAlterationReason || '',
+            effectiveFrom: req.body.effectiveFrom || null,
+            confirmApply: true,
+            ipAddress: req.ip,
+            userAgent: req.get?.('user-agent'),
+        });
+        return res.status(200).send(new ApiResponse(200, result.master, result.message || 'Ledger group updated via Master Alteration'));
+    }
+
     if (oldLedger.isTdsPayableLedger) {
-        const ugChanging = Object.prototype.hasOwnProperty.call(updateData, 'underGroup')
-            && String(updateData.underGroup || '') !== String(oldLedger.underGroup || '');
         const secChanging = Object.prototype.hasOwnProperty.call(updateData, 'tdsPayableSectionCode')
             && String(updateData.tdsPayableSectionCode || '').toUpperCase()
                 !== String(oldLedger.tdsPayableSectionCode || '').toUpperCase();
-        if (ugChanging || secChanging) {
+        if (secChanging) {
             const used = await Voucher.countDocuments({
                 status: { $ne: 'Cancelled' },
                 items: { $elemMatch: { ledgerId: oldLedger._id } },

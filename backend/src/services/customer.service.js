@@ -8,6 +8,7 @@ import logger from '../utils/logger.js';
 import { SalesOrder } from '../models/salesOrder.model.js';
 import { SalesInvoice } from '../models/salesInvoice.model.js';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
+import { applyBlankGstinConsumerRule } from '../utils/customerGstConsistency.js';
 
 /** Empty select values arrive as "" and break ObjectId cast — use null instead. */
 const nullifyEmptyObjectIds = (body = {}) => {
@@ -76,6 +77,12 @@ const genCustomerCode = async (offset = 0) => {
  */
 const createCustomer = async (body) => {
     body = nullifyEmptyObjectIds(body);
+    applyBlankGstinConsumerRule(body);
+    // New customers with no GSTIN always default to Consumer
+    if (!Object.prototype.hasOwnProperty.call(body, 'gstNumber') || !String(body.gstNumber || '').trim()) {
+        body.gstNumber = '';
+        body.gstRegistrationType = 'Consumer';
+    }
     logger.info('📝 Creating customer:', { customerName: body.customerName, company: body.company });
 
     // ── Duplicate check by company name ─────────────────────────────────────
@@ -230,6 +237,11 @@ const updateCustomerById = async (customerId, updateBody) => {
     delete safeBody.isDeleted;  // cannot be changed via normal update
     delete safeBody.restoredAt;
     delete safeBody.restoredReason;
+
+    // findOneAndUpdate bypasses pre('save') — enforce blank GSTIN → Consumer here
+    if (Object.prototype.hasOwnProperty.call(safeBody, 'gstNumber')) {
+        applyBlankGstinConsumerRule(safeBody);
+    }
 
     const oldCustomer = await Customer.findById(customerId).lean();
     if (!oldCustomer) {

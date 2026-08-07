@@ -283,6 +283,7 @@ import RawMaterialStockReport from '@/features/inventory/RawMaterialStockReport'
 import FinishedGoodsStockReport from '@/features/inventory/FinishedGoodsStockReport';
 import StockMovementLedger from '@/features/inventory/StockMovementLedger';
 import ProductionOutputFormPage from './features/production/ProductionOutputFormPage';
+import ProductionWorkOrderPickPage from './features/production/ProductionWorkOrderPickPage';
 import ProductConversionFormPage from './features/production/ProductConversionFormPage';
 import ComponentReplacementFormPage from '@/features/production/ComponentReplacementFormPage';
 import ProductionRejectionFormPage from '@/features/production/ProductionRejectionFormPage';
@@ -1018,6 +1019,10 @@ const AppLayout = () => {
                         <Route path="/inventory/stock/finished-goods" element={<ProtectedRoute requirePermission="inventory"><FinishedGoodsStockReport /></ProtectedRoute>} />
                         <Route path="/inventory/stock/ledger" element={<ProtectedRoute requirePermission="inventory"><StockMovementLedger /></ProtectedRoute>} />
                         <Route path="/production/outputs" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/output/new" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/inward" element={<ProtectedRoute requirePermission="production"><ProductionOutputFormPage /></ProtectedRoute>} />
+                        <Route path="/production/consumption" element={<ProtectedRoute requirePermission="production"><ProductionWorkOrderPickPage /></ProtectedRoute>} />
+                        <Route path="/production/qc" element={<ProtectedRoute requirePermission="production"><ProductionWorkOrderPickPage /></ProtectedRoute>} />
                         <Route path="/production/conversion/new" element={<ProtectedRoute requirePermission="production"><ProductConversionFormPage /></ProtectedRoute>} />
                         <Route path="/production/component-replacements/new" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />
                         <Route path="/production/component-replacements" element={<ProtectedRoute requirePermission="production"><ComponentReplacementFormPage /></ProtectedRoute>} />

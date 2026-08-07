@@ -59,6 +59,17 @@ export function buildCustomerFieldControl(settings, isEnabledLegacy) {
         return !!fields[fieldKey]?.required;
     };
 
+    /**
+     * GSTIN required only when template marks gstNumber required AND registration
+     * type is not Consumer / Unregistered (blank GSTIN → Consumer path).
+     */
+    const isGstNumberRequired = (registrationType) => {
+        if (!isRequired('gstNumber')) return false;
+        const t = String(registrationType || '').trim();
+        if (!t || t === 'Consumer' || t === 'Unregistered') return false;
+        return true;
+    };
+
     const isReadOnly = (fieldKey) => {
         if (useLegacy) return false;
         return !!fields[fieldKey]?.readOnly;
@@ -76,6 +87,7 @@ export function buildCustomerFieldControl(settings, isEnabledLegacy) {
         useLegacy,
         isVisible,
         isRequired,
+        isGstNumberRequired,
         isReadOnly,
         getDefaultValue,
         anyVisibleInGroup,

@@ -13,19 +13,39 @@ import { FaultyReceipt } from '../models/faultyReceipt.model.js';
 import { Complaint } from '../models/complaint.model.js';
 import { ComponentReplacement } from '../models/componentReplacement.model.js';
 import { NameChangeLog } from '../models/nameChangeLog.model.js';
+import { Gstr1PeriodStatus } from '../models/gstr1PeriodStatus.model.js';
+import { AccountingPeriodLock } from '../models/accountingPeriodLock.model.js';
 import logger from './logger.js';
+
+function returnPeriodFromDate(d) {
+    const x = new Date(d);
+    if (Number.isNaN(x.getTime())) return '';
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function filedPeriodSet(companyId) {
+    if (!companyId) return new Set();
+    const rows = await Gstr1PeriodStatus.find({ companyId, status: 'Filed' }).select('returnPeriod').lean();
+    return new Set(rows.map((r) => r.returnPeriod));
+}
+
+async function isBooksLockedFy(financialYear) {
+    if (!financialYear) return false;
+    const lock = await AccountingPeriodLock.findOne({ financialYear, isActive: true }).lean();
+    return Boolean(lock?.booksLockedTill);
+}
 
 export class GlobalRenamer {
     /**
      * Propagates a name change globally across the system.
+     * Statutory snapshots (filed GSTR-1, e-invoice, locked FY) are NOT overwritten.
      */
-    static async propagate({ masterType, id, oldName, newName, userId }) {
+    static async propagate({ masterType, id, oldName, newName, userId, companyId }) {
         if (!newName || oldName === newName) return;
 
         logger.info(`🚀 Global Rename [${masterType}]: "${oldName}" -> "${newName}" (ID: ${id})`);
 
         try {
-            // 1. Log the change for audit trail
             await NameChangeLog.create({
                 masterType,
                 masterId: id,
@@ -35,19 +55,18 @@ export class GlobalRenamer {
                 changedAt: new Date()
             });
 
-            // 2. Perform propagation based on master type
             switch (masterType) {
                 case 'CUSTOMER':
-                    await this.propagateCustomerRename(id, oldName, newName);
+                    await this.propagateCustomerRename(id, oldName, newName, companyId);
                     break;
                 case 'SUPPLIER':
-                    await this.propagateSupplierRename(id, oldName, newName);
+                    await this.propagateSupplierRename(id, oldName, newName, companyId);
                     break;
                 case 'ITEM':
-                    await this.propagateItemRename(id, oldName, newName);
+                    await this.propagateItemRename(id, oldName, newName, companyId);
                     break;
                 case 'LEDGER':
-                    await this.propagateLedgerRename(id, oldName, newName);
+                    await this.propagateLedgerRename(id, oldName, newName, companyId);
                     break;
                 default:
                     logger.warn(`⚠️ Unsupported master type for propagation: ${masterType}`);
@@ -60,8 +79,7 @@ export class GlobalRenamer {
         }
     }
 
-    static async propagateCustomerRename(id, oldName, newName) {
-        // A. Update AccountLedger (linked via referenceId)
+    static async propagateCustomerRename(id, oldName, newName, companyId) {
         const ledger = await AccountLedger.findOneAndUpdate(
             { referenceId: id, referenceModel: 'Customer' },
             { $set: { name: newName, printName: newName } },
@@ -69,32 +87,56 @@ export class GlobalRenamer {
         );
 
         if (ledger) {
-            await this.propagateLedgerRename(ledger._id, oldName, newName);
+            await this.propagateLedgerRename(ledger._id, oldName, newName, companyId || ledger.companyId);
         }
 
-        // B. Update Transactions (ID-based link)
-        const siResult = await SalesInvoice.updateMany({ customerId: id }, { $set: { customerName: newName } });
+        const filedSet = await filedPeriodSet(companyId || ledger?.companyId);
+        const invoices = await SalesInvoice.find({ customerId: id, isDeleted: { $ne: true } });
+        let siUpdated = 0;
+        let siProtected = 0;
+        for (const inv of invoices) {
+            const period = returnPeriodFromDate(inv.invoiceDate);
+            const locked =
+                filedSet.has(period) ||
+                inv.irn ||
+                inv.eInvoiceStatus === 'Generated' ||
+                (await isBooksLockedFy(inv.financialYear));
+            if (locked) {
+                siProtected += 1;
+                continue;
+            }
+            if (inv.customerName !== newName) {
+                inv.customerName = newName;
+                await inv.save();
+                siUpdated += 1;
+            }
+        }
+
         const soResult = await SalesOrder.updateMany({ customerId: id }, { $set: { customerName: newName } });
         const rdResult = await ReplacementDispatch.updateMany({ customerId: id }, { $set: { customerName: newName } });
         const frResult = await FaultyReceipt.updateMany({ customerId: id }, { $set: { customerName: newName } });
         const cpResult = await Complaint.updateMany({ customerId: id }, { $set: { customerName: newName } });
         const crResult = await ComponentReplacement.updateMany({ customerId: id }, { $set: { customerName: newName } });
 
-        // C. Fallback for Orphaned Records (Name-based)
         if (oldName) {
-            const fallbackSI = await SalesInvoice.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
-            const fallbackSO = await SalesOrder.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
-            const fallbackRD = await ReplacementDispatch.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
-            const fallbackCP = await Complaint.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
-            
-            logger.info(`   - Customer Fallbacks: SI(${fallbackSI.modifiedCount}), SO(${fallbackSO.modifiedCount}), RD(${fallbackRD.modifiedCount})`);
+            await SalesInvoice.updateMany(
+                {
+                    customerId: null,
+                    customerName: oldName,
+                    eInvoiceStatus: { $ne: 'Generated' },
+                    $or: [{ irn: null }, { irn: '' }],
+                },
+                { $set: { customerName: newName, customerId: id } },
+            );
+            await SalesOrder.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
+            await ReplacementDispatch.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
+            await Complaint.updateMany({ customerId: null, customerName: oldName }, { $set: { customerName: newName, customerId: id } });
         }
 
-        logger.info(`   - Customer sync total: SI(${siResult.modifiedCount}), SO(${soResult.modifiedCount}), RD(${rdResult.modifiedCount})`);
+        logger.info(`   - Customer sync: SI open(${siUpdated}) protected(${siProtected}), SO(${soResult.modifiedCount}), RD(${rdResult.modifiedCount}), FR(${frResult.modifiedCount}), CP(${cpResult.modifiedCount}), CR(${crResult.modifiedCount})`);
     }
 
-    static async propagateSupplierRename(id, oldName, newName) {
-        // A. Update AccountLedger
+    static async propagateSupplierRename(id, oldName, newName, companyId) {
         const ledger = await AccountLedger.findOneAndUpdate(
             { referenceId: id, referenceModel: 'Supplier' },
             { $set: { name: newName, printName: newName } },
@@ -102,24 +144,34 @@ export class GlobalRenamer {
         );
 
         if (ledger) {
-            await this.propagateLedgerRename(ledger._id, oldName, newName);
+            await this.propagateLedgerRename(ledger._id, oldName, newName, companyId || ledger.companyId);
         }
 
-        // B. Update Transactions
-        const piResult = await PurchaseInvoice.updateMany({ supplierId: id }, { $set: { supplierName: newName } });
+        const invoices = await PurchaseInvoice.find({ supplierId: id, isDeleted: { $ne: true } });
+        let piUpdated = 0;
+        let piProtected = 0;
+        for (const inv of invoices) {
+            if (await isBooksLockedFy(inv.financialYear)) {
+                piProtected += 1;
+                continue;
+            }
+            if (inv.supplierName !== newName) {
+                inv.supplierName = newName;
+                await inv.save();
+                piUpdated += 1;
+            }
+        }
+
         const poResult = await PurchaseOrder.updateMany({ supplierId: id }, { $set: { supplierName: newName } });
         const grnResult = await GRN.updateMany({ supplierId: id }, { $set: { supplierName: newName } });
 
-        // C. Fallback for Orphans (Name-based)
         if (oldName) {
-            const fallbackPI = await PurchaseInvoice.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
-            const fallbackPO = await PurchaseOrder.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
-            const fallbackGRN = await GRN.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
-            
-            logger.info(`   - Supplier Fallbacks: PI(${fallbackPI.modifiedCount}), PO(${fallbackPO.modifiedCount}), GRN(${fallbackGRN.modifiedCount})`);
+            await PurchaseInvoice.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
+            await PurchaseOrder.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
+            await GRN.updateMany({ supplierId: null, supplierName: oldName }, { $set: { supplierName: newName, supplierId: id } });
         }
 
-        logger.info(`   - Supplier sync total: PI(${piResult.modifiedCount}), PO(${poResult.modifiedCount}), GRN(${grnResult.modifiedCount})`);
+        logger.info(`   - Supplier sync: PI open(${piUpdated}) protected(${piProtected}), PO(${poResult.modifiedCount}), GRN(${grnResult.modifiedCount})`);
     }
 
     static async propagateLedgerRename(ledgerId, oldName, newName) {

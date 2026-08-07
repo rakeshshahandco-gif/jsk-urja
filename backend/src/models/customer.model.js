@@ -259,6 +259,35 @@ const customerSchema = mongoose.Schema(
             enum: ['Registered', 'Unregistered', 'Composite', 'Consumer', 'UIN', 'SEZ', 'Export', ''],
             default: '',
         },
+        /** Portal/manual GST status for master display (history in GstStatusHistory) */
+        gstStatus: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        gstRegistrationEffectiveDate: { type: Date, default: null },
+        gstCancellationEffectiveDate: { type: Date, default: null },
+        /**
+         * Bounded embedded GST registration history (max ~20).
+         * Current fields above remain ACTIVE; history preserves prior effective periods.
+         * Do not create customergstregistrations / gststatushistories collections for this.
+         */
+        gstRegistrationHistory: [
+            {
+                gstin: { type: String, default: '' },
+                registrationType: { type: String, default: '' },
+                status: { type: String, default: '' },
+                effectiveFrom: { type: Date, default: null },
+                effectiveTo: { type: Date, default: null },
+                cancellationDate: { type: Date, default: null },
+                stateCode: { type: String, default: '' },
+                verificationProvider: { type: String, default: '' },
+                verificationDate: { type: Date, default: null },
+                changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+                changedAt: { type: Date, default: Date.now },
+                reason: { type: String, default: '' },
+            },
+        ],
         defaultPlaceOfSupply: {
             type: String,
             trim: true,
@@ -493,6 +522,23 @@ const customerSchema = mongoose.Schema(
         msmeCategory: { type: String, enum: ['', 'Micro', 'Small', 'Medium'], default: '' },
         /** Dynamic industry / feature-config custom fields (featureKey → value) */
         industryCustomFields: { type: Map, of: String, default: {} },
+        /** Tenant ownership (also injected by tenantSchemaPlugin when loaded via db.js) */
+        companyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Company',
+            index: true,
+            default: null,
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
     },
     {
         timestamps: true,
@@ -502,14 +548,14 @@ const customerSchema = mongoose.Schema(
 // Pre-save hook for GST Automation
 customerSchema.pre('save', function (next) {
     // 1. Handle GST Registration Type based on GST Number
+    // Blank GSTIN → always Consumer (exact enum). With GSTIN → auto Registered only from Consumer/Unregistered/empty.
     if (this.gstNumber && this.gstNumber.trim().length > 0) {
         if (!this.gstRegistrationType || this.gstRegistrationType === 'Unregistered' || this.gstRegistrationType === 'Consumer') {
             this.gstRegistrationType = 'Registered';
         }
     } else {
-        if (!this.gstRegistrationType || this.gstRegistrationType === 'Registered' || this.gstRegistrationType === 'Unregistered') {
-            this.gstRegistrationType = 'Consumer';
-        }
+        this.gstNumber = '';
+        this.gstRegistrationType = 'Consumer';
     }
 
     // 2. Handle GST Type based on State or GST Number Prefix

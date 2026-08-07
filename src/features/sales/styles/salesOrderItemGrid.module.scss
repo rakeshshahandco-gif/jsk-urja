@@ -1,0 +1,152 @@
+/**
+ * Sales Order item-entry grid only (Create/Edit).
+ * Compact desktop fit — does not affect Sales Invoice or calculations.
+ */
+
+.wrap {
+  width: 100%;
+  overflow-x: visible;
+  overflow-y: visible;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+  table-layout: fixed;
+}
+
+.th {
+  padding: 6px 6px;
+  text-align: left;
+  color: #64748b;
+  font-weight: 700;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+
+.td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+  vertical-align: middle;
+  background: #fff;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.center {
+  text-align: center;
+}
+
+.inp {
+  padding: 5px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background: #fff;
+  color: #374151;
+  min-width: 0;
+}
+
+.tableInpNum {
+  padding: 5px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.readonly {
+  background: #f8fafc;
+  color: #475569;
+  cursor: default;
+}
+
+.money {
+  color: #0f172a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* Width priority for desktop fit */
+.colSr { width: 3%; min-width: 28px; }
+.colCode { width: 16%; }
+.colDesc { width: 18%; }
+.colNotes { width: 16%; }
+.colHsn { width: 8%; }
+.colUom { width: 6%; }
+.colQty { width: 7%; }
+.colRate { width: 10%; }
+.colAmount { width: 11%; }
+.colAction { width: 3.5%; min-width: 32px; max-width: 40px; text-align: center; }
+
+.addBtn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px dashed #0d9488;
+  background: #f0fdfa;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #0d9488;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:global(.no-spin)::-webkit-inner-spin-button,
+:global(.no-spin)::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+:global(.no-spin) {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Genuine small screens only — allow horizontal scroll when needed */
+@media (max-width: 960px) {
+  .wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .colCode { min-width: 140px; }
+  .colDesc { min-width: 140px; }
+  .colNotes { min-width: 120px; }
+  .colHsn { min-width: 72px; }
+  .colUom { min-width: 56px; }
+  .colQty { min-width: 64px; }
+  .colRate { min-width: 80px; }
+  .colAmount { min-width: 88px; }
+}

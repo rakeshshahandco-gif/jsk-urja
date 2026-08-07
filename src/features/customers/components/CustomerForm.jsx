@@ -27,6 +27,8 @@ import { CUSTOMER_FORM_TABS } from '@/config/customerKyc.config';
 import { CustomerGstTaxTab, CustomerBankingTab, CustomerExportTab } from './CustomerKycTabSections';
 import { CustomerDocumentsKycTab } from './CustomerDocumentsKycTab';
 import api from '@/services/api';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -150,7 +152,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 tags: [],
                 gstNumber: '',
                 gstType: '',
-                gstRegistrationType: '',
+                gstRegistrationType: 'Consumer',
                 customerActivityType: '',
                 exportCountry: '',
                 contactPersons: [
@@ -297,6 +299,27 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 ? String(customerData.gstCancellationDate).slice(0, 10)
                 : '',
             gstStatus: customerData.gstStatus || 'Unknown',
+            gstStatusEffectiveFrom: customerData.gstStatusEffectiveFrom
+                ? String(customerData.gstStatusEffectiveFrom).slice(0, 10)
+                : '',
+            gstRevocationDate: customerData.gstRevocationDate
+                ? String(customerData.gstRevocationDate).slice(0, 10)
+                : '',
+            gstLegalName: customerData.gstLegalName || '',
+            gstTradeName: customerData.gstTradeName || '',
+            gstTaxpayerType: customerData.gstTaxpayerType || '',
+            gstConstitutionOfBusiness: customerData.gstConstitutionOfBusiness || '',
+            gstRegisteredAddress: customerData.gstRegisteredAddress || '',
+            gstAddressLine1: customerData.gstAddressLine1 || '',
+            gstAddressLine2: customerData.gstAddressLine2 || '',
+            gstDistrict: customerData.gstDistrict || '',
+            gstCity: customerData.gstCity || '',
+            gstPincode: customerData.gstPincode || '',
+            gstFilingFrequency: customerData.gstFilingFrequency || '',
+            gstTreatment: customerData.gstTreatment || '',
+            gstVerificationReference: customerData.gstVerificationReference || '',
+            gstVerificationResult: customerData.gstVerificationResult || '',
+            gstVerificationError: customerData.gstVerificationError || '',
             gstVerificationDate: customerData.gstVerificationDate
                 ? String(customerData.gstVerificationDate).slice(0, 10)
                 : '',
@@ -336,7 +359,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         return normalized;
     };
 
-    const { register, control, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm({
+    const { register, control, handleSubmit, setValue, getValues, watch, formState: { errors }, reset } = useForm({
         defaultValues: normalizeCustomerData(customer),
     });
 
@@ -349,6 +372,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const [generatingCode, setGeneratingCode] = useState(false);
     const [isFetchingPin, setIsFetchingPin] = useState(false);
     const [gstinWarning, setGstinWarning] = useState(null); // { payload, invoices, showList }
+    const [alterationPending, setAlterationPending] = useState(null);
     const initialCompanyName = customer?.company || '';
     const currentCompanyName = watch('company');
     const isNameChanged = customer && initialCompanyName && currentCompanyName && initialCompanyName !== currentCompanyName;
@@ -357,7 +381,9 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const totalDueDays = computeCustomerDueDays(creditPeriodVal, gracePeriodVal, fieldCtrl.isVisible('gracePeriod'));
 
     const finishSubmit = (payload) => {
-        onSubmit(payload);
+        const cleaned = { ...(payload || {}) };
+        delete cleaned.__skipMasterAlterationGate;
+        onSubmit(cleaned);
     };
 
     const handleFormSubmit = async (data) => {
@@ -365,11 +391,27 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         if (fieldCtrl.isRequired('creditPeriod') && (data.creditPeriod === undefined || data.creditPeriod === null || data.creditPeriod === '')) missing.push('Credit Period');
         if (fieldCtrl.isRequired('gracePeriod') && (data.gracePeriodDays === undefined || data.gracePeriodDays === null || data.gracePeriodDays === '')) missing.push('Grace Period');
         if (fieldCtrl.isRequired('creditLimit') && (data.creditLimit === undefined || data.creditLimit === null || data.creditLimit === '')) missing.push('Credit Limit');
-        if (fieldCtrl.isRequired('gstNumber') && !String(data.gstNumber || '').trim()) missing.push('GST No');
+        // Consumer / blank GSTIN must never require GST No
+        const gstTrim = String(data.gstNumber || '').trim();
+        if (!gstTrim) {
+            data.gstNumber = '';
+            data.gstRegistrationType = 'Consumer';
+        }
+        const regType = String(data.gstRegistrationType || '').trim();
+        if (fieldCtrl.isGstNumberRequired?.(regType) && !gstTrim) {
+            missing.push('GST No');
+        }
         if (fieldCtrl.isRequired('panNumber') && !String(data.panNumber || '').trim()) missing.push('PAN No');
         if (missing.length) {
             addToast(`Required fields: ${missing.join(', ')}`, 'error');
             return;
+        }
+        // Inconsistent legacy: blank GSTIN but Registered-type — warn; save still forces Consumer
+        if (!gstTrim && customer?._id && ['Registered', 'Composite', 'SEZ', 'UIN', 'Export'].includes(String(customer.gstRegistrationType || ''))) {
+            const ok = window.confirm(
+                'GST Registration Type is inconsistent because no GSTIN is available. Saving this Customer will change Registration Type to Consumer.'
+            );
+            if (!ok) return;
         }
         // Blank "-- Select --" options send ""; Mongo ObjectId fields need null.
         const payload = { ...data };
@@ -385,7 +427,35 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         const nextGst = String(payload.gstNumber || '').trim();
         const gstinNewlyAdded = Boolean(customer?._id) && !prevGst && nextGst.length >= 15;
 
-        if (gstinNewlyAdded && !gstinWarning) {
+        const sensitiveProposed = {};
+        const sensFields = [
+            'gstNumber',
+            'gstRegistrationType',
+            'gstStatus',
+            'gstRegistrationEffectiveDate',
+            'gstCancellationEffectiveDate',
+            'state',
+            'billingStateCode',
+            'gstState',
+            'panNumber',
+            'customerName',
+            'company',
+        ];
+        if (customer?._id && !data?.__skipMasterAlterationGate) {
+            for (const f of sensFields) {
+                if (payload[f] !== undefined && String(payload[f] ?? '') !== String(customer[f] ?? '')) {
+                    sensitiveProposed[f] = payload[f];
+                }
+            }
+        }
+
+        if (Object.keys(sensitiveProposed).length && !alterationPending) {
+            setAlterationPending({ payload, proposedChanges: sensitiveProposed });
+            return;
+        }
+
+        // Live production: warn when GSTIN newly added and open invoices may be affected
+        if (gstinNewlyAdded && !gstinWarning && !alterationPending) {
             try {
                 const { data: res } = await api.get(`/gst-reports/customers/${customer._id}/affected-invoices`);
                 const invoices = res?.data?.invoices || [];
@@ -518,13 +588,19 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     }, [stateValue, gstNumberValue, setValue]);
 
     // Automate GST Registration Type based on GST Number
+    // Blank → Consumer. GSTIN present → only auto-upgrade from Consumer/Unregistered/empty to Registered
+    // (do not overwrite Composite / SEZ / UIN / Export).
     useEffect(() => {
-        if (gstNumberValue && gstNumberValue.trim().length > 0) {
-            setValue('gstRegistrationType', 'Registered', { shouldValidate: true, shouldDirty: true });
+        const gst = String(gstNumberValue || '').trim();
+        const currentType = String(getValues('gstRegistrationType') || '').trim();
+        if (gst.length > 0) {
+            if (!currentType || currentType === 'Consumer' || currentType === 'Unregistered') {
+                setValue('gstRegistrationType', 'Registered', { shouldValidate: true, shouldDirty: true });
+            }
         } else {
             setValue('gstRegistrationType', 'Consumer', { shouldValidate: true, shouldDirty: true });
         }
-    }, [gstNumberValue, setValue]);
+    }, [gstNumberValue, setValue, getValues]);
 
     useEffect(() => {
         if (!isEnabled('customer.customerType')) return;
@@ -651,6 +727,11 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     {/* Left Sidebar Navigation */}
                     <nav className={styles['form-sidebar']}>
                         <span className={styles['sidebar-label']}>Sections</span>
+                        {customer?._id && (
+                            <div style={{ marginBottom: 10 }}>
+                                <MasterUsagePanel masterType="Customer" masterId={customer._id} />
+                            </div>
+                        )}
                         <a className={styles['sidebar-item']} href="#sec-basic" onClick={e => { e.preventDefault(); document.getElementById('sec-basic')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>👤</span> Basic Info
                         </a>
@@ -1759,6 +1840,24 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 }}
             />
 
+            {alterationPending && customer?._id && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Customer"
+                    masterId={customer._id}
+                    proposedChanges={alterationPending.proposedChanges}
+                    onClose={() => setAlterationPending(null)}
+                    onApplied={() => {
+                        const full = { ...alterationPending.payload };
+                        const proposed = alterationPending.proposedChanges || {};
+                        // Engine already applied sensitive fields — omit them so normal Save cannot bypass/re-write GST.
+                        for (const f of Object.keys(proposed)) delete full[f];
+                        setAlterationPending(null);
+                        addToast('Sensitive Master fields applied via Impact Preview engine', 'success');
+                        finishSubmit({ ...full, __skipMasterAlterationGate: true });
+                    }}
+                />
+            )}
             {gstinWarning && (
                 <div
                     style={{

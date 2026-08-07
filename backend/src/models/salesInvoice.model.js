@@ -73,6 +73,22 @@ const salesInvoiceSchema = new mongoose.Schema({
     billingStateCode: { type: String, default: '' },
     customerGstin: { type: String, default: '' },
     customerRegistrationType: { type: String, default: '' }, // Captured from Customer Master
+    /** GST verification / GSTR-1 classification snapshots (written by gstVerification + master alteration) */
+    gstinUsed: { type: String, default: '' },
+    gstLegalNameSnapshot: { type: String, default: '' },
+    gstTradeNameSnapshot: { type: String, default: '' },
+    gstStatusSnapshot: { type: String, default: '' },
+    gstStatusOnTransactionDate: { type: String, default: '' },
+    gstRegistrationTypeSnapshot: { type: String, default: '' },
+    gstTreatmentSnapshot: { type: String, default: '' },
+    gstr1CategorySnapshot: { type: String, default: '' },
+    cancellationDateSnapshot: { type: Date, default: null },
+    verificationDateSnapshot: { type: Date, default: null },
+    verificationProviderSnapshot: { type: String, default: '' },
+    gstHistoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'GstStatusHistory', default: null },
+    decisionReason: { type: String, default: '' },
+    gstRevalidationRequired: { type: Boolean, default: false },
+    gstRevalidatedAt: { type: Date, default: null },
     exportCountry: { type: String, default: '' }, // Captured from Customer Master
     customerPhone: { type: String, default: '' },
     shippingAddress: { type: String, default: '' },

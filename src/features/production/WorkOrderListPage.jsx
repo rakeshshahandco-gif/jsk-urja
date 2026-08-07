@@ -39,6 +39,9 @@ const PRIORITY_COLORS = {
 export default function WorkOrderListPage() {
     const navigate = useNavigate();
     const [sp] = useSearchParams();
+    const { selectedCompany } = useCompany();
+    const isTextile = isTextileIndustryCompany(selectedCompany);
+    const labels = getWorkOrderLabels(isTextile);
     const [wos, setWos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');

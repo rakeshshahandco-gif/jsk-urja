@@ -5,6 +5,11 @@ import { env } from '@/config/env';
  * Report API Service
  */
 
+/** config/api fetch client returns the JSON body; axios-style clients return { data }. */
+const unwrap = (response) => (response && typeof response === 'object' && 'data' in response && response.data != null
+    ? response.data
+    : response);
+
 /**
  * Fetch customer master report data
  * @param {Object} params - Filter and pagination params
@@ -13,7 +18,7 @@ import { env } from '@/config/env';
 export const getCustomerReport = async (params = {}) => {
     try {
         const response = await api.get('/reports/customers', params);
-        return response.data;
+        return unwrap(response);
     } catch (error) {
         console.error('Error fetching customer report:', error);
         throw error;
@@ -27,7 +32,7 @@ export const getCustomerReport = async (params = {}) => {
 export const getReportOptions = async () => {
     try {
         const response = await api.get('/reports/options');
-        return response.data;
+        return unwrap(response);
     } catch (error) {
         console.error('Error fetching report options:', error);
         throw error;
@@ -77,7 +82,7 @@ export const exportCustomerReportBlob = async (type = 'csv', params = {}) => {
 export const getFollowUpReport = async (params) => {
     try {
         const response = await api.get('/reports/followups', params);
-        return response.data;
+        return unwrap(response);
     } catch (error) {
         console.error('Error fetching follow-up report:', error);
         throw error;
@@ -112,7 +117,7 @@ export const exportFollowUpPDFBlob = async (params) => {
 export const getReminderReport = async (params) => {
     try {
         const response = await api.get('/reports/reminders', params);
-        return response.data;
+        return unwrap(response);
     } catch (error) {
         console.error('Error fetching reminder report:', error);
         throw error;

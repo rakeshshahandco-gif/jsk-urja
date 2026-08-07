@@ -1,4 +1,6 @@
+import httpStatus from 'http-status';
 import pick from '../utils/pick.js';
+import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import reportService from '../services/report.service.js';
 import reminderService from '../services/reminder.service.js';
@@ -218,9 +220,11 @@ const exportOpenRemindersPDF = catchAsync(async (req, res) => {
 });
 
 const getFollowupDashboardList = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['type', 'priority', 'due']);
-    filters.search = req.query.search || req.query.q;
+    const filters = pick(req.query, ['type', 'priority', 'due', 'q', 'search', 'product']);
+    filters.q = req.query.q || req.query.search || '';
+    filters.product = req.query.product || '';
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    if (!options.limit) options.limit = 500;
     const result = await reportService.queryFollowupDashboardList(filters, options);
     res.send(result);
 });
@@ -232,13 +236,30 @@ const getFollowupDashboardDetail = catchAsync(async (req, res) => {
 });
 
 const exportFollowupDashboardList = catchAsync(async (req, res) => {
-    const filters = pick(req.query, ['q', 'type', 'priority', 'due']);
+    const filters = pick(req.query, ['q', 'search', 'type', 'priority', 'due', 'product']);
+    filters.q = req.query.q || req.query.search || '';
+    filters.product = req.query.product || '';
     const format = req.query.format || 'excel';
     const buffer = await reportService.generateDashboardListExport(format, filters);
 
     if (format === 'pdf') {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=followup-dashboard.pdf');
+        // May fall back to Excel buffer when puppeteer is unavailable
+        const isExcelFallback =
+            buffer &&
+            !(Buffer.isBuffer(buffer) && buffer.slice(0, 4).toString() === '%PDF');
+        if (isExcelFallback && Buffer.isBuffer(buffer) && buffer[0] === 0x50) {
+            res.setHeader(
+                'Content-Type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
+            res.setHeader(
+                'Content-Disposition',
+                'attachment; filename=followup-dashboard.xlsx'
+            );
+        } else {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename=followup-dashboard.pdf');
+        }
     } else if (format === 'docx') {
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', 'attachment; filename=followup-dashboard.doc');
@@ -246,6 +267,27 @@ const exportFollowupDashboardList = catchAsync(async (req, res) => {
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=followup-dashboard.xlsx');
     }
+    res.send(buffer);
+});
+
+const exportFollowupProductChats = catchAsync(async (req, res) => {
+    const filters = pick(req.query, ['q', 'search', 'product']);
+    filters.q = req.query.q || req.query.search || '';
+    filters.product = req.query.product || filters.q || '';
+    if (!String(filters.product || '').trim()) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Enter a product (e.g. DALI) to export related chats');
+    }
+    const format = req.query.format || 'excel';
+    const buffer = await reportService.generateProductChatExport(format, filters);
+    const safeName = String(filters.product)
+        .trim()
+        .replace(/[^\w\-]+/g, '_')
+        .slice(0, 40) || 'product';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=product-chats-${safeName}.xlsx`
+    );
     res.send(buffer);
 });
 
@@ -501,6 +543,7 @@ export default {
     getFollowupDashboardList,
     getFollowupDashboardDetail,
     exportFollowupDashboardList,
+    exportFollowupProductChats,
     exportFollowupDashboardDetail,
     getFollowupTaskReportAll,
     getFollowupTaskReportSingle,

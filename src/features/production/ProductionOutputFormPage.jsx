@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, Save, Package, ClipboardList, Warehouse, Info, CheckCircle, X } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
@@ -8,6 +8,12 @@ import { Button } from '../../components/ui';
 
 export default function ProductionOutputFormPage() {
     const navigate = useNavigate();
+    const { pathname } = useLocation();
+    const isInward = pathname.includes('/inward');
+    const pageTitle = isInward ? 'Finished Goods Inward' : 'Production Entry';
+    const pageSubtitle = isInward
+        ? 'Record finished goods inward from production'
+        : 'Record new finished goods production';
     const [items, setItems] = useState([]);
     const [workOrders, setWorkOrders] = useState([]);
     const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), workOrderId: '', workOrderNo: '', finishedItemId: '', qtyProduced: '', warehouse: '', remarks: '' });
@@ -70,8 +76,8 @@ export default function ProductionOutputFormPage() {
                         <ChevronLeft size={20} />
                     </button>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>Production Output</h2>
-                        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>Record new finished goods production</p>
+                        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1e293b' }}>{pageTitle}</h2>
+                        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>{pageSubtitle}</p>
                     </div>
                 </div>
             </div>

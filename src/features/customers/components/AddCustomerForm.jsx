@@ -26,9 +26,23 @@ export const AddCustomerForm = ({ closeModal }) => {
             primaryContactIndex: '0',
             status: 'lead',
             paymentType: 'Credit',
-            creditPeriod: 0
+            creditPeriod: 0,
+            gstNumber: '',
+            gstRegistrationType: 'Consumer',
         }
     });
+    const addGstNumber = watch('gstNumber');
+    useEffect(() => {
+        const gst = String(addGstNumber || '').trim();
+        if (!gst) {
+            setValue('gstRegistrationType', 'Consumer', { shouldDirty: true });
+        } else {
+            const t = String(watch('gstRegistrationType') || '').trim();
+            if (!t || t === 'Consumer' || t === 'Unregistered') {
+                setValue('gstRegistrationType', 'Registered', { shouldDirty: true });
+            }
+        }
+    }, [addGstNumber, setValue, watch]);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isCustomType, setIsCustomType] = useState(false);
     const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
@@ -326,7 +340,7 @@ export const AddCustomerForm = ({ closeModal }) => {
                             maxLength={15}
                             {...(function() {
                                 const { onChange, ...rest } = register('gstNumber', {
-                                    pattern: { value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
+                                    pattern: { value: /^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message: 'Invalid GST format' },
                                     validate: (value) => {
                                         if (!value) return true;
                                         if (!stateValue) return true;
