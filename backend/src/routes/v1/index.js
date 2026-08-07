@@ -96,6 +96,7 @@ import transporterRoute from './transporter.routes.js';
 import ewayBillRoute from './ewayBill.routes.js';
 import eInvoiceRoute from './eInvoice.routes.js';
 import gstReportRoute from './gstReport.routes.js';
+import masterAlterationRoute from './masterAlteration.routes.js';
 import gstReconciliationRoute from './gstReconciliation.routes.js';
 import rcmRoute from './rcm.routes.js';
 import backupRoute from './backup.routes.js';
@@ -594,6 +595,10 @@ const defaultRoutes = [
   {
     path: '/gst-reports',
     route: gstReportRoute,
+  },
+  {
+    path: '/master-alteration',
+    route: masterAlterationRoute,
   },
   {
     path: '/gst-reconciliation',

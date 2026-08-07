@@ -7,6 +7,52 @@ import { Supplier } from '../models/supplier.model.js';
 import { Voucher } from '../models/voucher.model.js';
 import { GlobalRenamer } from '../utils/GlobalRenamer.js';
 import pick from '../utils/pick.js';
+import {
+    getAccountGroupChain,
+    classifyFromGroupChain,
+    deriveLedgerFieldsFromClassification,
+    isCreditorRole,
+} from '../utils/ledgerClassification.utils.js';
+
+async function applyGroupDerivedClassification(body) {
+    if (!body?.underGroup) return { isCreditor: false, classification: null };
+    const chain = await getAccountGroupChain(body.underGroup);
+    const classification = classifyFromGroupChain(chain);
+    const derived = deriveLedgerFieldsFromClassification(classification);
+    body.groupName = derived.groupName;
+    body.type = derived.type;
+    body.isSupplier = !!derived.isSupplier;
+    body.isCustomer = !!derived.isCustomer;
+    body.isBank = !!derived.isBank;
+    body.isCashLedger = !!derived.isCashLedger;
+    body.isTaxLedger = !!derived.isTaxLedger;
+    if (Object.prototype.hasOwnProperty.call(derived, 'expenseCategory')) {
+        body.expenseCategory = derived.expenseCategory;
+    }
+    return { isCreditor: isCreditorRole(classification.role), classification };
+}
+
+async function linkExistingSupplierIfNeeded(ledger) {
+    if (!ledger?.isSupplier || ledger.referenceId) return;
+    try {
+        const nameRe = new RegExp(
+            `^\\s*${String(ledger.name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+            'i',
+        );
+        const supplier = await Supplier.findOne({ supplierName: nameRe }).select('_id').lean();
+        if (supplier) {
+            await AccountLedger.findByIdAndUpdate(ledger._id, {
+                referenceId: supplier._id,
+                referenceModel: 'Supplier',
+            });
+            if (!supplier.ledgerId) {
+                await Supplier.findByIdAndUpdate(supplier._id, { ledgerId: ledger._id });
+            }
+        }
+    } catch (err) {
+        console.error('⚠️ Link existing Supplier from Ledger failed:', err.message);
+    }
+}
 
 const initializeMasters = catchAsync(async (req, res) => {
     const result = await initializeAccountingMasters(req.user._id);
@@ -46,22 +92,22 @@ const createLedger = catchAsync(async (req, res) => {
         return res.status(400).send(new ApiResponse(400, null, 'When TDS Applicable is ON, TDS Section must be selected'));
     }
 
-    // Check if being created under Sundry Creditors
-    let isSundryCreditor = false;
-    if (body.underGroup) {
-        const grp = await AccountGroup.findById(body.underGroup).lean();
-        if (grp && grp.name === 'Sundry Creditors') {
-            isSundryCreditor = true;
-            body.type = 'Supplier';
-            body.isSupplier = true;
-        }
-    }
+    const { isCreditor: isSundryCreditor } = await applyGroupDerivedClassification(body);
 
     // Set initial currentBalance based on Opening Balance sign
     const opBal = Number(body.openingBalance) || 0;
     body.currentBalance = (body.drCr === 'Cr') ? -opBal : opBal;
 
     const ledger = await AccountLedger.create(body);
+
+    // Prefer linking an existing Supplier master; create only when none matches
+    if (isSundryCreditor && !body.referenceId) {
+        await linkExistingSupplierIfNeeded(ledger);
+        const refreshed = await AccountLedger.findById(ledger._id).lean();
+        if (refreshed?.referenceId) {
+            return res.status(201).send(new ApiResponse(201, refreshed, 'Ledger created successfully'));
+        }
+    }
 
     // Auto-create / link Supplier master when ledger is under Sundry Creditors
     if (isSundryCreditor && !body.referenceId) {
@@ -147,13 +193,48 @@ const updateLedger = catchAsync(async (req, res) => {
     const oldLedger = await AccountLedger.findById(req.params.id);
     if (!oldLedger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
 
+    const ugChanging = Object.prototype.hasOwnProperty.call(updateData, 'underGroup')
+        && String(updateData.underGroup || '') !== String(oldLedger.underGroup || '');
+
+    // Central Master Alteration gate for Ledger Group (Category B)
+    if (ugChanging) {
+        const { buildImpactPreview, applyMasterAlteration } = await import('../services/masterAlteration/index.js');
+        if (!req.body.confirmMasterAlteration) {
+            const preview = await buildImpactPreview({
+                masterType: 'Ledger',
+                masterId: req.params.id,
+                proposedChanges: { underGroup: updateData.underGroup },
+                companyId: req.companyId || oldLedger.companyId,
+                effectiveFrom: req.body.effectiveFrom || null,
+            });
+            return res.status(409).send(
+                new ApiResponse(
+                    409,
+                    { requiresImpactPreview: true, preview },
+                    preview.blockReason || 'Impact Preview required before Ledger Group alteration',
+                ),
+            );
+        }
+        const result = await applyMasterAlteration({
+            masterType: 'Ledger',
+            masterId: req.params.id,
+            proposedChanges: { underGroup: updateData.underGroup, ...(updateData.name ? { name: updateData.name } : {}) },
+            companyId: req.companyId || oldLedger.companyId,
+            user: req.user,
+            reason: req.body.reason || req.body._masterAlterationReason || '',
+            effectiveFrom: req.body.effectiveFrom || null,
+            confirmApply: true,
+            ipAddress: req.ip,
+            userAgent: req.get?.('user-agent'),
+        });
+        return res.status(200).send(new ApiResponse(200, result.master, result.message || 'Ledger group updated via Master Alteration'));
+    }
+
     if (oldLedger.isTdsPayableLedger) {
-        const ugChanging = Object.prototype.hasOwnProperty.call(updateData, 'underGroup')
-            && String(updateData.underGroup || '') !== String(oldLedger.underGroup || '');
         const secChanging = Object.prototype.hasOwnProperty.call(updateData, 'tdsPayableSectionCode')
             && String(updateData.tdsPayableSectionCode || '').toUpperCase()
                 !== String(oldLedger.tdsPayableSectionCode || '').toUpperCase();
-        if (ugChanging || secChanging) {
+        if (secChanging) {
             const used = await Voucher.countDocuments({
                 status: { $ne: 'Cancelled' },
                 items: { $elemMatch: { ledgerId: oldLedger._id } },
@@ -192,12 +273,33 @@ const updateLedger = catchAsync(async (req, res) => {
         }
     }
 
+    // Always re-derive type/flags/groupName from underGroup (fixes stale Expense→Creditor moves)
+    const underGroupForSync = updateData.underGroup ?? oldLedger.underGroup;
+    if (underGroupForSync) {
+        const syncBody = { underGroup: underGroupForSync };
+        await applyGroupDerivedClassification(syncBody);
+        updateData.groupName = syncBody.groupName;
+        updateData.type = syncBody.type;
+        updateData.isSupplier = syncBody.isSupplier;
+        updateData.isCustomer = syncBody.isCustomer;
+        updateData.isBank = syncBody.isBank;
+        updateData.isCashLedger = syncBody.isCashLedger;
+        updateData.isTaxLedger = syncBody.isTaxLedger;
+        if (Object.prototype.hasOwnProperty.call(syncBody, 'expenseCategory')) {
+            updateData.expenseCategory = syncBody.expenseCategory;
+        }
+    }
+
     const ledger = await AccountLedger.findByIdAndUpdate(
         req.params.id,
         { ...updateData },
         { new: true, runValidators: true }
     ).populate('underGroup', 'name');
     if (!ledger) return res.status(404).send(new ApiResponse(404, null, 'Ledger not found'));
+
+    if (ledger.isSupplier && !ledger.referenceId) {
+        await linkExistingSupplierIfNeeded(ledger);
+    }
 
     // Sync changes back to linked Supplier master
     if (ledger.referenceId && ledger.referenceModel === 'Supplier') {

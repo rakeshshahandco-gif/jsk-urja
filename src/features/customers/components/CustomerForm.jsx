@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Button, Input } from '@/components/ui';
@@ -26,6 +26,9 @@ import { listCustomerDocuments } from '@/services/customerDocumentApi';
 import { CUSTOMER_FORM_TABS } from '@/config/customerKyc.config';
 import { CustomerGstTaxTab, CustomerBankingTab, CustomerExportTab } from './CustomerKycTabSections';
 import { CustomerDocumentsKycTab } from './CustomerDocumentsKycTab';
+import api from '@/services/api';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
 import styles from './CustomerForm.module.scss';
 
 /**
@@ -37,6 +40,7 @@ import styles from './CustomerForm.module.scss';
  * @param {boolean} props.isSubmitting - Loading state
  */
 export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = false }) => {
+    const navigate = useNavigate();
     const [isCustomType, setIsCustomType] = useState(false);
     const [dynamicCustomerTypes, setDynamicCustomerTypes] = useState([
         { value: '', label: '-- Select Type --' },
@@ -288,6 +292,38 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             iecNumber: customerData.iecNumber || '',
             gstState: customerData.gstState || '',
             defaultPlaceOfSupply: customerData.defaultPlaceOfSupply || '',
+            gstRegistrationEffectiveDate: customerData.gstRegistrationEffectiveDate
+                ? String(customerData.gstRegistrationEffectiveDate).slice(0, 10)
+                : '',
+            gstCancellationDate: customerData.gstCancellationDate
+                ? String(customerData.gstCancellationDate).slice(0, 10)
+                : '',
+            gstStatus: customerData.gstStatus || 'Unknown',
+            gstStatusEffectiveFrom: customerData.gstStatusEffectiveFrom
+                ? String(customerData.gstStatusEffectiveFrom).slice(0, 10)
+                : '',
+            gstRevocationDate: customerData.gstRevocationDate
+                ? String(customerData.gstRevocationDate).slice(0, 10)
+                : '',
+            gstLegalName: customerData.gstLegalName || '',
+            gstTradeName: customerData.gstTradeName || '',
+            gstTaxpayerType: customerData.gstTaxpayerType || '',
+            gstConstitutionOfBusiness: customerData.gstConstitutionOfBusiness || '',
+            gstRegisteredAddress: customerData.gstRegisteredAddress || '',
+            gstAddressLine1: customerData.gstAddressLine1 || '',
+            gstAddressLine2: customerData.gstAddressLine2 || '',
+            gstDistrict: customerData.gstDistrict || '',
+            gstCity: customerData.gstCity || '',
+            gstPincode: customerData.gstPincode || '',
+            gstFilingFrequency: customerData.gstFilingFrequency || '',
+            gstTreatment: customerData.gstTreatment || '',
+            gstVerificationReference: customerData.gstVerificationReference || '',
+            gstVerificationResult: customerData.gstVerificationResult || '',
+            gstVerificationError: customerData.gstVerificationError || '',
+            gstVerificationDate: customerData.gstVerificationDate
+                ? String(customerData.gstVerificationDate).slice(0, 10)
+                : '',
+            gstVerificationSource: customerData.gstVerificationSource || '',
             bankName: customerData.bankName || '',
             bankBranch: customerData.bankBranch || '',
             bankAccountNumber: customerData.bankAccountNumber || '',
@@ -335,6 +371,8 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const { addToast } = useToast();
     const [generatingCode, setGeneratingCode] = useState(false);
     const [isFetchingPin, setIsFetchingPin] = useState(false);
+    const [gstinWarning, setGstinWarning] = useState(null); // { payload, invoices, showList }
+    const [alterationPending, setAlterationPending] = useState(null);
     const initialCompanyName = customer?.company || '';
     const currentCompanyName = watch('company');
     const isNameChanged = customer && initialCompanyName && currentCompanyName && initialCompanyName !== currentCompanyName;
@@ -342,7 +380,13 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     const gracePeriodVal = watch('gracePeriodDays');
     const totalDueDays = computeCustomerDueDays(creditPeriodVal, gracePeriodVal, fieldCtrl.isVisible('gracePeriod'));
 
-    const handleFormSubmit = (data) => {
+    const finishSubmit = (payload) => {
+        const cleaned = { ...(payload || {}) };
+        delete cleaned.__skipMasterAlterationGate;
+        onSubmit(cleaned);
+    };
+
+    const handleFormSubmit = async (data) => {
         const missing = [];
         if (fieldCtrl.isRequired('creditPeriod') && (data.creditPeriod === undefined || data.creditPeriod === null || data.creditPeriod === '')) missing.push('Credit Period');
         if (fieldCtrl.isRequired('gracePeriod') && (data.gracePeriodDays === undefined || data.gracePeriodDays === null || data.gracePeriodDays === '')) missing.push('Grace Period');
@@ -362,7 +406,62 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
             if (!payload.referralDetails.salespersonId) payload.referralDetails.salespersonId = null;
             if (!payload.referralDetails.distributorId) payload.referralDetails.distributorId = null;
         }
-        onSubmit(payload);
+
+        const prevGst = String(customer?.gstNumber || '').trim();
+        const nextGst = String(payload.gstNumber || '').trim();
+        const gstinNewlyAdded = Boolean(customer?._id) && !prevGst && nextGst.length >= 15;
+
+        const sensitiveProposed = {};
+        const sensFields = [
+            'gstNumber',
+            'gstRegistrationType',
+            'gstStatus',
+            'gstRegistrationEffectiveDate',
+            'gstCancellationEffectiveDate',
+            'state',
+            'billingStateCode',
+            'gstState',
+            'panNumber',
+            'customerName',
+            'company',
+        ];
+        if (customer?._id && !data?.__skipMasterAlterationGate) {
+            for (const f of sensFields) {
+                if (payload[f] !== undefined && String(payload[f] ?? '') !== String(customer[f] ?? '')) {
+                    sensitiveProposed[f] = payload[f];
+                }
+            }
+        }
+
+        if (Object.keys(sensitiveProposed).length && !alterationPending) {
+            setAlterationPending({ payload, proposedChanges: sensitiveProposed });
+            return;
+        }
+
+        if (gstinNewlyAdded && !gstinWarning && !alterationPending) {
+            try {
+                const { data: res } = await api.get(`/gst-reports/customers/${customer._id}/affected-invoices`);
+                const invoices = res?.data?.invoices || [];
+                if (invoices.length > 0) {
+                    setGstinWarning({ payload, invoices, showList: false, navigateToGstr1: false });
+                    return;
+                }
+            } catch {
+                /* non-blocking — still allow save */
+            }
+        }
+
+        finishSubmit(payload);
+    };
+
+    const dismissGstinWarning = (opts = {}) => {
+        const pending = gstinWarning?.payload;
+        const goGstr1 = opts.reviewGstr1;
+        setGstinWarning(null);
+        if (pending) finishSubmit(pending);
+        if (goGstr1) {
+            setTimeout(() => navigate(PATHS.GST?.GSTR1 || '/gst/gstr1'), 400);
+        }
     };
 
     const handleFetchPin = async () => {
@@ -605,6 +704,11 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     {/* Left Sidebar Navigation */}
                     <nav className={styles['form-sidebar']}>
                         <span className={styles['sidebar-label']}>Sections</span>
+                        {customer?._id && (
+                            <div style={{ marginBottom: 10 }}>
+                                <MasterUsagePanel masterType="Customer" masterId={customer._id} />
+                            </div>
+                        )}
                         <a className={styles['sidebar-item']} href="#sec-basic" onClick={e => { e.preventDefault(); document.getElementById('sec-basic')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
                             <span className={styles['sidebar-icon']}>👤</span> Basic Info
                         </a>
@@ -1712,6 +1816,103 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                     setValue('customerType', name, { shouldDirty: true });
                 }}
             />
+
+            {alterationPending && customer?._id && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Customer"
+                    masterId={customer._id}
+                    proposedChanges={alterationPending.proposedChanges}
+                    onClose={() => setAlterationPending(null)}
+                    onApplied={() => {
+                        const full = { ...alterationPending.payload };
+                        const proposed = alterationPending.proposedChanges || {};
+                        // Engine already applied sensitive fields — omit them so normal Save cannot bypass/re-write GST.
+                        for (const f of Object.keys(proposed)) delete full[f];
+                        setAlterationPending(null);
+                        addToast('Sensitive Master fields applied via Impact Preview engine', 'success');
+                        finishSubmit({ ...full, __skipMasterAlterationGate: true });
+                    }}
+                />
+            )}
+            {gstinWarning && (
+                <div
+                    style={{
+                        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 1100,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+                    }}
+                    onClick={() => setGstinWarning(null)}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff', borderRadius: 12, maxWidth: 560, width: '100%',
+                            boxShadow: '0 20px 50px rgba(0,0,0,0.15)', padding: 24,
+                        }}
+                    >
+                        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800, color: '#0f172a' }}>
+                            Earlier invoices without GST details
+                        </h3>
+                        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
+                            This customer has earlier invoices without GST details.
+                            Customer Master updates never rewrite historical invoices automatically.
+                            Use GSTR-1 Validation → Fix from Customer Master when ready.
+                        </p>
+                        <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: '#0f766e' }}>
+                            Affected invoices: {gstinWarning.invoices?.length || 0}
+                        </p>
+                        {gstinWarning.showList && (
+                            <div style={{ maxHeight: 180, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 14, fontSize: 12 }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f8fafc' }}>
+                                            <th style={{ textAlign: 'left', padding: 8 }}>Invoice</th>
+                                            <th style={{ textAlign: 'left', padding: 8 }}>Date</th>
+                                            <th style={{ textAlign: 'left', padding: 8 }}>GSTIN</th>
+                                            <th style={{ textAlign: 'left', padding: 8 }}>POS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(gstinWarning.invoices || []).map((inv) => (
+                                            <tr key={String(inv._id)}>
+                                                <td style={{ padding: 8 }}>{inv.invoiceNumber}</td>
+                                                <td style={{ padding: 8 }}>{inv.invoiceDate ? String(inv.invoiceDate).slice(0, 10) : '—'}</td>
+                                                <td style={{ padding: 8, fontFamily: 'monospace' }}>{inv.customerGstin || '—'}</td>
+                                                <td style={{ padding: 8 }}>{inv.placeOfSupply || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setGstinWarning((w) => ({ ...w, showList: !w.showList }))}
+                                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                View Affected Invoices
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => dismissGstinWarning({ reviewGstr1: true })}
+                                style={{ padding: '8px 12px', borderRadius: 8, border: 'none', background: '#0d9488', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                Review for GSTR-1 Correction
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => dismissGstinWarning()}
+                                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}
+                            >
+                                Ignore for Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

@@ -4,6 +4,9 @@ import { getAccountGroups, getLedgers, createLedger, updateLedger, deleteLedger 
 import { getSuppliers } from '@/services/purchaseApi';
 import { fetchGeocodeAddress } from '@/services/locationApi';
 import { toast } from 'react-hot-toast';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
+import { useMasterAlterationGate } from '@/hooks/useMasterAlterationGate';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Shared style tokens
@@ -28,6 +31,8 @@ const LedgerMasterPage = () => {
     const [panel, setPanel] = useState(null); // null | 'create' | { ledger }
     const [search, setSearch] = useState('');
     const [filterGroup, setFilterGroup] = useState('');
+    const { pending, clearPending, gateSensitiveSave } = useMasterAlterationGate('Ledger');
+    const [effectiveFrom, setEffectiveFrom] = useState('');
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -58,6 +63,10 @@ const LedgerMasterPage = () => {
         setSaving(true);
         try {
             if (panel?.ledger?._id) {
+                if (gateSensitiveSave(panel.ledger, data)) {
+                    setSaving(false);
+                    return;
+                }
                 await updateLedger(panel.ledger._id, data);
                 toast.success('Ledger updated successfully');
             } else {
@@ -67,7 +76,13 @@ const LedgerMasterPage = () => {
             setPanel(null);
             fetchData();
         } catch (e) {
-            toast.error(e.response?.data?.message || 'Failed to save ledger');
+            const body = e.response?.data;
+            if (e.response?.status === 409 && body?.data?.requiresImpactPreview) {
+                // Backend Impact Preview gate for Ledger Group
+                toast(body.message || 'Impact Preview required', { icon: 'ℹ️' });
+            } else {
+                toast.error(body?.message || 'Failed to save ledger');
+            }
         } finally {
             setSaving(false);
         }
@@ -116,7 +131,12 @@ const LedgerMasterPage = () => {
                         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#1e293b' }}>
                             {panel === 'create' ? '+ Create New Ledger' : `✎ Edit: ${panel.ledger?.name}`}
                         </h3>
-                        <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 4 }}><X size={18} /></button>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            {panel?.ledger?._id && (
+                                <MasterUsagePanel masterType="Ledger" masterId={panel.ledger._id} />
+                            )}
+                            <button onClick={() => setPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 4 }}><X size={18} /></button>
+                        </div>
                     </div>
                     <LedgerForm
                         key={panel === 'create' ? 'create' : panel?.ledger?._id || 'ledger'}
@@ -127,6 +147,23 @@ const LedgerMasterPage = () => {
                         loading={saving}
                     />
                 </div>
+            )}
+
+            {pending && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Ledger"
+                    masterId={pending.masterId}
+                    proposedChanges={pending.proposedChanges}
+                    effectiveFrom={effectiveFrom || undefined}
+                    onClose={clearPending}
+                    onApplied={() => {
+                        clearPending();
+                        setPanel(null);
+                        fetchData();
+                        toast.success('Ledger Master alteration applied');
+                    }}
+                />
             )}
 
             {/* Search & Filter Bar */}
