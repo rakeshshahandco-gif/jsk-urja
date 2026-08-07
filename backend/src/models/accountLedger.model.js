@@ -11,7 +11,22 @@ const accountLedgerSchema = new mongoose.Schema({
         ref: 'AccountGroup',
         default: null
     },
-    groupName: { type: String }, // Denormalized for quick reports
+    groupName: { type: String }, // Denormalized for quick reports (current active)
+    /**
+     * Bounded effective-dated group classification history (max ~20).
+     * Historical TB/P&L/BS resolve group as-of date from this; not a new collection.
+     */
+    groupHistory: [
+        {
+            groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'AccountGroup', default: null },
+            groupNameSnapshot: { type: String, default: '' },
+            effectiveFrom: { type: Date, default: null },
+            effectiveTo: { type: Date, default: null },
+            changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+            changedAt: { type: Date, default: Date.now },
+            reason: { type: String, default: '' },
+        },
+    ],
 
     // Entry Types (Compatibility/Tracking)
     type: {
@@ -172,6 +187,12 @@ const accountLedgerSchema = new mongoose.Schema({
     /** Section-wise TDS liability ledger (under Duties & Taxes → TDS Payable) — one per section recommended. */
     isTdsPayableLedger: { type: Boolean, default: false },
     tdsPayableSectionCode: { type: String, trim: true, uppercase: true, default: '' },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company',
+        index: true,
+        default: null,
+    },
 }, { timestamps: true });
 
 accountLedgerSchema.index({ companyId: 1, name: 1 }, { unique: true });

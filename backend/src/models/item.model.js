@@ -163,7 +163,13 @@ const itemSchema = new mongoose.Schema({
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }
+    },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Company',
+        index: true,
+        default: null,
+    },
 
 }, { timestamps: true });
 

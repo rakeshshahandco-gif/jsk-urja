@@ -13,6 +13,9 @@ import { useItemTemplateFieldSettings } from '@/hooks/useItemTemplateFieldSettin
 import { useIndustryInventoryLabels } from '@/hooks/useIndustryInventoryLabels';
 import { FIELD_BY_KEY, ITEM_MASTER_TEMPLATE_FIELDS } from '@/constants/itemMasterTemplateFields';
 import { ItemTextileImagesTab } from './ItemTextileImagesTab';
+import MasterAlterationImpactModal from '@/components/masters/MasterAlterationImpactModal';
+import MasterUsagePanel from '@/components/masters/MasterUsagePanel';
+import { useMasterAlterationGate } from '@/hooks/useMasterAlterationGate';
 
 function getFormValue(form, formField) {
     if (!formField) return undefined;
@@ -121,6 +124,8 @@ const ItemFormPage = () => {
     const [saving, setSaving] = useState(false);
     const [generatingCode, setGeneratingCode] = useState(false);
     const [originalItemName, setOriginalItemName] = useState('');
+    const [originalItem, setOriginalItem] = useState(null);
+    const { pending, clearPending, gateSensitiveSave } = useMasterAlterationGate('Item');
     const [itemTypes, setItemTypes] = useState([]);
     const [itemGroups, setItemGroups] = useState([]);
 
@@ -143,6 +148,7 @@ const ItemFormPage = () => {
                     textile: { ...DEFAULT.textile, ...(data.textile || {}) },
                 });
                 setOriginalItemName(data.itemName || '');
+                setOriginalItem(data);
             })
             .catch((err) => {
                 console.error('Load Item Error:', err);
@@ -243,6 +249,10 @@ const ItemFormPage = () => {
         try {
             if (isEdit) {
                 const { currentStock, faultyStock, ...payload } = form;
+                if (originalItem && gateSensitiveSave(originalItem, payload)) {
+                    setSaving(false);
+                    return;
+                }
                 await updateItem(id, payload);
             } else {
                 const payload = {
@@ -275,6 +285,7 @@ const ItemFormPage = () => {
                     <Package size={15} style={{ color: '#2563eb' }} />
                     <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{isEdit ? 'Edit Item' : 'New Item'}</span>
                     {form.itemCode && <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#2563eb', background: '#eff6ff', padding: '1px 8px', borderRadius: 4, fontWeight: 700 }}>{form.itemCode}</span>}
+                    {isEdit && id && <MasterUsagePanel masterType="Item" masterId={id} />}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => { if (window.confirm('Discard changes?')) navigate('/inventory/items'); }} style={{ height: 30, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
@@ -691,6 +702,21 @@ const ItemFormPage = () => {
                     <Save size={13} /> {saving ? 'Saving…' : (isEdit ? 'Update Item' : 'Save Item')}
                 </button>
             </div>
+
+            {pending && (
+                <MasterAlterationImpactModal
+                    open
+                    masterType="Item"
+                    masterId={pending.masterId}
+                    proposedChanges={pending.proposedChanges}
+                    onClose={clearPending}
+                    onApplied={() => {
+                        clearPending();
+                        addToast('Item Master alteration applied', 'success');
+                        navigate('/inventory/items');
+                    }}
+                />
+            )}
         </div>
     );
 };

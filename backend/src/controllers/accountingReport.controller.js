@@ -14,69 +14,15 @@ import Customer from '../models/customer.model.js';
 import moment from 'moment';
 import * as gpAnalysis from '../services/gpAnalysis.service.js';
 import { getCashFlowStatement } from '../services/cashFlow.service.js';
+import { getLedgerBalancesByEntryGroup } from '../services/masterAlteration/ledgerBalanceByGroup.service.js';
 
 /**
- * Common Logic to Fetch All Ledger Balances for a given period
- * openingBalance + (DebitEntries - CreditEntries)
+ * Common Logic to Fetch All Ledger Balances for a given period.
+ * Group classification is resolved per LedgerEntry.date via AccountLedger.groupHistory
+ * (mid-FY group changes split amounts correctly across groups).
  */
 const getLedgerBalances = async (startDate, endDate) => {
-    const ledgers = await AccountLedger.find({}).lean();
-    const groups = await AccountGroup.find({}).lean();
-    
-    // Group Map for quick lookup
-    const groupMap = {};
-    groups.forEach(g => groupMap[g._id.toString()] = g);
-
-    // Sum of entries up to endDate
-    const entries = await LedgerEntry.aggregate([
-        {
-            $match: {
-                date: { $lte: new Date(endDate) }
-            }
-        },
-        {
-            $group: {
-                _id: '$ledgerId',
-                totalDebit: { 
-                    $sum: { $cond: [{ $eq: ['$type', 'Debit'] }, '$amount', 0] } 
-                },
-                totalCredit: { 
-                    $sum: { $cond: [{ $eq: ['$type', 'Credit'] }, '$amount', 0] } 
-                }
-            }
-        }
-    ]);
-
-    const entryBalances = {};
-    entries.forEach(e => {
-        entryBalances[e._id.toString()] = { 
-            debit: e.totalDebit, 
-            credit: e.totalCredit, 
-            net: e.totalDebit - e.totalCredit 
-        };
-    });
-
-    // Calculate closing balances
-    const ledgerReports = ledgers.map(l => {
-        const stats = entryBalances[l._id.toString()] || { debit: 0, credit: 0, net: 0 };
-        const signedOpeningBalance = (l.drCr === 'Cr') ? -(l.openingBalance || 0) : (l.openingBalance || 0);
-        const closingBalance = signedOpeningBalance + stats.net;
-        const group = l.underGroup ? groupMap[l.underGroup.toString()] : null;
-
-        return {
-            ledgerId: l._id,
-            name: l.name,
-            groupName: l.groupName || group?.name || 'Unmapped',
-            groupId: l.underGroup,
-            nature: group?.nature || 'General',
-            affectGrossProfit: group?.affectGrossProfit || false,
-            closingBalance,
-            absBalance: Math.abs(closingBalance),
-            balanceType: closingBalance >= 0 ? 'Debit' : 'Credit'
-        };
-    });
-
-    return { ledgerReports, groups };
+    return getLedgerBalancesByEntryGroup(startDate, endDate);
 };
 
 /**
