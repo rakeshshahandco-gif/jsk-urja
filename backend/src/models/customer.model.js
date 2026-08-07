@@ -548,14 +548,14 @@ const customerSchema = mongoose.Schema(
 // Pre-save hook for GST Automation
 customerSchema.pre('save', function (next) {
     // 1. Handle GST Registration Type based on GST Number
+    // Blank GSTIN → always Consumer (exact enum). With GSTIN → auto Registered only from Consumer/Unregistered/empty.
     if (this.gstNumber && this.gstNumber.trim().length > 0) {
         if (!this.gstRegistrationType || this.gstRegistrationType === 'Unregistered' || this.gstRegistrationType === 'Consumer') {
             this.gstRegistrationType = 'Registered';
         }
     } else {
-        if (!this.gstRegistrationType || this.gstRegistrationType === 'Registered' || this.gstRegistrationType === 'Unregistered') {
-            this.gstRegistrationType = 'Consumer';
-        }
+        this.gstNumber = '';
+        this.gstRegistrationType = 'Consumer';
     }
 
     // 2. Handle GST Type based on State or GST Number Prefix

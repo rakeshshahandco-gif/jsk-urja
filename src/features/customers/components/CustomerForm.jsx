@@ -152,7 +152,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
                 tags: [],
                 gstNumber: '',
                 gstType: '',
-                gstRegistrationType: '',
+                gstRegistrationType: 'Consumer',
                 customerActivityType: '',
                 exportCountry: '',
                 contactPersons: [
@@ -359,7 +359,7 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         return normalized;
     };
 
-    const { register, control, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm({
+    const { register, control, handleSubmit, setValue, getValues, watch, formState: { errors }, reset } = useForm({
         defaultValues: normalizeCustomerData(customer),
     });
 
@@ -391,11 +391,27 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
         if (fieldCtrl.isRequired('creditPeriod') && (data.creditPeriod === undefined || data.creditPeriod === null || data.creditPeriod === '')) missing.push('Credit Period');
         if (fieldCtrl.isRequired('gracePeriod') && (data.gracePeriodDays === undefined || data.gracePeriodDays === null || data.gracePeriodDays === '')) missing.push('Grace Period');
         if (fieldCtrl.isRequired('creditLimit') && (data.creditLimit === undefined || data.creditLimit === null || data.creditLimit === '')) missing.push('Credit Limit');
-        if (fieldCtrl.isRequired('gstNumber') && !String(data.gstNumber || '').trim()) missing.push('GST No');
+        // Consumer / blank GSTIN must never require GST No
+        const gstTrim = String(data.gstNumber || '').trim();
+        if (!gstTrim) {
+            data.gstNumber = '';
+            data.gstRegistrationType = 'Consumer';
+        }
+        const regType = String(data.gstRegistrationType || '').trim();
+        if (fieldCtrl.isGstNumberRequired?.(regType) && !gstTrim) {
+            missing.push('GST No');
+        }
         if (fieldCtrl.isRequired('panNumber') && !String(data.panNumber || '').trim()) missing.push('PAN No');
         if (missing.length) {
             addToast(`Required fields: ${missing.join(', ')}`, 'error');
             return;
+        }
+        // Inconsistent legacy: blank GSTIN but Registered-type — warn; save still forces Consumer
+        if (!gstTrim && customer?._id && ['Registered', 'Composite', 'SEZ', 'UIN', 'Export'].includes(String(customer.gstRegistrationType || ''))) {
+            const ok = window.confirm(
+                'GST Registration Type is inconsistent because no GSTIN is available. Saving this Customer will change Registration Type to Consumer.'
+            );
+            if (!ok) return;
         }
         // Blank "-- Select --" options send ""; Mongo ObjectId fields need null.
         const payload = { ...data };
@@ -572,13 +588,19 @@ export const CustomerForm = ({ customer, onSubmit, onCancel, isSubmitting = fals
     }, [stateValue, gstNumberValue, setValue]);
 
     // Automate GST Registration Type based on GST Number
+    // Blank → Consumer. GSTIN present → only auto-upgrade from Consumer/Unregistered/empty to Registered
+    // (do not overwrite Composite / SEZ / UIN / Export).
     useEffect(() => {
-        if (gstNumberValue && gstNumberValue.trim().length > 0) {
-            setValue('gstRegistrationType', 'Registered', { shouldValidate: true, shouldDirty: true });
+        const gst = String(gstNumberValue || '').trim();
+        const currentType = String(getValues('gstRegistrationType') || '').trim();
+        if (gst.length > 0) {
+            if (!currentType || currentType === 'Consumer' || currentType === 'Unregistered') {
+                setValue('gstRegistrationType', 'Registered', { shouldValidate: true, shouldDirty: true });
+            }
         } else {
             setValue('gstRegistrationType', 'Consumer', { shouldValidate: true, shouldDirty: true });
         }
-    }, [gstNumberValue, setValue]);
+    }, [gstNumberValue, setValue, getValues]);
 
     useEffect(() => {
         if (!isEnabled('customer.customerType')) return;

@@ -15,6 +15,7 @@ import {
 import { discoverDependencies } from './dependencyDiscovery.service.js';
 import { assessLedgerGroupChange } from './accountingImpact.service.js';
 import { resolveCustomerGstOnInvoiceDate } from './gstOpenRevalidation.service.js';
+import { applyBlankGstinConsumerRule } from '../../utils/customerGstConsistency.js';
 
 function oid(id) {
     try {
@@ -123,7 +124,13 @@ export async function buildImpactPreview({
         throw err;
     }
 
-    const changes = detectChangedFields(masterType, master, proposedChanges || {});
+    // Keep Impact Preview aligned with apply: blank GSTIN → Consumer (both fields visible).
+    const proposed = { ...(proposedChanges || {}) };
+    if (masterType === MASTER_TYPES.CUSTOMER && Object.prototype.hasOwnProperty.call(proposed, 'gstNumber')) {
+        applyBlankGstinConsumerRule(proposed);
+    }
+
+    const changes = detectChangedFields(masterType, master, proposed);
     if (!changes.length) {
         return {
             masterType,
@@ -176,7 +183,7 @@ export async function buildImpactPreview({
             // Sample first invoice date-effective resolve
             if (deps.invoices?.[0]) {
                 const inv = deps.invoices[0];
-                const merged = { ...master.toObject(), ...proposedChanges };
+                const merged = { ...master.toObject(), ...proposed };
                 gstPreviewSample = await resolveCustomerGstOnInvoiceDate({
                     companyId,
                     customerId: masterId,

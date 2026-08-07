@@ -36,6 +36,8 @@ import {
     classifyFromGroupChain,
     deriveLedgerFieldsFromClassification,
 } from '../../utils/ledgerClassification.utils.js';
+import { applyBlankGstinConsumerRule } from '../../utils/customerGstConsistency.js';
+import { appendGstHistoryIfChanged } from './embeddedGstHistory.js';
 
 async function applyGroupDerivedClassification(body) {
     if (!body?.underGroup) return;
@@ -242,8 +244,6 @@ function assertPermissions(user, masterType, changes) {
         }
     }
 }
-
-import { appendGstHistoryIfChanged } from './embeddedGstHistory.js';
 
 async function collectionExists(name) {
     const cols = await mongoose.connection.db.listCollections({ name }).toArray();
@@ -513,6 +513,11 @@ export async function applyMasterAlteration({
         const prior = await Customer.findOne({ _id: oid(masterId), isDeleted: { $ne: true } }).lean();
         if (!prior) throw new ApiError(httpStatus.NOT_FOUND, 'Customer not found');
         assertCompanyOwnership(prior, companyId, 'Customer');
+
+        // Blank GSTIN → Consumer (findOneAndUpdate bypasses model pre-save)
+        if (Object.prototype.hasOwnProperty.call(safeProposed, 'gstNumber')) {
+            applyBlankGstinConsumerRule(safeProposed);
+        }
 
         master = await Customer.findOneAndUpdate(
             { _id: oid(masterId), isDeleted: { $ne: true } },
