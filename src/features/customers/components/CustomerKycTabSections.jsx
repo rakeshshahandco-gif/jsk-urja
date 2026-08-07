@@ -58,21 +58,26 @@ export function CustomerGstTaxTab({
         <div className={styles.grid4}>
             {gstOn && (
                 <>
-                    <Field label={`GST NO${fieldCtrl?.isRequired('gstNumber') ? ' *' : ''}`}>
+                    <Field label={`GST NO${fieldCtrl?.isGstNumberRequired?.(watch('gstRegistrationType')) ? ' *' : ''}`}>
                         <Input
                             {...register('gstNumber', {
                                 pattern: {
-                                    value: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+                                    value: /^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
                                     message: 'Invalid GST format',
                                 },
-                                required: fieldCtrl?.isRequired('gstNumber') ? 'GST No is required' : false,
+                                validate: (value) => {
+                                    const type = watch('gstRegistrationType');
+                                    const needs = fieldCtrl?.isGstNumberRequired?.(type);
+                                    if (needs && !String(value || '').trim()) return 'GST No is required';
+                                    return true;
+                                },
                             })}
                             placeholder="22AAAAA0000A1Z5"
                             maxLength={15}
                             style={{ textTransform: 'uppercase', fontWeight: 700 }}
                             readOnly={fieldCtrl?.isReadOnly('gstNumber')}
                             disabled={fieldCtrl?.isReadOnly('gstNumber')}
-                            onChange={(e) => setValue('gstNumber', e.target.value.replace(/\s/g, '').toUpperCase(), { shouldDirty: true })}
+                            onChange={(e) => setValue('gstNumber', e.target.value.replace(/\s/g, '').toUpperCase(), { shouldDirty: true, shouldValidate: true })}
                         />
                         {errors.gstNumber && <span className={styles.error}>{errors.gstNumber.message}</span>}
                     </Field>
