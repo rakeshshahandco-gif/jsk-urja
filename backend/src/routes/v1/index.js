@@ -183,6 +183,7 @@ router.get('/health', (req, res) => {
         industryType: identity.industryType,
         port: identity.port,
         environment: identity.environment,
+        appEnv: identity.appEnv,
         databaseName: identity.databaseName,
     });
 });

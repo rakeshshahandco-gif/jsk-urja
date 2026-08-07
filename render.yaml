@@ -1,5 +1,5 @@
 services:
-  # Backend Web Service (serves both API and React frontend)
+  # Production — DO NOT use for Master Alteration staging deploys
   - type: web
     name: jsk-urja-backend
     env: node
@@ -10,3 +10,31 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+
+  # JSK URJA STAGING ONLY — separate service, separate MongoDB, never jskurja-prod
+  - type: web
+    name: jsk-urja-staging
+    env: node
+    rootDir: .
+    buildCommand: node scripts/render-deploy-build.cjs && cd backend && npm install
+    startCommand: node backend/src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: INDUSTRY_TYPE
+        value: electronics
+      - key: APPLICATION_KEY
+        value: jsk-urja-staging
+      - key: VITE_APP_ENV
+        value: staging
+      # Set in Render Dashboard from the SEPARATE Atlas staging cluster only:
+      - key: MONGODB_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRATION_MINUTES
+        value: "30"
+      - key: JWT_REFRESH_EXPIRATION_DAYS
+        value: "30"

@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import Joi from 'joi';
+import { assertSafeMongoUrl } from '../utils/mongoDatabaseGuard.js';
 
 // Capture shell/platform PORT before any dotenv load (Render injects PORT; local tests may set PORT=10000).
 const portFromShell = process.env.PORT;
@@ -26,6 +27,8 @@ if (portFromShell !== undefined && String(portFromShell).trim() !== '') {
 
 const envSchema = Joi.object().keys({
     NODE_ENV: Joi.string().valid('production', 'development', 'test').required(),
+    // Logical deploy lane: staging uses NODE_ENV=production + APP_ENV=staging
+    APP_ENV: Joi.string().valid('production', 'development', 'test', 'staging').optional(),
     // Local JSK default 5100; Render always injects process.env.PORT
     PORT: Joi.number().default(5100),
     MONGODB_URL: Joi.string().optional().description('Mongo DB url (preferred)'),
@@ -44,8 +47,14 @@ if (!mongoUrl) {
     throw new Error('Config validation error: MONGODB_URL, MONGO_URI, or MONGODB_URI is required');
 }
 
+const appEnv = String(envVars.APP_ENV || envVars.NODE_ENV || '').trim().toLowerCase() || envVars.NODE_ENV;
+
+// Fail fast before listen/connect when staging/dev points at jskurja-prod.
+assertSafeMongoUrl(mongoUrl, { appEnv, nodeEnv: envVars.NODE_ENV });
+
 export default {
     env: envVars.NODE_ENV,
+    appEnv,
     port: envVars.PORT,
     mongoose: {
         url: mongoUrl,

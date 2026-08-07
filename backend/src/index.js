@@ -24,11 +24,25 @@ connectDB().then((connected) => {
         initializeUserManagement().catch(err => logger.error('User Init Error:', err));
         ensureDefaultIndustryTemplates().catch(err => logger.error('Industry Template Seed Error:', err));
         
-        // Start Cron Jobs
+        // Start Cron Jobs (staging: no WhatsApp/Email bulk auto-send side effects)
         startTaskCron();
         startReminderCron();
-        startWhatsappBulkCron();
-        startEmailBulkCron();
+        if (String(config.appEnv || '').toLowerCase() === 'staging') {
+            logger.info('[STAGING] WhatsApp/Email bulk crons disabled');
+        } else {
+            startWhatsappBulkCron();
+            startEmailBulkCron();
+        }
+
+        // SLS: reclaim stale CP6–CP8 processing locks after restart (no auto campaign restart)
+        setTimeout(() => {
+            import('./services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.autoProcessing.service.js')
+                .then((mod) => mod.recoverStaleAutoProcessingOnStartup())
+                .then((summary) => {
+                    logger.info(`[SLS] Startup stale-job recovery: ${JSON.stringify(summary)}`);
+                })
+                .catch((err) => logger.error(`[SLS] Startup recovery failed: ${err?.message || err}`));
+        }, 8000);
     }
 
     // Create HTTP server wrapping Express app
@@ -44,12 +58,16 @@ connectDB().then((connected) => {
         logger.info(`Listening on ${listenHost}:${config.port}`);
         logger.info(`🌐 API available at: http://localhost:${config.port}/api/v1`);
 
-        // Auto-reconnect all saved per-user WhatsApp sessions (after 5s delay for socket init)
-        setTimeout(() => {
-            WhatsAppService.initializeSavedSessions().catch(e =>
-                logger.error(`[WhatsApp] Session init error: ${e.message}`)
-            );
-        }, 5000);
+        // Auto-reconnect WhatsApp sessions — skipped on staging to avoid live customer chat side effects
+        if (String(config.appEnv || '').toLowerCase() === 'staging') {
+            logger.info('[STAGING] WhatsApp session auto-reconnect disabled');
+        } else {
+            setTimeout(() => {
+                WhatsAppService.initializeSavedSessions().catch(e =>
+                    logger.error(`[WhatsApp] Session init error: ${e.message}`)
+                );
+            }, 5000);
+        }
     });
 
     httpServer.on('error', (err) => {

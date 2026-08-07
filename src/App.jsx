@@ -5,6 +5,7 @@ import { PATHS } from '@/routes/paths';
 import { useForm } from 'react-hook-form';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { StagingEnvBadge } from './components/layout/StagingEnvBadge';
 import ModuleLockBanner from './components/module/ModuleLockBanner';
 import { TopMenuBar } from './components/layout/TopMenuBar/TopMenuBar';
 import { Button, Input, Select, ModalProvider, useModal } from '@/components/ui';
@@ -20,6 +21,10 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import CompanyProfilePage from '@/features/settings/CompanyProfilePage';
 import CompaniesListPage from '@/features/companies/CompaniesListPage';
 import WhatsAppSettingsPage from '@/features/settings/WhatsAppSettingsPage';
+import WhatsAppHomePage from '@/features/whatsapp/pages/WhatsAppHomePage';
+import CommunicationHomePage from '@/features/communication/pages/CommunicationHomePage';
+import AdminHomePage from '@/features/admin/pages/AdminHomePage';
+import SuperAdminHomePage from '@/features/superAdmin/pages/SuperAdminHomePage';
 import { CustomerMasterReport } from '@/features/reports/CustomerMasterReport';
 import CustomerKycReportsPage from '@/features/reports/CustomerKycReportsPage';
 import SupplierKycReportsPage from '@/features/reports/SupplierKycReportsPage';
@@ -122,6 +127,7 @@ import PettyCashEntryPage from '@/features/pettyCash/PettyCashEntryPage';
 import PettyCashImportPage from '@/features/pettyCash/PettyCashImportPage';
 import PettyCashReportsPage from '@/features/pettyCash/PettyCashReportsPage';
 import PettyCashSettingsPage from '@/features/pettyCash/PettyCashSettingsPage';
+import CreditNoteLedgerConfigPage from '@/features/accounts/CreditNoteLedgerConfigPage';
 import WhatsappBulkCampaignsPage from '@/features/whatsappBulk/WhatsappBulkCampaignsPage';
 import WhatsappBulkMatterPage from '@/features/whatsappBulk/WhatsappBulkMatterPage';
 import WhatsappBulkBlacklistPage from '@/features/whatsappBulk/WhatsappBulkBlacklistPage';
@@ -137,6 +143,10 @@ import {
     WhatsAppAIReplyDraftsPage,
     WhatsAppAIKnowledgePage,
     WhatsAppAIDocumentsPage,
+    WhatsAppAIPriceListsPage,
+    WhatsAppAIIntentKeywordPage,
+    WhatsAppAIKnowledgePackagesPage,
+    WhatsAppAIUnmatchedLearningPage,
     WhatsAppAIRulesPage,
     WhatsAppAISettingsPage,
     WhatsAppAIAuditLogsPage,
@@ -342,6 +352,8 @@ import ItcRegisterPage from '@/features/reports/gst/ItcRegisterPage';
 import GstPayableSummary from '@/features/reports/gst/GstPayableSummary';
 import HsnSummaryPage from '@/features/reports/gst/HsnSummaryPage';
 import GstLedgerPage from '@/features/reports/gst/GstLedgerPage';
+import GstVerificationProviderSettingsPage from '@/features/settings/GstVerificationProviderSettingsPage';
+import GstConnectedServicesPage from '@/features/settings/GstConnectedServicesPage';
 
 import { CustomerAnalysisTab } from '@/features/mis/CustomerAnalysisTab';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -533,6 +545,7 @@ const AppLayout = () => {
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}>
                 <TopMenuBar />
+                <StagingEnvBadge />
                 <Header />
                 <ModuleLockBanner />
                 <main
@@ -569,7 +582,8 @@ const AppLayout = () => {
                         <Route path="/tasks" element={<Navigate to="/tasks/home" replace />} />
                         <Route path="/tasks/home" element={<ProtectedRoute><ModuleHomePage moduleName="Task Management" title="Task Management - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path="/admin" element={<Navigate to="/admin/home" replace />} />
-                        <Route path="/admin/home" element={<ProtectedRoute><ModuleHomePage moduleName="Admin" title="Admin - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path="/admin/home" element={<ProtectedRoute requirePermission="admin"><AdminHomePage /></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.COMMUNICATION_HOME} element={<ProtectedRoute><CommunicationHomePage /></ProtectedRoute>} />
                         <Route path={PATHS.CHINA_SUPPLIER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="China Sourcing" title="China Sourcing - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.EWAY_BILL.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="eway-bill" title="E-Way Bills - Home" isStatic={false} /></ProtectedRoute>} />
                         <Route path={PATHS.TRANSPORTERS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="transporters" title="Transporters - Home" isStatic={false} /></ProtectedRoute>} />
@@ -608,6 +622,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.PRINT_FORMAT_DESIGNER} element={<ProtectedRoute requirePermission="admin.print_format_designer.view"><PrintFormatDesignerPage /></ProtectedRoute>} />
                         <Route path={PATHS.E_INVOICE.LIST} element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceListPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/e-invoices/draft/:id" element={<ProtectedRoute requirePermission="sales"><FeatureGuard feature="gst.eInvoiceRequired"><EInvoiceDraftPage /></FeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_HOME} element={<ProtectedRoute><WhatsAppHomePage /></ProtectedRoute>} />
                         <Route path="/whatsapp" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppSettingsPage /></ProtectedRoute>} />
                         <Route path="/whatsapp/chat" element={<ProtectedRoute requirePermission="whatsapp.whatsapp_settings.view"><WhatsAppChatPage /></ProtectedRoute>} />
                         {/* Legacy redirect for old URL */}
@@ -630,6 +645,13 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.REPLY_DRAFTS} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.DRAFTS_VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIReplyDraftsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_MANAGE, WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_APPROVE]}><WhatsAppAIKnowledgePage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.DOCUMENTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE, WHATSAPP_AI_PERMISSIONS.DOCUMENTS_SHARE]}><WhatsAppAIDocumentsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.PRICE_LISTS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE, WHATSAPP_AI_PERMISSIONS.PRICE_LIST_MANAGE]}><WhatsAppAIPriceListsPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.INTENT_KEYWORDS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.INTENT_VIEW, WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE]}><WhatsAppAIIntentKeywordPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE_PACKAGES} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.KNOWLEDGE_PACKAGE_VIEW, WHATSAPP_AI_PERMISSIONS.DOCUMENTS_MANAGE, WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE]}><WhatsAppAIKnowledgePackagesPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.UNMATCHED} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.UNMATCHED_VIEW, WHATSAPP_AI_PERMISSIONS.KEYWORD_SUGGESTION_VIEW, WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE]}><WhatsAppAIUnmatchedLearningPage /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.KEYWORD_SUGGESTIONS} element={<ProtectedRoute><WhatsAppAiFeatureGuard><WhatsAppAiAnyPermission permissions={[WHATSAPP_AI_PERMISSIONS.KEYWORD_SUGGESTION_VIEW, WHATSAPP_AI_PERMISSIONS.UNMATCHED_VIEW, WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE]}><WhatsAppAIUnmatchedLearningPage defaultTab="suggestions" /></WhatsAppAiAnyPermission></WhatsAppAiFeatureGuard></ProtectedRoute>} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.INTENT_KEYWORDS_LEGACY} element={<Navigate to={PATHS.SETTINGS.WHATSAPP_AI.INTENT_KEYWORDS} replace />} />
+                        <Route path={PATHS.SETTINGS.WHATSAPP_AI.UNMATCHED_LEGACY} element={<Navigate to={PATHS.SETTINGS.WHATSAPP_AI.UNMATCHED} replace />} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.RULES} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE}><WhatsAppAiFeatureGuard><WhatsAppAIRulesPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.SETTINGS} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.SETTINGS_MANAGE}><WhatsAppAiFeatureGuard><WhatsAppAISettingsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.SETTINGS.WHATSAPP_AI.AUDIT} element={<ProtectedRoute requirePermission={WHATSAPP_AI_PERMISSIONS.AUDIT_VIEW}><WhatsAppAiFeatureGuard><WhatsAppAIAuditLogsPage /></WhatsAppAiFeatureGuard></ProtectedRoute>} />
@@ -683,6 +705,8 @@ const AppLayout = () => {
                         <Route path={PATHS.GST.ITC_REGISTER} element={<ProtectedRoute requirePermission="gst.itc_register.view"><ItcRegisterPage /></ProtectedRoute>} />
                         <Route path={PATHS.GST.HSN_SUMMARY} element={<ProtectedRoute requirePermission="gst.hsn_summary.view"><HsnSummaryPage /></ProtectedRoute>} />
                         <Route path={PATHS.GST.LEDGER} element={<ProtectedRoute requirePermission="gst.gst_ledger.view"><GstLedgerPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.VERIFICATION_PROVIDER} element={<ProtectedRoute requirePermission="gst.verification.view"><GstVerificationProviderSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.GST.CONNECTED_SERVICES} element={<ProtectedRoute requirePermission="gst.connected.view_session"><GstConnectedServicesPage /></ProtectedRoute>} />
                         {/* Legacy /reports/gst* URLs → GST module */}
                         <Route path="/reports/gstr1" element={<Navigate to={PATHS.GST.GSTR1} replace />} />
                         <Route path="/reports/gstr3b" element={<Navigate to={PATHS.GST.GSTR3B} replace />} />
@@ -851,6 +875,7 @@ const AppLayout = () => {
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_IMPORT} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.import"><PettyCashImportPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_REPORTS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.view"><PettyCashReportsPage /></ProtectedRoute>} />
                         <Route path={PATHS.ACCOUNTS.PETTY_CASH_SETTINGS} element={<ProtectedRoute requirePermission="voucher_entry.petty_cash.edit"><PettyCashSettingsPage /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.CREDIT_NOTE_LEDGER_CONFIG} element={<ProtectedRoute requirePermission="accounts.ledger_master.edit"><CreditNoteLedgerConfigPage /></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SMART_IMPORT_HUB} element={<ProtectedRoute requirePermission="import_utility.import_utility.view"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportHubPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path="/documents/smart-import/batch/:importType" element={<ProtectedRoute requirePermission="import_utility.import_utility.upload"><FeatureGuard feature="accounting.enableAiSmartImport"><SmartImportBatchPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_DRAFTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryDraftsPage /></FeatureGuard></ProtectedRoute>} />
@@ -952,6 +977,7 @@ const AppLayout = () => {
                         <Route path={PATHS.EINVOICE} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         <Route path={PATHS.E_INVOICE.ROOT} element={<Navigate to={PATHS.E_INVOICE.LIST} replace />} />
                         {/* SaaS Super Admin Routes */}
+                        <Route path={PATHS.SAAS_ADMIN.HOME} element={<ProtectedPlatformRoute><SuperAdminHomePage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.DASHBOARD} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.COMPANIES} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SAAS_ADMIN.SUBSCRIPTIONS} element={<ProtectedPlatformRoute><SaasAdminPage /></ProtectedPlatformRoute>} />
