@@ -61,6 +61,33 @@ export async function resolveCustomerGstOnInvoiceDate({
     invoiceDate,
     customerFallback = {},
 }) {
+    // Master correction (not statutory cancellation):
+    // Current master has blank GSTIN and no cancellation date → open GSTR-1 must
+    // follow corrected master as B2C. Do not keep prior Active embedded GSTIN on
+    // the invoice date (that left HALOMAX / similar invoices stuck in B2B).
+    const currentGstin = String(gstin || customerFallback.gstNumber || '')
+        .trim()
+        .toUpperCase();
+    const hasCancellation = Boolean(customerFallback.gstCancellationEffectiveDate);
+    if (!currentGstin && !hasCancellation) {
+        const currentType = String(
+            customerFallback.gstRegistrationType || customerFallback.gstRegistrationStatus || '',
+        ).trim();
+        return {
+            statusOnTransactionDate: currentType === 'Consumer' ? 'Unknown' : 'Unknown',
+            effectiveFrom: null,
+            effectiveTo: null,
+            sourceHistoryId: null,
+            resolutionReason:
+                'Master corrected to blank GSTIN (Consumer/unregistered) without cancellation date — open periods treat as B2C',
+            gstinOnDate: '',
+            recommendedCategory: 'B2C',
+            recommendedTreatment: 'Unregistered / B2C (master correction)',
+            historyRowCount: 0,
+            embeddedSource: 'masterCorrectionUnregister',
+        };
+    }
+
     const { resolveEmbeddedGstOnDate } = await import('./embeddedGstHistory.js');
     const embedded = resolveEmbeddedGstOnDate(
         {
@@ -272,12 +299,14 @@ export async function revalidateCustomerOpenGst({
                 customerFallback: customer,
             });
 
-            const proposedGstin = resolution.gstinOnDate;
+            const proposedGstin = String(resolution.gstinOnDate || '').trim().toUpperCase();
+            const masterType = String(customer.gstRegistrationType || '').trim();
             const proposedReg =
                 proposedGstin.length >= 15
-                    ? customer.gstRegistrationType || 'Registered'
-                    : customer.gstRegistrationType || 'Unregistered';
-            const proposedCategory = resolution.recommendedCategory;
+                    ? (['Consumer', 'Unregistered', ''].includes(masterType) ? 'Registered' : masterType || 'Registered')
+                    : (masterType || 'Consumer');
+            const proposedCategory =
+                proposedGstin.length >= 15 ? resolution.recommendedCategory || 'B2B' : 'B2C';
 
             if (filed) {
                 summary.filedProtected += 1;
