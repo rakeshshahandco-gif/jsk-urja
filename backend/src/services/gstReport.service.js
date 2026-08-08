@@ -730,9 +730,19 @@ function validateInvoices(invoices) {
       });
     }
 
-    // 3b. Missing GSTIN on snapshot while GST invoice — flagged for master-fix workflow when blank
+    // 3b. Missing GSTIN — only when invoice still looks registered/B2B without a GSTIN.
+    // Consumer / Unregistered / B2C (e.g. GST cancelled → master altered to Consumer) is valid blank GSTIN.
     const gstinBlank = !inv.customerGstin || String(inv.customerGstin).trim().length < 15;
-    if (inv.gstApplicable !== false && gstinBlank) {
+    const regType = String(inv.customerRegistrationType || '').trim();
+    const catSnap = String(inv.gstr1CategorySnapshot || '').toUpperCase();
+    const treatmentSnap = String(inv.gstTreatmentSnapshot || '').toUpperCase();
+    const isConsumerOrB2C =
+      regType === 'Consumer' ||
+      regType === 'Unregistered' ||
+      catSnap.startsWith('B2C') ||
+      treatmentSnap.includes('B2C') ||
+      treatmentSnap.includes('UNREGISTERED');
+    if (inv.gstApplicable !== false && gstinBlank && !isConsumerOrB2C) {
       errors.push({
         ...base,
         invoiceId: inv._id ? String(inv._id) : '',
@@ -1295,9 +1305,21 @@ export async function validateGSTR1(startDate, endDate) {
     )];
     if (custIds.length) {
       const customers = await Customer.find({ _id: { $in: custIds } })
-        .select('gstNumber defaultPlaceOfSupply billingStateCode gstState gstRegistrationEffectiveDate')
+        .select('gstNumber gstRegistrationType defaultPlaceOfSupply billingStateCode gstState gstRegistrationEffectiveDate')
         .lean();
       const byId = new Map(customers.map((c) => [String(c._id), c]));
+      // Drop Missing GSTIN warnings when master is already Consumer/blank (cancelled → B2C path)
+      for (let i = baseErrors.length - 1; i >= 0; i -= 1) {
+        const err = baseErrors[i];
+        if (err.errorType !== 'Missing GSTIN' || !err.customerId) continue;
+        const c = byId.get(String(err.customerId));
+        if (!c) continue;
+        const masterGstin = String(c.gstNumber || '').trim().toUpperCase();
+        const masterType = String(c.gstRegistrationType || '').trim();
+        if (!masterGstin && (masterType === 'Consumer' || masterType === 'Unregistered' || !masterType)) {
+          baseErrors.splice(i, 1);
+        }
+      }
       for (const err of baseErrors) {
         if (!err.canFixFromMaster || !err.customerId) continue;
         const c = byId.get(String(err.customerId));
