@@ -102,17 +102,23 @@ export default function ExpandableModuleHome({
 
     const expandedSection = visibleSections.find((s) => s.id === expandedId) || null;
 
+    const openTool = (path) => {
+        if (!path) return;
+        navigate(path);
+    };
+
     const toggleSection = (id) => {
+        const section = visibleSections.find((s) => s.id === id);
+        // Leaf launchers (one tool): open route directly — multi-tool sections (e.g. Taxation GST) still expand.
+        if (section?.tools?.length === 1 && section.tools[0]?.path) {
+            openTool(section.tools[0].path);
+            return;
+        }
         setExpandedId((prev) => {
             const next = prev === id ? '' : id;
             writeSession(next);
             return next;
         });
-    };
-
-    const openTool = (path) => {
-        if (!path) return;
-        navigate(path);
     };
 
     return (

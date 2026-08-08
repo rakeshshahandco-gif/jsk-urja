@@ -385,6 +385,10 @@ export const PATHS = {
         HSN_SUMMARY: '/gst/hsn-summary',
         LEDGER: '/gst/ledger',
     },
+    TAXATION: {
+        ROOT: '/taxation',
+        HOME: '/taxation/home',
+    },
     VOUCHER_ENTRY: {
         ROOT: '/voucher-entry',
         HOME: '/voucher-entry/home'

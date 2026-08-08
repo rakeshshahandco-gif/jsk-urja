@@ -72,6 +72,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
         const specialMappings = {
             'CRM': PATHS.CRM?.HOME,
             'ACCOUNT_MASTER_PARENT': PATHS.ACCOUNT_MASTER?.HOME,
+            'TAXATION': PATHS.TAXATION?.HOME || '/taxation/home',
             'GST_MENU': PATHS.GST?.HOME,
             'TDS': PATHS.TDS?.HOME,
             'TCS': PATHS.TCS?.HOME,
@@ -145,7 +146,7 @@ export const SidebarItem = ({ item, collapsed, level = 1 }) => {
     // legacy expand-on-click behaviour — they are not rendered inside the
     // sidebar tree anyway because of the children-render guard below, but
     // we preserve their handler for any future use.
-    /** Top-level groups that expand inline (Handloom testing hub). WhatsApp / Communication / Admin / Super Admin use Module Home hubs. */
+    /** Top-level groups that expand inline. Taxation / WhatsApp / Communication / Admin use Module Home hubs. */
     const inlineTopLevelGroup = item.id === 'textile-foundation';
     const isTopLevelParent = level === 1 && hasChildren && !inlineTopLevelGroup;
     const alwaysShowChildren = inlineTopLevelGroup;

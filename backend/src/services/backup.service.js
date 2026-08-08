@@ -412,7 +412,22 @@ export const listBackups = () => {
 /**
  * Restore from a backup
  */
+const assertLocalhostRestoreTarget = () => {
+    const dbName = String(mongoose.connection?.name || '').trim();
+    const uri = String(process.env.MONGODB_URL || process.env.MONGO_URI || '');
+    const uriTargetsProd = /\/jskurja-prod(\?|$)/i.test(uri);
+    // Localhost restore is allowed ONLY into jskurja-dev
+    if (dbName.toLowerCase() !== 'jskurja-dev' || uriTargetsProd) {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            'RESTORE BLOCKED: Production database cannot be used as localhost restore target.'
+        );
+    }
+    return dbName;
+};
+
 export const restoreBackup = async (backupId, userId) => {
+    const targetDatabase = assertLocalhostRestoreTarget();
     const id = safeBackupId(backupId);
     const zipPath = path.join(BACKUP_DIR, `${id}.zip`);
     if (!fs.existsSync(zipPath)) {
@@ -426,6 +441,7 @@ export const restoreBackup = async (backupId, userId) => {
     }
 
     const metadata = JSON.parse(metadataEntry.getData().toString('utf8'));
+    const backupSourceDatabase = metadata.dbName || metadata.sourceDatabase || null;
     const backupCollectionNames = new Set(
         metadata.collections?.length
             ? metadata.collections
@@ -436,8 +452,15 @@ export const restoreBackup = async (backupId, userId) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid backup: no collections listed in metadata');
     }
 
+    console.log(
+        `[backup] restore start backupId=${id} backupSourceDatabase=${backupSourceDatabase || 'unknown'} restoreTargetDatabase=${targetDatabase}`
+    );
+
+    let safetyBackupId = null;
     try {
-        await generateBackup(userId, `Auto-Safety Backup before restoring ${id}`);
+        const safety = await generateBackup(userId, `Auto-Safety Backup before restoring ${id}`);
+        safetyBackupId = safety?.id || safety?.name || null;
+        console.log(`[backup] safety snapshot created: ${safetyBackupId}`);
     } catch (safetyErr) {
         console.warn('[backup] Safety backup before restore failed (continuing):', safetyErr.message);
     }
@@ -447,7 +470,11 @@ export const restoreBackup = async (backupId, userId) => {
 
         return {
             success: true,
-            message: `Restored ${result.collectionCount} collections (${result.totalDocs} documents), ${result.uploadsRestored} upload files`,
+            message: `Database restoration completed successfully. Restored ${result.collectionCount} collections (${result.totalDocs} documents), ${result.uploadsRestored} upload files`,
+            backupId: id,
+            backupSourceDatabase,
+            targetDatabase,
+            safetyBackupId,
             ...result,
         };
     } catch (error) {

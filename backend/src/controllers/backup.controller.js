@@ -29,10 +29,13 @@ export const downloadBackup = asyncHandler(async (req, res) => {
 export const restoreFromBackup = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await backupService.restoreBackup(id, req.user.id);
-    res.json({
+    res.status(httpStatus.OK).json({
         success: true,
-        message: 'System restored successfully',
-        data: result
+        message: result?.message || 'Database restoration completed successfully',
+        backupId: result?.backupId || id,
+        targetDatabase: result?.targetDatabase,
+        backupSourceDatabase: result?.backupSourceDatabase,
+        data: result,
     });
 });
 

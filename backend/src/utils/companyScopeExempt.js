@@ -86,5 +86,8 @@ export function isCompanyScopeExempt(req) {
     if (p === '/financial-years' && m === 'GET') return true;
     if (p === '/financial-years/current' && m === 'GET') return true;
 
+    // Platform backup/restore is whole-database (superadmin) — not company-scoped
+    if (p.startsWith('/backups')) return true;
+
     return false;
 }

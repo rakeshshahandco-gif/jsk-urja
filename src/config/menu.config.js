@@ -9,7 +9,7 @@ export const ROLES = {
 };
 
 export const menuConfig = [
-    {
+{
         id: 'dashboard',
         title: 'Home',
         icon: 'BusinessIcon',
@@ -17,7 +17,7 @@ export const menuConfig = [
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
         permission: null
     },
-    {
+{
         id: 'crm',
         title: 'CRM',
         icon: 'BusinessIcon',
@@ -206,7 +206,7 @@ export const menuConfig = [
             }
         ]
     },
-    {
+{
         id: 'tasks',
         title: 'Task Management',
         path: '/tasks/home',
@@ -230,7 +230,7 @@ export const menuConfig = [
             },
         ],
     },
-    {
+{
         id: 'messenger',
         title: 'Messenger',
         icon: '💬',
@@ -238,58 +238,7 @@ export const menuConfig = [
         path: PATHS.MESSENGER.ROOT,
         permission: 'messenger',
     },
-    {
-        id: 'whatsapp-root',
-        title: 'WhatsApp',
-        icon: 'ChatIcon',
-        path: PATHS.SETTINGS.WHATSAPP_HOME,
-        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-        permission: null,
-        children: [
-            {
-                id: 'whatsapp-communication-group',
-                title: 'WhatsApp Communication',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: null,
-                children: [
-                    { id: 'whatsapp-chat', title: 'Chats / Conversations', path: '/whatsapp/chat', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp.whatsapp_settings.view' },
-                    { id: 'communication-bulk-campaigns', title: 'WhatsApp Bulk Message Utility', path: PATHS.SETTINGS.WHATSAPP_BULK.CAMPAIGNS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
-                    { id: 'communication-bulk-matter', title: 'WhatsApp Matter Master', path: PATHS.SETTINGS.WHATSAPP_BULK.MATTERS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.matter_master.view' },
-                    { id: 'communication-bulk-blacklist', title: 'WhatsApp Blacklist', path: PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.blacklist.view' },
-                    { id: 'communication-bulk-history', title: 'Campaign History', path: PATHS.SETTINGS.WHATSAPP_BULK.HISTORY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
-                    { id: 'communication-bulk-number-health', title: 'Number Health', path: PATHS.SETTINGS.WHATSAPP_BULK.NUMBER_HEALTH, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.number_health.view' },
-                    { id: 'communication-bulk-settings', title: 'WhatsApp Bulk Messaging Settings', path: PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.settings.view' },
-                ],
-            },
-            {
-                id: 'communication-whatsapp-ai-group',
-                title: 'WhatsApp AI',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: null,
-                children: [
-                    { id: 'communication-whatsapp-ai-dashboard', title: 'Dashboard', path: PATHS.SETTINGS.WHATSAPP_AI.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.dashboard.view' },
-                    { id: 'communication-whatsapp-ai-inbox', title: 'Inbox', path: PATHS.SETTINGS.WHATSAPP_AI.INBOX, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.module.view' },
-                    { id: 'communication-whatsapp-ai-active', title: 'Active Conversations', path: PATHS.SETTINGS.WHATSAPP_AI.ACTIVE, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.conversations.view_assigned' },
-                    { id: 'communication-whatsapp-ai-waiting', title: 'Waiting for Human', path: PATHS.SETTINGS.WHATSAPP_AI.WAITING_HUMAN, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.module.takeover' },
-                    { id: 'communication-whatsapp-ai-lead-drafts', title: 'Lead Drafts', path: PATHS.SETTINGS.WHATSAPP_AI.LEAD_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.lead_draft.create' },
-                    { id: 'communication-whatsapp-ai-reply-drafts', title: 'Reply Drafts', path: PATHS.SETTINGS.WHATSAPP_AI.REPLY_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.drafts.view' },
-                    { id: 'communication-whatsapp-ai-knowledge', title: 'Knowledge', path: PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.knowledge.manage' },
-                    { id: 'communication-whatsapp-ai-documents', title: 'Documents', path: PATHS.SETTINGS.WHATSAPP_AI.DOCUMENTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.documents.manage' },
-                    { id: 'communication-whatsapp-ai-rules', title: 'Rules', path: PATHS.SETTINGS.WHATSAPP_AI.RULES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.settings.manage' },
-                    { id: 'communication-whatsapp-ai-settings', title: 'AI Settings', path: PATHS.SETTINGS.WHATSAPP_AI.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.settings.manage' },
-                    { id: 'communication-whatsapp-ai-audit', title: 'Audit Logs', path: PATHS.SETTINGS.WHATSAPP_AI.AUDIT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.audit.view' },
-                ],
-            },
-            {
-                id: 'whatsapp',
-                title: 'WhatsApp Settings',
-                path: PATHS.SETTINGS.WHATSAPP,
-                roles: [ROLES.ADMIN, ROLES.MANAGER],
-                permission: 'whatsapp.whatsapp_settings.view',
-            },
-        ],
-    },
-    {
+{
         id: 'sales',
         title: 'Sales',
         icon: 'ShoppingBagIcon',
@@ -305,9 +254,9 @@ export const menuConfig = [
             { id: 'bulk-renumber', title: 'Bulk Renumbering', path: PATHS.SALES.BULK_RENUMBER, roles: [ROLES.ADMIN], permission: 'sales.sales_invoices.view' },
         ],
     },
-    {
+{
         id: 'purchase',
-        title: 'Purchase',
+        title: 'Purchases',
         icon: 'ShoppingCartIcon',
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'purchase',
@@ -323,37 +272,7 @@ export const menuConfig = [
             { id: 'consumable-cost-report', title: 'Consumable Cost Analysis', path: '/reports/consumable-cost', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'purchase.purchase_invoices.view' },
         ],
     },
-    {
-        id: 'documents-menu',
-        title: 'Documents',
-        icon: 'DocumentIcon',
-        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-        permission: 'documents',
-        children: [
-            { id: 'scan-bills', title: 'Scan Bills', path: PATHS.DOCUMENTS.SCAN_BILLS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'documents.scan_bills.view' },
-            { id: 'missing-attachments', title: 'Missing Attachments', path: PATHS.DOCUMENTS.MISSING, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'documents.missing_attachments.view' },
-            {
-                id: 'smart-import-hub',
-                title: 'AI Smart Import',
-                path: PATHS.DOCUMENTS.SMART_IMPORT_HUB,
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'scan_entry.scan_entry.view',
-            },
-            {
-                id: 'scan-entry-group',
-                title: 'Scan Entry (OCR)',
-                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-                permission: 'scan_entry.scan_entry.view',
-                children: [
-                    { id: 'scan-entry-drafts', title: 'Pending OCR Drafts', path: PATHS.DOCUMENTS.SCAN_ENTRY_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.view' },
-                    { id: 'scan-entry-bulk', title: 'Bulk Import', path: PATHS.DOCUMENTS.SCAN_ENTRY_BULK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.upload' },
-                    { id: 'scan-entry-reports', title: 'Scan Entry Reports', path: PATHS.DOCUMENTS.SCAN_ENTRY_REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.view' },
-                    { id: 'scan-entry-keywords', title: 'Expense Keyword Map', path: PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'scan_entry.scan_entry.review' },
-                ],
-            },
-        ],
-    },
-    {
+{
         id: 'inventory',
         title: 'Inventory',
         icon: 'InventoryIcon',
@@ -411,7 +330,7 @@ export const menuConfig = [
             },
         ],
     },
-    {
+{
         id: 'production',
         title: 'Production',
         icon: 'FactoryIcon',
@@ -449,7 +368,7 @@ export const menuConfig = [
             { id: 'textile-process-routes', title: 'Process Route Master', path: PATHS.PRODUCTION.TEXTILE_PROCESS_ROUTES, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'production.textile_process_route.view', textileOnly: true },
         ],
     },
-    {
+{
         id: 'voucher-entry',
         title: 'Voucher Entry',
         icon: 'VoucherIcon',
@@ -469,10 +388,11 @@ export const menuConfig = [
             { id: 'narration-templates', title: 'Narration Templates', path: PATHS.NARRATION_TEMPLATES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
         ]
     },
-    {
+{
         id: 'account-master-parent',
         title: 'Account Master',
         icon: 'SettingsIcon',
+        path: PATHS.ACCOUNT_MASTER.HOME,
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'accounts',
         children: [
@@ -484,10 +404,11 @@ export const menuConfig = [
             { id: 'budgets', title: 'Budget Master', path: PATHS.BUDGETS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.vouchers.view' },
         ]
     },
-    {
+{
         id: 'accounts',
-        title: 'Accounts',
-        icon: 'AccountBalanceWalletIcon',
+        title: 'Account Report',
+        icon: 'BarChartIcon',
+        path: PATHS.ACCOUNTS.HOME,
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
         permission: 'accounts',
         children: [
@@ -529,56 +450,147 @@ export const menuConfig = [
             },
         ]
     },
-    {
-        id: 'tds',
-        title: 'TDS',
-        icon: 'ReceiptLongIcon',
-        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-        permission: 'tds',
-        children: [
-            { id: 'tds-dashboard', title: 'TDS Dashboard', path: PATHS.TDS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
-            { id: 'tds-master', title: 'TDS Master / Section Rates', path: PATHS.TDS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.master.view' },
-            { id: 'tds-ledger-mapping', title: 'TDS Ledger Mapping', path: PATHS.TDS.LEDGER_MAPPING, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.ledger_mapping.view' },
-            { id: 'tds-deduction-register', title: 'TDS Deduction Register', path: PATHS.TDS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
-            { id: 'tds-payable-register', title: 'TDS Payable Register', path: PATHS.TDS.PAYABLE_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.payable_register.view' },
-            { id: 'tds-challan', title: 'TDS Challan / Payment', path: PATHS.TDS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.challan.view' },
-            { id: 'tds-returns', title: 'TDS Return / Filing Data', path: PATHS.TDS.RETURNS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.returns.view' },
-            { id: 'tds-reports', title: 'TDS Reports', path: PATHS.TDS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.reports.view' },
-            { id: 'form-26as', title: '26AS Reconciliation', path: PATHS.FORM_26AS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
-        ],
-    },
-    {
-        id: 'tcs',
-        title: 'TCS',
-        icon: 'ReceiptLongIcon',
-        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-        permission: 'tds',
-        children: [
-            { id: 'tcs-dashboard', title: 'TCS Dashboard', path: PATHS.TCS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
-            { id: 'tcs-master', title: 'TCS Master / Section Rates', path: PATHS.TCS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.master.view' },
-            { id: 'tcs-deductions', title: 'TCS Deduction Register', path: PATHS.TCS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
-            { id: 'tcs-challans', title: 'TCS Challan / Payment', path: PATHS.TCS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.challan.view' },
-            { id: 'tcs-reports', title: 'TCS Reports', path: PATHS.TCS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
-        ],
-    },
-    {
-        id: 'gst-menu',
-        title: 'GST',
+{
+        id: 'taxation',
+        title: 'Taxation',
         icon: 'AssessmentIcon',
+        path: PATHS.TAXATION.HOME,
         roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
-        permission: 'gst',
+        permission: null,
         children: [
-            { id: 'gstr1-export', title: 'GSTR-1 Compliance', path: PATHS.GST.GSTR1, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr1.view' },
-            { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: PATHS.GST.GSTR3B, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
-            { id: 'gstr9-annual', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
-            { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_reconciliation.view' },
-            { id: 'itc-register', title: 'GST Inward & ITC Register', path: PATHS.GST.ITC_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.itc_register.view' },
-            { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_payable.view' },
-            { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.hsn_summary.view' },
-            { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_ledger.view' },
-        ]
+            {
+                id: 'gst-menu',
+                title: 'GST',
+                icon: 'AssessmentIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'gst',
+                children: [
+                    { id: 'gstr1-export', title: 'GSTR-1 Compliance', path: PATHS.GST.GSTR1, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr1.view' },
+                    { id: 'gstr3b-compliance', title: 'GSTR-3B Compliance', path: PATHS.GST.GSTR3B, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
+                    { id: 'gstr9-annual', title: 'GSTR-9 Annual Return', path: PATHS.GST.GSTR9, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gstr3b.view' },
+                    { id: 'gst-reconciliation', title: '2A / 2B Reconciliation', path: PATHS.GST.RECONCILIATION, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_reconciliation.view' },
+                    { id: 'itc-register', title: 'GST Inward & ITC Register', path: PATHS.GST.ITC_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.itc_register.view' },
+                    { id: 'gst-payable', title: 'GST Payable Summary', path: PATHS.GST.PAYABLE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_payable.view' },
+                    { id: 'hsn-summary', title: 'HSN Summary', path: PATHS.GST.HSN_SUMMARY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.hsn_summary.view' },
+                    { id: 'gst-ledger', title: 'GST Ledger', path: PATHS.GST.LEDGER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'gst.gst_ledger.view' },
+                ],
+            },
+            {
+                id: 'tds',
+                title: 'TDS',
+                icon: 'ReceiptLongIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'tds',
+                children: [
+                    { id: 'tds-dashboard', title: 'TDS Dashboard', path: PATHS.TDS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
+                    { id: 'tds-master', title: 'TDS Master / Section Rates', path: PATHS.TDS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.master.view' },
+                    { id: 'tds-ledger-mapping', title: 'TDS Ledger Mapping', path: PATHS.TDS.LEDGER_MAPPING, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.ledger_mapping.view' },
+                    { id: 'tds-deduction-register', title: 'TDS Deduction Register', path: PATHS.TDS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
+                    { id: 'tds-payable-register', title: 'TDS Payable Register', path: PATHS.TDS.PAYABLE_REGISTER, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.payable_register.view' },
+                    { id: 'tds-challan', title: 'TDS Challan / Payment', path: PATHS.TDS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.challan.view' },
+                    { id: 'tds-returns', title: 'TDS Return / Filing Data', path: PATHS.TDS.RETURNS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.returns.view' },
+                    { id: 'tds-reports', title: 'TDS Reports', path: PATHS.TDS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.reports.view' },
+                    { id: 'form-26as', title: '26AS Reconciliation', path: PATHS.FORM_26AS.LIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
+                ],
+            },
+            {
+                id: 'tcs',
+                title: 'TCS',
+                icon: 'ReceiptLongIcon',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'tds',
+                children: [
+                    { id: 'tcs-dashboard', title: 'TCS Dashboard', path: PATHS.TCS.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.dashboard.view' },
+                    { id: 'tcs-master', title: 'TCS Master / Section Rates', path: PATHS.TCS.MASTER, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.master.view' },
+                    { id: 'tcs-deductions', title: 'TCS Deduction Register', path: PATHS.TCS.DEDUCTIONS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'tds.deduction_register.view' },
+                    { id: 'tcs-challans', title: 'TCS Challan / Payment', path: PATHS.TCS.CHALLANS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.challan.view' },
+                    { id: 'tcs-reports', title: 'TCS Reports', path: PATHS.TCS.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'tds.reports.view' },
+                ],
+            },
+        ],
     },
     {
+        id: 'whatsapp-root',
+        title: 'WhatsApp',
+        icon: 'ChatIcon',
+        path: PATHS.SETTINGS.WHATSAPP_HOME,
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: null,
+        children: [
+            {
+                id: 'whatsapp-communication-group',
+                title: 'WhatsApp Communication',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: null,
+                children: [
+                    { id: 'whatsapp-chat', title: 'Chats / Conversations', path: '/whatsapp/chat', roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp.whatsapp_settings.view' },
+                    { id: 'communication-bulk-campaigns', title: 'WhatsApp Bulk Message Utility', path: PATHS.SETTINGS.WHATSAPP_BULK.CAMPAIGNS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
+                    { id: 'communication-bulk-matter', title: 'WhatsApp Matter Master', path: PATHS.SETTINGS.WHATSAPP_BULK.MATTERS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.matter_master.view' },
+                    { id: 'communication-bulk-blacklist', title: 'WhatsApp Blacklist', path: PATHS.SETTINGS.WHATSAPP_BULK.BLACKLIST, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.blacklist.view' },
+                    { id: 'communication-bulk-history', title: 'Campaign History', path: PATHS.SETTINGS.WHATSAPP_BULK.HISTORY, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.campaigns.view' },
+                    { id: 'communication-bulk-number-health', title: 'Number Health', path: PATHS.SETTINGS.WHATSAPP_BULK.NUMBER_HEALTH, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.number_health.view' },
+                    { id: 'communication-bulk-settings', title: 'WhatsApp Bulk Messaging Settings', path: PATHS.SETTINGS.WHATSAPP_BULK.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_bulk.settings.view' },
+                ],
+            },
+            {
+                id: 'communication-whatsapp-ai-group',
+                title: 'WhatsApp AI',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: null,
+                children: [
+                    { id: 'communication-whatsapp-ai-dashboard', title: 'Dashboard', path: PATHS.SETTINGS.WHATSAPP_AI.DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.dashboard.view' },
+                    { id: 'communication-whatsapp-ai-inbox', title: 'Inbox', path: PATHS.SETTINGS.WHATSAPP_AI.INBOX, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.module.view' },
+                    { id: 'communication-whatsapp-ai-active', title: 'Active Conversations', path: PATHS.SETTINGS.WHATSAPP_AI.ACTIVE, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.conversations.view_assigned' },
+                    { id: 'communication-whatsapp-ai-waiting', title: 'Waiting for Human', path: PATHS.SETTINGS.WHATSAPP_AI.WAITING_HUMAN, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.module.takeover' },
+                    { id: 'communication-whatsapp-ai-lead-drafts', title: 'Lead Drafts', path: PATHS.SETTINGS.WHATSAPP_AI.LEAD_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.lead_draft.create' },
+                    { id: 'communication-whatsapp-ai-reply-drafts', title: 'Reply Drafts', path: PATHS.SETTINGS.WHATSAPP_AI.REPLY_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.drafts.view' },
+                    { id: 'communication-whatsapp-ai-knowledge', title: 'Knowledge', path: PATHS.SETTINGS.WHATSAPP_AI.KNOWLEDGE, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.knowledge.manage' },
+                    { id: 'communication-whatsapp-ai-documents', title: 'Documents', path: PATHS.SETTINGS.WHATSAPP_AI.DOCUMENTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'whatsapp_ai.documents.manage' },
+                    { id: 'communication-whatsapp-ai-rules', title: 'Rules', path: PATHS.SETTINGS.WHATSAPP_AI.RULES, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.settings.manage' },
+                    { id: 'communication-whatsapp-ai-settings', title: 'AI Settings', path: PATHS.SETTINGS.WHATSAPP_AI.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.settings.manage' },
+                    { id: 'communication-whatsapp-ai-audit', title: 'Audit Logs', path: PATHS.SETTINGS.WHATSAPP_AI.AUDIT, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'whatsapp_ai.audit.view' },
+                ],
+            },
+            {
+                id: 'whatsapp',
+                title: 'WhatsApp Settings',
+                path: PATHS.SETTINGS.WHATSAPP,
+                roles: [ROLES.ADMIN, ROLES.MANAGER],
+                permission: 'whatsapp.whatsapp_settings.view',
+            },
+        ],
+    },
+{
+        id: 'documents-menu',
+        title: 'Documents',
+        icon: 'DocumentIcon',
+        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+        permission: 'documents',
+        children: [
+            { id: 'scan-bills', title: 'Scan Bills', path: PATHS.DOCUMENTS.SCAN_BILLS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'documents.scan_bills.view' },
+            { id: 'missing-attachments', title: 'Missing Attachments', path: PATHS.DOCUMENTS.MISSING, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'documents.missing_attachments.view' },
+            {
+                id: 'smart-import-hub',
+                title: 'AI Smart Import',
+                path: PATHS.DOCUMENTS.SMART_IMPORT_HUB,
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'scan_entry.scan_entry.view',
+            },
+            {
+                id: 'scan-entry-group',
+                title: 'Scan Entry (OCR)',
+                roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                permission: 'scan_entry.scan_entry.view',
+                children: [
+                    { id: 'scan-entry-drafts', title: 'Pending OCR Drafts', path: PATHS.DOCUMENTS.SCAN_ENTRY_DRAFTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.view' },
+                    { id: 'scan-entry-bulk', title: 'Bulk Import', path: PATHS.DOCUMENTS.SCAN_ENTRY_BULK, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.upload' },
+                    { id: 'scan-entry-reports', title: 'Scan Entry Reports', path: PATHS.DOCUMENTS.SCAN_ENTRY_REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'scan_entry.scan_entry.view' },
+                    { id: 'scan-entry-keywords', title: 'Expense Keyword Map', path: PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'scan_entry.scan_entry.review' },
+                ],
+            },
+        ],
+    },
+{
         id: 'mis-reports',
         title: 'MIS Reports',
         icon: 'AssessmentIcon',
@@ -595,7 +607,7 @@ export const menuConfig = [
             { id: 'report-purchase-comparison', title: 'Purchase Comparison Report', path: '/reports/purchase-comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports.purchase_comparison_report.view' },
         ]
     },
-    {
+{
         id: 'fixed-assets-parent',
         title: 'Fixed Assets',
         icon: 'AccountBalanceIcon',
@@ -609,7 +621,7 @@ export const menuConfig = [
             { id: 'depreciation-schedule', title: 'Depreciation Schedule', path: PATHS.DEPRECIATION.SCHEDULE, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'accounts.fixed_assets.view' },
         ]
     },
-    {
+{
         id: 'service',
         title: 'Service',
         icon: 'SettingsIcon',
@@ -620,7 +632,7 @@ export const menuConfig = [
             { id: 'replacement-dashboard', title: 'Replacement Dashboard', path: PATHS.SERVICE.REPLACEMENT_DASHBOARD, roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF], permission: 'service.replacement_dashboard.view' },
         ],
     },
-    {
+{
         id: 'prd',
         title: 'Product R&D',
         icon: 'ScienceIcon',
@@ -632,7 +644,7 @@ export const menuConfig = [
             { id: 'prd-parameters', title: 'Test Parameter Master', path: PATHS.PRD.TEST_PARAMETERS, roles: [ROLES.ADMIN, 'rd_manager', 'qa_head'], permission: 'prd.test_parameters.view' },
         ],
     },
-    {
+{
         id: 'rd-samples',
         title: 'R&D Samples',
         icon: 'ScienceIcon',
@@ -644,7 +656,7 @@ export const menuConfig = [
             { id: 'rd-comparison', title: 'Sample Comparison', path: '/rd-samples/comparison', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'rd_samples.samples.compare' },
         ],
     },
-    {
+{
         id: 'china-supplier',
         title: 'China Sourcing',
         icon: 'GlobeIcon',
@@ -660,7 +672,7 @@ export const menuConfig = [
             { id: 'cs-reports', title: 'Reports', path: PATHS.CHINA_SUPPLIER.REPORTS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'reports' },
         ],
     },
-    {
+{
         id: 'hr',
         title: 'HR Management',
         icon: 'BadgeIcon',
@@ -678,7 +690,7 @@ export const menuConfig = [
             { id: 'holiday-list', title: 'Holiday List', path: '/hr/holidays', roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'hr.hr_reports.view' },
         ],
     },
-    {
+{
         id: 'communication-bulk-group',
         title: 'Communication',
         path: PATHS.SETTINGS.COMMUNICATION_HOME,
@@ -695,7 +707,7 @@ export const menuConfig = [
             { id: 'communication-email-bulk-settings', title: 'Email Bulk Messaging Settings', path: PATHS.SETTINGS.EMAIL_BULK.SETTINGS, roles: [ROLES.ADMIN, ROLES.MANAGER], permission: 'email_bulk.settings.view' },
         ],
     },
-    {
+{
         id: 'print-format-designer',
         title: 'Print Format Designer',
         icon: 'SettingsIcon',
@@ -703,9 +715,7 @@ export const menuConfig = [
         path: PATHS.SETTINGS.PRINT_FORMAT_DESIGNER,
         permission: 'admin.print_format_designer.view',
     },
-    // Optional per-user UI customization (visible only when
-    // ui.advancedCustomizationEnabled feature flag is on; defaults OFF).
-    {
+{
         id: 'ui-preferences',
         title: 'My UI Preferences',
         path: '/profile/ui-preferences',
@@ -713,7 +723,7 @@ export const menuConfig = [
         roles: [ROLES.SUPERADMIN, ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF, ROLES.VIEWER],
         permission: null,
     },
-    {
+{
         id: 'admin',
         title: 'Admin',
         path: '/admin/home',
@@ -760,8 +770,7 @@ export const menuConfig = [
             },
         ],
     },
-    // ── Super Admin / Platform (superadmin only — hidden via platformAccess) ─
-    {
+{
         id: 'super-admin',
         title: 'Super Admin',
         icon: 'SettingsIcon',
@@ -816,7 +825,7 @@ export const menuConfig = [
                 ],
             },
         ],
-    },
+    }
 ];
 
 export const getFlattenedMenu = () => {

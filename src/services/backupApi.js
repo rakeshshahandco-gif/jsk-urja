@@ -25,10 +25,28 @@ export const downloadBackup = (id) => {
         });
 };
 
-export const restoreBackup = (id) => 
-    apiClient.post(`/backups/restore/${encodeURIComponent(id)}`, null, {
-        timeout: BACKUP_LONG_TIMEOUT_MS,
-    }).then(r => r.data);
+export const restoreBackup = (id) =>
+    apiClient
+        .post(
+            `/backups/restore/${encodeURIComponent(id)}`,
+            {},
+            { timeout: BACKUP_LONG_TIMEOUT_MS }
+        )
+        .then((r) => {
+            const payload = r?.data;
+            if (payload == null || typeof payload !== 'object') {
+                throw new Error('Restore failed: server returned an empty or invalid response');
+            }
+            if (payload.success === false) {
+                throw new Error(payload.message || payload.error || 'Restore failed');
+            }
+            // Accept legacy responses that omit success but include message/data
+            if (payload.success !== true && payload.success !== undefined) {
+                throw new Error(payload.message || 'Restore failed');
+            }
+            return payload;
+        });
+
 
 export const uploadBackup = (file) => {
     const formData = new FormData();

@@ -121,13 +121,34 @@ const BackupRestorePage = () => {
         try {
             setIsRestoring(true);
             toast.loading('System restoration in progress. Please do not close the browser...', { id: 'restore' });
-            await backupApi.restoreBackup(restoreTargetId);
-            toast.success('System restored successfully!', { id: 'restore' });
+            const result = await backupApi.restoreBackup(restoreTargetId);
+            if (!result || result.success === false) {
+                throw new Error(result?.message || 'Restore did not confirm success');
+            }
+            const target = result.targetDatabase || result.data?.targetDatabase || 'jskurja-dev';
+            toast.success(
+                result.message || `System restored successfully into ${target}`,
+                { id: 'restore' }
+            );
             setRestoreTargetId(null);
             setRestoreConfirmation('');
             fetchBackups();
         } catch (error) {
-            toast.error('Restoration failed: ' + (error.response?.data?.message || error.message), { id: 'restore' });
+            const data = error.response?.data;
+            let msg =
+                (data && typeof data === 'object' && (data.message || data.error)) ||
+                (typeof data === 'string' && data.trim() && !data.trim().startsWith('<')
+                    ? data.trim().slice(0, 300)
+                    : null) ||
+                error.message ||
+                'Restore failed';
+            if (/Unexpected token|JSON\.parse|is not valid JSON/i.test(String(msg))) {
+                msg = 'Restore request failed due to an invalid JSON body/response. Please retry.';
+            }
+            if (error.code === 'ECONNABORTED') {
+                msg = 'Restore timed out. Check backend logs before retrying.';
+            }
+            toast.error('Restoration failed: ' + msg, { id: 'restore' });
         } finally {
             setIsRestoring(false);
         }

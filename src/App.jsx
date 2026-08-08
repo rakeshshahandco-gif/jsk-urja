@@ -22,6 +22,9 @@ import CompaniesListPage from '@/features/companies/CompaniesListPage';
 import WhatsAppSettingsPage from '@/features/settings/WhatsAppSettingsPage';
 import WhatsAppHomePage from '@/features/whatsapp/pages/WhatsAppHomePage';
 import CommunicationHomePage from '@/features/communication/pages/CommunicationHomePage';
+import TaxationHomePage from '@/features/taxation/pages/TaxationHomePage';
+import AccountMasterHomePage from '@/features/accounts/pages/AccountMasterHomePage';
+import AccountReportHomePage from '@/features/accounts/pages/AccountReportHomePage';
 import AdminHomePage from '@/features/admin/pages/AdminHomePage';
 import SuperAdminHomePage from '@/features/superAdmin/pages/SuperAdminHomePage';
 import { CustomerMasterReport } from '@/features/reports/CustomerMasterReport';
@@ -560,9 +563,10 @@ const AppLayout = () => {
                         <Route path={PATHS.PURCHASE.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Purchase" title="Purchase - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.INVENTORY.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Inventory" title="Inventory - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.PRODUCTION.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Production" title="Production - Home" isStatic={true} /></ProtectedRoute>} />
-                        <Route path={PATHS.ACCOUNT_MASTER.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Account Master" title="Account Master - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNT_MASTER.HOME} element={<ProtectedRoute><AccountMasterHomePage /></ProtectedRoute>} />
                         <Route path={PATHS.VOUCHER_ENTRY.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Voucher Entry" title="Voucher Entry - Home" isStatic={true} /></ProtectedRoute>} />
-                        <Route path={PATHS.ACCOUNTS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="Accounts" title="Accounts - Home" isStatic={true} /></ProtectedRoute>} />
+                        <Route path={PATHS.ACCOUNTS.HOME} element={<ProtectedRoute><AccountReportHomePage /></ProtectedRoute>} />
+                        <Route path={PATHS.TAXATION.HOME} element={<ProtectedRoute><TaxationHomePage /></ProtectedRoute>} />
                         <Route path={PATHS.GST.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="GST" title="GST - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.MIS.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="MIS Reports" title="MIS Reports - Home" isStatic={true} /></ProtectedRoute>} />
                         <Route path={PATHS.CRM.HOME} element={<ProtectedRoute><ModuleHomePage moduleName="CRM" title="CRM - Home" isStatic={true} /></ProtectedRoute>} />
