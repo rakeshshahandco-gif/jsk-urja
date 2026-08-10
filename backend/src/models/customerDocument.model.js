@@ -18,6 +18,15 @@ const customerDocumentSchema = new mongoose.Schema(
         mimeType: { type: String, trim: true, default: '' },
         fileUrl: { type: String, required: true, trim: true },
         fileSize: { type: Number, default: 0 },
+        /** Storage foundation metadata — binary never stored in Mongo */
+        storageProvider: {
+            type: String,
+            enum: ['local', 's3'],
+            default: 'local',
+        },
+        bucket: { type: String, trim: true, default: null },
+        objectKey: { type: String, trim: true, default: null },
+        checksum: { type: String, trim: true, default: null },
         source: {
             type: String,
             enum: ['upload', 'scan', 'mobile_scan', 'replace'],

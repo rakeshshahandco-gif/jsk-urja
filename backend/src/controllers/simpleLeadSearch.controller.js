@@ -44,6 +44,11 @@ import {
     listCampaignCapturedData,
     exportAllCurrentCampaignData,
 } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.capturedData.service.js';
+import { listSimpleLeadSearchRuns } from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.runs.service.js';
+import {
+    persistSessionExportArtifacts,
+    getSessionExportDownloadUrl,
+} from '../services/dataExtractor/searchCampaign/simpleLeadSearch/simpleLeadSearch.exportS3.service.js';
 
 function sendSafeError(res, err) {
     const status = Number(err?.statusCode) || (err?.name === 'ValidationError' ? 400 : 500);
@@ -387,4 +392,33 @@ export const exportAllCurrentData = withSafeErrors(async (req, res) => {
     res.setHeader('X-Export-Row-Count', String(data.rowCount || 0));
     res.setHeader('X-Export-Campaign-Id', String(data.campaignId || ''));
     res.send(data.buffer);
+});
+
+export const listRuns = withSafeErrors(async (req, res) => {
+    const data = await listSimpleLeadSearchRuns({
+        companyId: requireCompany(req),
+        limit: req.query?.limit,
+    });
+    res.send(new ApiResponse(200, data, 'Data Extractor runs'));
+});
+
+export const persistExportArtifacts = withSafeErrors(async (req, res) => {
+    const fy = req.body?.financialYearId || req.headers['x-financial-year-id'] || 'none';
+    const data = await persistSessionExportArtifacts({
+        companyId: requireCompany(req),
+        user: req.user,
+        sessionId: req.params.sessionId,
+        financialYearId: fy,
+    });
+    res.send(new ApiResponse(200, data, 'Export artifacts stored'));
+});
+
+export const downloadExportArtifact = withSafeErrors(async (req, res) => {
+    const data = await getSessionExportDownloadUrl({
+        companyId: requireCompany(req),
+        sessionId: req.params.sessionId,
+        format: req.query?.format || 'xlsx',
+        expiresInSeconds: Number(req.query?.expiresIn) || 300,
+    });
+    res.send(new ApiResponse(200, data, 'Signed download URL'));
 });

@@ -108,6 +108,29 @@ const whatsappMessageSchema = new mongoose.Schema(
             default: false,
             index: true,
         },
+        /**
+         * Authoritative WhatsApp-session unread for this chat (Baileys chats.upsert/update).
+         * Stored on placeholder stubs; CRM badges prefer this over summing Mongo inbound rows.
+         */
+        sessionUnreadCount: {
+            type: Number,
+            default: null,
+            min: 0,
+        },
+        // Local disk path (legacy) + optional S3 reference for NEW media
+        relativeFilePath: { type: String, default: '' },
+        storageProvider: { type: String, default: '' },
+        objectKey: { type: String, default: '' },
+        mediaSize: { type: Number, default: null },
+        mediaChecksum: { type: String, default: '' },
+        downloadStatus: { type: String, default: '' },
+        conversationKey: { type: String, default: '' },
+        resolvedMobile: { type: String, default: '' },
+        remoteJid: { type: String, default: '' },
+        lidJid: { type: String, default: '' },
+        finalDisplayName: { type: String, default: '' },
+        deliveryStatus: { type: String, default: '' },
+        mediaMeta: { type: mongoose.Schema.Types.Mixed, default: null },
     },
     {
         timestamps: true,

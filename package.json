@@ -29,7 +29,9 @@
     "regression:release": "node backend/tools/regression/run.mjs --level release",
     "regression:report": "node backend/tools/regression/report.mjs",
     "safe-change:check": "node backend/tools/regression/safe-change/check.mjs",
-    "check:safe-change": "node backend/tools/regression/safe-change/check.mjs"
+    "check:safe-change": "node backend/tools/regression/safe-change/check.mjs",
+    "module-lock:status": "node backend/scripts/moduleLockStatus.mjs",
+    "module-lock:check": "node backend/scripts/moduleLockCheck.mjs"
   },
   "dependencies": {
     "axios": "^1.13.4",

@@ -13,7 +13,11 @@ const allowedMimes = [
 
 export const CUSTOMER_DOCUMENT_UPLOAD_DIR = 'uploads/customer-documents/';
 
-const storage = multer.diskStorage({
+function useS3Provider() {
+    return String(process.env.FILE_STORAGE_PROVIDER || 'local').trim().toLowerCase() === 's3';
+}
+
+const diskStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         if (!fs.existsSync(CUSTOMER_DOCUMENT_UPLOAD_DIR)) {
             fs.mkdirSync(CUSTOMER_DOCUMENT_UPLOAD_DIR, { recursive: true });
@@ -35,8 +39,9 @@ const fileFilter = (req, file, cb) => {
     else cb(new ApiError(400, 'Only PDF, JPG, PNG, or WEBP files are allowed.'));
 };
 
+/** Memory for S3 (binary never persisted locally); disk for local provider. */
 export const customerDocumentUpload = multer({
-    storage,
+    storage: useS3Provider() ? multer.memoryStorage() : diskStorage,
     limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter,
 });

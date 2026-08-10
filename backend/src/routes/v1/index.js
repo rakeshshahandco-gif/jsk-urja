@@ -144,22 +144,18 @@ import printFormatVersionRoute from './printFormatVersion.routes.js';
 import printFormatRoute from './printFormat.routes.js';
 import companyWorkflowAssignmentRoute from './companyWorkflowAssignment.routes.js';
 import workflowProductionLotRoute from './workflowProductionLot.routes.js';
-import textileProductionLotRoute from './textileProductionLot.routes.js';
-import textileJobWorkRateRoute from './textileJobWorkRate.routes.js';
-import textileConversionRoute from './textileConversion.routes.js';
-import textileDyeingChallanRoute from './textileDyeingChallan.routes.js';
-import textileJobWorkChallanRoute from './textileJobWorkChallan.routes.js';
-import textileProcessRoute from './textileProcessRoute.routes.js';
-import textileProductionOrderRoute from './textileProductionOrder.routes.js';
-import textileProcessOutputRoute from './textileProcessOutput.routes.js';
+// Handloom/Textile routes: loaded conditionally below (see handloomRuntime) so JSK
+// does not import Textile Mongoose models and recreate empty collections.
 import dataExtractorRoute, { dataExtractorPublicRoute } from './dataExtractor.routes.js';
 import { resolveCompanyScope } from '../../middlewares/companyScope.middleware.js';
 import { gateApiFeatureByPath } from '../../middlewares/featureAccess.middleware.js';
 import { attachModuleContext, gateApiModuleByPath } from '../../middlewares/moduleGuard.middleware.js';
 import moduleAllocationRoute from './moduleAllocation.routes.js';
+import moduleLockRoute from './moduleLock.routes.js';
 import deploymentManagerRoute from './deploymentManager.routes.js';
 import config from '../../config/config.js';
 import { getLocalAppIdentity } from '../../utils/localAppIdentity.js';
+import { isHandloomRuntimeEnabled } from '../../utils/handloomRuntime.js';
 
 const router = express.Router();
 
@@ -675,6 +671,10 @@ const defaultRoutes = [
         path: '/platform-feature-settings',
         route: platformFeatureSettingsRoute,
     },
+    {
+        path: '/module-locks',
+        route: moduleLockRoute,
+    },
     // ── CRM: WhatsApp-driven Leads + Product Catalog (gated by feature flags) ─
     {
         path: '/leads',
@@ -760,38 +760,6 @@ const defaultRoutes = [
         path: '/workflow-production-lots',
         route: workflowProductionLotRoute,
     },
-    {
-        path: '/textile-production-lots',
-        route: textileProductionLotRoute,
-    },
-    {
-        path: '/textile-job-work-rates',
-        route: textileJobWorkRateRoute,
-    },
-    {
-        path: '/textile-conversions',
-        route: textileConversionRoute,
-    },
-    {
-        path: '/textile-dyeing-challans',
-        route: textileDyeingChallanRoute,
-    },
-    {
-        path: '/textile-job-work-challans/:processType',
-        route: textileJobWorkChallanRoute,
-    },
-    {
-        path: '/textile-process-routes',
-        route: textileProcessRoute,
-    },
-    {
-        path: '/textile-production-orders',
-        route: textileProductionOrderRoute,
-    },
-    {
-        path: '/textile-process-output',
-        route: textileProcessOutputRoute,
-    },
     // ── WhatsApp Bulk Messaging Utility (isolated from chat module) ─────────
     {
         path: '/whatsapp-bulk',
@@ -831,7 +799,13 @@ const defaultRoutes = [
     },
 ];
 
-
+if (isHandloomRuntimeEnabled()) {
+    const { default: handloomTextileRoutes } = await import('./handloomTextile.routes.js');
+    defaultRoutes.push(...handloomTextileRoutes);
+    console.log('[runtime] Handloom/Textile routes ENABLED');
+} else {
+    console.log('[runtime] Handloom/Textile routes DISABLED (JSK / non-handloom identity)');
+}
 
 defaultRoutes.forEach((route) => {
     console.log(`Registering route: ${route.path}`);

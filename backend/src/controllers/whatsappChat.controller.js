@@ -212,15 +212,7 @@ const listChats = catchAsync(async (req, res) => {
                             $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
                         },
                         isContact: { $max: { $cond: ['$isContact', 1, 0] } },
-                        unread: {
-                            $sum: {
-                                $cond: [
-                                    { $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$read', false] }] },
-                                    1,
-                                    0,
-                                ],
-                            },
-                        },
+                        sessionUnreadCount: { $max: '$sessionUnreadCount' },
                     },
                 },
                 {
@@ -234,7 +226,8 @@ const listChats = catchAsync(async (req, res) => {
                         lastDirection: '$latest.direction',
                         lastMediaType: '$latest.mediaType',
                         lastTimestamp: '$latest.timestamp',
-                        unread: 1,
+                        // Prefer Baileys session unread. Do NOT fall back to historical read:false sum.
+                        unread: { $ifNull: ['$sessionUnreadCount', 0] },
                     },
                 },
                 { $sort: { lastTimestamp: -1 } },
@@ -255,15 +248,7 @@ const listChats = catchAsync(async (req, res) => {
                             $max: { $cond: [{ $eq: [{ $ifNull: ['$mobile', ''] }, ''] }, null, '$mobile'] },
                         },
                         isContact: { $max: { $cond: ['$isContact', 1, 0] } },
-                        unread: {
-                            $sum: {
-                                $cond: [
-                                    { $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$read', false] }] },
-                                    1,
-                                    0,
-                                ],
-                            },
-                        },
+                        sessionUnreadCount: { $max: '$sessionUnreadCount' },
                     },
                 },
                 { $sort: { lastTimestamp: -1 } },
@@ -304,7 +289,7 @@ const listChats = catchAsync(async (req, res) => {
                         lastDirection: { $arrayElemAt: ['$latestArr.direction', 0] },
                         lastMediaType: { $arrayElemAt: ['$latestArr.mediaType', 0] },
                         lastTimestamp: 1,
-                        unread: 1,
+                        unread: { $ifNull: ['$sessionUnreadCount', 0] },
                     },
                 },
             ]).allowDiskUse(true);
@@ -517,11 +502,50 @@ const listMessages = catchAsync(async (req, res) => {
 const markRead = catchAsync(async (req, res) => {
     const userId = whatsAppDataUserId(req);
     const { jid } = req.params;
-    const result = await WhatsAppMessage.updateMany(
-        { userId, jid, direction: 'in', read: false },
-        { $set: { read: true } }
+    const filter = { userId, jid, direction: 'in', read: false, mediaType: { $ne: 'placeholder' } };
+
+    const unreadDocs = await WhatsAppMessage.find(filter)
+        .select('messageId jid remoteJid participant fromMe')
+        .sort({ timestamp: -1 })
+        .limit(64)
+        .lean();
+
+    const result = await WhatsAppMessage.updateMany(filter, { $set: { read: true } });
+
+    // Clear session unread on placeholder stubs for this chat
+    await WhatsAppMessage.updateMany(
+        {
+            userId,
+            mediaType: 'placeholder',
+            $or: [
+                { jid },
+                { messageId: `placeholder:${jid}` },
+            ],
+        },
+        { $set: { sessionUnreadCount: 0 } },
     );
-    res.json({ updated: result.modifiedCount || 0 });
+
+    let waReadSync = { attempted: false, ok: false, reason: '' };
+    try {
+        const keys = unreadDocs
+            .filter((m) => m.messageId && !String(m.messageId).startsWith('placeholder:'))
+            .map((m) => ({
+                remoteJid: m.remoteJid || m.jid || jid,
+                id: m.messageId,
+                fromMe: false,
+                ...(m.participant ? { participant: m.participant } : {}),
+            }));
+        if (keys.length) {
+            waReadSync = await WhatsAppService.markMessagesRead(userId, keys);
+        } else {
+            waReadSync = { attempted: false, ok: false, reason: 'no_unread_keys' };
+        }
+    } catch (e) {
+        waReadSync = { attempted: true, ok: false, reason: String(e?.message || e).slice(0, 200) };
+        logger.warn(`[WhatsApp-Chat] markRead WA sync failed: ${waReadSync.reason}`);
+    }
+
+    res.json({ updated: result.modifiedCount || 0, waReadSync });
 });
 
 /**
@@ -710,6 +734,45 @@ const downloadMedia = catchAsync(async (req, res) => {
     return res.end(buffer);
 });
 
+
+const createChatArchive = catchAsync(async (req, res) => {
+    const userId = whatsAppDataUserId(req);
+    const companyId = companyIdFrom(req);
+    if (!companyId) {
+        return res.status(httpStatus.BAD_REQUEST).json({ message: 'Company context required' });
+    }
+    const {
+        createWhatsAppChatArchive,
+    } = await import('../services/whatsappChatArchive.service.js');
+    const data = await createWhatsAppChatArchive({
+        companyId,
+        userId,
+        whatsappAccountOrSessionId: userId,
+        from: req.body?.from,
+        to: req.body?.to,
+        limit: req.body?.limit,
+        createdBy: req.user?._id || req.user?.id,
+    });
+    res.json({ success: true, ...data });
+});
+
+const downloadChatArchive = catchAsync(async (req, res) => {
+    const { getWhatsAppArchiveDownloadUrl } = await import('../services/whatsappChatArchive.service.js');
+    const objectKey = String(req.query?.objectKey || req.body?.objectKey || '').trim();
+    const data = await getWhatsAppArchiveDownloadUrl({
+        objectKey,
+        expiresInSeconds: Number(req.query?.expiresIn) || 300,
+    });
+    res.json({ success: true, ...data });
+});
+
+const archiveBackfillDryRun = catchAsync(async (req, res) => {
+    const userId = whatsAppDataUserId(req);
+    const { dryRunWhatsAppArchiveBackfill } = await import('../services/whatsappChatArchive.service.js');
+    const data = await dryRunWhatsAppArchiveBackfill({ userId });
+    res.json({ success: true, data });
+});
+
 export default {
     listChats,
     listMessages,
@@ -718,4 +781,7 @@ export default {
     syncChats,
     startChat,
     downloadMedia,
+    createChatArchive,
+    downloadChatArchive,
+    archiveBackfillDryRun,
 };

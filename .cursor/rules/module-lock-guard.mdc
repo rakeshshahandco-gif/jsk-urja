@@ -1,0 +1,65 @@
+---
+description: Golden Module Lock — check before modifying CRM modules
+alwaysApply: true
+---
+
+# Module Lock / Golden Module Protection
+
+Development protection only. Locked modules must keep working at runtime for normal users.
+
+## Before modifying an existing CRM module
+
+1. Run `npm run module-lock:check -- <moduleKey>` (or `npm run module-lock:status`) against **jskurja-dev**.
+2. Map the task to a catalog key when possible (`salesOrder`, `salesOrder.print`, `gstr1`, `whatsapp`, etc.).
+
+### If status = OPEN
+
+Proceed within the user’s requested scope only.
+
+### If status = LOCKED
+
+**DO NOT MODIFY** that module (or its protected sub-key).
+
+STOP and report:
+
+```
+MODULE PROTECTION BLOCK
+
+<Module Name> is currently LOCKED / GOLDEN.
+
+Your requested task requires modification of this
+protected module.
+
+Please unlock it from:
+
+Settings → System Protection → Module Lock
+
+or explicitly authorize the required unlock.
+```
+
+## Hard bans
+
+- Do **not** automatically unlock a module.
+- Do **not** change `platformfeaturesettings.settings.moduleLocks` (or any DB value) to bypass protection.
+- Do **not** bypass the lock checker.
+- Do **not** treat LOCKED as runtime read-only / disabled module (that is separate from `companies.moduleStates` ON/OFF/LOCKED).
+
+## Shared file impact
+
+If a change touches shared code used by a LOCKED module (e.g. GST helpers used by Sales Order + GSTR-1):
+
+```
+SHARED MODULE IMPACT
+
+Requested change may affect locked modules:
+- …
+Owner approval / regression validation required.
+```
+
+Do not silently modify that shared code. Do not unnecessarily block unrelated OPEN modules.
+
+## Storage (do not invent new collections)
+
+- Platform locks: `platformfeaturesettings.settings.moduleLocks`
+- Company module allocation: existing `companies.moduleStates` only
+---

@@ -550,15 +550,38 @@ const WhatsAppChatPage = () => {
             }
         };
         const onChatsSynced = () => scheduleReloadChats();
+        const onChatUnread = (payload) => {
+            if (!payload) return;
+            if (Number.isFinite(Number(payload.unread))) {
+                const unread = Number(payload.unread);
+                setChats((prev) => prev.map((c) => {
+                    const match = c.jid === payload.jid
+                        || c.jid === payload.remoteJid;
+                    return match ? { ...c, unread } : c;
+                }));
+                return;
+            }
+            if (Number(payload.unreadDelta) === 1) {
+                setChats((prev) => prev.map((c) => {
+                    const match = c.jid === payload.jid
+                        || c.jid === payload.remoteJid;
+                    if (!match) return c;
+                    if (c.jid === activeJid) return { ...c, unread: 0 };
+                    return { ...c, unread: (Number(c.unread) || 0) + 1 };
+                }));
+            }
+        };
         socket.on('whatsapp:message', onMessage);
         socket.on('whatsapp:status', onStatus);
         socket.on('whatsapp:history-sync', onHistorySync);
         socket.on('whatsapp:chats-synced', onChatsSynced);
+        socket.on('whatsapp:chat-unread', onChatUnread);
         return () => {
             socket.off('whatsapp:message', onMessage);
             socket.off('whatsapp:status', onStatus);
             socket.off('whatsapp:history-sync', onHistorySync);
             socket.off('whatsapp:chats-synced', onChatsSynced);
+            socket.off('whatsapp:chat-unread', onChatUnread);
         };
     }, [socket, activeJid]);
 

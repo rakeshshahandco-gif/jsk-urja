@@ -64,6 +64,10 @@ const PLATFORM_PAGE_GUIDANCE = Object.freeze({
         moduleName: 'Backup & Restore',
         denialReason: 'This page is restricted to Platform Admin (System Admin role).',
     },
+    '/admin/system-protection/module-lock': {
+        moduleName: 'Module Lock',
+        denialReason: 'This page is restricted to Platform Admin (System Admin role).',
+    },
 });
 
 function titleFromPath(pathname = '') {

@@ -52,11 +52,17 @@ export function CustomerDocumentActions({
     const latest = documents.filter((d) => d.documentType === documentType && !d.isDeleted);
 
     const appendMeta = (fd) => {
-        fd.append('documentType', documentType);
+        // Exact backend enum value (e.g. pan_card) — must be present on multipart body
+        fd.append('documentType', String(documentType || '').trim());
         if (companyId) fd.append('companyId', companyId);
         if (financialYearId) fd.append('financialYearId', financialYearId);
         if (showExpiry && expiryDate) fd.append('expiryDate', expiryDate);
         if (showExpiry && reminderDays !== '') fd.append('reminderDays', reminderDays);
+    };
+
+    const resolveDocUrl = (doc) => {
+        if (doc?.signedUrl) return doc.signedUrl;
+        return getCustomerDocumentDownloadUrl(doc?.fileUrl);
     };
 
     const handleUpload = async (file, source = 'upload') => {
@@ -65,12 +71,20 @@ export function CustomerDocumentActions({
             return;
         }
         if (!file) return;
+        if (!documentType) {
+            toast.error('Document type is missing. Please refresh and try again.');
+            return;
+        }
         setBusy(true);
         try {
             const fd = new FormData();
             fd.append('file', file);
             fd.append('source', source);
             appendMeta(fd);
+            // Guarantees documentType is on the outbound FormData before request leaves browser
+            if (!fd.get('documentType')) {
+                throw new Error('documentType was not attached to the upload request');
+            }
             if (replaceId) {
                 await replaceCustomerDocument(replaceId, fd);
                 toast.success('Document replaced');
@@ -81,7 +95,8 @@ export function CustomerDocumentActions({
             }
             onRefresh?.();
         } catch (e) {
-            toast.error(e.response?.data?.message || 'Upload failed');
+            const msg = e.response?.data?.message || e.message || 'Upload failed';
+            toast.error(String(msg).replace(/^DEBUG:\s*/i, ''));
         } finally {
             setBusy(false);
             if (pdfInputRef.current) pdfInputRef.current.value = '';
@@ -165,9 +180,9 @@ export function CustomerDocumentActions({
                             {doc.expiryDate && (
                                 <span style={{ fontSize: 11, color: '#b45309' }}>Exp: {new Date(doc.expiryDate).toLocaleDateString()}</span>
                             )}
-                            <button type="button" style={btn} onClick={() => window.open(getCustomerDocumentDownloadUrl(doc.fileUrl), '_blank')}>View</button>
+                            <button type="button" style={btn} onClick={() => window.open(resolveDocUrl(doc), '_blank')}>View</button>
                             {effectiveCanDownload && (
-                                <a href={getCustomerDocumentDownloadUrl(doc.fileUrl)} download style={{ ...btn, textDecoration: 'none' }}>Download</a>
+                                <a href={resolveDocUrl(doc)} download style={{ ...btn, textDecoration: 'none' }}>Download</a>
                             )}
                             {effectiveCanUpload && (
                                 <button type="button" style={btn} disabled={busy} onClick={() => { setReplaceId(doc._id); replaceInputRef.current?.click(); }}>Replace</button>

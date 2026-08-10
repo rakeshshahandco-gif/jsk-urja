@@ -581,12 +581,96 @@ class WhatsAppSession {
                         }
 
                         if (doc) {
+                        // Live inbound → bump Baileys-aligned session unread on the chat stub.
+                        if (!fromMe && doc.read !== true) {
+                            WhatsAppMessage.updateOne(
+                                {
+                                    userId: this.userId,
+                                    messageId: `placeholder:${remoteJid}`,
+                                },
+                                [
+                                    {
+                                        $set: {
+                                            sessionUnreadCount: {
+                                                $add: [{ $ifNull: ['$sessionUnreadCount', 0] }, 1],
+                                            },
+                                        },
+                                    },
+                                ],
+                            ).catch(() => {});
+                            this._emit('whatsapp:chat-unread', {
+                                jid: remoteJid,
+                                remoteJid,
+                                unreadDelta: 1,
+                            });
+                        }
+
                             // Loud, structured log so we can prove via terminal that
                             // each real message touches the DB.
                             logger.info(
                                 `[WhatsApp-Chat] User ${this.userId}: msg ${direction.toUpperCase()} `
                                 + `jid=${remoteJid} type=${mediaType} text="${(text || '').slice(0, 60)}"`
                             );
+
+                            // LIVE media → FileStorage/S3 (metadata only). Non-fatal.
+                            // Skip history-like upserts (type === 'append') and existing objectKey.
+                            if (isMedia && type === 'notify' && !doc.objectKey) {
+                                (async () => {
+                                    try {
+                                        const buffer = await this.downloadMediaForMessage(m);
+                                        if (!Buffer.isBuffer(buffer) || buffer.length === 0) return;
+                                        const { getFileStorageService } = await import('./fileStorage/index.js');
+                                        const storage = getFileStorageService();
+                                        const originalFileName = mediaFilename || `whatsapp-${mediaType || 'file'}.bin`;
+                                        const mimeType = mediaMime || 'application/octet-stream';
+                                        const companyId = 'default';
+                                        const safeMsg = String(messageId || doc.messageId || doc._id || '')
+                                            .replace(/[^\w.\-:@]+/g, '_')
+                                            .slice(0, 120) || 'unknown';
+                                        const safeName = String(originalFileName)
+                                            .replace(/[\\/\0]+/g, '_')
+                                            .replace(/[^\w.\-()+@ ]+/g, '_')
+                                            .slice(0, 160) || 'media.bin';
+                                        const uploaded = await storage.uploadFile({
+                                            companyId,
+                                            financialYearId: 'none',
+                                            module: 'whatsapp',
+                                            originalFileName: safeName,
+                                            mimeType,
+                                            buffer,
+                                            createdBy: this.userId,
+                                            // Deterministic-ish key: same messageId reuses same object key.
+                                            objectKey: [
+                                                'company', companyId,
+                                                'financial-year', 'none',
+                                                'whatsapp',
+                                                String(this.userId).replace(/[^\w.\-:@]+/g, '_').slice(0, 64),
+                                                safeMsg,
+                                                safeName,
+                                            ].join('/'),
+                                            skipValidation: true,
+                                        });
+                                        await WhatsAppMessage.updateOne(
+                                            { _id: doc._id, $or: [{ objectKey: '' }, { objectKey: null }, { objectKey: { $exists: false } }] },
+                                            {
+                                                $set: {
+                                                    storageProvider: uploaded.storageProvider || '',
+                                                    objectKey: uploaded.objectKey || '',
+                                                    mediaSize: uploaded.fileSize ?? buffer.length,
+                                                    mediaChecksum: uploaded.checksum || '',
+                                                    ...(mediaFilename ? { mediaFilename } : {}),
+                                                    ...(mediaMime ? { mediaMime } : {}),
+                                                },
+                                            },
+                                        );
+                                    } catch (e) {
+                                        logger.warn(
+                                            `[WhatsApp-Chat] User ${this.userId}: S3 media upload skipped msg=${messageId || doc._id}: ${e?.message || e}`,
+                                        );
+                                    }
+                                })();
+                            }
+
                             this._emit('whatsapp:message', {
                                 _id: doc._id, userId: this.userId,
                                 jid: remoteJid, isGroup, participant,
@@ -627,6 +711,8 @@ class WhatsAppSession {
                     const ts = c.conversationTimestamp
                         ? new Date(Number(c.conversationTimestamp) * 1000)
                         : null;
+                    const hasSessionUnread = typeof c.unreadCount === 'number' && Number.isFinite(c.unreadCount);
+                    const sessionUnreadCount = hasSessionUnread ? Math.max(0, Math.floor(c.unreadCount)) : null;
                     // Insert a placeholder if missing, AND always update name/mobile
                     // (so renames / saved-contact updates are picked up).
                     ops.push({
@@ -648,11 +734,32 @@ class WhatsAppSession {
                                 $set: {
                                     ...(name ? { chatName: name } : {}),
                                     ...(mobile ? { mobile } : {}),
+                                    ...(hasSessionUnread ? { sessionUnreadCount } : {}),
                                 },
                             },
                             upsert: true,
                         }
                     });
+                    // Phone cleared unread → align CRM message read flags (no new collection).
+                    if (hasSessionUnread && sessionUnreadCount === 0) {
+                        WhatsAppMessage.updateMany(
+                            {
+                                userId: this.userId,
+                                direction: 'in',
+                                read: false,
+                                mediaType: { $ne: 'placeholder' },
+                                $or: [{ jid: c.id }, ...(mobile ? [{ mobile }] : [])],
+                            },
+                            { $set: { read: true } },
+                        ).catch(() => {});
+                    }
+                    if (hasSessionUnread) {
+                        this._emit('whatsapp:chat-unread', {
+                            jid: c.id,
+                            remoteJid: c.id,
+                            unread: sessionUnreadCount,
+                        });
+                    }
                 }
                 if (ops.length) {
                     try {
@@ -1353,6 +1460,29 @@ class WhatsAppServiceManager {
 
     async downloadMediaForMessage(userId, rawMessage) {
         return this._getOrCreate(userId).downloadMediaForMessage(rawMessage);
+    }
+
+    /**
+     * CRM → WhatsApp: mark messages as read on the connected Baileys session.
+     */
+    async markMessagesRead(requestUserId, keys = []) {
+        const userId = this.resolveChatUserId(requestUserId);
+        const session = this.sessions.get(String(userId));
+        if (!session?.isConnected || !session.sock) {
+            return { attempted: false, ok: false, reason: 'session_offline' };
+        }
+        if (!Array.isArray(keys) || !keys.length) {
+            return { attempted: false, ok: false, reason: 'no_keys' };
+        }
+        if (typeof session.sock.readMessages !== 'function') {
+            return { attempted: true, ok: false, reason: 'readMessages_unsupported' };
+        }
+        try {
+            await session.sock.readMessages(keys);
+            return { attempted: true, ok: true, reason: '' };
+        } catch (e) {
+            return { attempted: true, ok: false, reason: String(e?.message || e).slice(0, 200) };
+        }
     }
 
     async syncChats(userId) {

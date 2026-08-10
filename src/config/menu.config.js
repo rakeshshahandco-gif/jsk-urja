@@ -804,10 +804,11 @@ export const menuConfig = [
             },
             {
                 id: 'super-admin-system',
-                title: 'System',
+                title: 'System Protection',
                 roles: [ROLES.SUPERADMIN],
                 permission: null,
                 children: [
+                    { id: 'system-protection-module-lock', title: 'Module Lock', path: PATHS.SETTINGS.MODULE_LOCK, roles: [ROLES.SUPERADMIN], permission: 'admin' },
                     { id: 'system-diagnostic', title: 'System Master Diagnostic', path: '/admin/diagnostics', roles: [ROLES.SUPERADMIN], permission: 'admin' },
                     { id: 'backup-restore', title: 'Backup & Restore', path: '/admin/backups', roles: [ROLES.SUPERADMIN], permission: 'admin' },
                 ],

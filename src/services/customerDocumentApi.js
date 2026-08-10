@@ -13,15 +13,43 @@ export async function listCustomerDocuments(customerId, params = {}) {
 }
 
 export async function uploadCustomerDocument(customerId, formData) {
+    // Let the browser/axios set multipart boundary — do NOT force Content-Type
+    // (missing boundary drops FormData fields like documentType).
     const res = await api.post(`${BASE}/${customerId}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': undefined },
+        transformRequest: [
+            (data, headers) => {
+                if (typeof FormData !== 'undefined' && data instanceof FormData) {
+                    if (headers && typeof headers.delete === 'function') {
+                        headers.delete('Content-Type');
+                    } else if (headers) {
+                        delete headers['Content-Type'];
+                        delete headers['content-type'];
+                    }
+                }
+                return data;
+            },
+        ],
     });
     return res.data?.data ?? res.data;
 }
 
 export async function replaceCustomerDocument(documentId, formData) {
     const res = await api.put(`${BASE}/file/${documentId}/replace`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': undefined },
+        transformRequest: [
+            (data, headers) => {
+                if (typeof FormData !== 'undefined' && data instanceof FormData) {
+                    if (headers && typeof headers.delete === 'function') {
+                        headers.delete('Content-Type');
+                    } else if (headers) {
+                        delete headers['Content-Type'];
+                        delete headers['content-type'];
+                    }
+                }
+                return data;
+            },
+        ],
     });
     return res.data?.data ?? res.data;
 }

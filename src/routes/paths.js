@@ -36,6 +36,7 @@ export const PATHS = {
         /** @deprecated redirect only — use FEATURE_COMPLIANCE?tab=customer */
         CUSTOMER_MASTER_SETTINGS: '/admin/customer-master-settings',
         PLATFORM_FEATURE_DEFAULTS: '/admin/platform-feature-defaults',
+        MODULE_LOCK: '/admin/system-protection/module-lock',
         INDUSTRY_TEMPLATES: '/admin/industry-templates',
         COMPANY_MODULE_ALLOCATION: '/admin/module-allocation',
         INDUSTRY_DEPLOYMENT_MANAGER: '/admin/industry-deployment-manager',
@@ -437,6 +438,7 @@ export const PATHS = {
         HISTORY: '/data-extractor/history',
         LEADS: '/data-extractor/leads',
         PREVIEW: (jobId) => `/data-extractor/preview/${jobId}`,
+        RUN: (sessionId) => `/data-extractor/runs/${sessionId}`,
         SETTINGS: '/data-extractor/settings',
     },
     // ── SaaS Super Admin ──────────────────────────────────────────────────

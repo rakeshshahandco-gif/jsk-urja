@@ -12,6 +12,7 @@ import { startTaskCron } from './cron/taskCron.js';
 import { startReminderCron } from './cron/reminderCron.js';
 import { startWhatsappBulkCron } from './cron/whatsappBulkCron.js';
 import { startEmailBulkCron } from './cron/emailBulkCron.js';
+import { startSimpleLeadSearchRuntimeCron } from './cron/simpleLeadSearchRuntimeCron.js';
 import WhatsAppService from './services/whatsapp.service.js';
 
 // Connect to Database
@@ -27,6 +28,7 @@ connectDB().then((connected) => {
         // Start Cron Jobs (staging: no WhatsApp/Email bulk auto-send side effects)
         startTaskCron();
         startReminderCron();
+        startSimpleLeadSearchRuntimeCron();
         if (String(config.appEnv || '').toLowerCase() === 'staging') {
             logger.info('[STAGING] WhatsApp/Email bulk crons disabled');
         } else {
