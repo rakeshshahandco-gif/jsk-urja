@@ -348,6 +348,7 @@ export const createTaxInvoiceFromSalesOrder = asyncHandler(async (req, res, next
         const igstAmt = gstApplicable && isIGST ? Math.round(taxable * gstRate / 100 * 100) / 100 : 0;
         items.push({
             itemId: i.itemId || null,
+            salesOrderLineId: i._id || null,
             itemCode: i.itemCode || '',
             itemName: i.itemName || '',
             modelNo: i.modelNo || '',

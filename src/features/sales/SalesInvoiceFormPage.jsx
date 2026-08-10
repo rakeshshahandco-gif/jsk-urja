@@ -30,6 +30,7 @@ const EWAY_BILL_THRESHOLD = 50000;
 
 const BLANK_ITEM = () => ({
     itemId: '',
+    salesOrderLineId: null,
     itemCode: '',
     itemName: '',
     modelNo: '',
@@ -360,8 +361,16 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     incentiveType: 'Percentage of sales',
                     incentiveValue: 0,
                 },
-                items: so.items?.length ? so.items.map(i => ({ 
-                    itemId: i.itemId || null, 
+                items: so.items?.length ? so.items.map(i => {
+                    const lineBilling = (so.billingState?.lines || []).find(
+                        (l) => String(l.lineId) === String(i._id)
+                    );
+                    const remaining = lineBilling != null
+                        ? Number(lineBilling.remainingQty)
+                        : Number(i.qty) || 0;
+                    return {
+                    itemId: i.itemId || null,
+                    salesOrderLineId: i._id || null,
                     itemCode: i.itemCode || i.code || i.sku || '', 
                     itemName: i.itemName || i.name || '', 
                     modelNo: i.modelNo || '', 
@@ -369,12 +378,13 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     additionalNotes: i.additionalNotes || i.itemNotes || i.notes || i.addNotes || i.remark || '', 
                     hsnCode: i.hsnCode || '', 
                     uom: i.uom || 'NOS', 
-                    qty: i.qty || '', 
+                    qty: remaining > 0 ? remaining : (i.qty || ''),
                     rate: i.rate || '', 
                     gstRate: so.gstApplicable === false ? 0 : (i.gstRate || 18), 
                     discountPercent: 0,
                     saleType: i.saleType || 'MANUFACTURED_SALE'
-                })) : [BLANK_ITEM()],
+                };
+                }).filter((row) => Number(row.qty) > 0) : [BLANK_ITEM()],
             }));
 
             // Series list may already be loaded — re-apply SO series into the dropdown now.
@@ -630,6 +640,7 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                     const itemGstRate = gstApplicable ? (Number(i.gstRate) || 18) : 0;
                     return {
                         itemId: i.itemId,
+                        salesOrderLineId: i.salesOrderLineId || null,
                         itemCode: i.itemCode,
                         itemName: i.itemName,
                         modelNo: i.modelNo,
@@ -667,7 +678,15 @@ export default function SalesInvoiceFormPage({ listMode = 'invoice' }) {
                 roundOff: Number((roundedTotal - grandTotal).toFixed(2)),
                 amountInWords: numberToWords(roundedTotal)
             };
-            const inv = await createSalesInvoice(payload);
+            const resBody = await createSalesInvoice(payload);
+            const inv = resBody?.data || resBody;
+            if (resBody?.soOverInvoice?.overInvoiced) {
+                const msg =
+                    resBody.warning ||
+                    resBody.soOverInvoice.warnings?.[0]?.message ||
+                    'Warning: Invoice quantity exceeds Sales Order remaining quantity.';
+                toast(msg, { icon: '⚠️', duration: 8000 });
+            }
             toast.success('Invoice created!');
 
             // E-Way Bill reminder: prompt only for GST tax invoices above the threshold.
