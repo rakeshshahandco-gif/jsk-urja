@@ -54,23 +54,61 @@ export function resolveSalesOrderId(source) {
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
-function lineKey(item) {
+/** Product identity only — must NOT be used alone for remaining qty across duplicate SO lines. */
+function productKey(item) {
     if (item?.itemId) return `id:${String(item.itemId)}`;
     return `name:${String(item.itemName || '').trim().toLowerCase()}`;
 }
 
+function resolveInvoiceSalesOrderLineId(invLine) {
+    const raw = invLine?.salesOrderLineId || invLine?.soLineId || invLine?.lineId || null;
+    if (!raw) return null;
+    const s = String(raw).trim();
+    return s && s !== 'null' && s !== 'undefined' ? s : null;
+}
+
 /**
- * Sum invoiced qty per SO line from ACTIVE invoices only (not cancelled, not deleted).
+ * Per SO-line invoiced qty from ACTIVE invoices only (not cancelled, not deleted).
+ * Prefer salesOrderLineId; legacy lines without it are FIFO-allocated to matching product lines.
  */
-function sumActiveInvoicedQtyByKey(activeInvoices) {
-    const map = new Map();
-    for (const inv of activeInvoices) {
+function sumActiveInvoicedQtyBySoLine(soItems, activeInvoices) {
+    const byLineId = new Map();
+    for (const soItem of soItems || []) {
+        if (soItem?._id) byLineId.set(String(soItem._id), 0);
+    }
+
+    const orphanByProduct = new Map();
+    for (const inv of activeInvoices || []) {
         for (const line of inv.items || []) {
-            const key = lineKey(line);
-            map.set(key, r2((map.get(key) || 0) + (Number(line.qty) || 0)));
+            const qty = Number(line.qty) || 0;
+            if (qty <= 0) continue;
+            const soLineId = resolveInvoiceSalesOrderLineId(line);
+            if (soLineId && byLineId.has(soLineId)) {
+                byLineId.set(soLineId, r2((byLineId.get(soLineId) || 0) + qty));
+                continue;
+            }
+            const pk = productKey(line);
+            orphanByProduct.set(pk, r2((orphanByProduct.get(pk) || 0) + qty));
         }
     }
-    return map;
+
+    // FIFO: allocate orphan (legacy) invoiced qty onto SO lines with matching product, in order.
+    for (const soItem of soItems || []) {
+        const lineId = soItem?._id ? String(soItem._id) : null;
+        if (!lineId) continue;
+        const orderedQty = Number(soItem.qty) || 0;
+        const already = byLineId.get(lineId) || 0;
+        const room = Math.max(0, orderedQty - already);
+        if (room <= 0.0001) continue;
+        const pk = productKey(soItem);
+        const orphan = orphanByProduct.get(pk) || 0;
+        if (orphan <= 0.0001) continue;
+        const take = Math.min(room, orphan);
+        byLineId.set(lineId, r2(already + take));
+        orphanByProduct.set(pk, r2(orphan - take));
+    }
+
+    return byLineId;
 }
 
 /**
@@ -104,14 +142,14 @@ export async function recalculateSalesOrderBillingFromInvoices(soId, session = n
         return so;
     }
 
-    const invoicedByKey = sumActiveInvoicedQtyByKey(activeInvoices);
     const soItems = so.items || [];
+    const invoicedByLineId = sumActiveInvoicedQtyBySoLine(soItems, activeInvoices);
     let anyInvoiced = false;
     let allFullyInvoiced = soItems.length > 0;
 
     for (const soItem of soItems) {
         const orderedQty = Number(soItem.qty) || 0;
-        const invoicedQty = invoicedByKey.get(lineKey(soItem)) || 0;
+        const invoicedQty = soItem._id ? (invoicedByLineId.get(String(soItem._id)) || 0) : 0;
         if (invoicedQty > 0.0001) anyInvoiced = true;
         if (invoicedQty < orderedQty - 0.0001) allFullyInvoiced = false;
     }
@@ -173,7 +211,8 @@ export async function getSalesOrderBillingSnapshot(soOrId, session = null) {
         .session(session)
         .lean();
 
-    const invoicedByKey = sumActiveInvoicedQtyByKey(activeInvoicesFull);
+    const soItems = so.items || [];
+    const invoicedByLineId = sumActiveInvoicedQtyBySoLine(soItems, activeInvoicesFull);
     const activeInvoices = activeInvoicesFull.map((inv) => ({
         _id: inv._id,
         invoiceNumber: inv.displayInvoiceNumber || inv.invoiceNumber,
@@ -181,14 +220,14 @@ export async function getSalesOrderBillingSnapshot(soOrId, session = null) {
         status: inv.status,
     }));
 
-    const soItems = so.items || [];
     let anyInvoiced = false;
     let allFullyInvoiced = soItems.length > 0;
 
     const lines = soItems.map((soItem) => {
         const orderedQty = Number(soItem.qty) || 0;
-        const invoicedQty = invoicedByKey.get(lineKey(soItem)) || 0;
-        const remainingQty = r2(Math.max(0, orderedQty - invoicedQty));
+        const invoicedQty = soItem._id ? (invoicedByLineId.get(String(soItem._id)) || 0) : 0;
+        // Allow negative remaining (over-invoicing is a valid business rule).
+        const remainingQty = r2(orderedQty - invoicedQty);
         if (invoicedQty > 0.0001) anyInvoiced = true;
         if (invoicedQty < orderedQty - 0.0001) allFullyInvoiced = false;
         return {
@@ -198,6 +237,8 @@ export async function getSalesOrderBillingSnapshot(soOrId, session = null) {
             orderedQty,
             invoicedQty: r2(invoicedQty),
             remainingQty,
+            overInvoiced: remainingQty < -0.0001,
+            lineKey: soItem._id ? `line:${String(soItem._id)}` : productKey(soItem),
         };
     });
 
@@ -213,39 +254,120 @@ export async function getSalesOrderBillingSnapshot(soOrId, session = null) {
 }
 
 /**
- * Block creating invoice lines that exceed remaining (ordered − active invoiced) qty.
- * Preserves partial invoicing; does not change full-remaining behaviour.
+ * Evaluate invoice qty vs SO-line remaining. NEVER blocks over-invoicing.
+ * Remaining is tracked per Sales Order LINE (salesOrderLineId); duplicate products stay independent.
+ * Legacy payloads without salesOrderLineId allocate FIFO within the same SO, then apply excess
+ * to the last matching line (remaining may go negative).
+ *
+ * @returns {{ overInvoiced: boolean, warnings: Array<object> }}
  */
-export function assertInvoiceItemsWithinRemaining(so, invoiceItems, billingSnapshot) {
+export function evaluateInvoiceItemsAgainstRemaining(so, invoiceItems, billingSnapshot) {
+    const empty = { overInvoiced: false, warnings: [] };
     const snap = billingSnapshot;
-    if (!so || !snap?.lines?.length) return;
+    if (!so || !snap?.lines?.length) return empty;
 
-    const remainingByKey = new Map();
+    const remainingByLineId = new Map();
+    const metaByLineId = new Map();
+    const fifoByProduct = new Map();
+
     for (const soItem of so.items || []) {
-        const line = snap.lines.find((l) => String(l.lineId) === String(soItem._id));
-        const rem = line ? line.remainingQty : (Number(soItem.qty) || 0);
-        remainingByKey.set(lineKey(soItem), rem);
+        const lineId = soItem?._id ? String(soItem._id) : null;
+        if (!lineId) continue;
+        const line = snap.lines.find((l) => String(l.lineId) === lineId);
+        const orderedQty = line ? Number(line.orderedQty) : (Number(soItem.qty) || 0);
+        const invoicedQty = line ? Number(line.invoicedQty) || 0 : 0;
+        const rem = line != null ? Number(line.remainingQty) : orderedQty;
+        remainingByLineId.set(lineId, rem);
+        metaByLineId.set(lineId, {
+            orderedQty,
+            alreadyInvoicedQty: invoicedQty,
+            itemName: soItem.itemName || line?.itemName || '',
+        });
+        const pk = productKey(soItem);
+        if (!fifoByProduct.has(pk)) fifoByProduct.set(pk, []);
+        fifoByProduct.get(pk).push(lineId);
     }
+
+    const warnings = [];
+
+    const pushOverWarning = (lineId, remBefore, qty, remAfter, label) => {
+        const meta = metaByLineId.get(lineId) || {};
+        warnings.push({
+            overInvoiced: true,
+            salesOrderLineId: lineId,
+            itemName: label || meta.itemName || '',
+            orderedQty: meta.orderedQty ?? null,
+            alreadyInvoicedQty: meta.alreadyInvoicedQty ?? null,
+            remainingBefore: remBefore,
+            invoiceQty: qty,
+            remainingAfter: remAfter,
+            message:
+                `Sales Order remaining quantity is ${remBefore}. ` +
+                `Current invoice quantity is ${qty}. ` +
+                `Remaining after invoice will be ${remAfter}.`,
+        });
+    };
 
     for (const invItem of invoiceItems || []) {
-        const key = lineKey(invItem);
-        if (!remainingByKey.has(key)) continue;
-        const rem = remainingByKey.get(key);
         const qty = Number(invItem.qty) || 0;
-        if (qty > rem + 0.0001) {
-            throw new ApiError(
-                httpStatus.BAD_REQUEST,
-                `Cannot invoice more than remaining quantity for "${invItem.itemName || key}". ` +
-                `Requested ${qty}, available ${rem}.`
-            );
+        if (qty <= 0) continue;
+        const label = invItem.itemName || invItem.itemCode || productKey(invItem);
+        const soLineId = resolveInvoiceSalesOrderLineId(invItem);
+
+        if (soLineId && remainingByLineId.has(soLineId)) {
+            const remBefore = remainingByLineId.get(soLineId) ?? 0;
+            const remAfter = r2(remBefore - qty);
+            remainingByLineId.set(soLineId, remAfter);
+            if (qty > remBefore + 0.0001) {
+                pushOverWarning(soLineId, remBefore, qty, remAfter, label);
+            }
+            continue;
         }
-        remainingByKey.set(key, r2(rem - qty));
+
+        // Legacy / missing salesOrderLineId: FIFO within SO for same product; excess → last line.
+        const pool = fifoByProduct.get(productKey(invItem)) || [];
+        if (!pool.length) continue;
+
+        const remBeforeProduct = r2(pool.reduce((s, id) => s + (remainingByLineId.get(id) ?? 0), 0));
+        let left = qty;
+        for (const lineId of pool) {
+            if (left <= 0.0001) break;
+            const rem = remainingByLineId.get(lineId) ?? 0;
+            if (rem <= 0.0001) continue;
+            const take = Math.min(rem, left);
+            remainingByLineId.set(lineId, r2(rem - take));
+            left = r2(left - take);
+        }
+        if (left > 0.0001) {
+            const target = pool[pool.length - 1];
+            const rem = remainingByLineId.get(target) ?? 0;
+            remainingByLineId.set(target, r2(rem - left));
+            left = 0;
+        }
+        const remAfterProduct = r2(pool.reduce((s, id) => s + (remainingByLineId.get(id) ?? 0), 0));
+        if (qty > remBeforeProduct + 0.0001) {
+            pushOverWarning(pool[pool.length - 1], remBeforeProduct, qty, remAfterProduct, label);
+        }
     }
+
+    return {
+        overInvoiced: warnings.length > 0,
+        warnings,
+    };
 }
 
 /**
- * Before creating a new invoice: refresh SO billing from ACTIVE invoices only,
- * then block only when an active invoice still fully covers the order.
+ * Name kept for call sites — over-invoicing is ALLOWED (non-blocking).
+ * Returns evaluateInvoiceItemsAgainstRemaining result; does not throw on excess qty.
+ */
+export function assertInvoiceItemsWithinRemaining(so, invoiceItems, billingSnapshot) {
+    return evaluateInvoiceItemsAgainstRemaining(so, invoiceItems, billingSnapshot);
+}
+
+/**
+ * Before creating a new invoice: refresh SO billing from ACTIVE invoices.
+ * Does NOT block when SO is already fully/over invoiced — further invoices may make remaining negative.
+ * Still blocks Draft and terminal statuses (Cancelled / Closed / Completed).
  */
 export async function prepareSalesOrderForInvoiceCreation(soId, session = null) {
     const so = await recalculateSalesOrderBillingFromInvoices(soId, session);
@@ -263,20 +385,6 @@ export async function prepareSalesOrderForInvoiceCreation(soId, session = null) 
             httpStatus.BAD_REQUEST,
             `Sales Order ${so.soNumber || ''} is ${so.status} and cannot be invoiced`
         );
-    }
-    if (so.status === 'Invoiced') {
-        const billing = await getSalesOrderBillingSnapshot(so, session);
-        const existing = billing.activeInvoices?.[0] || null;
-        const err = new ApiError(
-            httpStatus.CONFLICT,
-            'A Tax Invoice has already been created from this Sales Order.'
-        );
-        err.data = {
-            code: 'SO_ALREADY_INVOICED',
-            existingInvoice: existing,
-            activeInvoices: billing.activeInvoices || [],
-        };
-        throw err;
     }
     return so;
 }

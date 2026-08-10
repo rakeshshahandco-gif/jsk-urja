@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 
 const siItemSchema = new mongoose.Schema({
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
+    /** Exact Sales Order line this invoice row bills against (required for duplicate-product SO lines). */
+    salesOrderLineId: { type: mongoose.Schema.Types.ObjectId, default: null },
     itemCode: { type: String, default: '' },
     itemName: { type: String, required: true },
     modelNo: { type: String, default: '' },

@@ -33,7 +33,7 @@ import {
     prepareSalesOrderForInvoiceCreation,
     resolveSalesOrderId,
     getSalesOrderBillingSnapshot,
-    assertInvoiceItemsWithinRemaining,
+    evaluateInvoiceItemsAgainstRemaining,
 } from '../utils/salesOrderBilling.utils.js';
 import logger from '../utils/logger.js';
 
@@ -94,10 +94,12 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
             }
         }
 
+        let soOverInvoice = null;
         if (linkedSoId) {
             const soPrepared = await prepareSalesOrderForInvoiceCreation(linkedSoId, session);
             const billingSnap = await getSalesOrderBillingSnapshot(soPrepared, session);
-            assertInvoiceItemsWithinRemaining(soPrepared, body.items, billingSnap);
+            // Calculate remaining / over-invoice warnings — NEVER block save for excess qty.
+            soOverInvoice = evaluateInvoiceItemsAgainstRemaining(soPrepared, body.items, billingSnap);
         }
 
         // Financial Year Tagging
@@ -368,6 +370,41 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
                 invData.customerRegistrationType = 'Consumer-B2CS';
             }
         }
+
+        // Stamp GST verification snapshot when client provided (never rewrites later from master alone)
+        if (invData.gstVerificationSnapshot && typeof invData.gstVerificationSnapshot === 'object') {
+            const snap = invData.gstVerificationSnapshot;
+            invData.gstinUsed = snap.gstinUsed ?? invData.customerGstin ?? '';
+            invData.gstLegalNameSnapshot = snap.gstLegalNameSnapshot || '';
+            invData.gstTradeNameSnapshot = snap.gstTradeNameSnapshot || '';
+            invData.gstStatusSnapshot = snap.gstStatusSnapshot || '';
+            invData.gstStatusOnTransactionDate = snap.gstStatusOnTransactionDate || '';
+            invData.gstRegistrationTypeSnapshot = snap.gstRegistrationTypeSnapshot || '';
+            invData.gstTreatmentSnapshot = snap.gstTreatmentSnapshot || '';
+            invData.gstr1CategorySnapshot = snap.gstr1CategorySnapshot || '';
+            invData.cancellationDateSnapshot = snap.cancellationDateSnapshot || null;
+            invData.verificationDateSnapshot = snap.verificationDateSnapshot || null;
+            invData.verificationProviderSnapshot = snap.verificationProviderSnapshot || '';
+            invData.gstHistoryId = snap.gstHistoryId || null;
+            invData.gstDecisionReason = snap.decisionReason || snap.gstDecisionReason || '';
+            invData.gstManualOverride = Boolean(snap.manualOverride || snap.gstManualOverride);
+            invData.gstOverrideReason = snap.overrideReason || snap.gstOverrideReason || '';
+            invData.gstApprovedBy = snap.approvedBy || snap.gstApprovedBy || null;
+            invData.gstApprovedAt = snap.approvedAt || snap.gstApprovedAt || null;
+            delete invData.gstVerificationSnapshot;
+        } else if (!invData.gstr1CategorySnapshot) {
+            if (isB2C || String(invData.customerRegistrationType || '').startsWith('Consumer')) {
+                invData.gstTreatmentSnapshot = invData.gstTreatmentSnapshot || 'Unregistered';
+                invData.gstr1CategorySnapshot = String(invData.customerRegistrationType).includes('B2CL') ? 'B2CL' : 'B2CS';
+                invData.gstDecisionReason = invData.gstDecisionReason || 'Unregistered/Consumer classification at create';
+            } else if (invData.customerGstin && String(invData.customerGstin).length === 15) {
+                invData.gstinUsed = invData.customerGstin;
+                invData.gstTreatmentSnapshot = invData.gstTreatmentSnapshot || 'Registered';
+                invData.gstr1CategorySnapshot = 'B2B';
+                invData.gstStatusOnTransactionDate = invData.gstStatusOnTransactionDate || 'Active';
+                invData.gstDecisionReason = invData.gstDecisionReason || 'Default B2B snapshot from invoice GSTIN at create';
+            }
+        }
         // ---------------------------------------------
 
         const [invoice] = await SalesInvoice.create([invData], { session });
@@ -474,7 +511,14 @@ export const createSalesInvoice = asyncHandler(async (req, res) => {
         }], { session });
 
         await session.commitTransaction();
-        res.status(httpStatus.CREATED).json({ success: true, data: invoice });
+        const payload = { success: true, data: invoice };
+        if (soOverInvoice?.overInvoiced) {
+            payload.soOverInvoice = soOverInvoice;
+            payload.warning =
+                soOverInvoice.warnings?.[0]?.message ||
+                'Warning: Invoice quantity exceeds Sales Order remaining quantity.';
+        }
+        res.status(httpStatus.CREATED).json(payload);
 
     } catch (error) {
         await session.abortTransaction();
