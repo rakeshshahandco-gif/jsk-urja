@@ -711,33 +711,8 @@ class PDFService {
         const grandTotal = so.roundedTotal || so.grandTotal || 0;
         if (!so.amountInWords) so.amountInWords = numberToWords(grandTotal);
 
-        let printFormat = null;
-        try {
-            const companyId = so.companyId || company?.companyId || company?._id;
-            if (companyId) {
-                printFormat = await PrintFormatService.getActiveDefault(companyId, 'Sales Order');
-            }
-        } catch (e) {
-            console.warn('[PDF] SO active print format skipped:', e.message);
-        }
-
-        const liveBlocks = isLivePrintFormat(printFormat)
-            && printFormat?.layout?.blocks
-            && typeof printFormat.layout.blocks === 'object'
-            && Object.keys(printFormat.layout.blocks).length > 0;
-
-        const bodyHtml = liveBlocks
-            ? buildSalesOrderBlockHtml({
-                so,
-                company,
-                user,
-                logoBase64,
-                blocks: printFormat.layout.blocks,
-                printFormat,
-            })
-            : buildSalesOrderFlowHtml({ so, company, user, logoBase64 });
-
-        const formatCss = liveBlocks ? buildPdfFormatCss(printFormat, 'Sales Order') : '';
+        // Print/PDF uses the approved full-width AFTER flow (same as browser print).
+        const bodyHtml = buildSalesOrderFlowHtml({ so, company, user, logoBase64 });
 
         const htmlContent = `<!DOCTYPE html>
             <html>
@@ -745,7 +720,6 @@ class PDFService {
                 <meta charset="UTF-8">
                 <style>
                     ${SO_PRINT_BASE_CSS}
-                    ${formatCss}
                 </style>
             </head>
             <body>

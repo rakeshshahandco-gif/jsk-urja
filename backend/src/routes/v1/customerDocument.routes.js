@@ -42,8 +42,9 @@ router.get(
 router.post(
     '/:customerId/upload',
     checkPermission('customers.customer_documents.upload'),
-    validate(customerDocumentValidation.upload),
+    // Multer must run before validate so multipart fields (documentType) are on req.body
     customerDocumentUpload.single('file'),
+    validate(customerDocumentValidation.upload),
     customerDocumentController.uploadDocument,
 );
 
@@ -57,8 +58,8 @@ router.get(
 router.put(
     '/file/:documentId/replace',
     checkPermission('customers.customer_documents.upload'),
-    validate(customerDocumentValidation.replace),
     customerDocumentUpload.single('file'),
+    validate(customerDocumentValidation.replace),
     customerDocumentController.replaceDocument,
 );
 

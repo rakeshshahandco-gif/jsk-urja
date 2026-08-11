@@ -9,9 +9,112 @@ import {
     CUSTOMER_FIELD_DOCUMENT_LINKS,
 } from '../constants/customerKyc.constants.js';
 import { CUSTOMER_DOCUMENT_UPLOAD_DIR } from '../middlewares/customerDocumentUpload.middleware.js';
+import { createFileStorageService } from './fileStorage/index.js';
 
 function publicFileUrl(filename) {
     return `/${CUSTOMER_DOCUMENT_UPLOAD_DIR}${filename}`.replace(/\\/g, '/');
+}
+
+function storageProviderName() {
+    return String(process.env.FILE_STORAGE_PROVIDER || 'local').trim().toLowerCase() === 's3'
+        ? 's3'
+        : 'local';
+}
+
+function getFileBuffer(file) {
+    if (file?.buffer && Buffer.isBuffer(file.buffer)) return file.buffer;
+    if (file?.path && fs.existsSync(file.path)) return fs.readFileSync(file.path);
+    throw new ApiError(400, 'Uploaded file content is missing');
+}
+
+async function persistUploadedFile(file, {
+    companyId,
+    financialYearId,
+    documentType,
+    userId,
+}) {
+    const provider = storageProviderName();
+    if (provider === 's3') {
+        const buffer = getFileBuffer(file);
+        const storage = createFileStorageService({ provider: 's3' });
+        const meta = await storage.uploadFile({
+            companyId: companyId || 'unknown',
+            financialYearId: financialYearId || 'none',
+            module: 'customer-document',
+            originalFileName: file.originalname || 'document.pdf',
+            mimeType: file.mimetype || 'application/pdf',
+            buffer,
+            createdBy: userId || null,
+        });
+        if (file.path && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+        }
+        return {
+            fileName: path.basename(meta.objectKey),
+            originalName: meta.originalFileName,
+            mimeType: meta.mimeType,
+            fileUrl: `s3://${meta.bucket}/${meta.objectKey}`,
+            fileSize: meta.fileSize,
+            storageProvider: 's3',
+            bucket: meta.bucket,
+            objectKey: meta.objectKey,
+            checksum: meta.checksum,
+        };
+    }
+
+    if (!file?.filename) throw new ApiError(400, 'Uploaded file is missing');
+    return {
+        fileName: file.filename,
+        originalName: file.originalname || file.filename,
+        mimeType: file.mimetype || '',
+        fileUrl: publicFileUrl(file.filename),
+        fileSize: file.size || 0,
+        storageProvider: 'local',
+        bucket: null,
+        objectKey: null,
+        checksum: null,
+    };
+}
+
+async function deleteStoredFile(doc) {
+    if (!doc) return;
+    if (doc.storageProvider === 's3' && doc.objectKey) {
+        try {
+            const storage = createFileStorageService({ provider: 's3' });
+            await storage.deleteFile({ objectKey: doc.objectKey });
+        } catch { /* ignore missing remote object */ }
+        return;
+    }
+    const rel = String(doc.fileUrl || '').replace(/^\//, '');
+    if (!rel || rel.startsWith('s3://')) return;
+    const oldPath = path.join(process.cwd(), rel);
+    if (fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch { /* ignore */ }
+    }
+}
+
+async function withSignedUrl(doc) {
+    if (!doc) return doc;
+    const plain = typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
+    if (plain.storageProvider === 's3' && plain.objectKey) {
+        try {
+            const storage = createFileStorageService({ provider: 's3' });
+            const signed = await storage.getSignedUrl({
+                objectKey: plain.objectKey,
+                expiresInSeconds: 300,
+            });
+            // Ephemeral for clients — Mongo keeps s3:// reference only
+            plain.signedUrl = signed.url;
+            plain.fileUrl = signed.url;
+        } catch {
+            /* leave stored reference */
+        }
+    }
+    // Never expose binary fields
+    delete plain.buffer;
+    delete plain.body;
+    delete plain.data;
+    return plain;
 }
 
 export async function listCustomerDocuments(customerId, { documentType, includeDeleted = false } = {}) {
@@ -19,13 +122,13 @@ export async function listCustomerDocuments(customerId, { documentType, includeD
     if (!includeDeleted) filter.isDeleted = false;
     if (documentType) filter.documentType = documentType;
     const docs = await CustomerDocument.find(filter).sort({ createdAt: -1 }).populate('uploadedBy', 'name email');
-    return docs;
+    return Promise.all(docs.map((d) => withSignedUrl(d)));
 }
 
 export async function getCustomerDocumentById(id) {
     const doc = await CustomerDocument.findById(id);
     if (!doc || doc.isDeleted) throw new ApiError(404, 'Document not found');
-    return doc;
+    return withSignedUrl(doc);
 }
 
 export async function uploadCustomerDocument({
@@ -47,19 +150,29 @@ export async function uploadCustomerDocument({
     const customer = await Customer.findById(customerId);
     if (!customer || customer.isDeleted) throw new ApiError(404, 'Customer not found');
 
-    const fileUrl = publicFileUrl(file.filename);
+    const stored = await persistUploadedFile(file, {
+        companyId: companyId || customer.companyId,
+        financialYearId,
+        documentType,
+        userId,
+    });
+
     const doc = await CustomerDocument.create({
         groupId: groupId || '',
-        companyId: companyId || null,
+        companyId: companyId || customer.companyId || null,
         customerId,
         financialYearId: financialYearId || null,
         documentType,
         documentNumber: documentNumber || '',
-        fileName: file.filename,
-        originalName: file.originalname || file.filename,
-        mimeType: file.mimetype || '',
-        fileUrl,
-        fileSize: file.size || 0,
+        fileName: stored.fileName,
+        originalName: stored.originalName,
+        mimeType: stored.mimeType,
+        fileUrl: stored.fileUrl,
+        fileSize: stored.fileSize,
+        storageProvider: stored.storageProvider,
+        bucket: stored.bucket,
+        objectKey: stored.objectKey,
+        checksum: stored.checksum,
         source: source || 'upload',
         uploadedBy: userId,
         updatedBy: userId,
@@ -67,20 +180,31 @@ export async function uploadCustomerDocument({
         reminderDays: reminderDays != null && reminderDays !== '' ? Number(reminderDays) : null,
         ocrStatus: 'none',
     });
-    return doc;
+    return withSignedUrl(doc);
 }
 
 export async function replaceCustomerDocument(id, { file, userId, documentNumber, expiryDate, reminderDays, source }) {
-    const existing = await getCustomerDocumentById(id);
-    const oldPath = path.join(process.cwd(), existing.fileUrl.replace(/^\//, ''));
-    if (fs.existsSync(oldPath)) {
-        try { fs.unlinkSync(oldPath); } catch (_) { /* ignore */ }
-    }
-    existing.fileName = file.filename;
-    existing.originalName = file.originalname || file.filename;
-    existing.mimeType = file.mimetype || '';
-    existing.fileUrl = publicFileUrl(file.filename);
-    existing.fileSize = file.size || 0;
+    const existing = await CustomerDocument.findById(id);
+    if (!existing || existing.isDeleted) throw new ApiError(404, 'Document not found');
+
+    await deleteStoredFile(existing);
+
+    const stored = await persistUploadedFile(file, {
+        companyId: existing.companyId,
+        financialYearId: existing.financialYearId,
+        documentType: existing.documentType,
+        userId,
+    });
+
+    existing.fileName = stored.fileName;
+    existing.originalName = stored.originalName;
+    existing.mimeType = stored.mimeType;
+    existing.fileUrl = stored.fileUrl;
+    existing.fileSize = stored.fileSize;
+    existing.storageProvider = stored.storageProvider;
+    existing.bucket = stored.bucket;
+    existing.objectKey = stored.objectKey;
+    existing.checksum = stored.checksum;
     existing.source = source || 'replace';
     existing.updatedBy = userId;
     if (documentNumber !== undefined) existing.documentNumber = documentNumber || '';
@@ -89,11 +213,12 @@ export async function replaceCustomerDocument(id, { file, userId, documentNumber
         existing.reminderDays = reminderDays != null && reminderDays !== '' ? Number(reminderDays) : null;
     }
     await existing.save();
-    return existing;
+    return withSignedUrl(existing);
 }
 
 export async function softDeleteCustomerDocument(id, userId) {
-    const doc = await getCustomerDocumentById(id);
+    const doc = await CustomerDocument.findById(id);
+    if (!doc || doc.isDeleted) throw new ApiError(404, 'Document not found');
     doc.isDeleted = true;
     doc.updatedBy = userId;
     await doc.save();
@@ -101,7 +226,8 @@ export async function softDeleteCustomerDocument(id, userId) {
 }
 
 export async function updateDocumentMeta(id, { documentNumber, expiryDate, reminderDays }, userId) {
-    const doc = await getCustomerDocumentById(id);
+    const doc = await CustomerDocument.findById(id);
+    if (!doc || doc.isDeleted) throw new ApiError(404, 'Document not found');
     if (documentNumber !== undefined) doc.documentNumber = documentNumber || '';
     if (expiryDate !== undefined) doc.expiryDate = expiryDate ? new Date(expiryDate) : null;
     if (reminderDays !== undefined) {
@@ -109,7 +235,7 @@ export async function updateDocumentMeta(id, { documentNumber, expiryDate, remin
     }
     doc.updatedBy = userId;
     await doc.save();
-    return doc;
+    return withSignedUrl(doc);
 }
 
 /** OCR-ready hook — no extraction yet */

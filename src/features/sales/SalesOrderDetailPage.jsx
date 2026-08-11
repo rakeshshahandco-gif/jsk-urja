@@ -956,7 +956,17 @@ export default function SalesOrderDetailPage() {
                     .so-print-portal .so-print-root .print-items-table th,
                     .so-print-portal .so-print-root .print-items-table td {
                         word-wrap: break-word;
-                        overflow-wrap: anywhere;
+                        overflow-wrap: break-word;
+                    }
+                    .so-print-portal .so-print-root .print-items-table [data-pf-col="sr"],
+                    .so-print-portal .so-print-root .print-items-table [data-pf-col="hsn"],
+                    .so-print-portal .so-print-root .print-items-table [data-pf-col="qty"],
+                    .so-print-portal .so-print-root .print-items-table [data-pf-col="rate"],
+                    .so-print-portal .so-print-root .print-items-table [data-pf-col="amount"] {
+                        white-space: nowrap !important;
+                        overflow-wrap: normal !important;
+                        word-break: keep-all !important;
+                        word-wrap: normal !important;
                     }
                 }
             `}</style>

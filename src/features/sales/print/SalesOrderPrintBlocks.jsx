@@ -22,24 +22,26 @@ const thBorder = {
     background: '#f5f5f5',
 };
 
-/** Golden SO column set (matches live print / 035.pdf). */
+/** Compact columns must stay on one line (SR / AMOUNT headers + numeric values). */
+const COMPACT_COL_IDS = new Set(['sr', 'hsn', 'qty', 'rate', 'amount']);
+
+/** Approved AFTER print columns — full width, Amount last, no trailing blank column. */
 export const SO_PRINT_COLUMNS = [
-    { id: 'sr', label: 'SR', width: '30px', align: 'center' },
-    { id: 'itemCode', label: 'ITEM CODE', width: '100px', align: 'left' },
-    { id: 'description', label: 'DESCRIPTION', width: '120px', align: 'left' },
-    { id: 'notes', label: 'ADDITIONAL NOTES', width: '100px', align: 'left' },
-    { id: 'hsn', label: 'HSN', width: '60px', align: 'center' },
-    { id: 'qty', label: 'QTY', width: '60px', align: 'center' },
-    { id: 'rate', label: 'RATE', width: '80px', align: 'right' },
-    { id: 'amount', label: 'AMOUNT', width: '100px', align: 'right' },
-    { id: 'spacer', label: '', width: 'auto', align: 'center' },
+    { id: 'sr', label: 'SR', width: '6%', widthPct: 6, align: 'center' },
+    { id: 'itemCode', label: 'ITEM CODE', width: '17%', widthPct: 17, align: 'left' },
+    { id: 'description', label: 'DESCRIPTION', width: '26%', widthPct: 26, align: 'left' },
+    { id: 'notes', label: 'ADDITIONAL NOTES', width: '15%', widthPct: 15, align: 'left' },
+    { id: 'hsn', label: 'HSN', width: '7%', widthPct: 7, align: 'center' },
+    { id: 'qty', label: 'QTY', width: '7%', widthPct: 7, align: 'center' },
+    { id: 'rate', label: 'RATE', width: '10%', widthPct: 10, align: 'right' },
+    { id: 'amount', label: 'AMOUNT', width: '12%', widthPct: 12, align: 'right' },
 ];
 
 function visibleColumns(columns) {
-    if (Array.isArray(columns) && columns.length) {
-        return columns.filter((c) => c.visible !== false);
-    }
-    return SO_PRINT_COLUMNS.map((c) => ({ ...c, visible: true, widthPct: undefined }));
+    const source = Array.isArray(columns) && columns.length
+        ? columns
+        : SO_PRINT_COLUMNS.map((c) => ({ ...c, visible: true }));
+    return source.filter((c) => c.visible !== false && c.id !== 'spacer');
 }
 
 function cellValue(colId, item, srNo, visibleColIds = []) {
@@ -63,8 +65,6 @@ function cellValue(colId, item, srNo, visibleColIds = []) {
             return fmtMoney(item.rate);
         case 'amount':
             return fmtMoney(item.amount ?? (Number(item.qty) || 0) * (Number(item.rate) || 0));
-        case 'spacer':
-            return '';
         default:
             return item[colId] ?? '—';
     }
@@ -280,8 +280,12 @@ export function SoBlockItemTable({
                             }}
                             style={{
                                 ...thBorder,
+                                padding: COMPACT_COL_IDS.has(col.id) ? '8px 3px' : thBorder.padding,
                                 textAlign: col.headerAlign || col.align || 'left',
                                 width: col.width,
+                                whiteSpace: COMPACT_COL_IDS.has(col.id) ? 'nowrap' : undefined,
+                                overflowWrap: COMPACT_COL_IDS.has(col.id) ? 'normal' : undefined,
+                                wordBreak: COMPACT_COL_IDS.has(col.id) ? 'keep-all' : undefined,
                                 outline: selectedColumnId === col.id ? '2px solid #2563eb' : undefined,
                                 cursor: onColumnHeaderClick ? 'pointer' : undefined,
                             }}
@@ -305,8 +309,17 @@ export function SoBlockItemTable({
                                         textAlign: col.align || 'left',
                                         fontWeight: col.id === 'description' || col.id === 'qty' || col.id === 'amount' ? 700 : undefined,
                                         textTransform: col.id === 'itemCode' || col.id === 'description' ? 'uppercase' : undefined,
-                                        fontSize: col.id === 'notes' || col.id === 'hsn' ? '9px' : undefined,
-                                        overflowWrap: col.id === 'itemCode' ? 'anywhere' : undefined,
+                                        fontSize: col.id === 'notes' || col.id === 'hsn' ? '9pt' : undefined,
+                                        overflowWrap: COMPACT_COL_IDS.has(col.id)
+                                            ? 'normal'
+                                            : (col.id === 'itemCode' || col.id === 'description' || col.id === 'notes')
+                                                ? 'break-word'
+                                                : undefined,
+                                        wordBreak: COMPACT_COL_IDS.has(col.id)
+                                            ? 'keep-all'
+                                            : col.id === 'itemCode' ? 'normal' : undefined,
+                                        whiteSpace: COMPACT_COL_IDS.has(col.id) ? 'nowrap' : undefined,
+                                        padding: COMPACT_COL_IDS.has(col.id) ? '6px 3px' : tdBorder.padding,
                                     }}
                                 >
                                     {cellValue(col.id, item, srNo, visibleColIds)}
@@ -341,15 +354,14 @@ export function SoBlockItemTable({
 }
 
 function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
-    const spacerCols = Math.max(colCount - 3, 0);
-    const emptyLead = spacerCols > 0 ? (
-        <td colSpan={spacerCols} style={{ border: 'none' }} />
+    const emptyLead = colCount > 2 ? (
+        <td colSpan={colCount - 2} style={{ border: 'none' }} />
     ) : null;
 
     return (
         <tbody style={{ borderTop: '2px solid #000' }} data-pf-block-inner="totalsBox">
             <tr style={{ background: '#f5f5f5' }}>
-                <td colSpan={Math.max(colCount - 4, 1)} style={{ ...tdBorder, fontWeight: 'bold' }}>
+                <td colSpan={Math.max(colCount - 3, 1)} style={{ ...tdBorder, fontWeight: 'bold' }}>
                     Total Quantity:
                 </td>
                 <td style={{ ...tdBorder, textAlign: 'center', fontWeight: 'bold' }}>
@@ -357,14 +369,12 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                 </td>
                 <td style={{ ...tdBorder, fontWeight: 'bold' }}>Total Taxable</td>
                 <td style={{ ...tdBorder, textAlign: 'right', fontWeight: 'bold' }}>{fmtMoney(so?.totalAmount)}</td>
-                {colCount > 8 && <td style={tdBorder} />}
             </tr>
             {Number(so?.freightAmount || 0) > 0 && (
                 <tr>
                     {emptyLead}
                     <td style={{ ...tdBorder, fontWeight: 'bold' }}>Freight</td>
                     <td style={{ ...tdBorder, textAlign: 'right' }}>{fmtMoney(so.freightAmount)}</td>
-                    {colCount > 8 && <td style={tdBorder} />}
                 </tr>
             )}
             {gstApplicable && (
@@ -374,7 +384,6 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                     <td style={{ ...tdBorder, textAlign: 'right', fontWeight: 'bold' }}>
                         {fmtMoney((so?.totalAmount || 0) + (so?.freightAmount || 0))}
                     </td>
-                    {colCount > 8 && <td style={tdBorder} />}
                 </tr>
             )}
             {gstApplicable &&
@@ -383,7 +392,6 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                         {emptyLead}
                         <td style={{ ...tdBorder, fontWeight: 'bold' }}>IGST @ {gstRate}%</td>
                         <td style={{ ...tdBorder, textAlign: 'right' }}>{fmtMoney(so?.totalIgst || so?.totalGst)}</td>
-                        {colCount > 8 && <td style={tdBorder} />}
                     </tr>
                 ) : (
                     <>
@@ -393,7 +401,6 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                             <td style={{ ...tdBorder, textAlign: 'right' }}>
                                 {fmtMoney(so?.totalCgst || so?.totalGst / 2)}
                             </td>
-                            {colCount > 8 && <td style={tdBorder} />}
                         </tr>
                         <tr>
                             {emptyLead}
@@ -401,7 +408,6 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                             <td style={{ ...tdBorder, textAlign: 'right' }}>
                                 {fmtMoney(so?.totalSgst || so?.totalGst / 2)}
                             </td>
-                            {colCount > 8 && <td style={tdBorder} />}
                         </tr>
                     </>
                 ))}
@@ -409,7 +415,6 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                 {emptyLead}
                 <td style={{ ...tdBorder, fontWeight: 'bold' }}>Round Off</td>
                 <td style={{ ...tdBorder, textAlign: 'right' }}>{Number(so?.roundOff || 0).toFixed(2)}</td>
-                {colCount > 8 && <td style={tdBorder} />}
             </tr>
             <tr style={{ background: '#f5f5f5' }}>
                 {emptyLead}
@@ -417,13 +422,11 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
                 <td style={{ ...tdBorder, textAlign: 'right', fontWeight: 'bold', fontSize: 14 }}>
                     {fmtMoney(so?.roundedTotal || so?.grandTotal)}
                 </td>
-                {colCount > 8 && <td style={tdBorder} />}
             </tr>
             <tr>
                 {emptyLead}
                 <td style={{ ...tdBorder, fontWeight: 'bold' }}>In Words:</td>
                 <td
-                    colSpan={colCount > 8 ? 2 : 1}
                     style={{
                         ...tdBorder,
                         fontSize: 9,
@@ -439,10 +442,10 @@ function SoTotalsRows({ so, gstApplicable, isIGST, gstRate, colCount }) {
 }
 
 /** Standalone totals for absolute block layout (designer / custom format). */
-export function SoBlockTotalsBox({ so }) {
+export function SoBlockTotalsBox({ so, showAmountInWords = true }) {
     const { gstApplicable, isIGST, gstRate } = resolveGstFlags(so);
     const lines = [
-        ['Total Taxable', so?.totalAmount],
+        ['Total Item Amount', so?.totalAmount],
         Number(so?.freightAmount || 0) > 0 ? ['Freight', so.freightAmount] : null,
         gstApplicable ? ['Taxable Amount', (so?.totalAmount || 0) + (so?.freightAmount || 0)] : null,
         gstApplicable && isIGST ? [`IGST @ ${gstRate}%`, so?.totalIgst || so?.totalGst] : null,
@@ -452,18 +455,20 @@ export function SoBlockTotalsBox({ so }) {
     ].filter(Boolean);
 
     return (
-        <div style={{ fontSize: '10pt' }}>
+        <div style={{ fontSize: '10pt', width: '100%' }}>
             {lines.map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 700 }}>{label}</span>
-                    <span>{label === 'Round Off' ? Number(val || 0).toFixed(2) : fmtMoney(val)}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 3 }}>
+                    <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</span>
+                    <span style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        {label === 'Round Off' ? Number(val || 0).toFixed(2) : fmtMoney(val)}
+                    </span>
                 </div>
             ))}
             <div
                 style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    gap: 8,
+                    gap: 12,
                     fontWeight: 900,
                     marginTop: 4,
                     borderTop: '1px solid #000',
@@ -471,10 +476,10 @@ export function SoBlockTotalsBox({ so }) {
                     fontSize: 14,
                 }}
             >
-                <span>Rounded Total:</span>
-                <span>{fmtMoney(so?.roundedTotal || so?.grandTotal)}</span>
+                <span style={{ whiteSpace: 'nowrap' }}>Grand Total</span>
+                <span style={{ whiteSpace: 'nowrap' }}>{fmtMoney(so?.roundedTotal || so?.grandTotal)}</span>
             </div>
-            {so?.amountInWords && (
+            {showAmountInWords && so?.amountInWords && (
                 <div style={{ marginTop: 6, fontSize: '9px', fontStyle: 'italic', textTransform: 'capitalize' }}>
                     {so.amountInWords}
                 </div>
@@ -495,33 +500,74 @@ export function SoBlockRemarks({ so }) {
     );
 }
 
-export function SoBlockBankDetails() {
+export function SoBlockBankDetails({ company } = {}) {
+    const bankName = company?.bankName || 'BANK OF BARODA';
+    const accountName = company?.accountName || company?.companyName || '';
+    const accountNo = company?.accountNo || company?.bankAccountNo || '20260200001544';
+    const ifsc = company?.ifscCode || 'BARB0SHIBOR';
+    const branch = company?.branchName || 'SHIMPOLI';
+    const label = { width: 88, paddingBottom: 3, color: '#6b7280', verticalAlign: 'top' };
+    const value = { paddingBottom: 3, verticalAlign: 'top' };
     return (
         <div style={{ fontSize: 9 }}>
-            <b style={{ textTransform: 'uppercase' }}>COMPANY BANK DETAILS:</b>
-            <br />
+            <b style={{ textTransform: 'uppercase' }}>BANK DETAILS</b>
             <table style={{ borderCollapse: 'collapse', marginTop: 4 }}>
                 <tbody>
                     <tr>
-                        <td style={{ width: 80, paddingBottom: 3, color: '#6b7280' }}>Bank Name</td>
-                        <td style={{ paddingBottom: 3 }}>
-                            : <b>BANK OF BARODA</b>
-                        </td>
+                        <td style={label}>Bank Name</td>
+                        <td style={value}>: <b>{bankName}</b></td>
+                    </tr>
+                    {accountName ? (
+                        <tr>
+                            <td style={label}>A/C Name</td>
+                            <td style={value}>: <b>{accountName}</b></td>
+                        </tr>
+                    ) : null}
+                    <tr>
+                        <td style={label}>A/C Number</td>
+                        <td style={value}>: <b>{accountNo}</b></td>
                     </tr>
                     <tr>
-                        <td style={{ paddingBottom: 3, color: '#6b7280' }}>A/c No.</td>
-                        <td style={{ paddingBottom: 3 }}>
-                            : <b>20260200001544</b>
-                        </td>
+                        <td style={label}>IFSC Code</td>
+                        <td style={value}>: <b>{ifsc}</b></td>
                     </tr>
                     <tr>
-                        <td style={{ paddingBottom: 3, color: '#6b7280' }}>Branch &amp; IFS Code</td>
-                        <td style={{ paddingBottom: 3 }}>
-                            : <b>SHIMPOLI &amp; BARB0SHIBOR</b>
-                        </td>
+                        <td style={label}>Branch</td>
+                        <td style={value}>: <b>{branch}</b></td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+export function SoBlockApprovalLines() {
+    const labels = ['PREPARED BY', 'CHECKED BY', 'AUTHORIZED BY', 'RECEIVED BY'];
+    return (
+        <div
+            style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 16,
+                marginTop: 22,
+                width: '100%',
+            }}
+        >
+            {labels.map((label) => (
+                <div key={label} style={{ flex: 1, textAlign: 'center' }}>
+                    <div
+                        style={{
+                            borderTop: '1px solid #000',
+                            paddingTop: 4,
+                            fontSize: 8,
+                            fontWeight: 800,
+                            letterSpacing: 0.3,
+                        }}
+                    >
+                        {label}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
@@ -588,7 +634,7 @@ export function SoBlockSignature({ so, company, user }) {
 export function SoBlockTerms({ so }) {
     return (
         <div style={{ fontSize: '8pt', lineHeight: 1.3 }}>
-            <div style={{ fontWeight: 900, marginBottom: 4 }}>Terms &amp; Declaration:</div>
+            <div style={{ fontWeight: 900, marginBottom: 4, textTransform: 'uppercase' }}>Terms &amp; Conditions</div>
             {so?.terms || (
                 <>
                     1. Goods once sold will not be taken back.
@@ -652,7 +698,7 @@ export function SalesOrderPrintBlockContent({
         case 'terms':
             return <SoBlockTerms so={so} />;
         case 'bankDetails':
-            return <SoBlockBankDetails />;
+            return <SoBlockBankDetails company={company} />;
         case 'signature':
             return <SoBlockSignature so={so} company={company} user={user} />;
         default:

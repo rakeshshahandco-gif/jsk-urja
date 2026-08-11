@@ -151,6 +151,7 @@ router.post(
 router.post('/simple-lead-search/start', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.start);
 router.post('/simple-lead-search/preview-queries', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.previewQueries);
 router.get('/simple-lead-search/agent-status', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.agentStatus);
+router.get('/simple-lead-search/runs', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.listRuns);
 router.get('/simple-lead-search/sessions/:sessionId', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.sessionStatus);
 router.get('/simple-lead-search/sessions/:sessionId/results', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.sessionResults);
 router.post('/simple-lead-search/sessions/:sessionId/stop', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.stop);
@@ -182,6 +183,8 @@ router.post('/simple-lead-search/sessions/:sessionId/auto-processing/tick', chec
 router.get('/simple-lead-search/sessions/:sessionId/auto-processing', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.autoProcessingStatus);
 router.get('/simple-lead-search/sessions/:sessionId/captured-data', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.campaignCapturedData);
 router.get('/simple-lead-search/sessions/:sessionId/export-all-current', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.exportAllCurrentData);
+router.post('/simple-lead-search/sessions/:sessionId/export-artifacts', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.persistExportArtifacts);
+router.get('/simple-lead-search/sessions/:sessionId/export-artifacts/download', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.downloadExportArtifact);
 
 // ---- Checkpoint 6A RawCapture website enrichment (Simple Lead Search session-scoped) ----
 router.post('/simple-lead-search/sessions/:sessionId/enrichment/start', checkPermission('data_extractor.assisted_capture.start'), rawCaptureEnrichmentController.start);

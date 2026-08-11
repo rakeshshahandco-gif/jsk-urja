@@ -88,13 +88,13 @@ export const SI_FIELD_CATALOG = [
 
 export const SO_COLUMN_CATALOG = [
     col('sr', 'SR', 4, 'center', { order: 1 }),
-    col('itemCode', 'ITEM CODE', 9, 'left', { order: 2 }),
+    col('itemCode', 'ITEM CODE', 16, 'left', { order: 2 }),
     col('itemName', 'ITEM NAME', 10, 'left', { order: 3, visible: false }),
-    col('description', 'DESCRIPTION', 22, 'left', { order: 4 }),
-    col('notes', 'NOTES', 10, 'left', { order: 5 }),
-    col('hsn', 'HSN', 6, 'center', { order: 6 }),
-    col('qty', 'QTY', 5, 'center', { order: 7 }),
-    col('uom', 'UOM', 5, 'center', { order: 8 }),
+    col('description', 'DESCRIPTION', 32, 'left', { order: 4 }),
+    col('notes', 'ADDITIONAL NOTES', 18, 'left', { order: 5 }),
+    col('hsn', 'HSN', 7, 'center', { order: 6 }),
+    col('qty', 'QTY', 7, 'center', { order: 7 }),
+    col('uom', 'UOM', 5, 'center', { order: 8, visible: false }),
     col('rate', 'RATE', 8, 'right', { order: 9 }),
     col('discount', 'DISCOUNT', 6, 'right', { order: 10, visible: false }),
     col('taxableAmount', 'TAXABLE AMT', 8, 'right', { order: 11, visible: false }),
@@ -102,7 +102,7 @@ export const SO_COLUMN_CATALOG = [
     col('cgst', 'CGST', 6, 'right', { order: 13, visible: false }),
     col('sgst', 'SGST', 6, 'right', { order: 14, visible: false }),
     col('igst', 'IGST', 6, 'right', { order: 15, visible: false }),
-    col('amount', 'AMOUNT', 10, 'right', { order: 16 }),
+    col('amount', 'AMOUNT', 8, 'right', { order: 16 }),
 ];
 
 export const SI_COLUMN_CATALOG = [

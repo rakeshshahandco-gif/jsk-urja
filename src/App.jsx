@@ -170,6 +170,7 @@ import DataExtractorKeywordSearchPage from '@/features/dataExtractor/DataExtract
 import DataExtractorSimpleLeadSearchPage from '@/features/dataExtractor/DataExtractorSimpleLeadSearchPage';
 import DataExtractorManualUrlPage from '@/features/dataExtractor/DataExtractorManualUrlPage';
 import DataExtractorImportPage from '@/features/dataExtractor/DataExtractorImportPage';
+import DataExtractorRunPage from '@/features/dataExtractor/DataExtractorRunPage';
 import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHistoryPage';
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
@@ -364,6 +365,7 @@ import { UiPreferencesProvider } from '@/contexts/UiPreferencesContext';
 import FeatureComplianceSettingsPage from '@/features/settings/FeatureComplianceSettingsPage';
 import FeatureConfigurationPage from '@/features/settings/FeatureConfigurationPage';
 import PlatformFeatureDefaultsPage from '@/features/settings/PlatformFeatureDefaultsPage';
+import ModuleLockPage from '@/features/settings/ModuleLockPage';
 import IndustryTemplateMasterPage from '@/features/settings/IndustryTemplateMasterPage';
 import CompanyModuleAllocationPage from '@/features/settings/CompanyModuleAllocationPage';
 import IndustryDeploymentManagerPage from '@/features/settings/IndustryDeploymentManagerPage';
@@ -609,6 +611,7 @@ const AppLayout = () => {
                         <Route path={PATHS.SETTINGS.ACCOUNTS_SUNDRY_DEBTOR} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.SETTINGS.CUSTOMER_SETTINGS} element={<Navigate to={`${PATHS.SETTINGS.FEATURE_COMPLIANCE}?tab=customer`} replace />} />
                         <Route path={PATHS.SETTINGS.PLATFORM_FEATURE_DEFAULTS} element={<ProtectedPlatformRoute><PlatformFeatureDefaultsPage /></ProtectedPlatformRoute>} />
+                        <Route path={PATHS.SETTINGS.MODULE_LOCK} element={<ProtectedPlatformRoute><ModuleLockPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.INDUSTRY_TEMPLATES} element={<ProtectedPlatformRoute><IndustryTemplateMasterPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.COMPANY_MODULE_ALLOCATION} element={<ProtectedPlatformRoute><CompanyModuleAllocationPage /></ProtectedPlatformRoute>} />
                         <Route path={PATHS.SETTINGS.INDUSTRY_DEPLOYMENT_MANAGER} element={<ProtectedPlatformRoute><IndustryDeploymentManagerPage /></ProtectedPlatformRoute>} />
@@ -881,6 +884,7 @@ const AppLayout = () => {
                             <Route path="leads" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorLeadsPage /></ProtectedRoute>} />
                         </Route>
                         <Route path="/data-extractor/preview/:jobId" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorPreviewPage /></DataExtractorGuard></ProtectedRoute>} />
+                        <Route path="/data-extractor/runs/:sessionId" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorGuard><DataExtractorRunPage /></DataExtractorGuard></ProtectedRoute>} />
                         <Route path={PATHS.DATA_EXTRACTOR.SETTINGS} element={<ProtectedRoute requirePermission="data_extractor.extractor.settings"><DataExtractorSettingsPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />
                         <Route path="/accounts/journal-entry/edit/:id" element={<ProtectedRoute requirePermission="accounts"><JournalEntryPage /></ProtectedRoute>} />

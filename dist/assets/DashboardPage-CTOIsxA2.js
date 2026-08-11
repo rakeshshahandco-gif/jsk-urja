@@ -1,1 +1,0 @@
-import{j as e}from"./index-QChLC3h9.js";import o from"./ModuleHomePage-DcFS7BlM.js";const s=()=>e.jsxDEV(o,{moduleName:"dashboard",title:"Home",subtitle:"Your Global Shortcuts"},void 0,!1,{fileName:"D:/JSK-SO-INVOICE-HOTFIX-WT/src/features/dashboard/DashboardPage.jsx",lineNumber:5,columnNumber:12},void 0);export{s as default};

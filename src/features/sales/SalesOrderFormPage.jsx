@@ -10,7 +10,7 @@ import { PATHS } from '@/routes/paths';
 import toast from 'react-hot-toast';
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { BrandedLoader } from '@/components/ui';
-import gridStyles from '@/features/sales/styles/salesItemGrid.module.scss';
+import gridStyles from '@/features/sales/styles/salesOrderFormItemGrid.module.scss';
 
 
 const inp = { padding: '7px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff', color: '#374151' };
@@ -93,7 +93,7 @@ const canChangeSeriesOnEdit = (form) => {
 
 
 const Section = ({ title, children }) => (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '18px 20px', marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
         <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', paddingBottom: 10 }}>{title}</h3>
         {children}
     </div>
@@ -431,7 +431,7 @@ export default function SalesOrderFormPage() {
                 prev.focus();
             }
         } else if (e.key === 'Enter') {
-            const nextColTargets = [1, 3, 4, 5, 6, 7, 8]; // Columns that are inputs (skipping readonly description)
+            const nextColTargets = [1, 3, 4, 5, 6, 7]; // Inputs only (skip readonly Description; GST% hidden from row UI)
             const currentTargetIdx = nextColTargets.indexOf(colIdx);
             
             if (currentTargetIdx < nextColTargets.length - 1) {
@@ -493,7 +493,7 @@ export default function SalesOrderFormPage() {
                 </div>
             </div>
 
-            <div style={{ padding: '20px 24px', maxWidth: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+            <div style={{ padding: '20px 24px', maxWidth: '100%', minWidth: 0, margin: '0 auto', boxSizing: 'border-box' }}>
                 {loading ? <BrandedLoader size={120} /> : (
                 <>
                 <Section title="Order Information">
@@ -716,33 +716,23 @@ export default function SalesOrderFormPage() {
                         <table className={gridStyles.table}>
                             <thead>
                                 <tr>
-                                    <th className={`${gridStyles.th} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`}>Sr</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>Item Code *</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>Description</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colSr}`}>Sr</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colCode}`}>Item Code</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colDesc}`}>Description</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colNotes}`}>Additional Notes</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colHsn}`}>HSN</th>
                                     <th className={`${gridStyles.th} ${gridStyles.colUom}`}>UOM</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty *</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate *</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colTaxable} ${gridStyles.num}`}>Taxable</th>
-                                    {gstApplicable && (
-                                        <>
-                                            <th className={`${gridStyles.th} ${gridStyles.colGstPct} ${gridStyles.center}`}>GST%</th>
-                                            <th className={`${gridStyles.th} ${gridStyles.colGstAmt} ${gridStyles.num}`}>GST Amt</th>
-                                        </>
-                                    )}
-                                    <th className={`${gridStyles.th} ${gridStyles.colTotal} ${gridStyles.num}`}>Total</th>
-                                    <th className={`${gridStyles.th} ${gridStyles.colAction} ${gridStyles.stickyRight}`} />
+                                    <th className={`${gridStyles.th} ${gridStyles.colQty} ${gridStyles.center}`}>Qty</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colRate} ${gridStyles.num}`}>Rate</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colAmount} ${gridStyles.num}`}>Amount</th>
+                                    <th className={`${gridStyles.th} ${gridStyles.colAction}`}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {processedItems.map((item, i) => {
-                                    const gstAmt = gstApplicable ? ((isIGST ? item.igstAmt : (item.cgstAmt || 0) * 2) || 0) : 0;
-                                    const lineTotal = (item.amount || 0) + gstAmt;
-                                    return (
+                                {processedItems.map((item, i) => (
                                         <tr key={i}>
-                                            <td className={`${gridStyles.td} ${gridStyles.colSr} ${gridStyles.stickyLeft1}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
-                                            <td className={`${gridStyles.td} ${gridStyles.colCode} ${gridStyles.stickyLeft2}`}>
+                                            <td className={`${gridStyles.td} ${gridStyles.colSr}`} style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                            <td className={`${gridStyles.td} ${gridStyles.colCode}`}>
                                                 <SearchableSelect
                                                     options={allItems.map(it => ({ 
                                                         value: it._id, 
@@ -754,6 +744,8 @@ export default function SalesOrderFormPage() {
                                                     onKeyDown={(e) => handleRowKeyDown(e, i, 1)}
                                                     data-row={i}
                                                     data-col={1}
+                                                    style={{ minWidth: 0, maxWidth: '100%' }}
+                                                    dropdownMinWidth={280}
                                                     placeholder="Item Code..."
                                                     noOptionsMessage={
                                                         <div style={{ padding: '8px', color: '#64748b' }}>
@@ -766,7 +758,7 @@ export default function SalesOrderFormPage() {
                                                     }
                                                 />
                                             </td>
-                                            <td className={`${gridStyles.td} ${gridStyles.colDesc} ${gridStyles.stickyLeft3}`}>
+                                            <td className={`${gridStyles.td} ${gridStyles.colDesc}`}>
                                                 <input value={item.description || item.itemName || ''} readOnly className={`${gridStyles.inp} ${gridStyles.readonly}`} placeholder="Description" tabIndex="-1" />
                                             </td>
                                             <td className={`${gridStyles.td} ${gridStyles.colNotes}`}>
@@ -784,28 +776,14 @@ export default function SalesOrderFormPage() {
                                             <td className={`${gridStyles.td} ${gridStyles.colRate}`}>
                                                 <input type="number" min="0" step="any" value={item.rate} onChange={e => setItem(i, 'rate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 7)} data-row={i} data-col={7} className={`no-spin ${gridStyles.tableInpNum}`} style={{ borderColor: !item.rate ? '#fca5a5' : '#e5e7eb' }} autoComplete="off" />
                                             </td>
-                                            <td className={`${gridStyles.td} ${gridStyles.colTaxable} ${gridStyles.num} ${gridStyles.money}`}>
+                                            <td className={`${gridStyles.td} ${gridStyles.colAmount} ${gridStyles.num} ${gridStyles.money}`}>
                                                 ₹{(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                             </td>
-                                            {gstApplicable && (
-                                                <>
-                                                    <td className={`${gridStyles.td} ${gridStyles.colGstPct}`}>
-                                                        <input type="number" min="0" max="28" step="any" value={item.gstRate} onChange={e => setItem(i, 'gstRate', e.target.value)} onKeyDown={(e) => handleRowKeyDown(e, i, 8)} data-row={i} data-col={8} className={`no-spin ${gridStyles.tableInpNum}`} style={{ textAlign: 'center' }} autoComplete="off" />
-                                                    </td>
-                                                    <td className={`${gridStyles.td} ${gridStyles.colGstAmt} ${gridStyles.num} ${gridStyles.moneyGst}`}>
-                                                        ₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                </>
-                                            )}
-                                            <td className={`${gridStyles.td} ${gridStyles.colTotal} ${gridStyles.num} ${gridStyles.moneyTotal}`}>
-                                                ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td className={`${gridStyles.td} ${gridStyles.colAction} ${gridStyles.stickyRight}`}>
-                                                {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }}>✕</button>}
+                                            <td className={`${gridStyles.td} ${gridStyles.colAction}`}>
+                                                {form.items.length > 1 && <button type="button" onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 16, padding: 0 }} aria-label="Remove item">✕</button>}
                                             </td>
                                         </tr>
-                                    );
-                                })}
+                                ))}
                             </tbody>
                         </table>
                     </div>

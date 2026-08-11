@@ -57,31 +57,30 @@ function buildTotalsRows(so, gstApplicable, isIGST, gstRate) {
         <td style="text-align:center;font-weight:800;">${totalQty}</td>
         <td class="totals-label">Total Taxable</td>
         <td class="totals-value">${fmtMoney(so.totalAmount)}</td>
-        <td></td>
       </tr>`;
     if (Number(so.freightAmount || 0) > 0) {
-        html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">Freight</td><td class="totals-value">${fmtMoney(so.freightAmount)}</td><td></td></tr>`;
+        html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">Freight</td><td class="totals-value">${fmtMoney(so.freightAmount)}</td></tr>`;
     }
     if (gstApplicable) {
-        html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">Taxable Amount</td><td class="totals-value">${fmtMoney((so.totalAmount || 0) + (so.freightAmount || 0))}</td><td></td></tr>`;
+        html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">Taxable Amount</td><td class="totals-value">${fmtMoney((so.totalAmount || 0) + (so.freightAmount || 0))}</td></tr>`;
         if (isIGST) {
-            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">IGST @ ${gstRate}%</td><td class="totals-value">${fmtMoney(so.totalIgst || so.totalGst)}</td><td></td></tr>`;
+            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">IGST @ ${gstRate}%</td><td class="totals-value">${fmtMoney(so.totalIgst || so.totalGst)}</td></tr>`;
         } else {
-            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">CGST @ ${gstRate / 2}%</td><td class="totals-value">${fmtMoney(so.totalCgst || (so.totalGst || 0) / 2)}</td><td></td></tr>`;
-            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">SGST @ ${gstRate / 2}%</td><td class="totals-value">${fmtMoney(so.totalSgst || (so.totalGst || 0) / 2)}</td><td></td></tr>`;
+            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">CGST @ ${gstRate / 2}%</td><td class="totals-value">${fmtMoney(so.totalCgst || (so.totalGst || 0) / 2)}</td></tr>`;
+            html += `<tr><td colspan="6" style="border:none;"></td><td class="totals-label">SGST @ ${gstRate / 2}%</td><td class="totals-value">${fmtMoney(so.totalSgst || (so.totalGst || 0) / 2)}</td></tr>`;
         }
     }
     const grandTotal = so.roundedTotal || so.grandTotal || 0;
     html += `
-      <tr><td colspan="6" style="border:none;"></td><td class="totals-label">Round Off</td><td class="totals-value">${Number(so.roundOff || 0).toFixed(2)}</td><td></td></tr>
-      <tr class="rounded-total"><td colspan="6" style="border:none;background:#fff;"></td><td>Rounded Total:</td><td class="totals-value">${fmtMoney(grandTotal)}</td><td></td></tr>
-      <tr><td colspan="6" style="border:none;"></td><td class="totals-label">In Words:</td><td style="font-size:7.5pt;font-style:italic;text-transform:capitalize;">${esc(so.amountInWords || '')}</td><td></td></tr>`;
+      <tr><td colspan="6" style="border:none;"></td><td class="totals-label">Round Off</td><td class="totals-value">${Number(so.roundOff || 0).toFixed(2)}</td></tr>
+      <tr class="rounded-total"><td colspan="6" style="border:none;background:#fff;"></td><td>Rounded Total:</td><td class="totals-value">${fmtMoney(grandTotal)}</td></tr>
+      <tr><td colspan="6" style="border:none;"></td><td class="totals-label">In Words:</td><td style="font-size:7.5pt;font-style:italic;text-transform:capitalize;">${esc(so.amountInWords || '')}</td></tr>`;
     return html;
 }
 
 function buildStandaloneTotals(so, gstApplicable, isIGST, gstRate) {
     const grandTotal = so.roundedTotal || so.grandTotal || 0;
-    let lines = `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;"><span style="font-weight:700;">Total Taxable</span><span>${fmtMoney(so.totalAmount)}</span></div>`;
+    let lines = `<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:3px;white-space:nowrap;"><span style="font-weight:700;">Total Item Amount</span><span>${fmtMoney(so.totalAmount)}</span></div>`;
     if (Number(so.freightAmount || 0) > 0) {
         lines += `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;"><span style="font-weight:700;">Freight</span><span>${fmtMoney(so.freightAmount)}</span></div>`;
     }
@@ -95,20 +94,40 @@ function buildStandaloneTotals(so, gstApplicable, isIGST, gstRate) {
         }
     }
     lines += `<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:2px;"><span style="font-weight:700;">Round Off</span><span>${Number(so.roundOff || 0).toFixed(2)}</span></div>`;
-    lines += `<div style="display:flex;justify-content:space-between;gap:8px;font-weight:900;margin-top:4px;border-top:1px solid #000;padding-top:4px;font-size:14px;"><span>Rounded Total:</span><span>${fmtMoney(grandTotal)}</span></div>`;
-    if (so.amountInWords) {
-        lines += `<div style="margin-top:6px;font-size:9px;font-style:italic;text-transform:capitalize;">${esc(so.amountInWords)}</div>`;
-    }
+    lines += `<div style="display:flex;justify-content:space-between;gap:12px;font-weight:900;margin-top:4px;border-top:1px solid #000;padding-top:4px;font-size:14px;white-space:nowrap;"><span>Grand Total</span><span>${fmtMoney(grandTotal)}</span></div>`;
     return lines;
 }
 
-function bankHtml() {
-    return `<div style="font-size:7.5pt;"><strong>COMPANY BANK DETAILS:</strong>
+function bankHtml(company = {}) {
+    const bankName = company.bankName || 'BANK OF BARODA';
+    const accountName = company.accountName || company.companyName || '';
+    const accountNo = company.accountNo || company.bankAccountNo || '20260200001544';
+    const ifsc = company.ifscCode || 'BARB0SHIBOR';
+    const branch = company.branchName || 'SHIMPOLI';
+    return `<div style="font-size:7.5pt;"><strong>BANK DETAILS</strong>
       <table style="border-collapse:collapse;margin-top:4px;">
-        <tr><td>Bank Name</td><td>: <strong>BANK OF BARODA</strong></td></tr>
-        <tr><td>A/c No.</td><td>: <strong>20260200001544</strong></td></tr>
-        <tr><td>Branch &amp; IFS Code</td><td>: <strong>SHIMPOLI &amp;<br/>BARB0SHIBOR</strong></td></tr>
+        <tr><td>Bank Name</td><td>: <strong>${esc(bankName)}</strong></td></tr>
+        ${accountName ? `<tr><td>A/C Name</td><td>: <strong>${esc(accountName)}</strong></td></tr>` : ''}
+        <tr><td>A/C Number</td><td>: <strong>${esc(accountNo)}</strong></td></tr>
+        <tr><td>IFSC Code</td><td>: <strong>${esc(ifsc)}</strong></td></tr>
+        <tr><td>Branch</td><td>: <strong>${esc(branch)}</strong></td></tr>
       </table></div>`;
+}
+
+function termsHtml(so) {
+    const body = so.terms
+        ? esc(so.terms)
+        : '1. Goods once sold will not be taken back.<br/>2. Subject to MUMBAI Jurisdiction.<br/>3. We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.';
+    return `<div style="font-size:8pt;line-height:1.3;"><div style="font-weight:900;margin-bottom:4px;text-transform:uppercase;">Terms &amp; Conditions</div>${body}</div>`;
+}
+
+function approvalLinesHtml() {
+    return `<div class="approval-lines">
+      <div class="approval-line">PREPARED BY</div>
+      <div class="approval-line">CHECKED BY</div>
+      <div class="approval-line">AUTHORIZED BY</div>
+      <div class="approval-line">RECEIVED BY</div>
+    </div>`;
 }
 
 function signatureHtml(so, company, user) {
@@ -137,7 +156,6 @@ function itemRows(pageItems, pageIdx, srStart = null) {
         <td style="text-align:center;font-weight:700;" data-pf-col="qty">${esc(item.qty)} ${esc(item.uom || '')}</td>
         <td style="text-align:right;" data-pf-col="rate">${fmtMoney(item.rate)}</td>
         <td style="text-align:right;font-weight:700;" data-pf-col="amount">${fmtMoney(item.amount ?? (Number(item.qty) || 0) * (Number(item.rate) || 0))}</td>
-        <td data-pf-col="spacer"></td>
       </tr>`;
     }).join('');
 }
@@ -218,7 +236,7 @@ export function buildSalesOrderBlockHtml({ so, company, user, logoBase64, blocks
             ? `<div style="border:1px solid #000;padding:7px 9px;"><div style="font-size:7.5pt;font-weight:800;color:#555;">REMARKS:</div><div style="font-size:8.5pt;white-space:pre-wrap;">${esc(so.remarks)}</div></div>`
             : '',
         terms: '',
-        bankDetails: bankHtml(),
+        bankDetails: bankHtml(company),
         signature: signatureHtml(so, company, user),
     };
 
@@ -230,10 +248,13 @@ export function buildSalesOrderBlockHtml({ so, company, user, logoBase64, blocks
             ? `<div class="pf-cont-header"><strong>${esc(company.companyName || 'JSK URJA')}</strong>
                 <span>Order No: ${esc(so.soNumber)} | Date: ${fmtDate(so.soDate)} (continued)</span></div>`
             : '';
-        const itemTableHtml = `<table class="items-table"><thead><tr>
+        const itemTableHtml = `<table class="items-table"><colgroup>
+          <col style="width:6%"/><col style="width:17%"/><col style="width:26%"/><col style="width:15%"/>
+          <col style="width:7%"/><col style="width:7%"/><col style="width:10%"/><col style="width:12%"/>
+        </colgroup><thead><tr>
           <th data-pf-col="sr">SR</th><th data-pf-col="itemCode">ITEM CODE</th><th data-pf-col="description">DESCRIPTION</th>
           <th data-pf-col="notes">ADDITIONAL NOTES</th><th data-pf-col="hsn">HSN</th><th data-pf-col="qty">QTY</th>
-          <th data-pf-col="rate">RATE</th><th data-pf-col="amount">AMOUNT</th><th data-pf-col="spacer"></th>
+          <th data-pf-col="rate">RATE</th><th data-pf-col="amount">AMOUNT</th>
         </tr></thead><tbody>${itemRows(pageItems, pageIdx, start)}</tbody></table>`;
 
         const ids = Object.keys({ ...staticContent, itemTable: true });
@@ -314,24 +335,27 @@ export function buildSalesOrderFlowHtml({ so, company, user, logoBase64 }) {
 
         const table = `
           ${blockHtml('itemTable', `<table class="items-table">
+            <colgroup>
+              <col style="width:6%"/><col style="width:17%"/><col style="width:26%"/><col style="width:15%"/>
+              <col style="width:7%"/><col style="width:7%"/><col style="width:10%"/><col style="width:12%"/>
+            </colgroup>
             <thead><tr>
-              <th style="width:35px;" data-pf-col="sr">SR</th>
-              <th style="width:100px;text-align:left;" data-pf-col="itemCode">ITEM CODE</th>
-              <th style="width:120px;text-align:left;" data-pf-col="description">DESCRIPTION</th>
-              <th style="width:100px;text-align:left;" data-pf-col="notes">ADDITIONAL NOTES</th>
-              <th style="width:60px;" data-pf-col="hsn">HSN</th>
-              <th style="width:60px;" data-pf-col="qty">QTY</th>
-              <th style="width:80px;text-align:right;" data-pf-col="rate">RATE</th>
-              <th style="width:100px;text-align:right;" data-pf-col="amount">AMOUNT</th>
-              <th style="width:auto;" data-pf-col="spacer"></th>
+              <th data-pf-col="sr">SR</th>
+              <th style="text-align:left;" data-pf-col="itemCode">ITEM CODE</th>
+              <th style="text-align:left;" data-pf-col="description">DESCRIPTION</th>
+              <th style="text-align:left;" data-pf-col="notes">ADDITIONAL NOTES</th>
+              <th data-pf-col="hsn">HSN</th>
+              <th data-pf-col="qty">QTY</th>
+              <th style="text-align:right;" data-pf-col="rate">RATE</th>
+              <th style="text-align:right;" data-pf-col="amount">AMOUNT</th>
             </tr></thead>
             <tbody>
               ${itemRows(pageItems, pageIdx)}
-              ${isLastPage ? buildTotalsRows(so, gstApplicable, isIGST, gstRate) : ''}
             </tbody>
           </table>`)}
           ${!isLastPage ? '<div class="continued-notice">Continued on next page...</div>' : ''}
-          <div data-pf-block="totalsBox" class="pf-flow-fallback" style="display:none;"></div>`;
+          ${isLastPage ? `<div data-pf-block="totalsBox" class="so-totals-wrap">${buildStandaloneTotals(so, gstApplicable, isIGST, gstRate)}</div>
+            ${so.amountInWords ? `<div class="amount-in-words"><strong>Amount in Words: </strong>${esc(so.amountInWords)}</div>` : ''}` : ''}`;
 
         const footer = isLastPage ? `
           ${so.remarks ? blockHtml('remarks', `<div style="margin-top:12px;border:1px solid #000;padding:7px 9px;">
@@ -339,11 +363,10 @@ export function buildSalesOrderFlowHtml({ so, company, user, logoBase64 }) {
             <div style="font-size:8.5pt;white-space:pre-wrap;">${esc(so.remarks)}</div>
           </div>`) : blockHtml('remarks', '')}
           <div class="footer">
-            ${blockHtml('bankDetails', bankHtml())}
-            <div class="generated-note">This is a computer generated order and does not require a physical signature.</div>
-            ${blockHtml('signature', signatureHtml(so, company, user))}
+            ${blockHtml('bankDetails', bankHtml(company))}
+            ${blockHtml('terms', termsHtml(so))}
           </div>
-          <div data-pf-block="terms" style="display:none;"></div>` : '';
+          ${blockHtml('signature', approvalLinesHtml())}` : '';
 
         return `<div class="page">
           <div class="page-counter">Page ${pageIdx + 1} of ${totalPages}</div>
@@ -377,11 +400,21 @@ export const SO_PRINT_BASE_CSS = `
   .info-value { font-size: 10pt; padding: 4px 0; vertical-align: top; text-transform: uppercase; }
   .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; table-layout: fixed; }
   .items-table th { border: 1px solid #000; padding: 8px 6px; font-weight: 800; background: #f5f5f5; text-align: center; text-transform: uppercase; }
-  .items-table td { border: 1px solid #000; padding: 6px; vertical-align: top; overflow-wrap: anywhere; }
+  .items-table td { border: 1px solid #000; padding: 6px; vertical-align: top; overflow-wrap: break-word; }
+  .items-table td[data-pf-col="itemCode"] { word-break: normal; }
+  .items-table [data-pf-col="sr"],
+  .items-table [data-pf-col="hsn"],
+  .items-table [data-pf-col="qty"],
+  .items-table [data-pf-col="rate"],
+  .items-table [data-pf-col="amount"] { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; padding-left: 3px; padding-right: 3px; }
   .totals-label { font-weight: 800; }
   .totals-value { text-align: right; font-weight: 700; }
   .rounded-total td { background: #f5f5f5; font-size: 11pt; font-weight: 900; }
-  .footer { display: grid; grid-template-columns: 1.15fr 1.35fr 1fr; align-items: end; gap: 16px; margin-top: 30px; }
+  .footer { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 28px; margin-top: 18px; }
+  .so-totals-wrap { width: 88mm; margin-left: auto; margin-top: 8px; margin-bottom: 8px; }
+  .amount-in-words { font-size: 9pt; font-style: italic; text-transform: capitalize; margin-bottom: 10px; }
+  .approval-lines { display: flex; justify-content: space-between; gap: 16px; margin-top: 22px; width: 100%; }
+  .approval-line { flex: 1; text-align: center; border-top: 1px solid #000; padding-top: 4px; font-size: 8pt; font-weight: 800; }
   .bank-details { font-size: 7.5pt; }
   .generated-note { text-align: center; font-size: 8pt; color: #666; }
   .signatory { border: 1px solid #000; min-height: 76px; display: flex; flex-direction: column; text-align: center; }

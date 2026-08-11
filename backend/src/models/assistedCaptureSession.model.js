@@ -264,6 +264,14 @@ const assistedCaptureSessionSchema = new mongoose.Schema(
             rootSessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'AssistedCaptureSession', default: null },
             campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'SearchCampaign', default: null },
         },
+        /**
+         * Durable export file references (S3/local via FileStorageService).
+         * Metadata only — never store workbook binary/base64 here.
+         */
+        exportArtifacts: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
+        },
     },
     { timestamps: true, collection: 'assisted_capture_sessions' },
 );

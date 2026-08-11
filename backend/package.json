@@ -19,6 +19,8 @@
         "test": "node --test test/*.test.js"
     },
     "dependencies": {
+        "@aws-sdk/client-s3": "^3.1106.0",
+        "@aws-sdk/s3-request-presigner": "^3.1106.0",
         "@whiskeysockets/baileys": "^7.0.0-rc.9",
         "adm-zip": "^0.5.17",
         "bcryptjs": "^3.0.3",

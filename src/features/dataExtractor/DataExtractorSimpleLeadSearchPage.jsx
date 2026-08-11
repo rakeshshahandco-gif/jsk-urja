@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useParams } from 'react-router-dom';
 import { useFinancialYear } from '@/contexts/FinancialYearContext';
 import { dataExtractorApi } from '@/services/dataExtractorApi';
+import { PATHS } from '@/routes/paths';
 import {
     Rocket, Info, PlayCircle, ShieldAlert, Search, Database, Sparkles,
     CheckCircle2, AlertTriangle, XCircle, RefreshCw, ChevronRight, Layers, Ban,
@@ -17,6 +19,7 @@ import {
     shouldKeepPollingForAutoProcessing,
 } from './simpleLeadSearchUi.js';
 import SimpleLeadSearchCapturedDataPanel from './SimpleLeadSearchCapturedDataPanel.jsx';
+import DataExtractorActiveRunsPanel from './DataExtractorActiveRunsPanel.jsx';
 
 class SimpleLeadSearchErrorBoundary extends React.Component {
     constructor(props) {
@@ -251,7 +254,9 @@ function formatPhoneCell(phone) {
     return `${phone.normalized || phone.original}${conf}`;
 }
 
-export default function DataExtractorSimpleLeadSearchPage() {
+export default function DataExtractorSimpleLeadSearchPage({ initialSessionId = null, runMode = false } = {}) {
+    const params = useParams();
+    const resumeSessionId = initialSessionId || params.sessionId || null;
     const { selectedFY } = useFinancialYear();
     const [form, setForm] = useState({
         product: '',
@@ -487,6 +492,25 @@ export default function DataExtractorSimpleLeadSearchPage() {
         }
     }, []);
 
+    // Resume persistent run from dedicated /runs/:sessionId tab (or initialSessionId prop)
+    useEffect(() => {
+        if (!resumeSessionId) return undefined;
+        let cancelled = false;
+        (async () => {
+            const data = await refreshSession(resumeSessionId);
+            if (cancelled || !data) return;
+            setResult((prev) => ({
+                ...(prev || {}),
+                session: data.session || { _id: resumeSessionId },
+                campaign: data.campaign || prev?.campaign,
+            }));
+            setSession(data.session || { _id: resumeSessionId });
+            await refreshResults(resumeSessionId);
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resumeSessionId]);
+
     useEffect(() => {
         refreshAgent(session?._id);
         const t = setInterval(() => refreshAgent(session?._id), 5000);
@@ -649,6 +673,14 @@ export default function DataExtractorSimpleLeadSearchPage() {
         setCaptureCompletedFlash(false);
         setSamePageCaptureLocked(false);
         lastCapturedPageKeyRef.current = '';
+        // Popup-safe: open tab synchronously on user click, navigate after jobId exists
+        const runWindowName = 'de-run-pending';
+        let runWin = null;
+        try {
+            runWin = window.open('about:blank', runWindowName);
+        } catch {
+            runWin = null;
+        }
         try {
             const enabledQueryTexts = (queryPreview?.queries || [])
                 .filter((q) => q.enabled !== false)
@@ -700,6 +732,23 @@ export default function DataExtractorSimpleLeadSearchPage() {
             } else {
                 autoBootPendingRef.current = false;
             }
+            const sid = data?.session?._id;
+            if (sid) {
+                const runUrl = `${window.location.origin}${PATHS.DATA_EXTRACTOR.RUN(sid)}`;
+                const winName = `de-run-${sid}`;
+                if (runWin && !runWin.closed) {
+                    try {
+                        runWin.name = winName;
+                        runWin.location.href = runUrl;
+                    } catch {
+                        window.open(runUrl, winName);
+                    }
+                } else {
+                    window.open(runUrl, winName);
+                }
+            } else if (runWin && !runWin.closed) {
+                runWin.close();
+            }
             toast.success(
                 ownerFullAuto
                     ? (data.campaignAction === 'reused'
@@ -713,6 +762,9 @@ export default function DataExtractorSimpleLeadSearchPage() {
                 toast.warning(data.autoCollectionStoppedWarning);
             }
         } catch (err) {
+            if (runWin && !runWin.closed) {
+                try { runWin.close(); } catch { /* ignore */ }
+            }
             toast.error(ownerFacingSearchError(err));
         } finally {
             setBusy('');
@@ -2056,6 +2108,13 @@ export default function DataExtractorSimpleLeadSearchPage() {
     return (
         <SimpleLeadSearchErrorBoundary onStartNew={onStartNew}>
         <div className={styles.page}>
+            {runMode ? (
+                <div style={{ marginBottom: 12, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', fontSize: 13 }}>
+                    Dedicated search run window — closing this tab does <strong>not</strong> stop the backend search.
+                    {resumeSessionId ? <> Run ID: <code>{resumeSessionId}</code></> : null}
+                </div>
+            ) : null}
+            {!runMode ? <DataExtractorActiveRunsPanel /> : null}
             {ownerErrorMessage && !result && (
                 <div className={styles.manualBanner} role="alert" style={{ marginBottom: 16 }}>
                     <ShieldAlert size={22} aria-hidden />

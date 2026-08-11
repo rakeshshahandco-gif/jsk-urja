@@ -12,6 +12,7 @@ import { buildBlockLayoutCss, blockInlineStyle, hasBlockLayout } from '@/utils/p
 import { isLivePrintFormat, buildPrintFormatCss } from '@/utils/printFormatRuntime';
 import {
     SalesOrderPrintBlockContent,
+    SoBlockApprovalLines,
     SoBlockBankDetails,
     SoBlockCompanyDetails,
     SoBlockCustomerDetails,
@@ -21,7 +22,8 @@ import {
     SoBlockItemTable,
     SoBlockLogo,
     SoBlockRemarks,
-    SoBlockSignature,
+    SoBlockTerms,
+    SoBlockTotalsBox,
     SO_PRINT_COLUMNS,
 } from './SalesOrderPrintBlocks';
 import {
@@ -39,7 +41,7 @@ import {
 /** Scale visible column widthPct so they sum to 100 — prevents crushed HSN/UOM in print. */
 function normalizeColumnWidths(columns = []) {
     const list = (columns || []).map((c) => ({ ...c }));
-    const visible = list.filter((c) => c.visible !== false);
+    const visible = list.filter((c) => c.visible !== false && c.id !== 'spacer');
     const sum = visible.reduce((s, c) => s + (Number(c.widthPct) || 0), 0);
     if (sum > 0 && Math.abs(sum - 100) > 0.5) {
         visible.forEach((c) => {
@@ -89,22 +91,28 @@ export default function SalesOrderPrintDocument({
             || printFormat.status === 'approved'
         )
     );
-    const useBlockLayout = designerMode || liveCustom;
+    // Print/preview uses the approved full-width AFTER flow.
+    // Live designer block widths were leaving a blank right band and crushing columns.
+    // Designer mode still uses the saved block layout unchanged.
+    const useBlockLayout = designerMode;
 
     const blocks = useBlockLayout
         ? mergeBlocks(printFormat?.layout?.blocks || {}, 'Sales Order')
         : null;
 
-    const columns = useBlockLayout
+    // Print/preview always use the approved 8-column AFTER layout.
+    // Designer still merges saved format columns so the designer UI is unchanged.
+    const approvedPrintColumns = SO_PRINT_COLUMNS.map((c) => ({
+        id: c.id,
+        label: c.label,
+        widthPct: c.widthPct,
+        width: c.width,
+        visible: true,
+        align: c.align,
+    }));
+    const columns = designerMode
         ? normalizeColumnWidths(mergeColumns(printFormat?.layout?.itemTable?.columns || [], 'Sales Order'))
-        : SO_PRINT_COLUMNS.map((c) => ({
-            id: c.id,
-            label: c.label,
-            widthPct: c.id === 'spacer' ? 10 : undefined,
-            width: c.width,
-            visible: true,
-            align: c.align,
-        }));
+        : approvedPrintColumns;
 
     const pageCss = useBlockLayout && !designerMode && printFormat
         ? `
@@ -491,23 +499,34 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                     </div>
                 )}
 
-                <div data-pf-block="itemTable" data-pf-section="itemTable" style={{ marginBottom: 'auto' }}>
+                <div data-pf-block="itemTable" data-pf-section="itemTable">
                     <SoBlockItemTable
                         so={so}
                         pageItems={pageItems}
                         pageIdx={pageIdx}
                         isLastPage={isLastPage}
-                        showTotals
+                        showTotals={false}
                         columns={columns}
                         srStart={soItemSrStart(pages, pageIdx)}
                     />
                 </div>
 
-                <div data-pf-block="totalsBox" className="pf-flow-fallback" style={{ display: 'none' }} />
-
                 {isLastPage && (
                     <>
-                        <div data-pf-block="remarks" data-pf-section="remarks" style={{ marginTop: so.remarks ? 14 : 0 }}>
+                        <div
+                            data-pf-block="totalsBox"
+                            style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, marginBottom: 8 }}
+                        >
+                            <div style={{ width: '88mm', minWidth: '88mm' }}>
+                                <SoBlockTotalsBox so={so} showAmountInWords={false} />
+                            </div>
+                        </div>
+                        {so.amountInWords ? (
+                            <div style={{ fontSize: '9pt', fontStyle: 'italic', textTransform: 'capitalize', marginBottom: 10 }}>
+                                <strong>Amount in Words: </strong>{so.amountInWords}
+                            </div>
+                        ) : null}
+                        <div data-pf-block="remarks" data-pf-section="remarks" style={{ marginTop: so.remarks ? 10 : 0 }}>
                             <SoBlockRemarks so={so} />
                         </div>
                         <div
@@ -515,21 +534,21 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                             style={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
-                                alignItems: 'flex-end',
-                                marginTop: 30,
+                                alignItems: 'flex-start',
+                                gap: 28,
+                                marginTop: 18,
                             }}
                         >
-                            <div data-pf-block="bankDetails" data-pf-section="bankDetails">
-                                <SoBlockBankDetails />
+                            <div data-pf-block="bankDetails" data-pf-section="bankDetails" style={{ flex: 1 }}>
+                                <SoBlockBankDetails company={company} />
                             </div>
-                            <div style={{ textAlign: 'center', fontSize: '8pt', color: '#666' }}>
-                                This is a computer generated order and does not require a physical signature.
-                            </div>
-                            <div data-pf-block="signature" data-pf-section="signature" style={{ width: 220 }}>
-                                <SoBlockSignature so={so} company={company} user={user} />
+                            <div data-pf-block="terms" data-pf-section="terms" style={{ flex: 1 }}>
+                                <SoBlockTerms so={so} />
                             </div>
                         </div>
-                        <div data-pf-block="terms" style={{ display: 'none' }} />
+                        <div data-pf-block="signature" data-pf-section="signature">
+                            <SoBlockApprovalLines />
+                        </div>
                     </>
                 )}
             </div>

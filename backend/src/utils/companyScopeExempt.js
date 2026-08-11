@@ -64,6 +64,7 @@ export function isCompanyScopeExempt(req) {
     if (p.startsWith('/auth')) return true;
     if (p.startsWith('/saas')) return true;   // SaaS super admin routes are company-scope exempt
     if (p.startsWith('/platform-feature-settings')) return true;
+    if (p.startsWith('/module-locks')) return true;
     if (p.startsWith('/industry-templates')) return true;
     if (p.startsWith('/module-allocation')) return true;
     if (p.startsWith('/customer-template-field-settings')) return true;

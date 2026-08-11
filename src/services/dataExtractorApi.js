@@ -170,6 +170,18 @@ export const dataExtractorApi = {
         const res = await api.get('/data-extractor/simple-lead-search/agent-status', { params });
         return unwrap(res);
     },
+    simpleLeadSearchListRuns: async (params = {}) => {
+        const res = await api.get('/data-extractor/simple-lead-search/runs', { params });
+        return unwrap(res);
+    },
+    simpleLeadSearchPersistExport: async (sessionId, body = {}) => {
+        const res = await api.post(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-artifacts`, body);
+        return unwrap(res);
+    },
+    simpleLeadSearchExportDownloadUrl: async (sessionId, params = {}) => {
+        const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}/export-artifacts/download`, { params });
+        return unwrap(res);
+    },
     simpleLeadSearchSessionStatus: async (sessionId) => {
         const res = await api.get(`/data-extractor/simple-lead-search/sessions/${sessionId}`);
         return unwrap(res);

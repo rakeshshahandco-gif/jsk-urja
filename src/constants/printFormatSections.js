@@ -49,15 +49,14 @@ export const BLOCK_LABELS = {
 };
 
 export const SO_TABLE_COLUMNS = [
-    { id: 'sr', label: 'SR', widthPct: 4, visible: true, align: 'center' },
-    { id: 'itemCode', label: 'ITEM CODE', widthPct: 10, visible: true, align: 'left' },
-    { id: 'description', label: 'DESCRIPTION', widthPct: 28, visible: true, align: 'left' },
-    { id: 'notes', label: 'NOTES', widthPct: 12, visible: true, align: 'left' },
+    { id: 'sr', label: 'SR', widthPct: 6, visible: true, align: 'center' },
+    { id: 'itemCode', label: 'ITEM CODE', widthPct: 17, visible: true, align: 'left' },
+    { id: 'description', label: 'DESCRIPTION', widthPct: 26, visible: true, align: 'left' },
+    { id: 'notes', label: 'ADDITIONAL NOTES', widthPct: 15, visible: true, align: 'left' },
     { id: 'hsn', label: 'HSN', widthPct: 7, visible: true, align: 'center' },
     { id: 'qty', label: 'QTY', widthPct: 7, visible: true, align: 'center' },
     { id: 'rate', label: 'RATE', widthPct: 10, visible: true, align: 'right' },
     { id: 'amount', label: 'AMOUNT', widthPct: 12, visible: true, align: 'right' },
-    { id: 'spacer', label: '', widthPct: 10, visible: true, align: 'center' },
 ];
 
 export const SI_TABLE_COLUMNS = [
