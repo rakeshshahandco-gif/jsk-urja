@@ -249,8 +249,8 @@ export function buildSalesOrderBlockHtml({ so, company, user, logoBase64, blocks
                 <span>Order No: ${esc(so.soNumber)} | Date: ${fmtDate(so.soDate)} (continued)</span></div>`
             : '';
         const itemTableHtml = `<table class="items-table"><colgroup>
-          <col style="width:6%"/><col style="width:17%"/><col style="width:26%"/><col style="width:15%"/>
-          <col style="width:7%"/><col style="width:7%"/><col style="width:10%"/><col style="width:12%"/>
+          <col data-pf-col="sr" style="width:4%"/><col data-pf-col="itemCode" style="width:18%"/><col data-pf-col="description" style="width:33%"/><col data-pf-col="notes" style="width:18%"/>
+          <col data-pf-col="hsn" style="width:6%"/><col data-pf-col="qty" style="width:5%"/><col data-pf-col="rate" style="width:7%"/><col data-pf-col="amount" style="width:9%"/>
         </colgroup><thead><tr>
           <th data-pf-col="sr">SR</th><th data-pf-col="itemCode">ITEM CODE</th><th data-pf-col="description">DESCRIPTION</th>
           <th data-pf-col="notes">ADDITIONAL NOTES</th><th data-pf-col="hsn">HSN</th><th data-pf-col="qty">QTY</th>
@@ -336,8 +336,8 @@ export function buildSalesOrderFlowHtml({ so, company, user, logoBase64 }) {
         const table = `
           ${blockHtml('itemTable', `<table class="items-table">
             <colgroup>
-              <col style="width:6%"/><col style="width:17%"/><col style="width:26%"/><col style="width:15%"/>
-              <col style="width:7%"/><col style="width:7%"/><col style="width:10%"/><col style="width:12%"/>
+              <col data-pf-col="sr" style="width:4%"/><col data-pf-col="itemCode" style="width:18%"/><col data-pf-col="description" style="width:33%"/><col data-pf-col="notes" style="width:18%"/>
+              <col data-pf-col="hsn" style="width:6%"/><col data-pf-col="qty" style="width:5%"/><col data-pf-col="rate" style="width:7%"/><col data-pf-col="amount" style="width:9%"/>
             </colgroup>
             <thead><tr>
               <th data-pf-col="sr">SR</th>
@@ -398,7 +398,17 @@ export const SO_PRINT_BASE_CSS = `
   .info-table { width: 100%; border-collapse: collapse; }
   .info-label { width: 120px; font-size: 10pt; font-weight: 800; padding: 4px 0; vertical-align: top; }
   .info-value { font-size: 10pt; padding: 4px 0; vertical-align: top; text-transform: uppercase; }
-  .items-table { width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; table-layout: fixed; }
+  [data-pf-block="itemTable"] { width: 100%; max-width: 100%; min-width: 0; }
+  .items-table { width: 100%; max-width: 100%; border-collapse: collapse; border: 1px solid #000; font-size: 11px; margin-bottom: auto; table-layout: fixed; box-sizing: border-box; }
+  .items-table col[data-pf-col="sr"] { width: 4%; }
+  .items-table col[data-pf-col="itemCode"] { width: 18%; }
+  .items-table col[data-pf-col="description"] { width: 33%; }
+  .items-table col[data-pf-col="notes"] { width: 18%; }
+  .items-table col[data-pf-col="hsn"] { width: 6%; }
+  .items-table col[data-pf-col="qty"] { width: 5%; }
+  .items-table col[data-pf-col="rate"] { width: 7%; }
+  .items-table col[data-pf-col="amount"] { width: 9%; }
+  .items-table [data-pf-col="spacer"] { display: none; width: 0; padding: 0; border: none; }
   .items-table th { border: 1px solid #000; padding: 8px 6px; font-weight: 800; background: #f5f5f5; text-align: center; text-transform: uppercase; }
   .items-table td { border: 1px solid #000; padding: 6px; vertical-align: top; overflow-wrap: break-word; }
   .items-table td[data-pf-col="itemCode"] { word-break: normal; }

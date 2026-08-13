@@ -949,10 +949,35 @@ export default function SalesOrderDetailPage() {
                     .so-print-portal .so-print-root [data-pf-block] {
                         overflow: visible !important;
                     }
+                    .so-print-portal .so-print-root [data-pf-block="itemTable"] {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        min-width: 0 !important;
+                        align-self: stretch !important;
+                    }
                     .so-print-portal .so-print-root .print-items-table {
                         width: 100% !important;
+                        max-width: 100% !important;
                         table-layout: fixed !important;
+                        border-collapse: collapse !important;
+                        box-sizing: border-box !important;
                     }
+                    .so-print-portal .so-print-root [data-pf-col="spacer"],
+                    .so-print-portal .so-print-root col[data-pf-col="spacer"] {
+                        display: none !important;
+                        width: 0 !important;
+                        max-width: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                    }
+                    .so-print-portal .so-print-root col[data-pf-col="sr"] { width: 4% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="itemCode"] { width: 18% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="description"] { width: 33% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="notes"] { width: 18% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="hsn"] { width: 6% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="qty"] { width: 5% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="rate"] { width: 7% !important; }
+                    .so-print-portal .so-print-root col[data-pf-col="amount"] { width: 9% !important; }
                     .so-print-portal .so-print-root .print-items-table th,
                     .so-print-portal .so-print-root .print-items-table td {
                         word-wrap: break-word;

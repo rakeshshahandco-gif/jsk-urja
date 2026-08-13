@@ -38,6 +38,37 @@ import {
     SO_BLOCK_LAST_PAGE_IDS,
 } from './salesOrderPrintUtils';
 
+/** Force 8-col AFTER widths in print so Chrome does not leave a blank band after Amount. */
+function buildApprovedSoPrintTableCss(rootClassName) {
+    const colRules = SO_PRINT_COLUMNS.map((c) => (
+        `.${rootClassName} col[data-pf-col="${c.id}"] { width: ${c.widthPct}% !important; }`
+    )).join('\n');
+    return `
+      .${rootClassName} [data-pf-block="itemTable"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        align-self: stretch !important;
+      }
+      .${rootClassName} .print-items-table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+        box-sizing: border-box !important;
+      }
+      .${rootClassName} [data-pf-col="spacer"],
+      .${rootClassName} col[data-pf-col="spacer"] {
+        display: none !important;
+        width: 0 !important;
+        max-width: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+      }
+      ${colRules}
+    `;
+}
+
 /** Scale visible column widthPct so they sum to 100 — prevents crushed HSN/UOM in print. */
 function normalizeColumnWidths(columns = []) {
     const list = (columns || []).map((c) => ({ ...c }));
@@ -196,6 +227,7 @@ export default function SalesOrderPrintDocument({
                 boxSizing: 'border-box',
             }}
         >
+            <style>{buildApprovedSoPrintTableCss(rootClassName)}</style>
             <SalesOrderFlowPages so={so} company={company} user={user} columns={columns} />
         </div>
     );
@@ -499,7 +531,7 @@ function SalesOrderFlowPages({ so, company, user, columns }) {
                     </div>
                 )}
 
-                <div data-pf-block="itemTable" data-pf-section="itemTable">
+                <div data-pf-block="itemTable" data-pf-section="itemTable" style={{ width: '100%', maxWidth: '100%', minWidth: 0, alignSelf: 'stretch' }}>
                     <SoBlockItemTable
                         so={so}
                         pageItems={pageItems}

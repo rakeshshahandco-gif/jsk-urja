@@ -25,16 +25,18 @@ const thBorder = {
 /** Compact columns must stay on one line (SR / AMOUNT headers + numeric values). */
 const COMPACT_COL_IDS = new Set(['sr', 'hsn', 'qty', 'rate', 'amount']);
 
-/** Approved AFTER print columns — full width, Amount last, no trailing blank column. */
+/** Approved AFTER print columns — full width, Amount last, no trailing blank column.
+ * Freed spacer width goes mainly to DESCRIPTION, then ITEM CODE and ADDITIONAL NOTES.
+ * Numeric columns stay compact. Percentages must sum to 100. */
 export const SO_PRINT_COLUMNS = [
-    { id: 'sr', label: 'SR', width: '6%', widthPct: 6, align: 'center' },
-    { id: 'itemCode', label: 'ITEM CODE', width: '17%', widthPct: 17, align: 'left' },
-    { id: 'description', label: 'DESCRIPTION', width: '26%', widthPct: 26, align: 'left' },
-    { id: 'notes', label: 'ADDITIONAL NOTES', width: '15%', widthPct: 15, align: 'left' },
-    { id: 'hsn', label: 'HSN', width: '7%', widthPct: 7, align: 'center' },
-    { id: 'qty', label: 'QTY', width: '7%', widthPct: 7, align: 'center' },
-    { id: 'rate', label: 'RATE', width: '10%', widthPct: 10, align: 'right' },
-    { id: 'amount', label: 'AMOUNT', width: '12%', widthPct: 12, align: 'right' },
+    { id: 'sr', label: 'SR', width: '4%', widthPct: 4, align: 'center' },
+    { id: 'itemCode', label: 'ITEM CODE', width: '18%', widthPct: 18, align: 'left' },
+    { id: 'description', label: 'DESCRIPTION', width: '33%', widthPct: 33, align: 'left' },
+    { id: 'notes', label: 'ADDITIONAL NOTES', width: '18%', widthPct: 18, align: 'left' },
+    { id: 'hsn', label: 'HSN', width: '6%', widthPct: 6, align: 'center' },
+    { id: 'qty', label: 'QTY', width: '5%', widthPct: 5, align: 'center' },
+    { id: 'rate', label: 'RATE', width: '7%', widthPct: 7, align: 'right' },
+    { id: 'amount', label: 'AMOUNT', width: '9%', widthPct: 9, align: 'right' },
 ];
 
 function visibleColumns(columns) {
@@ -252,10 +254,12 @@ export function SoBlockItemTable({
             className="print-items-table"
             style={{
                 width: '100%',
+                maxWidth: '100%',
                 borderCollapse: 'collapse',
                 fontSize: '10pt',
                 border: '1px solid #000',
                 tableLayout: 'fixed',
+                boxSizing: 'border-box',
             }}
         >
             <colgroup>
@@ -282,7 +286,6 @@ export function SoBlockItemTable({
                                 ...thBorder,
                                 padding: COMPACT_COL_IDS.has(col.id) ? '8px 3px' : thBorder.padding,
                                 textAlign: col.headerAlign || col.align || 'left',
-                                width: col.width,
                                 whiteSpace: COMPACT_COL_IDS.has(col.id) ? 'nowrap' : undefined,
                                 overflowWrap: COMPACT_COL_IDS.has(col.id) ? 'normal' : undefined,
                                 wordBreak: COMPACT_COL_IDS.has(col.id) ? 'keep-all' : undefined,
