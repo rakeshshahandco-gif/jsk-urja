@@ -10,11 +10,11 @@ import { getSocialLoginStatus } from '../../socialSources/directLogin.adapter.js
 import { createDiscoveryJob, startDiscoveryJob, resumeDiscoveryJob } from '../discoveryJob.service.js';
 import { createLead, createTaskFromLead } from '../../../lead.service.js';
 import { crmStatusForIdentity } from '../phase5/identity.service.js';
-import { computeOperationsDashboard, identityExportRows, recentCampaignAnalytics, mapSocialHealth, nextRunAt } from './opsAnalytics.util.js';
+import { computeOperationsDashboard, identityExportRows, recentCampaignAnalytics, mapSocialHealth, nextRunAt, startupDiscoveryRecoveryFilter } from './opsAnalytics.util.js';
 import ExcelJS from 'exceljs';
 import { AuditLog } from '../../../../models/auditLog.model.js';
 
-export { computeOperationsDashboard, recentCampaignAnalytics, mapSocialHealth, nextRunAt };
+export { computeOperationsDashboard, recentCampaignAnalytics, mapSocialHealth, nextRunAt, startupDiscoveryRecoveryFilter };
 
 async function opsAudit(userId, description, details = {}) {
     if (!userId) return;
@@ -302,21 +302,39 @@ export async function executeBulkConvert(companyId, user, { ids = [], confirm = 
     return out;
 }
 
-export async function exportIdentitiesWorkbook(companyId, query = {}) {
+export const EXPORT_CURSOR_BATCH = 500;
+
+export function identityExportFilter(companyId, query = {}) {
     const q = { companyId, isDeleted: { $ne: true }, mergedIntoId: null, testOnly: { $ne: true } };
     if (query.keyword) q.keywords = new RegExp(String(query.keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     if (query.source) q.platforms = query.source;
     if (query.crmStatus) q.crmStatus = query.crmStatus;
-    const rows = await ExtractorCompanyIdentity.find(q).sort({ lastSeenAt: -1 }).limit(2000).lean();
-    const data = identityExportRows(rows);
+    return q;
+}
+
+export async function exportIdentitiesWorkbook(companyId, query = {}) {
+    const q = identityExportFilter(companyId, query);
+    const total = await ExtractorCompanyIdentity.countDocuments(q);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Consolidated Companies');
-    if (data[0]) {
-        ws.columns = Object.keys(data[0]).map((k) => ({ header: k, key: k, width: 22 }));
-        data.forEach((r) => ws.addRow(r));
+    const cursor = ExtractorCompanyIdentity.find(q).sort({ lastSeenAt: -1 }).batchSize(EXPORT_CURSOR_BATCH).cursor();
+    let columnsSet = false;
+    let count = 0;
+    for await (const ident of cursor) {
+        const row = identityExportRows([ident])[0];
+        if (!row) continue;
+        if (!columnsSet) {
+            ws.columns = Object.keys(row).map((k) => ({ header: k, key: k, width: 22 }));
+            columnsSet = true;
+        }
+        ws.addRow(row);
+        count += 1;
+    }
+    if (!columnsSet) {
+        ws.columns = [{ header: 'Company', key: 'Company', width: 22 }];
     }
     const buf = await wb.xlsx.writeBuffer();
-    return { buffer: Buffer.from(buf), fileName: 'consolidated-companies.xlsx', count: data.length };
+    return { buffer: Buffer.from(buf), fileName: 'consolidated-companies.xlsx', count, total };
 }
 
 export async function previewTestDataCleanup(companyId) {
@@ -338,12 +356,8 @@ export async function cleanupTestData(companyId, userId, { confirm = false } = {
 }
 
 export async function recoverStaleDiscoveryJobsOnStartup({ staleMs = 15 * 60 * 1000 } = {}) {
-    const cutoff = new Date(Date.now() - staleMs);
-    const stale = await DiscoveryJob.find({
-        status: 'RUNNING',
-        isDeleted: { $ne: true },
-        $or: [{ lastProcessedAt: { $lt: cutoff } }, { lastProcessedAt: null, startedAt: { $lt: cutoff } }],
-    }).limit(25);
+    void staleMs;
+    const stale = await DiscoveryJob.find(startupDiscoveryRecoveryFilter()).limit(25);
     const summary = { recovered: 0, paused: 0 };
     for (const job of stale) {
         job.status = 'PAUSED';

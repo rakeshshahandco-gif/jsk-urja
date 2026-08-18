@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isTestOnlyRecord } from '../src/services/dataExtractor/discovery/phase5/identityEvidence.util.js';
 import { clusterEvidence, campaignNeedIsBatchOnly, classifyIncremental } from '../src/services/dataExtractor/discovery/phase5/cluster.util.js';
-import { buildDashboardFromIdentities, applyEvidenceRawCounts, identityExportRows, campaignAnalyticsFromJob, mapSocialHealth, nextRunAt } from '../src/services/dataExtractor/discovery/phase6/opsAnalytics.util.js';
+import { buildDashboardFromIdentities, applyEvidenceRawCounts, identityExportRows, campaignAnalyticsFromJob, mapSocialHealth, nextRunAt, startupDiscoveryRecoveryFilter } from '../src/services/dataExtractor/discovery/phase6/opsAnalytics.util.js';
 import { JOB_STATUSES } from '../src/services/dataExtractor/discovery/providerTypes.js';
 
 function evidence(i, extras = {}) {
@@ -67,6 +67,13 @@ describe('phase6 operations', () => {
         assert.ok(JOB_STATUSES.includes('STOPPED'));
         assert.ok(JOB_STATUSES.includes('RECOVERING'));
         assert.ok(JOB_STATUSES.includes('BLOCKED'));
+    });
+
+    it('startup recovery targets every RUNNING job, not only 15-minute-stale ones', () => {
+        const q = startupDiscoveryRecoveryFilter();
+        assert.deepEqual(q.status.$in, ['RUNNING', 'RECOVERING']);
+        assert.equal(q.lastProcessedAt, undefined);
+        assert.equal(q.isDeleted.$ne, true);
     });
 
     it('source health maps login required honestly and never includes secrets', () => {
@@ -155,6 +162,21 @@ describe('phase6 operations', () => {
         assert.ok(c.unique > 0 && c.excluded > 0);
         assert.ok(c.ms < 120000, `10k clustering took ${c.ms}ms`);
         console.log(JSON.stringify({ scale: { '1k': a, '5k': b, '10k': c } }));
+    });
+
+    it('consolidated export has no 2000 total-row ceiling and skips testOnly', () => {
+        const many = [];
+        for (let i = 0; i < 2500; i += 1) {
+            many.push({ canonicalName: `Co ${i}`, testOnly: false, platforms: ['web'], website: `https://c${i}.example` });
+        }
+        many.push({ canonicalName: 'Fixture', testOnly: true, website: 'https://t.example' });
+        const rows = identityExportRows(many);
+        assert.equal(rows.length, 2500);
+        assert.ok(rows.length > 2000);
+        assert.equal(rows.some((r) => r.Company === 'Fixture'), false);
+        assert.ok(Object.prototype.hasOwnProperty.call(rows[0], 'SourcePlatforms'));
+        assert.ok(Object.prototype.hasOwnProperty.call(rows[0], 'SourcePlatformCount'));
+        assert.ok(Object.prototype.hasOwnProperty.call(rows[0], 'EvidenceCount'));
     });
 });
 

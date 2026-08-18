@@ -1,6 +1,6 @@
-import { ApiResponse } from '../../utils/ApiResponse.js';
-import { ApiError } from '../../utils/ApiError.js';
-import { asyncHandler } from '../../utils/asyncHandler.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
+import { ApiError } from '../utils/ApiError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import {
     consolidateCompanyIdentities,
     listIdentities,
@@ -153,10 +153,12 @@ export const bulkConvert = asyncHandler(async (req, res) => {
 
 export const exportCompanies = asyncHandler(async (req, res) => {
     rejectScoped(req);
-    const { buffer, fileName, count } = await exportIdentitiesWorkbook(req.companyId, req.query);
+    const { buffer, fileName, count, total } = await exportIdentitiesWorkbook(req.companyId, req.query);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.setHeader('X-Export-Count', String(count));
+    res.setHeader('X-Export-Total', String(total ?? count));
+    res.setHeader('X-Export-Capped', 'false');
     res.send(buffer);
 });
 

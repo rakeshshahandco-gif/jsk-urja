@@ -192,6 +192,7 @@ export function identityExportRows(identities = []) {
         FirstDiscovered: i.firstDiscoveredAt || '',
         LastSeen: i.lastSeenAt || '',
         Completeness: i.completeness ?? '',
+        SourcePlatforms: (i.platforms || []).join('; '),
     }));
 }
 
@@ -229,6 +230,13 @@ const SOURCE_HEALTH_MAP = {
 
 export function mapSocialHealth(status) {
     return SOURCE_HEALTH_MAP[status] || 'Disconnected';
+}
+
+export function startupDiscoveryRecoveryFilter() {
+    return {
+        status: { $in: ['RUNNING', 'RECOVERING'] },
+        isDeleted: { $ne: true },
+    };
 }
 
 export function nextRunAt(schedule = {}, from = new Date()) {
