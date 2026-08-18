@@ -11,7 +11,7 @@ import {
 } from './directLogin.quality.util.js';
 
 const LAUNCH_ARGS = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
-const LOGIN_WAIT_MS = 10 * 60 * 1000;
+const LOGIN_WAIT_MS = 20 * 60 * 1000;
 const HYDRATION_TIMEOUT_MS = 18000;
 const STABILIZE_MS = 1100;
 const HUMAN_DELAY_MS = 900;
