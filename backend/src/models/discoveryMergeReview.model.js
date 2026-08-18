@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 export const MERGE_REVIEW_STATUSES = ['open', 'resolved', 'ignored'];
 export const MERGE_ACTIONS = [
     'keep_a', 'keep_b', 'merge_selected_fields', 'mark_separate', 'ignore', 'link_existing',
+    'merge', 'keep_separate',
 ];
 
 const discoveryMergeReviewSchema = new mongoose.Schema(
@@ -25,6 +26,7 @@ const discoveryMergeReviewSchema = new mongoose.Schema(
         resolvedAt: { type: Date, default: null },
         notes: { type: String, default: '', maxlength: 2000 },
         auditLog: { type: [mongoose.Schema.Types.Mixed], default: [] },
+        reviewKind: { type: String, trim: true, default: 'discovery_preview', index: true },
         isDeleted: { type: Boolean, default: false },
     },
     { timestamps: true, collection: 'discovery_merge_reviews' },
