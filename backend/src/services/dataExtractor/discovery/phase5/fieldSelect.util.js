@@ -190,13 +190,46 @@ export function collectSocialAndDirectories(members = []) {
     return { social, directories: uniqueDirs };
 }
 
+function extraEvidenceUrls(member = {}) {
+    const fromRefs = Array.isArray(member.sourceRefs)
+        ? member.sourceRefs.map((r) => r?.sourceUrl || r?.url)
+        : [];
+    const fromLinkedInEvidence = Array.isArray(member.social?.linkedinProfessionalEvidence)
+        ? member.social.linkedinProfessionalEvidence
+        : [];
+    return [
+        member.sourceUrl,
+        member.resultUrl,
+        member.social?.facebookUrl,
+        member.socialLinks?.facebook,
+        member.social?.instagramUrl,
+        member.socialLinks?.instagram,
+        member.social?.linkedinCompanyUrl,
+        member.socialLinks?.linkedin,
+        member.social?.xUrl,
+        member.socialLinks?.twitter,
+        member.socialLinks?.x,
+        ...fromLinkedInEvidence,
+        ...fromRefs,
+    ].filter(Boolean);
+}
+
 export function countSourcePlatforms(members = []) {
     const platforms = new Set();
     let evidence = 0;
     for (const m of members) {
         evidence += Number(m.evidenceRecordCount || 1);
-        platforms.add(m.sourcePlatform || m.source || 'web');
+        const declared = m.sourcePlatform || m.source;
+        if (declared) {
+            platforms.add(classifySourcePlatform({ source: declared, sourcePlatform: declared }));
+        }
+        for (const url of extraEvidenceUrls(m)) {
+            // URL-only so a Facebook member that also carries a LinkedIn URL counts both.
+            platforms.add(classifySourcePlatform({ url }));
+        }
+        if (!declared && extraEvidenceUrls(m).length === 0) platforms.add('web');
     }
+    platforms.delete('');
     return {
         sourcePlatformCount: platforms.size,
         evidenceRecordCount: evidence,

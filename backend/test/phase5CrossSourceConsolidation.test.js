@@ -90,6 +90,25 @@ describe('phase5 cross-source consolidation', () => {
         assert.equal(ident.verificationSummary.status, 'Partially Verified');
     });
 
+    it('facebook identity that also carries a LinkedIn URL counts 2 source platforms', () => {
+        const counts = countSourcePlatforms([{
+            companyName: 'NUOS Home Automation',
+            sourcePlatform: 'facebook',
+            sourceUrl: 'https://www.facebook.com/nuoshomeautomation',
+            social: {
+                facebookUrl: 'https://www.facebook.com/nuoshomeautomation',
+                linkedinCompanyUrl: 'https://www.linkedin.com/company/nuos-home-automation',
+            },
+            sourceRefs: [
+                { source: 'facebook', sourceUrl: 'https://www.facebook.com/nuoshomeautomation' },
+                { source: 'linkedin', sourceUrl: 'https://www.linkedin.com/company/nuos-home-automation' },
+            ],
+        }]);
+        assert.equal(counts.sourcePlatformCount, 2);
+        assert.ok(counts.platforms.includes('facebook'));
+        assert.ok(counts.platforms.includes('linkedin'));
+    });
+
     it('multiple source URLs are preserved and platform vs evidence counts differ', () => {
         const members = [
             { companyName: 'ABC', sourcePlatform: 'web', sourceUrl: 'https://abc.com/a', website: 'https://abc.com', normalizedDomain: 'abc.com', evidenceRecordCount: 10 },

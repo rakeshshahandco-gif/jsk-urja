@@ -8,7 +8,30 @@ import { DiscoveryMergeReview } from '../../../../models/discoveryMergeReview.mo
 import { ApiError } from '../../../../utils/ApiError.js';
 import { checkDuplicateForRecord } from '../../duplicateChecker.service.js';
 import { clusterEvidence } from './cluster.util.js';
+import { countSourcePlatforms } from './fieldSelect.util.js';
 import { isTestOnlyRecord, previewRecordToEvidence, rawCaptureToEvidence } from './identityEvidence.util.js';
+
+function unionPlatforms(existing = {}, ident = {}, nextRefs = []) {
+    const recounted = countSourcePlatforms([
+        {
+            ...ident,
+            sourceRefs: nextRefs,
+            social: ident.social || existing.social,
+        },
+    ]);
+    const platforms = [...new Set([
+        ...(existing.platforms || []),
+        ...(ident.platforms || []),
+        ...(recounted.platforms || []),
+    ])].filter(Boolean);
+    return {
+        platforms,
+        sourcePlatformCount: platforms.length,
+        badges: recounted.badges?.length
+            ? [...new Set([...(existing.badges || []), ...recounted.badges])]
+            : platforms,
+    };
+}
 
 function identityMatchFilter(companyId, ident) {
     const or = [];
@@ -123,9 +146,13 @@ export async function consolidateCompanyIdentities({
         } = ident;
         void _identId; void _identCompany; void _crmStatus; void _crmMatchRefs; void _promoted;
         void _createdBy; void _first; void _found; void _testOnly; void _deleted; void _merged;
+        const platformUnion = unionPlatforms(existing, ident, nextRefs);
         await ExtractorCompanyIdentity.updateOne({ _id: existing._id }, {
             $set: {
                 ...identFields,
+                platforms: platformUnion.platforms,
+                sourcePlatformCount: platformUnion.sourcePlatformCount,
+                badges: platformUnion.badges,
                 sourceRefs: nextRefs,
                 keywords,
                 firstDiscoveredAt: existing.firstDiscoveredAt || ident.firstDiscoveredAt,
@@ -273,8 +300,10 @@ export async function manualMergeIdentities(companyId, userId, { keepId, mergeId
     }
     keep.sourceRefs = refs;
     keep.keywords = [...new Set([...(keep.keywords || []), ...(other.keywords || [])])];
-    keep.platforms = [...new Set([...(keep.platforms || []), ...(other.platforms || [])])];
-    keep.sourcePlatformCount = keep.platforms.length;
+    const mergedPlatforms = unionPlatforms(keep.toObject?.() || keep, other.toObject?.() || other, refs);
+    keep.platforms = mergedPlatforms.platforms;
+    keep.sourcePlatformCount = mergedPlatforms.sourcePlatformCount;
+    if (mergedPlatforms.badges?.length) keep.badges = mergedPlatforms.badges;
     keep.evidenceRecordCount = (keep.evidenceRecordCount || 0) + (other.evidenceRecordCount || 0);
     keep.mergeHistory = [...(keep.mergeHistory || []), {
         action: 'manually_merged',

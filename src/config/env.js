@@ -7,7 +7,12 @@ const isRenderHost = hostname.endsWith('.onrender.com');
 /** Combined API + UI on same Render Web Service. */
 const isJskBackendRenderService = hostname === 'jsk-urja-backend.onrender.com';
 const isHandloomBackendRenderService = hostname === 'handloom-crm-backend.onrender.com';
-const isSameOriginRenderBackend = isJskBackendRenderService || isHandloomBackendRenderService;
+/** Combined staging service — must never fall through to production API. */
+const isJskStagingRenderService =
+    hostname === 'jsk-urja-staging.onrender.com' ||
+    /^jsk-urja-staging(?:-[a-z0-9]+)?\.onrender\.com$/i.test(hostname);
+const isSameOriginRenderBackend =
+    isJskBackendRenderService || isHandloomBackendRenderService || isJskStagingRenderService;
 
 /** Handloom static frontend → dedicated Handloom backend (not JSK). */
 const isHandloomFrontendRenderService = hostname === 'handloom-crm-frontend.onrender.com';
@@ -60,6 +65,8 @@ function isLoopbackApiUrl(url) {
 }
 
 function resolveProductionApiUrl() {
+    // Staging combined service must stay on its own origin — never production.
+    if (isJskStagingRenderService) return `${window.location.origin}/api/v1`;
     // Never bake localhost into production: a local VITE_API_URL would break every other PC.
     if (viteApiUrl && !isLoopbackApiUrl(viteApiUrl)) return stripTrailingSlash(viteApiUrl);
     if (isSameOriginRenderBackend) return `${window.location.origin}/api/v1`;
@@ -68,6 +75,7 @@ function resolveProductionApiUrl() {
 }
 
 function resolveProductionSocketUrl() {
+    if (isJskStagingRenderService) return window.location.origin;
     if (viteSocketUrl && !isLoopbackApiUrl(viteSocketUrl)) return stripTrailingSlash(viteSocketUrl);
     if (isSameOriginRenderBackend) return window.location.origin;
     if (isHandloomFrontendRenderService) return HANDLOOM_BACKEND_ORIGIN;
@@ -88,6 +96,7 @@ export const env = {
 };
 
 if (typeof window !== 'undefined') {
-    console.log(`🌐 System Environment: ${!useLocalBackend ? 'Production' : 'Local'}`);
+    const lane = useLocalBackend ? 'Local' : isJskStagingRenderService ? 'Staging' : 'Production';
+    console.log(`🌐 System Environment: ${lane}`);
     console.log(`🔌 Backend Target: ${env.API_URL}`);
 }
