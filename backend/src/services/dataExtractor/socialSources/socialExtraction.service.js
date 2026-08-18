@@ -25,6 +25,7 @@ import {
     officialApiStatus,
 } from './constants.js';
 import { isSocialSessionIsolatedFromWhatsApp } from './sessionStore.util.js';
+import { buildPublicUrlTestCandidate, PUBLIC_URL_TEST_MODE } from './linkedinX.publicUrl.util.js';
 
 function actorId(user) {
     return user?._id || user?.id || null;
@@ -316,6 +317,93 @@ export async function startSocialExtraction({
         limitations: getSocialSourceStatus({ platform: p, companyId }).limitations,
         groupMeta: found.groupMeta || null,
         metrics: found.metrics || null,
+    };
+}
+
+export async function ingestPublicSocialUrl({
+    companyId,
+    user,
+    headers = {},
+    platform,
+    publicUrl,
+    website = '',
+    keyword = '',
+    location = '',
+    title = '',
+    snippet = '',
+    testOnly,
+}) {
+    assertCanExtract(user);
+    const p = normalizeExtractPlatform(platform);
+    if (p !== 'linkedin' && p !== 'x') {
+        throw new ApiError(400, 'Test Public URL is only available for LinkedIn and X');
+    }
+    const rec = buildPublicUrlTestCandidate({
+        platform: p,
+        publicUrl,
+        website,
+        keyword: keyword || (p === 'linkedin' ? 'Home Automation' : 'Phase4CFixture'),
+        location: location || (p === 'linkedin' ? 'Mumbai' : ''),
+        title,
+        snippet,
+        testOnly,
+    });
+    if (rec.website) {
+        await bridgeCompanyWebsites([rec]);
+    }
+
+    const kw = rec.notes.match(/keyword=([^;]+)/)?.[1] || (p === 'linkedin' ? 'Home Automation' : 'Phase4CFixture');
+    const loc = rec.notes.match(/location=([^;]+)/)?.[1] || '';
+    const campaign = await ensureSocialCampaign({ companyId, user, platform: p, keyword: kw, city: loc });
+    const query = await ensureSimpleLeadSearchQuery({
+        companyId,
+        user,
+        campaignId: campaign._id,
+        queryText: `${kw}${loc ? ` ${loc}` : ''}`.trim(),
+        sourceHint: p,
+        priorityScore: 100,
+        selectedCriteria: { socialMode: PUBLIC_URL_TEST_MODE, socialSearchType: rec.resultTypeHint },
+    });
+
+    const ingest = await ingestRawCaptures({
+        companyId,
+        user,
+        campaignId: campaign._id,
+        body: {
+            queryId: String(query._id),
+            source: p,
+            querySourceHint: p,
+            captureMethod: 'manual_url',
+            idempotencyKey: `social-${p}-urltest-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+            records: toIngestRecords([rec]),
+        },
+    });
+
+    const sessionWrap = await createAssistedCaptureSession({
+        companyId,
+        user,
+        campaignId: campaign._id,
+        queryId: query._id,
+        body: { sourceHint: p, financialYear: headers['x-financial-year'] || '' },
+        headers,
+    });
+
+    return {
+        ingested: ingest?.acceptedCount ?? 1,
+        insertedCount: ingest?.insertedCount ?? 0,
+        updatedExistingCount: ingest?.updatedExistingCount ?? 0,
+        duplicate: Number(ingest?.insertedCount || 0) === 0 && Number(ingest?.acceptedCount || 0) > 0,
+        batch: ingest || null,
+        records: [rec],
+        campaignId: String(campaign._id),
+        queryId: String(query._id),
+        sessionId: String(sessionWrap.session?._id || ''),
+        processingUrl: sessionWrap.session?._id ? `/data-extractor/runs/${sessionWrap.session._id}` : '/data-extractor/simple-lead-search',
+        mode: PUBLIC_URL_TEST_MODE,
+        testOnly: rec.testOnly === true,
+        note: rec.testOnly
+            ? 'Test-only fixture was sent to existing Processing. It is not a genuine business record and must not be verified as genuine.'
+            : 'Public URL candidate was sent to the existing Processing → Verified Data pipeline. Direct Login remains not validated. Convert to Lead stays manual.',
     };
 }
 

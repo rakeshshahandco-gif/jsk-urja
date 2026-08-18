@@ -457,4 +457,6 @@ export const dataExtractorApi = {
     xDisconnect: async () => unwrap(await api.post('/data-extractor/social/x/disconnect')),
     startLinkedInExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/linkedin/extract', payload, { timeout: 180000 })),
     startXExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/x/extract', payload, { timeout: 180000 })),
+    testLinkedInPublicUrl: async (payload) => unwrap(await api.post('/data-extractor/social/linkedin/test-public-url', payload, { timeout: 180000 })),
+    testXPublicUrl: async (payload) => unwrap(await api.post('/data-extractor/social/x/test-public-url', payload, { timeout: 180000 })),
 };

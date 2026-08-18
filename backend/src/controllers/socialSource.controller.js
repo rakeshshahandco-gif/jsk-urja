@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import {
     getSocialSourceStatus,
     startSocialExtraction,
+    ingestPublicSocialUrl,
     connectDirect,
     disconnectDirect,
 } from '../services/dataExtractor/socialSources/socialExtraction.service.js';
@@ -139,4 +140,40 @@ export const linkedinDisconnect = asyncHandler(async (req, res) => {
 export const xDisconnect = asyncHandler(async (req, res) => {
     const data = await disconnectDirect({ companyId: req.companyId, user: req.user, platform: 'x' });
     res.send(new ApiResponse(200, data, 'X Direct Login disconnected'));
+});
+
+export const linkedinTestPublicUrl = asyncHandler(async (req, res) => {
+    rejectScopedBody(req.body || {});
+    const data = await ingestPublicSocialUrl({
+        companyId: req.companyId,
+        user: req.user,
+        headers: req.headers,
+        platform: 'linkedin',
+        publicUrl: req.body.publicUrl || req.body.url,
+        website: req.body.website || req.body.knownWebsite || '',
+        keyword: req.body.keyword || '',
+        location: req.body.location || req.body.city || '',
+        title: req.body.title || '',
+        snippet: req.body.snippet || '',
+        testOnly: req.body.testOnly,
+    });
+    res.send(new ApiResponse(200, data, data.duplicate ? 'LinkedIn public URL already in Processing (updated)' : 'LinkedIn public URL sent to Processing'));
+});
+
+export const xTestPublicUrl = asyncHandler(async (req, res) => {
+    rejectScopedBody(req.body || {});
+    const data = await ingestPublicSocialUrl({
+        companyId: req.companyId,
+        user: req.user,
+        headers: req.headers,
+        platform: 'x',
+        publicUrl: req.body.publicUrl || req.body.url,
+        website: req.body.website || req.body.knownWebsite || '',
+        keyword: req.body.keyword || '',
+        location: req.body.location || req.body.city || '',
+        title: req.body.title || '',
+        snippet: req.body.snippet || '',
+        testOnly: req.body.testOnly,
+    });
+    res.send(new ApiResponse(200, data, data.duplicate ? 'X public URL already in Processing (updated)' : 'X public URL sent to Processing'));
 });

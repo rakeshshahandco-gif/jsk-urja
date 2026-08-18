@@ -56,6 +56,7 @@ const PLATFORM = {
         connect: () => dataExtractorApi.linkedinConnect(),
         disconnect: () => dataExtractorApi.linkedinDisconnect(),
         extract: (payload) => dataExtractorApi.startLinkedInExtraction(payload),
+        testPublicUrl: (payload) => dataExtractorApi.testLinkedInPublicUrl(payload),
     },
     x: {
         label: 'X / Twitter',
@@ -69,6 +70,7 @@ const PLATFORM = {
         connect: () => dataExtractorApi.xConnect(),
         disconnect: () => dataExtractorApi.xDisconnect(),
         extract: (payload) => dataExtractorApi.startXExtraction(payload),
+        testPublicUrl: (payload) => dataExtractorApi.testXPublicUrl(payload),
     },
 };
 
@@ -83,6 +85,10 @@ export default function DataExtractorSocialSourcePage({ platform }) {
     const [location, setLocation] = useState(cfg.defaultLocation);
     const [searchType, setSearchType] = useState(types[0][0]);
     const [result, setResult] = useState(null);
+    const [publicUrl, setPublicUrl] = useState(platform === 'linkedin'
+        ? 'https://www.linkedin.com/company/nuos-home-automation'
+        : 'https://x.com/jsk4c_x_fixture');
+    const [knownWebsite, setKnownWebsite] = useState('');
 
     const loadStatus = useCallback(async () => {
         try {
@@ -144,6 +150,30 @@ export default function DataExtractorSocialSourcePage({ platform }) {
         }
     };
 
+    const onTestPublicUrl = async () => {
+        if (!cfg.testPublicUrl) return;
+        if (!publicUrl.trim()) {
+            toast.error('Public URL is required');
+            return;
+        }
+        setBusy('testurl');
+        setResult(null);
+        try {
+            const data = await cfg.testPublicUrl({
+                publicUrl: publicUrl.trim(),
+                website: knownWebsite.trim(),
+                keyword: keyword.trim() || undefined,
+                location: location.trim() || undefined,
+            });
+            setResult(data);
+            toast.success(data?.duplicate ? 'Existing Processing record updated' : 'Sent to Processing');
+        } catch (e) {
+            toast.error(e?.response?.data?.message || 'Public URL test failed');
+        } finally {
+            setBusy('');
+        }
+    };
+
     return (
         <div style={{ maxWidth: 760 }}>
             <h2 style={{ marginTop: 0, fontSize: 18 }}>{label} extraction</h2>
@@ -151,6 +181,11 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                 {label} is a source adapter only. Results enter the existing Processing → Verified Data workflow.
                 Convert to Lead stays manual.
             </p>
+            {cfg.testPublicUrl ? (
+                <p style={{ fontSize: 12, color: '#9a3412', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: 8 }}>
+                    Direct Login is <strong>NOT VALIDATED</strong> until the owner completes login in Chrome. Test Public URL is a no-login pipeline check only.
+                </p>
+            ) : null}
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                 {[['public_search', 'Public Search'], ['direct_login', `Direct ${label} Login`]].map(([id, text]) => (
@@ -199,6 +234,22 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                 <p key={t} style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 8 }}>{t}</p>
             ))}
 
+            {cfg.testPublicUrl ? (
+                <div style={{ border: '1px dashed #94a3b8', borderRadius: 8, padding: 12, marginBottom: 16, background: '#fff' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Test Public URL</div>
+                    <p style={{ fontSize: 12, color: '#64748b', marginTop: 0 }}>
+                        No-login pipeline check. Uses existing classification and Processing. Does not mark Direct Login as connected.
+                    </p>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Public URL</label>
+                    <input value={publicUrl} onChange={(e) => setPublicUrl(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, marginBottom: 12 }} />
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Known company website (optional)</label>
+                    <input value={knownWebsite} onChange={(e) => setKnownWebsite(e.target.value)} placeholder="Only if genuinely known — do not invent" style={{ width: '100%', padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, marginBottom: 12 }} />
+                    <button type="button" disabled={!!busy} style={btn('#0f766e')} onClick={onTestPublicUrl}>
+                        {busy === 'testurl' ? 'Testing…' : 'TEST & SEND TO PROCESSING'}
+                    </button>
+                </div>
+            ) : null}
+
             <button type="button" disabled={!!busy} style={btn('#1d4ed8')} onClick={onStart}>
                 {busy === 'extract' ? 'Starting…' : (cfg.extractLabel || `START ${label.toUpperCase()} EXTRACTION`)}
             </button>
@@ -206,7 +257,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             {result ? (
                 <div style={{ marginTop: 16, border: '1px solid #bfdbfe', background: '#eff6ff', borderRadius: 8, padding: 12, fontSize: 13 }}>
                     <p style={{ marginTop: 0 }}>{result.note}</p>
-                    <p>Ingested: <strong>{result.ingested || 0}</strong></p>
+                    <p>Ingested: <strong>{result.ingested || 0}</strong>{result.duplicate ? ' (existing URL updated)' : ''}{result.testOnly ? ' · testOnly' : ''}{result.mode ? ` · ${result.mode}` : ''}</p>
                     {(result.errors || []).length ? <p style={{ color: '#b91c1c' }}>{result.errors.join(' ')}</p> : null}
                     {result.processingUrl ? (
                         <Link to={result.sessionId ? PATHS.DATA_EXTRACTOR.RUN(result.sessionId) : PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH}>

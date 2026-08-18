@@ -202,10 +202,12 @@ router.get('/social/linkedin/status', checkAnyPermission('data_extractor.assiste
 router.post('/social/linkedin/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinConnect);
 router.post('/social/linkedin/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinDisconnect);
 router.post('/social/linkedin/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinStart);
+router.post('/social/linkedin/test-public-url', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinTestPublicUrl);
 router.get('/social/x/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.xStatus);
 router.post('/social/x/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xConnect);
 router.post('/social/x/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xDisconnect);
 router.post('/social/x/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xStart);
+router.post('/social/x/test-public-url', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xTestPublicUrl);
 
 router.get('/simple-lead-search/sessions/:sessionId/captured-data', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.campaignCapturedData);
 router.get('/simple-lead-search/sessions/:sessionId/export-all-current', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.exportAllCurrentData);
