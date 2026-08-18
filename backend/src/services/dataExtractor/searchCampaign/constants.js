@@ -23,6 +23,7 @@ export const SEARCH_CAMPAIGN_STATUS_TRANSITIONS = Object.freeze({
 export const SEARCH_CAMPAIGN_SOURCES = Object.freeze([
     'google',
     'facebook',
+    'instagram',
     'indiamart',
     'official_website',
     'web',
