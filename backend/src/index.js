@@ -13,6 +13,7 @@ import { startReminderCron } from './cron/reminderCron.js';
 import { startWhatsappBulkCron } from './cron/whatsappBulkCron.js';
 import { startEmailBulkCron } from './cron/emailBulkCron.js';
 import { startSimpleLeadSearchRuntimeCron } from './cron/simpleLeadSearchRuntimeCron.js';
+import { startExtractorScheduleCron } from './cron/extractorScheduleCron.js';
 import WhatsAppService from './services/whatsapp.service.js';
 
 // Connect to Database
@@ -29,6 +30,7 @@ connectDB().then((connected) => {
         startTaskCron();
         startReminderCron();
         startSimpleLeadSearchRuntimeCron();
+        startExtractorScheduleCron();
         if (String(config.appEnv || '').toLowerCase() === 'staging') {
             logger.info('[STAGING] WhatsApp/Email bulk crons disabled');
         } else {
@@ -44,6 +46,12 @@ connectDB().then((connected) => {
                     logger.info(`[SLS] Startup stale-job recovery: ${JSON.stringify(summary)}`);
                 })
                 .catch((err) => logger.error(`[SLS] Startup recovery failed: ${err?.message || err}`));
+            import('./services/dataExtractor/discovery/phase6/ops.service.js')
+                .then((mod) => mod.recoverStaleDiscoveryJobsOnStartup())
+                .then((summary) => {
+                    logger.info(`[Discovery] Startup stale-job recovery: ${JSON.stringify(summary)}`);
+                })
+                .catch((err) => logger.error(`[Discovery] Startup recovery failed: ${err?.message || err}`));
         }, 8000);
     }
 

@@ -177,6 +177,9 @@ import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHist
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
 import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
+import DataExtractorOperationsPage from '@/features/dataExtractor/DataExtractorOperationsPage';
+import DataExtractorConsolidatedCompaniesPage from '@/features/dataExtractor/DataExtractorConsolidatedCompaniesPage';
+import DataExtractorSavedSearchesPage from '@/features/dataExtractor/DataExtractorSavedSearchesPage';
 import DataExtractorSocialSourcePage from '@/features/dataExtractor/DataExtractorSocialSourcePage';
 import SmartImportHubPage from '@/features/smartImport/SmartImportHubPage';
 import SmartImportBatchPage from '@/features/smartImport/SmartImportBatchPage';
@@ -890,6 +893,9 @@ const AppLayout = () => {
                         <Route path={PATHS.DATA_EXTRACTOR.ROOT} element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorLayout /></DataExtractorGuard></ProtectedRoute>}>
                             <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH} replace />} />
                             <Route path="simple-lead-search" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSimpleLeadSearchPage /></ProtectedRoute>} />
+                            <Route path="operations" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorOperationsPage /></ProtectedRoute>} />
+                            <Route path="consolidated-companies" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorConsolidatedCompaniesPage /></ProtectedRoute>} />
+                            <Route path="saved-searches" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorSavedSearchesPage /></ProtectedRoute>} />
                             <Route path="facebook" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="facebook" /></ProtectedRoute>} />
                             <Route path="instagram" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="instagram" /></ProtectedRoute>} />
                             <Route path="linkedin" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="linkedin" /></ProtectedRoute>} />

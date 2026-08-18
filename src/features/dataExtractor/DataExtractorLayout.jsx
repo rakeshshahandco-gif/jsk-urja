@@ -3,6 +3,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 
 const tabs = [
+    { to: PATHS.DATA_EXTRACTOR.OPERATIONS, label: 'Operations' },
+    { to: PATHS.DATA_EXTRACTOR.CONSOLIDATED_COMPANIES, label: 'Consolidated Companies' },
+    { to: PATHS.DATA_EXTRACTOR.SAVED_SEARCHES, label: 'Saved Searches' },
     { to: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH, label: 'Simple Lead Search' },
     { to: PATHS.DATA_EXTRACTOR.FACEBOOK, label: 'Facebook' },
     { to: PATHS.DATA_EXTRACTOR.INSTAGRAM, label: 'Instagram' },

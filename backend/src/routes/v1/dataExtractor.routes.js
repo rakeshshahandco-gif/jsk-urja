@@ -42,6 +42,7 @@ import * as rawCaptureQualificationController from '../../controllers/rawCapture
 import * as rawCaptureGenuinenessController from '../../controllers/rawCaptureGenuineness.controller.js';
 import { multerSingleFile } from '../../controllers/rawCaptureImport.controller.js';
 import { assertImportCampaignAccessMiddleware } from '../../services/dataExtractor/searchCampaign/rawCaptureImport/permissions.util.js';
+import dataExtractorOpsRoutes from './dataExtractorOps.routes.js';
 
 const publicRouter = express.Router();
 publicRouter.all('/webhooks/justdial/:token', extractorController.justdialWebhook);
@@ -49,6 +50,7 @@ publicRouter.all('/webhooks/justdial/:token', extractorController.justdialWebhoo
 const router = express.Router();
 
 router.use(protect);
+router.use(dataExtractorOpsRoutes);
 
 // ---- Phase 1 Search Campaign Master (Checkpoint 1) ----
 router.post('/search-campaigns', checkPermission('data_extractor.search_campaign.manage'), searchCampaignController.createCampaign);

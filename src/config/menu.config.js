@@ -115,6 +115,27 @@ export const menuConfig = [
                 permission: 'data_extractor.extractor.view',
                 children: [
                     {
+                        id: 'data-extractor-operations',
+                        title: 'Operations',
+                        path: PATHS.DATA_EXTRACTOR.OPERATIONS,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-consolidated',
+                        title: 'Consolidated Companies',
+                        path: PATHS.DATA_EXTRACTOR.CONSOLIDATED_COMPANIES,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.view',
+                    },
+                    {
+                        id: 'data-extractor-saved-searches',
+                        title: 'Saved Searches',
+                        path: PATHS.DATA_EXTRACTOR.SAVED_SEARCHES,
+                        roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.STAFF],
+                        permission: 'data_extractor.extractor.search',
+                    },
+                    {
                         id: 'data-extractor-keyword',
                         title: 'Keyword Search',
                         path: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH,
