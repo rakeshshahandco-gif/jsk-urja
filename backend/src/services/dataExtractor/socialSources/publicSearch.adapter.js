@@ -75,9 +75,11 @@ export async function discoverInstagramPublic({ keyword, location, searchType = 
     for (const query of queries) {
         const result = await searchWithPublicHtml({ query, maxResults });
         if (result.error && !result.items.length) errors.push(result.error);
+        let classifiedCount = 0;
         for (const item of result.items || []) {
             const classified = classifyInstagramUrl(unwrapPublicResultLink(item.link), searchType);
             if (!classified) continue;
+            classifiedCount += 1;
             const key = classified.pageUrl.toLowerCase();
             if (seen.has(key)) continue;
             seen.add(key);
@@ -85,6 +87,9 @@ export async function discoverInstagramPublic({ keyword, location, searchType = 
                 keyword, location, mode: 'public_search', searchType, platform: 'instagram',
             }));
             if (records.length >= maxResults) break;
+        }
+        if ((result.items || []).length && !classifiedCount) {
+            errors.push(`Public search returned ${(result.items || []).length} results that were not Instagram profile URLs (provider: ${result.providerName || 'unknown'}). Direct Login remains the primary Instagram method.`);
         }
         if (records.length >= maxResults) break;
     }

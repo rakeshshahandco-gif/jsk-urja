@@ -35,6 +35,8 @@ describe('phase3 social source adapters', () => {
         assert.equal(groupBlocked, null);
         const groupOk = classifyFacebookUrl('https://www.facebook.com/groups/homeautomationmumbai', 'group_intelligence');
         assert.equal(groupOk.resultTypeHint, 'facebook_group');
+        assert.equal(classifyFacebookUrl('https://www.facebook.com/messages', 'pages'), null);
+        assert.equal(classifyFacebookUrl('https://www.facebook.com/search/groups', 'groups'), null);
     });
 
     it('classifies Instagram professional profiles and rejects reels', () => {
@@ -51,6 +53,9 @@ describe('phase3 social source adapters', () => {
         assert.ok(!fb.join(' ').toLowerCase().includes('home automation'));
         const ig = instagramPublicQueries({ keyword: 'Textile Machinery', searchType: 'business_profiles' });
         assert.ok(ig.some((q) => q.toLowerCase().includes('textile')));
+        const quoted = instagramPublicQueries({ keyword: 'Home Automation', location: 'Mumbai', searchType: 'business_profiles' });
+        assert.ok(quoted.some((q) => q.includes('"Home Automation"')));
+        assert.ok(quoted.every((q) => q.includes('site:instagram.com')));
     });
 
     it('unwraps Bing redirect wrappers to the destination URL', async () => {

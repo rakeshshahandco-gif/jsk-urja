@@ -2,10 +2,11 @@
  * Classify public Facebook / Instagram URLs for source adapters.
  * Does not log in and does not enumerate private members/followers.
  */
+import { FACEBOOK_NAV_PATH_RE, INSTAGRAM_RESERVED_PATHS, unwrapSocialHref } from './directLogin.quality.util.js';
 
 function safeUrl(raw) {
     try {
-        return new URL(String(raw || '').trim());
+        return new URL(unwrapSocialHref(raw));
     } catch {
         return null;
     }
@@ -19,35 +20,54 @@ export function classifyFacebookUrl(rawUrl, searchType = 'pages') {
     const path = u.pathname || '/';
     const lower = path.toLowerCase();
 
-    if (/\/(login|share|sharer|dialog|plugins|marketplace|watch|gaming|ads|privacy|policies)\b/.test(lower)) return null;
+    if (FACEBOOK_NAV_PATH_RE.test(lower)) return null;
+    if (lower.startsWith('/search')) return null;
 
-    if (lower.includes('/groups/')) {
+    const segs = path.split('/').filter(Boolean);
+    if (segs[0]?.toLowerCase() === 'groups') {
         if (!['groups', 'group_intelligence'].includes(searchType)) return null;
-        const slug = path.split('/').filter(Boolean)[1] || '';
+        const slug = segs[1] || '';
+        if (!slug || ['search', 'feed', 'joins', 'discover'].includes(slug.toLowerCase())) return null;
         return {
             platform: 'facebook',
             resultTypeHint: 'facebook_group',
+            urlKind: 'group',
             handle: slug,
-            pageUrl: `https://www.facebook.com${path.split('/').slice(0, 3).join('/')}`,
+            pageUrl: `https://www.facebook.com/groups/${slug}`,
         };
     }
 
-    if (['posts'].includes(searchType) && (/\/posts\//.test(lower) || /\/permalink/.test(lower))) {
+    if (/profile\.php/i.test(path)) {
+        const id = u.searchParams.get('id') || '';
+        if (!id) return null;
         return {
             platform: 'facebook',
             resultTypeHint: 'facebook_page',
+            urlKind: 'profile_php',
+            needsBusinessEvidence: true,
+            handle: id,
+            pageUrl: `https://www.facebook.com/profile.php?id=${id}`,
+        };
+    }
+
+    if (['posts', 'group_intelligence'].includes(searchType) && (/\/posts\//.test(lower) || /\/permalink/.test(lower))) {
+        return {
+            platform: 'facebook',
+            resultTypeHint: 'facebook_page',
+            urlKind: 'post',
             handle: path.split('/').filter(Boolean)[0] || '',
             pageUrl: u.href.split('?')[0],
         };
     }
 
-    const reserved = new Set(['pages', 'groups', 'search', 'events', 'watch', 'people', 'hashtag', 'reel']);
+    const reserved = new Set(['pages', 'groups', 'search', 'events', 'watch', 'people', 'hashtag', 'reel', 'photo.php', 'help', 'home']);
     const handle = path.split('/').filter(Boolean)[0] || '';
     if (!handle || reserved.has(handle.toLowerCase())) return null;
     if (!/^[A-Za-z0-9._-]{2,80}$/.test(handle)) return null;
     return {
         platform: 'facebook',
         resultTypeHint: 'facebook_page',
+        urlKind: 'page',
         handle,
         pageUrl: `https://www.facebook.com/${handle}`,
     };
@@ -62,6 +82,8 @@ export function classifyInstagramUrl(rawUrl, searchType = 'business_profiles') {
     const lower = path.toLowerCase();
     const segments = path.split('/').filter(Boolean);
 
+    if (lower === '/explore' || lower === '/explore/' || (lower.startsWith('/explore/') && !lower.includes('/explore/tags/'))) return null;
+    if (lower.startsWith('/accounts') || lower.startsWith('/direct') || lower.startsWith('/reels') || lower.startsWith('/stories')) return null;
     if (/\/(accounts|direct|legal|developer|about)\b/.test(lower)) return null;
 
     if (lower.includes('/explore/tags/')) {
@@ -78,6 +100,7 @@ export function classifyInstagramUrl(rawUrl, searchType = 'business_profiles') {
     if (['/p/', '/reel/', '/reels/', '/tv/', '/stories/'].some((p) => lower.includes(p))) return null;
     if (segments.length !== 1) return null;
     const handle = segments[0];
+    if (INSTAGRAM_RESERVED_PATHS.includes(handle.toLowerCase())) return null;
     if (!/^[a-zA-Z0-9._]{1,30}$/.test(handle)) return null;
     return {
         platform: 'instagram',
@@ -109,12 +132,23 @@ export function facebookPublicQueries({ keyword, location, searchType }) {
 export function instagramPublicQueries({ keyword, location, searchType }) {
     const loc = String(location || '').trim();
     const kw = String(keyword || '').trim();
-    const base = [kw, loc].filter(Boolean).join(' ');
+    const quoted = `"${kw}"`;
     if (searchType === 'hashtag_topic') {
-        return [`site:instagram.com/explore/tags ${kw}`, `site:instagram.com ${kw}`];
+        const tag = kw.replace(/\s+/g, '').replace(/^#/, '');
+        return [
+            `site:instagram.com/explore/tags/${tag}`,
+            `site:instagram.com ${quoted}`,
+        ];
     }
-    if (searchType === 'community_intelligence') {
-        return [`site:instagram.com ${base} community`, `site:instagram.com ${base}`];
+    if (searchType === 'community_intelligence' || searchType === 'related_accounts') {
+        return [
+            `site:instagram.com ${quoted} ${loc}`.trim(),
+            `site:instagram.com ${quoted}`,
+        ];
     }
-    return [`site:instagram.com ${base}`, `site:instagram.com ${kw} business`];
+    return [
+        `site:instagram.com ${quoted} ${loc}`.trim(),
+        loc ? `site:instagram.com ${quoted} ${loc === 'Mumbai' ? 'India' : loc}` : `site:instagram.com ${quoted} India`,
+        `site:instagram.com ${kw.replace(/\s+/g, '')} ${loc}`.trim(),
+    ].filter((q, i, arr) => q && arr.indexOf(q) === i);
 }

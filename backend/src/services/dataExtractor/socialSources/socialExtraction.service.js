@@ -7,8 +7,12 @@ import { ingestRawCaptures } from '../searchCampaign/rawCapture/rawCapture.inges
 import { ensureSimpleLeadSearchQuery } from '../searchCampaign/searchQuery/searchQuery.service.js';
 import { createAssistedCaptureSession } from '../searchCampaign/assistedCapture/session.service.js';
 import { normalizeNameForIndex } from '../searchCampaign/normalize.util.js';
+import { enrichDomainFromWebsite } from '../searchCampaign/rawCaptureEnrichment/fetch.util.js';
+import { fetchPublicHtml } from '../searchCampaign/chinaWebsiteCrawler/safeFetch.util.js';
+import { parsePageBundle } from '../searchCampaign/rawCaptureEnrichment/parse.util.js';
 import { discoverFacebookPublic, discoverInstagramPublic } from './publicSearch.adapter.js';
 import { connectSocialLogin, disconnectSocialLogin, getSocialLoginStatus, discoverWithDirectLogin } from './directLogin.adapter.js';
+import { isExternalBusinessWebsite } from './directLogin.quality.util.js';
 import {
     FACEBOOK_MODES,
     FACEBOOK_SEARCH_TYPES,
@@ -80,6 +84,74 @@ async function ensureSocialCampaign({ companyId, user, platform, keyword, city }
     return campaign;
 }
 
+function flattenContact(list = []) {
+    return (list || []).map((x) => {
+        if (typeof x === 'string') return x;
+        return x?.value || x?.email || x?.raw || x?.original || x?.normalized || '';
+    }).filter(Boolean);
+}
+
+function websiteFromRecord(rec = {}) {
+    if (rec.website && isExternalBusinessWebsite(rec.website)) return rec.website;
+    const m = String(rec.notes || '').match(/website=(https?:\/\/[^\s;]+)/i);
+    return m && isExternalBusinessWebsite(m[1]) ? m[1] : '';
+}
+
+function toIngestRecords(records = []) {
+    return records.map((rec) => ({
+        title: rec.title,
+        snippet: rec.snippet,
+        resultUrl: rec.resultUrl,
+        resultTypeHint: rec.resultTypeHint,
+        sourceRecordId: rec.sourceRecordId,
+        notes: rec.notes,
+    }));
+}
+
+/**
+ * If Facebook/Instagram exposed an external company website, run the existing
+ * Phase 1 website crawler against that domain (not the social HTML).
+ */
+async function bridgeCompanyWebsites(records = []) {
+    let bridged = 0;
+    for (const rec of records) {
+        const site = websiteFromRecord(rec);
+        if (!site) continue;
+        if (bridged >= 5) break;
+        bridged += 1;
+        let crawled = null;
+        try {
+            crawled = await enrichDomainFromWebsite(site, { maxPages: 4 });
+        } catch (err) {
+            crawled = { ok: false, error: String(err?.message || err) };
+        }
+        if (!crawled?.ok) {
+            try {
+                const fetched = await fetchPublicHtml(site);
+                if (fetched.ok) {
+                    crawled = {
+                        ok: true,
+                        data: parsePageBundle(fetched.html, fetched.finalUrl || site),
+                        pagesVisited: [fetched.finalUrl || site],
+                    };
+                }
+            } catch {
+                /* keep failed crawl */
+            }
+        }
+        if (crawled?.ok && crawled.data) {
+            const emails = flattenContact(crawled.data.emails).slice(0, 3);
+            const phones = flattenContact(crawled.data.phones).slice(0, 3);
+            const city = crawled.data.city || '';
+            rec.snippet = `${rec.snippet || ''} Website crawl (${site}): ${emails.join(', ')} ${phones.join(', ')} ${city}`.trim().slice(0, 2000);
+            rec.notes = `${rec.notes || ''}; websiteCrawl=ok${emails.length ? `; emails=${emails.join(',')}` : ''}${phones.length ? `; phones=${phones.join(',')}` : ''}${city ? `; city=${city}` : ''}`.slice(0, 2000);
+        } else {
+            rec.notes = `${rec.notes || ''}; websiteCrawl=failed`.slice(0, 2000);
+        }
+    }
+    return records;
+}
+
 async function discover({ platform, mode, keyword, location, searchType, companyId, maxResults }) {
     if (mode === 'official_api') {
         const api = officialApiStatus(platform);
@@ -129,6 +201,10 @@ export async function startSocialExtraction({
         maxResults: Math.min(40, Math.max(5, Number(maxResults) || 20)),
     });
 
+    if (m === 'direct_login' && found.records.length) {
+        await bridgeCompanyWebsites(found.records);
+    }
+
     if (!found.records.length) {
         return {
             ingested: 0,
@@ -139,6 +215,8 @@ export async function startSocialExtraction({
             sessionId: '',
             campaignId: '',
             note: 'Nothing was sent to Processing because no candidates were found.',
+            groupMeta: found.groupMeta || null,
+            metrics: found.metrics || null,
         };
     }
 
@@ -163,7 +241,7 @@ export async function startSocialExtraction({
             querySourceHint: p,
             captureMethod: m === 'direct_login' ? 'assisted_visible' : 'api_batch',
             idempotencyKey: `social-${p}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
-            records: found.records.slice(0, 100),
+            records: toIngestRecords(found.records).slice(0, 100),
         },
     });
 
@@ -188,6 +266,8 @@ export async function startSocialExtraction({
         processingUrl: sessionWrap.session?._id ? `/data-extractor/runs/${sessionWrap.session._id}` : '/data-extractor/simple-lead-search',
         note: 'Candidates were ingested into the existing Processing → Verified Data pipeline. Open Processing to enrich, qualify, verify, export, or Convert to Lead. Highly Relevant is never auto-converted.',
         limitations: getSocialSourceStatus({ platform: p, companyId }).limitations,
+        groupMeta: found.groupMeta || null,
+        metrics: found.metrics || null,
     };
 }
 
