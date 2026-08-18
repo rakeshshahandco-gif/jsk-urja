@@ -177,6 +177,10 @@ import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHist
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
 import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
+import DataExtractorDiscoveryPage from '@/features/dataExtractor/DataExtractorDiscoveryPage';
+import DataExtractorDiscoveryJobsPage from '@/features/dataExtractor/DataExtractorDiscoveryJobsPage';
+import DataExtractorDiscoveryJobPage from '@/features/dataExtractor/DataExtractorDiscoveryJobPage';
+import DataExtractorDuplicateReviewPage from '@/features/dataExtractor/DataExtractorDuplicateReviewPage';
 import DataExtractorOperationsPage from '@/features/dataExtractor/DataExtractorOperationsPage';
 import DataExtractorConsolidatedCompaniesPage from '@/features/dataExtractor/DataExtractorConsolidatedCompaniesPage';
 import DataExtractorSavedSearchesPage from '@/features/dataExtractor/DataExtractorSavedSearchesPage';
@@ -891,7 +895,11 @@ const AppLayout = () => {
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_REPORTS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.view"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryReportsPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DOCUMENTS.SCAN_ENTRY_KEYWORDS} element={<ProtectedRoute requirePermission="scan_entry.scan_entry.review"><FeatureGuard feature="accounting.enableAiSmartImport"><ScanEntryKeywordSettingsPage /></FeatureGuard></ProtectedRoute>} />
                         <Route path={PATHS.DATA_EXTRACTOR.ROOT} element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorLayout /></DataExtractorGuard></ProtectedRoute>}>
-                            <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH} replace />} />
+                            <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.OPERATIONS} replace />} />
+                            <Route path="quick-search" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorDiscoveryPage /></ProtectedRoute>} />
+                            <Route path="discovery-jobs" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDiscoveryJobsPage /></ProtectedRoute>} />
+                            <Route path="discovery-jobs/:id" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDiscoveryJobPage /></ProtectedRoute>} />
+                            <Route path="duplicate-review" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorDuplicateReviewPage /></ProtectedRoute>} />
                             <Route path="simple-lead-search" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSimpleLeadSearchPage /></ProtectedRoute>} />
                             <Route path="operations" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorOperationsPage /></ProtectedRoute>} />
                             <Route path="consolidated-companies" element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorConsolidatedCompaniesPage /></ProtectedRoute>} />

@@ -440,6 +440,7 @@ export const PATHS = {
         PREVIEW: (jobId) => `/data-extractor/preview/${jobId}`,
         RUN: (sessionId) => `/data-extractor/runs/${sessionId}`,
         SETTINGS: '/data-extractor/settings',
+        QUICK_SEARCH: '/data-extractor/quick-search',
         OPERATIONS: '/data-extractor/operations',
         CONSOLIDATED_COMPANIES: '/data-extractor/consolidated-companies',
         SAVED_SEARCHES: '/data-extractor/saved-searches',
