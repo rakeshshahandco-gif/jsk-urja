@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import { readSocialSession, writeSocialSession, socialUserDataDir, clearSocialSession } from './sessionStore.util.js';
 import { classifyFacebookUrl, classifyInstagramUrl } from './classify.util.js';
+import { connectLinkedInOrXLogin, discoverLinkedInOrXDirect } from './linkedinX.directLogin.adapter.js';
 import {
     detectPlatformChallenge,
     displayNameFromSocialText,
@@ -71,6 +72,9 @@ function instagramLoggedInCookies(cookies = []) {
 }
 
 export async function connectSocialLogin({ platform, companyId }) {
+    if (platform === 'linkedin' || platform === 'x') {
+        return connectLinkedInOrXLogin({ platform, companyId });
+    }
     const home = platform === 'instagram' ? 'https://www.instagram.com/' : 'https://www.facebook.com/';
     const result = await withSocialBrowser(platform, companyId, async (page) => {
         await page.goto(home, { waitUntil: 'domcontentloaded' });
@@ -886,6 +890,9 @@ async function discoverInstagramDirect(page, { keyword, location, searchType, ma
 }
 
 export async function discoverWithDirectLogin({ platform, companyId, keyword, location = '', searchType, maxResults = 20 }) {
+    if (platform === 'linkedin' || platform === 'x') {
+        return discoverLinkedInOrXDirect({ platform, companyId, keyword, location, searchType, maxResults });
+    }
     const session = readSocialSession(platform, companyId);
     if (session.status !== 'connected') {
         return {

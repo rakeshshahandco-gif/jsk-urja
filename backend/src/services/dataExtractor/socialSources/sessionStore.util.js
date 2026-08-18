@@ -6,8 +6,17 @@ import { SESSION_STATUSES } from './constants.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../.data-extractor-social-sessions');
 
+const SOCIAL_SESSION_PLATFORMS = new Set(['facebook', 'instagram', 'linkedin', 'x']);
+
+export function normalizeSocialSessionPlatform(platform) {
+    const raw = String(platform || '').toLowerCase();
+    const p = raw === 'twitter' ? 'x' : raw;
+    return SOCIAL_SESSION_PLATFORMS.has(p) ? p : '';
+}
+
 function platformDir(platform, companyId) {
-    const p = platform === 'instagram' ? 'instagram' : 'facebook';
+    const p = normalizeSocialSessionPlatform(platform);
+    if (!p) throw new Error('Unsupported social session platform');
     return path.join(ROOT, p, String(companyId));
 }
 

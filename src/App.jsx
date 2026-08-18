@@ -177,6 +177,7 @@ import DataExtractorHistoryPage from '@/features/dataExtractor/DataExtractorHist
 import DataExtractorLeadsPage from '@/features/dataExtractor/DataExtractorLeadsPage';
 import DataExtractorPreviewPage from '@/features/dataExtractor/DataExtractorPreviewPage';
 import DataExtractorSettingsPage from '@/features/dataExtractor/DataExtractorSettingsPage';
+import DataExtractorSocialSourcePage from '@/features/dataExtractor/DataExtractorSocialSourcePage';
 import SmartImportHubPage from '@/features/smartImport/SmartImportHubPage';
 import SmartImportBatchPage from '@/features/smartImport/SmartImportBatchPage';
 import ImportCenterPage from '@/features/importCenter/ImportCenterPage';
@@ -889,6 +890,10 @@ const AppLayout = () => {
                         <Route path={PATHS.DATA_EXTRACTOR.ROOT} element={<ProtectedRoute requirePermission="data_extractor.extractor.view"><DataExtractorGuard><DataExtractorLayout /></DataExtractorGuard></ProtectedRoute>}>
                             <Route index element={<Navigate to={PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH} replace />} />
                             <Route path="simple-lead-search" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSimpleLeadSearchPage /></ProtectedRoute>} />
+                            <Route path="facebook" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="facebook" /></ProtectedRoute>} />
+                            <Route path="instagram" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="instagram" /></ProtectedRoute>} />
+                            <Route path="linkedin" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="linkedin" /></ProtectedRoute>} />
+                            <Route path="x" element={<ProtectedRoute requirePermission="data_extractor.assisted_capture.start"><DataExtractorSocialSourcePage platform="x" /></ProtectedRoute>} />
                             <Route path="keyword-search" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorKeywordSearchPage /></ProtectedRoute>} />
                             <Route path="manual-url" element={<ProtectedRoute requirePermission="data_extractor.extractor.search"><DataExtractorManualUrlPage /></ProtectedRoute>} />
                             <Route path="import" element={<ProtectedRoute requirePermission="data_extractor.extractor.import"><DataExtractorImportPage /></ProtectedRoute>} />

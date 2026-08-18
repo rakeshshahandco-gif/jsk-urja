@@ -11,7 +11,7 @@ export const INSTAGRAM_RESERVED_PATHS = Object.freeze([
 
 export const FACEBOOK_NAV_PATH_RE = /\/(login|logout|recover|checkpoint|share|sharer|dialog|plugins|marketplace|watch|gaming|ads|privacy|policies|messages|notifications|bookmarks|friends|settings|stories|reels|reel|saved|memories|fundraisers|help|composer|pages\/create|friends\/requests)\b/i;
 
-const SOCIAL_HOST_RE = /(^|\.)(facebook|fb|instagram|meta|whatsapp|messenger)\.com$/i;
+const SOCIAL_HOST_RE = /(^|\.)(facebook|fb|instagram|meta|whatsapp|messenger|linkedin)\.com$|(^|\.)(x\.com|twitter\.com)$/i;
 
 const GENERIC_BUSINESS_HINT = /\b(works?\s+at|owner|founder|integrator|company|pvt\.?|ltd\.?|llp|enterprise|solutions|systems|official|business|dealer|distributor|installer|contractor|architect|interior|category|website|www\.|http|\.com\b|\.in\b|\.co\b)\b/i;
 

@@ -78,3 +78,65 @@ export const instagramDisconnect = asyncHandler(async (req, res) => {
     const data = await disconnectDirect({ companyId: req.companyId, user: req.user, platform: 'instagram' });
     res.send(new ApiResponse(200, data, 'Instagram Direct Login disconnected'));
 });
+
+export const linkedinStatus = asyncHandler(async (req, res) => {
+    const data = getSocialSourceStatus({ platform: 'linkedin', companyId: req.companyId });
+    res.send(new ApiResponse(200, data, 'LinkedIn source status'));
+});
+
+export const xStatus = asyncHandler(async (req, res) => {
+    const data = getSocialSourceStatus({ platform: 'x', companyId: req.companyId });
+    res.send(new ApiResponse(200, data, 'X source status'));
+});
+
+export const linkedinStart = asyncHandler(async (req, res) => {
+    rejectScopedBody(req.body || {});
+    const data = await startSocialExtraction({
+        companyId: req.companyId,
+        user: req.user,
+        headers: req.headers,
+        platform: 'linkedin',
+        mode: req.body.mode,
+        keyword: req.body.keyword,
+        location: req.body.location || req.body.city || '',
+        searchType: req.body.searchType,
+        maxResults: req.body.maxResults,
+    });
+    res.send(new ApiResponse(200, data, data.ingested ? 'LinkedIn candidates sent to Processing' : 'No LinkedIn candidates found'));
+});
+
+export const xStart = asyncHandler(async (req, res) => {
+    rejectScopedBody(req.body || {});
+    const data = await startSocialExtraction({
+        companyId: req.companyId,
+        user: req.user,
+        headers: req.headers,
+        platform: 'x',
+        mode: req.body.mode,
+        keyword: req.body.keyword,
+        location: req.body.location || req.body.city || '',
+        searchType: req.body.searchType,
+        maxResults: req.body.maxResults,
+    });
+    res.send(new ApiResponse(200, data, data.ingested ? 'X candidates sent to Processing' : 'No X candidates found'));
+});
+
+export const linkedinConnect = asyncHandler(async (req, res) => {
+    const data = await connectDirect({ companyId: req.companyId, user: req.user, platform: 'linkedin' });
+    res.send(new ApiResponse(200, data, data.status === 'connected' ? 'LinkedIn Direct Login connected' : 'LinkedIn Direct Login not connected'));
+});
+
+export const xConnect = asyncHandler(async (req, res) => {
+    const data = await connectDirect({ companyId: req.companyId, user: req.user, platform: 'x' });
+    res.send(new ApiResponse(200, data, data.status === 'connected' ? 'X Direct Login connected' : 'X Direct Login not connected'));
+});
+
+export const linkedinDisconnect = asyncHandler(async (req, res) => {
+    const data = await disconnectDirect({ companyId: req.companyId, user: req.user, platform: 'linkedin' });
+    res.send(new ApiResponse(200, data, 'LinkedIn Direct Login disconnected'));
+});
+
+export const xDisconnect = asyncHandler(async (req, res) => {
+    const data = await disconnectDirect({ companyId: req.companyId, user: req.user, platform: 'x' });
+    res.send(new ApiResponse(200, data, 'X Direct Login disconnected'));
+});

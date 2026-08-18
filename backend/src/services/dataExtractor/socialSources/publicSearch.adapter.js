@@ -1,5 +1,6 @@
 import { searchWithPublicHtml } from '../providers/publicHtmlSearchProvider.js';
 import { classifyFacebookUrl, classifyInstagramUrl, facebookPublicQueries, instagramPublicQueries } from './classify.util.js';
+import { classifyLinkedInUrl, classifyXUrl, linkedinPublicQueries, xPublicQueries, xPostToProfileEvidence } from './linkedinX.classify.util.js';
 
 /** Unwrap Bing/Duck redirect wrappers so facebook.com / instagram.com URLs can be classified. */
 export function unwrapPublicResultLink(raw) {
@@ -90,6 +91,75 @@ export async function discoverInstagramPublic({ keyword, location, searchType = 
         }
         if ((result.items || []).length && !classifiedCount) {
             errors.push(`Public search returned ${(result.items || []).length} results that were not Instagram profile URLs (provider: ${result.providerName || 'unknown'}). Direct Login remains the primary Instagram method.`);
+        }
+        if (records.length >= maxResults) break;
+    }
+    return { records, errors, queries };
+}
+
+export async function discoverLinkedInPublic({ keyword, location, searchType = 'companies', maxResults = 20 }) {
+    const queries = linkedinPublicQueries({ keyword, location, searchType });
+    const seen = new Set();
+    const records = [];
+    const errors = [];
+    for (const query of queries) {
+        const result = await searchWithPublicHtml({ query, maxResults });
+        if (result.error && !result.items.length) errors.push(result.error);
+        let classifiedCount = 0;
+        for (const item of result.items || []) {
+            const classified = classifyLinkedInUrl(unwrapPublicResultLink(item.link), searchType);
+            if (!classified) continue;
+            if (searchType === 'companies' && classified.urlKind !== 'company') continue;
+            if (searchType === 'professionals' && classified.urlKind !== 'professional') continue;
+            classifiedCount += 1;
+            const key = classified.pageUrl.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            records.push(toCandidate(classified, item, {
+                keyword, location, mode: 'public_search', searchType, platform: 'linkedin',
+            }));
+            if (records.length >= maxResults) break;
+        }
+        if ((result.items || []).length && !classifiedCount) {
+            errors.push(`Public search returned ${(result.items || []).length} results that were not LinkedIn ${searchType} URLs. Direct Login remains the primary LinkedIn method.`);
+        }
+        if (records.length >= maxResults) break;
+    }
+    return { records, errors, queries };
+}
+
+export async function discoverXPublic({ keyword, location, searchType = 'profiles', maxResults = 20 }) {
+    const queries = xPublicQueries({ keyword, location, searchType });
+    const seen = new Set();
+    const records = [];
+    const errors = [];
+    for (const query of queries) {
+        const result = await searchWithPublicHtml({ query, maxResults });
+        if (result.error && !result.items.length) errors.push(result.error);
+        let classifiedCount = 0;
+        for (const item of result.items || []) {
+            let classified = classifyXUrl(unwrapPublicResultLink(item.link), searchType);
+            if (!classified) continue;
+            if (classified.urlKind === 'post') {
+                const mapped = xPostToProfileEvidence(classified, item);
+                if (!mapped) continue;
+                classified = mapped;
+            }
+            classifiedCount += 1;
+            const key = classified.pageUrl.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const rec = toCandidate(classified, item, {
+                keyword, location, mode: 'public_search', searchType, platform: 'x',
+            });
+            if (classified.evidenceUrl) {
+                rec.notes = `${rec.notes}; postEvidence=${classified.evidenceUrl}`.slice(0, 2000);
+            }
+            records.push(rec);
+            if (records.length >= maxResults) break;
+        }
+        if ((result.items || []).length && !classifiedCount) {
+            errors.push(`Public search returned ${(result.items || []).length} results that were not X profile URLs. Direct Login remains the primary X method.`);
         }
         if (records.length >= maxResults) break;
     }

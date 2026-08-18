@@ -440,6 +440,10 @@ export const PATHS = {
         PREVIEW: (jobId) => `/data-extractor/preview/${jobId}`,
         RUN: (sessionId) => `/data-extractor/runs/${sessionId}`,
         SETTINGS: '/data-extractor/settings',
+        FACEBOOK: '/data-extractor/facebook',
+        INSTAGRAM: '/data-extractor/instagram',
+        LINKEDIN: '/data-extractor/linkedin',
+        X: '/data-extractor/x',
     },
     // ── SaaS Super Admin ──────────────────────────────────────────────────
     SAAS_ADMIN: {

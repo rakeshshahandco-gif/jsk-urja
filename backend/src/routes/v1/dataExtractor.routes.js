@@ -8,6 +8,7 @@ import * as discoveryController from '../../controllers/discovery.controller.js'
 import * as discoveryAgentController from '../../controllers/discoveryAgent.controller.js';
 import { protectDiscoveryAgent } from '../../middlewares/discoveryAgentAuth.middleware.js';
 import * as discoveryMergeReviewController from '../../controllers/discoveryMergeReview.controller.js';
+import * as socialSourceController from '../../controllers/socialSource.controller.js';
 import * as industryClassificationController from '../../controllers/industryClassification.controller.js';
 import * as leadRelevanceController from '../../controllers/leadRelevance.controller.js';
 import * as productRecommendationController from '../../controllers/productRecommendation.controller.js';
@@ -181,6 +182,31 @@ router.post('/simple-lead-search/sessions/:sessionId/auto-processing/resume', ch
 router.post('/simple-lead-search/sessions/:sessionId/auto-processing/stop', checkPermission('data_extractor.assisted_capture.start'), simpleLeadSearchController.autoProcessingStop);
 router.post('/simple-lead-search/sessions/:sessionId/auto-processing/tick', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.autoProcessingTick);
 router.get('/simple-lead-search/sessions/:sessionId/auto-processing', checkPermission('data_extractor.assisted_capture.view'), simpleLeadSearchController.autoProcessingStatus);
+
+function checkAnyPermission(...keys) {
+    return (req, res, next) => {
+        if (keys.some((k) => checkUserPermission(req.user, k))) return next();
+        throw new ApiError(403, `Permission denied: ${keys[0]} required`);
+    };
+}
+
+router.get('/social/facebook/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.facebookStatus);
+router.post('/social/facebook/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookConnect);
+router.post('/social/facebook/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookDisconnect);
+router.post('/social/facebook/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.facebookStart);
+router.get('/social/instagram/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.instagramStatus);
+router.post('/social/instagram/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramConnect);
+router.post('/social/instagram/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramDisconnect);
+router.post('/social/instagram/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.instagramStart);
+router.get('/social/linkedin/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.linkedinStatus);
+router.post('/social/linkedin/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinConnect);
+router.post('/social/linkedin/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinDisconnect);
+router.post('/social/linkedin/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.linkedinStart);
+router.get('/social/x/status', checkAnyPermission('data_extractor.assisted_capture.view', 'data_extractor.extractor.view'), socialSourceController.xStatus);
+router.post('/social/x/connect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xConnect);
+router.post('/social/x/disconnect', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xDisconnect);
+router.post('/social/x/extract', checkAnyPermission('data_extractor.assisted_capture.start', 'data_extractor.extractor.search'), socialSourceController.xStart);
+
 router.get('/simple-lead-search/sessions/:sessionId/captured-data', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.campaignCapturedData);
 router.get('/simple-lead-search/sessions/:sessionId/export-all-current', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.exportAllCurrentData);
 router.post('/simple-lead-search/sessions/:sessionId/export-artifacts', checkPermission('data_extractor.raw_capture.view'), simpleLeadSearchController.persistExportArtifacts);

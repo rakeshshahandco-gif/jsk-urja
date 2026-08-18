@@ -31,7 +31,7 @@ export const SEARCH_QUERY_MEANING_FIELDS = Object.freeze(['queryText', 'sourceHi
 export const SEARCH_QUERY_METADATA_FIELDS = Object.freeze(['notes']);
 
 export const SEARCH_QUERY_SOURCE_HINTS = Object.freeze([
-    'google', 'facebook', 'indiamart', 'official_website', 'web', 'manual',
+    'google', 'facebook', 'instagram', 'linkedin', 'x', 'indiamart', 'official_website', 'web', 'manual',
 ]);
 
 export const SEARCH_QUERY_TYPES = Object.freeze([

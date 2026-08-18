@@ -24,6 +24,8 @@ export const SEARCH_CAMPAIGN_SOURCES = Object.freeze([
     'google',
     'facebook',
     'instagram',
+    'linkedin',
+    'x',
     'indiamart',
     'official_website',
     'web',

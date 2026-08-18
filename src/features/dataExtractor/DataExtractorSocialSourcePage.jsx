@@ -15,41 +15,83 @@ const btn = (bg, color = '#fff') => ({
     fontWeight: 600,
 });
 
-const FACEBOOK_TYPES = [
-    ['pages', 'Business/Pages'],
-    ['groups', 'Groups'],
-    ['group_intelligence', 'Group Intelligence'],
-    ['posts', 'Posts/Activity'],
-];
-
-const INSTAGRAM_TYPES = [
-    ['business_profiles', 'Business Profiles'],
-    ['professional_accounts', 'Professional Accounts'],
-    ['hashtag_topic', 'Hashtag/Topic'],
-    ['related_accounts', 'Related Accounts'],
-    ['community_intelligence', 'Community Intelligence'],
-];
+const PLATFORM = {
+    facebook: {
+        label: 'Facebook',
+        types: [
+            ['pages', 'Business/Pages'],
+            ['groups', 'Groups'],
+            ['group_intelligence', 'Group Intelligence'],
+            ['posts', 'Posts/Activity'],
+        ],
+        defaultLocation: 'Mumbai',
+        status: () => dataExtractorApi.facebookSourceStatus(),
+        connect: () => dataExtractorApi.facebookConnect(),
+        disconnect: () => dataExtractorApi.facebookDisconnect(),
+        extract: (payload) => dataExtractorApi.startFacebookExtraction(payload),
+    },
+    instagram: {
+        label: 'Instagram',
+        types: [
+            ['business_profiles', 'Business Profiles'],
+            ['professional_accounts', 'Professional Accounts'],
+            ['hashtag_topic', 'Hashtag/Topic'],
+            ['related_accounts', 'Related Accounts'],
+            ['community_intelligence', 'Community Intelligence'],
+        ],
+        defaultLocation: '',
+        status: () => dataExtractorApi.instagramSourceStatus(),
+        connect: () => dataExtractorApi.instagramConnect(),
+        disconnect: () => dataExtractorApi.instagramDisconnect(),
+        extract: (payload) => dataExtractorApi.startInstagramExtraction(payload),
+    },
+    linkedin: {
+        label: 'LinkedIn',
+        types: [
+            ['companies', 'Companies'],
+            ['professionals', 'Professionals'],
+        ],
+        defaultLocation: 'Mumbai',
+        status: () => dataExtractorApi.linkedinSourceStatus(),
+        connect: () => dataExtractorApi.linkedinConnect(),
+        disconnect: () => dataExtractorApi.linkedinDisconnect(),
+        extract: (payload) => dataExtractorApi.startLinkedInExtraction(payload),
+    },
+    x: {
+        label: 'X / Twitter',
+        extractLabel: 'START X EXTRACTION',
+        types: [
+            ['profiles', 'Profiles'],
+            ['posts', 'Posts'],
+        ],
+        defaultLocation: '',
+        status: () => dataExtractorApi.xSourceStatus(),
+        connect: () => dataExtractorApi.xConnect(),
+        disconnect: () => dataExtractorApi.xDisconnect(),
+        extract: (payload) => dataExtractorApi.startXExtraction(payload),
+    },
+};
 
 export default function DataExtractorSocialSourcePage({ platform }) {
-    const isIg = platform === 'instagram';
-    const label = isIg ? 'Instagram' : 'Facebook';
-    const types = isIg ? INSTAGRAM_TYPES : FACEBOOK_TYPES;
+    const cfg = PLATFORM[platform] || PLATFORM.facebook;
+    const label = cfg.label;
+    const types = cfg.types;
     const [status, setStatus] = useState(null);
     const [busy, setBusy] = useState('');
     const [mode, setMode] = useState('public_search');
     const [keyword, setKeyword] = useState('Home Automation');
-    const [location, setLocation] = useState(isIg ? '' : 'Mumbai');
+    const [location, setLocation] = useState(cfg.defaultLocation);
     const [searchType, setSearchType] = useState(types[0][0]);
     const [result, setResult] = useState(null);
 
     const loadStatus = useCallback(async () => {
         try {
-            const data = isIg ? await dataExtractorApi.instagramSourceStatus() : await dataExtractorApi.facebookSourceStatus();
+            const data = await cfg.status();
             setStatus(data);
         } catch (e) {
             toast.error(e?.response?.data?.message || `Failed to load ${label} status`);
         }
-    }, [isIg, label]);
+    }, [cfg, label]);
 
     useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -59,7 +101,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
     const onConnect = async () => {
         setBusy('connect');
         try {
-            const data = isIg ? await dataExtractorApi.instagramConnect() : await dataExtractorApi.facebookConnect();
+            const data = await cfg.connect();
             toast.success(data?.status === 'connected' ? `${label} connected` : 'Login not completed');
             await loadStatus();
         } catch (e) {
@@ -72,8 +114,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
     const onDisconnect = async () => {
         setBusy('disconnect');
         try {
-            if (isIg) await dataExtractorApi.instagramDisconnect();
-            else await dataExtractorApi.facebookDisconnect();
+            await cfg.disconnect();
             toast.success(`${label} disconnected`);
             await loadStatus();
         } catch (e) {
@@ -92,9 +133,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
         setResult(null);
         try {
             const payload = { mode, keyword: keyword.trim(), location: location.trim(), searchType };
-            const data = isIg
-                ? await dataExtractorApi.startInstagramExtraction(payload)
-                : await dataExtractorApi.startFacebookExtraction(payload);
+            const data = await cfg.extract(payload);
             setResult(data);
             if (data?.ingested) toast.success(`${data.ingested} candidate(s) sent to Processing`);
             else toast(data?.errors?.[0] || 'No candidates found');
@@ -110,7 +149,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             <h2 style={{ marginTop: 0, fontSize: 18 }}>{label} extraction</h2>
             <p style={{ color: '#64748b', fontSize: 13 }}>
                 {label} is a source adapter only. Results enter the existing Processing → Verified Data workflow.
-                Convert to Lead stays manual. LinkedIn and X are not included.
+                Convert to Lead stays manual.
             </p>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -134,7 +173,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
                     <strong>Direct Login:</strong> {loginLabel}
                     {mode === 'direct_login' ? (
                         <span style={{ marginLeft: 8 }}>
-                            <button type="button" disabled={!!busy} style={btn('#0f766e')} onClick={onConnect}>Connect</button>
+                            <button type="button" disabled={!!busy} style={btn('#0f766e')} onClick={onConnect}>{loginStatus === 'expired' ? 'Reconnect' : 'Connect'}</button>
                             {' '}
                             <button type="button" disabled={!!busy} style={btn('#fff', '#334155')} onClick={onDisconnect}>Disconnect</button>
                         </span>
@@ -148,7 +187,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Keyword</label>
             <input value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, marginBottom: 12 }} />
 
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Location {isIg ? '(optional)' : '(optional)'}</label>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Location (optional)</label>
             <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Mumbai" style={{ width: '100%', padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, marginBottom: 12 }} />
 
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Search type</label>
@@ -161,7 +200,7 @@ export default function DataExtractorSocialSourcePage({ platform }) {
             ))}
 
             <button type="button" disabled={!!busy} style={btn('#1d4ed8')} onClick={onStart}>
-                {busy === 'extract' ? 'Starting…' : `START ${label.toUpperCase()} EXTRACTION`}
+                {busy === 'extract' ? 'Starting…' : (cfg.extractLabel || `START ${label.toUpperCase()} EXTRACTION`)}
             </button>
 
             {result ? (

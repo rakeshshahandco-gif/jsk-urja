@@ -10,7 +10,7 @@ import { normalizeNameForIndex } from '../searchCampaign/normalize.util.js';
 import { enrichDomainFromWebsite } from '../searchCampaign/rawCaptureEnrichment/fetch.util.js';
 import { fetchPublicHtml } from '../searchCampaign/chinaWebsiteCrawler/safeFetch.util.js';
 import { parsePageBundle } from '../searchCampaign/rawCaptureEnrichment/parse.util.js';
-import { discoverFacebookPublic, discoverInstagramPublic } from './publicSearch.adapter.js';
+import { discoverFacebookPublic, discoverInstagramPublic, discoverLinkedInPublic, discoverXPublic } from './publicSearch.adapter.js';
 import { connectSocialLogin, disconnectSocialLogin, getSocialLoginStatus, discoverWithDirectLogin } from './directLogin.adapter.js';
 import { isExternalBusinessWebsite } from './directLogin.quality.util.js';
 import {
@@ -18,6 +18,10 @@ import {
     FACEBOOK_SEARCH_TYPES,
     INSTAGRAM_MODES,
     INSTAGRAM_SEARCH_TYPES,
+    LINKEDIN_MODES,
+    LINKEDIN_SEARCH_TYPES,
+    X_MODES,
+    X_SEARCH_TYPES,
     officialApiStatus,
 } from './constants.js';
 import { isSocialSessionIsolatedFromWhatsApp } from './sessionStore.util.js';
@@ -34,15 +38,55 @@ function assertCanExtract(user) {
     ) {
         return;
     }
-    throw new ApiError(403, 'Permission denied: cannot start Facebook/Instagram extraction');
+    throw new ApiError(403, 'Permission denied: cannot start social source extraction');
+}
+
+function normalizeExtractPlatform(platform) {
+    const p = String(platform || '').toLowerCase() === 'twitter' ? 'x' : String(platform || '').toLowerCase();
+    if (!['facebook', 'instagram', 'linkedin', 'x'].includes(p)) {
+        throw new ApiError(400, 'Unsupported social platform');
+    }
+    return p;
+}
+
+function platformLabel(platform) {
+    return { facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', x: 'X' }[platform] || platform;
+}
+
+function modesFor(platform) {
+    if (platform === 'instagram') return INSTAGRAM_MODES;
+    if (platform === 'linkedin') return LINKEDIN_MODES;
+    if (platform === 'x') return X_MODES;
+    return FACEBOOK_MODES;
+}
+
+function typesFor(platform) {
+    if (platform === 'instagram') return INSTAGRAM_SEARCH_TYPES;
+    if (platform === 'linkedin') return LINKEDIN_SEARCH_TYPES;
+    if (platform === 'x') return X_SEARCH_TYPES;
+    return FACEBOOK_SEARCH_TYPES;
+}
+
+function defaultSearchType(platform) {
+    if (platform === 'instagram') return 'business_profiles';
+    if (platform === 'linkedin') return 'companies';
+    if (platform === 'x') return 'profiles';
+    return 'pages';
 }
 
 export function getSocialSourceStatus({ platform, companyId }) {
-    const login = getSocialLoginStatus({ platform, companyId });
-    const api = officialApiStatus(platform);
+    const p = normalizeExtractPlatform(platform);
+    const login = getSocialLoginStatus({ platform: p, companyId });
+    const api = officialApiStatus(p);
+    const limitations = {
+        facebook: ['Facebook Groups API / group member permissions were deprecated from Graph API v19 (22 Apr 2024). Group Intelligence only uses information visible to the authenticated session — it does not enumerate every member.'],
+        instagram: ['Instagram Login API is for professional accounts. Follower dumps and group chats are not used as bulk lead sources.'],
+        linkedin: ['LinkedIn is used for company and professional discovery. Private emails, mobile numbers, and hidden connections are not extracted. Company websites are preferred for contact enrichment.'],
+        x: ['X posts are treated as evidence for the author/business account, not as separate CRM companies. System routes such as /home and /explore are rejected.'],
+    };
     return {
-        platform,
-        publicSearch: { available: true, status: 'connected', message: 'Uses public web discovery (DuckDuckGo/Bing). No Facebook/Instagram login.' },
+        platform: p,
+        publicSearch: { available: true, status: 'connected', message: `Uses public web discovery (DuckDuckGo/Bing). No ${platformLabel(p)} login.` },
         directLogin: {
             status: login.status,
             connectedAt: login.connectedAt,
@@ -50,14 +94,12 @@ export function getSocialSourceStatus({ platform, companyId }) {
             isolatedFromWhatsApp: isSocialSessionIsolatedFromWhatsApp(),
         },
         officialApi: api,
-        limitations: platform === 'facebook'
-            ? ['Facebook Groups API / group member permissions were deprecated from Graph API v19 (22 Apr 2024). Group Intelligence only uses information visible to the authenticated session — it does not enumerate every member.']
-            : ['Instagram Login API is for professional accounts. Follower dumps and group chats are not used as bulk lead sources.'],
+        limitations: limitations[p] || [],
     };
 }
 
 async function ensureSocialCampaign({ companyId, user, platform, keyword, city }) {
-    const name = `${platform === 'instagram' ? 'Instagram' : 'Facebook'} · ${keyword}${city ? ` · ${city}` : ''}`;
+    const name = `${platformLabel(platform)} · ${keyword}${city ? ` · ${city}` : ''}`;
     const nameNormalized = normalizeNameForIndex(name);
     let campaign = await SearchCampaign.findOne({
         companyId,
@@ -166,6 +208,12 @@ async function discover({ platform, mode, keyword, location, searchType, company
     if (platform === 'instagram') {
         return discoverInstagramPublic({ keyword, location, searchType, maxResults });
     }
+    if (platform === 'linkedin') {
+        return discoverLinkedInPublic({ keyword, location, searchType, maxResults });
+    }
+    if (platform === 'x') {
+        return discoverXPublic({ keyword, location, searchType, maxResults });
+    }
     return discoverFacebookPublic({ keyword, location, searchType, maxResults });
 }
 
@@ -181,12 +229,12 @@ export async function startSocialExtraction({
     maxResults = 20,
 }) {
     assertCanExtract(user);
-    const p = platform === 'instagram' ? 'instagram' : 'facebook';
+    const p = normalizeExtractPlatform(platform);
     const m = String(mode || 'public_search');
-    const allowedModes = p === 'instagram' ? INSTAGRAM_MODES : FACEBOOK_MODES;
+    const allowedModes = modesFor(p);
     if (!allowedModes.includes(m)) throw new ApiError(400, 'Invalid extraction mode');
-    const types = p === 'instagram' ? INSTAGRAM_SEARCH_TYPES : FACEBOOK_SEARCH_TYPES;
-    const st = String(searchType || (p === 'instagram' ? 'business_profiles' : 'pages'));
+    const types = typesFor(p);
+    const st = String(searchType || defaultSearchType(p));
     if (!types.includes(st)) throw new ApiError(400, 'Invalid search type');
     const kw = String(keyword || '').trim();
     if (kw.length < 2) throw new ApiError(400, 'Keyword is required');

@@ -4,6 +4,10 @@ import { PATHS } from '@/routes/paths';
 
 const tabs = [
     { to: PATHS.DATA_EXTRACTOR.SIMPLE_LEAD_SEARCH, label: 'Simple Lead Search' },
+    { to: PATHS.DATA_EXTRACTOR.FACEBOOK, label: 'Facebook' },
+    { to: PATHS.DATA_EXTRACTOR.INSTAGRAM, label: 'Instagram' },
+    { to: PATHS.DATA_EXTRACTOR.LINKEDIN, label: 'LinkedIn' },
+    { to: PATHS.DATA_EXTRACTOR.X, label: 'X / Twitter' },
     { to: PATHS.DATA_EXTRACTOR.KEYWORD_SEARCH, label: 'Keyword Search' },
     { to: PATHS.DATA_EXTRACTOR.MANUAL_URL, label: 'Manual URL' },
     { to: PATHS.DATA_EXTRACTOR.IMPORT, label: 'Excel Import' },

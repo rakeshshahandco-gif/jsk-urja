@@ -440,4 +440,21 @@ export const dataExtractorApi = {
         });
         return res;
     },
+
+    facebookSourceStatus: async () => unwrap(await api.get('/data-extractor/social/facebook/status')),
+    instagramSourceStatus: async () => unwrap(await api.get('/data-extractor/social/instagram/status')),
+    facebookConnect: async () => unwrap(await api.post('/data-extractor/social/facebook/connect', {}, { timeout: 180000 })),
+    instagramConnect: async () => unwrap(await api.post('/data-extractor/social/instagram/connect', {}, { timeout: 180000 })),
+    facebookDisconnect: async () => unwrap(await api.post('/data-extractor/social/facebook/disconnect')),
+    instagramDisconnect: async () => unwrap(await api.post('/data-extractor/social/instagram/disconnect')),
+    startFacebookExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/facebook/extract', payload, { timeout: 180000 })),
+    startInstagramExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/instagram/extract', payload, { timeout: 180000 })),
+    linkedinSourceStatus: async () => unwrap(await api.get('/data-extractor/social/linkedin/status')),
+    xSourceStatus: async () => unwrap(await api.get('/data-extractor/social/x/status')),
+    linkedinConnect: async () => unwrap(await api.post('/data-extractor/social/linkedin/connect', {}, { timeout: 180000 })),
+    xConnect: async () => unwrap(await api.post('/data-extractor/social/x/connect', {}, { timeout: 180000 })),
+    linkedinDisconnect: async () => unwrap(await api.post('/data-extractor/social/linkedin/disconnect')),
+    xDisconnect: async () => unwrap(await api.post('/data-extractor/social/x/disconnect')),
+    startLinkedInExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/linkedin/extract', payload, { timeout: 180000 })),
+    startXExtraction: async (payload) => unwrap(await api.post('/data-extractor/social/x/extract', payload, { timeout: 180000 })),
 };

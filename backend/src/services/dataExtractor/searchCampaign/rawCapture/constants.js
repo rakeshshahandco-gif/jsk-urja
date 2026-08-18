@@ -2,11 +2,11 @@
  * RawCapture Checkpoint 3 constants.
  */
 export const RAW_CAPTURE_SOURCES = Object.freeze([
-    'google', 'facebook', 'indiamart', 'web', 'manual', 'discovery_agent',
+    'google', 'facebook', 'instagram', 'linkedin', 'x', 'indiamart', 'web', 'manual', 'discovery_agent',
 ]);
 
 export const RAW_CAPTURE_QUERY_SOURCE_HINTS = Object.freeze([
-    'google', 'facebook', 'indiamart', 'official_website', 'web', 'manual',
+    'google', 'facebook', 'instagram', 'linkedin', 'x', 'indiamart', 'official_website', 'web', 'manual',
 ]);
 
 export const RAW_CAPTURE_METHODS = Object.freeze([
@@ -22,6 +22,8 @@ export const RAW_CAPTURE_ALLOWED_INGEST_METHODS = Object.freeze([...RAW_CAPTURE_
 
 export const RAW_CAPTURE_RESULT_TYPE_HINTS = Object.freeze([
     'company', 'product_listing', 'marketplace_supplier', 'facebook_page', 'facebook_group',
+    'instagram_profile', 'instagram_hashtag',
+    'linkedin_company', 'linkedin_profile', 'x_profile', 'x_post',
     'article', 'job', 'course', 'directory', 'unknown',
 ]);
 
